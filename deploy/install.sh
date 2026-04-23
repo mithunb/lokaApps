@@ -26,11 +26,17 @@ if command -v node >/dev/null 2>&1; then
 fi
 if [[ "${NODE_MAJOR}" -lt 20 ]]; then
   echo "   installing Node 20.x (found v${NODE_MAJOR}.x)"
-  apt-get remove -y nodejs libnode-dev 2>/dev/null || true
+  apt-get purge -y nodejs libnode-dev libnode72 nodejs-doc 2>/dev/null || true
+  rm -f /etc/apt/sources.list.d/nodesource.list
   curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
   apt-get install -y nodejs
 fi
 echo "   node $(node -v)"
+INSTALLED_MAJOR=$(node -p 'process.versions.node.split(".")[0]')
+if [[ "${INSTALLED_MAJOR}" -lt 20 ]]; then
+  echo "ERROR: node is still < 20 after install ($(node -v))." >&2
+  exit 1
+fi
 
 echo "==> Ensuring ${REPO_DIR} is owned by ${OWNER}"
 chown -R "${OWNER}:${OWNER}" "${REPO_DIR}"
