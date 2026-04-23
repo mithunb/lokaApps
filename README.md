@@ -16,8 +16,7 @@ lokaApps/
 │   ├── apps/wildlife.js
 │   └── package.json
 └── deploy/
-    ├── install.sh          # umbrella: Node deps, systemd, Apache modules
-    ├── lokaApps.service    # systemd unit
+    ├── install.sh          # umbrella: Node deps, pm2, Apache modules
     └── lokaApps.conf       # Apache proxy snippet
 ```
 
@@ -53,7 +52,16 @@ Reload Apache: `sudo apachectl configtest && sudo systemctl reload apache2`.
 ```bash
 cd /home/mithun/loka.place/lokaApps
 git pull
-sudo ./deploy/install.sh     # re-runs npm install and restarts the service
+sudo ./deploy/install.sh     # re-runs npm install and reloads pm2
+```
+
+## Operating (pm2)
+
+```bash
+sudo -u mithun pm2 list
+sudo -u mithun pm2 logs lokaApps
+sudo -u mithun pm2 reload lokaApps --update-env   # after editing api/.env
+sudo -u mithun pm2 restart lokaApps
 ```
 
 ## Adding a new app

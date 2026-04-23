@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Wildlife widget installer — registers / updates the GEMINI_API_KEY used by
-# the wildlife API handler, then restarts the Node service.
+# Wildlife widget installer — sets the GEMINI_API_KEY used by the wildlife
+# API handler, then reloads the pm2-managed Node service.
 #
 # Usage (interactive):
 #   sudo ./wildlife/install.sh
@@ -10,6 +10,8 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="${REPO_DIR}/api/.env"
+OWNER="${OWNER:-mithun}"
+PORT="${LOKA_PORT:-8181}"
 
 if [[ $EUID -ne 0 ]]; then
   echo "Must be run as root (sudo)." >&2
@@ -37,14 +39,15 @@ else
   echo "GEMINI_API_KEY=${GEMINI_API_KEY}" >> "${ENV_FILE}"
 fi
 chmod 600 "${ENV_FILE}"
+chown "${OWNER}:${OWNER}" "${ENV_FILE}"
 
-echo "==> Restarting lokaApps service"
-systemctl restart lokaApps.service
+echo "==> Reloading lokaApps via pm2"
+sudo -u "${OWNER}" pm2 reload lokaApps --update-env
 
 sleep 1
-if curl -fsS "http://127.0.0.1:8181/healthz" >/dev/null; then
+if curl -fsS "http://127.0.0.1:${PORT}/healthz" >/dev/null; then
   echo "OK — wildlife widget ready at https://loka.place/lokaApps/wildlife/"
 else
-  echo "WARN — service not healthy; check: journalctl -u lokaApps -n 50" >&2
+  echo "WARN — service not healthy; check: sudo -u ${OWNER} pm2 logs lokaApps --lines 50" >&2
   exit 1
 fi

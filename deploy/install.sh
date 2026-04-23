@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Umbrella installer — run after `git pull` on the server.
-# Idempotent: safe to re-run. Run as root or via sudo.
+# Idempotent: safe to re-run. Run as root (or via sudo).
 #
 # Usage:
 #   cd /home/mithun/loka.place/lokaApps
@@ -10,6 +10,8 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 API_DIR="${REPO_DIR}/api"
 OWNER="${OWNER:-mithun}"
+OWNER_HOME="$(getent passwd "${OWNER}" | cut -d: -f6)"
+PORT="${LOKA_PORT:-8181}"
 
 if [[ $EUID -ne 0 ]]; then
   echo "Must be run as root (sudo)." >&2
@@ -50,11 +52,28 @@ if [[ ! -f "${API_DIR}/.env" ]]; then
   chmod 600 "${API_DIR}/.env"
 fi
 
-echo "==> Installing systemd unit"
-cp "${REPO_DIR}/deploy/lokaApps.service" /etc/systemd/system/lokaApps.service
-systemctl daemon-reload
-systemctl enable lokaApps.service
-systemctl restart lokaApps.service
+echo "==> Installing pm2"
+if ! command -v pm2 >/dev/null 2>&1; then
+  npm install -g pm2
+fi
+echo "   pm2 $(pm2 -v)"
+
+echo "==> Removing legacy systemd unit if present"
+if systemctl list-unit-files 2>/dev/null | grep -q '^lokaApps.service'; then
+  systemctl stop lokaApps.service 2>/dev/null || true
+  systemctl disable lokaApps.service 2>/dev/null || true
+  rm -f /etc/systemd/system/lokaApps.service
+  systemctl daemon-reload
+fi
+
+echo "==> Starting / reloading lokaApps under pm2 (as ${OWNER})"
+sudo -u "${OWNER}" bash -lc "cd '${API_DIR}' && pm2 startOrReload ecosystem.config.cjs --update-env"
+
+echo "==> Saving pm2 process list"
+sudo -u "${OWNER}" pm2 save
+
+echo "==> Configuring pm2 to start on boot"
+env PATH="$PATH:/usr/bin" pm2 startup systemd -u "${OWNER}" --hp "${OWNER_HOME}" >/dev/null
 
 echo "==> Enabling Apache proxy modules"
 a2enmod proxy proxy_http >/dev/null
@@ -66,10 +85,10 @@ echo "Then: apachectl configtest && systemctl reload apache2"
 echo
 
 sleep 1
-if curl -fsS "http://127.0.0.1:8181/healthz" >/dev/null; then
-  echo "OK — Node API up on :8181"
+if curl -fsS "http://127.0.0.1:${PORT}/healthz" >/dev/null; then
+  echo "OK — Node API up on :${PORT} (managed by pm2)"
 else
-  echo "WARN — healthz failed; check: journalctl -u lokaApps -n 50"
+  echo "WARN — healthz failed; check: sudo -u ${OWNER} pm2 logs lokaApps --lines 50"
   exit 1
 fi
 
