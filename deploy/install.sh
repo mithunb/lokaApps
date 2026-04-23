@@ -16,6 +16,9 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
+echo "==> Trusting repo as root for future git operations"
+git config --global --add safe.directory "${REPO_DIR}" 2>/dev/null || true
+
 echo "==> Checking Node.js (need >= 20)"
 NODE_MAJOR=0
 if command -v node >/dev/null 2>&1; then
