@@ -43,40 +43,40 @@
     overflow: hidden;
   }
   .lw-intro {
-    flex: 0 0 240px;
+    flex: 0 0 168px;
     display: flex; flex-direction: column;
     background: var(--lw-moss);
     color: #F2F0E9;
-    padding: 20px 18px 14px;
+    padding: 14px 14px 12px;
     border-right: 1px solid rgba(0,0,0,0.15);
     scroll-snap-align: start;
-    min-height: 290px;
+    min-height: 232px;
     position: relative;
     overflow: hidden;
   }
   .lw-intro::after {
-    content: ''; position: absolute; inset: auto -40px -40px auto;
-    width: 160px; height: 160px; border-radius: 50%;
+    content: ''; position: absolute; inset: auto -30px -30px auto;
+    width: 110px; height: 110px; border-radius: 50%;
     background: rgba(242, 240, 233, 0.05);
     pointer-events: none;
   }
   .lw-intro-title {
     font-family: 'Fraunces', Georgia, serif;
-    font-size: 30px; font-weight: 400; line-height: 1.02;
+    font-size: 22px; font-weight: 400; line-height: 1.02;
     letter-spacing: -0.015em;
     color: inherit;
     margin: 0;
   }
   .lw-intro-where {
     font-family: 'Fraunces', Georgia, serif;
-    font-size: 15px; font-style: italic; opacity: 0.88;
-    margin-top: 10px;
+    font-size: 13px; font-style: italic; opacity: 0.88;
+    margin-top: 8px;
     line-height: 1.3;
   }
   .lw-intro-credit {
     margin-top: auto;
-    padding-top: 14px;
-    display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+    padding-top: 10px;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
     color: inherit; text-decoration: none;
     border-top: 1px solid rgba(242, 240, 233, 0.18);
     position: relative; z-index: 1;
@@ -89,7 +89,7 @@
     opacity: 0.65;
   }
   .lw-intro-logo {
-    height: 20px; width: auto; display: block;
+    height: 16px; width: auto; display: block;
     filter: invert(1) brightness(1.1);
     opacity: 0.9;
     transition: opacity 120ms ease;
@@ -102,12 +102,12 @@
   .lw-card {
     flex: 0 0 240px; display: flex; flex-direction: column;
     background: var(--lw-surface); border-right: 1px solid var(--lw-border);
-    scroll-snap-align: start; min-height: 290px;
+    scroll-snap-align: start; min-height: 232px;
   }
   .lw-card:last-child { border-right: 0; }
   .lw-img {
-    width: 100%; height: 200px;
-    background: var(--lw-bg) center/contain no-repeat;
+    width: 100%; aspect-ratio: 3 / 2;
+    background: var(--lw-bg) center/cover no-repeat;
     border-bottom: 1px solid var(--lw-border); position: relative;
   }
   .lw-img.lw-img--loading::after {
