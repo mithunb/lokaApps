@@ -50,7 +50,7 @@
     padding: 10px 12px 10px;
     border-right: 1px solid rgba(0,0,0,0.15);
     scroll-snap-align: start;
-    min-height: 162px;
+    min-height: 200px;
     position: relative;
     overflow: hidden;
   }
@@ -100,9 +100,9 @@
   }
   .lw-strip::-webkit-scrollbar { height: 0; }
   .lw-card {
-    flex: 0 0 160px; display: flex; flex-direction: column;
+    flex: 0 0 200px; display: flex; flex-direction: column;
     background: var(--lw-surface); border-right: 1px solid var(--lw-border);
-    scroll-snap-align: start; min-height: 162px;
+    scroll-snap-align: start; min-height: 200px;
   }
   .lw-card:last-child { border-right: 0; }
   .lw-img {
@@ -131,10 +131,11 @@
     font-size: 14px; font-weight: 500; line-height: 1.15; letter-spacing: -0.01em;
     color: var(--lw-text);
   }
-  .lw-sci {
-    font-size: 11px; font-style: italic; color: var(--lw-muted); line-height: 1.25;
+  .lw-sci { display: none; }
+  .lw-loc {
+    margin-top: 3px; font-size: 11px; color: var(--lw-moss); line-height: 1.3;
+    overflow-wrap: anywhere;
   }
-  .lw-loc { display: none; }
   .lw-status {
     padding: 32px 16px; text-align: center; color: var(--lw-muted); font-size: 13px;
   }
