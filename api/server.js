@@ -29,8 +29,8 @@ const appFiles = fs.existsSync(appsDir)
     console.log(`mounted POST /api/${name}`);
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`lokaApps api listening on 0.0.0.0:${PORT}`);
+  app.listen(PORT, '127.0.0.1', () => {
+    console.log(`lokaApps api listening on 127.0.0.1:${PORT}`);
   });
 })().catch((err) => {
   console.error('startup error', err);
