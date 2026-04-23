@@ -43,40 +43,40 @@
     overflow: hidden;
   }
   .lw-intro {
-    flex: 0 0 168px;
+    flex: 0 0 160px;
     display: flex; flex-direction: column;
     background: var(--lw-moss);
     color: #F2F0E9;
-    padding: 14px 14px 12px;
+    padding: 10px 12px 10px;
     border-right: 1px solid rgba(0,0,0,0.15);
     scroll-snap-align: start;
-    min-height: 232px;
+    min-height: 162px;
     position: relative;
     overflow: hidden;
   }
   .lw-intro::after {
-    content: ''; position: absolute; inset: auto -30px -30px auto;
-    width: 110px; height: 110px; border-radius: 50%;
+    content: ''; position: absolute; inset: auto -24px -24px auto;
+    width: 80px; height: 80px; border-radius: 50%;
     background: rgba(242, 240, 233, 0.05);
     pointer-events: none;
   }
   .lw-intro-title {
     font-family: 'Fraunces', Georgia, serif;
-    font-size: 22px; font-weight: 400; line-height: 1.02;
+    font-size: 18px; font-weight: 400; line-height: 1.02;
     letter-spacing: -0.015em;
     color: inherit;
     margin: 0;
   }
   .lw-intro-where {
     font-family: 'Fraunces', Georgia, serif;
-    font-size: 13px; font-style: italic; opacity: 0.88;
-    margin-top: 8px;
+    font-size: 11px; font-style: italic; opacity: 0.88;
+    margin-top: 4px;
     line-height: 1.3;
   }
   .lw-intro-credit {
     margin-top: auto;
-    padding-top: 10px;
-    display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+    padding-top: 8px;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
     color: inherit; text-decoration: none;
     border-top: 1px solid rgba(242, 240, 233, 0.18);
     position: relative; z-index: 1;
@@ -85,11 +85,11 @@
   .lw-intro-credit:hover .lw-intro-logo { opacity: 1; }
   .lw-intro-by {
     font-family: 'DM Sans', sans-serif;
-    font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+    font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase;
     opacity: 0.65;
   }
   .lw-intro-logo {
-    height: 16px; width: auto; display: block;
+    height: 13px; width: auto; display: block;
     filter: invert(1) brightness(1.1);
     opacity: 0.9;
     transition: opacity 120ms ease;
@@ -100,9 +100,9 @@
   }
   .lw-strip::-webkit-scrollbar { height: 0; }
   .lw-card {
-    flex: 0 0 240px; display: flex; flex-direction: column;
+    flex: 0 0 160px; display: flex; flex-direction: column;
     background: var(--lw-surface); border-right: 1px solid var(--lw-border);
-    scroll-snap-align: start; min-height: 232px;
+    scroll-snap-align: start; min-height: 162px;
   }
   .lw-card:last-child { border-right: 0; }
   .lw-img {
@@ -119,25 +119,22 @@
   .lw-img.lw-img--empty {
     background: repeating-linear-gradient(45deg, var(--lw-bg), var(--lw-bg) 6px, var(--lw-surface) 6px, var(--lw-surface) 12px);
   }
-  .lw-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 2px; }
+  .lw-body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 1px; }
   .lw-cat {
-    display: inline-flex; align-items: center; gap: 6px;
-    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
-    color: var(--lw-muted); margin-bottom: 2px;
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--lw-muted); margin-bottom: 1px;
   }
-  .lw-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; }
+  .lw-dot { width: 5px; height: 5px; border-radius: 50%; flex: 0 0 auto; }
   .lw-name {
     font-family: 'Fraunces', Georgia, serif;
-    font-size: 16px; font-weight: 500; line-height: 1.2; letter-spacing: -0.01em;
+    font-size: 14px; font-weight: 500; line-height: 1.15; letter-spacing: -0.01em;
     color: var(--lw-text);
   }
   .lw-sci {
-    font-size: 12px; font-style: italic; color: var(--lw-muted); line-height: 1.3;
+    font-size: 11px; font-style: italic; color: var(--lw-muted); line-height: 1.25;
   }
-  .lw-loc {
-    margin-top: 4px; font-size: 11px; color: var(--lw-moss); line-height: 1.3;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-  }
+  .lw-loc { display: none; }
   .lw-status {
     padding: 32px 16px; text-align: center; color: var(--lw-muted); font-size: 13px;
   }
