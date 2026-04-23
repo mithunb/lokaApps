@@ -2,6 +2,7 @@
   'use strict';
 
   const API = 'https://loka.place/lokaApps/wildlife/api';
+  const LOGO = 'https://loka.place/lokaApps/wildlife/loka-logo.png';
 
   const CATEGORY_DOT = {
     Birds: '#7A5CFF',
@@ -41,30 +42,64 @@
     border-radius: var(--lw-radius);
     overflow: hidden;
   }
-  .lw-head {
-    display: flex; align-items: center; gap: 12px;
-    padding: 10px 14px; border-bottom: 1px solid var(--lw-border);
-    background: var(--lw-surface);
+  .lw-intro {
+    flex: 0 0 240px;
+    display: flex; flex-direction: column; gap: 0;
+    background: var(--lw-moss);
+    color: #F2F0E9;
+    padding: 18px 18px 14px;
+    border-right: 1px solid rgba(0,0,0,0.15);
+    scroll-snap-align: start;
+    min-height: 220px;
+    position: relative;
+    overflow: hidden;
   }
-  .lw-kicker {
+  .lw-intro::after {
+    content: ''; position: absolute; inset: auto -40px -40px auto;
+    width: 140px; height: 140px; border-radius: 50%;
+    background: rgba(242, 240, 233, 0.05);
+    pointer-events: none;
+  }
+  .lw-intro-kicker {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    font-weight: 500; opacity: 0.72;
+    margin-bottom: 6px;
+  }
+  .lw-intro-title {
     font-family: 'Fraunces', Georgia, serif;
-    font-size: 14px; font-weight: 500; letter-spacing: -0.01em;
-    color: var(--lw-text); white-space: nowrap;
-    min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    font-size: 26px; font-weight: 400; line-height: 1.05;
+    letter-spacing: -0.015em;
+    color: inherit;
+    margin: 0;
   }
-  .lw-kicker b { font-weight: 600; }
-  .lw-credit {
-    margin-left: auto; flex: 0 0 auto;
-    font-size: 10px; color: var(--lw-muted);
-    letter-spacing: 0.02em; text-decoration: none; white-space: nowrap;
-    transition: color 120ms ease;
+  .lw-intro-where {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 14px; font-style: italic; opacity: 0.88;
+    margin-top: 10px;
+    line-height: 1.3;
   }
-  .lw-credit:hover { color: var(--lw-moss); }
-  .lw-credit b {
-    font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
-    color: var(--lw-text);
+  .lw-intro-credit {
+    margin-top: auto;
+    padding-top: 12px;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+    color: inherit; text-decoration: none;
+    border-top: 1px solid rgba(242, 240, 233, 0.18);
+    position: relative; z-index: 1;
   }
-  .lw-credit:hover b { color: var(--lw-moss); }
+  .lw-intro-credit:hover { text-decoration: none; color: inherit; }
+  .lw-intro-credit:hover .lw-intro-logo { opacity: 1; }
+  .lw-intro-by {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+    opacity: 0.65;
+  }
+  .lw-intro-logo {
+    height: 18px; width: auto; display: block;
+    filter: invert(1) brightness(1.1);
+    opacity: 0.9;
+    transition: opacity 120ms ease;
+  }
   .lw-strip {
     display: flex; gap: 0; overflow-x: auto; scroll-snap-type: x mandatory;
     scroll-behavior: smooth; padding: 0;
@@ -218,16 +253,27 @@
   }
   function escapeAttr(s) { return escapeHTML(s); }
 
+  function introHTML(cityName) {
+    return `
+      <article class="lw-intro" aria-label="Meet the Locals, a widget by LOKA">
+        <span class="lw-intro-kicker">A field guide to</span>
+        <h2 class="lw-intro-title">Meet<br>the Locals</h2>
+        <span class="lw-intro-where">of ${escapeHTML(cityName)}</span>
+        <a class="lw-intro-credit" href="https://discoverloka.org" target="_blank" rel="noopener">
+          <span class="lw-intro-by">A widget by</span>
+          <img class="lw-intro-logo" src="${LOGO}" alt="LOKA" loading="lazy" />
+        </a>
+      </article>
+    `;
+  }
+
   function render(root, state) {
     const species = interleave(state.data.categories || []);
     const cityName = state.data.locationName || state.city;
 
     root.innerHTML = `
-      <div class="lw-head">
-        <span class="lw-kicker">meet the locals of <b>${escapeHTML(cityName)}</b></span>
-        <a class="lw-credit" href="https://discoverloka.org" target="_blank" rel="noopener" aria-label="A widget by LOKA — opens discoverloka.org">a widget by <b>LOKA</b></a>
-      </div>
       <div class="lw-strip" role="list">
+        ${introHTML(cityName)}
         ${species.map((s, i) => cardHTML(s, i)).join('')}
       </div>
     `;
