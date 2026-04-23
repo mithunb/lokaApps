@@ -22,6 +22,9 @@ if ! command -v node >/dev/null 2>&1; then
   apt-get install -y nodejs
 fi
 
+echo "==> Ensuring ${REPO_DIR} is owned by ${OWNER}"
+chown -R "${OWNER}:${OWNER}" "${REPO_DIR}"
+
 echo "==> Installing Node dependencies"
 sudo -u "${OWNER}" bash -lc "cd '${API_DIR}' && npm install --omit=dev"
 
