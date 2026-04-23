@@ -1,11 +1,11 @@
 import { GoogleGenAI, Type } from '@google/genai';
+import { getFlashModel } from '../lib/models.js';
 
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
   console.warn('wildlife: GEMINI_API_KEY is not set — endpoint will 500');
 }
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
 const schema = {
   type: Type.OBJECT,
@@ -75,7 +75,7 @@ export default async function wildlife(req, res) {
 
   try {
     const response = await ai.models.generateContent({
-      model: MODEL,
+      model: getFlashModel(),
       contents: PROMPT(location),
       config: { responseMimeType: 'application/json', responseSchema: schema },
     });

@@ -2,9 +2,12 @@ import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { startModelResolver, getResolverStatus } from './lib/models.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.LOKA_PORT) || 8181;
+
+startModelResolver();
 
 const app = express();
 app.use(express.json({ limit: '256kb' }));
@@ -20,6 +23,7 @@ app.use((req, res, next) => {
 });
 
 app.get('/healthz', (_req, res) => res.type('text/plain').send('ok'));
+app.get('/status', (_req, res) => res.json({ ok: true, model: getResolverStatus() }));
 
 const appsDir = path.join(__dirname, 'apps');
 const appFiles = fs.existsSync(appsDir)
