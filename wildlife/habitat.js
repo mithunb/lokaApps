@@ -41,7 +41,28 @@
     border: 1px solid var(--lw-border);
     border-radius: var(--lw-radius);
     overflow: hidden;
+    position: relative;
   }
+  .lw-nav {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 32px; height: 32px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(250, 249, 246, 0.94);
+    color: var(--lw-text);
+    border: 1px solid var(--lw-border);
+    border-radius: 999px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    cursor: pointer;
+    opacity: 0; pointer-events: none;
+    transition: opacity 150ms ease, background 150ms ease, transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    z-index: 2;
+  }
+  .lw-nav.is-visible { opacity: 1; pointer-events: auto; }
+  .lw-nav--prev { left: 6px; }
+  .lw-nav--next { right: 6px; }
+  .lw-nav:hover { background: #FFF; }
+  .lw-nav:active { transform: translateY(-50%) scale(0.94); }
+  .lw-nav svg { width: 14px; height: 14px; display: block; }
   .lw-intro {
     flex: 0 0 160px;
     display: flex; flex-direction: column;
@@ -50,7 +71,7 @@
     padding: 10px 12px 10px;
     border-right: 1px solid rgba(0,0,0,0.15);
     scroll-snap-align: start;
-    min-height: 200px;
+    min-height: 180px;
     position: relative;
     overflow: hidden;
   }
@@ -100,9 +121,9 @@
   }
   .lw-strip::-webkit-scrollbar { height: 0; }
   .lw-card {
-    flex: 0 0 200px; display: flex; flex-direction: column;
+    flex: 0 0 180px; display: flex; flex-direction: column;
     background: var(--lw-surface); border-right: 1px solid var(--lw-border);
-    scroll-snap-align: start; min-height: 200px;
+    scroll-snap-align: start; min-height: 180px;
   }
   .lw-card:last-child { border-right: 0; }
   .lw-img {
@@ -259,6 +280,9 @@
     `;
   }
 
+  const CHEV_LEFT = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4 L6 8 L10 12"/></svg>';
+  const CHEV_RIGHT = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4 L10 8 L6 12"/></svg>';
+
   function render(root, state) {
     const species = interleave(state.data.categories || []);
     const cityName = state.data.locationName || state.city;
@@ -268,7 +292,25 @@
         ${introHTML(cityName)}
         ${species.map((s, i) => cardHTML(s, i)).join('')}
       </div>
+      <button class="lw-nav lw-nav--prev" type="button" aria-label="Scroll left">${CHEV_LEFT}</button>
+      <button class="lw-nav lw-nav--next" type="button" aria-label="Scroll right">${CHEV_RIGHT}</button>
     `;
+
+    const strip = root.querySelector('.lw-strip');
+    const prevBtn = root.querySelector('.lw-nav--prev');
+    const nextBtn = root.querySelector('.lw-nav--next');
+    const step = 180;
+    const updateNav = () => {
+      const canLeft = strip.scrollLeft > 4;
+      const canRight = strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 4;
+      prevBtn.classList.toggle('is-visible', canLeft);
+      nextBtn.classList.toggle('is-visible', canRight);
+    };
+    prevBtn.addEventListener('click', () => strip.scrollBy({ left: -step, behavior: 'smooth' }));
+    nextBtn.addEventListener('click', () => strip.scrollBy({ left: step, behavior: 'smooth' }));
+    strip.addEventListener('scroll', updateNav, { passive: true });
+    window.addEventListener('resize', updateNav);
+    requestAnimationFrame(updateNav);
 
     root.querySelectorAll('.lw-card').forEach((card) => {
       const name = card.dataset.name;
