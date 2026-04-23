@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Wildlife habitat widget — LOKA</title>
-  <meta name="description" content="Drop the LOKA wildlife habitat widget onto any page with a single script tag. It lists notable native species for a given location." />
+  <title>Meet the Locals — LOKA widget</title>
+  <meta name="description" content="Drop the Meet the Locals widget onto any page with a single script tag. It introduces visitors to the wildlife sharing their neighbourhood." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Figtree:wght@500;600;700&display=swap" />
@@ -200,12 +200,20 @@
     }
     .city-gallery-meta b { color: var(--color-text-secondary); font-weight: 500; }
     .city-strip {
-      display: grid; gap: .75rem;
-      grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+      display: flex; gap: .75rem;
+      overflow-x: auto; overflow-y: hidden;
+      scroll-snap-type: x mandatory; scroll-behavior: smooth;
+      padding-bottom: .5rem;
+      scrollbar-width: thin; scrollbar-color: var(--color-border) transparent;
     }
+    .city-strip::-webkit-scrollbar { height: 6px; }
+    .city-strip::-webkit-scrollbar-track { background: transparent; }
+    .city-strip::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
     .city-tile {
+      flex: 0 0 9rem;
       display: flex; flex-direction: column; gap: .375rem;
       text-decoration: none; color: inherit;
+      scroll-snap-align: start;
     }
     .city-tile-img {
       aspect-ratio: 4 / 5; background: var(--color-bg-alt) center/cover no-repeat;
@@ -268,12 +276,12 @@
 
   <main>
     <section class="hero">
-      <span class="eyebrow">widget · wildlife habitat</span>
-      <h1>Native species, on any page.</h1>
+      <span class="eyebrow">widget · meet the locals</span>
+      <h1>Meet the Locals.</h1>
       <p class="lead">
-        Embed a single line of HTML. The widget auto-detects the visitor's city
-        and surfaces notable wildlife nearby — habitat-aware, AI-generated, and
-        illustrated with open Wikipedia imagery.
+        A one-line embed that introduces your visitors to the wildlife sharing
+        their neighbourhood. Auto-detects the city, surfaces notable species,
+        and illustrates each one with open Wikipedia imagery.
       </p>
     </section>
 
@@ -314,26 +322,12 @@
 
     <section class="section" aria-labelledby="cities-heading">
       <div class="section-head">
-        <h2 id="cities-heading">From your recent visits</h2>
-        <p>Each widget load caches a city's species locally for a week. Here's what's in your browser.</p>
+        <h2 id="cities-heading">Recently explored</h2>
+        <p>Cities the widget has looked up recently, cached on the server for 30 days.</p>
       </div>
       <div id="cities-grid" class="cities-grid" aria-live="polite"></div>
     </section>
 
-    <section class="section" aria-labelledby="endpoint-heading">
-      <div class="section-head">
-        <h2 id="endpoint-heading">Endpoint reference</h2>
-        <p>For when you'd rather call the API directly.</p>
-      </div>
-      <div class="card">
-        <dl class="meta">
-          <dt>Widget script</dt><dd>https://loka.place/lokaApps/wildlife/habitat.js</dd>
-          <dt>API</dt><dd>POST https://loka.place/lokaApps/wildlife/api</dd>
-          <dt>Request body</dt><dd>{ "location": "Bangalore" }</dd>
-          <dt>Embeddable from</dt><dd>Any domain — no allowlist</dd>
-        </dl>
-      </div>
-    </section>
   </main>
 
   <footer class="site">
@@ -363,7 +357,7 @@
   <script>
     (function () {
       const grid = document.getElementById('cities-grid');
-      const CACHE_PREFIX = 'loka:wildlife:v2:';
+      const RECENT_API = 'https://loka.place/lokaApps/wildlife/api?limit=10';
       const CATEGORY_DOT = {
         Birds: '#7A5CFF', Mammals: '#C46A2A', Reptiles: '#3F7A58',
         Amphibians: '#2E8C9B', Insects: '#B38A1C', Fish: '#1F6FB0',
@@ -375,6 +369,7 @@
       function relTime(ts) {
         const diff = Date.now() - ts;
         const mins = Math.round(diff / 60000);
+        if (mins < 1) return 'just now';
         if (mins < 60) return rtf.format(-mins, 'minute');
         const hours = Math.round(mins / 60);
         if (hours < 24) return rtf.format(-hours, 'hour');
@@ -395,17 +390,38 @@
         return out;
       }
 
+      const imgMemory = new Map();
+      async function wikiImage(query) {
+        if (!query) return null;
+        if (imgMemory.has(query)) return imgMemory.get(query);
+        const p = (async () => {
+          const url = 'https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1'
+            + '&generator=search&gsrlimit=1&gsrsearch=' + encodeURIComponent(query)
+            + '&prop=pageimages&piprop=thumbnail&pithumbsize=400';
+          try {
+            const r = await fetch(url);
+            if (!r.ok) return null;
+            const j = await r.json();
+            const pages = (j && j.query && j.query.pages) || {};
+            const first = Object.values(pages)[0];
+            return (first && first.thumbnail && first.thumbnail.source) || null;
+          } catch { return null; }
+        })();
+        imgMemory.set(query, p);
+        const src = await p;
+        imgMemory.set(query, src);
+        return src;
+      }
+
       function tileHTML(species) {
         const cat = species.category || 'Fauna';
         const dot = CATEGORY_DOT[cat] || DEFAULT_DOT;
-        const img = window.LokaWildlife && window.LokaWildlife.getCachedImage(species.name);
         const initial = (species.name || '?').trim().charAt(0).toUpperCase();
-        const imgAttrs = img
-          ? `style="background-image:url('${esc(img).replace(/'/g, '%27')}')"`
-          : `data-empty="true" data-initial="${esc(initial)}"`;
         return `
           <div class="city-tile">
-            <div class="city-tile-img" role="img" aria-label="${esc(species.name)}" ${imgAttrs}>
+            <div class="city-tile-img" role="img" aria-label="${esc(species.name)}"
+                 data-empty="true" data-initial="${esc(initial)}"
+                 data-name="${esc(species.name)}" data-sci="${esc(species.scientificName || '')}">
               <span class="city-tile-cat"><i style="background:${dot}"></i>${esc(cat)}</span>
             </div>
             <div class="city-tile-name">${esc(species.name)}</div>
@@ -414,17 +430,39 @@
         `;
       }
 
-      function render() {
-        const cities = window.LokaWildlife ? window.LokaWildlife.listCachedCities() : [];
-        if (!cities.length) {
-          grid.innerHTML = `<div class="cities-empty">Your browser hasn't cached any wildlife yet. The widget above will populate this as it loads.</div>`;
+      async function hydrateImages() {
+        const tiles = grid.querySelectorAll('.city-tile-img[data-empty="true"]');
+        tiles.forEach(async (el) => {
+          const name = el.getAttribute('data-name');
+          const sci = el.getAttribute('data-sci');
+          let src = await wikiImage(name);
+          if (!src && sci) src = await wikiImage(sci);
+          if (src && el.isConnected) {
+            el.style.backgroundImage = `url("${src.replace(/"/g, '%22')}")`;
+            el.removeAttribute('data-empty');
+          }
+        });
+      }
+
+      async function load() {
+        let entries = [];
+        try {
+          const r = await fetch(RECENT_API);
+          if (r.ok) {
+            const j = await r.json();
+            entries = j.entries || [];
+          }
+        } catch {}
+
+        if (!entries.length) {
+          grid.innerHTML = `<div class="cities-empty">No cities looked up yet. Load the widget above to populate this list.</div>`;
           return;
         }
 
-        grid.innerHTML = cities.map((entry) => {
-          const species = interleave(entry.data && entry.data.categories).slice(0, 8);
+        grid.innerHTML = entries.map((entry) => {
+          const species = interleave(entry.data && entry.data.categories);
           const name = (entry.data && entry.data.locationName) || entry.city;
-          const total = (entry.data.categories || []).reduce((n, c) => n + ((c.speciesList || []).length), 0);
+          const total = ((entry.data && entry.data.categories) || []).reduce((n, c) => n + ((c.speciesList || []).length), 0);
           return `
             <section class="city-gallery">
               <header>
@@ -440,17 +478,12 @@
             </section>
           `;
         }).join('');
+
+        hydrateImages();
       }
 
-      window.addEventListener('loka:wildlife:loaded', render);
-      window.addEventListener('storage', (e) => {
-        if (e.key && e.key.startsWith(CACHE_PREFIX)) render();
-      });
-      // Widget fills Wikipedia image cache asynchronously — re-render a few times.
-      setTimeout(render, 600);
-      setTimeout(render, 2000);
-      setTimeout(render, 5000);
-      render();
+      window.addEventListener('loka:wildlife:loaded', load);
+      load();
     })();
   </script>
 </body>

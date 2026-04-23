@@ -38,8 +38,9 @@ const appFiles = fs.existsSync(appsDir)
       console.warn(`apps/${file}: no default export — skipped`);
       continue;
     }
+    app.get(`/api/${name}`, mod.default);
     app.post(`/api/${name}`, mod.default);
-    console.log(`mounted POST /api/${name}`);
+    console.log(`mounted GET+POST /api/${name}`);
   }
 
   app.listen(PORT, '127.0.0.1', () => {

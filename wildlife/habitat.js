@@ -2,8 +2,6 @@
   'use strict';
 
   const API = 'https://loka.place/lokaApps/wildlife/api';
-  const CACHE_PREFIX = 'loka:wildlife:v2:';
-  const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
   const CATEGORY_DOT = {
     Birds: '#7A5CFF',
@@ -143,25 +141,6 @@
     document.head.appendChild(s);
   }
 
-  function cacheKey(city) {
-    return CACHE_PREFIX + String(city).trim().toLowerCase();
-  }
-  function cacheGet(city) {
-    try {
-      const raw = localStorage.getItem(cacheKey(city));
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (!parsed || !parsed.ts || !parsed.data) return null;
-      if (Date.now() - parsed.ts > CACHE_TTL_MS) return null;
-      return parsed.data;
-    } catch { return null; }
-  }
-  function cacheSet(city, data) {
-    try {
-      localStorage.setItem(cacheKey(city), JSON.stringify({ ts: Date.now(), city, data }));
-    } catch {}
-  }
-
   async function detectCity() {
     try {
       const r = await fetch('https://ipapi.co/json/');
@@ -184,28 +163,23 @@
   }
 
   const imgMemory = new Map();
-  const imgStorageKey = (name) => 'loka:wiki:v1:' + name.toLowerCase();
-
-  async function wikiImage(name) {
-    if (!name) return null;
-    if (imgMemory.has(name)) return imgMemory.get(name);
+  async function wikiImage(query) {
+    if (!query) return null;
+    if (imgMemory.has(query)) return imgMemory.get(query);
+    const url = 'https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1'
+      + '&generator=search&gsrlimit=1&gsrsearch=' + encodeURIComponent(query)
+      + '&prop=pageimages&piprop=thumbnail&pithumbsize=400';
     try {
-      const cached = localStorage.getItem(imgStorageKey(name));
-      if (cached !== null) {
-        const v = cached === '' ? null : cached;
-        imgMemory.set(name, v);
-        return v;
-      }
-    } catch {}
-    try {
-      const r = await fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(name));
+      const r = await fetch(url);
+      if (!r.ok) { imgMemory.set(query, null); return null; }
       const j = await r.json();
-      const src = (j && j.thumbnail && j.thumbnail.source) || null;
-      imgMemory.set(name, src);
-      try { localStorage.setItem(imgStorageKey(name), src || ''); } catch {}
+      const pages = (j && j.query && j.query.pages) || {};
+      const first = Object.values(pages)[0];
+      const src = (first && first.thumbnail && first.thumbnail.source) || null;
+      imgMemory.set(query, src);
       return src;
     } catch {
-      imgMemory.set(name, null);
+      imgMemory.set(query, null);
       return null;
     }
   }
@@ -255,7 +229,7 @@
 
     root.innerHTML = `
       <div class="lw-head">
-        <span class="lw-kicker">wildlife near <b>${escapeHTML(cityName)}</b></span>
+        <span class="lw-kicker">meet the locals of <b>${escapeHTML(cityName)}</b></span>
         <div class="lw-chips" role="tablist" aria-label="Category">
           ${cats.map((c) => `<button type="button" class="lw-chip${c === state.category ? ' is-active' : ''}" data-cat="${escapeAttr(c)}" role="tab" aria-selected="${c === state.category}">${escapeHTML(c)}</button>`).join('')}
         </div>
@@ -299,57 +273,21 @@
     loadFonts();
     injectStyles();
     const root = ensureRoot();
-    renderStatus(root, 'Finding native species near you…');
+    renderStatus(root, 'Finding your wild neighbours…');
 
     const city = await detectCity();
-    let data = cacheGet(city);
-    if (!data) {
-      try {
-        data = await fetchWildlife(city);
-        cacheSet(city, data);
-      } catch (e) {
-        renderStatus(root, `Couldn't reach the wildlife service. <br><small>${escapeHTML(e.message || 'unknown error')}</small>`);
-        return;
-      }
+    let data;
+    try {
+      data = await fetchWildlife(city);
+    } catch (e) {
+      renderStatus(root, `Couldn't reach the wildlife service. <br><small>${escapeHTML(e.message || 'unknown error')}</small>`);
+      return;
     }
 
     const state = { city, data, category: 'All' };
     render(root, state);
     window.dispatchEvent(new CustomEvent('loka:wildlife:loaded', { detail: { city, data } }));
   }
-
-  // Expose cache read for host pages
-  window.LokaWildlife = {
-    listCachedCities() {
-      const out = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (!k || !k.startsWith(CACHE_PREFIX)) continue;
-        try {
-          const parsed = JSON.parse(localStorage.getItem(k));
-          if (parsed && parsed.data) {
-            out.push({
-              city: parsed.city || k.slice(CACHE_PREFIX.length),
-              ts: parsed.ts,
-              data: parsed.data,
-            });
-          }
-        } catch {}
-      }
-      return out.sort((a, b) => b.ts - a.ts);
-    },
-    getCachedImage(name) {
-      try { return localStorage.getItem(imgStorageKey(name)) || null; } catch { return null; }
-    },
-    clearCache() {
-      const keys = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && (k.startsWith(CACHE_PREFIX) || k.startsWith('loka:wiki:v1:'))) keys.push(k);
-      }
-      keys.forEach((k) => localStorage.removeItem(k));
-    },
-  };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
