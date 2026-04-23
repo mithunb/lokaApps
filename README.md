@@ -25,7 +25,7 @@ lokaApps/
 
 - Static assets (`index.html`, `habitat.js`, preview pages) are served by
   Apache directly from `/home/mithun/loka.place/lokaApps/`.
-- `POST /lokaApps/<app>/api` is proxied by Apache to Node at `127.0.0.1:81`
+- `POST /lokaApps/<app>/api` is proxied by Apache to Node at `127.0.0.1:8181`
   and handled by `api/apps/<app>.js`.
 
 ## First-time deployment

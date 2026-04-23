@@ -66,8 +66,8 @@ echo "Then: apachectl configtest && systemctl reload apache2"
 echo
 
 sleep 1
-if curl -fsS "http://127.0.0.1:81/healthz" >/dev/null; then
-  echo "OK — Node API up on :81"
+if curl -fsS "http://127.0.0.1:8181/healthz" >/dev/null; then
+  echo "OK — Node API up on :8181"
 else
   echo "WARN — healthz failed; check: journalctl -u lokaApps -n 50"
   exit 1

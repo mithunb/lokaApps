@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.LOKA_PORT) || 81;
+const PORT = Number(process.env.LOKA_PORT) || 8181;
 
 const app = express();
 app.use(express.json({ limit: '256kb' }));

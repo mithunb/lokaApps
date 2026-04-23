@@ -42,7 +42,7 @@ echo "==> Restarting lokaApps service"
 systemctl restart lokaApps.service
 
 sleep 1
-if curl -fsS "http://127.0.0.1:81/healthz" >/dev/null; then
+if curl -fsS "http://127.0.0.1:8181/healthz" >/dev/null; then
   echo "OK — wildlife widget ready at https://loka.place/lokaApps/wildlife/"
 else
   echo "WARN — service not healthy; check: journalctl -u lokaApps -n 50" >&2
