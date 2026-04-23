@@ -50,24 +50,21 @@
     font-family: 'Fraunces', Georgia, serif;
     font-size: 14px; font-weight: 500; letter-spacing: -0.01em;
     color: var(--lw-text); white-space: nowrap;
+    min-width: 0; overflow: hidden; text-overflow: ellipsis;
   }
   .lw-kicker b { font-weight: 600; }
-  .lw-chips {
-    display: flex; gap: 4px; overflow-x: auto;
-    margin-left: auto; scrollbar-width: none;
+  .lw-credit {
+    margin-left: auto; flex: 0 0 auto;
+    font-size: 10px; color: var(--lw-muted);
+    letter-spacing: 0.02em; text-decoration: none; white-space: nowrap;
+    transition: color 120ms ease;
   }
-  .lw-chips::-webkit-scrollbar { display: none; }
-  .lw-chip {
-    appearance: none; background: transparent; border: 1px solid transparent;
-    color: var(--lw-muted); font: inherit; font-size: 11px; font-weight: 500;
-    letter-spacing: 0.02em; padding: 5px 10px; border-radius: 999px;
-    cursor: pointer; white-space: nowrap;
-    transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+  .lw-credit:hover { color: var(--lw-moss); }
+  .lw-credit b {
+    font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--lw-text);
   }
-  .lw-chip:hover { color: var(--lw-text); }
-  .lw-chip.is-active {
-    color: var(--lw-text); background: var(--lw-bg); border-color: var(--lw-border);
-  }
+  .lw-credit:hover b { color: var(--lw-moss); }
   .lw-strip {
     display: flex; gap: 0; overflow-x: auto; scroll-snap-type: x mandatory;
     scroll-behavior: smooth; padding: 0;
@@ -223,28 +220,17 @@
 
   function render(root, state) {
     const species = interleave(state.data.categories || []);
-    const cats = ['All', ...Array.from(new Set((state.data.categories || []).map((c) => c.name)))];
-    const visible = state.category === 'All' ? species : species.filter((s) => s.category === state.category);
     const cityName = state.data.locationName || state.city;
 
     root.innerHTML = `
       <div class="lw-head">
         <span class="lw-kicker">meet the locals of <b>${escapeHTML(cityName)}</b></span>
-        <div class="lw-chips" role="tablist" aria-label="Category">
-          ${cats.map((c) => `<button type="button" class="lw-chip${c === state.category ? ' is-active' : ''}" data-cat="${escapeAttr(c)}" role="tab" aria-selected="${c === state.category}">${escapeHTML(c)}</button>`).join('')}
-        </div>
+        <a class="lw-credit" href="https://discoverloka.org" target="_blank" rel="noopener" aria-label="A widget by LOKA — opens discoverloka.org">a widget by <b>LOKA</b></a>
       </div>
       <div class="lw-strip" role="list">
-        ${visible.map((s, i) => cardHTML(s, i)).join('')}
+        ${species.map((s, i) => cardHTML(s, i)).join('')}
       </div>
     `;
-
-    root.querySelectorAll('.lw-chip').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        state.category = btn.dataset.cat;
-        render(root, state);
-      });
-    });
 
     root.querySelectorAll('.lw-card').forEach((card) => {
       const name = card.dataset.name;
@@ -284,7 +270,7 @@
       return;
     }
 
-    const state = { city, data, category: 'All' };
+    const state = { city, data };
     render(root, state);
     window.dispatchEvent(new CustomEvent('loka:wildlife:loaded', { detail: { city, data } }));
   }
