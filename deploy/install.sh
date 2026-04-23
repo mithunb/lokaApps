@@ -16,11 +16,18 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
-echo "==> Checking Node.js"
-if ! command -v node >/dev/null 2>&1; then
+echo "==> Checking Node.js (need >= 20)"
+NODE_MAJOR=0
+if command -v node >/dev/null 2>&1; then
+  NODE_MAJOR=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
+fi
+if [[ "${NODE_MAJOR}" -lt 20 ]]; then
+  echo "   installing Node 20.x (found v${NODE_MAJOR}.x)"
+  apt-get remove -y nodejs libnode-dev 2>/dev/null || true
   curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
   apt-get install -y nodejs
 fi
+echo "   node $(node -v)"
 
 echo "==> Ensuring ${REPO_DIR} is owned by ${OWNER}"
 chown -R "${OWNER}:${OWNER}" "${REPO_DIR}"

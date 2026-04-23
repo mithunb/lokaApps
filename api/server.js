@@ -17,17 +17,22 @@ const appFiles = fs.existsSync(appsDir)
   ? fs.readdirSync(appsDir).filter((f) => f.endsWith('.js'))
   : [];
 
-for (const file of appFiles) {
-  const name = path.basename(file, '.js');
-  const mod = await import(pathToFileURL(path.join(appsDir, file)).href);
-  if (typeof mod.default !== 'function') {
-    console.warn(`apps/${file}: no default export — skipped`);
-    continue;
+(async () => {
+  for (const file of appFiles) {
+    const name = path.basename(file, '.js');
+    const mod = await import(pathToFileURL(path.join(appsDir, file)).href);
+    if (typeof mod.default !== 'function') {
+      console.warn(`apps/${file}: no default export — skipped`);
+      continue;
+    }
+    app.post(`/api/${name}`, mod.default);
+    console.log(`mounted POST /api/${name}`);
   }
-  app.post(`/api/${name}`, mod.default);
-  console.log(`mounted POST /api/${name}`);
-}
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`lokaApps api listening on 0.0.0.0:${PORT}`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`lokaApps api listening on 0.0.0.0:${PORT}`);
+  });
+})().catch((err) => {
+  console.error('startup error', err);
+  process.exit(1);
 });
