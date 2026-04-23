@@ -10,6 +10,15 @@ const app = express();
 app.use(express.json({ limit: '256kb' }));
 app.disable('x-powered-by');
 
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  next();
+});
+
 app.get('/healthz', (_req, res) => res.type('text/plain').send('ok'));
 
 const appsDir = path.join(__dirname, 'apps');
