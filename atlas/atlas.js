@@ -111,7 +111,7 @@
   /* ---- base style (glyphs + background + basemaps) ---- */
   function baseStyle(m) {
     var sources = {}, layers = [
-      { id: "bg", type: "background", paint: { "background-color": "#0c1512" } }
+      { id: "bg", type: "background", paint: { "background-color": "#e6e4df" } }
     ];
     m.basemaps.forEach(function (b) {
       sources["base-" + b.id] = {
@@ -190,7 +190,7 @@
     map.addLayer({
       id: L.id + "-hl", type: "line", source: srcId(L), layout: { visibility: vis(L) },
       paint: {
-        "line-color": ["case", ["boolean", ["feature-state", "selected"], false], "#f97316", "#1e2a1c"],
+        "line-color": ["case", ["boolean", ["feature-state", "selected"], false], "#A6522F", "#1e2a1c"],
         "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 3.4, ["boolean", ["feature-state", "hover"], false], 1.8, 0],
         "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 1, ["boolean", ["feature-state", "hover"], false], 0.9, 0]
       }

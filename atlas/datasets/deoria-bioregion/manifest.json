@@ -40,16 +40,16 @@
       "label": "Crop distribution by block", "default": true,
       "arrayProperty": "crops", "countProperty": "ncrops", "nameProperty": "name",
       "defaultMode": "diversity",
-      "diversity": { "label": "Crop diversity", "ramp": ["#eef7e6", "#c7e9b4", "#7fcdbb", "#41b6c4", "#2c7fb8", "#1a5276"], "max": 5 },
+      "diversity": { "label": "Crop diversity", "ramp": ["#e7e3d8", "#cdd3b4", "#a9bd8e", "#7f9c65", "#566f42", "#39502f"], "max": 5 },
       "categories": [
-        { "name": "Sugarcane", "color": "#1b9e77" },
-        { "name": "Rice", "color": "#4e9ef5" },
-        { "name": "Wheat", "color": "#d9a12a" },
-        { "name": "Mustard", "color": "#e6d63a" },
-        { "name": "Maize", "color": "#e6743b" },
-        { "name": "Banana", "color": "#8fce46" },
-        { "name": "Turmeric", "color": "#e6a817" },
-        { "name": "Vegetable Pea", "color": "#9c6ade" }
+        { "name": "Sugarcane", "color": "#4f6b3f" },
+        { "name": "Rice", "color": "#6f8fa0" },
+        { "name": "Wheat", "color": "#b58a3e" },
+        { "name": "Mustard", "color": "#cdb14a" },
+        { "name": "Maize", "color": "#b5613a" },
+        { "name": "Banana", "color": "#9aad5b" },
+        { "name": "Turmeric", "color": "#cc8a33" },
+        { "name": "Vegetable Pea", "color": "#7fa06a" }
       ],
       "popup": { "title": "name", "subtitleProperty": "district", "fields": [
         { "type": "tags", "label": "Crops grown", "property": "crops" },
@@ -58,15 +58,15 @@
     {
       "id": "floodplain", "group": "eco", "type": "fill", "source": "floodplain.geojson",
       "label": "Floodplain (observed inundation)", "default": false, "opacityControl": true,
-      "paint": { "fillColor": "#2f6fb0", "fillOpacity": 0.35, "outlineColor": "#1c4e86", "outlineWidth": 0.6 },
+      "paint": { "fillColor": "#6d8ba0", "fillOpacity": 0.35, "outlineColor": "#4f6b7e", "outlineWidth": 0.6 },
       "info": "Areas inundated at least once, 1998–2022 (NRSC/ISRO NDEM satellite record).",
-      "legend": [{ "color": "#2f6fb0", "label": "Historically flooded" }]
+      "legend": [{ "color": "#6d8ba0", "label": "Historically flooded" }]
     },
     {
       "id": "wetlands", "group": "eco", "type": "fill", "source": "wetlands.geojson",
       "label": "Wetlands & water bodies", "default": false,
-      "paint": { "fillColor": "#0ea5b7", "fillOpacity": 0.7, "outlineColor": "#0b7c8a", "outlineWidth": 0.5 },
-      "legend": [{ "color": "#0ea5b7", "label": "Lakes, ponds, ox-bows, riverine wetlands" }],
+      "paint": { "fillColor": "#5f8f86", "fillOpacity": 0.7, "outlineColor": "#48706a", "outlineWidth": 0.5 },
+      "legend": [{ "color": "#5f8f86", "label": "Lakes, ponds, ox-bows, riverine wetlands" }],
       "popup": { "title": "name", "titleFallback": "type", "fields": [
         { "label": "Type", "property": "type" },
         { "label": "Area", "property": "area_ha", "suffix": " ha" } ] }
@@ -74,43 +74,43 @@
     {
       "id": "basin", "group": "eco", "type": "fill", "source": "basin.geojson",
       "label": "River sub-basins", "default": false,
-      "paint": { "fillColor": "#60a5fa", "fillOpacity": 0.08, "outlineColor": "#2563eb", "outlineWidth": 1.4, "outlineDash": [3, 2] },
-      "legend": [{ "color": "#2563eb", "label": "Ghaghara / Gandak sub-basin", "shape": "dashed" }],
+      "paint": { "fillColor": "#8aa2b0", "fillOpacity": 0.08, "outlineColor": "#5f7f92", "outlineWidth": 1.4, "outlineDash": [3, 2] },
+      "legend": [{ "color": "#5f7f92", "label": "Ghaghara / Gandak sub-basin", "shape": "dashed" }],
       "popup": { "title": "name", "fields": [ { "label": "Basin", "property": "basin" } ] }
     },
     {
       "id": "agro", "group": "eco", "type": "fill", "source": "agro_zones.geojson",
       "label": "Agro-ecological zones", "default": false,
-      "paint": { "fillColor": "#84cc16", "fillOpacity": 0.1, "outlineColor": "#4d7c0f", "outlineWidth": 1.2, "outlineDash": [2, 2] },
-      "legend": [{ "color": "#4d7c0f", "label": "Agro-ecological region", "shape": "dashed" }],
+      "paint": { "fillColor": "#9aad5b", "fillOpacity": 0.1, "outlineColor": "#6b7a3f", "outlineWidth": 1.2, "outlineDash": [2, 2] },
+      "legend": [{ "color": "#6b7a3f", "label": "Agro-ecological region", "shape": "dashed" }],
       "popup": { "title": "name" }
     },
     {
       "id": "canals", "group": "eco", "type": "line", "source": "canals.geojson",
       "label": "Canals", "default": false,
-      "paint": { "color": "#38bdf8", "width": 1.4, "opacity": 0.9 },
-      "legend": [{ "color": "#38bdf8", "label": "Irrigation canal", "shape": "line" }],
+      "paint": { "color": "#7ba0b0", "width": 1.4, "opacity": 0.9 },
+      "legend": [{ "color": "#7ba0b0", "label": "Irrigation canal", "shape": "line" }],
       "popup": { "title": "name", "fields": [ { "label": "Project", "property": "project" } ] }
     },
     {
       "id": "rivers", "group": "eco", "type": "line", "source": "rivers.geojson",
       "label": "Rivers & drainage", "default": false,
       "paint": {
-        "color": "#3b82f6",
+        "color": "#5f7f92",
         "width": ["case", ["==", ["get", "layer"], "major"], 2.6, 1.1],
         "opacity": 0.95
       },
-      "label_text": { "property": "name", "size": 11, "color": "#1e3a8a", "haloColor": "#eaf2ff", "haloWidth": 1.4, "minzoom": 9 },
-      "legend": [{ "color": "#3b82f6", "label": "River / stream", "shape": "line" }],
+      "label_text": { "property": "name", "size": 11, "color": "#35505f", "haloColor": "#eaf2ff", "haloWidth": 1.4, "minzoom": 9 },
+      "legend": [{ "color": "#5f7f92", "label": "River / stream", "shape": "line" }],
       "popup": { "title": "name", "fields": [
         { "label": "Class", "property": "layer" }, { "label": "Sub-basin", "property": "sub_basin" } ] }
     },
     {
       "id": "districts", "group": "base", "type": "fill", "source": "districts.geojson",
       "label": "District boundaries", "default": true,
-      "paint": { "fillColor": "#000000", "fillOpacity": 0, "outlineColor": "#ffd43b", "outlineWidth": 2.6 },
+      "paint": { "fillColor": "#000000", "fillOpacity": 0, "outlineColor": "#B0863A", "outlineWidth": 2.6 },
       "label_text": { "property": "name", "size": 15, "color": "#1e2a1c", "haloColor": "#ffffff", "haloWidth": 2.2, "transform": "uppercase", "letterSpacing": 0.12, "minzoom": 7 },
-      "legend": [{ "color": "#ffd43b", "label": "District", "shape": "line" }],
+      "legend": [{ "color": "#B0863A", "label": "District", "shape": "line" }],
       "popup": { "title": "name", "subtitle": "District", "fields": [
         { "label": "Dominant crops", "property": "crops" },
         { "label": "Soil", "property": "soil" },
@@ -121,15 +121,15 @@
     {
       "id": "blocks", "group": "base", "type": "fill", "source": "blocks.geojson",
       "label": "Block boundaries & labels", "default": true,
-      "paint": { "fillColor": "#000000", "fillOpacity": 0, "outlineColor": "#ffffff", "outlineWidth": 1, "outlineOpacity": 0.55 },
-      "label_text": { "property": "name", "size": 11, "color": "#243524", "haloColor": "#ffffff", "haloWidth": 1.6, "minzoom": 9 }
+      "paint": { "fillColor": "#000000", "fillOpacity": 0, "outlineColor": "#5c544a", "outlineWidth": 1, "outlineOpacity": 0.42 },
+      "label_text": { "property": "name", "size": 11, "color": "#2b2723", "haloColor": "#ffffff", "haloWidth": 1.6, "minzoom": 9 }
     },
     {
       "id": "clusters", "group": "base", "type": "fill", "source": "clusters.geojson",
       "label": "Survey clusters", "default": true,
-      "paint": { "fillColor": "#f97316", "fillOpacity": 0.12, "outlineColor": "#f97316", "outlineWidth": 2.4, "outlineDash": [2, 1.5] },
-      "label_text": { "property": "name", "size": 13, "color": "#7c2d12", "haloColor": "#ffedd5", "haloWidth": 1.6 },
-      "legend": [{ "color": "#f97316", "label": "Confirmed cluster (5 villages)", "shape": "dashed" }],
+      "paint": { "fillColor": "#A6522F", "fillOpacity": 0.12, "outlineColor": "#A6522F", "outlineWidth": 2.4, "outlineDash": [2, 1.5] },
+      "label_text": { "property": "name", "size": 13, "color": "#7E3B1F", "haloColor": "#ffedd5", "haloWidth": 1.6 },
+      "legend": [{ "color": "#A6522F", "label": "Confirmed cluster (5 villages)", "shape": "dashed" }],
       "popup": { "title": "name", "fields": [
         { "label": "District", "property": "district" },
         { "label": "Block", "property": "block" },
@@ -140,13 +140,13 @@
       "label": "Value-chain nodes", "default": true,
       "markerBy": "type",
       "markers": {
-        "Sugar mill": { "color": "#b45309", "icon": "factory" },
-        "Distillery": { "color": "#7c3aed", "icon": "flask" }
+        "Sugar mill": { "color": "#9C5A34", "icon": "factory" },
+        "Distillery": { "color": "#40573D", "icon": "flask" }
       },
       "label_text": { "property": "name" },
       "legend": [
-        { "color": "#b45309", "label": "Sugar mill", "icon": "factory" },
-        { "color": "#7c3aed", "label": "Distillery", "icon": "flask" }
+        { "color": "#9C5A34", "label": "Sugar mill", "icon": "factory" },
+        { "color": "#40573D", "label": "Distillery", "icon": "flask" }
       ],
       "popup": { "title": "name", "subtitleProperty": "type", "fields": [
         { "label": "District", "property": "district" },
@@ -156,10 +156,10 @@
     {
       "id": "villages", "group": "base", "type": "marker", "source": "villages.geojson",
       "label": "Survey villages", "default": true,
-      "marker": { "color": "#f97316", "ring": true },
+      "marker": { "color": "#A6522F", "ring": true },
       "cluster": { "belowZoom": 10.8, "label": "Cluster 1" },
       "label_text": { "property": "name" },
-      "legend": [{ "color": "#f97316", "label": "Survey village", "shape": "dot" }],
+      "legend": [{ "color": "#A6522F", "label": "Survey village", "shape": "dot" }],
       "popup": { "title": "name", "subtitle": "Cluster 1 survey village", "fields": [
         { "label": "Block", "property": "block" },
         { "label": "LGD village", "property": "matched" } ] }
