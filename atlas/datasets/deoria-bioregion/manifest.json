@@ -2,7 +2,7 @@
   "id": "deoria-bioregion",
   "title": "Deoria · Kushinagar · Gorakhpur",
   "subtitle": "A bioregional map for the Basket of Needs survey",
-  "about": "Crop systems, value-chain infrastructure and the ecological landscape across three eastern-UP districts — a shared map to help select the survey villages and frame the bioregion. Built with Jagriti & Socratus.",
+  "about": "Crop systems, value-chain infrastructure and the ecological landscape across three eastern-UP districts — a shared map to help select the survey villages and frame the bioregion. A collaboration between LOKA and the Systems Practice at Socratus, with Jagriti as the on-ground partner.",
   "center": [83.72, 26.68],
   "zoom": 8.2,
   "bounds": [[83.0, 26.03], [84.47, 27.34]],
@@ -178,6 +178,6 @@
     { "name": "ESA WorldCover 2021 (Copernicus)", "url": "https://esa-worldcover.org", "note": "Land use / land cover", "license": "CC-BY 4.0" },
     { "name": "Esri World Imagery", "url": "https://www.esri.com", "note": "Satellite basemap & place labels" },
     { "name": "OpenStreetMap contributors & CARTO", "url": "https://www.openstreetmap.org/copyright", "note": "Map basemap, geocoding", "license": "ODbL" },
-    { "name": "Socratus value-chain desk research", "url": "https://socratus.org", "note": "Crop-by-block & value-chain data (attribute mapping)" }
+    { "name": "Systems Practice, Socratus", "url": "https://socratus.org", "note": "Value-chain desk research — crop-by-block & value-chain data" }
   ]
 }
