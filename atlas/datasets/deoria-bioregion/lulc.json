@@ -1,0 +1,82 @@
+{
+  "image": "lulc.png",
+  "coordinates": [
+    [
+      83.05,
+      27.32
+    ],
+    [
+      84.43984999999999,
+      27.32
+    ],
+    [
+      84.43984999999999,
+      26.06985
+    ],
+    [
+      83.05,
+      26.06985
+    ]
+  ],
+  "bounds": [
+    83.05,
+    26.06985,
+    84.43984999999999,
+    27.32
+  ],
+  "size": [
+    2527,
+    2273
+  ],
+  "legend": [
+    {
+      "value": 40,
+      "label": "Cropland",
+      "color": "#f096ff",
+      "pct": 77.3
+    },
+    {
+      "value": 10,
+      "label": "Tree cover",
+      "color": "#006400",
+      "pct": 12.2
+    },
+    {
+      "value": 50,
+      "label": "Built-up",
+      "color": "#fa0000",
+      "pct": 5.8
+    },
+    {
+      "value": 30,
+      "label": "Grassland",
+      "color": "#ffff4c",
+      "pct": 2.0
+    },
+    {
+      "value": 80,
+      "label": "Water",
+      "color": "#0064c8",
+      "pct": 1.9
+    },
+    {
+      "value": 60,
+      "label": "Bare / sparse",
+      "color": "#b4b4b4",
+      "pct": 0.4
+    },
+    {
+      "value": 90,
+      "label": "Herbaceous wetland",
+      "color": "#0096a0",
+      "pct": 0.3
+    },
+    {
+      "value": 20,
+      "label": "Shrubland",
+      "color": "#ffbb22",
+      "pct": 0.0
+    }
+  ],
+  "source": "ESA WorldCover 2021 v200 (10 m), clipped to districts, resampled ~60 m"
+}

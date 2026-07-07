@@ -1,0 +1,183 @@
+{
+  "id": "deoria-bioregion",
+  "title": "Deoria · Kushinagar · Gorakhpur",
+  "subtitle": "A bioregional map for the Basket of Needs survey",
+  "about": "Crop systems, value-chain infrastructure and the ecological landscape across three eastern-UP districts — a shared map to help select the survey villages and frame the bioregion. Built with Jagriti & Socratus.",
+  "center": [83.72, 26.68],
+  "zoom": 8.2,
+  "bounds": [[83.0, 26.03], [84.47, 27.34]],
+  "minzoom": 6.5,
+  "maxzoom": 15,
+  "glyphs": "https://tiles.basemaps.cartocdn.com/fonts/{fontstack}/{range}.pbf",
+  "basemaps": [
+    {
+      "id": "satellite", "label": "Satellite", "default": true,
+      "tiles": ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+      "tileSize": 256, "maxzoom": 19,
+      "attribution": "Imagery © Esri, Maxar, Earthstar Geographics"
+    },
+    {
+      "id": "light", "label": "Map",
+      "tiles": ["https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png", "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png", "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"],
+      "tileSize": 256, "maxzoom": 19,
+      "attribution": "© OpenStreetMap contributors © CARTO"
+    }
+  ],
+  "groups": [
+    { "id": "base", "label": "Base", "open": true },
+    { "id": "agri", "label": "Crops & value chain", "open": true },
+    { "id": "eco", "label": "Ecological landscape", "open": false }
+  ],
+  "layers": [
+    {
+      "id": "lulc", "group": "eco", "type": "image", "source": "lulc.json",
+      "label": "Land use / land cover", "default": false, "opacityControl": true, "opacity": 0.75,
+      "info": "ESA WorldCover 2021 (10 m), clipped to the three districts.",
+      "legendFrom": "source"
+    },
+    {
+      "id": "crops", "group": "agri", "type": "categories", "source": "blocks.geojson",
+      "label": "Crop distribution by block", "default": true,
+      "arrayProperty": "crops", "countProperty": "ncrops", "nameProperty": "name",
+      "defaultMode": "diversity",
+      "diversity": { "label": "Crop diversity", "ramp": ["#eef7e6", "#c7e9b4", "#7fcdbb", "#41b6c4", "#2c7fb8", "#1a5276"], "max": 5 },
+      "categories": [
+        { "name": "Sugarcane", "color": "#1b9e77" },
+        { "name": "Rice", "color": "#4e9ef5" },
+        { "name": "Wheat", "color": "#d9a12a" },
+        { "name": "Mustard", "color": "#e6d63a" },
+        { "name": "Maize", "color": "#e6743b" },
+        { "name": "Banana", "color": "#8fce46" },
+        { "name": "Turmeric", "color": "#e6a817" },
+        { "name": "Vegetable Pea", "color": "#9c6ade" }
+      ],
+      "popup": { "title": "name", "subtitleProperty": "district", "fields": [
+        { "type": "tags", "label": "Crops grown", "property": "crops" },
+        { "type": "notes", "property": "cropNotes" } ] }
+    },
+    {
+      "id": "floodplain", "group": "eco", "type": "fill", "source": "floodplain.geojson",
+      "label": "Floodplain (observed inundation)", "default": false, "opacityControl": true,
+      "paint": { "fillColor": "#2f6fb0", "fillOpacity": 0.35, "outlineColor": "#1c4e86", "outlineWidth": 0.6 },
+      "info": "Areas inundated at least once, 1998–2022 (NRSC/ISRO NDEM satellite record).",
+      "legend": [{ "color": "#2f6fb0", "label": "Historically flooded" }]
+    },
+    {
+      "id": "wetlands", "group": "eco", "type": "fill", "source": "wetlands.geojson",
+      "label": "Wetlands & water bodies", "default": false,
+      "paint": { "fillColor": "#0ea5b7", "fillOpacity": 0.7, "outlineColor": "#0b7c8a", "outlineWidth": 0.5 },
+      "legend": [{ "color": "#0ea5b7", "label": "Lakes, ponds, ox-bows, riverine wetlands" }],
+      "popup": { "title": "name", "titleFallback": "type", "fields": [
+        { "label": "Type", "property": "type" },
+        { "label": "Area", "property": "area_ha", "suffix": " ha" } ] }
+    },
+    {
+      "id": "basin", "group": "eco", "type": "fill", "source": "basin.geojson",
+      "label": "River sub-basins", "default": false,
+      "paint": { "fillColor": "#60a5fa", "fillOpacity": 0.08, "outlineColor": "#2563eb", "outlineWidth": 1.4, "outlineDash": [3, 2] },
+      "legend": [{ "color": "#2563eb", "label": "Ghaghara / Gandak sub-basin", "shape": "dashed" }],
+      "popup": { "title": "name", "fields": [ { "label": "Basin", "property": "basin" } ] }
+    },
+    {
+      "id": "agro", "group": "eco", "type": "fill", "source": "agro_zones.geojson",
+      "label": "Agro-ecological zones", "default": false,
+      "paint": { "fillColor": "#84cc16", "fillOpacity": 0.1, "outlineColor": "#4d7c0f", "outlineWidth": 1.2, "outlineDash": [2, 2] },
+      "legend": [{ "color": "#4d7c0f", "label": "Agro-ecological region", "shape": "dashed" }],
+      "popup": { "title": "name" }
+    },
+    {
+      "id": "canals", "group": "eco", "type": "line", "source": "canals.geojson",
+      "label": "Canals", "default": false,
+      "paint": { "color": "#38bdf8", "width": 1.4, "opacity": 0.9 },
+      "legend": [{ "color": "#38bdf8", "label": "Irrigation canal", "shape": "line" }],
+      "popup": { "title": "name", "fields": [ { "label": "Project", "property": "project" } ] }
+    },
+    {
+      "id": "rivers", "group": "eco", "type": "line", "source": "rivers.geojson",
+      "label": "Rivers & drainage", "default": false,
+      "paint": {
+        "color": "#3b82f6",
+        "width": ["case", ["==", ["get", "layer"], "major"], 2.6, 1.1],
+        "opacity": 0.95
+      },
+      "label_text": { "property": "name", "size": 11, "color": "#1e3a8a", "haloColor": "#eaf2ff", "haloWidth": 1.4, "minzoom": 9 },
+      "legend": [{ "color": "#3b82f6", "label": "River / stream", "shape": "line" }],
+      "popup": { "title": "name", "fields": [
+        { "label": "Class", "property": "layer" }, { "label": "Sub-basin", "property": "sub_basin" } ] }
+    },
+    {
+      "id": "districts", "group": "base", "type": "fill", "source": "districts.geojson",
+      "label": "District boundaries", "default": true,
+      "paint": { "fillColor": "#000000", "fillOpacity": 0, "outlineColor": "#ffd43b", "outlineWidth": 2.6 },
+      "label_text": { "property": "name", "size": 15, "color": "#1e2a1c", "haloColor": "#ffffff", "haloWidth": 2.2, "transform": "uppercase", "letterSpacing": 0.12, "minzoom": 7 },
+      "legend": [{ "color": "#ffd43b", "label": "District", "shape": "line" }],
+      "popup": { "title": "name", "subtitle": "District", "fields": [
+        { "label": "Dominant crops", "property": "crops" },
+        { "label": "Soil", "property": "soil" },
+        { "label": "Water resources", "property": "water" },
+        { "label": "ODOP", "property": "odop" },
+        { "label": "Value-chain infra", "property": "valuechain" } ] }
+    },
+    {
+      "id": "blocks", "group": "base", "type": "fill", "source": "blocks.geojson",
+      "label": "Block boundaries & labels", "default": true,
+      "paint": { "fillColor": "#000000", "fillOpacity": 0, "outlineColor": "#ffffff", "outlineWidth": 1, "outlineOpacity": 0.55 },
+      "label_text": { "property": "name", "size": 11, "color": "#243524", "haloColor": "#ffffff", "haloWidth": 1.6, "minzoom": 9 }
+    },
+    {
+      "id": "clusters", "group": "base", "type": "fill", "source": "clusters.geojson",
+      "label": "Survey clusters", "default": true,
+      "paint": { "fillColor": "#f97316", "fillOpacity": 0.12, "outlineColor": "#f97316", "outlineWidth": 2.4, "outlineDash": [2, 1.5] },
+      "label_text": { "property": "name", "size": 13, "color": "#7c2d12", "haloColor": "#ffedd5", "haloWidth": 1.6 },
+      "legend": [{ "color": "#f97316", "label": "Confirmed cluster (5 villages)", "shape": "dashed" }],
+      "popup": { "title": "name", "fields": [
+        { "label": "District", "property": "district" },
+        { "label": "Block", "property": "block" },
+        { "type": "tags", "label": "Villages", "property": "villages" } ] }
+    },
+    {
+      "id": "valuechain", "group": "agri", "type": "marker", "source": "valuechain.geojson",
+      "label": "Value-chain nodes", "default": true,
+      "markerBy": "type",
+      "markers": {
+        "Sugar mill": { "color": "#b45309", "glyph": "▲" },
+        "Distillery": { "color": "#7c3aed", "glyph": "◆" }
+      },
+      "label_text": { "property": "name" },
+      "legend": [
+        { "color": "#b45309", "label": "Sugar mill", "shape": "triangle" },
+        { "color": "#7c3aed", "label": "Distillery", "shape": "diamond" }
+      ],
+      "popup": { "title": "name", "subtitleProperty": "type", "fields": [
+        { "label": "District", "property": "district" },
+        { "label": "About", "property": "note" },
+        { "label": "Location", "property": "location_source" } ] }
+    },
+    {
+      "id": "villages", "group": "base", "type": "marker", "source": "villages.geojson",
+      "label": "Survey villages", "default": true,
+      "marker": { "color": "#f97316", "glyph": "●", "ring": true },
+      "label_text": { "property": "name" },
+      "legend": [{ "color": "#f97316", "label": "Survey village", "shape": "dot" }],
+      "popup": { "title": "name", "subtitle": "Cluster 1 survey village", "fields": [
+        { "label": "Block", "property": "block" },
+        { "label": "LGD village", "property": "matched" } ] }
+    },
+    {
+      "id": "labels", "group": "base", "type": "raster", "default": true,
+      "label": "Place labels (satellite)", "onlyWithBasemap": "satellite",
+      "tiles": ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"],
+      "tileSize": 256, "attribution": "Labels © Esri"
+    }
+  ],
+  "attributions": [
+    { "name": "Bharatlas", "url": "https://bharatlas.com", "note": "Boundaries, rivers, sub-basins, flood inundation, wetlands, ethanol plants (aggregated)", "license": "CC0 / CC-BY 4.0" },
+    { "name": "Local Government Directory (LGD)", "url": "https://lgdirectory.gov.in", "note": "District, block & village boundaries" },
+    { "name": "India-WRIS, Central Water Commission", "url": "https://indiawris.gov.in", "note": "Rivers, sub-basins, canals" },
+    { "name": "NRSC / ISRO — NDEM", "url": "https://bhuvan.nrsc.gov.in", "note": "Flood inundation 1998–2022" },
+    { "name": "ESA WorldCover 2021 (Copernicus)", "url": "https://esa-worldcover.org", "note": "Land use / land cover", "license": "CC-BY 4.0" },
+    { "name": "Esri World Imagery", "url": "https://www.esri.com", "note": "Satellite basemap & place labels" },
+    { "name": "OpenStreetMap contributors & CARTO", "url": "https://www.openstreetmap.org/copyright", "note": "Map basemap, geocoding", "license": "ODbL" },
+    { "name": "Socratus value-chain desk research", "url": "https://socratus.org", "note": "Crop-by-block & value-chain data (attribute mapping)" }
+  ]
+}

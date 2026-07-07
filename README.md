@@ -64,6 +64,43 @@ sudo -u mithun pm2 reload lokaApps --update-env   # after editing api/.env
 sudo -u mithun pm2 restart lokaApps
 ```
 
+## Atlas — a generic, data-driven map app
+
+`atlas/` is a reusable map engine, not a one-off. `atlas.js` renders whatever a
+**dataset manifest** describes; a dataset is a self-contained folder of a `manifest.json`
+plus its data files. Nothing about a specific geography is hard-coded.
+
+```
+atlas/
+├── index.html                 # host page + LOKA styling + credits footer
+├── atlas.js                   # generic engine (MapLibre GL): manifest → layers, controls, legends, popups
+├── loka-logo.png
+└── datasets/
+    └── deoria-bioregion/      # one dataset = one geography/topic
+        ├── manifest.json      # declares basemaps, groups, layers, attributions
+        ├── districts.geojson  blocks.geojson  villages.geojson  clusters.geojson
+        ├── valuechain.geojson rivers.geojson  basin.geojson  wetlands.geojson
+        ├── canals.geojson     floodplain.geojson  agro_zones.geojson
+        └── lulc.png + lulc.json   # georeferenced image overlay + bounds/legend
+```
+
+- Open a dataset with `atlas/?dataset=<folder-name>` (defaults to `deoria-bioregion`).
+- **Add a new geography:** drop in a new `datasets/<id>/` folder with its own
+  `manifest.json` + data — no code changes.
+- **Layer types** the engine understands (set per layer in the manifest): `fill`, `line`,
+  `circle`, `marker` (DOM pins), `image` (georeferenced overlay), `raster` (XYZ tiles),
+  and `categories` (a choropleth with a category selector, e.g. crop-by-block).
+- Draw order = manifest layer array order (bottom→top); markers sit on top.
+- Basemaps (Esri World Imagery, CARTO) and glyphs (CARTO) load from public,
+  no-API-key, CORS-enabled endpoints. All data is baked in and self-hosted, so the app
+  is fully static.
+- The credits footer is manifest-driven: each dataset's `attributions` render
+  automatically alongside the fixed LOKA / Systems Practice / MapLibre credits.
+
+The `deoria-bioregion` dataset was built from an attribute spreadsheet + open boundary/
+hydrology/land-cover data (LGD, India-WRIS, NRSC-NDEM, ESA WorldCover) via one-off Python
+scripts; the app itself only ever reads the finished files in the dataset folder.
+
 ## Adding a new app
 
 1. Create `api/apps/<name>.js` exporting a default `(req, res) => …` handler.
