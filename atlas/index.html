@@ -187,7 +187,9 @@
     .credits-col h3 { display:flex; align-items:center; gap:.5rem; font-family:'Figtree',sans-serif; font-size:.72rem;
       font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--color-text-muted); margin:0 0 .8rem; }
     .credits-col h3 svg { width:15px; height:15px; color:var(--color-moss); }
-    .loka-wordmark { display:block; height:28px; width:auto; margin:0 0 .85rem; }
+    .loka-wordmark-link { display:inline-block; margin:0 0 .85rem; transition:opacity .15s ease; }
+    .loka-wordmark-link:hover { opacity:.78; }
+    .loka-wordmark { display:block; height:28px; width:auto; }
     .cr-lede { font-size:.85rem; color:var(--color-text-secondary); margin:0 0 1.1rem; max-width:36ch; }
     .cr-lede b { color:var(--color-text-primary); font-weight:600; }
     .cr-orgs { display:flex; flex-direction:column; gap:.9rem; }
@@ -288,7 +290,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           Made by
         </h3>
-        <img class="loka-wordmark" src="./loka-logo.png" alt="LOKA" />
+        <a class="loka-wordmark-link" href="https://discoverloka.org" target="_blank" rel="noopener" aria-label="LOKA — discoverloka.org"><img class="loka-wordmark" src="./loka-logo.png" alt="LOKA" /></a>
         <p class="cr-lede">A platform built by Socratus. This atlas is a collaboration between LOKA and the <b>Systems Practice</b> at Socratus.</p>
         <div class="cr-orgs">
           <div class="cr-org">
@@ -326,7 +328,10 @@
 
   <footer class="site">
     <div class="foot-inner">
-      Part of <a href="https://discoverloka.org">LOKA</a>, a platform built by Socratus.
+      Public Tech by Socratus. Check out
+      <a href="https://discoverloka.org" target="_blank" rel="noopener">LOKA</a>,
+      <a href="https://voicereport.in" target="_blank" rel="noopener">VoiceReports</a> and
+      <a href="https://wystem.ai" target="_blank" rel="noopener">Wystem</a>.
     </div>
   </footer>
 
