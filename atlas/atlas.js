@@ -29,6 +29,14 @@
     });
   };
 
+  // Lucide icons (MIT) — a modern, consistent set, inlined so the app stays self-contained.
+  var ICONS = {
+    chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
+    info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
+    factory: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M17 18h1M12 18h1M7 18h1"/></svg>',
+    flask: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></svg>'
+  };
+
   var map, MANIFEST, activeBasemap, DATA = {}, markersByLayer = {}, cropState = {};
 
   fetch(BASE + "manifest.json")
@@ -149,7 +157,7 @@
   function addGeoSource(L, done) {
     var gj = DATA[L.id];
     if (!gj) return;
-    if (!map.getSource(srcId(L))) map.addSource(srcId(L), { type: "geojson", data: gj });
+    if (!map.getSource(srcId(L))) map.addSource(srcId(L), { type: "geojson", data: gj, generateId: true });
     done && done(gj);
   }
 
@@ -170,8 +178,24 @@
         map.addLayer({ id: L.id + "-line", type: "line", source: srcId(L), layout: { visibility: vis(L) }, paint: lp });
         L._ids.push(L.id + "-line");
       }
+      addHighlight(L);
       addLabel(L);
     });
+  }
+
+  // Feature-state driven outline: invisible until a feature is hovered (thin dark) or
+  // selected (bold orange, persists while the map pans). Only for clickable layers.
+  function addHighlight(L) {
+    if (!L.popup || !map.getSource(srcId(L))) return;
+    map.addLayer({
+      id: L.id + "-hl", type: "line", source: srcId(L), layout: { visibility: vis(L) },
+      paint: {
+        "line-color": ["case", ["boolean", ["feature-state", "selected"], false], "#f97316", "#1e2a1c"],
+        "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 3.4, ["boolean", ["feature-state", "hover"], false], 1.8, 0],
+        "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 1, ["boolean", ["feature-state", "hover"], false], 0.9, 0]
+      }
+    });
+    L._ids.push(L.id + "-hl");
   }
 
   function addLine(L) {
@@ -239,7 +263,8 @@
 
   function addRaster(L) {
     map.addSource(srcId(L), { type: "raster", tiles: L.tiles, tileSize: L.tileSize || 256, attribution: L.attribution || "" });
-    map.addLayer({ id: L.id + "-raster", type: "raster", source: srcId(L), layout: { visibility: vis(L) }, paint: { "raster-opacity": L.opacity != null ? L.opacity : 1 } });
+    var show = on(L) && (!L.onlyWithBasemap || L.onlyWithBasemap === activeBasemap);
+    map.addLayer({ id: L.id + "-raster", type: "raster", source: srcId(L), layout: { visibility: show ? "visible" : "none" }, paint: { "raster-opacity": L.opacity != null ? L.opacity : 1 } });
     L._ids = [L.id + "-raster"];
   }
 
@@ -254,6 +279,7 @@
         paint: { "fill-color": "#888", "fill-opacity": 0.4, "fill-outline-color": "rgba(0,0,0,0)" }
       });
       L._ids.push(L.id + "-fill");
+      addHighlight(L);
       applyCategoryPaint(L);
     });
   }
@@ -289,25 +315,54 @@
   /* ---- markers (DOM) ---- */
   function addMarker(L) {
     markersByLayer[L.id] = [];
-    addGeoSource(L, function (gj) {
-      gj.features.forEach(function (f) {
-        var cfg = L.marker || (L.markers && L.markers[f.properties[L.markerBy]]) || {};
-        var wrap = el("div", "atlas-marker");
-        var pin = el("div", "atlas-pin" + (cfg.ring ? " ring" : ""));
-        pin.style.setProperty("--pin", cfg.color || "#f97316");
-        pin.textContent = cfg.glyph || "";
-        wrap.appendChild(pin);
-        if (L.label_text) {
-          var lab = el("span", "atlas-mlabel", esc(f.properties[L.label_text.property]));
-          wrap.appendChild(lab);
-        }
-        wrap.addEventListener("click", function (e) { e.stopPropagation(); openPopup(L, f, f.geometry.coordinates); });
-        var mk = new maplibregl.Marker({ element: wrap, anchor: "bottom" })
-          .setLngLat(f.geometry.coordinates).addTo(map);
-        wrap.style.display = on(L) ? "" : "none";
-        markersByLayer[L.id].push(mk);
-      });
+    var gj = DATA[L.id];
+    if (!gj) return;
+    var pts = [];
+    gj.features.forEach(function (f) {
+      var cfg = L.marker || (L.markers && L.markers[f.properties[L.markerBy]]) || {};
+      var wrap = el("div", "atlas-marker");
+      var pin = el("div", "atlas-pin" + (cfg.ring ? " ring" : ""));
+      pin.style.setProperty("--pin", cfg.color || "#f97316");
+      if (cfg.icon && ICONS[cfg.icon]) pin.innerHTML = ICONS[cfg.icon];
+      else if (cfg.glyph) pin.textContent = cfg.glyph;
+      wrap.appendChild(pin);
+      if (L.label_text) wrap.appendChild(el("span", "atlas-mlabel", esc(f.properties[L.label_text.property])));
+      wrap.addEventListener("click", function (e) { e.stopPropagation(); openPopup(L, f, f.geometry.coordinates); });
+      markersByLayer[L.id].push(
+        new maplibregl.Marker({ element: wrap, anchor: "bottom" }).setLngLat(f.geometry.coordinates).addTo(map)
+      );
+      pts.push(f.geometry.coordinates);
     });
+    L._pts = pts;
+    if (L.cluster && pts.length) setupCluster(L);
+    applyMarkerVisibility(L);
+  }
+
+  // A single numbered badge stands in for a tight group at overview zoom; the
+  // individual pins take over once you zoom past `belowZoom`.
+  function setupCluster(L) {
+    var pts = L._pts;
+    var cx = pts.reduce(function (s, p) { return s + p[0]; }, 0) / pts.length;
+    var cy = pts.reduce(function (s, p) { return s + p[1]; }, 0) / pts.length;
+    var wrap = el("div", "atlas-cluster");
+    wrap.innerHTML = '<span class="cl-count">' + pts.length + "</span>" +
+      (L.cluster.label ? '<span class="cl-label">' + esc(L.cluster.label) + "</span>" : "");
+    wrap.addEventListener("click", function (e) { e.stopPropagation(); fitPoints(pts); });
+    L._clusterMarker = new maplibregl.Marker({ element: wrap, anchor: "center" }).setLngLat([cx, cy]).addTo(map);
+    if (!L._zoomWired) { map.on("zoom", function () { applyMarkerVisibility(L); }); L._zoomWired = true; }
+  }
+
+  function applyMarkerVisibility(L) {
+    var shown = L._visible !== false;
+    var clustered = L.cluster && L._clusterMarker && map.getZoom() < L.cluster.belowZoom;
+    (markersByLayer[L.id] || []).forEach(function (mk) { mk.getElement().style.display = (shown && !clustered) ? "" : "none"; });
+    if (L._clusterMarker) L._clusterMarker.getElement().style.display = (shown && clustered) ? "" : "none";
+  }
+
+  function fitPoints(pts) {
+    var b = new maplibregl.LngLatBounds(pts[0], pts[0]);
+    pts.forEach(function (p) { b.extend(p); });
+    map.fitBounds(b, { padding: 110, maxZoom: 13, duration: 600 });
   }
 
   /* ==================================================================
@@ -318,7 +373,7 @@
     (L._ids || []).forEach(function (id) {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", show ? "visible" : "none");
     });
-    (markersByLayer[L.id] || []).forEach(function (mk) { mk.getElement().style.display = show ? "" : "none"; });
+    if (markersByLayer[L.id]) applyMarkerVisibility(L);
     if (L.onlyWithBasemap && show && activeBasemap !== L.onlyWithBasemap) hideLayerIds(L);
   }
   function hideLayerIds(L) {
@@ -364,7 +419,7 @@
       if (!layers.length) return;
       var sec = el("section", "ctl-group" + (g.open === false ? " collapsed" : ""));
       var head = el("button", "ctl-group-head");
-      head.innerHTML = '<span>' + esc(g.label) + '</span><span class="chev">▾</span>';
+      head.innerHTML = '<span>' + esc(g.label) + '</span><span class="chev">' + ICONS.chevron + '</span>';
       head.onclick = function () { sec.classList.toggle("collapsed"); };
       sec.appendChild(head);
       var body = el("div", "ctl-group-body");
@@ -383,7 +438,7 @@
     var name = el("span", "ctl-name", esc(L.label));
     top.appendChild(cb); top.appendChild(sw); top.appendChild(name);
     if (L.info) {
-      var info = el("span", "ctl-info", "i");
+      var info = el("span", "ctl-info", ICONS.info);
       info.title = L.info;
       top.appendChild(info);
     }
@@ -470,6 +525,11 @@
   }
 
   function swatch(it) {
+    if (it.icon && ICONS[it.icon]) {
+      var w = el("span", "leg-icon", ICONS[it.icon]);
+      w.style.setProperty("--c", it.color);
+      return w;
+    }
     var s = el("span", "leg-swatch " + (it.shape || "box"));
     s.style.setProperty("--c", it.color);
     return s;
@@ -481,23 +541,45 @@
   function wirePopups() {
     var clickable = MANIFEST.layers.filter(function (L) { return L.popup && L.type !== "marker"; });
     var ids = [];
-    clickable.forEach(function (L) { (L._ids || []).forEach(function (id) { if (id.endsWith("-fill") || id.endsWith("-line") || id.endsWith("-circle")) ids.push({ id: id, L: L }); }); });
+    clickable.forEach(function (L) { (L._ids || []).forEach(function (id) { if (/-(fill|line|circle)$/.test(id) && !/-hl$/.test(id)) ids.push({ id: id, L: L }); }); });
+    var idList = ids.map(function (x) { return x.id; });
+    var hoverRef = null, selRef = null;
+
+    // Prefer the most specific layer (earliest in manifest order — a block's crop popup
+    // wins over the transparent district fill that sits above it).
+    function pick(pt) {
+      var hits = map.queryRenderedFeatures(pt, { layers: idList });
+      var best = null, bestRank = Infinity;
+      hits.forEach(function (h) {
+        var i = ids.findIndex(function (x) { return x.id === h.layer.id; });
+        if (i >= 0 && i < bestRank) { bestRank = i; best = { f: h, L: ids[i].L }; }
+      });
+      return best;
+    }
+    function clearHover() { if (hoverRef) { try { map.setFeatureState(hoverRef, { hover: false }); } catch (e) {} hoverRef = null; } }
+    function clearSel() { if (selRef) { try { map.setFeatureState(selRef, { selected: false }); } catch (e) {} selRef = null; } }
+
+    map.on("mousemove", function (e) {
+      var top = pick(e.point);
+      map.getCanvas().style.cursor = top ? "pointer" : "";
+      if (!top || top.f.id == null) { clearHover(); return; }
+      var ref = { source: top.f.source, id: top.f.id };
+      if (!hoverRef || hoverRef.id !== ref.id || hoverRef.source !== ref.source) {
+        clearHover(); hoverRef = ref;
+        try { map.setFeatureState(ref, { hover: true }); } catch (e) {}
+      }
+    });
+    map.on("mouseout", clearHover);
 
     map.on("click", function (e) {
-      var hits = map.queryRenderedFeatures(e.point, { layers: ids.map(function (x) { return x.id; }) });
-      if (!hits.length) return;
-      // Prefer the most specific layer (earliest in manifest order — e.g. a block's crop
-      // popup wins over the transparent district fill that sits above it).
-      var best = null, bestEntry = null, bestRank = Infinity;
-      hits.forEach(function (h) {
-        var idx = ids.findIndex(function (x) { return x.id === h.layer.id; });
-        if (idx >= 0 && idx < bestRank) { bestRank = idx; best = h; bestEntry = ids[idx]; }
-      });
-      if (best) openPopup(bestEntry.L, best, e.lngLat);
-    });
-    map.on("mousemove", function (e) {
-      var hits = map.queryRenderedFeatures(e.point, { layers: ids.map(function (x) { return x.id; }) });
-      map.getCanvas().style.cursor = hits.length ? "pointer" : "";
+      var top = pick(e.point);
+      if (!top) { clearSel(); return; }           // click on empty map clears the selection
+      clearSel();
+      if (top.f.id != null) {
+        selRef = { source: top.f.source, id: top.f.id };
+        try { map.setFeatureState(selRef, { selected: true }); } catch (e) {}
+      }
+      openPopup(top.L, top.f, e.lngLat);
     });
   }
 

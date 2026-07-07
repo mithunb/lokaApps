@@ -15,7 +15,7 @@
       --color-moss:#1A7048; --color-canopy:#145C3A;
       --color-text-primary:#111B13; --color-text-secondary:#4D6050; --color-text-muted:#7A8E7A;
       --color-divider:rgba(0,0,0,.07); --color-border:rgba(0,0,0,.08); --color-moss-tint:rgba(26,112,72,.08);
-      --radius-md:.875rem; --radius-lg:1.25rem;
+      --radius-md:.25rem; --radius-lg:.375rem;
       --shadow-sm:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
       --shadow-md:0 4px 16px rgba(0,0,0,.08),0 2px 6px rgba(0,0,0,.04);
       --shadow-lg:0 12px 40px rgba(0,0,0,.18),0 4px 12px rgba(0,0,0,.10);
@@ -34,7 +34,7 @@
     :focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:4px; }
     .eyebrow { display:inline-block; font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:600;
       letter-spacing:.14em; text-transform:uppercase; color:var(--color-moss); margin:0 0 .75rem;
-      padding:.25rem .6rem; background:var(--color-moss-tint); border-radius:999px; }
+      padding:.25rem .6rem; background:var(--color-moss-tint); border-radius:4px; }
     .lead { font-size:1.075rem; color:var(--color-text-secondary); max-width:46rem; }
 
     header.site { border-bottom:1px solid var(--color-divider); background:var(--color-bg); position:relative; z-index:2; }
@@ -63,12 +63,13 @@
     .panel-head { display:flex; align-items:center; justify-content:space-between; gap:.5rem;
       padding:.7rem .9rem; border-bottom:1px solid var(--color-divider); flex:0 0 auto; }
     .panel-head strong { font-family:'Figtree',sans-serif; font-size:.7rem; letter-spacing:.14em; text-transform:uppercase; color:var(--color-text-secondary); }
-    .panel-collapse { border:none; background:none; cursor:pointer; font-size:1rem; color:var(--color-text-muted); padding:.2rem .4rem; border-radius:6px; display:none; }
+    .panel-collapse { border:none; background:none; cursor:pointer; color:var(--color-text-muted); padding:.2rem .4rem; border-radius:4px; display:none; align-items:center; justify-content:center; }
+    .panel-collapse svg { width:18px; height:18px; display:block; }
     #atlas-controls { overflow-y:auto; padding:.6rem .8rem .8rem; scrollbar-width:thin; }
 
     .ctl-basemaps { display:flex; gap:.35rem; margin-bottom:.7rem; }
     .bm-btn { flex:1; padding:.4rem .5rem; font:inherit; font-size:.8rem; font-weight:500; cursor:pointer;
-      background:var(--color-bg-alt); color:var(--color-text-secondary); border:1px solid transparent; border-radius:8px; }
+      background:var(--color-bg-alt); color:var(--color-text-secondary); border:1px solid transparent; border-radius:4px; }
     .bm-btn.active { background:var(--color-moss); color:#fff; }
 
     .ctl-group { border-top:1px solid var(--color-divider); }
@@ -76,7 +77,8 @@
     .ctl-group-head { width:100%; display:flex; align-items:center; justify-content:space-between;
       background:none; border:none; cursor:pointer; padding:.55rem .1rem; font-family:'Figtree',sans-serif;
       font-size:.78rem; font-weight:600; letter-spacing:.04em; color:var(--color-text-primary); text-transform:uppercase; }
-    .ctl-group-head .chev { transition:transform .18s; color:var(--color-text-muted); }
+    .ctl-group-head .chev { display:inline-flex; transition:transform .18s cubic-bezier(.25,1,.5,1); color:var(--color-text-muted); }
+    .ctl-group-head .chev svg { width:16px; height:16px; }
     .ctl-group.collapsed .chev { transform:rotate(-90deg); }
     .ctl-group.collapsed .ctl-group-body { display:none; }
     .ctl-group-body { padding-bottom:.35rem; }
@@ -91,13 +93,15 @@
     .ctl-toggle input:checked + .ctl-switch::after { transform:translateX(14px); }
     .ctl-toggle input:focus-visible + .ctl-switch { outline:2px solid var(--color-moss); outline-offset:2px; }
     .ctl-name { font-size:.9rem; line-height:1.25; }
-    .ctl-info { margin-left:auto; flex:0 0 auto; width:16px; height:16px; border-radius:50%; border:1px solid var(--color-border);
-      color:var(--color-text-muted); font-size:.65rem; font-style:italic; font-weight:600; display:inline-flex; align-items:center; justify-content:center; cursor:help; }
+    .ctl-info { margin-left:auto; flex:0 0 auto; width:16px; height:16px; color:var(--color-text-muted);
+      display:inline-flex; align-items:center; justify-content:center; cursor:help; }
+    .ctl-info svg { width:15px; height:15px; }
+    .ctl-info:hover { color:var(--color-moss); }
     .ctl-extra { padding-left:2.1rem; }
     .ctl-extra:empty { padding:0; }
 
     .crop-chips { display:flex; flex-wrap:wrap; gap:.3rem; margin:.4rem 0 .1rem; }
-    .crop-chip { font:inherit; font-size:.72rem; padding:.2rem .5rem; border-radius:999px; cursor:pointer;
+    .crop-chip { font:inherit; font-size:.72rem; padding:.2rem .5rem; border-radius:4px; cursor:pointer;
       border:1px solid var(--color-border); background:#fff; color:var(--color-text-secondary); display:inline-flex; align-items:center; gap:.3rem;
       transition:background .15s ease, border-color .15s ease, color .15s ease, transform .1s cubic-bezier(.25,1,.5,1); }
     .crop-chip::before { content:''; width:8px; height:8px; border-radius:2px; background:var(--c,#888); transition:transform .15s cubic-bezier(.34,1.4,.6,1); }
@@ -115,14 +119,16 @@
     .leg-item { display:flex; align-items:center; gap:.45rem; font-size:.76rem; color:var(--color-text-secondary); }
     .leg-item.faint { opacity:.7; }
     /* sequential scale: one graduated bar, endpoints labelled */
-    .leg-ramp { display:flex; height:9px; border-radius:5px; overflow:hidden; margin:.15rem 0 .25rem; box-shadow:inset 0 0 0 1px rgba(0,0,0,.06); }
+    .leg-ramp { display:flex; height:9px; border-radius:3px; overflow:hidden; margin:.15rem 0 .25rem; box-shadow:inset 0 0 0 1px rgba(0,0,0,.06); }
     .leg-ramp-seg { flex:1 1 0; }
     .leg-ramp-labels { display:flex; justify-content:space-between; align-items:baseline; gap:.5rem; }
     .leg-ramp-end { font-size:.72rem; color:var(--color-text-secondary); font-variant-numeric:tabular-nums; }
     .leg-ramp-unit { font-size:.68rem; color:var(--color-text-muted); }
     .leg-label { line-height:1.2; }
     .leg-swatch { flex:0 0 auto; width:14px; height:14px; }
-    .leg-swatch.box { background:var(--c); border-radius:3px; }
+    .leg-icon { flex:0 0 auto; width:15px; height:15px; color:var(--c); display:inline-flex; align-items:center; justify-content:center; }
+    .leg-icon svg { width:15px; height:15px; }
+    .leg-swatch.box { background:var(--c); border-radius:2px; }
     .leg-swatch.dot { background:var(--c); border-radius:50%; width:11px; height:11px; margin:0 1.5px; }
     .leg-swatch.line { height:0; border-top:3px solid var(--c); border-radius:2px; align-self:center; }
     .leg-swatch.dashed { height:0; border-top:3px dashed var(--c); }
@@ -135,8 +141,19 @@
       color:var(--pin,#f97316); font-size:11px; line-height:1; display:flex; align-items:center; justify-content:center;
       box-shadow:0 1px 4px rgba(0,0,0,.4); transition:transform .18s cubic-bezier(.25,1,.5,1), box-shadow .18s ease; }
     .atlas-pin.ring { background:var(--pin,#f97316); border-color:#fff; }
+    .atlas-pin svg { width:12px; height:12px; display:block; }
     /* lift the pin (a child) on hover — never the marker element itself; MapLibre owns its transform */
     @media (hover:hover){ .atlas-marker:hover .atlas-pin { transform:translateY(-2px) scale(1.14); box-shadow:0 5px 12px rgba(0,0,0,.5); } }
+
+    /* numbered cluster badge (stands in for a tight group at overview zoom) */
+    .atlas-cluster { display:flex; align-items:center; gap:.4rem; cursor:pointer;
+      background:rgba(255,255,255,.95); border:1.5px solid #f97316; border-radius:4px;
+      padding:.2rem .5rem .2rem .3rem; box-shadow:0 2px 8px rgba(0,0,0,.35);
+      font-family:'Figtree',sans-serif; transition:transform .15s cubic-bezier(.25,1,.5,1), box-shadow .15s; }
+    .atlas-cluster:hover { transform:scale(1.04); box-shadow:0 4px 12px rgba(0,0,0,.4); }
+    .atlas-cluster .cl-count { display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:20px;
+      padding:0 4px; background:#f97316; color:#fff; border-radius:3px; font-size:12px; font-weight:700; }
+    .atlas-cluster .cl-label { font-size:12px; font-weight:600; color:#7c2d12; white-space:nowrap; }
     .atlas-mlabel { margin-top:2px; font-family:'Figtree',sans-serif; font-size:11px; font-weight:600; color:#14261a;
       text-shadow:0 0 2px #fff,0 0 3px #fff,0 0 4px #fff,0 1px 1px #fff; white-space:nowrap; pointer-events:none; }
 
@@ -153,7 +170,7 @@
     .pop-lbl { font-size:.68rem; text-transform:uppercase; letter-spacing:.06em; color:var(--color-text-muted); }
     .pop-val { font-size:.88rem; color:var(--color-text-primary); }
     .pop-tags { display:flex; flex-wrap:wrap; gap:.3rem; margin-top:.25rem; }
-    .pop-tag { font-size:.74rem; padding:.15rem .5rem; background:var(--color-moss-tint); color:var(--color-canopy); border-radius:999px; font-weight:500; }
+    .pop-tag { font-size:.74rem; padding:.15rem .5rem; background:var(--color-moss-tint); color:var(--color-canopy); border-radius:4px; font-weight:500; }
     .pop-notes { margin-top:.6rem; display:flex; flex-direction:column; gap:.5rem; }
     .pop-note { font-size:.82rem; }
     .pop-note b { display:block; color:var(--color-canopy); font-family:'Figtree',sans-serif; }
@@ -175,8 +192,8 @@
     .cr-lede b { color:var(--color-text-primary); font-weight:600; }
     .cr-orgs { display:flex; flex-direction:column; gap:.9rem; }
     .cr-org { display:flex; align-items:center; gap:.7rem; }
-    .cr-org .cr-icon { width:34px; height:34px; border-radius:8px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; background:var(--color-moss-tint); color:var(--color-moss); }
-    .cr-org .cr-icon svg { width:19px; height:19px; }
+    .cr-org .cr-icon { width:34px; height:34px; border-radius:5px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; background:var(--color-moss-tint); color:var(--color-moss); }
+    .cr-org .cr-icon svg { width:18px; height:18px; }
     .cr-org b { font-family:'Figtree',sans-serif; font-size:.92rem; color:var(--color-text-primary); font-weight:600; display:block; line-height:1.2; }
     .cr-org span { font-size:.82rem; color:var(--color-text-secondary); }
     #data-credits { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:.55rem .9rem; }
@@ -211,7 +228,7 @@
       #atlas-map { position:relative; inset:auto; flex:1 1 auto; min-height:150px; }
       .atlas-panel {
         position:relative; inset:auto; width:auto; max-width:none; flex:0 0 auto;
-        max-height:58%; border-radius:16px 16px 0 0;
+        max-height:58%; border-radius:6px 6px 0 0;
         box-shadow:0 -8px 28px rgba(0,0,0,.20);
         padding-bottom:env(safe-area-inset-bottom);
       }
@@ -258,7 +275,7 @@
     <aside class="atlas-panel" id="atlas-panel">
       <div class="panel-head">
         <strong>Map layers</strong>
-        <button class="panel-collapse" type="button" aria-label="Show or hide map layers" aria-expanded="true">▾</button>
+        <button class="panel-collapse" type="button" aria-label="Show or hide map layers" aria-expanded="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
       </div>
       <div id="atlas-controls"></div>
     </aside>
@@ -268,7 +285,7 @@
     <div class="credits-grid">
       <div class="credits-col">
         <h3>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           Made by
         </h3>
         <img class="loka-wordmark" src="./loka-logo.png" alt="LOKA" />
@@ -276,19 +293,19 @@
         <div class="cr-orgs">
           <div class="cr-org">
             <span class="cr-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M19.1 4.9l-2.8 2.8M7.7 16.3l-2.8 2.8"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4.5" r="2.5"/><path d="m10.2 6.3-3.9 3.9"/><circle cx="4.5" cy="12" r="2.5"/><path d="M7 12h10"/><circle cx="19.5" cy="12" r="2.5"/><path d="m13.8 17.7 3.9-3.9"/><circle cx="12" cy="19.5" r="2.5"/></svg>
             </span>
             <div><b>Systems Practice</b><span>Bioregional-economy programme at Socratus</span></div>
           </div>
           <div class="cr-org">
             <span class="cr-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 3-10"/><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z"/><path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z"/></svg>
             </span>
             <div><b>Jagriti</b><span>On-ground partner, with the Systems Practice</span></div>
           </div>
           <div class="cr-org">
             <span class="cr-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg>
             </span>
             <div><b>Built with MapLibre GL</b><span>Open-source maps · no API keys</span></div>
           </div>

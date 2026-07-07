@@ -11,14 +11,14 @@
   "glyphs": "https://tiles.basemaps.cartocdn.com/fonts/{fontstack}/{range}.pbf",
   "basemaps": [
     {
-      "id": "satellite", "label": "Satellite", "default": true,
+      "id": "satellite", "label": "Satellite",
       "tiles": ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
       "tileSize": 256, "maxzoom": 19,
       "attribution": "Imagery © Esri, Maxar, Earthstar Geographics"
     },
     {
-      "id": "light", "label": "Map",
-      "tiles": ["https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png", "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png", "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"],
+      "id": "light", "label": "Map", "default": true,
+      "tiles": ["https://a.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png", "https://b.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png", "https://c.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png"],
       "tileSize": 256, "maxzoom": 19,
       "attribution": "© OpenStreetMap contributors © CARTO"
     }
@@ -140,13 +140,13 @@
       "label": "Value-chain nodes", "default": true,
       "markerBy": "type",
       "markers": {
-        "Sugar mill": { "color": "#b45309", "glyph": "▲" },
-        "Distillery": { "color": "#7c3aed", "glyph": "◆" }
+        "Sugar mill": { "color": "#b45309", "icon": "factory" },
+        "Distillery": { "color": "#7c3aed", "icon": "flask" }
       },
       "label_text": { "property": "name" },
       "legend": [
-        { "color": "#b45309", "label": "Sugar mill", "shape": "triangle" },
-        { "color": "#7c3aed", "label": "Distillery", "shape": "diamond" }
+        { "color": "#b45309", "label": "Sugar mill", "icon": "factory" },
+        { "color": "#7c3aed", "label": "Distillery", "icon": "flask" }
       ],
       "popup": { "title": "name", "subtitleProperty": "type", "fields": [
         { "label": "District", "property": "district" },
@@ -156,7 +156,8 @@
     {
       "id": "villages", "group": "base", "type": "marker", "source": "villages.geojson",
       "label": "Survey villages", "default": true,
-      "marker": { "color": "#f97316", "glyph": "●", "ring": true },
+      "marker": { "color": "#f97316", "ring": true },
+      "cluster": { "belowZoom": 10.8, "label": "Cluster 1" },
       "label_text": { "property": "name" },
       "legend": [{ "color": "#f97316", "label": "Survey village", "shape": "dot" }],
       "popup": { "title": "name", "subtitle": "Cluster 1 survey village", "fields": [
