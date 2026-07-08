@@ -19,8 +19,8 @@
     },
     {
       "id": "subadmin",
-      "label": "Sub-divisions",
-      "info": "One level below your picked units — blocks in India, admin-3 elsewhere when available.",
+      "label": "Blocks / sub-divisions",
+      "info": "One level below your picked units — blocks in India.",
       "tiers": ["india"],
       "group": "base",
       "recipe": "subadmin",

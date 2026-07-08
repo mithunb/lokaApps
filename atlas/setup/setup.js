@@ -386,7 +386,7 @@
     api("geo/levels?iso3=" + S.geo.iso3).then(function (r) {
       S.geo.levels = r.levels || [1];
       $("#level-hint").textContent = maxLevel() > 1
-        ? "Tick areas to include them, or Open › one to pick smaller areas inside it."
+        ? "Boundary data goes down to " + (LEVEL_NOUN[maxLevel()] || "smaller areas") + " here."
         : "This country has one boundary level available.";
       loadUnits();
     }).catch(function () { loadUnits(); });
@@ -580,7 +580,9 @@
 
   function onBuilt() {
     $("#prog-fill").style.width = "100%";
-    $("#build-title").textContent = "Your atlas is ready";
+    $("#build-title").innerHTML =
+      '<svg class="done-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>' +
+      "Your atlas is ready";
     $("#prog-msg").textContent = "Built. Explore the preview below, then publish.";
     $("#preview-wrap").hidden = false;
     $("#preview-frame").src = previewUrl();

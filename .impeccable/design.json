@@ -11,7 +11,7 @@
       "sienna": { "role": "tertiary", "displayName": "Sienna", "canonical": "#9C5A34", "tonalRamp": ["#28170d", "#4f2d1b", "#764428", "#9C5A34", "#b57a57", "#cc9b7e", "#e0bda7", "#f0ded3"] },
       "field-grey": { "role": "neutral", "displayName": "Field Grey", "canonical": "#E6E4DF", "tonalRamp": ["#33322f", "#5c5a55", "#86847d", "#aeaca5", "#c9c7c1", "#D7D4CC", "#E6E4DF", "#f4f3f0"] },
       "paper-surface": { "role": "neutral", "displayName": "Paper Surface", "canonical": "#F2F0EB", "tonalRamp": ["#3a3934", "#64625b", "#8e8c83", "#b4b2a9", "#d0cec6", "#e2e0da", "#F2F0EB", "#faf9f7"] },
-      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#2B2723", "tonalRamp": ["#2B2723", "#453f39", "#5C544A", "#746b60", "#8C857A", "#a9a399", "#c7c2ba", "#e4e1dc"] }
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#2B2723", "tonalRamp": ["#2B2723", "#453f39", "#5C544A", "#746b60", "#6B655B", "#a9a399", "#c7c2ba", "#e4e1dc"] }
     },
     "typographyMeta": {
       "display": { "displayName": "Display", "purpose": "The atlas title — one per page, Figtree 700, text-wrap balance." },
@@ -88,7 +88,7 @@
       "refersTo": "input",
       "description": "White field on paper, labelled above in small bold ink-soft.",
       "html": "<label class=\"ds-field\">Atlas title<input class=\"ds-input\" type=\"text\" placeholder=\"Kilifi Coastal Atlas\"></label>",
-      "css": ".ds-field { display: flex; flex-direction: column; gap: 0.3rem; font-family: 'DM Sans', system-ui, sans-serif; font-size: 0.85rem; font-weight: 600; color: #5C544A; max-width: 22rem; } .ds-input { font: inherit; font-weight: 400; font-size: 0.95rem; padding: 0.55rem 0.65rem; border: 1px solid rgba(43,39,35,0.16); border-radius: 4px; background: #fff; color: #2B2723; } .ds-input:focus-visible { outline: 2px solid #40573D; outline-offset: 2px; } .ds-input::placeholder { color: #8C857A; }"
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 0.3rem; font-family: 'DM Sans', system-ui, sans-serif; font-size: 0.85rem; font-weight: 600; color: #5C544A; max-width: 22rem; } .ds-input { font: inherit; font-weight: 400; font-size: 0.95rem; padding: 0.55rem 0.65rem; border: 1px solid rgba(43,39,35,0.16); border-radius: 4px; background: #fff; color: #2B2723; } .ds-input:focus-visible { outline: 2px solid #40573D; outline-offset: 2px; } .ds-input::placeholder { color: #6B655B; }"
     },
     {
       "name": "Cost Badge",

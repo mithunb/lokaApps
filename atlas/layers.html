@@ -15,7 +15,7 @@
       --color-moss:#40573D; --color-canopy:#2F4230;
       --color-rust:#A6522F; --color-rust-deep:#7E3B1F;
       --color-sienna:#9C5A34; --color-ochre:#B0863A;
-      --color-text-primary:#2B2723; --color-text-secondary:#5C544A; --color-text-muted:#8C857A;
+      --color-text-primary:#2B2723; --color-text-secondary:#5C544A; --color-text-muted:#6B655B;
       --color-divider:rgba(43,39,35,.10); --color-border:rgba(43,39,35,.16);
       --color-moss-tint:rgba(64,87,61,.12); --color-rust-tint:rgba(166,82,47,.12);
       --radius-md:.25rem; --radius-lg:.375rem;
@@ -24,7 +24,7 @@
     * { box-sizing:border-box; }
     body { margin:0; background:var(--color-bg); color:var(--color-text-primary);
       font-family:'DM Sans',system-ui,-apple-system,sans-serif; font-size:1rem; line-height:1.55; -webkit-font-smoothing:antialiased; }
-    h1,h2,h3 { font-family:'Figtree',sans-serif; letter-spacing:-.01em; margin:0 0 .5rem; }
+    h1,h2,h3 { font-family:'Figtree',sans-serif; letter-spacing:-.01em; margin:0 0 .5rem; text-wrap:balance; }
     h1 { font-size:clamp(1.5rem,3.5vw,2.1rem); font-weight:700; }
     h2 { font-size:1.05rem; font-weight:600; }
     p { color:var(--color-text-secondary); margin:0 0 1rem; }
@@ -46,6 +46,7 @@
     .btn { display:inline-flex; align-items:center; gap:.4rem; padding:.55rem 1.1rem; border-radius:var(--radius-md); border:none;
       background:var(--color-moss); color:#fff; font:inherit; font-weight:600; font-size:.92rem; cursor:pointer; }
     .btn:hover { background:var(--color-canopy); }
+    .btn:active { transform:translateY(1px); }
     .btn.secondary { background:transparent; color:var(--color-moss); border:1px solid var(--color-moss); }
     .btn.secondary:hover { background:var(--color-moss-tint); }
     .btn:disabled { opacity:.5; cursor:not-allowed; }
@@ -58,6 +59,8 @@
     .drop { border:2px dashed var(--color-border); border-radius:var(--radius-lg); background:var(--color-surface);
       padding:2.2rem 1.5rem; text-align:center; color:var(--color-text-secondary); cursor:pointer; transition:border-color .15s ease; }
     .drop.over { border-color:var(--color-moss); background:var(--color-moss-tint); }
+    .drop-ico { width:30px; height:30px; color:var(--color-text-muted); margin-bottom:.45rem; }
+    .drop.over .drop-ico { color:var(--color-moss); }
     .drop b { display:block; font-family:'Figtree',sans-serif; color:var(--color-text-primary); margin-bottom:.25rem; }
     .drop input { display:none; }
     details.paste { margin-top:.8rem; }
@@ -65,6 +68,7 @@
 
     /* workbench */
     .bench { display:grid; grid-template-columns:minmax(21rem,1fr) 1.4fr; gap:1rem; margin-top:1rem; }
+    .bench[hidden] { display:none; }
     @media (max-width:900px){ .bench { grid-template-columns:1fr; } }
     .bench-left { display:flex; flex-direction:column; gap:1rem; min-width:0; }
     #preview-frame { width:100%; height:640px; border:1px solid var(--color-border); border-radius:var(--radius-lg); background:#DEDCD6; position:sticky; top:1rem; }
@@ -116,6 +120,7 @@
         <span class="hint" id="dataset-hint"></span>
       </label>
       <div class="drop" id="drop">
+        <svg class="drop-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg>
         <b>Drop a CSV or Excel file here</b>
         <span>or click to choose — up to 5,000 rows</span>
         <input type="file" id="f-file" accept=".csv,.tsv,.xlsx,.xls" />
@@ -146,7 +151,7 @@
               <select id="s-join"></select>
             </label>
             <label class="f" id="w-name">Place-name column<select id="s-name"></select></label>
-            <label class="f" id="w-parent">Parent column <span class="hint">(optional)</span><select id="s-parent"></select></label>
+            <label class="f" id="w-parent"><span>Parent column <span class="hint">(optional)</span></span><select id="s-parent"></select></label>
             <label class="f" id="w-lat" hidden>Latitude column<select id="s-lat"></select></label>
             <label class="f" id="w-lng" hidden>Longitude column<select id="s-lng"></select></label>
             <label class="f" id="w-value">Value column<select id="s-value"></select></label>
@@ -178,8 +183,8 @@
 
         <div class="card">
           <h2>Publish to the atlas</h2>
-          <label class="f">Edit token <span class="hint">(from when the atlas was created)</span>
-            <input type="text" id="f-token" placeholder="paste your edit token" />
+          <label class="f"><span>Edit token <span class="hint">(from when the atlas was created)</span></span>
+            <input type="text" id="f-token" placeholder="paste your edit token" autocomplete="off" spellcheck="false" />
           </label>
           <div style="display:flex; gap:.6rem; flex-wrap:wrap">
             <button class="btn" id="commit">Add layer to atlas</button>

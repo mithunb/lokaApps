@@ -15,7 +15,7 @@
       --color-moss:#40573D; --color-canopy:#2F4230;
       --color-rust:#A6522F; --color-rust-deep:#7E3B1F;
       --color-sienna:#9C5A34; --color-ochre:#B0863A;
-      --color-text-primary:#2B2723; --color-text-secondary:#5C544A; --color-text-muted:#8C857A;
+      --color-text-primary:#2B2723; --color-text-secondary:#5C544A; --color-text-muted:#6B655B;
       --color-divider:rgba(43,39,35,.10); --color-border:rgba(43,39,35,.16);
       --color-moss-tint:rgba(64,87,61,.12); --color-rust-tint:rgba(166,82,47,.12);
       --radius-md:.25rem; --radius-lg:.375rem;
@@ -50,6 +50,7 @@
     .btn { display:inline-block; padding:.6rem 1.2rem; border-radius:var(--radius-md);
       background:var(--color-moss); color:#fff; font-weight:600; font-size:.95rem; }
     .btn:hover { background:var(--color-canopy); color:#fff; text-decoration:none; }
+    .btn:active { transform:translateY(1px); }
     .btn.secondary { background:transparent; color:var(--color-moss); border:1px solid var(--color-moss); }
     .btn.secondary:hover { background:var(--color-moss-tint); color:var(--color-canopy); }
     .hero-actions { display:flex; gap:.75rem; flex-wrap:wrap; margin-top:1.25rem; }

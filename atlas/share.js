@@ -158,7 +158,7 @@
       ".shr-dialog{border:1px solid rgba(43,39,35,.2);border-radius:6px;padding:1.25rem 1.35rem;max-width:30rem;width:calc(100vw - 2.5rem);background:#F2F0EB;color:#2B2723;font-family:'DM Sans',system-ui,sans-serif}",
       ".shr-dialog::backdrop{background:rgba(43,39,35,.35)}",
       ".shr-dialog h3{margin:0 0 .9rem;font-family:Figtree,sans-serif;font-size:1.05rem}",
-      ".shr-dialog .shr-close{position:absolute;top:.6rem;right:.6rem;border:none;background:none;font-size:1.2rem;cursor:pointer;color:#8C857A;padding:.2rem .45rem}",
+      ".shr-dialog .shr-close{position:absolute;top:.6rem;right:.6rem;border:none;background:none;font-size:1.2rem;cursor:pointer;color:#6B655B;padding:.2rem .45rem}",
     ].join("\n");
     var s = document.createElement("style");
     s.textContent = css;

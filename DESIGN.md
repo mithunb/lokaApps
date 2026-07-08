@@ -13,7 +13,7 @@ colors:
   paper-surface: "#F2F0EB"
   ink: "#2B2723"
   ink-soft: "#5C544A"
-  ink-faded: "#8C857A"
+  ink-faded: "#6B655B"
   ink-border: "#2B272329"
   ink-divider: "#2B27231A"
   moss-tint: "#40573D1F"
@@ -132,7 +132,7 @@ reserve for data and warnings.
 - **Field Grey Deep** (#D7D4CC): footers, recessed strips, disabled toggles.
 - **Paper Surface** (#F2F0EB): cards, panels, sections — one tone step "above" the page.
 - **Ink** (#2B2723): primary text. **Ink Soft** (#5C544A): secondary text — still ≥ 4.5:1
-  on Field Grey. **Ink Faded** (#8C857A): hints and metadata only, never body copy.
+  on Field Grey. **Ink Faded** (#6B655B): hints and metadata only, never body copy.
 - **Ink Border** (rgba(43,39,35,.16)) / **Ink Divider** (rgba(43,39,35,.10)): all strokes
   are transparencies of Ink, so they sit naturally on any grey.
 

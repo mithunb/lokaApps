@@ -16,7 +16,7 @@
       --color-moss:#40573D; --color-canopy:#2F4230;
       --color-rust:#A6522F; --color-rust-deep:#7E3B1F;
       --color-sienna:#9C5A34; --color-ochre:#B0863A;
-      --color-text-primary:#2B2723; --color-text-secondary:#5C544A; --color-text-muted:#8C857A;
+      --color-text-primary:#2B2723; --color-text-secondary:#5C544A; --color-text-muted:#6B655B;
       --color-divider:rgba(43,39,35,.10); --color-border:rgba(43,39,35,.16);
       --color-moss-tint:rgba(64,87,61,.12); --color-rust-tint:rgba(166,82,47,.12);
       --radius-md:.25rem; --radius-lg:.375rem;
@@ -71,12 +71,14 @@
     .btn { display:inline-flex; align-items:center; gap:.4rem; padding:.6rem 1.2rem; border-radius:var(--radius-md); border:none;
       background:var(--color-moss); color:#fff; font:inherit; font-weight:600; font-size:.95rem; cursor:pointer; }
     .btn:hover { background:var(--color-canopy); }
+    .btn:active { transform:translateY(1px); }
     .btn.secondary { background:transparent; color:var(--color-moss); border:1px solid var(--color-moss); }
     .btn.secondary:hover { background:var(--color-moss-tint); }
     .btn.ghost { background:none; border:none; color:var(--color-text-secondary); text-decoration:underline; padding:.6rem .4rem; }
     .btn:disabled { opacity:.5; cursor:not-allowed; }
     .vis-toggle { display:flex; gap:.5rem; }
     .vis-toggle button { flex:1; font:inherit; font-size:.9rem; padding:.55rem; border:1px solid var(--color-border); background:#fff; border-radius:4px; cursor:pointer; color:var(--color-text-secondary); }
+    .vis-toggle button:hover { border-color:var(--color-moss); color:var(--color-text-primary); }
     .vis-toggle button.on { border-color:var(--color-moss); background:var(--color-moss-tint); color:var(--color-text-primary); font-weight:600; }
 
     /* geography picker */
@@ -116,6 +118,9 @@
 
     /* build */
     .prog { margin-top:1rem; }
+    .done-check { width:22px; height:22px; vertical-align:-3px; margin-right:.35rem; color:var(--color-moss); }
+    .done-check path { stroke-dasharray:30; stroke-dashoffset:30; animation:ds-draw .5s cubic-bezier(.25,1,.5,1) forwards; }
+    @keyframes ds-draw { to { stroke-dashoffset:0; } }
     .prog-bar { height:10px; border-radius:999px; background:var(--color-bg-alt); overflow:hidden; }
     .prog-bar i { display:block; height:100%; width:0; background:var(--color-moss); border-radius:999px; transition:width .5s ease-out; }
     .prog-msg { margin:.5rem 0 0; font-size:.9rem; color:var(--color-text-secondary); }
@@ -191,25 +196,25 @@
           <input type="text" id="f-slug" maxlength="40" placeholder="kilifi-coastal" />
           <span class="hint" id="slug-hint">lowercase letters, numbers and dashes</span>
         </label>
-        <label class="f">Subtitle <span class="opt">(optional)</span>
+        <label class="f"><span>Subtitle <span class="opt">(optional)</span></span>
           <input type="text" id="f-subtitle" maxlength="160" placeholder="A shared map for our watershed programme" />
         </label>
         <label class="f">Organisation name
           <input type="text" id="f-org" maxlength="60" placeholder="Your organisation" />
         </label>
-        <label class="f">Contact email <span class="opt">(needed for approvals &amp; private maps)</span>
+        <label class="f"><span>Contact email <span class="opt">(needed for approvals &amp; private maps)</span></span>
           <input type="email" id="f-email" placeholder="you@example.org" />
         </label>
-        <label class="f">Organisation website <span class="opt">(optional, https)</span>
+        <label class="f"><span>Organisation website <span class="opt">(optional, https)</span></span>
           <input type="url" id="f-orgurl" maxlength="200" placeholder="https://example.org" />
         </label>
-        <label class="f" style="grid-column:1/-1">About this atlas <span class="opt">(optional, shown under the title)</span>
+        <label class="f" style="grid-column:1/-1"><span>About this atlas <span class="opt">(optional, shown under the title)</span></span>
           <textarea id="f-about" rows="2" maxlength="500"></textarea>
         </label>
-        <label class="f">Footer line <span class="opt">(optional)</span>
+        <label class="f"><span>Footer line <span class="opt">(optional)</span></span>
           <input type="text" id="f-footer" maxlength="160" placeholder="A programme of Your Org, 2026" />
         </label>
-        <label class="f">Logo <span class="opt">(optional, PNG up to 200 KB)</span>
+        <label class="f"><span>Logo <span class="opt">(optional, PNG up to 200 KB)</span></span>
           <input type="file" id="f-logo" accept="image/png" />
           <span class="hint" id="logo-hint"></span>
         </label>
@@ -235,13 +240,13 @@
           <select id="f-country"><option value="">Choose a country…</option></select>
         </label>
         <div class="f" style="justify-content:flex-end">
-          <span class="hint" id="level-hint">Tick areas to include them, or open one to pick smaller areas inside it.</span>
+          <span class="hint" id="level-hint"></span>
         </div>
       </div>
       <nav class="geo-crumbs" id="geo-crumbs" aria-label="Region drill-down"></nav>
       <div class="geo-wrap">
         <div class="geo-list" id="geo-list"><span class="hint" style="padding:.5rem">Choose a country to load its boundaries.</span></div>
-        <div id="geo-map"></div>
+        <div id="geo-map" role="application" aria-label="Region selection map — click areas to select them"></div>
         <div class="geo-meta" id="geo-meta"></div>
       </div>
       <div class="btnrow">
