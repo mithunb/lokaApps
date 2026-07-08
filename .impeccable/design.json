@@ -9,8 +9,8 @@
       "rust": { "role": "secondary", "displayName": "Rust", "canonical": "#AE5028", "tonalRamp": ["#2b130a", "#54291a", "#7C3616", "#AE5028", "#bf7351", "#d29679", "#e2b9a4", "#f1dcd1"] },
       "ochre": { "role": "secondary", "displayName": "Ochre", "canonical": "#B8862F", "tonalRamp": ["#2d2210", "#584322", "#846430", "#B8862F", "#c39d5d", "#d4b684", "#e4cfae", "#f2e7d6"] },
       "sienna": { "role": "tertiary", "displayName": "Sienna", "canonical": "#99582F", "tonalRamp": ["#28170d", "#4f2d1b", "#764428", "#99582F", "#b57a57", "#cc9b7e", "#e0bda7", "#f0ded3"] },
-      "old-paper": { "role": "neutral", "displayName": "Old Paper", "canonical": "#E9DFC9", "tonalRamp": ["#33322f", "#5c5a55", "#86847d", "#aeaca5", "#c9c7c1", "#DCCFB4", "#E9DFC9", "#f4f3f0"] },
-      "paper-surface": { "role": "neutral", "displayName": "Paper Surface", "canonical": "#F4EDDC", "tonalRamp": ["#3a3934", "#64625b", "#8e8c83", "#b4b2a9", "#d0cec6", "#e2e0da", "#F4EDDC", "#faf9f7"] },
+      "old-paper": { "role": "neutral", "displayName": "Cream Paper", "canonical": "#FFFAEB", "tonalRamp": ["#33322f", "#5c5a55", "#86847d", "#aeaca5", "#c9c7c1", "#F1E7CC", "#FFFAEB", "#f4f3f0"] },
+      "paper-surface": { "role": "neutral", "displayName": "Paper Surface", "canonical": "#FAF2DC", "tonalRamp": ["#3a3934", "#64625b", "#8e8c83", "#b4b2a9", "#d0cec6", "#e2e0da", "#FAF2DC", "#faf9f7"] },
       "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#2A241A", "tonalRamp": ["#2A241A", "#453f39", "#564E3C", "#746b60", "#6B6350", "#a9a399", "#c7c2ba", "#e4e1dc"] }
     },
     "typographyMeta": {
@@ -104,14 +104,14 @@
       "refersTo": "card",
       "description": "A published-atlas entry — flat, bordered, moss border on hover.",
       "html": "<a class=\"ds-dir-card\" href=\"#\"><b>Rivers of Bengaluru</b><span>Bangalore · india tier</span></a>",
-      "css": ".ds-dir-card { display: block; background: #F4EDDC; border: 1px solid rgba(42,36,26,0.16); border-radius: 6px; padding: 1rem 1.1rem; color: #2A241A; text-decoration: none; font-family: 'DM Sans', system-ui, sans-serif; transition: border-color 0.15s ease; max-width: 18rem; } .ds-dir-card b { font-family: Figtree, sans-serif; display: block; } .ds-dir-card span { font-size: 0.85rem; color: #564E3C; } .ds-dir-card:hover { border-color: #4A5A33; }"
+      "css": ".ds-dir-card { display: block; background: #FAF2DC; border: 1px solid rgba(42,36,26,0.16); border-radius: 6px; padding: 1rem 1.1rem; color: #2A241A; text-decoration: none; font-family: 'DM Sans', system-ui, sans-serif; transition: border-color 0.15s ease; max-width: 18rem; } .ds-dir-card b { font-family: Figtree, sans-serif; display: block; } .ds-dir-card span { font-size: 0.85rem; color: #564E3C; } .ds-dir-card:hover { border-color: #4A5A33; }"
     }
   ],
   "narrative": {
     "northStar": "The Field Notebook",
     "overview": "LOKA Atlas looks like a working document from fieldwork, not a dashboard. The surfaces are matte greys — the tone of paper that has been in a bag all day — and everything drawn on them behaves like ink: thin borders, earthy boundary lines, stamped uppercase labels, small honest controls. The map is the page; the interface is the margin. The system explicitly rejects the shiny SaaS register: no gradients, no glassmorphism-as-decoration, no neon data-viz hues. Color is committed but muted: a rustic-pastel family (moss, rust, sienna, ochre) that could be mixed from soil, turmeric and leaves.",
     "keyCharacteristics": [
-      "Old-paper canvas; warm white reserved for elements that must read as 'on top'",
+      "Cream-paper canvas; pure white reserved for elements that must read as 'on top'",
       "One green speaks for the product (moss #4A5A33); earth accents belong to the data",
       "Flat, ink-on-paper depth: borders and tone steps, not shadows",
       "Two typefaces, two jobs: Figtree structures, DM Sans reads",
@@ -127,7 +127,7 @@
     ],
     "dos": [
       "Do keep the interface paper-quiet and let saturated color live on the map",
-      "Do separate with 1px ink-transparency borders and tone steps; reach for #F4EDDC before a shadow",
+      "Do separate with 1px ink-transparency borders and tone steps; reach for #FAF2DC before a shadow",
       "Do use Moss #4A5A33 for every interactive affordance so 'green means actionable' stays true",
       "Do give every map label a paper halo",
       "Do ship layers translucent (0.35–0.75 fill) with opacity sliders where stacking matters",

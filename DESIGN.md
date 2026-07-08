@@ -8,9 +8,9 @@ colors:
   rust-deep: "#7C3616"
   sienna: "#99582F"
   ochre: "#B8862F"
-  old-paper: "#E9DFC9"
-  old-paper-deep: "#DCCFB4"
-  paper-surface: "#F4EDDC"
+  old-paper: "#FFFAEB"
+  old-paper-deep: "#F1E7CC"
+  paper-surface: "#FAF2DC"
   ink: "#2A241A"
   ink-soft: "#564E3C"
   ink-faded: "#6B6350"
@@ -91,7 +91,7 @@ components:
 **Creative North Star: "The Field Notebook"**
 
 LOKA Atlas looks like a working document from fieldwork, not a dashboard. The surfaces are
-old paper — the warm, slightly foxed tone of a survey sheet that has lived in a field bag — and everything drawn on
+cream paper — a fresh survey sheet (#FFFAEB) with cards a tone deeper — and everything drawn on
 them behaves like ink: thin borders, earthy boundary lines, stamped uppercase labels,
 small honest controls. The map is the page; the interface is the margin. Every design
 decision defers to the data on the map, because the people this serves — survey teams,
@@ -104,7 +104,7 @@ in that order of importance. Color is committed but muted: a rustic-pastel famil
 rust, sienna, ochre) that could be mixed from soil, turmeric and leaves.
 
 **Key Characteristics:**
-- Old-paper canvas; warm white is reserved for elements that must read as "on top" (panel, inputs).
+- Cream-paper canvas (#FFFAEB); pure white is reserved for elements that must read as "on top" (panel, inputs).
 - One green speaks for the product (moss `#4A5A33`); earth accents belong to the data.
 - Flat, ink-on-paper depth: borders and tone steps, not shadows.
 - Two typefaces, two jobs: Figtree structures, DM Sans reads.
@@ -113,7 +113,7 @@ rust, sienna, ochre) that could be mixed from soil, turmeric and leaves.
 
 ## 2. Colors
 
-An earth-pigment palette on old paper — committed to green, with rust and ochre held in
+An earth-pigment palette on cream paper — committed to green, with rust and ochre held in
 reserve for data and warnings.
 
 ### Primary
@@ -128,9 +128,9 @@ reserve for data and warnings.
 - **Sienna** (#99582F): tertiary data accent (e.g. sugar-mill markers, caution copy).
 
 ### Neutral
-- **Old Paper** (#E9DFC9): the page background — aged survey paper, sun-warmed.
-- **Old Paper Deep** (#DCCFB4): footers, recessed strips, disabled toggles.
-- **Paper Surface** (#F4EDDC): cards, panels, sections — one tone step "above" the page.
+- **Cream Paper** (#FFFAEB): the page background — fresh cream survey paper.
+- **Cream Deep** (#F1E7CC): footers, recessed strips, disabled toggles.
+- **Paper Surface** (#FAF2DC): cards and sections — one tone step DEEPER than the page; pure white is what reads "on top" (inputs, the floating panel).
 - **Ink** (#2A241A): primary text. **Ink Soft** (#564E3C): secondary text — still ≥ 4.5:1
   on Field Grey. **Ink Faded** (#6B6350): hints and metadata only, never body copy.
 - **Ink Border** (rgba(42,36,26,.16)) / **Ink Divider** (rgba(42,36,26,.10)): all strokes
@@ -177,7 +177,7 @@ never Figtree for paragraphs; never DM Sans for uppercase labels.
 
 ## 4. Elevation
 
-Flat, ink on paper. Depth is conveyed by tone steps (Old Paper → Paper Surface → Warm White)
+Flat, ink on paper. Depth is conveyed by tone steps (Cream Paper page → deeper Paper Surface cards → pure White on-top elements)
 and by ink borders — not by shadows. `--shadow-sm` is literally `none`. Two sanctioned
 exceptions exist: the floating layer panel over the map carries a soft ambient shadow
 (`0 2px 12px rgba(42,36,26,.12)`) plus a ≥94%-opaque blur backdrop — a legibility device
@@ -244,7 +244,7 @@ or lighten a fill rather than adding emphasis.
 
 ### Do:
 - **Do** keep the interface paper-quiet and let saturated color live on the map (The Map Speaks Rule).
-- **Do** separate with 1px ink-transparency borders and tone steps; reach for `#F4EDDC`
+- **Do** separate with 1px ink-transparency borders and tone steps; reach for `#FAF2DC`
   before reaching for a shadow.
 - **Do** use Moss (#4A5A33) for every interactive affordance — buttons, switches, focus,
   links — so "green means you can act on it" stays true everywhere.

@@ -12,7 +12,7 @@
   <style>
     :root {
       /* Rustic-pastel palette on a grey canvas; flat (borders over shadows) */
-      --color-bg:#E9DFC9; --color-bg-alt:#DCCFB4; --color-surface:#F4EDDC;
+      --color-bg:#FFFAEB; --color-bg-alt:#F1E7CC; --color-surface:#FAF2DC;
       --color-moss:#4A5A33; --color-canopy:#384526;           /* rustic dark green (primary) */
       --color-rust:#AE5028; --color-rust-deep:#7C3616;         /* rust accent */
       --color-sienna:#99582F; --color-ochre:#B8862F;           /* sienna + ochre accents */
@@ -70,7 +70,7 @@
     /* ---- map stage ---- */
     .atlas-stage { position:relative; width:var(--container); margin:0 auto 1.5rem;
       height:clamp(560px,80vh,940px); border-radius:var(--radius-lg); overflow:hidden;
-      box-shadow:var(--shadow-lg); background:#E4D9BF; border:1px solid var(--color-border); }
+      box-shadow:var(--shadow-lg); background:#F3E9CE; border:1px solid var(--color-border); }
     #atlas-map { position:absolute; inset:0; }
     .atlas-error { position:absolute; inset:0; display:flex; flex-direction:column; gap:.5rem;
       align-items:center; justify-content:center; color:#e9efe9; font-size:1.05rem; text-align:center; padding:2rem; }
@@ -78,7 +78,7 @@
     /* ---- control widget ---- */
     .atlas-panel { position:absolute; top:1rem; left:1rem; z-index:5; width:19.5rem; max-width:calc(100% - 2rem);
       max-height:calc(100% - 2rem); display:flex; flex-direction:column;
-      background:rgba(252,247,234,.95); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+      background:rgba(255,255,255,.95); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
       border:1px solid var(--color-border); border-radius:var(--radius-md); box-shadow:var(--shadow-md); overflow:hidden; }
     .panel-head { display:flex; align-items:center; justify-content:space-between; gap:.5rem;
       padding:.7rem .9rem; border-bottom:1px solid var(--color-divider); flex:0 0 auto; }
@@ -108,7 +108,7 @@
     .ctl-toggle { display:flex; align-items:center; gap:.55rem; cursor:pointer; }
     .ctl-toggle input { position:absolute; opacity:0; width:0; height:0; }
     .ctl-switch { flex:0 0 auto; width:32px; height:18px; border-radius:999px; background:#CCC3A9; position:relative; transition:background .2s cubic-bezier(.25,1,.5,1); }
-    .ctl-switch::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#FFFDF6; box-shadow:0 1px 2px rgba(0,0,0,.25); transition:transform .2s cubic-bezier(.25,1,.5,1); }
+    .ctl-switch::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#FFFFFF; box-shadow:0 1px 2px rgba(0,0,0,.25); transition:transform .2s cubic-bezier(.25,1,.5,1); }
     .ctl-toggle input:checked + .ctl-switch { background:var(--color-moss); }
     .ctl-toggle input:checked + .ctl-switch::after { transform:translateX(14px); }
     .ctl-toggle input:focus-visible + .ctl-switch { outline:2px solid var(--color-moss); outline-offset:2px; }
@@ -139,7 +139,7 @@
 
     .crop-chips { display:flex; flex-wrap:wrap; gap:.3rem; margin:.4rem 0 .1rem; }
     .crop-chip { font:inherit; font-size:.72rem; padding:.2rem .5rem; border-radius:4px; cursor:pointer;
-      border:1px solid var(--color-border); background:#FFFDF6; color:var(--color-text-secondary); display:inline-flex; align-items:center; gap:.3rem;
+      border:1px solid var(--color-border); background:#FFFFFF; color:var(--color-text-secondary); display:inline-flex; align-items:center; gap:.3rem;
       transition:background .15s ease, border-color .15s ease, color .15s ease, transform .1s cubic-bezier(.25,1,.5,1); }
     .crop-chip::before { content:''; width:8px; height:8px; border-radius:2px; background:var(--c,#888); transition:transform .15s cubic-bezier(.34,1.4,.6,1); }
     .crop-chip.diversity::before { background:linear-gradient(90deg,#cdd3b4,#39502f); }
@@ -174,7 +174,7 @@
 
     /* ---- DOM markers ---- */
     .atlas-marker { display:flex; flex-direction:column; align-items:center; cursor:pointer; }
-    .atlas-pin { width:20px; height:20px; border-radius:50%; background:#FFFDF6; border:2px solid var(--pin,#AE5028);
+    .atlas-pin { width:20px; height:20px; border-radius:50%; background:#FFFFFF; border:2px solid var(--pin,#AE5028);
       color:var(--pin,#AE5028); font-size:11px; line-height:1; display:flex; align-items:center; justify-content:center;
       box-shadow:0 1px 3px rgba(42,36,26,.32); transition:transform .18s cubic-bezier(.25,1,.5,1), box-shadow .18s ease; }
     .atlas-pin.ring { background:var(--pin,#AE5028); border-color:#fff; }
