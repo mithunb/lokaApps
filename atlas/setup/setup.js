@@ -118,9 +118,13 @@
     initCountries();
   };
 
-  /* ================= step 2: geography ================= */
+  /* ================= step 2: geography (drill-down) ================= */
 
   var geoMap, geoMapReady = false, hoverId = null;
+  var LIMITS = { freeAreaDeg2: 6, hardAreaDeg2: 40 };
+  api("config").then(function (c) { LIMITS = c; }).catch(function () {});
+
+  var LEVEL_NOUN = { 1: "states / provinces", 2: "districts", 3: "sub-districts", 4: "localities" };
 
   function initCountries() {
     var sel = $("#f-country");
@@ -176,40 +180,92 @@
     });
   }
 
+  // Drill state: crumbs = the units opened so far; the list shows children of the
+  // last crumb (or the country's top level). Selections can mix siblings freely
+  // but must all sit at one depth — the built atlas is one set of units.
+  function resetGeo() {
+    S.geo.crumbs = [];
+    S.geo.viewLevel = 1;
+    S.geo.features = [];
+    S.geo.selected = {};
+  }
+
+  function countryName() {
+    var sel = $("#f-country");
+    return sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : "Country";
+  }
+
+  function maxLevel() {
+    var ls = S.geo.levels || [1];
+    return ls[ls.length - 1];
+  }
+
   function loadUnits() {
-    var iso3 = S.geo.iso3, level = S.geo.level;
+    var iso3 = S.geo.iso3;
     if (!iso3) return;
-    $("#geo-list").innerHTML = '<span class="hint" style="padding:.5rem">Loading boundaries…</span>';
-    $("#level-hint").textContent = "";
-    api("geo/admin?iso3=" + iso3 + "&level=" + level).then(function (fc) {
+    var level = S.geo.viewLevel;
+    var parent = S.geo.crumbs.length ? S.geo.crumbs[S.geo.crumbs.length - 1] : null;
+    $("#geo-list").innerHTML = '<span class="hint" style="padding:.5rem">Loading ' + (LEVEL_NOUN[level] || "areas") + "…</span>";
+    renderCrumbs();
+    var q = "geo/admin?iso3=" + iso3 + "&level=" + level + (parent ? "&parents=" + encodeURIComponent(parent.id) : "");
+    api(q).then(function (fc) {
       S.geo.features = fc.features || [];
-      S.geo.selected = {};
       renderGeoList();
       if (geoMapReady) {
         var src = geoMap.getSource("units");
         src.setData({ type: "FeatureCollection", features: S.geo.features.map(function (f) {
           return { type: "Feature", id: f.properties.id, properties: f.properties, geometry: f.geometry };
         }) });
-        var bb = unionBbox(S.geo.features);
-        if (bb) geoMap.fitBounds([[bb[0], bb[1]], [bb[2], bb[3]]], { padding: 30, duration: 400 });
+        S.geo.features.forEach(function (f) {
+          geoMap.setFeatureState({ source: "units", id: f.properties.id }, { sel: !!S.geo.selected[f.properties.id] });
+        });
+        var bb = parent ? null : unionBbox(S.geo.features);
+        var fit = bb || (S.geo.features.length ? unionBbox(S.geo.features) : null);
+        if (fit) geoMap.fitBounds([[fit[0], fit[1]], [fit[2], fit[3]]], { padding: 30, duration: 400 });
       }
       updateGeoMeta();
     }).catch(function (e) {
-      if (level === 2) {
-        $("#level-hint").textContent = "District level isn't available for this country — using state/province level.";
-        $("#f-level").value = "1"; S.geo.level = 1;
-        loadUnits();
-      } else {
-        $("#geo-list").innerHTML = '<span class="hint bad" style="padding:.5rem">' + esc(errMsg(e)) + "</span>";
-      }
+      $("#geo-list").innerHTML = '<span class="hint bad" style="padding:.5rem">' + esc(errMsg(e)) + "</span>";
     });
+  }
+
+  function renderCrumbs() {
+    var bar = $("#geo-crumbs");
+    bar.innerHTML = "";
+    if (!S.geo.iso3) return;
+    function add(el) { bar.appendChild(el); }
+    function sep() { var s = document.createElement("span"); s.className = "sep"; s.textContent = "›"; add(s); }
+    var root = document.createElement(S.geo.crumbs.length ? "button" : "span");
+    root.className = S.geo.crumbs.length ? "" : "cur";
+    root.textContent = countryName();
+    if (S.geo.crumbs.length) root.onclick = function () { S.geo.crumbs = []; S.geo.viewLevel = 1; loadUnits(); };
+    add(root);
+    S.geo.crumbs.forEach(function (c, i) {
+      sep();
+      var last = i === S.geo.crumbs.length - 1;
+      var el = document.createElement(last ? "span" : "button");
+      el.className = last ? "cur" : "";
+      el.textContent = c.name;
+      if (!last) el.onclick = function () {
+        S.geo.crumbs = S.geo.crumbs.slice(0, i + 1);
+        S.geo.viewLevel = c.level + 1;
+        loadUnits();
+      };
+      add(el);
+    });
+    sep();
+    var noun = document.createElement("span");
+    noun.className = "sep";
+    noun.textContent = LEVEL_NOUN[S.geo.viewLevel] || "areas";
+    add(noun);
   }
 
   function unionBbox(feats) {
     if (!feats.length) return null;
     var w = 180, s = 90, e = -180, n = -90;
     feats.forEach(function (f) {
-      var b = f.bbox; if (!b) return;
+      var b = f.bbox || f;
+      if (!b || b.length !== 4) return;
       w = Math.min(w, b[0]); s = Math.min(s, b[1]); e = Math.max(e, b[2]); n = Math.max(n, b[3]);
     });
     return [w, s, e, n];
@@ -218,6 +274,7 @@
   function renderGeoList() {
     var box = $("#geo-list");
     box.innerHTML = "";
+    var canDrill = S.geo.viewLevel < maxLevel();
     S.geo.features
       .slice()
       .sort(function (a, b) { return a.properties.name.localeCompare(b.properties.name); })
@@ -225,60 +282,131 @@
         var id = f.properties.id;
         var row = document.createElement("label");
         row.className = "geo-item";
+        row.dataset.id = id;
         var cb = document.createElement("input");
         cb.type = "checkbox";
         cb.checked = !!S.geo.selected[id];
         cb.onchange = function () { toggleUnit(id); };
         row.appendChild(cb);
-        row.appendChild(document.createTextNode(f.properties.name));
-        row.dataset.id = id;
+        var nm = document.createElement("span");
+        nm.className = "nm";
+        nm.textContent = f.properties.name;
+        row.appendChild(nm);
+        if (canDrill) {
+          var open = document.createElement("button");
+          open.type = "button";
+          open.className = "geo-open";
+          open.textContent = "Open ›";
+          open.title = "Pick smaller areas inside " + f.properties.name;
+          open.onclick = function (ev) {
+            ev.preventDefault(); ev.stopPropagation();
+            S.geo.crumbs.push({ id: id, name: f.properties.name, level: S.geo.viewLevel });
+            S.geo.viewLevel += 1;
+            loadUnits();
+          };
+          row.appendChild(open);
+        }
         box.appendChild(row);
       });
+    if (!S.geo.features.length) {
+      box.innerHTML = '<span class="hint" style="padding:.5rem">No smaller areas available here.</span>';
+    }
   }
 
   function toggleUnit(id) {
-    if (S.geo.selected[id]) delete S.geo.selected[id];
-    else S.geo.selected[id] = true;
+    var f = S.geo.features.find(function (x) { return x.properties.id === id; });
+    if (S.geo.selected[id]) {
+      delete S.geo.selected[id];
+    } else {
+      if (!f) return;
+      var levels = Object.keys(S.geo.selected).map(function (k) { return S.geo.selected[k].level; });
+      if (levels.length && levels[0] !== S.geo.viewLevel) {
+        if (!confirm("Your earlier picks are at a different level — clear them and start from here?")) return;
+        Object.keys(S.geo.selected).forEach(function (k) {
+          if (geoMapReady) geoMap.setFeatureState({ source: "units", id: k }, { sel: false });
+        });
+        S.geo.selected = {};
+        renderGeoList();
+      }
+      S.geo.selected[id] = { name: f.properties.name, bbox: f.bbox, level: S.geo.viewLevel };
+    }
     var row = document.querySelector('.geo-item[data-id="' + CSS.escape(id) + '"] input');
     if (row) row.checked = !!S.geo.selected[id];
     if (geoMapReady) geoMap.setFeatureState({ source: "units", id: id }, { sel: !!S.geo.selected[id] });
     updateGeoMeta();
   }
 
-  function selectedFeatures() {
-    return S.geo.features.filter(function (f) { return S.geo.selected[f.properties.id]; });
+  function selection() {
+    return Object.keys(S.geo.selected).map(function (id) {
+      var s = S.geo.selected[id];
+      return { id: id, name: s.name, bbox: s.bbox, level: s.level };
+    });
+  }
+
+  function selectionArea() {
+    var sel = selection();
+    if (!sel.length) return 0;
+    var bb = unionBbox(sel.map(function (s) { return { bbox: s.bbox }; }));
+    return (bb[2] - bb[0]) * (bb[3] - bb[1]);
+  }
+
+  function selectionSizeState() {
+    var area = selectionArea();
+    if (area > LIMITS.hardAreaDeg2) return "blocked";
+    if (area > LIMITS.freeAreaDeg2) return "approval";
+    return "free";
   }
 
   function updateGeoMeta() {
-    var sel = selectedFeatures();
+    var sel = selection();
     var meta = $("#geo-meta");
-    if (!sel.length) { meta.innerHTML = "Click units on the map or tick them in the list."; return; }
-    var bb = unionBbox(sel);
-    var area = (bb[2] - bb[0]) * (bb[3] - bb[1]);
-    meta.innerHTML = "<b>" + sel.length + "</b> unit" + (sel.length > 1 ? "s" : "") + " selected — " +
-      sel.slice(0, 4).map(function (f) { return esc(f.properties.name); }).join(", ") +
-      (sel.length > 4 ? " +" + (sel.length - 4) : "") +
-      (area > 6 ? ' <span class="hint bad">— too large, pick fewer units (max ~6°²)</span>'
-                : ' <span class="hint ok">(~' + area.toFixed(1) + '°²)</span>');
+    if (!sel.length) {
+      meta.innerHTML = "Tick areas to include them in your atlas — or <b>Open ›</b> one to pick smaller areas inside it.";
+      return;
+    }
+    var names = sel.slice(0, 4).map(function (s) { return esc(s.name); }).join(", ") +
+      (sel.length > 4 ? " +" + (sel.length - 4) : "");
+    var state = selectionSizeState();
+    var line = "<b>" + sel.length + "</b> area" + (sel.length > 1 ? "s" : "") + " selected — " + names + ". ";
+    if (state === "free") {
+      line += '<span class="hint ok">Ready to build.</span>';
+    } else if (state === "approval") {
+      line += '<span style="color:var(--color-sienna)">That\u2019s a big region. You can continue — it just needs a quick, free approval from the LOKA team before it builds (we\u2019ll email you). Prefer not to wait? <b>Open ›</b> an area and pick smaller parts of it.</span>';
+    } else {
+      line += '<span class="hint bad">That\u2019s more than one atlas can cover. <b>Open ›</b> an area and pick smaller parts inside it.</span>';
+    }
+    meta.innerHTML = line;
   }
 
   $("#f-country").addEventListener("change", function () {
     S.geo.iso3 = this.value;
-    if (S.geo.iso3 === "IND" && S.geo.level === 1) {
-      $("#f-level").value = "2"; S.geo.level = 2;
-      $("#level-hint").textContent = "India gets district-level picking (LGD boundaries in the final atlas).";
-    }
-    loadUnits();
+    resetGeo();
+    if (!S.geo.iso3) return;
+    S.geo.levels = [1];
+    api("geo/levels?iso3=" + S.geo.iso3).then(function (r) {
+      S.geo.levels = r.levels || [1];
+      $("#level-hint").textContent = maxLevel() > 1
+        ? "Tick areas to include them, or Open › one to pick smaller areas inside it."
+        : "This country has one boundary level available.";
+      loadUnits();
+    }).catch(function () { loadUnits(); });
   });
-  $("#f-level").addEventListener("change", function () { S.geo.level = Number(this.value); loadUnits(); });
 
   $("#back-2").onclick = function () { show(1); };
   $("#next-2").onclick = function () {
     msg(2, "");
-    var sel = selectedFeatures();
-    if (!sel.length) return msg(2, "Pick at least one unit.");
-    var bb = unionBbox(sel);
-    if ((bb[2] - bb[0]) * (bb[3] - bb[1]) > 6) return msg(2, "That region is too large — pick fewer units.");
+    var sel = selection();
+    if (!sel.length) return msg(2, "Pick at least one area first.");
+    var state = selectionSizeState();
+    if (state === "blocked") {
+      return msg(2, "That region is more than one atlas can cover — <b>Open ›</b> an area in the list and pick smaller parts inside it.");
+    }
+    if (state === "approval" && !$("#f-email").value.trim()) {
+      msg(2, 'This region needs a quick approval from the LOKA team, so we need a way to reach you. <a href="#" id="goto-email">Add your contact email in step 1 →</a>');
+      var a = document.getElementById("goto-email");
+      if (a) a.onclick = function (ev) { ev.preventDefault(); show(1); setTimeout(function () { $("#f-email").focus(); }, 50); };
+      return;
+    }
     show(3);
     loadCatalog();
   };
@@ -348,7 +476,8 @@
   /* ================= step 4: create + poll + preview ================= */
 
   function payload() {
-    var sel = selectedFeatures();
+    var sel = selection();
+    var level = sel.length ? sel[0].level : S.geo.viewLevel;
     return {
       slug: $("#f-slug").value.trim() || undefined,
       title: $("#f-title").value.trim(),
@@ -363,7 +492,7 @@
         footerLine: $("#f-footer").value.trim() || undefined,
         logoData: S.logoData || undefined,
       },
-      region: { iso3: S.geo.iso3, level: S.geo.level, shapeIDs: sel.map(function (f) { return f.properties.id; }) },
+      region: { iso3: S.geo.iso3, level: level, shapeIDs: sel.map(function (f) { return f.id; }) },
       layers: Object.keys(S.catalog.chosen),
     };
   }
@@ -382,8 +511,9 @@
       S.build = r;
       if (r.status === "pending-approval") {
         $("#build-title").textContent = "Waiting for a quick approval";
-        $("#prog-msg").textContent = "Some of your layers use heavy source data, so the LOKA team gets a quick look first. " +
-          "We've emailed them — and we'll email you at " + esc($("#f-email").value) + " when it's approved. You can leave this page.";
+        $("#prog-msg").textContent = "Your atlas needs a bit more computing than the free tier covers (a large region or heavy data layers), " +
+          "so the LOKA team gets a quick look first — it's free and usually same-day. " +
+          "We'll email you at " + $("#f-email").value + " when it's approved. You can safely leave this page.";
         $("#prog-fill").style.width = "6%";
         pollInstanceUntilBuilding();
       } else {
@@ -552,7 +682,9 @@
         $("#auth-step-wait").hidden = false;
         $("#auth-sent-to").textContent = email;
         if (!r.sent) {
-          $("#auth-msg").innerHTML = '<div class="msg ok">Dev mode: the sign-in link was logged on the server.</div>';
+          $("#auth-msg").innerHTML = '<div class="msg err">This server can’t send email yet, so no message reached your inbox. ' +
+            'Your sign-in link was written to the server log — ask the LOKA team (mithun@socratus.org) to send it to you, ' +
+            'or try again once email is set up.</div>';
         }
         authPollTimer = setInterval(function () {
           api("auth/me").then(function (me) {
@@ -580,7 +712,12 @@
         about: $("#f-about").value, footer: $("#f-footer").value,
       },
       visibility: S.visibility,
-      geo: { iso3: S.geo.iso3, level: S.geo.level, selected: Object.keys(S.geo.selected) },
+      geo: {
+        iso3: S.geo.iso3,
+        level: selection().length ? selection()[0].level : S.geo.viewLevel,
+        selected: Object.keys(S.geo.selected),
+        crumbs: S.geo.crumbs,
+      },
       chosen: Object.keys(S.catalog.chosen),
       step: S.step,
     };
@@ -596,20 +733,26 @@
     if (st.visibility) setVisibility(st.visibility);
     S.draftId = d.id;
     if (st.geo && st.geo.iso3) {
-      S.geo.iso3 = st.geo.iso3; S.geo.level = st.geo.level || 1;
+      S.geo.iso3 = st.geo.iso3;
       initCountries();
       setTimeout(function () {
         $("#f-country").value = S.geo.iso3;
-        $("#f-level").value = String(S.geo.level);
-        loadUnits();
-        var restore = setInterval(function () {
-          if (S.geo.features.length) {
-            clearInterval(restore);
-            (st.geo.selected || []).forEach(function (id) {
-              if (!S.geo.selected[id]) toggleUnit(id);
-            });
-          }
-        }, 400);
+        resetGeo();
+        S.geo.crumbs = st.geo.crumbs || [];
+        S.geo.viewLevel = st.geo.level || 1;
+        api("geo/levels?iso3=" + S.geo.iso3).then(function (r) { S.geo.levels = r.levels || [1]; })
+          .catch(function () {})
+          .then(function () {
+            loadUnits();
+            var restore = setInterval(function () {
+              if (S.geo.features.length) {
+                clearInterval(restore);
+                (st.geo.selected || []).forEach(function (id) {
+                  if (!S.geo.selected[id]) toggleUnit(id);
+                });
+              }
+            }, 400);
+          });
       }, 300);
     }
     (st.chosen || []).forEach(function (id) { S.catalog.chosen[id] = true; });

@@ -23,7 +23,8 @@ const REPO_ROOT = path.join(__dirname, '..', '..');
 const CATALOG_FILE = path.join(REPO_ROOT, 'atlas', 'setup', 'catalog.json');
 const GEOCACHE_DIR = path.join(reg.DATA_DIR, 'geocache');
 
-const MAX_AREA_DEG2 = Number(process.env.ATLAS_MAX_AREA_DEG2) || 6;
+const FREE_AREA_DEG2 = Number(process.env.ATLAS_MAX_AREA_DEG2) || 6;   // beyond this: admin approval
+const HARD_AREA_DEG2 = Number(process.env.ATLAS_HARD_AREA_DEG2) || 40; // beyond this: refuse politely
 const MAX_INSTANCES = Number(process.env.ATLAS_MAX_INSTANCES) || 50;
 const PER_IP_PER_DAY = Number(process.env.ATLAS_PER_IP_PER_DAY) || 3;
 const ADMIN_EMAIL = process.env.ATLAS_ADMIN_EMAIL || 'mithun@socratus.org';
@@ -54,6 +55,10 @@ router.get('/catalog', (req, res) => {
   if (!/^[A-Z]{3}$/.test(iso3)) return res.status(400).json({ error: 'iso3 required' });
   const tier = tierOf(iso3);
   res.json({ tier, layers: layersForTier(tier) });
+});
+
+router.get('/config', (_req, res) => {
+  res.json({ freeAreaDeg2: FREE_AREA_DEG2, hardAreaDeg2: HARD_AREA_DEG2 });
 });
 
 /* ================= geography (geoBoundaries picker data) ================= */
@@ -130,19 +135,54 @@ function pointInGeom(x, y, geom) {
   return false;
 }
 
+// Which ADM depths does geoBoundaries actually have for this country? (cached probe)
+const MAX_LEVEL = 4;
+router.get('/geo/levels', async (req, res) => {
+  const iso3 = String(req.query.iso3 || '').toUpperCase();
+  if (!/^[A-Z]{3}$/.test(iso3)) return res.status(400).json({ error: 'iso3 required' });
+  fs.mkdirSync(GEOCACHE_DIR, { recursive: true });
+  const cacheFile = path.join(GEOCACHE_DIR, `${iso3}-levels.json`);
+  try {
+    return res.json(JSON.parse(fs.readFileSync(cacheFile, 'utf8')));
+  } catch {}
+  const MAX_LEVEL_MB = Number(process.env.ATLAS_MAX_LEVEL_MB) || 80;
+  const levels = [];
+  for (let l = 1; l <= MAX_LEVEL; l++) {
+    try {
+      const r = await fetch(GB_API(iso3, l), { headers: { 'User-Agent': 'LOKA-Atlas (mithun@socratus.org)' } });
+      if (!r.ok) break;
+      const meta = await r.json();
+      const url = meta && (meta.simplifiedGeometryGeoJSON || meta.gjDownloadURL);
+      if (!url) break;
+      // very deep levels of big countries can be enormous — skip what we can't serve
+      if (l >= 3) {
+        try {
+          const h = await fetch(url, { method: 'HEAD', headers: { 'User-Agent': 'LOKA-Atlas (mithun@socratus.org)' } });
+          const size = Number(h.headers.get('content-length') || 0);
+          if (size > MAX_LEVEL_MB * 1024 * 1024) break;
+        } catch {}
+      }
+      levels.push(l);
+    } catch { break; }
+  }
+  const doc = { iso3, levels: levels.length ? levels : [1] };
+  try { fs.writeFileSync(cacheFile, JSON.stringify(doc)); } catch {}
+  res.json(doc);
+});
+
 router.get('/geo/admin', async (req, res) => {
   const iso3 = String(req.query.iso3 || '').toUpperCase();
   const level = Number(req.query.level) || 1;
-  if (!/^[A-Z]{3}$/.test(iso3) || ![1, 2].includes(level)) {
-    return res.status(400).json({ error: 'iso3 and level (1|2) required' });
+  if (!/^[A-Z]{3}$/.test(iso3) || level < 1 || level > MAX_LEVEL) {
+    return res.status(400).json({ error: `iso3 and level (1–${MAX_LEVEL}) required` });
   }
   try {
     const doc = await loadAdmin(iso3, level);
     let features = doc.features;
     const parents = String(req.query.parents || '').split(',').filter(Boolean);
-    if (parents.length && level === 2) {
-      const adm1 = await loadAdmin(iso3, 1);
-      const parentGeoms = adm1.features
+    if (parents.length && level > 1) {
+      const up = await loadAdmin(iso3, level - 1);
+      const parentGeoms = up.features
         .filter((f) => parents.includes(f.properties.id))
         .map((f) => f.geometry);
       features = features.filter((f) => {
@@ -253,9 +293,14 @@ router.post('/instances', async (req, res) => {
     e = Math.max(e, f.bbox[2]); n = Math.max(n, f.bbox[3]);
   }
   const areaDeg2 = (e - w) * (n - s);
-  if (areaDeg2 > MAX_AREA_DEG2) {
-    return res.status(400).json({ error: `region too large (${areaDeg2.toFixed(1)} deg² > ${MAX_AREA_DEG2}) — pick fewer units` });
+  if (areaDeg2 > HARD_AREA_DEG2) {
+    return res.status(400).json({
+      error: 'That region is larger than a single atlas can cover right now — open a unit on the map and pick smaller areas inside it.',
+      tooLarge: true,
+    });
   }
+  // Bigger than the free tier → same approval pipeline as heavy layers.
+  const largeRegion = areaDeg2 > FREE_AREA_DEG2;
   const shapeNames = picked.map((f) => f.properties.name);
   const regionLabel = shapeNames.slice(0, 3).join(' · ') + (shapeNames.length > 3 ? ` +${shapeNames.length - 3}` : '');
 
@@ -272,11 +317,14 @@ router.post('/instances', async (req, res) => {
     return res.status(409).json({ error: 'slug unavailable', slug });
   }
 
-  // cost gate
+  // cost gate: heavy layers OR a large region both go through admin approval
   const approvalLayers = layerIds.filter((id) => allowed.get(id).cost === 'approval');
-  const needsApproval = approvalLayers.length > 0;
+  const approvalReasons = [];
+  if (approvalLayers.length) approvalReasons.push(`heavy layers: ${approvalLayers.join(', ')}`);
+  if (largeRegion) approvalReasons.push(`large region: ${regionLabel} (~${Math.round(areaDeg2 * 12300).toLocaleString('en-IN')} km²)`);
+  const needsApproval = approvalReasons.length > 0;
   if (needsApproval && !reg.validEmail(email)) {
-    return res.status(400).json({ error: 'these layers need approval — a contact email is required', needsEmail: true });
+    return res.status(400).json({ error: 'this build needs a quick approval from the LOKA team — add a contact email so we can reach you', needsEmail: true });
   }
 
   const editToken = reg.newToken();
@@ -313,7 +361,7 @@ router.post('/instances', async (req, res) => {
     await sendMail({
       to: ADMIN_EMAIL,
       subject: `[LOKA Atlas] approval needed: ${title} (${slug})`,
-      text: `New atlas needs approval (heavy layers: ${approvalLayers.join(', ')}).\n\n` +
+      text: `New atlas needs approval (${approvalReasons.join('; ')}).\n\n` +
         `Org: ${org || '—'}\nContact: ${email}\nRegion: ${regionLabel} (${iso3}, ${areaDeg2.toFixed(1)} deg²)\n` +
         `Layers: ${layerIds.join(', ')}\nVisibility: ${visibility}\n\n` +
         `Approve: ${approve}\nDeny:    ${deny}\n`,
@@ -470,7 +518,7 @@ router.post('/auth/request-link', async (req, res) => {
     subject: 'Sign in to LOKA Atlas',
     text: `Click to sign in (valid 15 minutes):\n\n${link}\n\nIf you didn't request this, ignore this email.`,
   });
-  res.json({ ok: true, sent: !!result.sent });
+  res.json({ ok: true, sent: !!result.sent, via: result.via || 'log' });
 });
 function makeSafe(t) { return encodeURIComponent(t); }
 
