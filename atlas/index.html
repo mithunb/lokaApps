@@ -12,17 +12,17 @@
   <style>
     :root {
       /* Rustic-pastel palette on a grey canvas; flat (borders over shadows) */
-      --color-bg:#E6E4DF; --color-bg-alt:#D7D4CC; --color-surface:#F2F0EB;
-      --color-moss:#40573D; --color-canopy:#2F4230;           /* rustic dark green (primary) */
-      --color-rust:#A6522F; --color-rust-deep:#7E3B1F;         /* rust accent */
-      --color-sienna:#9C5A34; --color-ochre:#B0863A;           /* sienna + ochre accents */
-      --color-text-primary:#2B2723; --color-text-secondary:#5C544A; --color-text-muted:#6B655B;
-      --color-divider:rgba(43,39,35,.10); --color-border:rgba(43,39,35,.16);
-      --color-moss-tint:rgba(64,87,61,.12); --color-rust-tint:rgba(166,82,47,.12);
+      --color-bg:#E9DFC9; --color-bg-alt:#DCCFB4; --color-surface:#F4EDDC;
+      --color-moss:#4A5A33; --color-canopy:#384526;           /* rustic dark green (primary) */
+      --color-rust:#AE5028; --color-rust-deep:#7C3616;         /* rust accent */
+      --color-sienna:#99582F; --color-ochre:#B8862F;           /* sienna + ochre accents */
+      --color-text-primary:#2A241A; --color-text-secondary:#564E3C; --color-text-muted:#6B6350;
+      --color-divider:rgba(42,36,26,.10); --color-border:rgba(42,36,26,.16);
+      --color-moss-tint:rgba(74,90,51,.13); --color-rust-tint:rgba(174,80,40,.13);
       --radius-md:.25rem; --radius-lg:.375rem;
       --shadow-sm:none;
-      --shadow-md:0 1px 4px rgba(43,39,35,.10);
-      --shadow-lg:0 2px 12px rgba(43,39,35,.12);
+      --shadow-md:0 1px 4px rgba(42,36,26,.10);
+      --shadow-lg:0 2px 12px rgba(42,36,26,.12);
       --container:min(76rem,100% - 2.5rem);
     }
     * { box-sizing:border-box; }
@@ -70,7 +70,7 @@
     /* ---- map stage ---- */
     .atlas-stage { position:relative; width:var(--container); margin:0 auto 1.5rem;
       height:clamp(560px,80vh,940px); border-radius:var(--radius-lg); overflow:hidden;
-      box-shadow:var(--shadow-lg); background:#DEDCD6; border:1px solid var(--color-border); }
+      box-shadow:var(--shadow-lg); background:#E4D9BF; border:1px solid var(--color-border); }
     #atlas-map { position:absolute; inset:0; }
     .atlas-error { position:absolute; inset:0; display:flex; flex-direction:column; gap:.5rem;
       align-items:center; justify-content:center; color:#e9efe9; font-size:1.05rem; text-align:center; padding:2rem; }
@@ -78,7 +78,7 @@
     /* ---- control widget ---- */
     .atlas-panel { position:absolute; top:1rem; left:1rem; z-index:5; width:19.5rem; max-width:calc(100% - 2rem);
       max-height:calc(100% - 2rem); display:flex; flex-direction:column;
-      background:rgba(255,255,255,.94); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+      background:rgba(252,247,234,.95); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
       border:1px solid var(--color-border); border-radius:var(--radius-md); box-shadow:var(--shadow-md); overflow:hidden; }
     .panel-head { display:flex; align-items:center; justify-content:space-between; gap:.5rem;
       padding:.7rem .9rem; border-bottom:1px solid var(--color-divider); flex:0 0 auto; }
@@ -107,8 +107,8 @@
     .ctl-row.off .ctl-name { color:var(--color-text-muted); }
     .ctl-toggle { display:flex; align-items:center; gap:.55rem; cursor:pointer; }
     .ctl-toggle input { position:absolute; opacity:0; width:0; height:0; }
-    .ctl-switch { flex:0 0 auto; width:32px; height:18px; border-radius:999px; background:#cfd6cf; position:relative; transition:background .2s cubic-bezier(.25,1,.5,1); }
-    .ctl-switch::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.25); transition:transform .2s cubic-bezier(.25,1,.5,1); }
+    .ctl-switch { flex:0 0 auto; width:32px; height:18px; border-radius:999px; background:#CCC3A9; position:relative; transition:background .2s cubic-bezier(.25,1,.5,1); }
+    .ctl-switch::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#FFFDF6; box-shadow:0 1px 2px rgba(0,0,0,.25); transition:transform .2s cubic-bezier(.25,1,.5,1); }
     .ctl-toggle input:checked + .ctl-switch { background:var(--color-moss); }
     .ctl-toggle input:checked + .ctl-switch::after { transform:translateX(14px); }
     .ctl-toggle input:focus-visible + .ctl-switch { outline:2px solid var(--color-moss); outline-offset:2px; }
@@ -139,7 +139,7 @@
 
     .crop-chips { display:flex; flex-wrap:wrap; gap:.3rem; margin:.4rem 0 .1rem; }
     .crop-chip { font:inherit; font-size:.72rem; padding:.2rem .5rem; border-radius:4px; cursor:pointer;
-      border:1px solid var(--color-border); background:#fff; color:var(--color-text-secondary); display:inline-flex; align-items:center; gap:.3rem;
+      border:1px solid var(--color-border); background:#FFFDF6; color:var(--color-text-secondary); display:inline-flex; align-items:center; gap:.3rem;
       transition:background .15s ease, border-color .15s ease, color .15s ease, transform .1s cubic-bezier(.25,1,.5,1); }
     .crop-chip::before { content:''; width:8px; height:8px; border-radius:2px; background:var(--c,#888); transition:transform .15s cubic-bezier(.34,1.4,.6,1); }
     .crop-chip.diversity::before { background:linear-gradient(90deg,#cdd3b4,#39502f); }
@@ -174,20 +174,20 @@
 
     /* ---- DOM markers ---- */
     .atlas-marker { display:flex; flex-direction:column; align-items:center; cursor:pointer; }
-    .atlas-pin { width:20px; height:20px; border-radius:50%; background:#fff; border:2px solid var(--pin,#A6522F);
-      color:var(--pin,#A6522F); font-size:11px; line-height:1; display:flex; align-items:center; justify-content:center;
-      box-shadow:0 1px 3px rgba(43,39,35,.32); transition:transform .18s cubic-bezier(.25,1,.5,1), box-shadow .18s ease; }
-    .atlas-pin.ring { background:var(--pin,#A6522F); border-color:#fff; }
+    .atlas-pin { width:20px; height:20px; border-radius:50%; background:#FFFDF6; border:2px solid var(--pin,#AE5028);
+      color:var(--pin,#AE5028); font-size:11px; line-height:1; display:flex; align-items:center; justify-content:center;
+      box-shadow:0 1px 3px rgba(42,36,26,.32); transition:transform .18s cubic-bezier(.25,1,.5,1), box-shadow .18s ease; }
+    .atlas-pin.ring { background:var(--pin,#AE5028); border-color:#fff; }
     .atlas-pin svg { width:12px; height:12px; display:block; }
     /* lift the pin (a child) on hover — never the marker element itself; MapLibre owns its transform */
-    @media (hover:hover){ .atlas-marker:hover .atlas-pin { transform:translateY(-2px) scale(1.14); box-shadow:0 3px 8px rgba(43,39,35,.4); } }
+    @media (hover:hover){ .atlas-marker:hover .atlas-pin { transform:translateY(-2px) scale(1.14); box-shadow:0 3px 8px rgba(42,36,26,.4); } }
 
     /* numbered cluster badge (stands in for a tight group at overview zoom) */
     .atlas-cluster { display:flex; align-items:center; gap:.4rem; cursor:pointer;
       background:var(--color-surface); border:1.5px solid var(--color-rust); border-radius:4px;
-      padding:.2rem .5rem .2rem .3rem; box-shadow:0 1px 5px rgba(43,39,35,.22);
+      padding:.2rem .5rem .2rem .3rem; box-shadow:0 1px 5px rgba(42,36,26,.22);
       font-family:'Figtree',sans-serif; transition:transform .15s cubic-bezier(.25,1,.5,1), box-shadow .15s; }
-    .atlas-cluster:hover { transform:scale(1.04); box-shadow:0 2px 8px rgba(43,39,35,.28); }
+    .atlas-cluster:hover { transform:scale(1.04); box-shadow:0 2px 8px rgba(42,36,26,.28); }
     .atlas-cluster .cl-count { display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:20px;
       padding:0 4px; background:var(--color-rust); color:#fff; border-radius:3px; font-size:12px; font-weight:700; }
     .atlas-cluster .cl-label { font-size:12px; font-weight:600; color:var(--color-rust-deep); white-space:nowrap; }
@@ -283,7 +283,7 @@
       .atlas-panel {
         position:relative; inset:auto; width:auto; max-width:none;
         flex:0 0 46%; max-height:46%; min-height:0; border-radius:6px 6px 0 0;
-        box-shadow:0 -2px 12px rgba(43,39,35,.14);
+        box-shadow:0 -2px 12px rgba(42,36,26,.14);
         padding-bottom:env(safe-area-inset-bottom);
       }
       .atlas-panel #atlas-controls { flex:1 1 auto; min-height:0; }

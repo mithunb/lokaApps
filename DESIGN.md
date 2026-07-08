@@ -2,22 +2,22 @@
 name: LOKA Atlas
 description: Layered, manifest-driven maps for any geography — public tech by Socratus.
 colors:
-  moss: "#40573D"
-  canopy: "#2F4230"
-  rust: "#A6522F"
-  rust-deep: "#7E3B1F"
-  sienna: "#9C5A34"
-  ochre: "#B0863A"
-  field-grey: "#E6E4DF"
-  field-grey-deep: "#D7D4CC"
-  paper-surface: "#F2F0EB"
-  ink: "#2B2723"
-  ink-soft: "#5C544A"
-  ink-faded: "#6B655B"
-  ink-border: "#2B272329"
-  ink-divider: "#2B27231A"
-  moss-tint: "#40573D1F"
-  rust-tint: "#A6522F1F"
+  moss: "#4A5A33"
+  canopy: "#384526"
+  rust: "#AE5028"
+  rust-deep: "#7C3616"
+  sienna: "#99582F"
+  ochre: "#B8862F"
+  old-paper: "#E9DFC9"
+  old-paper-deep: "#DCCFB4"
+  paper-surface: "#F4EDDC"
+  ink: "#2A241A"
+  ink-soft: "#564E3C"
+  ink-faded: "#6B6350"
+  ink-border: "#2A241A29"
+  ink-divider: "#2A241A1A"
+  moss-tint: "#4A5A331F"
+  rust-tint: "#AE50281F"
 typography:
   display:
     fontFamily: "Figtree, sans-serif"
@@ -91,7 +91,7 @@ components:
 **Creative North Star: "The Field Notebook"**
 
 LOKA Atlas looks like a working document from fieldwork, not a dashboard. The surfaces are
-matte greys — the tone of paper that has been in a bag all day — and everything drawn on
+old paper — the warm, slightly foxed tone of a survey sheet that has lived in a field bag — and everything drawn on
 them behaves like ink: thin borders, earthy boundary lines, stamped uppercase labels,
 small honest controls. The map is the page; the interface is the margin. Every design
 decision defers to the data on the map, because the people this serves — survey teams,
@@ -104,8 +104,8 @@ in that order of importance. Color is committed but muted: a rustic-pastel famil
 rust, sienna, ochre) that could be mixed from soil, turmeric and leaves.
 
 **Key Characteristics:**
-- Grey paper canvas; white is reserved for elements that must read as "on top" (panel, inputs).
-- One green speaks for the product (moss `#40573D`); earth accents belong to the data.
+- Old-paper canvas; warm white is reserved for elements that must read as "on top" (panel, inputs).
+- One green speaks for the product (moss `#4A5A33`); earth accents belong to the data.
 - Flat, ink-on-paper depth: borders and tone steps, not shadows.
 - Two typefaces, two jobs: Figtree structures, DM Sans reads.
 - Refined and restrained components: thin strokes, small radii, quiet states.
@@ -113,27 +113,27 @@ rust, sienna, ochre) that could be mixed from soil, turmeric and leaves.
 
 ## 2. Colors
 
-An earth-pigment palette on grey paper — committed to green, with rust and ochre held in
+An earth-pigment palette on old paper — committed to green, with rust and ochre held in
 reserve for data and warnings.
 
 ### Primary
-- **Moss** (#40573D): the product's one voice — primary buttons, active toggles, selected
-  states, links, focus rings. Deepens to **Canopy** (#2F4230) on hover/press.
-- **Moss Tint** (#40573D1F): selection washes, eyebrow chips, informational backgrounds.
+- **Moss** (#4A5A33): the product's one voice — primary buttons, active toggles, selected
+  states, links, focus rings. Deepens to **Canopy** (#384526) on hover/press.
+- **Moss Tint** (#4A5A331F): selection washes, eyebrow chips, informational backgrounds.
 
 ### Secondary
-- **Rust** (#A6522F): the data accent — survey markers, selected map features, warning text
-  (as **Rust Deep** #7E3B1F). Never a button fill in the UI.
-- **Ochre** (#B0863A): boundary ink on the map (district outlines) and approval badges.
-- **Sienna** (#9C5A34): tertiary data accent (e.g. sugar-mill markers, caution copy).
+- **Rust** (#AE5028): the data accent — survey markers, selected map features, warning text
+  (as **Rust Deep** #7C3616). Never a button fill in the UI.
+- **Ochre** (#B8862F): boundary ink on the map (district outlines) and approval badges.
+- **Sienna** (#99582F): tertiary data accent (e.g. sugar-mill markers, caution copy).
 
 ### Neutral
-- **Field Grey** (#E6E4DF): the page background — the paper.
-- **Field Grey Deep** (#D7D4CC): footers, recessed strips, disabled toggles.
-- **Paper Surface** (#F2F0EB): cards, panels, sections — one tone step "above" the page.
-- **Ink** (#2B2723): primary text. **Ink Soft** (#5C544A): secondary text — still ≥ 4.5:1
-  on Field Grey. **Ink Faded** (#6B655B): hints and metadata only, never body copy.
-- **Ink Border** (rgba(43,39,35,.16)) / **Ink Divider** (rgba(43,39,35,.10)): all strokes
+- **Old Paper** (#E9DFC9): the page background — aged survey paper, sun-warmed.
+- **Old Paper Deep** (#DCCFB4): footers, recessed strips, disabled toggles.
+- **Paper Surface** (#F4EDDC): cards, panels, sections — one tone step "above" the page.
+- **Ink** (#2A241A): primary text. **Ink Soft** (#564E3C): secondary text — still ≥ 4.5:1
+  on Field Grey. **Ink Faded** (#6B6350): hints and metadata only, never body copy.
+- **Ink Border** (rgba(42,36,26,.16)) / **Ink Divider** (rgba(42,36,26,.10)): all strokes
   are transparencies of Ink, so they sit naturally on any grey.
 
 ### Named Rules
@@ -177,17 +177,17 @@ never Figtree for paragraphs; never DM Sans for uppercase labels.
 
 ## 4. Elevation
 
-Flat, ink on paper. Depth is conveyed by tone steps (Field Grey → Paper Surface → White)
+Flat, ink on paper. Depth is conveyed by tone steps (Old Paper → Paper Surface → Warm White)
 and by ink borders — not by shadows. `--shadow-sm` is literally `none`. Two sanctioned
 exceptions exist: the floating layer panel over the map carries a soft ambient shadow
-(`0 2px 12px rgba(43,39,35,.12)`) plus a ≥94%-opaque blur backdrop — a legibility device
+(`0 2px 12px rgba(42,36,26,.12)`) plus a ≥94%-opaque blur backdrop — a legibility device
 over unpredictable map imagery, not decoration — and the map stage itself sits in a
 1px-bordered well with the same soft shadow to read as "the page's plate".
 
 ### Shadow Vocabulary
-- **panel-lift** (`box-shadow: 0 2px 12px rgba(43,39,35,.12)`): the layer panel and map
+- **panel-lift** (`box-shadow: 0 2px 12px rgba(42,36,26,.12)`): the layer panel and map
   stage only.
-- **hairline-lift** (`box-shadow: 0 1px 4px rgba(43,39,35,.10)`): mobile bottom sheet edge.
+- **hairline-lift** (`box-shadow: 0 1px 4px rgba(42,36,26,.10)`): mobile bottom sheet edge.
 
 ### Named Rules
 **The Ink-on-Paper Rule.** Surfaces are flat at rest and flat on hover. If a new element
@@ -243,10 +243,10 @@ or lighten a fill rather than adding emphasis.
 ## 6. Do's and Don'ts
 
 ### Do:
-- **Do** keep the interface grey and let saturated color live on the map (The Map Speaks Rule).
-- **Do** separate with 1px ink-transparency borders and tone steps; reach for `#F2F0EB`
+- **Do** keep the interface paper-quiet and let saturated color live on the map (The Map Speaks Rule).
+- **Do** separate with 1px ink-transparency borders and tone steps; reach for `#F4EDDC`
   before reaching for a shadow.
-- **Do** use Moss (#40573D) for every interactive affordance — buttons, switches, focus,
+- **Do** use Moss (#4A5A33) for every interactive affordance — buttons, switches, focus,
   links — so "green means you can act on it" stays true everywhere.
 - **Do** give every map label a paper halo; text over imagery is unreadable without it.
 - **Do** ship layers translucent (0.35–0.75 fill) with opacity sliders where stacking matters.

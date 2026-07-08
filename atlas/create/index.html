@@ -11,13 +11,13 @@
   <style>
     :root {
       /* Same rustic-pastel system as the atlas viewer */
-      --color-bg:#E6E4DF; --color-bg-alt:#D7D4CC; --color-surface:#F2F0EB;
-      --color-moss:#40573D; --color-canopy:#2F4230;
-      --color-rust:#A6522F; --color-rust-deep:#7E3B1F;
-      --color-sienna:#9C5A34; --color-ochre:#B0863A;
-      --color-text-primary:#2B2723; --color-text-secondary:#5C544A; --color-text-muted:#6B655B;
-      --color-divider:rgba(43,39,35,.10); --color-border:rgba(43,39,35,.16);
-      --color-moss-tint:rgba(64,87,61,.12); --color-rust-tint:rgba(166,82,47,.12);
+      --color-bg:#E9DFC9; --color-bg-alt:#DCCFB4; --color-surface:#F4EDDC;
+      --color-moss:#4A5A33; --color-canopy:#384526;
+      --color-rust:#AE5028; --color-rust-deep:#7C3616;
+      --color-sienna:#99582F; --color-ochre:#B8862F;
+      --color-text-primary:#2A241A; --color-text-secondary:#564E3C; --color-text-muted:#6B6350;
+      --color-divider:rgba(42,36,26,.10); --color-border:rgba(42,36,26,.16);
+      --color-moss-tint:rgba(74,90,51,.13); --color-rust-tint:rgba(174,80,40,.13);
       --radius-md:.25rem; --radius-lg:.375rem;
       --container:min(64rem,100% - 2.5rem);
     }
@@ -88,7 +88,7 @@
     .invite { margin:3rem 0 0; background:var(--color-moss); border-radius:var(--radius-lg); padding:2rem 1.75rem; color:#eef2ec; }
     .invite h2 { color:#fff; }
     .invite p { color:#d6ddd2; max-width:44rem; }
-    .invite .btn { background:#fff; color:var(--color-canopy); }
+    .invite .btn { background:#FFFDF6; color:var(--color-canopy); }
     .invite .btn:hover { background:var(--color-surface); color:var(--color-canopy); }
     .invite small { display:block; margin-top:.9rem; color:#b9c4b4; font-size:.82rem; }
 
@@ -140,15 +140,15 @@
       </div>
       <div class="showcase-map" aria-hidden="true">
         <svg viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-          <rect width="400" height="260" fill="#DEDCD6"/>
-          <path d="M60 40 L160 25 L235 60 L305 45 L355 95 L330 170 L360 215 L280 240 L190 225 L120 240 L70 190 L40 120 Z" fill="#E9E6DE" stroke="#B0863A" stroke-width="3"/>
-          <path d="M160 25 L175 90 L235 60 M175 90 L150 160 L120 240 M175 90 L250 130 L305 45 M250 130 L245 200 L280 240 M150 160 L245 200" fill="none" stroke="#5c544a" stroke-width="1" opacity=".45"/>
+          <rect width="400" height="260" fill="#E4D9BF"/>
+          <path d="M60 40 L160 25 L235 60 L305 45 L355 95 L330 170 L360 215 L280 240 L190 225 L120 240 L70 190 L40 120 Z" fill="#E9E6DE" stroke="#B8862F" stroke-width="3"/>
+          <path d="M160 25 L175 90 L235 60 M175 90 L150 160 L120 240 M175 90 L250 130 L305 45 M250 130 L245 200 L280 240 M150 160 L245 200" fill="none" stroke="#564E3C" stroke-width="1" opacity=".45"/>
           <path d="M40 120 C110 130 170 105 230 125 C285 143 330 130 360 145" fill="none" stroke="#5f7f92" stroke-width="3" opacity=".85"/>
           <path d="M120 240 C140 200 165 185 205 175" fill="none" stroke="#7ba0b0" stroke-width="1.6" opacity=".8"/>
-          <circle cx="205" cy="112" r="7" fill="#9C5A34"/>
-          <circle cx="150" cy="160" r="7" fill="#40573D"/>
-          <circle cx="284" cy="170" r="7" fill="#A6522F"/>
-          <rect x="96" y="60" width="34" height="22" rx="3" fill="#40573D" opacity=".35"/>
+          <circle cx="205" cy="112" r="7" fill="#99582F"/>
+          <circle cx="150" cy="160" r="7" fill="#4A5A33"/>
+          <circle cx="284" cy="170" r="7" fill="#AE5028"/>
+          <rect x="96" y="60" width="34" height="22" rx="3" fill="#4A5A33" opacity=".35"/>
           <rect x="255" y="88" width="40" height="26" rx="3" fill="#9aad5b" opacity=".5"/>
           <rect x="180" y="205" width="30" height="18" rx="3" fill="#cdb14a" opacity=".5"/>
         </svg>

@@ -11,13 +11,13 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Figtree:wght@500;600;700&display=swap" />
   <style>
     :root {
-      --color-bg:#E6E4DF; --color-bg-alt:#D7D4CC; --color-surface:#F2F0EB;
-      --color-moss:#40573D; --color-canopy:#2F4230;
-      --color-rust:#A6522F; --color-rust-deep:#7E3B1F;
-      --color-sienna:#9C5A34; --color-ochre:#B0863A;
-      --color-text-primary:#2B2723; --color-text-secondary:#5C544A; --color-text-muted:#6B655B;
-      --color-divider:rgba(43,39,35,.10); --color-border:rgba(43,39,35,.16);
-      --color-moss-tint:rgba(64,87,61,.12); --color-rust-tint:rgba(166,82,47,.12);
+      --color-bg:#E9DFC9; --color-bg-alt:#DCCFB4; --color-surface:#F4EDDC;
+      --color-moss:#4A5A33; --color-canopy:#384526;
+      --color-rust:#AE5028; --color-rust-deep:#7C3616;
+      --color-sienna:#99582F; --color-ochre:#B8862F;
+      --color-text-primary:#2A241A; --color-text-secondary:#564E3C; --color-text-muted:#6B6350;
+      --color-divider:rgba(42,36,26,.10); --color-border:rgba(42,36,26,.16);
+      --color-moss-tint:rgba(74,90,51,.13); --color-rust-tint:rgba(174,80,40,.13);
       --radius-md:.25rem; --radius-lg:.375rem;
       --container:min(78rem,100% - 2.5rem);
     }
@@ -42,7 +42,7 @@
 
     .panel { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:1.35rem; }
     label.f { display:flex; flex-direction:column; gap:.3rem; font-size:.85rem; font-weight:600; color:var(--color-text-secondary); margin-bottom:.8rem; }
-    input[type=text], select, textarea { font:inherit; font-size:.92rem; padding:.5rem .6rem; border:1px solid var(--color-border); border-radius:4px; background:#fff; color:var(--color-text-primary); width:100%; }
+    input[type=text], select, textarea { font:inherit; font-size:.92rem; padding:.5rem .6rem; border:1px solid var(--color-border); border-radius:4px; background:#FFFDF6; color:var(--color-text-primary); width:100%; }
     .btn { display:inline-flex; align-items:center; gap:.4rem; padding:.55rem 1.1rem; border-radius:var(--radius-md); border:none;
       background:var(--color-moss); color:#fff; font:inherit; font-weight:600; font-size:.92rem; cursor:pointer; }
     .btn:hover { background:var(--color-canopy); }
@@ -71,7 +71,7 @@
     .bench[hidden] { display:none; }
     @media (max-width:900px){ .bench { grid-template-columns:1fr; } }
     .bench-left { display:flex; flex-direction:column; gap:1rem; min-width:0; }
-    #preview-frame { width:100%; height:640px; border:1px solid var(--color-border); border-radius:var(--radius-lg); background:#DEDCD6; position:sticky; top:1rem; }
+    #preview-frame { width:100%; height:640px; border:1px solid var(--color-border); border-radius:var(--radius-lg); background:#E4D9BF; position:sticky; top:1rem; }
     .card { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:1.1rem 1.2rem; }
     .card h2 { display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
     .infer-note { font-size:.88rem; color:var(--color-text-secondary); background:var(--color-moss-tint); border-radius:4px; padding:.6rem .75rem; margin:.4rem 0 .9rem; }
@@ -84,11 +84,11 @@
     .fix-row button { font-size:.75rem; padding:.3rem .55rem; }
     details.frag { margin-top:.6rem; }
     details.frag summary { cursor:pointer; font-size:.82rem; color:var(--color-text-muted); }
-    details.frag pre { font:11px/1.5 ui-monospace,Menlo,monospace; background:#fff; border:1px solid var(--color-border);
+    details.frag pre { font:11px/1.5 ui-monospace,Menlo,monospace; background:#FFFDF6; border:1px solid var(--color-border);
       border-radius:4px; padding:.6rem; overflow:auto; max-height:14rem; }
     .chat-log { display:flex; flex-direction:column; gap:.4rem; margin-bottom:.6rem; max-height:12rem; overflow-y:auto; }
     .chat-log .me { align-self:flex-end; background:var(--color-moss); color:#fff; border-radius:8px 8px 2px 8px; padding:.4rem .7rem; font-size:.85rem; max-width:85%; }
-    .chat-log .ai { align-self:flex-start; background:#fff; border:1px solid var(--color-border); border-radius:8px 8px 8px 2px; padding:.4rem .7rem; font-size:.85rem; max-width:85%; }
+    .chat-log .ai { align-self:flex-start; background:#FFFDF6; border:1px solid var(--color-border); border-radius:8px 8px 8px 2px; padding:.4rem .7rem; font-size:.85rem; max-width:85%; }
     .chat-row { display:flex; gap:.5rem; }
     .chat-row input { flex:1; }
     footer.site { margin-top:3rem; border-top:1px solid var(--color-divider); background:var(--color-bg-alt); }

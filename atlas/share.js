@@ -57,7 +57,7 @@
     var ctx = cv.getContext("2d");
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, size, size);
-    ctx.fillStyle = "#2B2723";
+    ctx.fillStyle = "#2A241A";
     for (var r = 0; r < n; r++) {
       for (var c = 0; c < n; c++) {
         if (qr.isDark(r, c)) ctx.fillRect((c + quiet) * scale, (r + quiet) * scale, scale, scale);
@@ -123,7 +123,7 @@
 
     // embed snippet (public only)
     if (!isPrivate) {
-      var snippet = '<iframe src="' + url + '" width="100%" height="620" style="border:1px solid #d7d4cc;border-radius:6px" title="' + title.replace(/"/g, "&quot;") + '" loading="lazy"></iframe>';
+      var snippet = '<iframe src="' + url + '" width="100%" height="620" style="border:1px solid #DCCFB4;border-radius:6px" title="' + title.replace(/"/g, "&quot;") + '" loading="lazy"></iframe>';
       var embed = el("div", "shr-embed");
       embed.appendChild(el("b", null, "Embed on your website"));
       var pre = el("textarea", "shr-code");
@@ -144,21 +144,21 @@
     var css = [
       ".shr{display:flex;flex-direction:column;gap:.9rem;font-size:.9rem}",
       ".shr-row{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}",
-      ".shr-link{flex:1 1 14rem;font:inherit;font-size:.85rem;padding:.5rem .6rem;border:1px solid rgba(43,39,35,.16);border-radius:4px;background:#fff;color:#2B2723;min-width:0}",
-      ".shr-btn{display:inline-flex;align-items:center;gap:.4rem;font:inherit;font-size:.85rem;font-weight:600;padding:.5rem .8rem;border:1px solid rgba(43,39,35,.16);border-radius:4px;background:#F2F0EB;color:#2B2723;cursor:pointer;text-decoration:none}",
-      ".shr-btn:hover{border-color:#40573D;color:#2F4230;text-decoration:none}",
+      ".shr-link{flex:1 1 14rem;font:inherit;font-size:.85rem;padding:.5rem .6rem;border:1px solid rgba(42,36,26,.16);border-radius:4px;background:#FFFDF6;color:#2A241A;min-width:0}",
+      ".shr-btn{display:inline-flex;align-items:center;gap:.4rem;font:inherit;font-size:.85rem;font-weight:600;padding:.5rem .8rem;border:1px solid rgba(42,36,26,.16);border-radius:4px;background:#F4EDDC;color:#2A241A;cursor:pointer;text-decoration:none}",
+      ".shr-btn:hover{border-color:#4A5A33;color:#384526;text-decoration:none}",
       ".shr-btn svg{width:15px;height:15px}",
-      ".shr-note{margin:0;color:#5C544A}",
+      ".shr-note{margin:0;color:#564E3C}",
       ".shr-qr{display:flex;gap:1rem;align-items:center;flex-wrap:wrap}",
-      ".shr-qr canvas{border:1px solid rgba(43,39,35,.16);border-radius:4px;width:132px;height:132px;image-rendering:pixelated}",
+      ".shr-qr canvas{border:1px solid rgba(42,36,26,.16);border-radius:4px;width:132px;height:132px;image-rendering:pixelated}",
       ".shr-qr-col{display:flex;flex-direction:column;gap:.35rem;max-width:20rem}",
-      ".shr-qr-col span{color:#5C544A;font-size:.85rem}",
+      ".shr-qr-col span{color:#564E3C;font-size:.85rem}",
       ".shr-embed{display:flex;flex-direction:column;gap:.4rem;align-items:flex-start}",
-      ".shr-code{width:100%;font:12px/1.45 ui-monospace,Menlo,monospace;padding:.5rem .6rem;border:1px solid rgba(43,39,35,.16);border-radius:4px;background:#fff;color:#2B2723;resize:vertical;box-sizing:border-box}",
-      ".shr-dialog{border:1px solid rgba(43,39,35,.2);border-radius:6px;padding:1.25rem 1.35rem;max-width:30rem;width:calc(100vw - 2.5rem);background:#F2F0EB;color:#2B2723;font-family:'DM Sans',system-ui,sans-serif}",
-      ".shr-dialog::backdrop{background:rgba(43,39,35,.35)}",
+      ".shr-code{width:100%;font:12px/1.45 ui-monospace,Menlo,monospace;padding:.5rem .6rem;border:1px solid rgba(42,36,26,.16);border-radius:4px;background:#FFFDF6;color:#2A241A;resize:vertical;box-sizing:border-box}",
+      ".shr-dialog{border:1px solid rgba(42,36,26,.2);border-radius:6px;padding:1.25rem 1.35rem;max-width:30rem;width:calc(100vw - 2.5rem);background:#F4EDDC;color:#2A241A;font-family:'DM Sans',system-ui,sans-serif}",
+      ".shr-dialog::backdrop{background:rgba(42,36,26,.35)}",
       ".shr-dialog h3{margin:0 0 .9rem;font-family:Figtree,sans-serif;font-size:1.05rem}",
-      ".shr-dialog .shr-close{position:absolute;top:.6rem;right:.6rem;border:none;background:none;font-size:1.2rem;cursor:pointer;color:#6B655B;padding:.2rem .45rem}",
+      ".shr-dialog .shr-close{position:absolute;top:.6rem;right:.6rem;border:none;background:none;font-size:1.2rem;cursor:pointer;color:#6B6350;padding:.2rem .45rem}",
     ].join("\n");
     var s = document.createElement("style");
     s.textContent = css;
