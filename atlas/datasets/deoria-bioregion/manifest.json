@@ -63,7 +63,7 @@
       "legend": [{ "color": "#6d8ba0", "label": "Historically flooded" }]
     },
     {
-      "id": "wetlands", "group": "eco", "type": "fill", "source": "wetlands.geojson",
+      "id": "wetlands", "group": "eco", "subgroup": "Water", "type": "fill", "source": "wetlands.geojson",
       "label": "Wetlands & water bodies", "default": false,
       "paint": { "fillColor": "#5f8f86", "fillOpacity": 0.7, "outlineColor": "#48706a", "outlineWidth": 0.5 },
       "legend": [{ "color": "#5f8f86", "label": "Lakes, ponds, ox-bows, riverine wetlands" }],
@@ -72,7 +72,7 @@
         { "label": "Area", "property": "area_ha", "suffix": " ha" } ] }
     },
     {
-      "id": "basin", "group": "eco", "type": "fill", "source": "basin.geojson",
+      "id": "basin", "group": "eco", "subgroup": "Water", "type": "fill", "source": "basin.geojson",
       "label": "River sub-basins", "default": false,
       "paint": { "fillColor": "#8aa2b0", "fillOpacity": 0.08, "outlineColor": "#5f7f92", "outlineWidth": 1.4, "outlineDash": [3, 2] },
       "legend": [{ "color": "#5f7f92", "label": "Ghaghara / Gandak sub-basin", "shape": "dashed" }],
@@ -88,7 +88,7 @@
     {
       "id": "wasteland", "group": "eco", "type": "fill", "source": "wasteland.geojson",
       "label": "Wasteland (open / barren land)", "default": false, "opacityControl": true, "opacity": 0.7,
-      "info": "Share of uncultivated open, scrub & barren land per block (ESA WorldCover 2021) — a proxy for revenue wasteland, which isn't openly available as GIS for these districts.",
+      "info": "No open revenue-wasteland GIS exists for these districts, so this is a land-cover proxy: the share of uncultivated open, scrub & barren land per block (ESA WorldCover 2021).",
       "paint": {
         "fillColor": ["step", ["get", "wl_pct"], "#efe6d9", 1.5, "#ddc4a0", 3, "#caa06f", 5, "#a8703f", 7, "#824e26"],
         "fillOpacity": 0.7, "outlineColor": "#7a5a3a", "outlineWidth": 0.4
@@ -104,30 +104,32 @@
         { "label": "Open / barren land", "property": "wl_pct", "suffix": "% of block area" } ] }
     },
     {
-      "id": "forests", "group": "eco", "type": "fill", "source": "forests.geojson",
-      "label": "Reserved & protected forests", "default": false,
-      "info": "Forest boundary polygons from Survey of India topo maps (reserved / protected).",
-      "paint": {
-        "fillColor": ["match", ["get", "type"], "Reserved", "#2f4a30", "#6f7d43"],
-        "fillOpacity": 0.6,
-        "outlineColor": ["match", ["get", "type"], "Reserved", "#22371f", "#556232"],
-        "outlineWidth": 0.8
-      },
-      "legend": [
-        { "color": "#2f4a30", "label": "Reserved forest" },
-        { "color": "#6f7d43", "label": "Protected forest" }
-      ],
-      "popup": { "title": "name", "titleFallback": "type", "subtitleProperty": "type", "fields": [] }
+      "id": "forests-reserved", "group": "eco", "subgroup": "Forests", "type": "fill", "source": "forests.geojson",
+      "label": "Reserved forest", "default": false,
+      "filter": ["==", ["get", "type"], "Reserved"],
+      "info": "Reserved-forest polygons from Survey of India topo maps.",
+      "paint": { "fillColor": "#2f4a30", "fillOpacity": 0.6, "outlineColor": "#22371f", "outlineWidth": 0.8 },
+      "legend": [{ "color": "#2f4a30", "label": "Reserved forest" }],
+      "popup": { "title": "name", "titleFallback": "type", "subtitle": "Reserved forest", "fields": [] }
     },
     {
-      "id": "canals", "group": "eco", "type": "line", "source": "canals.geojson",
+      "id": "forests-protected", "group": "eco", "subgroup": "Forests", "type": "fill", "source": "forests.geojson",
+      "label": "Protected forest", "default": false,
+      "filter": ["==", ["get", "type"], "Protected"],
+      "info": "Protected-forest polygons from Survey of India topo maps.",
+      "paint": { "fillColor": "#6f7d43", "fillOpacity": 0.6, "outlineColor": "#556232", "outlineWidth": 0.8 },
+      "legend": [{ "color": "#6f7d43", "label": "Protected forest" }],
+      "popup": { "title": "name", "titleFallback": "type", "subtitle": "Protected forest", "fields": [] }
+    },
+    {
+      "id": "canals", "group": "eco", "subgroup": "Water", "type": "line", "source": "canals.geojson",
       "label": "Canals", "default": false,
       "paint": { "color": "#7ba0b0", "width": 1.4, "opacity": 0.9 },
       "legend": [{ "color": "#7ba0b0", "label": "Irrigation canal", "shape": "line" }],
       "popup": { "title": "name", "fields": [ { "label": "Project", "property": "project" } ] }
     },
     {
-      "id": "rivers", "group": "eco", "type": "line", "source": "rivers.geojson",
+      "id": "rivers", "group": "eco", "subgroup": "Water", "type": "line", "source": "rivers.geojson",
       "label": "Rivers & drainage", "default": false,
       "paint": {
         "color": "#5f7f92",
@@ -143,10 +145,11 @@
       "id": "districts", "group": "base", "type": "fill", "source": "districts.geojson",
       "label": "District boundaries", "default": true,
       "paint": { "fillColor": "#000000", "fillOpacity": 0, "outlineColor": "#B0863A", "outlineWidth": 2.6 },
-      "label_text": { "property": "name", "size": 15, "color": "#1e2a1c", "haloColor": "#ffffff", "haloWidth": 2.2, "transform": "uppercase", "letterSpacing": 0.12, "minzoom": 7 },
+      "label_text": { "property": "name", "size": 15, "color": "#1e2a1c", "haloColor": "#ffffff", "haloWidth": 2.2, "transform": "uppercase", "letterSpacing": 0.12, "minzoom": 7, "alwaysShow": true },
       "legend": [{ "color": "#B0863A", "label": "District", "shape": "line" }],
       "popup": { "title": "name", "subtitle": "District", "fields": [
         { "label": "Dominant crops", "property": "crops" },
+        { "type": "cropProfile", "label": "All crops grown (blocks growing each)", "property": "cropProfile" },
         { "label": "Soil", "property": "soil" },
         { "label": "Water resources", "property": "water" },
         { "label": "ODOP", "property": "odop" },
@@ -157,6 +160,15 @@
       "label": "Block boundaries & labels", "default": true,
       "paint": { "fillColor": "#000000", "fillOpacity": 0, "outlineColor": "#5c544a", "outlineWidth": 1, "outlineOpacity": 0.42 },
       "label_text": { "property": "name", "size": 11, "color": "#2b2723", "haloColor": "#ffffff", "haloWidth": 1.6, "minzoom": 9 }
+    },
+    {
+      "id": "builtup", "group": "base", "type": "fill", "source": "builtup.geojson",
+      "label": "Urban / built-up areas", "default": false,
+      "info": "Town & city footprints vectorised from the ESA WorldCover 2021 built-up class — a land-cover proxy for urban centres. Official urban-local-body admin boundaries aren't openly available for these districts.",
+      "paint": { "fillColor": "#8a7d6d", "fillOpacity": 0.55, "outlineColor": "#5c544a", "outlineWidth": 0.6 },
+      "legend": [{ "color": "#8a7d6d", "label": "Built-up area (WorldCover-derived)" }],
+      "popup": { "subtitle": "Urban / built-up area", "fields": [
+        { "label": "Approx. footprint", "property": "area_km2", "suffix": " km²" } ] }
     },
     {
       "id": "clusters", "group": "base", "type": "fill", "source": "clusters.geojson",

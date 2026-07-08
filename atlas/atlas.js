@@ -161,21 +161,25 @@
     done && done(gj);
   }
 
+  // Apply an optional MapLibre filter so two layers can render subsets of one source
+  // (e.g. reserved vs protected forests off the same forests.geojson).
+  function withFilter(L, spec) { if (L.filter) spec.filter = L.filter; return spec; }
+
   function addFill(L) {
     L._ids = [];
     addGeoSource(L, function () {
       var p = L.paint || {};
-      map.addLayer({
+      map.addLayer(withFilter(L, {
         id: L.id + "-fill", type: "fill", source: srcId(L),
         layout: { visibility: vis(L) },
         paint: { "fill-color": p.fillColor || "#888", "fill-opacity": p.fillOpacity != null ? p.fillOpacity : 0.4 }
-      });
+      }));
       L._ids.push(L.id + "-fill");
       if (p.outlineColor || p.outlineWidth) {
         var lp = { "line-color": p.outlineColor || "#fff", "line-width": p.outlineWidth || 1 };
         if (p.outlineOpacity != null) lp["line-opacity"] = p.outlineOpacity;
         if (p.outlineDash) lp["line-dasharray"] = p.outlineDash;
-        map.addLayer({ id: L.id + "-line", type: "line", source: srcId(L), layout: { visibility: vis(L) }, paint: lp });
+        map.addLayer(withFilter(L, { id: L.id + "-line", type: "line", source: srcId(L), layout: { visibility: vis(L) }, paint: lp }));
         L._ids.push(L.id + "-line");
       }
       addHighlight(L);
@@ -187,14 +191,14 @@
   // selected (bold orange, persists while the map pans). Only for clickable layers.
   function addHighlight(L) {
     if (!L.popup || !map.getSource(srcId(L))) return;
-    map.addLayer({
+    map.addLayer(withFilter(L, {
       id: L.id + "-hl", type: "line", source: srcId(L), layout: { visibility: vis(L) },
       paint: {
         "line-color": ["case", ["boolean", ["feature-state", "selected"], false], "#A6522F", "#1e2a1c"],
         "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 3.4, ["boolean", ["feature-state", "hover"], false], 1.8, 0],
         "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 1, ["boolean", ["feature-state", "hover"], false], 0.9, 0]
       }
-    });
+    }));
     L._ids.push(L.id + "-hl");
   }
 
@@ -236,7 +240,9 @@
       "text-size": t.size || 12,
       "text-font": ["Open Sans Regular"],
       "symbol-placement": L.type === "line" ? "line" : "point",
-      "text-allow-overlap": false, "text-optional": true
+      "text-allow-overlap": !!t.alwaysShow,
+      "text-ignore-placement": !!t.alwaysShow,
+      "text-optional": !t.alwaysShow
     };
     if (t.transform) layout["text-transform"] = t.transform;
     if (t.letterSpacing) layout["text-letter-spacing"] = t.letterSpacing;
@@ -246,7 +252,7 @@
       "text-halo-color": t.haloColor || "#000",
       "text-halo-width": t.haloWidth || 1.2
     };
-    map.addLayer({ id: L.id + "-label", type: "symbol", source: srcId(L), layout: layout, paint: paint });
+    map.addLayer(withFilter(L, { id: L.id + "-label", type: "symbol", source: srcId(L), layout: layout, paint: paint }));
     L._ids.push(L.id + "-label");
   }
 
@@ -423,13 +429,68 @@
       head.onclick = function () { sec.classList.toggle("collapsed"); };
       sec.appendChild(head);
       var body = el("div", "ctl-group-body");
-      layers.forEach(function (L) { body.appendChild(layerRow(L)); });
+
+      // split into direct items and named sub-groups, preserving manifest order
+      var order = [], subMap = {};
+      layers.forEach(function (L) {
+        if (L.subgroup) {
+          if (!subMap[L.subgroup]) { subMap[L.subgroup] = { name: L.subgroup, layers: [] }; order.push({ sub: L.subgroup }); }
+          subMap[L.subgroup].layers.push(L);
+        } else {
+          order.push({ layer: L });
+        }
+      });
+      order.forEach(function (o) {
+        body.appendChild(o.layer ? layerRow(o.layer) : subGroupSection(subMap[o.sub]));
+      });
+
       sec.appendChild(body);
       panel.appendChild(sec);
     });
   }
 
-  function layerRow(L) {
+  // sub-group: a master (tri-state) toggle over related layers + a collapse chevron,
+  // with each child layer as its own indented row.
+  function subGroupSection(sg) {
+    var wrap = el("div", "ctl-sub");
+    var head = el("div", "ctl-sub-head");
+    var lab = el("label", "ctl-sub-toggle");
+    var master = el("input"); master.type = "checkbox";
+    var sw = el("span", "ctl-switch");
+    var name = el("span", "ctl-sub-name", esc(sg.name));
+    lab.appendChild(master); lab.appendChild(sw); lab.appendChild(name);
+    head.appendChild(lab);
+    var chev = el("button", "ctl-sub-chev", '<span class="chev">' + ICONS.chevron + "</span>");
+    head.appendChild(chev);
+    wrap.appendChild(head);
+
+    var body = el("div", "ctl-sub-body");
+    chev.onclick = function () { wrap.classList.toggle("collapsed"); };
+
+    function sync() {
+      var vis = sg.layers.filter(function (L) { return L._visible; }).length;
+      master.checked = vis > 0;
+      master.indeterminate = vis > 0 && vis < sg.layers.length;
+      head.classList.toggle("off", vis === 0);
+    }
+    master.onchange = function () {
+      var show = master.checked;
+      sg.layers.forEach(function (L) {
+        if (L._cb) L._cb.checked = show;
+        setLayerVisible(L, show);
+        if (L._row) L._row.classList.toggle("off", !show);
+        renderExtra(L);
+      });
+      master.indeterminate = false;
+      head.classList.toggle("off", !show);
+    };
+    sg.layers.forEach(function (L) { body.appendChild(layerRow(L, sync)); });
+    sync();
+    wrap.appendChild(body);
+    return wrap;
+  }
+
+  function layerRow(L, onChange) {
     L._visible = on(L);
     var row = el("div", "ctl-row");
     var top = el("label", "ctl-toggle");
@@ -447,8 +508,14 @@
     var extra = el("div", "ctl-extra");
     row.appendChild(extra);
     L._extra = extra;
+    L._cb = cb; L._row = row;
 
-    cb.onchange = function () { setLayerVisible(L, cb.checked); row.classList.toggle("off", !cb.checked); renderExtra(L); };
+    cb.onchange = function () {
+      setLayerVisible(L, cb.checked);
+      row.classList.toggle("off", !cb.checked);
+      renderExtra(L);
+      if (onChange) onChange();
+    };
     row.classList.toggle("off", !cb.checked);
 
     renderExtra(L);
@@ -612,6 +679,11 @@
         h += '<div class="pop-notes">' + notes.map(function (n) {
           return '<div class="pop-note"><b>' + esc(n.title) + "</b>" + (n.body ? "<span>" + esc(n.body) + "</span>" : "") + "</div>";
         }).join("") + "</div>";
+      } else if (fld.type === "cropProfile") {
+        var cp = Array.isArray(v) ? v : safeArr(v);
+        if (!cp.length) return;
+        h += '<div class="pop-field"><div class="pop-lbl">' + esc(fld.label) + '</div><div class="pop-tags">' +
+          cp.map(function (c) { return '<span class="pop-tag">' + esc(c.crop) + ' <b>' + esc(c.blocks) + "</b></span>"; }).join("") + "</div></div>";
       } else {
         h += '<div class="pop-field"><div class="pop-lbl">' + esc(fld.label) + '</div><div class="pop-val">' +
           esc(v) + (fld.suffix || "") + "</div></div>";

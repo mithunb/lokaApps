@@ -104,6 +104,23 @@
     .ctl-extra { padding-left:2.1rem; }
     .ctl-extra:empty { padding:0; }
 
+    /* related-layer sub-group: master toggle + collapsible children */
+    .ctl-sub { margin:.1rem 0 .2rem; }
+    .ctl-sub-head { display:flex; align-items:center; gap:.4rem; padding:.24rem 0; }
+    .ctl-sub-toggle { display:flex; align-items:center; gap:.55rem; cursor:pointer; flex:1 1 auto; }
+    .ctl-sub-toggle input { position:absolute; opacity:0; width:0; height:0; }
+    .ctl-sub-name { font-size:.74rem; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--color-text-secondary); }
+    .ctl-sub-head.off .ctl-sub-name { color:var(--color-text-muted); }
+    .ctl-sub-toggle input:indeterminate + .ctl-switch { background:var(--color-moss); opacity:.6; }
+    .ctl-sub-toggle input:indeterminate + .ctl-switch::after { transform:translateX(7px); }
+    .ctl-sub-toggle input:focus-visible + .ctl-switch { outline:2px solid var(--color-moss); outline-offset:2px; }
+    .ctl-sub-chev { background:none; border:none; cursor:pointer; padding:.15rem; display:inline-flex; color:var(--color-text-muted); }
+    .ctl-sub-chev .chev { display:inline-flex; transition:transform .18s cubic-bezier(.25,1,.5,1); }
+    .ctl-sub-chev .chev svg { width:15px; height:15px; }
+    .ctl-sub.collapsed .ctl-sub-chev .chev { transform:rotate(-90deg); }
+    .ctl-sub.collapsed .ctl-sub-body { display:none; }
+    .ctl-sub-body { padding-left:.85rem; }
+
     .crop-chips { display:flex; flex-wrap:wrap; gap:.3rem; margin:.4rem 0 .1rem; }
     .crop-chip { font:inherit; font-size:.72rem; padding:.2rem .5rem; border-radius:4px; cursor:pointer;
       border:1px solid var(--color-border); background:#fff; color:var(--color-text-secondary); display:inline-flex; align-items:center; gap:.3rem;
@@ -215,10 +232,12 @@
 
     /* Coarse pointer (touch): comfortable 44px targets regardless of screen size */
     @media (pointer:coarse){
-      .ctl-toggle { min-height:44px; }
+      .ctl-toggle, .ctl-sub-toggle { min-height:44px; }
       .ctl-switch { width:38px; height:22px; }
       .ctl-switch::after { width:18px; height:18px; }
       .ctl-toggle input:checked + .ctl-switch::after { transform:translateX(16px); }
+      .ctl-sub-toggle input:indeterminate + .ctl-switch::after { transform:translateX(8px); }
+      .ctl-sub-chev { min-width:40px; min-height:40px; align-items:center; justify-content:center; }
       .ctl-group-head { padding:.75rem .1rem; }
       .bm-btn { padding:.6rem .5rem; }
       .crop-chip { padding:.4rem .6rem; font-size:.78rem; }
@@ -232,17 +251,20 @@
       /* Map on top, sheet docked below — the sheet never covers the map; the map shrinks to fit. */
       .atlas-stage { height:58dvh; min-height:380px; display:flex; flex-direction:column; }
       #atlas-map { position:relative; inset:auto; flex:1 1 auto; min-height:150px; }
+      /* Expanded sheet is a FIXED fraction of the stage (not content-driven), so toggling
+         a layer only scrolls the sheet — the map container never resizes → no map "move". */
       .atlas-panel {
-        position:relative; inset:auto; width:auto; max-width:none; flex:0 0 auto;
-        max-height:58%; border-radius:6px 6px 0 0;
+        position:relative; inset:auto; width:auto; max-width:none;
+        flex:0 0 46%; max-height:46%; min-height:0; border-radius:6px 6px 0 0;
         box-shadow:0 -2px 12px rgba(43,39,35,.14);
         padding-bottom:env(safe-area-inset-bottom);
       }
+      .atlas-panel #atlas-controls { flex:1 1 auto; min-height:0; }
       .panel-head { position:relative; cursor:pointer; padding-top:1.05rem; }
       .panel-head::before { content:''; position:absolute; top:7px; left:50%; transform:translateX(-50%);
         width:34px; height:4px; border-radius:2px; background:var(--color-border); }
       .panel-collapse { display:inline-flex; transition:transform .2s cubic-bezier(.25,1,.5,1); }
-      .atlas-panel.collapsed { max-height:none; }
+      .atlas-panel.collapsed { flex:0 0 auto; max-height:none; }
       .atlas-panel.collapsed #atlas-controls { display:none; }
       .atlas-panel.collapsed .panel-head { border-bottom:none; }
       .atlas-panel.collapsed .panel-collapse { transform:rotate(180deg); }
