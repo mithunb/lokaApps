@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Bioregion Atlas — LOKA</title>
+  <title>LOKA Atlas</title>
   <meta name="description" content="An interactive, layered map of the Deoria–Kushinagar–Gorakhpur bioregion — crop systems, value-chain infrastructure and the ecological landscape — to support Jagriti's Basket of Needs survey." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -227,6 +227,17 @@
     #data-credits .cr-lic { color:var(--color-text-muted); font-size:.68rem; letter-spacing:.02em; }
     .credits-foot { margin-top:1rem; font-size:.78rem; color:var(--color-text-muted); display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
 
+    /* ---- "build your own" CTA band (fixed LOKA element on every instance) ---- */
+    .atlas-cta { width:var(--container); margin:0 auto 2rem; }
+    .cta-inner { display:flex; align-items:center; justify-content:space-between; gap:1.25rem; flex-wrap:wrap;
+      background:var(--color-moss-tint); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      padding:1.15rem 1.4rem; }
+    .cta-inner b { display:block; font-family:'Figtree',sans-serif; font-weight:600; color:var(--color-text-primary); }
+    .cta-inner span { font-size:.9rem; color:var(--color-text-secondary); }
+    .cta-btn { flex:0 0 auto; display:inline-block; padding:.55rem 1.1rem; border-radius:var(--radius-md);
+      background:var(--color-moss); color:#fff; font-weight:600; font-size:.9rem; }
+    .cta-btn:hover { background:var(--color-canopy); color:#fff; text-decoration:none; }
+
     footer.site { border-top:1px solid var(--color-divider); background:var(--color-bg-alt); }
     .foot-inner { width:var(--container); margin:0 auto; padding:1.5rem 0; color:var(--color-text-secondary); font-size:.875rem; }
 
@@ -283,17 +294,17 @@
 <body>
   <header class="site">
     <nav class="nav" aria-label="Primary">
-      <a href="/lokaApps/" class="brand">LOKA / apps</a>
+      <a href="../" class="brand">LOKA / apps</a>
       <div class="links">
-        <a href="/lokaApps/">all apps</a>
+        <a href="../">all apps</a>
         <a href="https://discoverloka.org" target="_blank" rel="noopener">discoverloka.org</a>
       </div>
     </nav>
   </header>
 
   <section class="atlas-hero">
-    <span class="eyebrow">interactive map · bioregion atlas</span>
-    <h1 id="atlas-title">Bioregion Atlas</h1>
+    <span class="eyebrow">interactive map · loka atlas</span>
+    <h1 id="atlas-title">LOKA Atlas</h1>
     <p class="lead" id="atlas-subtitle"></p>
     <p id="atlas-about"></p>
   </section>
@@ -351,6 +362,16 @@
       </div>
     </div>
   </section>
+
+  <aside class="atlas-cta" aria-label="Create your own atlas">
+    <div class="cta-inner">
+      <div>
+        <b>Build an atlas like this for your own geography and data.</b>
+        <span>Your region, your layers, your branding — free to start, no login needed.</span>
+      </div>
+      <a class="cta-btn" href="./create/">See how it works →</a>
+    </div>
+  </aside>
 
   <footer class="site">
     <div class="foot-inner">

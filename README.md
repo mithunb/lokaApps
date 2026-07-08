@@ -64,11 +64,14 @@ sudo -u mithun pm2 reload lokaApps --update-env   # after editing api/.env
 sudo -u mithun pm2 restart lokaApps
 ```
 
-## Atlas — a generic, data-driven map app
+## LOKA Atlas — a generic, data-driven map app
 
-`atlas/` is a reusable map engine, not a one-off. `atlas.js` renders whatever a
-**dataset manifest** describes; a dataset is a self-contained folder of a `manifest.json`
-plus its data files. Nothing about a specific geography is hard-coded.
+`atlas/` is **LOKA Atlas**, a reusable map engine, not a one-off. `atlas.js` renders
+whatever a **dataset manifest** describes; a dataset is a self-contained folder of a
+`manifest.json` plus its data files. Nothing about a specific geography is hard-coded.
+The first instance is the Deoria–Kushinagar–Gorakhpur bioregion atlas, built with the
+Systems Practice at Socratus and Jagriti. Orgs interested in their own instance start
+at `atlas/create/`.
 
 ```
 atlas/

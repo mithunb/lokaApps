@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Build your own atlas — LOKA Atlas</title>
+  <meta name="description" content="Get a LOKA Atlas for your own region and data — a layered, interactive map with your branding, built on open data. Free to start." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Figtree:wght@500;600;700&display=swap" />
+  <style>
+    :root {
+      /* Same rustic-pastel system as the atlas viewer */
+      --color-bg:#E6E4DF; --color-bg-alt:#D7D4CC; --color-surface:#F2F0EB;
+      --color-moss:#40573D; --color-canopy:#2F4230;
+      --color-rust:#A6522F; --color-rust-deep:#7E3B1F;
+      --color-sienna:#9C5A34; --color-ochre:#B0863A;
+      --color-text-primary:#2B2723; --color-text-secondary:#5C544A; --color-text-muted:#8C857A;
+      --color-divider:rgba(43,39,35,.10); --color-border:rgba(43,39,35,.16);
+      --color-moss-tint:rgba(64,87,61,.12); --color-rust-tint:rgba(166,82,47,.12);
+      --radius-md:.25rem; --radius-lg:.375rem;
+      --container:min(64rem,100% - 2.5rem);
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--color-bg); color:var(--color-text-primary);
+      font-family:'DM Sans',system-ui,-apple-system,sans-serif; font-size:1rem; line-height:1.6;
+      -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+    h1,h2,h3 { font-family:'Figtree',sans-serif; letter-spacing:-.01em; margin:0 0 .5rem; text-wrap:balance; }
+    h1 { font-size:clamp(1.8rem,4.5vw,2.7rem); font-weight:700; line-height:1.12; }
+    h2 { font-size:clamp(1.2rem,2.4vw,1.45rem); font-weight:600; }
+    p { color:var(--color-text-secondary); margin:0 0 1rem; text-wrap:pretty; }
+    a { color:var(--color-moss); text-decoration:none; }
+    a:hover { color:var(--color-canopy); text-decoration:underline; }
+    :focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:4px; }
+
+    header.site { border-bottom:1px solid var(--color-divider); background:var(--color-bg); }
+    .nav { width:var(--container); margin:0 auto; padding:1rem 0; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+    .brand { font-family:'Figtree',sans-serif; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--color-text-primary); font-size:.875rem; }
+    .brand:hover { color:var(--color-text-primary); text-decoration:none; }
+    .nav .links { display:flex; gap:1.25rem; }
+    .nav .links a { color:var(--color-text-secondary); font-size:.9rem; }
+
+    main { width:var(--container); margin:0 auto; padding:2.75rem 0 3.5rem; }
+
+    .eyebrow { display:inline-block; font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:600;
+      letter-spacing:.14em; text-transform:uppercase; color:var(--color-moss); margin:0 0 .85rem;
+      padding:.25rem .6rem; background:var(--color-moss-tint); border-radius:4px; }
+    .lead { font-size:1.1rem; max-width:44rem; }
+
+    .btn { display:inline-block; padding:.6rem 1.2rem; border-radius:var(--radius-md);
+      background:var(--color-moss); color:#fff; font-weight:600; font-size:.95rem; }
+    .btn:hover { background:var(--color-canopy); color:#fff; text-decoration:none; }
+    .btn.secondary { background:transparent; color:var(--color-moss); border:1px solid var(--color-moss); }
+    .btn.secondary:hover { background:var(--color-moss-tint); color:var(--color-canopy); }
+    .hero-actions { display:flex; gap:.75rem; flex-wrap:wrap; margin-top:1.25rem; }
+
+    /* showcase band */
+    .showcase { margin:3rem 0; border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      background:var(--color-surface); overflow:hidden; display:grid; grid-template-columns:1fr; }
+    @media (min-width:760px){ .showcase { grid-template-columns:1.15fr 1fr; } }
+    .showcase-copy { padding:1.75rem; }
+    .showcase-copy .tag { font-size:.75rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--color-rust); }
+    .showcase-map { min-height:230px; background:var(--color-bg-alt); position:relative; }
+    .showcase-map svg { position:absolute; inset:0; width:100%; height:100%; }
+
+    /* what you get: editorial rows, not a card grid */
+    .features { margin:3rem 0; }
+    .feature { display:flex; gap:1rem; padding:1.05rem 0; border-top:1px solid var(--color-divider); }
+    .feature:last-child { border-bottom:1px solid var(--color-divider); }
+    .feature svg { flex:0 0 auto; width:22px; height:22px; margin-top:.2rem; color:var(--color-moss); }
+    .feature b { display:block; font-family:'Figtree',sans-serif; font-weight:600; color:var(--color-text-primary); }
+    .feature span { font-size:.95rem; color:var(--color-text-secondary); }
+    .feature .soon { display:inline-block; margin-left:.5rem; font-size:.68rem; font-weight:600; letter-spacing:.08em;
+      text-transform:uppercase; color:var(--color-sienna); background:var(--color-rust-tint); border-radius:4px; padding:.1rem .4rem; vertical-align:2px; }
+
+    /* how it works: a genuine sequence */
+    .steps { margin:3rem 0; display:grid; gap:1rem; grid-template-columns:1fr; }
+    @media (min-width:760px){ .steps { grid-template-columns:repeat(3,1fr); } }
+    .step { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:1.25rem 1.35rem; }
+    .step em { display:block; font-style:normal; font-family:'Figtree',sans-serif; font-weight:700; font-size:1.35rem; color:var(--color-ochre); margin-bottom:.35rem; }
+    .step b { display:block; font-family:'Figtree',sans-serif; font-weight:600; margin-bottom:.25rem; }
+    .step p { font-size:.92rem; margin:0; }
+
+    .fineprint { max-width:44rem; font-size:.92rem; }
+
+    /* CTA */
+    .invite { margin:3rem 0 0; background:var(--color-moss); border-radius:var(--radius-lg); padding:2rem 1.75rem; color:#eef2ec; }
+    .invite h2 { color:#fff; }
+    .invite p { color:#d6ddd2; max-width:44rem; }
+    .invite .btn { background:#fff; color:var(--color-canopy); }
+    .invite .btn:hover { background:var(--color-surface); color:var(--color-canopy); }
+    .invite small { display:block; margin-top:.9rem; color:#b9c4b4; font-size:.82rem; }
+
+    footer.site { margin-top:3.5rem; border-top:1px solid var(--color-divider); background:var(--color-bg-alt); }
+    .foot-inner { width:var(--container); margin:0 auto; padding:1.5rem 0; color:var(--color-text-secondary); font-size:.875rem; }
+
+    @media (prefers-reduced-motion: reduce){
+      *, *::before, *::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site">
+    <nav class="nav" aria-label="Primary">
+      <a href="../../" class="brand">LOKA / apps</a>
+      <div class="links">
+        <a href="../">the bioregion atlas</a>
+        <a href="https://discoverloka.org" target="_blank" rel="noopener">discoverloka.org</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section aria-label="Introduction">
+      <span class="eyebrow">loka atlas · for organisations</span>
+      <h1>Your region, mapped.</h1>
+      <p class="lead">
+        LOKA Atlas turns open data into a layered, interactive map of any geography —
+        boundaries, rivers, land use, and the things your organisation cares about —
+        published at a link you can share, embed, or keep private.
+      </p>
+      <div class="hero-actions">
+        <a class="btn" href="#get-started">Get your atlas</a>
+        <a class="btn secondary" href="../">See a live atlas →</a>
+      </div>
+    </section>
+
+    <section class="showcase" aria-label="Showcase">
+      <div class="showcase-copy">
+        <span class="tag">Live instance</span>
+        <h2>The Deoria · Kushinagar · Gorakhpur bioregion atlas</h2>
+        <p>
+          Built with the <b>Systems Practice</b> at Socratus and <b>Jagriti</b>, it maps
+          crop systems block by block, sugar mills and distilleries, rivers, wetlands,
+          floodplains, forests and land cover across three eastern-UP districts — every
+          layer switchable, every feature clickable.
+        </p>
+        <a href="../">Open the bioregion atlas →</a>
+      </div>
+      <div class="showcase-map" aria-hidden="true">
+        <svg viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+          <rect width="400" height="260" fill="#DEDCD6"/>
+          <path d="M60 40 L160 25 L235 60 L305 45 L355 95 L330 170 L360 215 L280 240 L190 225 L120 240 L70 190 L40 120 Z" fill="#E9E6DE" stroke="#B0863A" stroke-width="3"/>
+          <path d="M160 25 L175 90 L235 60 M175 90 L150 160 L120 240 M175 90 L250 130 L305 45 M250 130 L245 200 L280 240 M150 160 L245 200" fill="none" stroke="#5c544a" stroke-width="1" opacity=".45"/>
+          <path d="M40 120 C110 130 170 105 230 125 C285 143 330 130 360 145" fill="none" stroke="#5f7f92" stroke-width="3" opacity=".85"/>
+          <path d="M120 240 C140 200 165 185 205 175" fill="none" stroke="#7ba0b0" stroke-width="1.6" opacity=".8"/>
+          <circle cx="205" cy="112" r="7" fill="#9C5A34"/>
+          <circle cx="150" cy="160" r="7" fill="#40573D"/>
+          <circle cx="284" cy="170" r="7" fill="#A6522F"/>
+          <rect x="96" y="60" width="34" height="22" rx="3" fill="#40573D" opacity=".35"/>
+          <rect x="255" y="88" width="40" height="26" rx="3" fill="#9aad5b" opacity=".5"/>
+          <rect x="180" y="205" width="30" height="18" rx="3" fill="#cdb14a" opacity=".5"/>
+        </svg>
+      </div>
+    </section>
+
+    <section class="features" aria-label="What you get">
+      <h2>What you get</h2>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg>
+        <div><b>A layered map of your geography</b>
+        <span>District and block boundaries, rivers and canals, wetlands, land use, built-up areas — assembled from open public data for anywhere in the world, with the deepest layer set for India.</span></div>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+        <div><b>Your branding</b>
+        <span>Your organisation's name, logo and links in the header and footer — on a map that credits its data sources properly. Made with LOKA, and it says so.</span></div>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+        <div><b>Share it anywhere</b>
+        <span>A clean link for WhatsApp and email, a QR code for posters, and an embed snippet that drops the whole map into your own website.</span></div>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <div><b>Private maps</b>
+        <span>Working with sensitive survey data? Keep an atlas off the public directory and share it only with the people who should see it.</span></div>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+        <div><b>Bring your own data<span class="soon">coming soon</span></b>
+        <span>Upload a spreadsheet — village survey results, facility lists, field GPS points — and an AI assistant turns it into a styled map layer you can refine in plain language.</span></div>
+      </div>
+    </section>
+
+    <section aria-label="How it works">
+      <h2>How it works</h2>
+      <div class="steps">
+        <div class="step"><em>1</em><b>Tell us your region</b><p>A district, a cluster of blocks, a watershed — anywhere. If it's in India, you get the richest layer catalogue.</p></div>
+        <div class="step"><em>2</em><b>Pick layers &amp; branding</b><p>Choose what belongs on your map from the catalogue for your region, and add your organisation's identity.</p></div>
+        <div class="step"><em>3</em><b>Get your link</b><p>Your atlas goes live at its own address — share it, embed it, or keep it private. Update it as your work grows.</p></div>
+      </div>
+      <p class="fineprint">
+        Free to start — most atlases cost nothing to build or host. Very large regions or
+        heavy data layers may need a quick approval from us first, and we'll tell you before
+        anything is charged (usually nothing is).
+      </p>
+    </section>
+
+    <section class="invite" id="get-started" aria-label="Get started">
+      <h2>Get your atlas</h2>
+      <p>
+        A self-serve setup wizard is on its way. Until then, we'll set your atlas up with you —
+        one short email is enough to get started. Tell us your organisation, your region, and
+        what you'd like on the map.
+      </p>
+      <a class="btn" href="mailto:mithun@socratus.org?subject=Create%20a%20LOKA%20Atlas%20for%20our%20organisation&body=Hi%2C%0A%0AWe%27d%20like%20a%20LOKA%20Atlas.%0A%0AOrganisation%3A%20%0ARegion%20(districts%20%2F%20area)%3A%20%0AWhat%20we%27d%20like%20to%20map%3A%20%0AData%20we%20have%20(spreadsheets%2C%20GPS%20points%2C%20none%20yet)%3A%20%0A%0AThanks%21">Email us to get started</a>
+      <small>LOKA Atlas is Public Tech by Socratus — built on open data, openly credited.</small>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="foot-inner">
+      Public Tech by Socratus. Check out
+      <a href="https://discoverloka.org" target="_blank" rel="noopener">LOKA</a>,
+      <a href="https://voicereport.in" target="_blank" rel="noopener">VoiceReports</a> and
+      <a href="https://wystem.ai" target="_blank" rel="noopener">Wystem</a>.
+    </div>
+  </footer>
+</body>
+</html>
