@@ -1,0 +1,293 @@
+/* LOKA Atlas — data-to-layer workbench.
+   Parsing happens in the browser (Papa Parse for CSV/paste, SheetJS for Excel);
+   the API only ever receives JSON. The inference card doubles as the manual
+   fallback: every field Gemini pre-fills is an editable picker, so the flow
+   still works when AI is unavailable. */
+(function () {
+  "use strict";
+
+  var API = "./api/";
+  var $ = function (s) { return document.querySelector(s); };
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function api(path, opts) {
+    opts = opts || {};
+    opts.headers = Object.assign({ "Content-Type": "application/json" }, opts.headers || {});
+    if (opts.body && typeof opts.body !== "string") opts.body = JSON.stringify(opts.body);
+    return fetch(API + path, opts).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (!r.ok) { j._status = r.status; throw j; }
+        return j;
+      });
+    });
+  }
+  function errMsg(e) { return (e && (e.error || e.message)) || "something went wrong"; }
+  function msg(sel, text, cls) {
+    $(sel).innerHTML = text ? '<div class="msg ' + (cls || "err") + '">' + text + "</div>" : "";
+  }
+
+  var S = { dataset: "", columns: [], rows: [], result: null, options: null };
+
+  /* ---------------- dataset field ---------------- */
+
+  var qsDataset = new URLSearchParams(location.search).get("dataset");
+  if (qsDataset) $("#f-dataset").value = qsDataset;
+
+  function datasetReady() {
+    S.dataset = $("#f-dataset").value.trim();
+    if (!S.dataset) { msg("#msg-start", "Enter the atlas dataset id first (it's in the atlas URL after ?dataset=)."); return false; }
+    return true;
+  }
+
+  /* ---------------- ingest ---------------- */
+
+  var drop = $("#drop");
+  drop.onclick = function () { $("#f-file").click(); };
+  drop.ondragover = function (e) { e.preventDefault(); drop.classList.add("over"); };
+  drop.ondragleave = function () { drop.classList.remove("over"); };
+  drop.ondrop = function (e) {
+    e.preventDefault(); drop.classList.remove("over");
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+  };
+  $("#f-file").onchange = function () { if (this.files[0]) handleFile(this.files[0]); };
+  $("#paste-go").onclick = function () {
+    var text = $("#f-paste").value.trim();
+    if (!text) return;
+    var parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+    fromTable("pasted-table", parsed.meta.fields || [], parsed.data || []);
+  };
+
+  function handleFile(file) {
+    if (!datasetReady()) return;
+    msg("#msg-start", "");
+    var name = file.name || "file";
+    if (/\.(xlsx|xls)$/i.test(name)) {
+      var rd = new FileReader();
+      rd.onload = function () {
+        try {
+          var wb = XLSX.read(new Uint8Array(rd.result), { type: "array" });
+          var ws = wb.Sheets[wb.SheetNames[0]];
+          var rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
+          var cols = rows.length ? Object.keys(rows[0]) : [];
+          fromTable(name, cols, rows);
+        } catch (e) { msg("#msg-start", "Couldn't read that Excel file: " + esc(e.message)); }
+      };
+      rd.readAsArrayBuffer(file);
+    } else {
+      Papa.parse(file, {
+        header: true, skipEmptyLines: true,
+        complete: function (out) { fromTable(name, out.meta.fields || [], out.data || []); },
+        error: function (e) { msg("#msg-start", "Couldn't parse that file: " + esc(e.message)); },
+      });
+    }
+  }
+
+  function fromTable(filename, columns, rows) {
+    if (!datasetReady()) return;
+    columns = columns.filter(Boolean).slice(0, 40);
+    rows = rows.slice(0, 5000);
+    if (!columns.length || !rows.length) { msg("#msg-start", "That table looks empty."); return; }
+    S.columns = columns; S.rows = rows;
+    msg("#msg-start", "Reading " + esc(filename) + " — " + rows.length + " rows, " + columns.length + " columns…", "ok");
+
+    Promise.all([
+      api("layers/options?dataset=" + encodeURIComponent(S.dataset)),
+      api("layers/infer", { method: "POST", body: { dataset: S.dataset, filename: filename, columns: columns, rows: rows } }),
+    ]).then(function (out) {
+      S.options = out[0];
+      onResult(out[1]);
+      $("#bench").hidden = false;
+      $("#chat-hint").textContent = S.options.geminiAvailable ? "" :
+        "AI refine is off (no key configured) — the pickers above do everything manually.";
+      $("#nav-atlas").href = "./?dataset=" + encodeURIComponent(S.dataset);
+      msg("#msg-start", "", "ok");
+      $("#bench").scrollIntoView({ behavior: "smooth" });
+    }).catch(function (e) {
+      msg("#msg-start", esc(errMsg(e)));
+    });
+  }
+
+  /* ---------------- workbench ---------------- */
+
+  function fillSelect(sel, items, value, withEmpty) {
+    var el = $(sel);
+    el.innerHTML = withEmpty ? '<option value="">—</option>' : "";
+    items.forEach(function (it) {
+      var o = document.createElement("option");
+      o.value = typeof it === "string" ? it : it.value;
+      o.textContent = typeof it === "string" ? it : it.label;
+      el.appendChild(o);
+    });
+    if (value != null) el.value = value;
+  }
+
+  function role(result, r) {
+    var c = (result.columns || []).find(function (x) { return x.role === r; });
+    return c ? c.name : "";
+  }
+
+  function onResult(result) {
+    S.result = result;
+    var spec = result.spec || {};
+
+    if (result.inference && (result.inference.rowSubject || result.inference.notes)) {
+      $("#infer-note").hidden = false;
+      $("#infer-note").innerHTML = "<b>" + esc(result.inference.rowSubject || "") + "</b>" +
+        (result.inference.notes ? "<br>" + esc(result.inference.notes) : "");
+    }
+
+    var rep = result.matchReport || {};
+    var bits = ["<b>" + (result.stats ? result.stats.features : 0) + "</b> features on the map"];
+    if (rep.strategy === "adminJoin") {
+      bits.push("joined to <b>" + esc(rep.joinLabel || rep.joinLayer || "boundaries") + "</b>");
+      if (rep.ambiguous && rep.ambiguous.length) bits.push('<b style="color:var(--color-rust-deep)">' + rep.ambiguous.length + " need attention</b>");
+      if (rep.unmatched && rep.unmatched.length) bits.push(rep.unmatched.length + " unmatched");
+    }
+    if (rep.outside) bits.push(rep.outside + " points fall outside the atlas area");
+    if (rep.note) bits.push(esc(rep.note));
+    $("#stat-line").innerHTML = bits.join(" · ");
+
+    // pickers
+    $("#s-label").value = spec.label || "";
+    $("#s-kind").value = spec.kind || "markers";
+    $("#s-strategy").value = result.strategy || "adminJoin";
+    $("#s-group").value = ["base", "agri", "eco"].indexOf(spec.group) >= 0 ? spec.group : "agri";
+    fillSelect("#s-join", (S.options.boundaries || []).map(function (b) { return { value: b.id, label: b.label + " (" + b.count + ")" }; }), result.joinLayer);
+    fillSelect("#s-name", S.columns, role(result, "placeName"), true);
+    fillSelect("#s-parent", S.columns, role(result, "adminParent"), true);
+    fillSelect("#s-lat", S.columns, role(result, "latitude"), true);
+    fillSelect("#s-lng", S.columns, role(result, "longitude"), true);
+    fillSelect("#s-value", S.columns, spec.valueColumn || role(result, "value"), true);
+    fillSelect("#s-palette", S.options.palettes || [], spec.palette || "greens");
+    fillSelect("#s-marker", S.options.markerColors || [], spec.markerColor || "rust");
+    syncVisibility();
+
+    // fragment JSON
+    $("#frag-json").textContent = JSON.stringify(result.fragment, null, 2);
+
+    // fix list
+    var fixes = (rep.ambiguous || []).concat(rep.unmatched || []);
+    $("#card-fixes").hidden = !fixes.length;
+    $("#fix-count").textContent = fixes.length ? "· " + fixes.length : "";
+    var list = $("#fix-list");
+    list.innerHTML = "";
+    fixes.slice(0, 60).forEach(function (f) {
+      var row = document.createElement("div");
+      row.className = "fix-row";
+      var candOpts = (f.candidates || []).map(function (c) {
+        return '<option value="' + esc(c.code) + '">' + esc(c.name) + (c.parent ? " (" + esc(c.parent) + ")" : "") +
+          " · " + Math.round(c.score * 100) + "%</option>";
+      }).join("");
+      row.innerHTML = "<b title=\"" + esc(f.name) + "\">" + esc(f.name) + "</b>" +
+        '<select><option value="">choose…</option>' + candOpts + "</select>" +
+        '<button class="btn secondary" data-a="ok">Match</button>' +
+        '<button class="btn secondary" data-a="skip">Skip</button>';
+      var sel = row.querySelector("select");
+      row.querySelector('[data-a="ok"]').onclick = function () {
+        if (!sel.value) return;
+        resolveFix([{ row: f.row, code: sel.value }]);
+      };
+      row.querySelector('[data-a="skip"]').onclick = function () { resolveFix([{ row: f.row, skip: true }]); };
+      list.appendChild(row);
+    });
+
+    // preview
+    $("#preview-frame").src = "./?dataset=" + encodeURIComponent(result.draftDataset);
+  }
+
+  function syncVisibility() {
+    var strat = $("#s-strategy").value;
+    var kind = $("#s-kind").value;
+    $("#w-join").hidden = strat !== "adminJoin";
+    $("#w-name").hidden = strat !== "adminJoin";
+    $("#w-parent").hidden = strat !== "adminJoin";
+    $("#w-lat").hidden = strat !== "coordinates";
+    $("#w-lng").hidden = strat !== "coordinates";
+    $("#w-value").hidden = kind !== "choropleth";
+    $("#w-palette").hidden = kind !== "choropleth";
+    $("#w-marker").hidden = kind !== "markers";
+  }
+  $("#s-strategy").onchange = syncVisibility;
+  $("#s-kind").onchange = syncVisibility;
+
+  $("#apply").onclick = function () {
+    if (!S.result) return;
+    var columns = S.columns.map(function (c) {
+      var r = "text";
+      if (c === $("#s-name").value) r = "placeName";
+      else if (c === $("#s-parent").value) r = "adminParent";
+      else if (c === $("#s-lat").value) r = "latitude";
+      else if (c === $("#s-lng").value) r = "longitude";
+      else if (c === $("#s-value").value) r = "value";
+      return { name: c, role: r };
+    });
+    var spec = Object.assign({}, S.result.spec, {
+      label: $("#s-label").value.trim() || "My data",
+      kind: $("#s-kind").value,
+      group: $("#s-group").value,
+      valueColumn: $("#s-value").value || undefined,
+      palette: $("#s-palette").value,
+      markerColor: $("#s-marker").value,
+      popupTitleColumn: $("#s-name").value || S.result.spec.popupTitleColumn,
+    });
+    api("layers/apply", { method: "POST", body: {
+      importId: S.result.importId, spec: spec,
+      strategy: $("#s-strategy").value, joinLayer: $("#s-join").value, columns: columns,
+    } }).then(onResult).catch(function (e) { alert(errMsg(e)); });
+  };
+
+  function resolveFix(fixes) {
+    api("layers/resolve", { method: "POST", body: { importId: S.result.importId, fixes: fixes } })
+      .then(onResult).catch(function (e) { alert(errMsg(e)); });
+  }
+
+  /* ---------------- chat refine ---------------- */
+
+  function chatAdd(cls, text) {
+    var d = document.createElement("div");
+    d.className = cls;
+    d.textContent = text;
+    $("#chat-log").appendChild(d);
+    $("#chat-log").scrollTop = 1e6;
+  }
+  $("#chat-send").onclick = sendChat;
+  $("#chat-input").addEventListener("keydown", function (e) { if (e.key === "Enter") sendChat(); });
+  function sendChat() {
+    var m = $("#chat-input").value.trim();
+    if (!m || !S.result) return;
+    $("#chat-input").value = "";
+    chatAdd("me", m);
+    api("layers/refine", { method: "POST", body: { importId: S.result.importId, message: m } })
+      .then(function (r) { chatAdd("ai", r.reply || "Updated."); onResult(r); })
+      .catch(function (e) { chatAdd("ai", "⚠ " + errMsg(e)); });
+  }
+
+  /* ---------------- commit ---------------- */
+
+  var savedToken = null;
+  try { savedToken = localStorage.getItem("atlas-token-" + (qsDataset || "")); } catch (e) {}
+  if (savedToken) $("#f-token").value = savedToken;
+
+  $("#commit").onclick = function () {
+    if (!S.result) return;
+    var token = $("#f-token").value.trim();
+    if (!token) { msg("#msg-commit", "Paste the atlas's edit token first."); return; }
+    try { localStorage.setItem("atlas-token-" + S.dataset, token); } catch (e) {}
+    api("layers/commit", { method: "POST", headers: { Authorization: "Bearer " + token },
+      body: { importId: S.result.importId } })
+      .then(function (r) {
+        msg("#msg-commit", 'Layer added 🎉 — <a href="./?dataset=' + encodeURIComponent(r.dataset) + '" target="_blank">open the atlas</a>', "ok");
+        $("#preview-frame").src = "./?dataset=" + encodeURIComponent(r.dataset);
+      })
+      .catch(function (e) { msg("#msg-commit", esc(errMsg(e))); });
+  };
+  $("#discard").onclick = function () {
+    if (!S.result) return;
+    api("layers/discard", { method: "POST", body: { importId: S.result.importId } }).then(function () {
+      location.reload();
+    });
+  };
+})();

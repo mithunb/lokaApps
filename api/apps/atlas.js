@@ -555,3 +555,504 @@ router.get('/datasets/:slug/:file', (req, res) => {
   res.type(MIME[path.extname(full)] || 'application/octet-stream');
   fs.createReadStream(full).pipe(res);
 });
+
+/* ==================================================================
+   DATA-TO-LAYER MODULE (the Gemini-assisted import workbench)
+   Pipeline: client-parsed table → column profiling (code) → schema
+   inference (Gemini, structured output) → transform (code: coordinates
+   or admin-name join, Gemini only adjudicates ambiguous matches) →
+   whitelist fragment builder (code) → draft dataset preview → commit
+   to the manifest.local.json overlay. Gemini never writes manifest JSON.
+================================================================== */
+import { GoogleGenAI, Type } from '@google/genai';
+import { getFlashModel, getFlashLiteModel } from '../lib/models.js';
+import { profileColumns, bestNameColumn } from '../lib/tabular.js';
+import { norm, joinByName, AUTO_ACCEPT } from '../lib/matching.js';
+import { PALETTES, MARKER_COLORS, buildFragment, sanitizeFeatures } from '../lib/fragment.js';
+import * as imports from '../lib/atlas/imports.js';
+
+const ai = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) : null;
+imports.sweepImports();
+
+const MAX_ROWS = 5000, MAX_COLS = 40;
+const geminiRate = new Map();
+function geminiAllowed(ip) {
+  const now = Date.now();
+  const hits = (geminiRate.get(ip) || []).filter((t) => now - t < 3600 * 1000);
+  if (hits.length >= 30) return false;
+  hits.push(now);
+  geminiRate.set(ip, hits);
+  return true;
+}
+
+/* ---------- boundary discovery: joinable polygon layers in the dataset ---------- */
+
+function boundaryOptions(datasetId) {
+  const m = imports.readManifest(datasetId);
+  if (!m) return { options: [], manifest: null };
+  const options = [];
+  for (const L of imports.mergedLayers(m)) {
+    if (L.type !== 'fill' && L.type !== 'categories') continue;
+    if (!L.source || !/\.geojson$/.test(L.source) || L.userLayer) continue;
+    try {
+      const gj = JSON.parse(fs.readFileSync(path.join(m.dir, L.source), 'utf8'));
+      const feats = gj.features || [];
+      if (!feats.length) continue;
+      const props = feats[0].properties || {};
+      const nameProp = 'name' in props ? 'name' : null;
+      if (!nameProp) continue;
+      const parentProp = 'district' in props ? 'district' : ('state' in props ? 'state' : null);
+      const geomOk = /Polygon/.test(feats[0].geometry && feats[0].geometry.type);
+      if (!geomOk) continue;
+      options.push({
+        id: L.id, label: L.label || L.id, source: L.source,
+        count: feats.length, nameProp, parentProp,
+        exampleNames: feats.slice(0, 10).map((f) => String(f.properties[nameProp])),
+      });
+    } catch {}
+  }
+  return { options, manifest: m };
+}
+
+function boundaryTargets(datasetId, optionId) {
+  const { options, manifest } = boundaryOptions(datasetId);
+  const opt = options.find((o) => o.id === optionId) || options[0];
+  if (!opt || !manifest) return null;
+  const gj = JSON.parse(fs.readFileSync(path.join(manifest.dir, opt.source), 'utf8'));
+  const targets = (gj.features || []).map((f, i) => ({
+    code: String(i),
+    name: String(f.properties[opt.nameProp] ?? ''),
+    parent: opt.parentProp ? String(f.properties[opt.parentProp] ?? '') : '',
+    geometry: f.geometry,
+  }));
+  return { opt, targets };
+}
+
+function centroidOf(geom) {
+  let w = 180, s = 90, e = -180, n = -90;
+  (function walk(c) {
+    if (typeof c[0] === 'number') {
+      if (c[0] < w) w = c[0]; if (c[0] > e) e = c[0];
+      if (c[1] < s) s = c[1]; if (c[1] > n) n = c[1];
+    } else c.forEach(walk);
+  })(geom.coordinates);
+  return [(w + e) / 2, (s + n) / 2];
+}
+
+/* ---------- Gemini schemas ---------- */
+
+const LAYER_SPEC_SCHEMA = {
+  type: Type.OBJECT,
+  required: ['kind', 'label', 'group'],
+  properties: {
+    kind: { type: Type.STRING, enum: ['markers', 'choropleth'] },
+    label: { type: Type.STRING },
+    group: { type: Type.STRING, enum: ['base', 'agri', 'eco'] },
+    subgroup: { type: Type.STRING },
+    valueColumn: { type: Type.STRING },
+    unit: { type: Type.STRING },
+    palette: { type: Type.STRING, enum: Object.keys(PALETTES) },
+    reverse: { type: Type.BOOLEAN },
+    classCount: { type: Type.INTEGER },
+    markerColor: { type: Type.STRING, enum: Object.keys(MARKER_COLORS) },
+    popupTitleColumn: { type: Type.STRING },
+    popupColumns: { type: Type.ARRAY, items: { type: Type.STRING } },
+  },
+};
+
+const INFER_SCHEMA = {
+  type: Type.OBJECT,
+  required: ['rowSubject', 'strategy', 'columns', 'layer'],
+  properties: {
+    rowSubject: { type: Type.STRING },
+    strategy: { type: Type.STRING, enum: ['coordinates', 'adminJoin'] },
+    joinLayer: { type: Type.STRING },
+    columns: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        required: ['name', 'role'],
+        properties: {
+          name: { type: Type.STRING },
+          role: { type: Type.STRING, enum: ['placeName', 'adminParent', 'latitude', 'longitude', 'value', 'category', 'id', 'text', 'ignore'] },
+        },
+      },
+    },
+    layer: LAYER_SPEC_SCHEMA,
+    notes: { type: Type.STRING },
+  },
+};
+
+const ADJUDICATE_SCHEMA = {
+  type: Type.OBJECT,
+  required: ['matches'],
+  properties: {
+    matches: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        required: ['sourceName', 'chosenCode'],
+        properties: {
+          sourceName: { type: Type.STRING },
+          chosenCode: { type: Type.STRING },
+          confidence: { type: Type.STRING, enum: ['high', 'medium', 'low'] },
+        },
+      },
+    },
+  },
+};
+
+const REFINE_SCHEMA = {
+  type: Type.OBJECT,
+  required: ['layer', 'reply'],
+  properties: { layer: LAYER_SPEC_SCHEMA, reply: { type: Type.STRING } },
+};
+
+async function geminiJSON(model, prompt, schema) {
+  const response = await ai.models.generateContent({
+    model, contents: prompt,
+    config: { responseMimeType: 'application/json', responseSchema: schema, maxOutputTokens: 2048 },
+  });
+  return JSON.parse(response.text ?? '');
+}
+
+/* ---------- transform: rows + spec → features ---------- */
+
+function rolesMap(columns) {
+  const map = {};
+  for (const c of columns || []) map[c.role] = map[c.role] || c.name;
+  return map;
+}
+
+function transform(session) {
+  const { rows, strategy } = session;
+  const roles = rolesMap(session.columns);
+  const report = { strategy, matched: 0, unmatched: [], ambiguous: [], outside: 0, total: rows.length };
+  let feats = [];
+
+  if (strategy === 'coordinates') {
+    let latCol = roles.latitude, lngCol = roles.longitude;
+    if (!latCol || !lngCol) throw new Error('latitude/longitude columns not set');
+    // auto-detect swapped columns
+    const lats = rows.map((r) => Number(r[latCol])).filter(Number.isFinite);
+    const lngs = rows.map((r) => Number(r[lngCol])).filter(Number.isFinite);
+    if (lats.length && lngs.length && Math.max(...lats.map(Math.abs)) > 90 && Math.max(...lngs.map(Math.abs)) <= 90) {
+      const t = latCol; latCol = lngCol; lngCol = t;
+      report.note = 'latitude/longitude looked swapped — corrected';
+    }
+    rows.forEach((r, i) => {
+      const lat = Number(r[latCol]), lng = Number(r[lngCol]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+        report.unmatched.push({ row: i, name: String(r[roles.placeName] || r[latCol] || i), reason: 'bad coordinates' });
+        return;
+      }
+      feats.push({ type: 'Feature', properties: { ...r }, geometry: { type: 'Point', coordinates: [lng, lat] } });
+      report.matched++;
+    });
+  } else {
+    const bt = boundaryTargets(session.dataset, session.joinLayer);
+    if (!bt) throw new Error('no joinable boundary layer in this dataset');
+    session.joinLayer = bt.opt.id;
+    report.joinLayer = bt.opt.id;
+    report.joinLabel = bt.opt.label;
+    const nameCol = roles.placeName;
+    if (!nameCol) throw new Error('place-name column not set');
+    const results = joinByName(rows, nameCol, roles.adminParent || null, bt.targets);
+    session.matchState = session.matchState || {};   // row -> code | 'skip' (manual fixes)
+    const wantChoropleth = session.spec && session.spec.kind === 'choropleth';
+    results.forEach((res) => {
+      const manual = session.matchState[res.row];
+      const code = manual === 'skip' ? null : (manual || res.match);
+      if (manual === 'skip') return;
+      if (!code) {
+        (res.candidates.length ? report.ambiguous : report.unmatched).push({
+          row: res.row, name: res.name, candidates: res.candidates,
+        });
+        return;
+      }
+      const target = bt.targets[Number(code)];
+      if (!target) return;
+      const r = rows[res.row];
+      const props = { ...r, name: target.name };
+      feats.push({
+        type: 'Feature', properties: props,
+        geometry: wantChoropleth ? target.geometry : { type: 'Point', coordinates: centroidOf(target.geometry) },
+      });
+      report.matched++;
+    });
+  }
+
+  // build the fragment + sanitize
+  const m = imports.readManifest(session.dataset);
+  const existingIds = imports.mergedLayers(m).map((l) => l.id);
+  const keep = new Set(['name']);
+  const roles2 = session.columns || [];
+  for (const c of roles2) if (!['ignore'].includes(c.role)) keep.add(c.name);
+  const spec = session.spec || {};
+  const frag = buildFragment(spec, feats, existingIds);
+  const clean = sanitizeFeatures(feats, [...keep], m.manifest.bounds);
+  report.outside = clean.outside;
+
+  return { frag, features: clean.features, report };
+}
+
+function applyAndDraft(session) {
+  const { frag, features, report } = transform(session);
+  const draftId = imports.writeDraft(session.dataset, session.id, frag.stanza,
+    frag.sourceFile, { type: 'FeatureCollection', features });
+  session.fragment = frag.stanza;
+  session.sourceFile = frag.sourceFile;
+  session.featureCount = features.length;
+  imports.saveImport(session);
+  return {
+    importId: session.id,
+    inference: session.inference || null,
+    spec: session.spec,
+    strategy: session.strategy,
+    joinLayer: session.joinLayer || null,
+    columns: session.columns,
+    matchReport: report,
+    fragment: frag.stanza,
+    draftDataset: draftId,
+    stats: { features: features.length, kind: frag.kindUsed },
+  };
+}
+
+/* ---------- routes ---------- */
+
+router.get('/layers/options', (req, res) => {
+  const dataset = String(req.query.dataset || '');
+  const { options } = boundaryOptions(dataset);
+  res.json({
+    boundaries: options.map(({ id, label, count, exampleNames }) => ({ id, label, count, exampleNames: exampleNames.slice(0, 5) })),
+    palettes: Object.keys(PALETTES),
+    markerColors: Object.keys(MARKER_COLORS),
+    geminiAvailable: !!ai,
+  });
+});
+
+router.post('/layers/infer', async (req, res) => {
+  const b = req.body || {};
+  const dataset = String(b.dataset || '');
+  if (!imports.datasetDir(dataset)) return res.status(404).json({ error: 'unknown dataset' });
+  if (!Array.isArray(b.columns) || !Array.isArray(b.rows) || !b.rows.length) {
+    return res.status(400).json({ error: 'columns and rows required' });
+  }
+  const columns = b.columns.map(String).slice(0, MAX_COLS);
+  const rows = b.rows.slice(0, MAX_ROWS).map((r) => {
+    const o = {};
+    for (const c of columns) {
+      const v = r[c];
+      o[c] = typeof v === 'number' ? v : (v == null ? '' : String(v).slice(0, 500));
+    }
+    return o;
+  });
+
+  const profiles = profileColumns(columns, rows);
+  const { options } = boundaryOptions(dataset);
+  const m = imports.readManifest(dataset);
+
+  const session = imports.newImport({
+    dataset, filename: String(b.filename || '').slice(0, 120),
+    columnsRaw: columns, rows, profilesSummary: profiles.map((p) => ({ name: p.name, type: p.type })),
+  });
+
+  let inference = null;
+  if (ai && !b.manual && geminiAllowed(clientIp(req))) {
+    try {
+      const prompt = [
+        'You are helping map a tabular dataset onto an interactive atlas. Infer its schema.',
+        'Column profiles (from code, trustworthy):', JSON.stringify(profiles),
+        'First rows (sample):', JSON.stringify(rows.slice(0, 30)),
+        'Atlas context: groups are base/agri/eco. Map bounds ' + JSON.stringify(m.manifest.bounds) + '.',
+        'Joinable boundary layers (choose joinLayer from these ids when rows are admin units):',
+        JSON.stringify(options.map((o) => ({ id: o.id, label: o.label, count: o.count, exampleNames: o.exampleNames }))),
+        'Rules: strategy "coordinates" only when usable lat/lng columns exist; otherwise "adminJoin"',
+        'with the boundary layer whose names match the place-name column. kind "choropleth" needs a',
+        'numeric valueColumn; otherwise "markers". Pick popupTitleColumn = the place/name column.',
+        'notes: 1-2 sentences for the user about your reading of the data and any caveats.',
+      ].join('\n');
+      inference = await geminiJSON(getFlashModel(), prompt, INFER_SCHEMA);
+    } catch (e) {
+      console.warn('[atlas] infer failed:', e.message);
+    }
+  }
+
+  if (inference) {
+    session.inference = { rowSubject: inference.rowSubject, notes: inference.notes || '' };
+    session.strategy = inference.strategy;
+    session.joinLayer = inference.joinLayer || (options[0] && options[0].id);
+    session.columns = (inference.columns || []).filter((c) => columns.includes(c.name));
+    session.spec = inference.layer;
+  } else {
+    // heuristic pre-fill (also the no-Gemini path)
+    const lat = profiles.find((p) => p.looksLikeLat || p.maybeLatIndia);
+    const lng = profiles.find((p) => p.looksLikeLng || p.maybeLngIndia);
+    const firstOpt = options[0];
+    let nameGuess = null;
+    if (firstOpt) {
+      const bt = boundaryTargets(dataset, firstOpt.id);
+      nameGuess = bestNameColumn(profiles, rows, bt.targets.map((t) => t.name), norm);
+    }
+    const numeric = profiles.find((p) => p.type === 'number' && !p.looksLikeLat && !p.looksLikeLng);
+    session.strategy = lat && lng ? 'coordinates' : 'adminJoin';
+    session.joinLayer = firstOpt && firstOpt.id;
+    session.columns = columns.map((c) => ({
+      name: c,
+      role: lat && c === lat.name ? 'latitude'
+        : lng && c === lng.name ? 'longitude'
+        : nameGuess && c === nameGuess.column ? 'placeName'
+        : numeric && c === numeric.name ? 'value' : 'text',
+    }));
+    session.spec = {
+      kind: session.strategy === 'coordinates' ? 'markers' : (numeric ? 'choropleth' : 'markers'),
+      label: (session.filename || 'My data').replace(/\.[a-z]+$/i, '') || 'My data',
+      group: 'agri',
+      valueColumn: numeric ? numeric.name : undefined,
+      palette: 'greens',
+      markerColor: 'rust',
+      popupTitleColumn: nameGuess ? nameGuess.column : columns[0],
+      popupColumns: columns.slice(0, 4),
+    };
+  }
+
+  try {
+    let result = applyAndDraft(session);
+
+    // Gemini adjudication for ambiguous joins (constrained: only offered candidates)
+    if (ai && result.matchReport.ambiguous.length && result.matchReport.ambiguous.length <= 40 && !b.manual) {
+      try {
+        const adj = await geminiJSON(getFlashLiteModel(), [
+          'Pick the right boundary for each source place name (Indian transliterations vary).',
+          'Only use chosenCode values from the candidates; use "" when none fits.',
+          JSON.stringify(result.matchReport.ambiguous.map((a) => ({
+            sourceName: a.name,
+            candidates: a.candidates.map((c) => ({ code: c.code, name: c.name, parent: c.parent })),
+          }))),
+        ].join('\n'), ADJUDICATE_SCHEMA);
+        let applied = 0;
+        for (const mt of adj.matches || []) {
+          const amb = result.matchReport.ambiguous.find((a) => a.name === mt.sourceName);
+          if (!amb || !mt.chosenCode) continue;
+          if (amb.candidates.some((c) => c.code === mt.chosenCode)) {
+            session.matchState = session.matchState || {};
+            session.matchState[amb.row] = mt.chosenCode;
+            applied++;
+          }
+        }
+        if (applied) result = applyAndDraft(session);
+      } catch (e) {
+        console.warn('[atlas] adjudication failed:', e.message);
+      }
+    }
+    res.json(result);
+  } catch (e) {
+    res.status(400).json({ error: e.message, importId: session.id, columns: session.columns, strategy: session.strategy });
+  }
+});
+
+router.post('/layers/apply', (req, res) => {
+  const b = req.body || {};
+  const session = imports.getImport(String(b.importId || ''));
+  if (!session) return res.status(404).json({ error: 'import expired or unknown' });
+  if (b.spec && typeof b.spec === 'object') session.spec = b.spec;
+  if (b.strategy && ['coordinates', 'adminJoin'].includes(b.strategy)) session.strategy = b.strategy;
+  if (b.joinLayer) session.joinLayer = String(b.joinLayer);
+  if (Array.isArray(b.columns)) {
+    session.columns = b.columns
+      .filter((c) => c && session.columnsRaw.includes(c.name))
+      .map((c) => ({ name: c.name, role: String(c.role) }));
+  }
+  try {
+    res.json(applyAndDraft(session));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+router.post('/layers/resolve', (req, res) => {
+  const b = req.body || {};
+  const session = imports.getImport(String(b.importId || ''));
+  if (!session) return res.status(404).json({ error: 'import expired or unknown' });
+  session.matchState = session.matchState || {};
+  for (const f of (Array.isArray(b.fixes) ? b.fixes : [])) {
+    if (!Number.isInteger(f.row)) continue;
+    if (f.skip) session.matchState[f.row] = 'skip';
+    else if (typeof f.code === 'string') session.matchState[f.row] = f.code;
+  }
+  try {
+    res.json(applyAndDraft(session));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+router.post('/layers/refine', async (req, res) => {
+  const b = req.body || {};
+  const session = imports.getImport(String(b.importId || ''));
+  if (!session) return res.status(404).json({ error: 'import expired or unknown' });
+  const message = String(b.message || '').slice(0, 500);
+  if (!message) return res.status(400).json({ error: 'message required' });
+  if (!ai) return res.status(503).json({ error: 'AI refine is unavailable — use the pickers instead' });
+  if (!geminiAllowed(clientIp(req))) return res.status(429).json({ error: 'AI limit reached — try later' });
+
+  const prompt = [
+    'Patch this atlas layer spec according to the user instruction. Keep unrelated fields unchanged.',
+    'Current spec: ' + JSON.stringify(session.spec),
+    'Available numeric columns: ' + JSON.stringify((session.columns || []).filter((c) => c.role === 'value').map((c) => c.name)),
+    'All columns: ' + JSON.stringify(session.columnsRaw),
+    'Palettes: ' + Object.keys(PALETTES).join(', ') + ' (rdylgn = red→green, gnrd = green→red).',
+    'User instruction: ' + message,
+    'reply: one short friendly sentence describing what you changed.',
+  ].join('\n');
+
+  try {
+    let out;
+    try {
+      out = await geminiJSON(getFlashLiteModel(), prompt, REFINE_SCHEMA);
+    } catch {
+      out = await geminiJSON(getFlashModel(), prompt, REFINE_SCHEMA);
+    }
+    session.spec = out.layer;
+    const result = applyAndDraft(session);
+    result.reply = String(out.reply || 'Updated.').slice(0, 300);
+    res.json(result);
+  } catch (e) {
+    res.status(502).json({ error: 'AI refine failed: ' + e.message });
+  }
+});
+
+router.post('/layers/commit', (req, res) => {
+  const b = req.body || {};
+  const session = imports.getImport(String(b.importId || ''));
+  if (!session) return res.status(404).json({ error: 'import expired or unknown' });
+
+  // auth: instance edit token (registry) or admin token (e.g. the deoria dataset)
+  const inst = reg.getInstance(session.dataset);
+  const bearer = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  const ok = (inst && bearer && reg.hashToken(bearer) === inst.tokenHash) || auth.isAdmin(req);
+  if (!ok) return res.status(403).json({ error: 'edit token required to change this atlas' });
+
+  try {
+    const { frag, features } = (function () {
+      const t = transform(session);
+      return { frag: t.frag, features: t.features };
+    })();
+    const out = imports.commitLayer(session.dataset, frag.stanza, frag.sourceFile,
+      { type: 'FeatureCollection', features });
+    imports.discardImport(session.id);
+    res.json({ ok: true, layerId: out.layerId, dataset: session.dataset });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+router.post('/layers/discard', (req, res) => {
+  const session = imports.getImport(String((req.body || {}).importId || ''));
+  if (session) imports.discardImport(session.id);
+  res.json({ ok: true });
+});
+
+router.get('/layers/imports', (req, res) => {
+  res.json({ imports: imports.listImports(String(req.query.dataset || '')) });
+});

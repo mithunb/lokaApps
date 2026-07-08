@@ -1,0 +1,173 @@
+// Constrained layer-spec → manifest fragment. Gemini only ever fills the spec
+// (enums + column names); THIS code builds the actual stanza, so the dangerous
+// manifest surface (tile URLs, raster types, raw expressions) is unreachable.
+
+// Curated ramps in the atlas's rustic-pastel register (light → dark).
+export const PALETTES = {
+  greens: ['#e7e3d8', '#cdd3b4', '#a9bd8e', '#7f9c65', '#566f42', '#39502f'],
+  blues: ['#e6ebec', '#c2d2d8', '#93b1bd', '#6690a1', '#446e80', '#2d4f5e'],
+  rust: ['#f0e6dd', '#e0c4ab', '#cb9c77', '#b06f47', '#8f4d2c', '#6e371d'],
+  ylorbr: ['#efe6d9', '#ddc4a0', '#caa06f', '#a8703f', '#824e26', '#5e3618'],
+  rdylgn: ['#a8503b', '#c98a5a', '#e0c48c', '#b8bd7e', '#7f9c65', '#4c6b40'],
+  gnrd: ['#4c6b40', '#7f9c65', '#b8bd7e', '#e0c48c', '#c98a5a', '#a8503b'],
+  purples: ['#e9e4ea', '#cfc3d4', '#ac97b6', '#8a6e96', '#6a4d75', '#4c3454'],
+};
+export const MARKER_COLORS = {
+  rust: '#A6522F', moss: '#40573D', ochre: '#B0863A', sienna: '#9C5A34', slate: '#5f7f92',
+};
+export const KINDS = ['markers', 'choropleth'];
+
+const MAX_CIRCLE_SWITCH = 300;   // DOM markers don't scale past this
+const CLASS_MIN = 3, CLASS_MAX = 7;
+
+export function slugifyId(text) {
+  const s = String(text || '').toLowerCase().normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+  return s || 'layer';
+}
+
+export function quantileBreaks(values, classes) {
+  const v = values.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
+  if (!v.length) return [];
+  const n = Math.max(CLASS_MIN, Math.min(CLASS_MAX, classes || 5));
+  const breaks = [];
+  for (let i = 1; i < n; i++) {
+    const q = v[Math.min(v.length - 1, Math.floor((v.length * i) / n))];
+    if (!breaks.length || q > breaks[breaks.length - 1]) breaks.push(q);
+  }
+  return breaks;
+}
+
+function fmt(x) {
+  if (Math.abs(x) >= 1000) return Math.round(x).toLocaleString('en-IN');
+  if (Math.abs(x) >= 10) return String(Math.round(x * 10) / 10);
+  return String(Math.round(x * 100) / 100);
+}
+
+/**
+ * Build a manifest layer stanza from a validated spec + the transformed data.
+ * spec: {kind, label, group, subgroup?, valueColumn?, unit?, palette?, reverse?,
+ *        classCount?, markerColor?, popupTitleColumn?, popupColumns?}
+ * feats: GeoJSON features carrying the (whitelisted) properties.
+ * Returns {stanza, sourceFile, kindUsed}.
+ */
+export function buildFragment(spec, feats, existingIds) {
+  const kind = KINDS.includes(spec.kind) ? spec.kind : 'markers';
+  let id = slugifyId(spec.label);
+  let i = 2;
+  while (existingIds.includes(id)) id = slugifyId(spec.label) + '-' + i++;
+  const sourceFile = 'user-' + id + '.geojson';
+  const group = ['base', 'agri', 'eco'].includes(spec.group) ? spec.group : 'agri';
+
+  const popup = { title: null, fields: [] };
+  if (spec.popupTitleColumn) popup.title = String(spec.popupTitleColumn);
+  for (const c of (spec.popupColumns || []).slice(0, 6)) {
+    if (c !== popup.title) popup.fields.push({ label: prettify(c), property: String(c) });
+  }
+
+  let stanza;
+  if (kind === 'choropleth') {
+    const prop = String(spec.valueColumn || '');
+    const values = feats.map((f) => Number(f.properties[prop])).filter(Number.isFinite);
+    const ramp = PALETTES[spec.palette] || PALETTES.greens;
+    const colors = spec.reverse ? [...ramp].reverse() : ramp;
+    const breaks = quantileBreaks(values, spec.classCount);
+    const used = colors.slice(0, breaks.length + 1);
+    const expr = ['step', ['get', prop], used[0]];
+    breaks.forEach((b, j) => { expr.push(b, used[j + 1]); });
+    const legend = used.map((color, j) => ({
+      color,
+      label: j === 0 ? '< ' + fmt(breaks[0] != null ? breaks[0] : 0)
+        : j === used.length - 1 ? '≥ ' + fmt(breaks[j - 1])
+        : fmt(breaks[j - 1]) + '–' + fmt(breaks[j]),
+    }));
+    if (spec.unit) legend.push({ color: 'transparent', label: '(' + String(spec.unit).slice(0, 20) + ')', faint: true });
+    stanza = {
+      id, group, type: 'fill', source: sourceFile,
+      label: String(spec.label).slice(0, 60), default: true,
+      paint: { fillColor: expr, fillOpacity: 0.72, outlineColor: '#5c544a', outlineWidth: 0.5 },
+      legend,
+      popup: { title: popup.title || 'name', fields: popup.fields },
+      userLayer: true,
+    };
+  } else {
+    const color = MARKER_COLORS[spec.markerColor] || MARKER_COLORS.rust;
+    if (feats.length > MAX_CIRCLE_SWITCH) {
+      stanza = {
+        id, group, type: 'circle', source: sourceFile,
+        label: String(spec.label).slice(0, 60), default: true,
+        paint: { radius: 4.5, color, strokeColor: '#ffffff', strokeWidth: 1.2 },
+        legend: [{ color, label: String(spec.label).slice(0, 40), shape: 'dot' }],
+        popup: { title: popup.title || 'name', fields: popup.fields },
+        userLayer: true,
+      };
+    } else {
+      stanza = {
+        id, group, type: 'marker', source: sourceFile,
+        label: String(spec.label).slice(0, 60), default: true,
+        marker: { color },
+        label_text: popup.title ? { property: popup.title } : undefined,
+        legend: [{ color, label: String(spec.label).slice(0, 40), shape: 'dot' }],
+        popup: { title: popup.title || 'name', fields: popup.fields },
+        userLayer: true,
+      };
+    }
+  }
+  if (spec.subgroup) stanza.subgroup = String(spec.subgroup).slice(0, 30);
+  return { stanza, sourceFile, kindUsed: stanza.type };
+}
+
+function prettify(col) {
+  return String(col).replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
+    .replace(/^\w/, (c) => c.toUpperCase()).slice(0, 40);
+}
+
+/* ---------------- sanitisation ---------------- */
+
+const MAX_FEATURES = 5000;
+const MAX_STR = 500;
+
+/** Whitelist-copy properties onto null-prototype objects; validate coords. */
+export function sanitizeFeatures(feats, keepProps, bounds) {
+  const out = [];
+  let outside = 0;
+  const pad = bounds ? padBounds(bounds, 0.5) : null;
+  for (const f of feats.slice(0, MAX_FEATURES)) {
+    if (!f || !f.geometry) continue;
+    if (!validGeom(f.geometry)) continue;
+    if (pad && f.geometry.type === 'Point') {
+      const [x, y] = f.geometry.coordinates;
+      if (x < pad[0] || x > pad[2] || y < pad[1] || y > pad[3]) outside++;
+    }
+    const props = Object.create(null);
+    for (const k of keepProps) {
+      const v = f.properties ? f.properties[k] : undefined;
+      if (v === undefined || v === null) continue;
+      props[k] = typeof v === 'number' && Number.isFinite(v) ? v : String(v).slice(0, MAX_STR);
+    }
+    out.push({ type: 'Feature', properties: { ...props }, geometry: f.geometry });
+  }
+  return { features: out, outside, dropped: feats.length - out.length };
+}
+
+function padBounds(b, frac) {
+  // manifest bounds are [[w,s],[e,n]]
+  const w = b[0][0], s = b[0][1], e = b[1][0], n = b[1][1];
+  const dx = (e - w) * frac, dy = (n - s) * frac;
+  return [w - dx, s - dy, e + dx, n + dy];
+}
+
+function validGeom(g) {
+  if (!g || typeof g !== 'object') return false;
+  if (!['Point', 'MultiPoint', 'Polygon', 'MultiPolygon', 'LineString', 'MultiLineString'].includes(g.type)) return false;
+  let ok = true, count = 0;
+  (function walk(c) {
+    if (!ok || !Array.isArray(c)) { ok = false; return; }
+    if (typeof c[0] === 'number') {
+      count++;
+      if (c.length < 2 || !Number.isFinite(c[0]) || !Number.isFinite(c[1]) ||
+          c[0] < -180 || c[0] > 180 || c[1] < -90 || c[1] > 90) ok = false;
+    } else c.forEach(walk);
+  })(g.coordinates);
+  return ok && count > 0 && count < 200000;
+}

@@ -58,6 +58,13 @@ export function getFlashModel() {
   return flashModel;
 }
 
+// Cheapest tier for constrained multiple-choice tasks (match adjudication,
+// spec patching). Derived from the resolved flash model; env-overridable.
+export function getFlashLiteModel() {
+  if (process.env.GEMINI_LITE_MODEL) return process.env.GEMINI_LITE_MODEL;
+  return flashModel + '-lite';
+}
+
 export function getResolverStatus() {
   return { flashModel, lastRefreshedAt, overridden: Boolean(process.env.GEMINI_MODEL) };
 }

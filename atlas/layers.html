@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Add your data — LOKA Atlas</title>
+  <meta name="description" content="Upload a spreadsheet and turn it into a map layer on your LOKA Atlas — joined to boundaries or plotted from coordinates, styled with plain-language instructions." />
+  <meta name="robots" content="noindex" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Figtree:wght@500;600;700&display=swap" />
+  <style>
+    :root {
+      --color-bg:#E6E4DF; --color-bg-alt:#D7D4CC; --color-surface:#F2F0EB;
+      --color-moss:#40573D; --color-canopy:#2F4230;
+      --color-rust:#A6522F; --color-rust-deep:#7E3B1F;
+      --color-sienna:#9C5A34; --color-ochre:#B0863A;
+      --color-text-primary:#2B2723; --color-text-secondary:#5C544A; --color-text-muted:#8C857A;
+      --color-divider:rgba(43,39,35,.10); --color-border:rgba(43,39,35,.16);
+      --color-moss-tint:rgba(64,87,61,.12); --color-rust-tint:rgba(166,82,47,.12);
+      --radius-md:.25rem; --radius-lg:.375rem;
+      --container:min(78rem,100% - 2.5rem);
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--color-bg); color:var(--color-text-primary);
+      font-family:'DM Sans',system-ui,-apple-system,sans-serif; font-size:1rem; line-height:1.55; -webkit-font-smoothing:antialiased; }
+    h1,h2,h3 { font-family:'Figtree',sans-serif; letter-spacing:-.01em; margin:0 0 .5rem; }
+    h1 { font-size:clamp(1.5rem,3.5vw,2.1rem); font-weight:700; }
+    h2 { font-size:1.05rem; font-weight:600; }
+    p { color:var(--color-text-secondary); margin:0 0 1rem; }
+    a { color:var(--color-moss); text-decoration:none; }
+    a:hover { color:var(--color-canopy); text-decoration:underline; }
+    :focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:4px; }
+    header.site { border-bottom:1px solid var(--color-divider); }
+    .nav { width:var(--container); margin:0 auto; padding:1rem 0; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+    .brand { font-family:'Figtree',sans-serif; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--color-text-primary); font-size:.875rem; }
+    .nav .links a { color:var(--color-text-secondary); font-size:.9rem; margin-left:1.25rem; }
+    main { width:var(--container); margin:0 auto; padding:2rem 0 3rem; }
+    .eyebrow { display:inline-block; font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:600;
+      letter-spacing:.14em; text-transform:uppercase; color:var(--color-moss); margin:0 0 .8rem;
+      padding:.25rem .6rem; background:var(--color-moss-tint); border-radius:4px; }
+
+    .panel { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:1.35rem; }
+    label.f { display:flex; flex-direction:column; gap:.3rem; font-size:.85rem; font-weight:600; color:var(--color-text-secondary); margin-bottom:.8rem; }
+    input[type=text], select, textarea { font:inherit; font-size:.92rem; padding:.5rem .6rem; border:1px solid var(--color-border); border-radius:4px; background:#fff; color:var(--color-text-primary); width:100%; }
+    .btn { display:inline-flex; align-items:center; gap:.4rem; padding:.55rem 1.1rem; border-radius:var(--radius-md); border:none;
+      background:var(--color-moss); color:#fff; font:inherit; font-weight:600; font-size:.92rem; cursor:pointer; }
+    .btn:hover { background:var(--color-canopy); }
+    .btn.secondary { background:transparent; color:var(--color-moss); border:1px solid var(--color-moss); }
+    .btn.secondary:hover { background:var(--color-moss-tint); }
+    .btn:disabled { opacity:.5; cursor:not-allowed; }
+    .hint { font-size:.8rem; font-weight:400; color:var(--color-text-muted); }
+    .msg { padding:.6rem .8rem; border-radius:4px; font-size:.88rem; margin:.8rem 0 0; }
+    .msg.err { background:var(--color-rust-tint); color:var(--color-rust-deep); }
+    .msg.ok { background:var(--color-moss-tint); color:var(--color-canopy); }
+
+    /* drop zone */
+    .drop { border:2px dashed var(--color-border); border-radius:var(--radius-lg); background:var(--color-surface);
+      padding:2.2rem 1.5rem; text-align:center; color:var(--color-text-secondary); cursor:pointer; transition:border-color .15s ease; }
+    .drop.over { border-color:var(--color-moss); background:var(--color-moss-tint); }
+    .drop b { display:block; font-family:'Figtree',sans-serif; color:var(--color-text-primary); margin-bottom:.25rem; }
+    .drop input { display:none; }
+    details.paste { margin-top:.8rem; }
+    details.paste summary { cursor:pointer; font-size:.85rem; color:var(--color-text-secondary); }
+
+    /* workbench */
+    .bench { display:grid; grid-template-columns:minmax(21rem,1fr) 1.4fr; gap:1rem; margin-top:1rem; }
+    @media (max-width:900px){ .bench { grid-template-columns:1fr; } }
+    .bench-left { display:flex; flex-direction:column; gap:1rem; min-width:0; }
+    #preview-frame { width:100%; height:640px; border:1px solid var(--color-border); border-radius:var(--radius-lg); background:#DEDCD6; position:sticky; top:1rem; }
+    .card { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:1.1rem 1.2rem; }
+    .card h2 { display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
+    .infer-note { font-size:.88rem; color:var(--color-text-secondary); background:var(--color-moss-tint); border-radius:4px; padding:.6rem .75rem; margin:.4rem 0 .9rem; }
+    .stat { font-size:.88rem; color:var(--color-text-secondary); }
+    .stat b { color:var(--color-text-primary); }
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:.35rem .8rem; }
+    .fix-row { display:flex; align-items:center; gap:.5rem; padding:.4rem 0; border-top:1px solid var(--color-divider); font-size:.88rem; flex-wrap:wrap; }
+    .fix-row b { flex:0 0 9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .fix-row select { flex:1; min-width:8rem; width:auto; }
+    .fix-row button { font-size:.75rem; padding:.3rem .55rem; }
+    details.frag { margin-top:.6rem; }
+    details.frag summary { cursor:pointer; font-size:.82rem; color:var(--color-text-muted); }
+    details.frag pre { font:11px/1.5 ui-monospace,Menlo,monospace; background:#fff; border:1px solid var(--color-border);
+      border-radius:4px; padding:.6rem; overflow:auto; max-height:14rem; }
+    .chat-log { display:flex; flex-direction:column; gap:.4rem; margin-bottom:.6rem; max-height:12rem; overflow-y:auto; }
+    .chat-log .me { align-self:flex-end; background:var(--color-moss); color:#fff; border-radius:8px 8px 2px 8px; padding:.4rem .7rem; font-size:.85rem; max-width:85%; }
+    .chat-log .ai { align-self:flex-start; background:#fff; border:1px solid var(--color-border); border-radius:8px 8px 8px 2px; padding:.4rem .7rem; font-size:.85rem; max-width:85%; }
+    .chat-row { display:flex; gap:.5rem; }
+    .chat-row input { flex:1; }
+    footer.site { margin-top:3rem; border-top:1px solid var(--color-divider); background:var(--color-bg-alt); }
+    .foot-inner { width:var(--container); margin:0 auto; padding:1.5rem 0; color:var(--color-text-secondary); font-size:.875rem; }
+    @media (prefers-reduced-motion: reduce){ *,*::before,*::after { transition:none !important; animation:none !important; } }
+  </style>
+</head>
+<body>
+  <header class="site">
+    <nav class="nav" aria-label="Primary">
+      <a href="../" class="brand">LOKA / apps</a>
+      <div class="links">
+        <a href="./setup/">setup wizard</a>
+        <a href="./" id="nav-atlas">open the atlas</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <span class="eyebrow">loka atlas · your data</span>
+    <h1>Add your data to the map</h1>
+    <p style="max-width:46rem">Drop in a spreadsheet — survey results by village, a facility list, field GPS points —
+      and it becomes a styled map layer: joined to your atlas's boundaries or plotted from coordinates.
+      Steer the result in plain language, check every uncertain match yourself, then publish it to your atlas.</p>
+
+    <section class="panel" id="start">
+      <label class="f" style="max-width:24rem">Which atlas?
+        <input type="text" id="f-dataset" placeholder="dataset id, e.g. deoria-bioregion" />
+        <span class="hint" id="dataset-hint"></span>
+      </label>
+      <div class="drop" id="drop">
+        <b>Drop a CSV or Excel file here</b>
+        <span>or click to choose — up to 5,000 rows</span>
+        <input type="file" id="f-file" accept=".csv,.tsv,.xlsx,.xls" />
+      </div>
+      <details class="paste">
+        <summary>…or paste a table (from Excel / Sheets)</summary>
+        <textarea id="f-paste" rows="6" placeholder="Paste rows here — the first line should be the column headers"></textarea>
+        <div style="margin-top:.5rem"><button class="btn secondary" id="paste-go">Use pasted table</button></div>
+      </details>
+      <div id="msg-start"></div>
+    </section>
+
+    <section class="bench" id="bench" hidden>
+      <div class="bench-left">
+        <div class="card" id="card-infer">
+          <h2>What we read from your file</h2>
+          <div class="infer-note" id="infer-note" hidden></div>
+          <p class="stat" id="stat-line"></p>
+          <div class="grid2">
+            <label class="f">Layer name<input type="text" id="s-label" maxlength="60" /></label>
+            <label class="f">Layer kind
+              <select id="s-kind"><option value="markers">Points / markers</option><option value="choropleth">Choropleth (colour by value)</option></select>
+            </label>
+            <label class="f">Locate rows by
+              <select id="s-strategy"><option value="adminJoin">Match names to boundaries</option><option value="coordinates">Lat / lng columns</option></select>
+            </label>
+            <label class="f" id="w-join">Join to
+              <select id="s-join"></select>
+            </label>
+            <label class="f" id="w-name">Place-name column<select id="s-name"></select></label>
+            <label class="f" id="w-parent">Parent column <span class="hint">(optional)</span><select id="s-parent"></select></label>
+            <label class="f" id="w-lat" hidden>Latitude column<select id="s-lat"></select></label>
+            <label class="f" id="w-lng" hidden>Longitude column<select id="s-lng"></select></label>
+            <label class="f" id="w-value">Value column<select id="s-value"></select></label>
+            <label class="f" id="w-palette">Colour ramp<select id="s-palette"></select></label>
+            <label class="f" id="w-marker">Marker colour<select id="s-marker"></select></label>
+            <label class="f">Group
+              <select id="s-group"><option value="agri">Crops &amp; value chain</option><option value="base">Base</option><option value="eco">Ecological landscape</option></select>
+            </label>
+          </div>
+          <div style="margin-top:.6rem"><button class="btn secondary" id="apply">Apply changes</button></div>
+          <details class="frag"><summary>Layer definition (JSON)</summary><pre id="frag-json"></pre></details>
+        </div>
+
+        <div class="card" id="card-fixes" hidden>
+          <h2>Needs your eye <span class="hint" id="fix-count"></span></h2>
+          <p class="hint">Rows we couldn't confidently match. Pick the right boundary or skip the row.</p>
+          <div id="fix-list"></div>
+        </div>
+
+        <div class="card" id="card-chat">
+          <h2>Refine in plain language</h2>
+          <div class="chat-log" id="chat-log"></div>
+          <div class="chat-row">
+            <input type="text" id="chat-input" placeholder='e.g. "red-to-green choropleth of literacy rate"' />
+            <button class="btn" id="chat-send">Send</button>
+          </div>
+          <p class="hint" id="chat-hint" style="margin:.5rem 0 0"></p>
+        </div>
+
+        <div class="card">
+          <h2>Publish to the atlas</h2>
+          <label class="f">Edit token <span class="hint">(from when the atlas was created)</span>
+            <input type="text" id="f-token" placeholder="paste your edit token" />
+          </label>
+          <div style="display:flex; gap:.6rem; flex-wrap:wrap">
+            <button class="btn" id="commit">Add layer to atlas</button>
+            <button class="btn secondary" id="discard">Discard</button>
+          </div>
+          <div id="msg-commit"></div>
+        </div>
+      </div>
+
+      <iframe id="preview-frame" title="Layer preview"></iframe>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="foot-inner">
+      Public Tech by Socratus. Check out
+      <a href="https://discoverloka.org" target="_blank" rel="noopener">LOKA</a>,
+      <a href="https://voicereport.in" target="_blank" rel="noopener">VoiceReports</a> and
+      <a href="https://wystem.ai" target="_blank" rel="noopener">Wystem</a>.
+    </div>
+  </footer>
+
+  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="./layers.js"></script>
+</body>
+</html>

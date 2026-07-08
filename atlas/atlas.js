@@ -49,11 +49,29 @@
 
   fetch(dataUrl("manifest.json"))
     .then(function (r) { if (!r.ok) throw new Error("manifest " + r.status); return r.json(); })
+    .then(mergeLocalOverlay)
     .then(start)
     .catch(function (err) {
       $("#atlas-map").innerHTML =
         '<div class="atlas-error">Could not load dataset “' + esc(DATASET) + '”.<br><small>' + esc(err.message) + "</small></div>";
     });
+
+  // Org-added layers live in a gitignored overlay (manifest.local.json + user-*.geojson)
+  // so a `git pull` on the server never conflicts with them.
+  function mergeLocalOverlay(manifest) {
+    return fetch(dataUrl("manifest.local.json"))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; })
+      .then(function (local) {
+        if (!local) return manifest;
+        (local.layers || []).forEach(function (L) { manifest.layers.push(L); });
+        (local.groups || []).forEach(function (g) {
+          if (!manifest.groups.some(function (x) { return x.id === g.id; })) manifest.groups.push(g);
+        });
+        (local.attributions || []).forEach(function (a) { manifest.attributions.push(a); });
+        return manifest;
+      });
+  }
 
   function start(manifest) {
     MANIFEST = manifest;
