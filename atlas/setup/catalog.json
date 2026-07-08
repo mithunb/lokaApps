@@ -1,0 +1,125 @@
+{
+  "comment": "LOKA Atlas capability catalog — single source of truth for the wizard (display), the API (validation, cost gate) and the Python builder (recipe dispatch). tiers: which region tiers can use a layer ('global' = any country, 'india' = ISO3 IND). cost: 'free' builds run immediately; 'approval' needs an admin OK (large source downloads). Layer stanzas themselves live in the recipes, ported from the proven deoria-bioregion manifest styling.",
+  "tiers": {
+    "global": "Baseline — open worldwide sources (geoBoundaries, OSM, ESA WorldCover)",
+    "india": "Enhanced — adds LGD boundaries and WRIS/NDEM water & flood layers"
+  },
+  "layers": [
+    {
+      "id": "admin",
+      "label": "Admin boundaries",
+      "info": "The units you picked (districts / admin-2), with labels and click-for-details.",
+      "tiers": ["global", "india"],
+      "group": "base",
+      "recipe": "admin",
+      "estSeconds": 30,
+      "cost": "free",
+      "required": true,
+      "attribution": { "global": "geoBoundaries (gbOpen), CC-BY 4.0", "india": "Local Government Directory via Bharatlas, CC0" }
+    },
+    {
+      "id": "subadmin",
+      "label": "Sub-divisions",
+      "info": "One level below your picked units — blocks in India, admin-3 elsewhere when available.",
+      "tiers": ["india"],
+      "group": "base",
+      "recipe": "subadmin",
+      "estSeconds": 40,
+      "cost": "free",
+      "attribution": { "india": "Local Government Directory via Bharatlas, CC0" }
+    },
+    {
+      "id": "water-osm",
+      "label": "Rivers & waterways",
+      "info": "Rivers and canals from OpenStreetMap for your region.",
+      "tiers": ["global"],
+      "group": "eco",
+      "subgroup": "Water",
+      "recipe": "water_osm",
+      "estSeconds": 60,
+      "cost": "free",
+      "attribution": { "global": "© OpenStreetMap contributors, ODbL" }
+    },
+    {
+      "id": "rivers-wris",
+      "label": "Rivers & canals",
+      "info": "Rivers, streams and irrigation canals from India-WRIS.",
+      "tiers": ["india"],
+      "group": "eco",
+      "subgroup": "Water",
+      "recipe": "rivers_wris",
+      "estSeconds": 90,
+      "cost": "free",
+      "attribution": { "india": "India-WRIS via Bharatlas, CC0" }
+    },
+    {
+      "id": "wetlands-wris",
+      "label": "Wetlands & water bodies",
+      "info": "Lakes, ponds, ox-bows and riverine wetlands.",
+      "tiers": ["india"],
+      "group": "eco",
+      "subgroup": "Water",
+      "recipe": "wetlands_wris",
+      "estSeconds": 60,
+      "cost": "free",
+      "attribution": { "india": "Bharatmaps/Parivesh via Bharatlas, CC0" }
+    },
+    {
+      "id": "basins-wris",
+      "label": "River sub-basins",
+      "info": "Hydrological sub-basin boundaries over your region.",
+      "tiers": ["india"],
+      "group": "eco",
+      "subgroup": "Water",
+      "recipe": "basins_wris",
+      "estSeconds": 40,
+      "cost": "free",
+      "attribution": { "india": "India-WRIS via Bharatlas, CC0" }
+    },
+    {
+      "id": "floodplain-ndem",
+      "label": "Floodplain (observed inundation)",
+      "info": "Areas flooded at least once 1998–2022, from ISRO's NDEM satellite record. Heavy source data — needs a quick approval.",
+      "tiers": ["india"],
+      "group": "eco",
+      "recipe": "floodplain_ndem",
+      "estSeconds": 180,
+      "cost": "approval",
+      "estMB": 100,
+      "attribution": { "india": "NRSC / ISRO NDEM via Bharatlas, CC0" }
+    },
+    {
+      "id": "lulc",
+      "label": "Land use / land cover",
+      "info": "ESA WorldCover 2021 (10 m) as a toggleable overlay, clipped to your region.",
+      "tiers": ["global", "india"],
+      "group": "eco",
+      "recipe": "lulc_worldcover",
+      "estSeconds": 120,
+      "cost": "free",
+      "attribution": { "global": "ESA WorldCover 2021 (Copernicus), CC-BY 4.0" }
+    },
+    {
+      "id": "builtup",
+      "label": "Urban / built-up areas",
+      "info": "Town and city footprints derived from the WorldCover built-up class.",
+      "tiers": ["global", "india"],
+      "group": "base",
+      "recipe": "builtup_worldcover",
+      "estSeconds": 90,
+      "cost": "free",
+      "attribution": { "global": "ESA WorldCover 2021 (Copernicus), CC-BY 4.0" }
+    },
+    {
+      "id": "labels",
+      "label": "Place labels (satellite)",
+      "info": "Town and place names shown on the satellite basemap.",
+      "tiers": ["global", "india"],
+      "group": "base",
+      "recipe": "labels_esri",
+      "estSeconds": 1,
+      "cost": "free",
+      "attribution": { "global": "Labels © Esri" }
+    }
+  ]
+}

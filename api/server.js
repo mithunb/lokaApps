@@ -15,12 +15,26 @@ app.disable('x-powered-by');
 
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Atlas-Key');
   res.setHeader('Access-Control-Max-Age', '86400');
   if (req.method === 'OPTIONS') return res.status(204).end();
   next();
 });
+
+// Dev-only prod parity: serve the repo statically under /apps and mimic Apache's
+// ProxyPassMatch (/apps/<app>/api/* -> /api/<app>/*) so one origin serves everything,
+// exactly like loka.place. Enable with LOKA_DEV_STATIC=1; never set in production.
+if (process.env.LOKA_DEV_STATIC) {
+  const repoRoot = path.join(__dirname, '..');
+  app.use((req, _res, next) => {
+    const m = req.url.match(/^\/apps\/([^/]+)\/api(\/.*|$)/);
+    if (m) req.url = `/api/${m[1]}${m[2] || ''}`;
+    next();
+  });
+  app.use('/apps', express.static(repoRoot));
+  console.log(`[dev] serving ${repoRoot} at /apps with API rewrite`);
+}
 
 app.get('/healthz', (_req, res) => res.type('text/plain').send('ok'));
 app.get('/status', (_req, res) => res.json({ ok: true, model: getResolverStatus() }));
@@ -34,6 +48,12 @@ const appFiles = fs.existsSync(appsDir)
   for (const file of appFiles) {
     const name = path.basename(file, '.js');
     const mod = await import(pathToFileURL(path.join(appsDir, file)).href);
+    if (mod.router) {
+      // App exports an express Router — mount it with full sub-path support.
+      app.use(`/api/${name}`, mod.router);
+      console.log(`mounted router at /api/${name}`);
+      continue;
+    }
     if (typeof mod.default !== 'function') {
       console.warn(`apps/${file}: no default export — skipped`);
       continue;

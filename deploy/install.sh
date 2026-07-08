@@ -52,6 +52,20 @@ if [[ ! -f "${API_DIR}/.env" ]]; then
   chmod 600 "${API_DIR}/.env"
 fi
 
+echo "==> Python venv for the LOKA Atlas dataset builder"
+BUILDERS_DIR="${API_DIR}/atlas-builders"
+if [[ -d "${BUILDERS_DIR}" ]]; then
+  apt-get install -y python3-venv python3-dev >/dev/null 2>&1 || true
+  if [[ ! -x "${BUILDERS_DIR}/.venv/bin/python3" ]]; then
+    sudo -u "${OWNER}" python3 -m venv "${BUILDERS_DIR}/.venv"
+  fi
+  # rasterio ships manylinux wheels with GDAL bundled; no system GDAL needed
+  sudo -u "${OWNER}" bash -lc "'${BUILDERS_DIR}/.venv/bin/pip' install -q --upgrade pip && '${BUILDERS_DIR}/.venv/bin/pip' install -q -r '${BUILDERS_DIR}/requirements.txt'"
+  sudo -u "${OWNER}" "${BUILDERS_DIR}/.venv/bin/python3" -c "import shapely, pyarrow, rasterio, PIL, numpy" \
+    && echo "   builder deps OK" \
+    || echo "   WARN: builder deps incomplete — atlas wizard builds will fail (see ${BUILDERS_DIR})"
+fi
+
 echo "==> Installing pm2"
 if ! command -v pm2 >/dev/null 2>&1; then
   npm install -g pm2

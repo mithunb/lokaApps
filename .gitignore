@@ -2,3 +2,13 @@ node_modules/
 .env
 *.log
 .DS_Store
+
+# LOKA Atlas: server-generated datasets & working state (only the reference dataset is tracked)
+atlas/datasets/*
+!atlas/datasets/deoria-bioregion
+atlas/datasets/deoria-bioregion/manifest.local.json
+atlas/datasets/deoria-bioregion/user-*.geojson
+api/data/
+api/atlas-builders/.venv/
+__pycache__/
+.claude/
