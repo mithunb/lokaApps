@@ -472,6 +472,38 @@ router.post('/instances/:slug/publish', (req, res) => {
   res.json({ ok: true });
 });
 
+// Email the edit token to its owner — proves possession of the token first,
+// so this can't be used to phish tokens for someone else's atlas.
+router.post('/instances/:slug/email-token', async (req, res) => {
+  const inst = reg.getInstance(String(req.params.slug));
+  if (!inst) return res.status(404).json({ error: 'not found' });
+  const bearer = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  if (!bearer || reg.hashToken(bearer) !== inst.tokenHash) {
+    return res.status(403).json({ error: 'edit token required' });
+  }
+  const email = reg.normEmail(req.body && req.body.email);
+  if (!reg.validEmail(email)) return res.status(400).json({ error: 'valid email required' });
+  const ip = clientIp(req);
+  const now = Date.now();
+  const hits = (linkRate.get(ip) || []).filter((t) => now - t < 3600 * 1000);
+  if (hits.length >= 5) return res.status(429).json({ error: 'too many emails — try later' });
+  hits.push(now);
+  linkRate.set(ip, hits);
+
+  const link = inst.visibility === 'private'
+    ? `(private atlas — use the view link from the wizard)`
+    : `${siteBase(req)}/apps/atlas/a/${inst.slug}`;
+  const result = await sendMail({
+    to: email,
+    subject: `[LOKA Atlas] your edit token for “${inst.title}”`,
+    text: `Your atlas: ${inst.title}\nLink: ${link}\n\n` +
+      `Edit token (keep it safe — it's the only way to manage this atlas):\n${bearer}\n\n` +
+      `Use it to add data layers, publish changes, or delete the atlas.\n`,
+  });
+  if (!inst.email) reg.updateInstance(inst.slug, { email });
+  res.json({ ok: true, sent: !!result.sent, via: result.via || 'log' });
+});
+
 router.post('/instances/:slug/claim', (req, res) => {
   const session = auth.sessionFromReq(req);
   if (!session) return res.status(401).json({ error: 'sign in first', needsAuth: true });

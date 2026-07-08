@@ -3,6 +3,11 @@
   "title": "Deoria · Kushinagar · Gorakhpur",
   "subtitle": "A bioregional map for the Basket of Needs survey",
   "about": "Crop systems, value-chain infrastructure and the ecological landscape across three eastern-UP districts — a shared map to help select the survey villages and frame the bioregion. A collaboration between LOKA and the Systems Practice at Socratus, with Jagriti as the on-ground partner.",
+  "collabLede": "This atlas is a collaboration between LOKA and the Systems Practice at Socratus.",
+  "collaborators": [
+    { "name": "Systems Practice", "role": "Bioregional-economy programme at Socratus", "icon": "network" },
+    { "name": "Jagriti", "role": "On-ground partner, with the Systems Practice", "icon": "sprout" }
+  ],
   "center": [83.72, 26.68],
   "zoom": 8.2,
   "bounds": [[83.0, 26.03], [84.47, 27.34]],
@@ -212,9 +217,13 @@
     },
     {
       "id": "labels", "group": "base", "type": "raster", "default": true,
-      "label": "Place labels (satellite)", "onlyWithBasemap": "satellite",
-      "tiles": ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"],
-      "tileSize": 256, "attribution": "Labels © Esri"
+      "label": "Place names",
+      "info": "Town, village and river names on the basemap.",
+      "tilesByBasemap": {
+        "light": ["https://a.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png", "https://b.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png", "https://c.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png"],
+        "satellite": ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"]
+      },
+      "tileSize": 256, "attribution": "Labels © Esri, © CARTO"
     }
   ],
   "attributions": [

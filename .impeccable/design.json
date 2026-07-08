@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-08T12:00:00Z",
+  "title": "Design System: LOKA Atlas",
+  "extensions": {
+    "colorMeta": {
+      "moss": { "role": "primary", "displayName": "Moss", "canonical": "#40573D", "tonalRamp": ["#131a12", "#22301f", "#31462d", "#40573D", "#5d7a58", "#7f9a7a", "#a7bda3", "#d3ded0"] },
+      "canopy": { "role": "primary", "displayName": "Canopy", "canonical": "#2F4230", "tonalRamp": ["#0e140e", "#1c281d", "#2F4230", "#465c47", "#647a65", "#879a88", "#adbcae", "#d6ded6"] },
+      "rust": { "role": "secondary", "displayName": "Rust", "canonical": "#A6522F", "tonalRamp": ["#2b130a", "#54291a", "#7E3B1F", "#A6522F", "#bf7351", "#d29679", "#e2b9a4", "#f1dcd1"] },
+      "ochre": { "role": "secondary", "displayName": "Ochre", "canonical": "#B0863A", "tonalRamp": ["#2d2210", "#584322", "#846430", "#B0863A", "#c39d5d", "#d4b684", "#e4cfae", "#f2e7d6"] },
+      "sienna": { "role": "tertiary", "displayName": "Sienna", "canonical": "#9C5A34", "tonalRamp": ["#28170d", "#4f2d1b", "#764428", "#9C5A34", "#b57a57", "#cc9b7e", "#e0bda7", "#f0ded3"] },
+      "field-grey": { "role": "neutral", "displayName": "Field Grey", "canonical": "#E6E4DF", "tonalRamp": ["#33322f", "#5c5a55", "#86847d", "#aeaca5", "#c9c7c1", "#D7D4CC", "#E6E4DF", "#f4f3f0"] },
+      "paper-surface": { "role": "neutral", "displayName": "Paper Surface", "canonical": "#F2F0EB", "tonalRamp": ["#3a3934", "#64625b", "#8e8c83", "#b4b2a9", "#d0cec6", "#e2e0da", "#F2F0EB", "#faf9f7"] },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#2B2723", "tonalRamp": ["#2B2723", "#453f39", "#5C544A", "#746b60", "#8C857A", "#a9a399", "#c7c2ba", "#e4e1dc"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "The atlas title — one per page, Figtree 700, text-wrap balance." },
+      "label": { "displayName": "Label / Eyebrow", "purpose": "Uppercase +0.14em stamps: eyebrow chip, panel titles, group headers." },
+      "body": { "displayName": "Body", "purpose": "DM Sans prose, 65–75ch cap, text-wrap pretty." },
+      "mono": { "displayName": "Mono", "purpose": "Build logs, edit tokens, embed snippets only." }
+    },
+    "shadows": [
+      { "name": "panel-lift", "value": "0 2px 12px rgba(43,39,35,0.12)", "purpose": "The floating layer panel and the map stage — the only sanctioned lifts." },
+      { "name": "hairline-lift", "value": "0 1px 4px rgba(43,39,35,0.10)", "purpose": "Mobile bottom-sheet top edge." }
+    ],
+    "motion": [
+      { "name": "ease-standard", "value": "cubic-bezier(0.25, 1, 0.5, 1)", "purpose": "All state transitions (toggles, chevrons, chips); 0.15–0.2s." },
+      { "name": "reduced-motion", "value": "@media (prefers-reduced-motion: reduce) → all transitions ~0ms", "purpose": "Global, non-negotiable." }
+    ],
+    "breakpoints": [
+      { "name": "mobile", "value": "720px" },
+      { "name": "container", "value": "min(76rem, 100% - 2.5rem)" }
+    ],
+    "cartography": {
+      "note": "Map-data ink is its own palette; UI must not compete with it (The Map Speaks Rule).",
+      "boundary": "#B0863A",
+      "water": ["#5f7f92", "#7ba0b0", "#5f8f86", "#6d8ba0"],
+      "cropCategoricals": { "Sugarcane": "#4f6b3f", "Rice": "#6f8fa0", "Wheat": "#b58a3e", "Mustard": "#cdb14a", "Maize": "#b5613a", "Banana": "#9aad5b", "Turmeric": "#cc8a33", "Vegetable Pea": "#7fa06a" },
+      "ramps": { "diversity": ["#e7e3d8", "#cdd3b4", "#a9bd8e", "#7f9c65", "#566f42", "#39502f"], "ylorbr": ["#efe6d9", "#ddc4a0", "#caa06f", "#a8703f", "#824e26", "#5e3618"] },
+      "labelHalo": "always: dark ink text with 1.4–2.2px paper-white halo over imagery",
+      "translucency": "fills ship at 0.35–0.75 opacity by design, so boundaries, land cover and basemap read through each other; opacityControl sliders where stacking matters"
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one committed action per view — moss fill, deepens on hover.",
+      "html": "<button class=\"ds-btn-primary\">Build my atlas →</button>",
+      "css": ".ds-btn-primary { background: #40573D; color: #fff; font-family: 'DM Sans', system-ui, sans-serif; font-weight: 600; font-size: 0.95rem; padding: 0.6rem 1.2rem; border: none; border-radius: 4px; cursor: pointer; transition: background 0.18s cubic-bezier(0.25,1,0.5,1); } .ds-btn-primary:hover { background: #2F4230; } .ds-btn-primary:focus-visible { outline: 2px solid #40573D; outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outlined moss for supporting actions.",
+      "html": "<button class=\"ds-btn-secondary\">Save draft</button>",
+      "css": ".ds-btn-secondary { background: transparent; color: #40573D; font-family: 'DM Sans', system-ui, sans-serif; font-weight: 600; font-size: 0.95rem; padding: 0.6rem 1.2rem; border: 1px solid #40573D; border-radius: 4px; cursor: pointer; transition: background 0.18s cubic-bezier(0.25,1,0.5,1); } .ds-btn-secondary:hover { background: rgba(64,87,61,0.12); } .ds-btn-secondary:focus-visible { outline: 2px solid #40573D; outline-offset: 2px; }"
+    },
+    {
+      "name": "Layer Switch",
+      "kind": "custom",
+      "refersTo": "toggle",
+      "description": "The signature control: a calm 32×18 pill that turns map layers on and off.",
+      "html": "<label class=\"ds-switch-row\"><input type=\"checkbox\" checked class=\"ds-switch-input\"><span class=\"ds-switch\"></span><span class=\"ds-switch-name\">Place names</span></label>",
+      "css": ".ds-switch-row { display: inline-flex; align-items: center; gap: 0.55rem; cursor: pointer; font-family: 'DM Sans', system-ui, sans-serif; color: #2B2723; } .ds-switch-input { position: absolute; opacity: 0; width: 0; height: 0; } .ds-switch { width: 32px; height: 18px; border-radius: 999px; background: #cfd6cf; position: relative; transition: background 0.2s cubic-bezier(0.25,1,0.5,1); } .ds-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.25); transition: transform 0.2s cubic-bezier(0.25,1,0.5,1); } .ds-switch-input:checked + .ds-switch { background: #40573D; } .ds-switch-input:checked + .ds-switch::after { transform: translateX(14px); } .ds-switch-input:focus-visible + .ds-switch { outline: 2px solid #40573D; outline-offset: 2px; } .ds-switch-name { font-size: 0.9rem; }"
+    },
+    {
+      "name": "Eyebrow Chip",
+      "kind": "chip",
+      "refersTo": "eyebrow-chip",
+      "description": "The page stamp — one per page.",
+      "html": "<span class=\"ds-eyebrow\">interactive map · loka atlas</span>",
+      "css": ".ds-eyebrow { display: inline-block; font-family: Figtree, sans-serif; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #40573D; padding: 0.25rem 0.6rem; background: rgba(64,87,61,0.12); border-radius: 4px; }"
+    },
+    {
+      "name": "Data Chip",
+      "kind": "chip",
+      "refersTo": "crop-chip",
+      "description": "Selectable data chip with an 8px ink swatch; selected = moss wash.",
+      "html": "<button class=\"ds-chip ds-chip-on\"><i style=\"background:#4f6b3f\"></i>Sugarcane</button> <button class=\"ds-chip\"><i style=\"background:#cc8a33\"></i>Turmeric</button>",
+      "css": ".ds-chip { font-family: 'DM Sans', system-ui, sans-serif; font-size: 0.72rem; padding: 0.2rem 0.5rem; border-radius: 4px; cursor: pointer; border: 1px solid rgba(43,39,35,0.16); background: #fff; color: #5C544A; display: inline-flex; align-items: center; gap: 0.3rem; transition: border-color 0.15s ease, color 0.15s ease; } .ds-chip i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; } .ds-chip:hover { border-color: #40573D; color: #2B2723; } .ds-chip-on { border-color: #40573D; background: rgba(64,87,61,0.12); color: #2B2723; font-weight: 600; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "White field on paper, labelled above in small bold ink-soft.",
+      "html": "<label class=\"ds-field\">Atlas title<input class=\"ds-input\" type=\"text\" placeholder=\"Kilifi Coastal Atlas\"></label>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 0.3rem; font-family: 'DM Sans', system-ui, sans-serif; font-size: 0.85rem; font-weight: 600; color: #5C544A; max-width: 22rem; } .ds-input { font: inherit; font-weight: 400; font-size: 0.95rem; padding: 0.55rem 0.65rem; border: 1px solid rgba(43,39,35,0.16); border-radius: 4px; background: #fff; color: #2B2723; } .ds-input:focus-visible { outline: 2px solid #40573D; outline-offset: 2px; } .ds-input::placeholder { color: #8C857A; }"
+    },
+    {
+      "name": "Cost Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Free vs needs-approval markers in the layer catalogue.",
+      "html": "<span class=\"ds-badge ds-badge-free\">free</span> <span class=\"ds-badge ds-badge-approval\">needs approval</span>",
+      "css": ".ds-badge { display: inline-block; font-family: 'DM Sans', system-ui, sans-serif; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; border-radius: 4px; padding: 0.12rem 0.4rem; } .ds-badge-free { background: rgba(64,87,61,0.12); color: #2F4230; } .ds-badge-approval { background: rgba(166,82,47,0.12); color: #7E3B1F; }"
+    },
+    {
+      "name": "Directory Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "A published-atlas entry — flat, bordered, moss border on hover.",
+      "html": "<a class=\"ds-dir-card\" href=\"#\"><b>Rivers of Bengaluru</b><span>Bangalore · india tier</span></a>",
+      "css": ".ds-dir-card { display: block; background: #F2F0EB; border: 1px solid rgba(43,39,35,0.16); border-radius: 6px; padding: 1rem 1.1rem; color: #2B2723; text-decoration: none; font-family: 'DM Sans', system-ui, sans-serif; transition: border-color 0.15s ease; max-width: 18rem; } .ds-dir-card b { font-family: Figtree, sans-serif; display: block; } .ds-dir-card span { font-size: 0.85rem; color: #5C544A; } .ds-dir-card:hover { border-color: #40573D; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Field Notebook",
+    "overview": "LOKA Atlas looks like a working document from fieldwork, not a dashboard. The surfaces are matte greys — the tone of paper that has been in a bag all day — and everything drawn on them behaves like ink: thin borders, earthy boundary lines, stamped uppercase labels, small honest controls. The map is the page; the interface is the margin. The system explicitly rejects the shiny SaaS register: no gradients, no glassmorphism-as-decoration, no neon data-viz hues. Color is committed but muted: a rustic-pastel family (moss, rust, sienna, ochre) that could be mixed from soil, turmeric and leaves.",
+    "keyCharacteristics": [
+      "Grey paper canvas; white reserved for elements that must read as 'on top'",
+      "One green speaks for the product (moss #40573D); earth accents belong to the data",
+      "Flat, ink-on-paper depth: borders and tone steps, not shadows",
+      "Two typefaces, two jobs: Figtree structures, DM Sans reads",
+      "Refined and restrained components: thin strokes, small radii, quiet states",
+      "Everything credited: sources, partners and licenses are part of the identity"
+    ],
+    "rules": [
+      { "name": "The Map Speaks Rule", "body": "Saturated color belongs to data on the map. The interface never uses more than moss + tints on roughly 10% of the screen. If a UI element competes with the map for color, mute the element.", "section": "colors" },
+      { "name": "The Earth Ink Rule", "body": "Every hue is desaturated toward earth. No pure primaries, nothing neon, no blues bluer than #5f7f92. A color that couldn't plausibly be mixed from soil, leaves or turmeric doesn't belong.", "section": "colors" },
+      { "name": "The Cartographic Palette", "body": "Map-layer colors are their own curated set, and layers ship deliberately translucent (fills 0.35–0.75) so boundaries, land cover and the basemap read through each other. Translucency is a feature.", "section": "colors" },
+      { "name": "The Two Voices Rule", "body": "Figtree for structure, DM Sans for reading. Never a third family; never Figtree for paragraphs; never DM Sans for uppercase labels.", "section": "typography" },
+      { "name": "The Ink-on-Paper Rule", "body": "Surfaces are flat at rest and flat on hover. If a new element seems to need a shadow, first try a border; then try a tone step; only then ask.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep the interface grey and let saturated color live on the map",
+      "Do separate with 1px ink-transparency borders and tone steps; reach for #F2F0EB before a shadow",
+      "Do use Moss #40573D for every interactive affordance so 'green means actionable' stays true",
+      "Do give every map label a paper halo",
+      "Do ship layers translucent (0.35–0.75 fill) with opacity sliders where stacking matters",
+      "Do credit sources, partners and licenses visibly",
+      "Do respect prefers-reduced-motion globally; transitions ≤0.2s ease-out"
+    ],
+    "donts": [
+      "Don't use gradients anywhere — fills, text or charts",
+      "Don't use glassmorphism decoratively; the ≥94%-opaque layer panel is the only translucent UI surface",
+      "Don't add shadows to cards, buttons or hovers",
+      "Don't introduce neon or pure-primary hues",
+      "Don't use border-left stripes, hero-metric blocks, or identical icon-card grids — the shiny-SaaS register is the anti-reference",
+      "Don't add a third typeface or track lowercase text",
+      "Don't exceed 6px radius on containers; pills are for the toggle track only",
+      "Don't let any UI element outsaturate the data — if a screenshot's most colorful thing isn't the map, the screen is wrong"
+    ]
+  }
+}

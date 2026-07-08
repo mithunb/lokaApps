@@ -625,6 +625,30 @@
     cp.className = "btn secondary"; cp.style.marginTop = ".5rem"; cp.textContent = "Copy token";
     cp.onclick = function () { navigator.clipboard.writeText(S.build.editToken); cp.textContent = "Copied ✓"; };
     tokenBox.appendChild(cp);
+
+    // …or have it emailed, so it isn't lost when this tab closes
+    var mailRow = document.createElement("div");
+    mailRow.style.cssText = "display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.7rem;align-items:center";
+    var mailIn = document.createElement("input");
+    mailIn.type = "email"; mailIn.placeholder = "you@example.org";
+    mailIn.style.cssText = "flex:1 1 12rem;min-width:0";
+    mailIn.value = (S.session && S.session.email) || $("#f-email").value.trim() || "";
+    var mailBtn = document.createElement("button");
+    mailBtn.className = "btn secondary"; mailBtn.textContent = "Email me the token";
+    mailBtn.onclick = function () {
+      var to = mailIn.value.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(to)) { mailBtn.textContent = "Enter a valid email"; return; }
+      mailBtn.disabled = true; mailBtn.textContent = "Sending…";
+      api("instances/" + S.build.slug + "/email-token", {
+        method: "POST", headers: authHeaders(), body: { email: to },
+      }).then(function (r) {
+        mailBtn.textContent = r.sent ? "Sent ✓ — check " + to : "Couldn't send — copy it instead";
+      }).catch(function (e) {
+        mailBtn.disabled = false; mailBtn.textContent = errMsg(e);
+      });
+    };
+    mailRow.appendChild(mailIn); mailRow.appendChild(mailBtn);
+    tokenBox.appendChild(mailRow);
     body.appendChild(tokenBox);
 
     if (!S.session && S.build.editToken) {

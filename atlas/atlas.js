@@ -80,6 +80,7 @@
     setText("#atlas-subtitle", manifest.subtitle || "");
     setText("#atlas-about", manifest.about || "");
     renderBranding(manifest.branding);
+    renderCollaborators(manifest);
     wireShare(manifest);
 
     activeBasemap = (manifest.basemaps.find(function (b) { return b.default; }) || manifest.basemaps[0]).id;
@@ -156,6 +157,29 @@
       if (b.orgName) cred.appendChild(el("div", "org-credit-name", esc(b.orgName)));
       if (b.footerLine) cred.appendChild(el("div", "org-credit-line", esc(b.footerLine)));
     }
+  }
+
+  // Instance-specific partner credits from the manifest (`collabLede` sentence +
+  // `collaborators: [{name, role, icon?}]`). Only the instance that declares them
+  // shows them — the LOKA and MapLibre credits stay fixed in the page.
+  var COLLAB_ICONS = {
+    network: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4.5" r="2.5"/><path d="m10.2 6.3-3.9 3.9"/><circle cx="4.5" cy="12" r="2.5"/><path d="M7 12h10"/><circle cx="19.5" cy="12" r="2.5"/><path d="m13.8 17.7 3.9-3.9"/><circle cx="12" cy="19.5" r="2.5"/></svg>',
+    sprout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 3-10"/><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z"/><path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z"/></svg>'
+  };
+  function renderCollaborators(manifest) {
+    var lede = $("#collab-lede");
+    if (lede && manifest.collabLede) lede.textContent = " " + manifest.collabLede;
+    var box = $("#collab-credits");
+    if (!box) return;
+    box.innerHTML = "";
+    (manifest.collaborators || []).slice(0, 6).forEach(function (c) {
+      var row = el("div", "cr-org");
+      var icon = el("span", "cr-icon", COLLAB_ICONS[c.icon] || COLLAB_ICONS.network);
+      icon.setAttribute("aria-hidden", "true");
+      row.appendChild(icon);
+      row.appendChild(el("div", null, "<b>" + esc(c.name) + "</b>" + (c.role ? "<span>" + esc(c.role) + "</span>" : "")));
+      box.appendChild(row);
+    });
   }
 
   function wireShare(manifest) {
@@ -353,10 +377,29 @@
   }
 
   function addRaster(L) {
+    L._ids = [];
+    L._idBasemap = {};
+    if (L.tilesByBasemap) {
+      // One logical layer, different tiles per basemap (e.g. "Place names":
+      // CARTO labels on the map basemap, Esri labels on satellite).
+      Object.keys(L.tilesByBasemap).forEach(function (bm) {
+        var id = L.id + "-raster-" + bm;
+        map.addSource(srcId(L) + "-" + bm, { type: "raster", tiles: L.tilesByBasemap[bm], tileSize: L.tileSize || 256, attribution: L.attribution || "" });
+        map.addLayer({
+          id: id, type: "raster", source: srcId(L) + "-" + bm,
+          layout: { visibility: on(L) && bm === activeBasemap ? "visible" : "none" },
+          paint: { "raster-opacity": L.opacity != null ? L.opacity : 1 }
+        });
+        L._ids.push(id);
+        L._idBasemap[id] = bm;
+      });
+      return;
+    }
     map.addSource(srcId(L), { type: "raster", tiles: L.tiles, tileSize: L.tileSize || 256, attribution: L.attribution || "" });
     var show = on(L) && (!L.onlyWithBasemap || L.onlyWithBasemap === activeBasemap);
     map.addLayer({ id: L.id + "-raster", type: "raster", source: srcId(L), layout: { visibility: show ? "visible" : "none" }, paint: { "raster-opacity": L.opacity != null ? L.opacity : 1 } });
     L._ids = [L.id + "-raster"];
+    if (L.onlyWithBasemap) L._idBasemap[L.id + "-raster"] = L.onlyWithBasemap;
   }
 
   /* ---- categories (crop distribution) ---- */
@@ -459,16 +502,18 @@
   /* ==================================================================
      TOGGLING
   ================================================================== */
+  // A sub-layer id may be tied to one basemap (L._idBasemap[id]); it only shows
+  // when its layer is on AND that basemap is active.
+  function idVisible(L, id, show) {
+    var bm = L._idBasemap && L._idBasemap[id];
+    return show && (!bm || bm === activeBasemap);
+  }
   function setLayerVisible(L, show) {
     L._visible = show;
     (L._ids || []).forEach(function (id) {
-      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", show ? "visible" : "none");
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", idVisible(L, id, show) ? "visible" : "none");
     });
     if (markersByLayer[L.id]) applyMarkerVisibility(L);
-    if (L.onlyWithBasemap && show && activeBasemap !== L.onlyWithBasemap) hideLayerIds(L);
-  }
-  function hideLayerIds(L) {
-    (L._ids || []).forEach(function (id) { if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none"); });
   }
 
   function switchBasemap(id) {
@@ -476,11 +521,13 @@
     MANIFEST.basemaps.forEach(function (b) {
       if (map.getLayer("base-" + b.id)) map.setLayoutProperty("base-" + b.id, "visibility", b.id === id ? "visible" : "none");
     });
-    // layers restricted to a basemap (e.g. satellite place-labels)
+    // sub-layers tied to a specific basemap (e.g. per-basemap place names)
     MANIFEST.layers.forEach(function (L) {
-      if (!L.onlyWithBasemap) return;
-      var show = L._visible !== false && L.onlyWithBasemap === id;
-      (L._ids || []).forEach(function (lid) { if (map.getLayer(lid)) map.setLayoutProperty(lid, "visibility", show ? "visible" : "none"); });
+      if (!L._idBasemap || !Object.keys(L._idBasemap).length) return;
+      var show = L._visible !== false;
+      (L._ids || []).forEach(function (lid) {
+        if (map.getLayer(lid)) map.setLayoutProperty(lid, "visibility", idVisible(L, lid, show) ? "visible" : "none");
+      });
     });
   }
 

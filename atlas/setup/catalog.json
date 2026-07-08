@@ -112,14 +112,14 @@
     },
     {
       "id": "labels",
-      "label": "Place labels (satellite)",
-      "info": "Town and place names shown on the satellite basemap.",
+      "label": "Place names",
+      "info": "Town, village and river names on the basemap — on by default, switchable off in the layer widget.",
       "tiers": ["global", "india"],
       "group": "base",
       "recipe": "labels_esri",
       "estSeconds": 1,
       "cost": "free",
-      "attribution": { "global": "Labels © Esri" }
+      "attribution": { "global": "Labels © Esri / © CARTO" }
     }
   ]
 }
