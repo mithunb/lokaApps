@@ -27,7 +27,9 @@ app.use((req, res, next) => {
 // exactly like loka.place. Enable with LOKA_DEV_STATIC=1; never set in production.
 if (process.env.LOKA_DEV_STATIC) {
   const repoRoot = path.join(__dirname, '..');
-  app.use((req, _res, next) => {
+  app.use((req, res, next) => {
+    const a = req.url.match(/^\/apps\/atlas\/a\/([a-z0-9-]+)\/?$/);
+    if (a) return res.redirect(302, `/apps/atlas/?dataset=${a[1]}`);
     const m = req.url.match(/^\/apps\/([^/]+)\/api(\/.*|$)/);
     if (m) req.url = `/api/${m[1]}${m[2] || ''}`;
     next();

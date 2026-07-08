@@ -14,8 +14,16 @@
     );
   } catch (e) {}
 
-  var DATASET = new URLSearchParams(location.search).get("dataset") || "deoria-bioregion";
-  var BASE = "./datasets/" + DATASET + "/";
+  var QS = new URLSearchParams(location.search);
+  var DATASET = QS.get("dataset") || "deoria-bioregion";
+  var KEY = QS.get("key") || "";
+  // Private datasets live outside the web root and are served by the API behind
+  // a view key; public datasets are plain static files.
+  var BASE = KEY ? "./api/datasets/" + DATASET + "/" : "./datasets/" + DATASET + "/";
+  function dataUrl(file) {
+    if (!KEY) return BASE + file;
+    return BASE + file + (file.indexOf("?") < 0 ? "?key=" : "&key=") + encodeURIComponent(KEY);
+  }
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
   var el = function (tag, cls, html) {
     var e = document.createElement(tag);
@@ -39,7 +47,7 @@
 
   var map, MANIFEST, activeBasemap, DATA = {}, markersByLayer = {}, cropState = {};
 
-  fetch(BASE + "manifest.json")
+  fetch(dataUrl("manifest.json"))
     .then(function (r) { if (!r.ok) throw new Error("manifest " + r.status); return r.json(); })
     .then(start)
     .catch(function (err) {
@@ -53,6 +61,8 @@
     setText("#atlas-title", manifest.title);
     setText("#atlas-subtitle", manifest.subtitle || "");
     setText("#atlas-about", manifest.about || "");
+    renderBranding(manifest.branding);
+    wireShare(manifest);
 
     activeBasemap = (manifest.basemaps.find(function (b) { return b.default; }) || manifest.basemaps[0]).id;
 
@@ -85,6 +95,63 @@
         });
       } catch (err) { console.error("Atlas build error:", err && err.message, err && err.stack); }
     });
+  }
+
+  // Org identity from the manifest's optional `branding` block. Rendered ALONGSIDE
+  // the fixed LOKA elements in the page (wordmark, credit strip, CTA) — those are
+  // hard-coded in index.html and never driven by manifest content, so an instance
+  // can add its own identity but can't remove LOKA's.
+  function renderBranding(b) {
+    if (!b || (!b.orgName && !b.logo)) return;
+    var hero = $("#org-branding");
+    if (hero) {
+      hero.innerHTML = "";
+      var wrap = el("span", "org-brand-line");
+      if (b.logo) {
+        var img = el("img", "org-brand-logo");
+        img.src = dataUrl(b.logo);
+        img.alt = b.orgName || "Organisation logo";
+        wrap.appendChild(img);
+      }
+      if (b.orgName) {
+        var lbl = el("span", null, "By <b>" + esc(b.orgName) + "</b>");
+        wrap.appendChild(lbl);
+      }
+      if (b.orgUrl && /^https:\/\//.test(b.orgUrl)) {
+        var a = el("a");
+        a.href = b.orgUrl; a.target = "_blank"; a.rel = "noopener";
+        a.appendChild(wrap);
+        hero.appendChild(a);
+      } else {
+        hero.appendChild(wrap);
+      }
+    }
+    var cred = $("#org-credit");
+    if (cred) {
+      cred.innerHTML = "";
+      if (b.logo) {
+        var cimg = el("img", "org-credit-logo");
+        cimg.src = dataUrl(b.logo);
+        cimg.alt = b.orgName || "";
+        cred.appendChild(cimg);
+      }
+      if (b.orgName) cred.appendChild(el("div", "org-credit-name", esc(b.orgName)));
+      if (b.footerLine) cred.appendChild(el("div", "org-credit-line", esc(b.footerLine)));
+    }
+  }
+
+  function wireShare(manifest) {
+    var btn = $("#share-btn");
+    if (!btn || !window.AtlasShare) return;
+    btn.hidden = false;
+    btn.onclick = function () {
+      window.AtlasShare.open({
+        url: location.href,
+        title: manifest.title + " — LOKA Atlas",
+        slug: DATASET,
+        private: !!KEY,
+      });
+    };
   }
 
   // Frame the data within the map area that's actually visible — i.e. to the right of the
@@ -135,7 +202,7 @@
     // is deterministic (array order = bottom→top; markers are DOM and sit on top).
     Promise.all(layers.map(function (L) {
       if (L.type === "raster" || !L.source) return Promise.resolve();
-      return fetch(BASE + L.source).then(function (r) { return r.json(); })
+      return fetch(dataUrl(L.source)).then(function (r) { return r.json(); })
         .then(function (d) { DATA[L.id] = d; })
         .catch(function () {});
     })).then(function () {
@@ -260,7 +327,7 @@
     var meta = DATA[L.id];
     if (!meta) return;
     L._imageMeta = meta;
-    map.addSource(srcId(L), { type: "image", url: BASE + meta.image, coordinates: meta.coordinates });
+    map.addSource(srcId(L), { type: "image", url: dataUrl(meta.image), coordinates: meta.coordinates });
     map.addLayer({ id: L.id + "-img", type: "raster", source: srcId(L), layout: { visibility: vis(L) }, paint: { "raster-opacity": L.opacity != null ? L.opacity : 0.8, "raster-fade-duration": 0 } });
     L._ids = [L.id + "-img"];
     if (L.legendFrom === "source" && meta.legend) L._legend = meta.legend.map(function (c) { return { color: c.color, label: c.label + (c.pct != null ? " · " + c.pct + "%" : "") }; });

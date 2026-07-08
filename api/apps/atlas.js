@@ -181,7 +181,8 @@ function cap(str, n) {
 function siteBase(req) {
   if (process.env.ATLAS_PUBLIC_BASE) return process.env.ATLAS_PUBLIC_BASE.replace(/\/$/, '');
   const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:8181';
-  const proto = req.headers['x-forwarded-proto'] || (host.startsWith('localhost') ? 'http' : 'https');
+  const proto = req.headers['x-forwarded-proto'] ||
+    (/^(localhost|127\.|0\.0\.0\.0|\[::1\])/.test(host) ? 'http' : 'https');
   return `${proto}://${host}`;
 }
 
