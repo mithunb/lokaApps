@@ -104,6 +104,12 @@ The `deoria-bioregion` dataset was built from an attribute spreadsheet + open bo
 hydrology/land-cover data (LGD, India-WRIS, NRSC-NDEM, ESA WorldCover) via one-off Python
 scripts; the app itself only ever reads the finished files in the dataset folder.
 
+## Deploying
+
+`./deploy/deploy.sh` from any machine with SSH access to the server: pulls
+main as the repo owner, refreshes npm/pip deps, restarts pm2 and runs health
+checks. First-time server setup is still `sudo ./deploy/install.sh`.
+
 ## Adding a new app
 
 1. Create `api/apps/<name>.js` exporting a default `(req, res) => …` handler.
