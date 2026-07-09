@@ -71,6 +71,11 @@ function logFallback(to, subject, text) {
 }
 
 export async function sendMail({ to, subject, text }) {
+  // dev override: MAIL_TRANSPORT=log forces links into the console
+  if (process.env.MAIL_TRANSPORT === 'log') {
+    logFallback(to, subject, text);
+    return { sent: false, via: 'log' };
+  }
   if (process.env.SG_KEY) {
     try {
       await sendViaSendGrid({ to, subject, text });

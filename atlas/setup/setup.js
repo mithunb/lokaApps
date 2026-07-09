@@ -592,7 +592,14 @@
   }
 
   $("#back-4").onclick = function () { show(3); };
-  $("#next-4").onclick = function () { publish(); };
+  $("#next-4").onclick = function () {
+    if (!S.session) {
+      signIn("Publishing needs a verified email, so your atlas stays manageable — and so we can reach you about it.")
+        .then(function (ok) { if (ok) publish(); });
+      return;
+    }
+    publish();
+  };
 
   /* ================= step 5: publish & share ================= */
 
@@ -609,7 +616,14 @@
         renderPublished();
         loadDirectory();
       })
-      .catch(function (e) { msg(4, esc(errMsg(e))); });
+      .catch(function (e) {
+        if (e.needsAuth) {
+          signIn("Publishing needs a verified email — sign in to continue.")
+            .then(function (ok) { if (ok) publish(); });
+          return;
+        }
+        msg(4, esc(errMsg(e)));
+      });
   }
 
   function renderPublished() {

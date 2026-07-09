@@ -462,12 +462,23 @@ router.get('/instances/:slug', (req, res) => {
   res.status(404).json({ error: 'not found' });
 });
 
+// Publishing requires a signed-in account (owner decision: anonymous create &
+// build stay friction-free, but a published atlas must be attached to an email
+// so it stays manageable and reachable). The instance is bound to the account.
 router.post('/instances/:slug/publish', (req, res) => {
   const inst = reg.getInstance(String(req.params.slug));
   if (!inst) return res.status(404).json({ error: 'not found' });
   if (!callerCanEdit(req, inst)) return res.status(403).json({ error: 'not allowed' });
+  const session = auth.sessionFromReq(req);
+  if (!session && !auth.isAdmin(req)) {
+    return res.status(401).json({ error: 'publishing needs a verified email — sign in first', needsAuth: true });
+  }
   if (inst.status === 'published') return res.json({ ok: true, already: true });
   if (inst.status !== 'built') return res.status(409).json({ error: `cannot publish while ${inst.status}` });
+  if (session) {
+    reg.bindInstance(session.email, inst.slug);
+    if (!inst.email) reg.updateInstance(inst.slug, { email: session.email });
+  }
   reg.updateInstance(inst.slug, { status: 'published', publishedAt: Date.now() });
   res.json({ ok: true });
 });

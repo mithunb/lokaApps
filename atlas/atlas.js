@@ -96,7 +96,7 @@
 
     var build = card("./setup/", "For organisations", "",
       "Build your own atlas",
-      "Pick a region anywhere in the world, choose layers, add your branding and data \u2014 free to start, no login needed.",
+      "Pick a region anywhere in the world, choose layers, add your branding and data \u2014 free to start. Sign in with just your email when you publish.",
       "Start the wizard");
     build.className = "home-card build";
     grid.appendChild(build);
