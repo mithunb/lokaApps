@@ -15,7 +15,9 @@
   } catch (e) {}
 
   var QS = new URLSearchParams(location.search);
-  var DATASET = QS.get("dataset") || "deoria-bioregion";
+  // No ?dataset= -> this page is the LOKA Atlas home (a gallery of instances).
+  // With ?dataset=<id> it is the viewer for that instance.
+  var DATASET = QS.get("dataset") || "";
   var KEY = QS.get("key") || "";
   // Private datasets live outside the web root and are served by the API behind
   // a view key; public datasets are plain static files.
@@ -47,6 +49,9 @@
 
   var map, MANIFEST, activeBasemap, DATA = {}, markersByLayer = {}, cropState = {};
 
+  if (!DATASET) {
+    renderHome();
+  } else {
   fetch(dataUrl("manifest.json"))
     .then(function (r) { if (!r.ok) throw new Error("manifest " + r.status); return r.json(); })
     .then(mergeLocalOverlay)
@@ -55,6 +60,62 @@
       $("#atlas-map").innerHTML =
         '<div class="atlas-error">Could not load dataset “' + esc(DATASET) + '”.<br><small>' + esc(err.message) + "</small></div>";
     });
+  }
+
+  // The LOKA Atlas home: featured reference instance, published instances, build CTA.
+  function renderHome() {
+    document.title = "LOKA Atlas \u2014 layered maps for any geography";
+    setText("#atlas-title", "LOKA Atlas");
+    setText("#atlas-subtitle", "Layered, shareable maps for any geography \u2014 built from open data.");
+    setText("#atlas-about", "Every atlas below is an instance of the same engine: pick a region, choose layers, add your data, and share it. Public tech by Socratus.");
+    var home = $("#atlas-home");
+    var stage = document.querySelector(".atlas-stage");
+    if (stage) stage.style.display = "none";
+    var credits = document.querySelector(".atlas-credits");
+    if (credits) credits.style.display = "none";
+    var cta = document.querySelector(".atlas-cta");
+    if (cta) cta.style.display = "none";
+    home.hidden = false;
+
+    var grid = $("#home-grid");
+    grid.innerHTML = "";
+
+    function card(href, tag, tagCls, title, blurb, go) {
+      var a = el("a", "home-card");
+      a.href = href;
+      a.innerHTML = '<span class="tag' + (tagCls ? " " + tagCls : "") + '">' + esc(tag) + "</span>" +
+        "<h2>" + esc(title) + "</h2><p>" + esc(blurb) + '</p><span class="go">' + esc(go) + " \u2192</span>";
+      return a;
+    }
+
+    // the reference instance doubles as the template for new atlases
+    grid.appendChild(card("./?dataset=deoria-bioregion", "Reference instance \u00b7 template", "template",
+      "Deoria \u00b7 Kushinagar \u00b7 Gorakhpur",
+      "The bioregional atlas built with the Systems Practice at Socratus and Jagriti \u2014 crops, value chains and ecology across three eastern-UP districts. New atlases start from its template.",
+      "Open the atlas"));
+
+    var build = card("./setup/", "For organisations", "",
+      "Build your own atlas",
+      "Pick a region anywhere in the world, choose layers, add your branding and data \u2014 free to start, no login needed.",
+      "Start the wizard");
+    build.className = "home-card build";
+    grid.appendChild(build);
+
+    // published instances from the registry (best-effort; fine without the API)
+    fetch("./api/instances")
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data || !data.instances) return;
+        data.instances.forEach(function (i) {
+          if (i.slug === "deoria-bioregion") return;
+          var c = card("./?dataset=" + encodeURIComponent(i.slug), "Instance", "",
+            i.title, [i.org, i.regionLabel].filter(Boolean).join(" \u00b7 ") || "A LOKA Atlas instance.",
+            "Open the atlas");
+          grid.insertBefore(c, build);
+        });
+      })
+      .catch(function () {});
+  }
 
   // Org-added layers live in a gitignored overlay (manifest.local.json + user-*.geojson)
   // so a `git pull` on the server never conflicts with them.

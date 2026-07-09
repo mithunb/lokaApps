@@ -421,9 +421,10 @@
         r.layers.forEach(function (l) { if (l.required || l.cost === "free") S.catalog.chosen[l.id] = true; });
         delete S.catalog.chosen["floodplain-ndem"];
       }
-      $("#tier-note").textContent = r.tier === "india"
+      $("#tier-note").textContent = (r.tier === "india"
         ? "India tier — the full catalogue, including LGD blocks and WRIS water layers."
-        : "Global tier — boundaries, OSM waterways and ESA WorldCover land cover.";
+        : "Global tier — boundaries, OSM waterways and ESA WorldCover land cover.")
+        + " Layers come pre-selected from the Bioregion atlas template — the Deoria · Kushinagar · Gorakhpur reference instance. Adjust freely.";
       renderCatalog();
     }).catch(function (e) { msg(3, esc(errMsg(e))); });
   }
