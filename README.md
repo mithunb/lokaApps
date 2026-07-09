@@ -66,7 +66,9 @@ sudo -u mithun pm2 restart lokaApps
 
 ## LOKA Atlas — a generic, data-driven map app
 
-`atlas/` is **LOKA Atlas**, a reusable map engine, not a one-off. `atlas.js` renders
+LOKA Atlas is a self-serve map publishing platform — organisations pick a region, choose layers built from open data, add their own, and publish a shareable atlas in minutes.
+
+`atlas/` is its code: a reusable map engine, not a one-off. `atlas.js` renders
 whatever a **dataset manifest** describes; a dataset is a self-contained folder of a
 `manifest.json` plus its data files. Nothing about a specific geography is hard-coded.
 The first instance is the Deoria–Kushinagar–Gorakhpur bioregion atlas, built with the
