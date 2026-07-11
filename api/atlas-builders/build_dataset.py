@@ -28,10 +28,11 @@ def zoom_for(bbox):
 GROUP_DEFS = {
     "base": {"id": "base", "label": "Base", "open": True},
     "context": {"id": "context", "label": "Terrain, climate & access", "open": True},
+    "people": {"id": "people", "label": "People & services", "open": True},
     "agri": {"id": "agri", "label": "Crops & value chain", "open": True},
     "eco": {"id": "eco", "label": "Ecological landscape", "open": True},
 }
-GROUP_ORDER = ["base", "context", "agri", "eco"]
+GROUP_ORDER = ["base", "context", "people", "agri", "eco"]
 
 BASEMAPS = [
     {
@@ -70,6 +71,7 @@ SOURCE_ATTRIBUTIONS = {
     "JRC Global Surface Water": {"url": "https://global-surface-water.appspot.com", "note": "Surface water 1984–2021", "license": "EC free & open"},
     "ISRIC SoilGrids 2.0": {"url": "https://soilgrids.org", "note": "Soil organic carbon", "license": "CC-BY 4.0"},
     "Malaria Atlas Project": {"url": "https://malariaatlas.org", "note": "Travel time to healthcare", "license": "CC-BY 4.0"},
+    "OpenStreetMap / HOT (HDX)": {"url": "https://data.humdata.org", "note": "Health & education facilities", "license": "ODbL"},
 }
 
 RECIPE_SOURCES = {
@@ -89,6 +91,8 @@ RECIPE_SOURCES = {
     "water_jrc": {"global": ["JRC Global Surface Water"], "india": ["JRC Global Surface Water"]},
     "soil_soilgrids": {"global": ["ISRIC SoilGrids 2.0"], "india": ["ISRIC SoilGrids 2.0"]},
     "access_healthcare": {"global": ["Malaria Atlas Project"], "india": ["Malaria Atlas Project"]},
+    "health_hot": {"global": ["OpenStreetMap / HOT (HDX)"], "india": ["OpenStreetMap / HOT (HDX)"]},
+    "education_hot": {"global": ["OpenStreetMap / HOT (HDX)"], "india": ["OpenStreetMap / HOT (HDX)"]},
 }
 
 

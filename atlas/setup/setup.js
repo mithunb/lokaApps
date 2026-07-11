@@ -469,12 +469,12 @@
     }).catch(function (e) { msg(3, esc(errMsg(e))); });
   }
 
-  var GROUP_LABELS = { base: "Base", context: "Terrain, climate & access", eco: "Ecological landscape", agri: "Crops & value chain" };
+  var GROUP_LABELS = { base: "Base", context: "Terrain, climate & access", people: "People & services", eco: "Ecological landscape", agri: "Crops & value chain" };
 
   function renderCatalog() {
     var box = $("#cat-list");
     box.innerHTML = "";
-    ["base", "context", "eco", "agri"].forEach(function (gid) {
+    ["base", "context", "people", "eco", "agri"].forEach(function (gid) {
       var entries = S.catalog.layers.filter(function (l) { return l.group === gid; });
       if (!entries.length) return;
       var g = document.createElement("div");

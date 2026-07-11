@@ -189,6 +189,30 @@
       "estSeconds": 60,
       "cost": "free",
       "attribution": { "global": "Malaria Atlas Project (Oxford), CC-BY 4.0" }
+    },
+    {
+      "id": "health",
+      "label": "Health facilities",
+      "info": "Hospitals, clinics and pharmacies mapped in OpenStreetMap (Humanitarian OSM Team export).",
+      "tiers": ["global", "india"],
+      "group": "people",
+      "subgroup": "Facilities",
+      "recipe": "health_hot",
+      "estSeconds": 60,
+      "cost": "free",
+      "attribution": { "global": "OpenStreetMap contributors via HOT / HDX, ODbL" }
+    },
+    {
+      "id": "education",
+      "label": "Schools & colleges",
+      "info": "Schools, colleges and kindergartens mapped in OpenStreetMap (Humanitarian OSM Team export).",
+      "tiers": ["global", "india"],
+      "group": "people",
+      "subgroup": "Facilities",
+      "recipe": "education_hot",
+      "estSeconds": 60,
+      "cost": "free",
+      "attribution": { "global": "OpenStreetMap contributors via HOT / HDX, ODbL" }
     }
   ]
 }

@@ -838,6 +838,91 @@ def access_healthcare(ctx):
                       "Travel time to healthcare", subgroup="Access", opacity=0.72)
 
 
+# ================================================================
+# People & services: community facilities from OpenStreetMap (HOT)
+# ================================================================
+#
+# (A population-density layer is a natural next addition, but the clean open
+# sources are either range-less country files hundreds of MB in size — WorldPop —
+# or need a GeoParquet/reprojection recipe — Kontur/GHSL. Deferred to that track.)
+
+HOT = "https://production-raw-data-api.s3.amazonaws.com/ISO3/%s/%s/hotosm_%s_%s_osm_geojson.zip"
+
+
+def _iso3(ctx):
+    return str((ctx.get("spec", {}).get("region") or {}).get("iso3") or "").upper()
+
+
+def _hot_facilities(ctx, kind, lid, label, color, info, legend_label):
+    import zipfile
+    iso3 = _iso3(ctx)
+    if not iso3:
+        return []
+    low = iso3.lower()
+    url = HOT % (iso3, kind, low, kind)
+    try:
+        path = fetch_cached(url, ctx["cache"], name=f"hot-{low}-{kind}.zip", step=lid)
+    except Exception as ex:
+        warn(f"{label} skipped — no OpenStreetMap export for {iso3}: {ex}")
+        return []
+    try:
+        z = zipfile.ZipFile(path)
+        member = next((m for m in z.namelist() if m.endswith(".geojson")), None)
+        gj = json.loads(z.read(member))
+    except Exception as ex:
+        warn(f"{label} skipped — could not read export: {ex}")
+        return []
+
+    sel = ctx["sel"]; b = ctx["bbox"]
+    feats = []
+    for f in gj.get("features", []):
+        geom = f.get("geometry")
+        if not geom:
+            continue
+        try:
+            g = shape(geom)
+        except Exception:
+            continue
+        gb = g.bounds
+        if gb[2] < b[0] or gb[0] > b[2] or gb[3] < b[1] or gb[1] > b[3]:
+            continue
+        pt = g if g.geom_type == "Point" else g.representative_point()
+        if not pt.within(sel):
+            continue
+        p = f.get("properties", {}) or {}
+        cat = p.get("healthcare") or p.get("amenity") or p.get("building") or ""
+        feats.append({"type": "Feature", "properties": {
+            "name": p.get("name") or p.get("name_en"),
+            "category": str(cat).replace("_", " ").strip() or None, "kind": lid},
+            "geometry": mapping(pt)})
+    progress(lid, 90, f"{len(feats)} facilities")
+    if not feats:
+        warn(f"{label}: none found in this region — layer omitted")
+        return []
+    write_geojson(ctx["out"], lid + ".geojson", feats)
+    return [{
+        "id": lid, "group": "people", "subgroup": "Facilities", "type": "circle", "source": lid + ".geojson",
+        "label": label, "default": False,
+        "paint": {"radius": 5, "color": color, "strokeColor": "#ffffff", "strokeWidth": 1.4, "opacity": 0.95},
+        "label_text": {"property": "name", "size": 10, "color": "#2b2723", "haloColor": "#ffffff", "haloWidth": 1.4, "minzoom": 12},
+        "legend": [{"color": color, "label": legend_label, "shape": "dot"}],
+        "info": info,
+        "popup": {"title": "name", "titleFallback": "category", "fields": [{"label": "Type", "property": "category"}]},
+    }]
+
+
+def health_hot(ctx):
+    return _hot_facilities(ctx, "health_facilities", "health", "Health facilities",
+                           "#c0392b", "Hospitals, clinics and pharmacies from OpenStreetMap (HOT export).",
+                           "Health facility")
+
+
+def education_hot(ctx):
+    return _hot_facilities(ctx, "education_facilities", "education", "Schools & colleges",
+                           "#2c6e9c", "Schools, colleges and kindergartens from OpenStreetMap (HOT export).",
+                           "School / college")
+
+
 RECIPES = {
     "admin": admin,
     "subadmin": subadmin,
@@ -855,4 +940,6 @@ RECIPES = {
     "water_jrc": water_jrc,
     "soil_soilgrids": soil_soilgrids,
     "access_healthcare": access_healthcare,
+    "health_hot": health_hot,
+    "education_hot": education_hot,
 }
