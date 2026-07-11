@@ -471,6 +471,29 @@
 
   var GROUP_LABELS = { base: "Base", context: "Terrain, climate & access", people: "People & services", eco: "Ecological landscape", agri: "Crops & value chain" };
 
+  function catRow(l) {
+    var row = document.createElement("label");
+    row.className = "cat-row";
+    var cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = !!S.catalog.chosen[l.id] || !!l.required;
+    cb.disabled = !!l.required;
+    cb.onchange = function () {
+      if (cb.checked) S.catalog.chosen[l.id] = true; else delete S.catalog.chosen[l.id];
+    };
+    var body = document.createElement("div");
+    var badge = l.required ? '<span class="badge locked">always on</span>'
+      : l.cost === "approval" ? '<span class="badge approval">needs approval</span>'
+      : '<span class="badge free">free</span>';
+    var attr = (l.attribution && (l.attribution[S.catalog.tier] || l.attribution.global)) || "";
+    body.innerHTML = "<b>" + esc(l.label) + "</b>" + badge +
+      '<span class="info">' + esc(l.info || "") + "</span>" +
+      (attr ? '<span class="attr">Source: ' + esc(attr) + "</span>" : "");
+    row.appendChild(cb);
+    row.appendChild(body);
+    return row;
+  }
+
   function renderCatalog() {
     var box = $("#cat-list");
     box.innerHTML = "";
@@ -480,27 +503,23 @@
       var g = document.createElement("div");
       g.className = "cat-group";
       g.innerHTML = "<h3>" + esc(GROUP_LABELS[gid]) + "</h3>";
+      // group by named subgroup in first-appearance order (mirrors the viewer's panel)
+      var order = [], subMap = {};
       entries.forEach(function (l) {
-        var row = document.createElement("label");
-        row.className = "cat-row";
-        var cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.checked = !!S.catalog.chosen[l.id] || !!l.required;
-        cb.disabled = !!l.required;
-        cb.onchange = function () {
-          if (cb.checked) S.catalog.chosen[l.id] = true; else delete S.catalog.chosen[l.id];
-        };
-        var body = document.createElement("div");
-        var badge = l.required ? '<span class="badge locked">always on</span>'
-          : l.cost === "approval" ? '<span class="badge approval">needs approval</span>'
-          : '<span class="badge free">free</span>';
-        var attr = (l.attribution && (l.attribution[S.catalog.tier] || l.attribution.global)) || "";
-        body.innerHTML = "<b>" + esc(l.label) + "</b>" + badge +
-          '<span class="info">' + esc(l.info || "") + "</span>" +
-          (attr ? '<span class="attr">Source: ' + esc(attr) + "</span>" : "");
-        row.appendChild(cb);
-        row.appendChild(body);
-        g.appendChild(row);
+        if (l.subgroup) {
+          if (!subMap[l.subgroup]) { subMap[l.subgroup] = []; order.push({ sub: l.subgroup }); }
+          subMap[l.subgroup].push(l);
+        } else {
+          order.push({ item: l });
+        }
+      });
+      order.forEach(function (o) {
+        if (o.item) { g.appendChild(catRow(o.item)); return; }
+        var h = document.createElement("div");
+        h.className = "cat-sub";
+        h.textContent = o.sub;
+        g.appendChild(h);
+        subMap[o.sub].forEach(function (l) { g.appendChild(catRow(l)); });
       });
       box.appendChild(g);
     });
