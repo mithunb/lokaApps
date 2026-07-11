@@ -226,6 +226,54 @@
       "attribution": { "india": "DataMeet community, CC-BY 4.0" }
     },
     {
+      "id": "births",
+      "label": "Institutional births (NFHS-5)",
+      "info": "Share of births in a health facility, by district (NFHS-5, 2019–21). Joined to your districts.",
+      "tiers": ["india"],
+      "group": "people",
+      "subgroup": "District indicators (NFHS-5)",
+      "recipe": "nfhs_births",
+      "estSeconds": 40,
+      "cost": "free",
+      "attribution": { "india": "NFHS-5 (IIPS / MoHFW); district table via jvargh7" }
+    },
+    {
+      "id": "literacy",
+      "label": "Women's literacy (NFHS-5)",
+      "info": "Share of women 15–49 who are literate, by district (NFHS-5, 2019–21).",
+      "tiers": ["india"],
+      "group": "people",
+      "subgroup": "District indicators (NFHS-5)",
+      "recipe": "nfhs_literacy",
+      "estSeconds": 40,
+      "cost": "free",
+      "attribution": { "india": "NFHS-5 (IIPS / MoHFW); district table via jvargh7" }
+    },
+    {
+      "id": "cleanfuel",
+      "label": "Clean cooking fuel (NFHS-5)",
+      "info": "Households cooking with clean fuel, by district (NFHS-5, 2019–21) — an energy-poverty indicator.",
+      "tiers": ["india"],
+      "group": "people",
+      "subgroup": "District indicators (NFHS-5)",
+      "recipe": "nfhs_cleanfuel",
+      "estSeconds": 40,
+      "cost": "free",
+      "attribution": { "india": "NFHS-5 (IIPS / MoHFW); district table via jvargh7" }
+    },
+    {
+      "id": "stunting",
+      "label": "Child stunting (NFHS-5)",
+      "info": "Children under 5 who are stunted (low height-for-age), by district (NFHS-5, 2019–21). Lower is better.",
+      "tiers": ["india"],
+      "group": "people",
+      "subgroup": "District indicators (NFHS-5)",
+      "recipe": "nfhs_stunting",
+      "estSeconds": 40,
+      "cost": "free",
+      "attribution": { "india": "NFHS-5 (IIPS / MoHFW); district table via jvargh7" }
+    },
+    {
       "id": "buildings",
       "label": "Buildings",
       "info": "Building footprints from OpenStreetMap, streamed live from the global Protomaps tiles — zoom in to see them. No build time.",

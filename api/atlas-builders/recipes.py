@@ -10,6 +10,8 @@ bbox (padded [w,s,e,n]), clip (shapely box of bbox).
 """
 import json
 import os
+import re
+import unicodedata
 
 os.environ.setdefault("GDAL_DISABLE_READDIR_ON_OPEN", "EMPTY_DIR")
 os.environ.setdefault("CPL_VSIL_CURL_ALLOWED_EXTENSIONS", ".tif")
@@ -1005,6 +1007,103 @@ def roads_pmtiles(ctx):
     }]
 
 
+# ================================================================
+# District indicators (NFHS-5) — CSV joined by district to LGD boundaries
+#
+# A curated public dataset (NFHS-5 district factsheets, IIPS/MoHFW) bundled in
+# the repo as a compact table keyed by normalised state|district, joined to the
+# region's LGD district boundaries and drawn as a graduated choropleth. This is
+# the "pick a public indicator → instant choropleth of your districts" pattern.
+# ================================================================
+
+_NFHS = None
+
+
+def _load_nfhs():
+    global _NFHS
+    if _NFHS is None:
+        p = os.path.join(os.path.dirname(__file__), "data", "nfhs5_districts.json")
+        _NFHS = json.load(open(p))
+    return _NFHS
+
+
+def _dnorm(s):
+    s = unicodedata.normalize("NFKD", str(s or "")).encode("ascii", "ignore").decode().lower()
+    s = re.sub(r"\b(district|dist|zila|zilla)\b", "", s)
+    return re.sub(r"[^a-z0-9]+", "", s)
+
+
+# short key -> (label, unit, breaks, colour ramp light→dark)
+_GREEN = ["#eef2e3", "#c9d6a8", "#9fb673", "#6f8f4a", "#4a5a33"]
+_RUST = ["#f2e3d6", "#e0b48f", "#cf8a5a", "#b25e30", "#7c3616"]
+NFHS_LAYERS = {
+    "births": ("Institutional births", "%", [50, 70, 85, 95], _GREEN,
+               "Share of births in a health facility (NFHS-5). Higher is better."),
+    "literacy": ("Women who are literate", "%", [50, 60, 70, 80], _GREEN,
+                 "Share of women age 15–49 who are literate (NFHS-5). Higher is better."),
+    "cleanfuel": ("Households using clean cooking fuel", "%", [25, 45, 65, 85], _GREEN,
+                  "Households cooking with clean fuel (NFHS-5). Higher is better."),
+    "stunting": ("Child stunting (under 5)", "%", [25, 32, 38, 45], _RUST,
+                 "Children under 5 who are stunted — low height-for-age (NFHS-5). Lower is better."),
+}
+
+
+def _nfhs_choropleth(ctx, key):
+    label, unit, breaks, colors, info = NFHS_LAYERS[key]
+    data = _load_nfhs()
+    progress(key, 8, "fetching district boundaries")
+    path = fetch_cached(R2 + "admin/districts/LGD_Districts.geojson", ctx["cache"], step=key)
+    gj = json.load(open(path))
+    sel = ctx["sel"]
+    feats = []
+    have = 0
+    for f in gj["features"]:
+        g = shape(f["geometry"]).buffer(0)
+        inter = g.intersection(sel)
+        if inter.is_empty or inter.area / max(g.area, 1e-12) < 0.5:
+            continue
+        p = f["properties"]
+        st = str(p.get("stname") or "").strip()
+        dt = str(p.get("dtname") or "").strip()
+        val = (data.get(_dnorm(st) + "|" + _dnorm(dt)) or {}).get(key)
+        props = {"name": dt.title(), "state": st.title()}
+        if val is not None:
+            props["value"] = val
+            have += 1
+        feats.append({"type": "Feature", "properties": props,
+                      "geometry": mapping(g.simplify(0.0009, preserve_topology=True))})
+    progress(key, 90, f"{have} districts with data")
+    if not have:
+        warn(f"{label}: no NFHS-5 data for these districts — layer omitted")
+        return []
+    step = ["step", ["get", "value"], colors[0]]
+    for i, b in enumerate(breaks):
+        step += [b, colors[i + 1]]
+    legend = [{"color": colors[0], "label": f"< {breaks[0]}{unit}"}]
+    for i in range(len(breaks) - 1):
+        legend.append({"color": colors[i + 1], "label": f"{breaks[i]}–{breaks[i + 1]}{unit}"})
+    legend.append({"color": colors[-1], "label": f"> {breaks[-1]}{unit}"})
+    legend.append({"color": "#e2ded6", "label": "No survey data"})
+    write_geojson(ctx["out"], key + ".geojson", feats)
+    return [{
+        "id": key, "group": "people", "subgroup": "District indicators (NFHS-5)",
+        "type": "fill", "source": key + ".geojson", "label": label, "default": False,
+        "paint": {"fillColor": ["case", ["has", "value"], step, "#e2ded6"],
+                  "fillOpacity": 0.72, "outlineColor": "#7a6f5c", "outlineWidth": 0.6},
+        "label_text": {"property": "name", "size": 11, "color": "#2b2723", "haloColor": "#ffffff",
+                       "haloWidth": 1.6, "minzoom": 7},
+        "legend": legend, "info": info,
+        "popup": {"title": "name", "subtitleProperty": "state",
+                  "fields": [{"label": label, "property": "value", "suffix": unit}]},
+    }]
+
+
+def nfhs_births(ctx): return _nfhs_choropleth(ctx, "births")
+def nfhs_literacy(ctx): return _nfhs_choropleth(ctx, "literacy")
+def nfhs_cleanfuel(ctx): return _nfhs_choropleth(ctx, "cleanfuel")
+def nfhs_stunting(ctx): return _nfhs_choropleth(ctx, "stunting")
+
+
 RECIPES = {
     "admin": admin,
     "subadmin": subadmin,
@@ -1027,4 +1126,8 @@ RECIPES = {
     "constituencies_datameet": constituencies_datameet,
     "buildings_pmtiles": buildings_pmtiles,
     "roads_pmtiles": roads_pmtiles,
+    "nfhs_births": nfhs_births,
+    "nfhs_literacy": nfhs_literacy,
+    "nfhs_cleanfuel": nfhs_cleanfuel,
+    "nfhs_stunting": nfhs_stunting,
 }
