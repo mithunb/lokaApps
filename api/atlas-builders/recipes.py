@@ -965,6 +965,46 @@ def constituencies_datameet(ctx):
     }]
 
 
+# ================================================================
+# Detailed OpenStreetMap vector tiles (Protomaps global PMTiles)
+#
+# Pure-stanza recipes (no build, no stored data): the viewer reads the region's
+# tiles straight from the global Protomaps OpenStreetMap PMTiles over HTTP range
+# requests. Works for any region worldwide, instantly, at zero storage cost.
+# ================================================================
+
+PROTOMAPS = "https://data.source.coop/protomaps/openstreetmap/tiles/v3.pmtiles"
+OSM_PM_ATTR = "© OpenStreetMap contributors, © Protomaps"
+
+
+def buildings_pmtiles(ctx):
+    return [{
+        "id": "buildings", "group": "base", "type": "pmtiles",
+        "label": "Buildings", "default": False,
+        "pmtiles": PROTOMAPS, "sourceLayer": "buildings", "render": "fill", "minzoom": 13,
+        "paint": {"fill-color": "#b3a595", "fill-opacity": 0.55, "fill-outline-color": "#8f8271"},
+        "legend": [{"color": "#b3a595", "label": "Building footprint"}],
+        "info": "Building footprints from OpenStreetMap — zoom in to see them (Protomaps global tiles).",
+        "attribution": OSM_PM_ATTR,
+    }]
+
+
+def roads_pmtiles(ctx):
+    width = ["interpolate", ["linear"], ["zoom"],
+             9, ["match", ["get", "pmap:kind"], "highway", 1.4, "major_road", 1.0, 0.4],
+             16, ["match", ["get", "pmap:kind"], "highway", 6, "major_road", 4,
+                  "medium_road", 2.6, "minor_road", 1.4, 0.8]]
+    return [{
+        "id": "roads", "group": "base", "type": "pmtiles",
+        "label": "Roads & streets", "default": False,
+        "pmtiles": PROTOMAPS, "sourceLayer": "roads", "render": "line", "minzoom": 9,
+        "paint": {"line-color": "#8a7d6d", "line-width": width, "line-opacity": 0.85},
+        "legend": [{"color": "#8a7d6d", "label": "Road / street", "shape": "line"}],
+        "info": "Road and street network from OpenStreetMap (Protomaps global tiles).",
+        "attribution": OSM_PM_ATTR,
+    }]
+
+
 RECIPES = {
     "admin": admin,
     "subadmin": subadmin,
@@ -985,4 +1025,6 @@ RECIPES = {
     "health_hot": health_hot,
     "education_hot": education_hot,
     "constituencies_datameet": constituencies_datameet,
+    "buildings_pmtiles": buildings_pmtiles,
+    "roads_pmtiles": roads_pmtiles,
 }

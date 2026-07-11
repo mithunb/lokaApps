@@ -224,6 +224,28 @@
       "estSeconds": 40,
       "cost": "free",
       "attribution": { "india": "DataMeet community, CC-BY 4.0" }
+    },
+    {
+      "id": "buildings",
+      "label": "Buildings",
+      "info": "Building footprints from OpenStreetMap, streamed live from the global Protomaps tiles — zoom in to see them. No build time.",
+      "tiers": ["global", "india"],
+      "group": "base",
+      "recipe": "buildings_pmtiles",
+      "estSeconds": 1,
+      "cost": "free",
+      "attribution": { "global": "© OpenStreetMap contributors, © Protomaps, ODbL" }
+    },
+    {
+      "id": "roads",
+      "label": "Roads & streets",
+      "info": "The road and street network from OpenStreetMap, streamed live from the global Protomaps tiles. No build time.",
+      "tiers": ["global", "india"],
+      "group": "base",
+      "recipe": "roads_pmtiles",
+      "estSeconds": 1,
+      "cost": "free",
+      "attribution": { "global": "© OpenStreetMap contributors, © Protomaps, ODbL" }
     }
   ]
 }

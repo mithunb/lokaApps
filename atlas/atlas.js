@@ -335,12 +335,43 @@
         else if (L.type === "image") addImage(L);
         else if (L.type === "raster") addRaster(L);
         else if (L.type === "marker") addMarker(L);
+        else if (L.type === "pmtiles") addPmtiles(L);
       });
     });
   }
   function on(L) { return L.default !== false; }
   function vis(L) { return on(L) ? "visible" : "none"; }
   function srcId(L) { return "src-" + L.id; }
+
+  // Vector tiles read straight from a remote PMTiles archive over HTTP range
+  // requests (e.g. the global Protomaps OpenStreetMap build) — no data is stored
+  // per instance. Layers sharing one archive URL share one vector source.
+  var pmSources = {};
+  function ensurePmtilesProtocol() {
+    if (window._lokaPmReg) return true;
+    if (!window.pmtiles || !window.maplibregl || !maplibregl.addProtocol) return false;
+    maplibregl.addProtocol("pmtiles", new pmtiles.Protocol().tile);
+    window._lokaPmReg = true;
+    return true;
+  }
+  function addPmtiles(L) {
+    L._ids = [];
+    if (!ensurePmtilesProtocol()) return; // pmtiles lib missing — skip gracefully
+    var url = L.pmtiles;
+    var sid = pmSources[url];
+    if (!sid) {
+      sid = "pmsrc-" + Object.keys(pmSources).length;
+      pmSources[url] = sid;
+      map.addSource(sid, { type: "vector", url: "pmtiles://" + url, attribution: L.attribution || "" });
+    }
+    var lid = L.id + "-pm";
+    var def = { id: lid, source: sid, "source-layer": L.sourceLayer, type: L.render || "fill",
+                layout: { visibility: vis(L) }, paint: L.paint || {} };
+    if (L.minzoom != null) def.minzoom = L.minzoom;
+    map.addLayer(def);
+    L._ids = [lid];
+    refreshLegend(L);
+  }
 
   function addGeoSource(L, done) {
     var gj = DATA[L.id];
