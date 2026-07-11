@@ -168,6 +168,23 @@
     .dir-card b { font-family:'Figtree',sans-serif; display:block; }
     .dir-card span { font-size:.85rem; color:var(--color-text-secondary); }
 
+    #my-atlases { margin:1rem 0 0; }
+    .mine { display:flex; flex-direction:column; gap:.6rem; margin-top:1rem; }
+    .mine-item { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; background:var(--color-surface);
+      border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:.85rem 1rem; }
+    .mine-main { flex:1 1 12rem; min-width:0; }
+    .mine-main b { font-family:'Figtree',sans-serif; display:block; }
+    .mine-main span { font-size:.83rem; color:var(--color-text-secondary); }
+    .mine-badge { font-family:'Figtree',sans-serif; font-size:.66rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+      padding:.12rem .45rem; border-radius:4px; background:var(--color-moss-tint); color:var(--color-canopy); }
+    .mine-badge.draft { background:var(--color-rust-tint); color:var(--color-rust-deep); }
+    .mine-actions { display:flex; gap:.4rem; flex-wrap:wrap; }
+    .mine-actions button, .mine-actions a { font:inherit; font-size:.83rem; font-weight:600; font-family:'Figtree',sans-serif;
+      padding:.35rem .6rem; border-radius:4px; border:1px solid var(--color-border); background:var(--color-surface);
+      color:var(--color-text-primary); cursor:pointer; text-decoration:none; }
+    .mine-actions button:hover, .mine-actions a:hover { border-color:var(--color-moss); color:var(--color-canopy); }
+    .mine-actions .danger:hover { border-color:var(--color-rust); color:var(--color-rust-deep); }
+
     .msg { padding:.7rem .9rem; border-radius:4px; font-size:.9rem; margin-top:1rem; }
     .msg.err { background:var(--color-rust-tint); color:var(--color-rust-deep); }
     .msg.ok { background:var(--color-moss-tint); color:var(--color-canopy); }
@@ -199,6 +216,13 @@
     <div id="resume-local" hidden></div>
     <div id="resume-drafts"></div>
 
+    <section id="my-atlases" hidden>
+      <h2>Your atlases</h2>
+      <p class="hint">Atlases you've created. Edit the details, change the layers, or open them.</p>
+      <div id="my-atlases-list"></div>
+      <p class="hint" id="my-atlases-new" style="margin-top:1rem">Or start a new one below.</p>
+    </section>
+
     <nav class="stepper" aria-label="Steps">
       <span class="stp" data-step="1"><em>1</em> Org &amp; branding</span>
       <span class="stp" data-step="2"><em>2</em> Geography</span>
@@ -209,6 +233,7 @@
 
     <!-- Step 1 -->
     <section class="panel" id="step-1">
+      <div id="edit-banner" class="msg ok" hidden></div>
       <h2>Your organisation &amp; atlas</h2>
       <div class="grid2">
         <label class="f">Atlas title
@@ -257,6 +282,7 @@
     <!-- Step 2 -->
     <section class="panel" id="step-2" hidden>
       <h2>Where is your region?</h2>
+      <div id="geo-current" class="msg" hidden></div>
       <div class="grid2">
         <label class="f">Country
           <select id="f-country"><option value="">Choose a country…</option></select>

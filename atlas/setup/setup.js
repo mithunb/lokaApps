@@ -23,6 +23,11 @@
     build: null,           // {slug, jobId, editToken, viewKey, status}
     session: null,
     draftId: null,
+    editSlug: null,        // editing an existing atlas (rebuild / details)
+    editMode: null,        // 'details' | 'rebuild'
+    editInst: null,        // the instance being edited
+    regionKept: false,     // rebuild: user kept the current region
+    removeLogo: false,
   };
 
   function api(path, opts) {
@@ -138,6 +143,7 @@
   $("#vis-private").onclick = function () { setVisibility("private"); };
 
   $("#next-1").onclick = function () {
+    if (S.editMode === "details") { saveDetails(); return; }
     msg(1, "");
     if (!$("#f-title").value.trim()) return msg(1, "Give your atlas a title first.");
     var slug = $("#f-slug").value.trim();
@@ -425,6 +431,11 @@
   $("#next-2").onclick = function () {
     msg(2, "");
     var sel = selection();
+    if (S.editMode === "rebuild" && !sel.length) {
+      // no new pick → keep the atlas's current region, just change layers
+      S.regionKept = true; show(3); loadCatalog(); return;
+    }
+    if (S.editMode === "rebuild") S.regionKept = false;
     if (!sel.length) return msg(2, "Pick at least one area first.");
     var state = selectionSizeState();
     if (state === "blocked") {
@@ -527,7 +538,32 @@
     };
   }
 
+  function rebuildInstance() {
+    show(4);
+    $("#build-title").textContent = "Rebuilding your atlas…";
+    $("#prog-fill").style.width = "3%";
+    $("#prog-msg").textContent = "Applying your changes…";
+    $("#preview-wrap").hidden = true;
+    $("#next-4").hidden = true;
+    $("#back-4").hidden = true;
+    msg(4, "");
+    var body = { layers: Object.keys(S.catalog.chosen) };
+    if (!S.regionKept) {
+      var sel = selection();
+      if (sel.length) body.region = { iso3: S.geo.iso3, level: sel[0].level, shapeIDs: sel.map(function (f) { return f.id; }) };
+    }
+    api("instances/" + S.editSlug + "/rebuild", { method: "POST", body: body }).then(function (r) {
+      S.build = { slug: r.slug, jobId: r.jobId };
+      S._rebuildWasPublished = r.wasPublished;
+      pollJob(r.jobId);
+    }).catch(function (e) {
+      show(3);
+      msg(3, esc(errMsg(e)));
+    });
+  }
+
   function createInstance() {
+    if (S.editMode === "rebuild") { rebuildInstance(); return; }
     show(4);
     $("#build-title").textContent = "Building your atlas…";
     $("#prog-fill").style.width = "3%";
@@ -626,16 +662,28 @@
     return u;
   }
 
+  var CHECK_SVG = '<svg class="done-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+
   function onBuilt() {
     $("#prog-fill").style.width = "100%";
     $("#prog-bar").classList.remove("working");
     $("#prog-layer").hidden = true;
-    $("#build-title").innerHTML =
-      '<svg class="done-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>' +
-      "Your atlas is ready";
-    $("#prog-msg").textContent = "Built. Explore the preview below, then publish.";
     $("#preview-wrap").hidden = false;
     $("#preview-frame").src = previewUrl();
+
+    // Rebuild of a published atlas: changes are already live — confirm and return.
+    if (S.editMode === "rebuild" && S._rebuildWasPublished) {
+      $("#build-title").innerHTML = CHECK_SVG + "Your changes are live";
+      $("#prog-msg").textContent = "Your published atlas has been updated with the new layers.";
+      $("#next-4").hidden = true;
+      $("#back-4").hidden = true;
+      msg(4, 'The preview below shows the updated atlas. <a href="#" id="rb-done">← Back to your atlases</a>', "ok");
+      var d = document.getElementById("rb-done");
+      if (d) d.onclick = function (ev) { ev.preventDefault(); exitEdit(); refreshMe(); window.scrollTo({ top: 0 }); };
+      return;
+    }
+    $("#build-title").innerHTML = CHECK_SVG + (S.editMode === "rebuild" ? "Rebuilt" : "Your atlas is ready");
+    $("#prog-msg").textContent = "Built. Explore the preview below, then publish.";
     $("#next-4").hidden = false;
     $("#back-4").hidden = false;
   }
@@ -782,6 +830,7 @@
           api("auth/me").then(function (me) {
             S.session = me;
             $("#nav-auth").textContent = me.email;
+            renderMyAtlases();
             endAuth(true);
           }).catch(function () {});
         }, 3000);
@@ -904,12 +953,168 @@
     }).catch(function () {});
   }
 
+  /* ================= edit an existing atlas ================= */
+
+  function refreshMe() {
+    return api("auth/me").then(function (me) {
+      S.session = me;
+      $("#nav-auth").textContent = me.email;
+      renderMyAtlases();
+      return me;
+    }).catch(function () {});
+  }
+
+  function renderMyAtlases() {
+    var sec = $("#my-atlases"), list = $("#my-atlases-list");
+    var mine = (S.session && S.session.instances) || [];
+    if (!mine.length) { sec.hidden = true; return; }
+    sec.hidden = false;
+    list.className = "mine";
+    list.innerHTML = "";
+    mine.forEach(function (i) {
+      var row = document.createElement("div");
+      row.className = "mine-item";
+      var label = i.status === "published" ? (i.visibility === "private" ? "Private" : "Published")
+        : i.status === "building" ? "Building…" : i.status === "pending-approval" ? "Awaiting approval"
+        : i.status === "built" ? "Unpublished" : i.status;
+      row.innerHTML = '<div class="mine-main"><b>' + esc(i.title || i.slug) + "</b><span>" +
+        esc(i.regionLabel || "") + '</span></div><span class="mine-badge ' +
+        (i.status === "published" ? "" : "draft") + '">' + esc(label) + "</span>";
+      var actions = document.createElement("div");
+      actions.className = "mine-actions";
+      if (i.status === "published" && i.visibility !== "private") {
+        var open = document.createElement("a");
+        open.href = "../a/" + encodeURIComponent(i.slug);
+        open.target = "_blank"; open.rel = "noopener"; open.textContent = "Open";
+        actions.appendChild(open);
+      }
+      var busy = i.status === "building" || i.status === "pending-approval";
+      var edit = document.createElement("button"); edit.textContent = "Edit details";
+      edit.disabled = busy; edit.onclick = function () { editDetails(i.slug); };
+      var reb = document.createElement("button"); reb.textContent = "Change layers";
+      reb.disabled = busy; reb.onclick = function () { changeLayers(i.slug); };
+      var del = document.createElement("button"); del.className = "danger"; del.textContent = "Delete";
+      del.onclick = function () { deleteAtlas(i.slug, i.title); };
+      actions.appendChild(edit); actions.appendChild(reb); actions.appendChild(del);
+      row.appendChild(actions);
+      list.appendChild(row);
+    });
+  }
+
+  function fillDetails(inst) {
+    var bnd = inst.branding || {};
+    $("#f-title").value = inst.title || "";
+    $("#f-slug").value = inst.slug || "";
+    $("#f-subtitle").value = inst.subtitle || "";
+    $("#f-org").value = inst.org || bnd.orgName || "";
+    $("#f-orgurl").value = bnd.orgUrl || "";
+    $("#f-about").value = inst.about || "";
+    $("#f-footer").value = bnd.footerLine || "";
+    S.logoData = null; S.removeLogo = false;
+    var lh = $("#logo-hint");
+    lh.className = "hint";
+    lh.textContent = bnd.hasLogo ? "current logo kept — choose a file to replace it" : "";
+    setVisibility(inst.visibility || "public");
+    $("#f-slug").disabled = true; // the slug is the atlas URL — fixed after creation
+  }
+
+  function editDetails(slug) {
+    api("instances/" + slug).then(function (inst) {
+      if (!inst.canEdit) { alert("You can't edit this atlas."); return; }
+      S.editSlug = slug; S.editMode = "details"; S.editInst = inst;
+      fillDetails(inst);
+      var eb = $("#edit-banner"); eb.hidden = false;
+      eb.innerHTML = "Editing <b>" + esc(inst.title) + "</b> — details, branding &amp; visibility. " +
+        '<a href="#" id="edit-cancel">Cancel</a>';
+      $("#edit-cancel").onclick = function (ev) { ev.preventDefault(); exitEdit(); };
+      $("#next-1").textContent = "Save changes";
+      $("#my-atlases").hidden = true;
+      $(".stepper").hidden = true;
+      show(1);
+      window.scrollTo({ top: 0 });
+    }).catch(function (e) { alert(errMsg(e)); });
+  }
+
+  function saveDetails() {
+    msg(1, "");
+    if (!$("#f-title").value.trim()) return msg(1, "Give your atlas a title first.");
+    var body = {
+      title: $("#f-title").value.trim(),
+      subtitle: $("#f-subtitle").value.trim(),
+      about: $("#f-about").value.trim(),
+      org: $("#f-org").value.trim(),
+      visibility: S.visibility,
+      branding: {
+        orgName: $("#f-org").value.trim(),
+        orgUrl: $("#f-orgurl").value.trim() || undefined,
+        footerLine: $("#f-footer").value.trim() || undefined,
+        logoData: S.logoData || undefined,
+        removeLogo: S.removeLogo || undefined,
+      },
+    };
+    $("#next-1").disabled = true;
+    api("instances/" + S.editSlug + "/details", { method: "POST", body: body })
+      .then(function () { $("#next-1").disabled = false; exitEdit(); refreshMe(); window.scrollTo({ top: 0 }); })
+      .catch(function (e) {
+        $("#next-1").disabled = false;
+        if (e.needsAuth) { signIn("Sign in to edit this atlas.").then(function (ok) { if (ok) saveDetails(); }); return; }
+        msg(1, esc(errMsg(e)));
+      });
+  }
+
+  function changeLayers(slug) {
+    api("instances/" + slug).then(function (inst) {
+      if (!inst.canEdit) { alert("You can't edit this atlas."); return; }
+      S.editSlug = slug; S.editMode = "rebuild"; S.editInst = inst; S.regionKept = true;
+      S.geo.iso3 = inst.region.iso3; S.geo.selected = {};
+      S.catalog = { tier: "", layers: [], chosen: {} };
+      (inst.layers || []).forEach(function (id) { S.catalog.chosen[id] = true; });
+      $("#my-atlases").hidden = true;
+      $(".stepper").hidden = false;
+      var gc = $("#geo-current"); gc.hidden = false;
+      gc.innerHTML = "Editing <b>" + esc(inst.title) + "</b>. Current region: <b>" + esc(inst.regionLabel || "") +
+        "</b>. Keep it and change layers on the next step, or pick a new region below. " +
+        '<a href="#" id="rebuild-cancel">Cancel</a>';
+      $("#rebuild-cancel").onclick = function (ev) { ev.preventDefault(); exitEdit(); };
+      if ($("#f-country").options.length < 2) initCountries();
+      $("#f-country").value = "";
+      show(2);
+      window.scrollTo({ top: 0 });
+    }).catch(function (e) { alert(errMsg(e)); });
+  }
+
+  function deleteAtlas(slug, title) {
+    if (!confirm("Delete “" + (title || slug) + "”? This removes the atlas and its data, and can't be undone.")) return;
+    api("instances/" + slug, { method: "DELETE" })
+      .then(function () { refreshMe(); })
+      .catch(function (e) { alert(errMsg(e)); });
+  }
+
+  function exitEdit() {
+    S.editSlug = null; S.editMode = null; S.editInst = null; S.regionKept = false;
+    $("#edit-banner").hidden = true;
+    $("#geo-current").hidden = true;
+    $("#next-1").textContent = "Choose layers →";
+    $("#f-slug").disabled = false;
+    $(".stepper").hidden = false;
+    ["f-title", "f-slug", "f-subtitle", "f-org", "f-orgurl", "f-about", "f-footer"].forEach(function (id) { $("#" + id).value = ""; });
+    S.logoData = null; S.removeLogo = false; S.slugTouched = false; S._rebuildWasPublished = false;
+    $("#logo-hint").textContent = "";
+    S.geo = { iso3: "", level: 1, features: [], selected: {}, viewLevel: 1, crumbs: [] };
+    S.catalog = { tier: "", layers: [], chosen: {} };
+    setVisibility("public");
+    msg(1, ""); msg(4, "");
+    renderMyAtlases();
+    show(1);
+  }
+
   /* ================= init ================= */
 
   api("auth/me").then(function (me) {
     S.session = me;
     $("#nav-auth").textContent = me.email;
     loadDrafts();
+    renderMyAtlases();
   }).catch(function () {});
   loadDirectory();
   show(1);

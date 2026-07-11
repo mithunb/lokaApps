@@ -421,8 +421,16 @@ function page(title, body) {
 setJobDoneHook((job) => {
   const inst = reg.getInstance(job.slug);
   if (!inst) return;
+  const keepPublished = inst.rebuildKeepPublished; // set when rebuilding an already-published atlas
   if (job.status === 'done') {
-    reg.updateInstance(job.slug, { status: 'built', sizeBytes: job.sizeBytes || 0, builtAt: Date.now() });
+    reg.updateInstance(job.slug, {
+      status: keepPublished ? 'published' : 'built',
+      sizeBytes: job.sizeBytes || 0, builtAt: Date.now(), rebuildKeepPublished: undefined,
+    });
+  } else if (keepPublished) {
+    // a published rebuild failed — the build only swaps on success, so the old
+    // dataset is untouched and still live; keep it published.
+    reg.updateInstance(job.slug, { status: 'published', failReason: job.message, rebuildKeepPublished: undefined });
   } else {
     reg.updateInstance(job.slug, { status: 'failed', failReason: job.message });
   }
@@ -526,6 +534,181 @@ router.post('/instances/:slug/claim', (req, res) => {
   res.json({ ok: true });
 });
 
+/* ---------- edit: details (no rebuild) + rebuild (layers/region) ---------- */
+
+function datasetDirFor(inst) {
+  const root = inst.visibility === 'private' ? PRIVATE_ROOT : DATASETS_ROOT;
+  return path.join(root, inst.slug);
+}
+
+// Keep the viewer's manifest.json in step with edited details — the viewer reads
+// title/subtitle/about/branding from there, not from the registry.
+function rewriteManifest(inst) {
+  const mf = path.join(datasetDirFor(inst), 'manifest.json');
+  let m;
+  try { m = JSON.parse(fs.readFileSync(mf, 'utf8')); } catch { return false; }
+  m.title = inst.title;
+  m.subtitle = inst.subtitle || '';
+  m.about = inst.about || '';
+  const b = inst.branding || {};
+  const bset = {};
+  if (b.orgName) bset.orgName = b.orgName;
+  if (b.orgUrl) bset.orgUrl = b.orgUrl;
+  if (b.footerLine) bset.footerLine = b.footerLine;
+  if (b.hasLogo) bset.logo = 'branding-logo.png';
+  if (Object.keys(bset).length) m.branding = bset; else delete m.branding;
+  try {
+    const tmp = mf + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(m, null, 1));
+    fs.renameSync(tmp, mf);
+    return true;
+  } catch { return false; }
+}
+
+// Fast edit — text, branding, logo and public/private — with no rebuild.
+router.post('/instances/:slug/details', (req, res) => {
+  const inst = reg.getInstance(String(req.params.slug));
+  if (!inst) return res.status(404).json({ error: 'not found' });
+  if (!callerCanEdit(req, inst)) return res.status(403).json({ error: 'not allowed' });
+  const b = req.body || {};
+  const session = auth.sessionFromReq(req);
+  const has = (k) => Object.prototype.hasOwnProperty.call(b, k);
+  const curB = inst.branding || {};
+
+  // Fields absent from the body are preserved (so a partial call can't wipe them);
+  // the wizard always sends the full form, so it behaves as a straight edit.
+  const title = has('title') ? cap(b.title, 80) : inst.title;
+  if (!title) return res.status(400).json({ error: 'title is required' });
+  const org = has('org') ? cap(b.org, 60) : (inst.org || '');
+  const bb = has('branding') ? (b.branding || {}) : {};
+  const hasB = (k) => has('branding') && Object.prototype.hasOwnProperty.call(bb, k);
+  const branding = {
+    orgName: hasB('orgName') ? (cap(bb.orgName, 60) || org) : (curB.orgName || org),
+    orgUrl: hasB('orgUrl') ? (/^https:\/\/[^\s]+$/.test(bb.orgUrl || '') ? String(bb.orgUrl).slice(0, 200) : '') : (curB.orgUrl || ''),
+    footerLine: hasB('footerLine') ? cap(bb.footerLine, 160) : (curB.footerLine || ''),
+    hasLogo: !!curB.hasLogo,
+  };
+
+  const patch = {
+    title,
+    subtitle: has('subtitle') ? cap(b.subtitle, 160) : (inst.subtitle || ''),
+    about: has('about') ? cap(b.about, 500) : (inst.about || ''),
+    org, branding,
+  };
+
+  // logo add / replace / remove (written straight into the current dataset dir)
+  const curDir = datasetDirFor(inst);
+  if (bb.removeLogo) {
+    try { fs.rmSync(path.join(curDir, 'branding-logo.png'), { force: true }); } catch { /* ignore */ }
+    branding.hasLogo = false;
+  } else if (bb.logoData) {
+    const valid = validLogo(bb.logoData);
+    if (!valid) return res.status(400).json({ error: 'logo must be a PNG under 200 KB' });
+    try {
+      fs.writeFileSync(path.join(curDir, 'branding-logo.png'), Buffer.from(valid.split(',')[1], 'base64'));
+      branding.hasLogo = true;
+    } catch { return res.status(500).json({ error: 'could not save the logo' }); }
+  }
+
+  // visibility change moves the dataset between the web root and the private root
+  let viewKey;
+  const newVis = b.visibility === 'private' ? 'private' : b.visibility === 'public' ? 'public' : inst.visibility;
+  if (newVis !== inst.visibility) {
+    if (newVis === 'private' && !session) return res.status(401).json({ error: 'making an atlas private needs a verified email', needsAuth: true });
+    const fromDir = datasetDirFor(inst);
+    const toRoot = newVis === 'private' ? PRIVATE_ROOT : DATASETS_ROOT;
+    const toDir = path.join(toRoot, inst.slug);
+    try {
+      fs.mkdirSync(toRoot, { recursive: true });
+      if (fs.existsSync(fromDir)) fs.renameSync(fromDir, toDir);
+    } catch { return res.status(500).json({ error: 'could not change who can see this atlas' }); }
+    patch.visibility = newVis;
+    if (newVis === 'private') { viewKey = reg.newToken(); patch.viewKeyHash = reg.hashToken(viewKey); }
+    else patch.viewKeyHash = null;
+  }
+
+  const updated = reg.updateInstance(inst.slug, patch);
+  rewriteManifest(updated);
+  res.json({ ok: true, visibility: updated.visibility, viewKey: viewKey || undefined });
+});
+
+// Rebuild — change layers and/or region, then rebuild into the same slug. The
+// build swaps the dataset atomically on success, so a published atlas has no
+// downtime; a published atlas stays published (see the job-done hook).
+router.post('/instances/:slug/rebuild', async (req, res) => {
+  const inst = reg.getInstance(String(req.params.slug));
+  if (!inst) return res.status(404).json({ error: 'not found' });
+  if (!callerCanEdit(req, inst)) return res.status(403).json({ error: 'not allowed' });
+  if (inst.status === 'building' || inst.status === 'pending-approval') {
+    return res.status(409).json({ error: 'a build is already running for this atlas' });
+  }
+  const b = req.body || {};
+  const r = b.region;
+  const useR = (r && r.iso3 && Array.isArray(r.shapeIDs) && r.shapeIDs.length)
+    ? { iso3: String(r.iso3).toUpperCase(), level: Number(r.level) || 1, shapeIDs: r.shapeIDs.map(String).slice(0, 100) }
+    : { iso3: inst.region.iso3, level: inst.region.level, shapeIDs: inst.region.shapeIDs };
+  if (!/^[A-Z]{3}$/.test(useR.iso3) || !useR.shapeIDs.length) return res.status(400).json({ error: 'region is required' });
+
+  let regionDoc;
+  try { regionDoc = await loadAdmin(useR.iso3, useR.level); } catch (e) { return res.status(502).json({ error: 'boundary source unavailable: ' + e.message }); }
+  const picked = regionDoc.features.filter((f) => useR.shapeIDs.includes(f.properties.id));
+  if (!picked.length) return res.status(400).json({ error: 'no matching boundary units' });
+  let w = 180, s = 90, e = -180, n = -90;
+  for (const f of picked) { w = Math.min(w, f.bbox[0]); s = Math.min(s, f.bbox[1]); e = Math.max(e, f.bbox[2]); n = Math.max(n, f.bbox[3]); }
+  const bbox = [w, s, e, n];
+  const areaDeg2 = (e - w) * (n - s);
+  if (areaDeg2 > HARD_AREA_DEG2) return res.status(400).json({ error: 'That region is larger than a single atlas can cover.', tooLarge: true });
+
+  const tier = tierOf(useR.iso3);
+  const allowed = new Map(layersForTier(tier).map((l) => [l.id, l]));
+  let layerIds = (Array.isArray(b.layers) ? b.layers.map(String) : inst.layers).filter((id) => allowed.has(id));
+  for (const l of allowed.values()) if (l.required && !layerIds.includes(l.id)) layerIds.unshift(l.id);
+  if (!layerIds.length) return res.status(400).json({ error: 'pick at least one layer' });
+
+  // v1: a rebuild that would newly need approval (big region / heavy layer) is
+  // refused with guidance — keeps the live atlas untouched.
+  const heavy = layerIds.some((id) => allowed.get(id).cost === 'approval');
+  if (heavy || areaDeg2 > FREE_AREA_DEG2) {
+    return res.status(400).json({
+      error: 'This change is bigger than the free tier (a large region or a heavy layer) and needs a quick approval — email mithun@socratus.org and we’ll set it up.',
+      approvalNeeded: true,
+    });
+  }
+
+  const shapeNames = picked.map((f) => f.properties.name);
+  const regionLabel = shapeNames.slice(0, 3).join(' · ') + (shapeNames.length > 3 ? ` +${shapeNames.length - 3}` : '');
+
+  // preserve org branding + logo across the rebuild (read the current logo back
+  // into the spec so the builder re-emits it)
+  const branding = { orgName: inst.branding && inst.branding.orgName, orgUrl: inst.branding && inst.branding.orgUrl, footerLine: inst.branding && inst.branding.footerLine };
+  const logoPath = path.join(datasetDirFor(inst), 'branding-logo.png');
+  if (inst.branding && inst.branding.hasLogo && fs.existsSync(logoPath)) {
+    try { branding.logoData = 'data:image/png;base64,' + fs.readFileSync(logoPath).toString('base64'); } catch { /* ignore */ }
+  }
+
+  const spec = {
+    slug: inst.slug, visibility: inst.visibility, tier,
+    title: inst.title, subtitle: inst.subtitle, about: inst.about, branding,
+    region: {
+      iso3: useR.iso3, level: useR.level, shapeIDs: useR.shapeIDs, shapeNames, bbox,
+      simplifiedFile: path.join(GEOCACHE_DIR, `${useR.iso3}-ADM${useR.level}.json`),
+      fullResUrl: regionDoc.fullResUrl,
+    },
+    layers: layerIds,
+  };
+
+  const wasPublished = inst.status === 'published';
+  reg.updateInstance(inst.slug, {
+    tier, region: { iso3: useR.iso3, level: useR.level, shapeIDs: useR.shapeIDs, shapeNames, bbox, areaDeg2 },
+    regionLabel, layers: layerIds, spec,
+    rebuildKeepPublished: wasPublished || undefined,
+    status: wasPublished ? 'published' : 'building',
+  });
+  const jobId = enqueueBuild(spec);
+  reg.updateInstance(inst.slug, { jobId });
+  res.json({ ok: true, jobId, slug: inst.slug, wasPublished });
+});
+
 router.delete('/instances/:slug', (req, res) => {
   const inst = reg.getInstance(String(req.params.slug));
   if (!inst) return res.status(404).json({ error: 'not found' });
@@ -578,10 +761,14 @@ router.get('/auth/me', (req, res) => {
   const session = auth.sessionFromReq(req);
   if (!session) return res.status(401).json({ error: 'not signed in' });
   const acc = reg.getAccount(session.email);
+  const instances = (acc ? acc.instances : [])
+    .map((slug) => reg.getInstance(slug))
+    .filter(Boolean)
+    .map((i) => ({ slug: i.slug, title: i.title, regionLabel: i.regionLabel || '', status: i.status, visibility: i.visibility }));
   res.json({
     email: session.email,
     verifiedAt: acc ? acc.verifiedAt : null,
-    instances: acc ? acc.instances : [],
+    instances,
     drafts: reg.listDrafts(session.email).map((d) => ({ id: d.id, title: d.title || '', updatedAt: d.updatedAt })),
   });
 });
