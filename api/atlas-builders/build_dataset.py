@@ -72,6 +72,7 @@ SOURCE_ATTRIBUTIONS = {
     "ISRIC SoilGrids 2.0": {"url": "https://soilgrids.org", "note": "Soil organic carbon", "license": "CC-BY 4.0"},
     "Malaria Atlas Project": {"url": "https://malariaatlas.org", "note": "Travel time to healthcare", "license": "CC-BY 4.0"},
     "OpenStreetMap / HOT (HDX)": {"url": "https://data.humdata.org", "note": "Health & education facilities", "license": "ODbL"},
+    "DataMeet": {"url": "https://github.com/datameet/maps", "note": "Lok Sabha constituency boundaries", "license": "CC-BY 4.0"},
 }
 
 RECIPE_SOURCES = {
@@ -93,6 +94,7 @@ RECIPE_SOURCES = {
     "access_healthcare": {"global": ["Malaria Atlas Project"], "india": ["Malaria Atlas Project"]},
     "health_hot": {"global": ["OpenStreetMap / HOT (HDX)"], "india": ["OpenStreetMap / HOT (HDX)"]},
     "education_hot": {"global": ["OpenStreetMap / HOT (HDX)"], "india": ["OpenStreetMap / HOT (HDX)"]},
+    "constituencies_datameet": {"india": ["DataMeet"]},
 }
 
 

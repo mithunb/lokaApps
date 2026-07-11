@@ -213,6 +213,17 @@
       "estSeconds": 60,
       "cost": "free",
       "attribution": { "global": "OpenStreetMap contributors via HOT / HDX, ODbL" }
+    },
+    {
+      "id": "constituencies",
+      "label": "Lok Sabha constituencies",
+      "info": "Parliamentary (Lok Sabha) constituency boundaries with reservation status, 2019 delimitation.",
+      "tiers": ["india"],
+      "group": "base",
+      "recipe": "constituencies_datameet",
+      "estSeconds": 40,
+      "cost": "free",
+      "attribution": { "india": "DataMeet community, CC-BY 4.0" }
     }
   ]
 }

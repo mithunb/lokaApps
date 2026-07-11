@@ -923,6 +923,48 @@ def education_hot(ctx):
                            "School / college")
 
 
+# ---------------------------------------------------------------- constituencies (DataMeet, India)
+
+DATAMEET_PC = "https://raw.githubusercontent.com/datameet/maps/master/parliamentary-constituencies/india_pc_2019_simplified.geojson"
+PC_CATEGORY = {"GEN": "General", "SC": "Reserved (SC)", "ST": "Reserved (ST)"}
+
+
+def constituencies_datameet(ctx):
+    progress("constituencies", 10, "fetching Lok Sabha constituencies")
+    path = fetch_cached(DATAMEET_PC, ctx["cache"], name="datameet-pc-2019.geojson", step="constituencies")
+    gj = json.load(open(path))
+    sel = ctx["sel"]; clip = ctx["clip"]
+    feats = []
+    for f in gj.get("features", []):
+        g = shape(f["geometry"]).buffer(0)
+        if not g.intersects(sel):
+            continue
+        g = g.intersection(clip).simplify(0.0009, preserve_topology=True)
+        if g.is_empty:
+            continue
+        p = f.get("properties", {})
+        feats.append({"type": "Feature", "properties": {
+            "name": (p.get("pc_name") or "").strip(),
+            "state": (p.get("st_name") or "").strip(),
+            "category": PC_CATEGORY.get(str(p.get("pc_category") or "").upper(), p.get("pc_category")),
+            "kind": "constituency"}, "geometry": mapping(g)})
+    progress("constituencies", 90, f"{len(feats)} constituencies")
+    if not feats:
+        return []
+    write_geojson(ctx["out"], "constituencies.geojson", feats)
+    return [{
+        "id": "constituencies", "group": "base", "type": "fill", "source": "constituencies.geojson",
+        "label": "Lok Sabha constituencies", "default": False,
+        "paint": {"fillColor": "#7a5c86", "fillOpacity": 0.05, "outlineColor": "#7a5c86", "outlineWidth": 1.6, "outlineDash": [4, 2]},
+        "label_text": {"property": "name", "size": 12, "color": "#4a3168", "haloColor": "#ffffff",
+                       "haloWidth": 2, "transform": "uppercase", "letterSpacing": 0.06, "minzoom": 7},
+        "legend": [{"color": "#7a5c86", "label": "Constituency", "shape": "dashed"}],
+        "info": "Lok Sabha (parliamentary) constituency boundaries, 2019 delimitation.",
+        "popup": {"title": "name", "fields": [
+            {"label": "State", "property": "state"}, {"label": "Reservation", "property": "category"}]},
+    }]
+
+
 RECIPES = {
     "admin": admin,
     "subadmin": subadmin,
@@ -942,4 +984,5 @@ RECIPES = {
     "access_healthcare": access_healthcare,
     "health_hot": health_hot,
     "education_hot": education_hot,
+    "constituencies_datameet": constituencies_datameet,
 }
