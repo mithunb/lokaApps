@@ -281,7 +281,7 @@
   /* ---- base style (glyphs + background + basemaps) ---- */
   function baseStyle(m) {
     var sources = {}, layers = [
-      { id: "bg", type: "background", paint: { "background-color": "#fffaeb" } }
+      { id: "bg", type: "background", paint: { "background-color": "#EAE9E3" } }
     ];
     m.basemaps.forEach(function (b) {
       sources["base-" + b.id] = {

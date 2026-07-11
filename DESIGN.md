@@ -8,16 +8,16 @@ colors:
   rust-deep: "#7C3616"
   sienna: "#99582F"
   ochre: "#B8862F"
-  old-paper: "#FFFAEB"
-  old-paper-deep: "#F1E7CC"
-  paper-surface: "#FAF2DC"
+  paper: "#F9F9F7"
+  paper-alt: "#F0EFEA"
+  surface: "#FFFFFF"
   ink: "#2A241A"
   ink-soft: "#564E3C"
   ink-faded: "#6B6350"
-  ink-border: "#2A241A29"
-  ink-divider: "#2A241A1A"
-  moss-tint: "#4A5A331F"
-  rust-tint: "#AE50281F"
+  ink-border: "#2A241A24"
+  ink-divider: "#2A241A17"
+  moss-tint: "#4A5A331A"
+  rust-tint: "#AE50281A"
 typography:
   display:
     fontFamily: "Figtree, sans-serif"
@@ -74,7 +74,7 @@ components:
     rounded: "{rounded.sm}"
     padding: "0.25rem 0.6rem"
   card:
-    backgroundColor: "{colors.paper-surface}"
+    backgroundColor: "{colors.surface}"
     rounded: "{rounded.md}"
     padding: "1.35rem"
   input:
@@ -90,9 +90,9 @@ components:
 
 **Creative North Star: "The Field Notebook"**
 
-LOKA Atlas looks like a working document from fieldwork, not a dashboard. The surfaces are
-cream paper — a fresh survey sheet (#FFFAEB) with cards a tone deeper — and everything drawn on
-them behaves like ink: thin borders, earthy boundary lines, stamped uppercase labels,
+LOKA Atlas looks like a working document from fieldwork, not a dashboard. The page is
+clean, near-white paper (#F9F9F7) with white cards raised by a hairline — and everything drawn on
+it behaves like ink: thin borders, earthy boundary lines, stamped uppercase labels,
 small honest controls. The map is the page; the interface is the margin. Every design
 decision defers to the data on the map, because the people this serves — survey teams,
 on-ground partners, small orgs — come to read the land, not the chrome.
@@ -104,7 +104,7 @@ in that order of importance. Color is committed but muted: a rustic-pastel famil
 rust, sienna, ochre) that could be mixed from soil, turmeric and leaves.
 
 **Key Characteristics:**
-- Cream-paper canvas (#FFFAEB); pure white is reserved for elements that must read as "on top" (panel, inputs).
+- Clean near-white paper canvas (#F9F9F7); white cards and the floating panel read as "on top".
 - One green speaks for the product (moss `#4A5A33`); earth accents belong to the data.
 - Flat, ink-on-paper depth: borders and tone steps, not shadows.
 - Two typefaces, two jobs: Figtree structures, DM Sans reads.
@@ -113,8 +113,9 @@ rust, sienna, ochre) that could be mixed from soil, turmeric and leaves.
 
 ## 2. Colors
 
-An earth-pigment palette on cream paper — committed to green, with rust and ochre held in
-reserve for data and warnings.
+An earth-pigment palette on clean near-white paper — committed to green, with rust and ochre
+held in reserve for data and warnings. The paper is neutral so the earthy inks and the map
+carry the warmth.
 
 ### Primary
 - **Moss** (#4A5A33): the product's one voice — primary buttons, active toggles, selected
@@ -128,13 +129,13 @@ reserve for data and warnings.
 - **Sienna** (#99582F): tertiary data accent (e.g. sugar-mill markers, caution copy).
 
 ### Neutral
-- **Cream Paper** (#FFFAEB): the page background — fresh cream survey paper.
-- **Cream Deep** (#F1E7CC): footers, recessed strips, disabled toggles.
-- **Paper Surface** (#FAF2DC): cards and sections — one tone step DEEPER than the page; pure white is what reads "on top" (inputs, the floating panel).
-- **Ink** (#2A241A): primary text. **Ink Soft** (#564E3C): secondary text — still ≥ 4.5:1
-  on Field Grey. **Ink Faded** (#6B6350): hints and metadata only, never body copy.
-- **Ink Border** (rgba(42,36,26,.16)) / **Ink Divider** (rgba(42,36,26,.10)): all strokes
-  are transparencies of Ink, so they sit naturally on any grey.
+- **Paper** (#F9F9F7): the page background — clean, near-white, faintly warm.
+- **Paper Alt** (#F0EFEA): footers, recessed strips, the map-stage well backdrop.
+- **Surface** (#FFFFFF): cards, inputs and the floating panel — white, raised off the page by a hairline border rather than a tone step.
+- **Ink** (#2A241A): primary text. **Ink Soft** (#564E3C): secondary text — ≥ 7:1 on Paper.
+  **Ink Faded** (#6B6350): hints and metadata (≥ 4.5:1), never body copy.
+- **Ink Border** (rgba(42,36,26,.14)) / **Ink Divider** (rgba(42,36,26,.09)): all strokes
+  are transparencies of Ink, so they sit naturally on the paper.
 
 ### Named Rules
 **The Map Speaks Rule.** Saturated color belongs to data on the map (crop categoricals,
@@ -177,8 +178,8 @@ never Figtree for paragraphs; never DM Sans for uppercase labels.
 
 ## 4. Elevation
 
-Flat, ink on paper. Depth is conveyed by tone steps (Cream Paper page → deeper Paper Surface cards → pure White on-top elements)
-and by ink borders — not by shadows. `--shadow-sm` is literally `none`. Two sanctioned
+Flat, ink on paper. Depth is conveyed by white cards lifting off the near-white page via a hairline ink border
+— not by shadows. `--shadow-sm` is literally `none`. Two sanctioned
 exceptions exist: the floating layer panel over the map carries a soft ambient shadow
 (`0 2px 12px rgba(42,36,26,.12)`) plus a ≥94%-opaque blur backdrop — a legibility device
 over unpredictable map imagery, not decoration — and the map stage itself sits in a
@@ -215,7 +216,7 @@ or lighten a fill rather than adding emphasis.
   in rust-tint — uppercase 0.68rem.
 
 ### Cards / Containers
-- **Corner Style:** 6px. **Background:** Paper Surface. **Border:** 1px Ink Border.
+- **Corner Style:** 6px. **Background:** Surface (white). **Border:** 1px Ink Border.
 - **Shadow Strategy:** none (see Elevation). **Internal Padding:** 1.35rem.
 - Cards are used sparingly — lists and dividers are the default; a card must mean
   "a distinct thing you can act on" (a step panel, a directory entry).
@@ -244,7 +245,7 @@ or lighten a fill rather than adding emphasis.
 
 ### Do:
 - **Do** keep the interface paper-quiet and let saturated color live on the map (The Map Speaks Rule).
-- **Do** separate with 1px ink-transparency borders and tone steps; reach for `#FAF2DC`
+- **Do** separate with 1px ink-transparency borders; reach for a white surface + hairline border
   before reaching for a shadow.
 - **Do** use Moss (#4A5A33) for every interactive affordance — buttons, switches, focus,
   links — so "green means you can act on it" stays true everywhere.

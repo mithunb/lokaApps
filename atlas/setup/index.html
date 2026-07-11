@@ -12,13 +12,13 @@
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <style>
     :root {
-      --color-bg:#FFFAEB; --color-bg-alt:#F1E7CC; --color-surface:#FAF2DC;
+      --color-bg:#F9F9F7; --color-bg-alt:#F0EFEA; --color-surface:#FFFFFF;
       --color-moss:#4A5A33; --color-canopy:#384526;
       --color-rust:#AE5028; --color-rust-deep:#7C3616;
       --color-sienna:#99582F; --color-ochre:#B8862F;
       --color-text-primary:#2A241A; --color-text-secondary:#564E3C; --color-text-muted:#6B6350;
-      --color-divider:rgba(42,36,26,.10); --color-border:rgba(42,36,26,.16);
-      --color-moss-tint:rgba(74,90,51,.13); --color-rust-tint:rgba(174,80,40,.13);
+      --color-divider:rgba(42,36,26,.09); --color-border:rgba(42,36,26,.14);
+      --color-moss-tint:rgba(74,90,51,.10); --color-rust-tint:rgba(174,80,40,.10);
       --radius-md:.25rem; --radius-lg:.375rem;
       --container:min(64rem,100% - 2.5rem);
     }
@@ -98,7 +98,7 @@
     .geo-open { flex:0 0 auto; font:inherit; font-size:.75rem; font-weight:600; border:1px solid var(--color-border);
       background:var(--color-surface); color:var(--color-text-secondary); border-radius:4px; padding:.15rem .5rem; cursor:pointer; }
     .geo-open:hover { border-color:var(--color-moss); color:var(--color-canopy); }
-    #geo-map { height:22rem; border:1px solid var(--color-border); border-radius:4px; background:#F3E9CE; }
+    #geo-map { height:22rem; border:1px solid var(--color-border); border-radius:4px; background:#EAE9E3; }
     .geo-meta { grid-column:1 / -1; font-size:.85rem; color:var(--color-text-secondary); }
     .geo-meta b { color:var(--color-text-primary); }
 
@@ -126,7 +126,7 @@
     .prog-msg { margin:.5rem 0 0; font-size:.9rem; color:var(--color-text-secondary); }
     .prog-log { margin:.75rem 0 0; font:11px/1.5 ui-monospace,Menlo,monospace; color:var(--color-text-muted);
       background:#FFFFFF; border:1px solid var(--color-border); border-radius:4px; padding:.5rem .65rem; max-height:9rem; overflow-y:auto; white-space:pre-wrap; }
-    #preview-frame { width:100%; height:560px; border:1px solid var(--color-border); border-radius:6px; margin-top:1rem; background:#F3E9CE; }
+    #preview-frame { width:100%; height:560px; border:1px solid var(--color-border); border-radius:6px; margin-top:1rem; background:#EAE9E3; }
 
     /* publish */
     .token-box { background:#FFFFFF; border:1px solid var(--color-border); border-radius:4px; padding:.8rem .9rem; margin:.9rem 0; }
