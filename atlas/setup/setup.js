@@ -974,6 +974,7 @@
     mine.forEach(function (i) {
       var row = document.createElement("div");
       row.className = "mine-item";
+      row.dataset.slug = i.slug;
       var label = i.status === "published" ? (i.visibility === "private" ? "Private" : "Published")
         : i.status === "building" ? "Building…" : i.status === "pending-approval" ? "Awaiting approval"
         : i.status === "built" ? "Unpublished" : i.status;
@@ -1108,15 +1109,40 @@
     show(1);
   }
 
+  // Deep-link from the viewer's "Manage this atlas" button: ?edit=<slug> scrolls
+  // to and highlights that atlas in the dashboard (prompting sign-in if needed).
+  function focusManage(slug) {
+    var owned = ((S.session && S.session.instances) || []).some(function (i) { return i.slug === slug; });
+    if (!owned) {
+      if (!S.session || !S.session.email) {
+        signIn("Sign in to manage your atlas.").then(function (ok) {
+          if (ok) refreshMe().then(function () { focusManage(slug); });
+        });
+      }
+      return;
+    }
+    var row = document.querySelector('.mine-item[data-slug="' + (window.CSS && CSS.escape ? CSS.escape(slug) : slug) + '"]');
+    if (row) {
+      row.scrollIntoView({ block: "center", behavior: "smooth" });
+      row.classList.add("flash");
+      setTimeout(function () { row.classList.remove("flash"); }, 2200);
+    }
+  }
+
   /* ================= init ================= */
+
+  var EDIT_PARAM = new URLSearchParams(location.search).get("edit");
 
   api("auth/me").then(function (me) {
     S.session = me;
     $("#nav-auth").textContent = me.email;
     loadDrafts();
     renderMyAtlases();
-  }).catch(function () {});
+    if (EDIT_PARAM) focusManage(EDIT_PARAM);
+  }).catch(function () {
+    if (EDIT_PARAM) focusManage(EDIT_PARAM); // not signed in → focusManage will prompt
+  });
   loadDirectory();
   show(1);
-  offerLocalResume();
+  if (!EDIT_PARAM) offerLocalResume();
 })();

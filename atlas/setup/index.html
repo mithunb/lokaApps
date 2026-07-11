@@ -184,6 +184,9 @@
       color:var(--color-text-primary); cursor:pointer; text-decoration:none; }
     .mine-actions button:hover, .mine-actions a:hover { border-color:var(--color-moss); color:var(--color-canopy); }
     .mine-actions .danger:hover { border-color:var(--color-rust); color:var(--color-rust-deep); }
+    .mine-item.flash { animation:mine-flash 2.2s ease-out; }
+    @keyframes mine-flash { 0%,40% { border-color:var(--color-moss); box-shadow:0 0 0 3px var(--color-moss-tint); } 100% { border-color:var(--color-border); box-shadow:none; } }
+    @media (prefers-reduced-motion:reduce){ .mine-item.flash { animation:none; border-color:var(--color-moss); } }
 
     .msg { padding:.7rem .9rem; border-radius:4px; font-size:.9rem; margin-top:1rem; }
     .msg.err { background:var(--color-rust-tint); color:var(--color-rust-deep); }

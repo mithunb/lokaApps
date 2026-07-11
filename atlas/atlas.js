@@ -56,6 +56,7 @@
     .then(function (r) { if (!r.ok) throw new Error("manifest " + r.status); return r.json(); })
     .then(mergeLocalOverlay)
     .then(start)
+    .then(checkOwner)
     .catch(function (err) {
       $("#atlas-map").innerHTML =
         '<div class="atlas-error">Could not load dataset “' + esc(DATASET) + '”.<br><small>' + esc(err.message) + "</small></div>";
@@ -241,6 +242,23 @@
       row.appendChild(el("div", null, "<b>" + esc(c.name) + "</b>" + (c.role ? "<span>" + esc(c.role) + "</span>" : "")));
       box.appendChild(row);
     });
+  }
+
+  // Show a "Manage this atlas" link only to the owner. The API returns
+  // canEdit:true when the caller's session owns this instance (same-origin
+  // cookie); everyone else gets public fields and no button.
+  function checkOwner() {
+    var btn = $("#manage-btn");
+    if (!btn || !DATASET) return;
+    fetch("./api/instances/" + encodeURIComponent(DATASET), { credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (inst) {
+        if (inst && inst.canEdit) {
+          btn.href = "./setup/?edit=" + encodeURIComponent(DATASET);
+          btn.hidden = false;
+        }
+      })
+      .catch(function () {});
   }
 
   function wireShare(manifest) {
