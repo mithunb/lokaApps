@@ -27,9 +27,11 @@ def zoom_for(bbox):
 
 GROUP_DEFS = {
     "base": {"id": "base", "label": "Base", "open": True},
+    "context": {"id": "context", "label": "Terrain, climate & access", "open": True},
     "agri": {"id": "agri", "label": "Crops & value chain", "open": True},
     "eco": {"id": "eco", "label": "Ecological landscape", "open": True},
 }
+GROUP_ORDER = ["base", "context", "agri", "eco"]
 
 BASEMAPS = [
     {
@@ -62,6 +64,12 @@ SOURCE_ATTRIBUTIONS = {
     "NRSC / ISRO — NDEM via Bharatlas": {"url": "https://bhuvan.nrsc.gov.in", "note": "Flood inundation 1998–2022"},
     "ESA WorldCover 2021 (Copernicus)": {"url": "https://esa-worldcover.org", "note": "Land cover & built-up areas", "license": "CC-BY 4.0"},
     "OpenStreetMap contributors": {"url": "https://www.openstreetmap.org/copyright", "note": "Waterways", "license": "ODbL"},
+    "Copernicus GLO-30 DEM": {"url": "https://spacedata.copernicus.eu", "note": "Terrain & elevation (© DLR/Airbus, ESA)", "license": "Copernicus free & open"},
+    "CHIRPS (UCSB Climate Hazards Center)": {"url": "https://www.chc.ucsb.edu/data/chirps", "note": "Annual rainfall", "license": "Public domain"},
+    "Hansen/UMD Global Forest Change": {"url": "https://glad.earthengine.app/view/global-forest-change", "note": "Forest cover & loss", "license": "CC-BY 4.0"},
+    "JRC Global Surface Water": {"url": "https://global-surface-water.appspot.com", "note": "Surface water 1984–2021", "license": "EC free & open"},
+    "ISRIC SoilGrids 2.0": {"url": "https://soilgrids.org", "note": "Soil organic carbon", "license": "CC-BY 4.0"},
+    "Malaria Atlas Project": {"url": "https://malariaatlas.org", "note": "Travel time to healthcare", "license": "CC-BY 4.0"},
 }
 
 RECIPE_SOURCES = {
@@ -75,6 +83,12 @@ RECIPE_SOURCES = {
     "lulc_worldcover": {"global": ["ESA WorldCover 2021 (Copernicus)"], "india": ["ESA WorldCover 2021 (Copernicus)"]},
     "builtup_worldcover": {"global": ["ESA WorldCover 2021 (Copernicus)"], "india": ["ESA WorldCover 2021 (Copernicus)"]},
     "labels_esri": {},
+    "terrain_glo30": {"global": ["Copernicus GLO-30 DEM"], "india": ["Copernicus GLO-30 DEM"]},
+    "rainfall_chirps": {"global": ["CHIRPS (UCSB Climate Hazards Center)"], "india": ["CHIRPS (UCSB Climate Hazards Center)"]},
+    "forest_hansen": {"global": ["Hansen/UMD Global Forest Change"], "india": ["Hansen/UMD Global Forest Change"]},
+    "water_jrc": {"global": ["JRC Global Surface Water"], "india": ["JRC Global Surface Water"]},
+    "soil_soilgrids": {"global": ["ISRIC SoilGrids 2.0"], "india": ["ISRIC SoilGrids 2.0"]},
+    "access_healthcare": {"global": ["Malaria Atlas Project"], "india": ["Malaria Atlas Project"]},
 }
 
 
@@ -152,7 +166,7 @@ def main():
     zoom = zoom_for(final_bounds)
 
     groups_present = []
-    for gid in ["base", "agri", "eco"]:
+    for gid in GROUP_ORDER:
         if any(l.get("group") == gid for l in layers):
             groups_present.append(GROUP_DEFS[gid])
 

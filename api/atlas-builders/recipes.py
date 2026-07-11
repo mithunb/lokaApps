@@ -20,8 +20,8 @@ from shapely.geometry import shape, mapping, LineString
 from shapely.ops import unary_union
 
 from common import (
-    R2, UA, WORLDCOVER, bbi, fetch_cached, progress, warn, write_geojson,
-    worldcover_tiles,
+    R2, UA, WORLDCOVER, bbi, fetch_cached, fetch_wcs_array, progress,
+    read_cog_window, warn, write_geojson, worldcover_tiles,
 )
 
 
@@ -486,6 +486,358 @@ def labels_esri(ctx):
     }]
 
 
+# ================================================================
+# Zero-storage remote-read raster layers
+#
+# Each reads an open global source windowed to the region at build time — the
+# COGs/WCS coverages live on the providers' anonymous HTTP/S3, so nothing is
+# mirrored locally. Output is a region-clipped PNG overlay + a *.json meta file,
+# exactly like lulc_worldcover, so the engine renders them with no changes.
+# ================================================================
+
+GLO30 = "https://copernicus-dem-30m.s3.amazonaws.com/%s/%s.tif"
+HANSEN = "https://storage.googleapis.com/earthenginepartners-hansen/GFC-2024-v1.12/Hansen_GFC-2024-v1.12_%s_%s.tif"
+GSW = "https://storage.googleapis.com/global-surface-water/downloads2021/%s/%s"
+CHIRPS = "https://data.chc.ucsb.edu/products/CHIRPS-2.0/global_annual/tifs/chirps-v2.0.%d.tif"
+SOILGRIDS = ("https://maps.isric.org/mapserv?map=/map/%s.map&SERVICE=WCS&VERSION=2.0.1&REQUEST=GetCoverage"
+             "&COVERAGEID=%s&FORMAT=image/tiff&SUBSET=long(%.4f,%.4f)&SUBSET=lat(%.4f,%.4f)"
+             "&SUBSETTINGCRS=http://www.opengis.net/def/crs/EPSG/0/4326"
+             "&OUTPUTCRS=http://www.opengis.net/def/crs/EPSG/0/4326")
+MAP_WCS = ("https://data.malariaatlas.org/geoserver/ows?service=WCS&version=2.0.1&request=GetCoverage"
+           "&coverageId=%s&format=image/geotiff&subset=Long(%.4f,%.4f)&subset=Lat(%.4f,%.4f)")
+
+CHIRPS_YEAR = 2024  # latest complete CHIRPS annual composite
+
+
+def _hex(h):
+    h = h.lstrip("#")
+    return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+
+
+def _clip_span(bbox, target_px, native_res):
+    """Output resolution: ~target_px on the long side, never finer than native."""
+    span = max(bbox[2] - bbox[0], bbox[3] - bbox[1])
+    return max(native_res, span / target_px)
+
+
+def glo30_tiles(bbox):
+    """Copernicus GLO-30 1° tiles (named by SW corner) covering bbox."""
+    import math
+    w, s, e, n = bbox
+    out = []
+    for lat in range(int(math.floor(s)), int(math.ceil(n))):
+        for lon in range(int(math.floor(w)), int(math.ceil(e))):
+            ns = "N" if lat >= 0 else "S"; ew = "E" if lon >= 0 else "W"
+            base = f"Copernicus_DSM_COG_10_{ns}{abs(lat):02d}_00_{ew}{abs(lon):03d}_00_DEM"
+            out.append((base, GLO30 % (base, base)))
+    return out
+
+
+def _corner10_tiles(bbox):
+    """(top-left-lat, left-lon) pairs on the 10° grid Hansen & JRC-GSW use."""
+    import math
+    w, s, e, n = bbox
+    lats = range(int(math.ceil(s / 10.0) * 10), int(math.ceil(n / 10.0) * 10) + 1, 10)
+    lons = range(int(math.floor(w / 10.0) * 10), int(math.floor(e / 10.0) * 10) + 1, 10)
+    return [(lat, lon) for lat in lats for lon in lons]
+
+
+def hansen_tiles(bbox, product):
+    out = []
+    for lat, lon in _corner10_tiles(bbox):
+        ns = "N" if lat >= 0 else "S"; ew = "E" if lon >= 0 else "W"
+        name = f"{abs(lat):02d}{ns}_{abs(lon):03d}{ew}"
+        out.append((f"{product} {name}", HANSEN % (product, name)))
+    return out
+
+
+def gsw_tiles(bbox, product="occurrence"):
+    out = []
+    for lat, lon in _corner10_tiles(bbox):
+        ns = "N" if lat >= 0 else "S"; ew = "E" if lon >= 0 else "W"
+        name = f"{product}_{abs(lon)}{ew}_{abs(lat)}{ns}v1_4_2021.tif"
+        out.append((name, GSW % (product, name)))
+    return out
+
+
+def _range_labels(edges, unit="", fmt="{:g}"):
+    """Human labels for np.digitize bins given interior break edges."""
+    labels = []
+    lo = None
+    for ed in list(edges) + [None]:
+        if lo is None:
+            labels.append("< " + fmt.format(edges[0]) + unit)
+        elif ed is None:
+            labels.append("≥ " + fmt.format(edges[-1]) + unit)
+        else:
+            labels.append(fmt.format(lo) + "–" + fmt.format(ed) + unit)
+        lo = ed
+    return labels
+
+
+def _emit_ramp(ctx, lid, arr, valid, transform, size, extent, edges, colors, labels,
+               source, info, label, group="context", subgroup=None, default=False, opacity=0.72):
+    """Bin `arr` by `edges`, colour it, clip to the region, write PNG + meta, return stanza."""
+    import numpy as np
+    from rasterio.features import geometry_mask
+    from PIL import Image
+
+    W, H = size
+    idx = np.digitize(arr, edges)  # 0..len(edges); needs len(colors) == len(edges)+1
+    rgba = np.zeros((H, W, 4), dtype=np.uint8)
+    present = []
+    for i, hexc in enumerate(colors):
+        m = valid & (idx == i)
+        if m.any():
+            rgba[m] = (*_hex(hexc), 255)
+            present.append(i)
+    inside = geometry_mask([ctx["sel"].__geo_interface__], out_shape=(H, W), transform=transform, invert=True)
+    rgba[~inside] = (0, 0, 0, 0)
+    Image.fromarray(rgba, "RGBA").save(os.path.join(ctx["out"], lid + ".png"), optimize=True)
+
+    X0, Y0e, X1e, Y1 = extent
+    legend = [{"color": colors[i], "label": labels[i]} for i in present] or \
+             [{"color": colors[i], "label": labels[i]} for i in range(len(colors))]
+    meta = {
+        "image": lid + ".png",
+        "coordinates": [[X0, Y1], [X1e, Y1], [X1e, Y0e], [X0, Y0e]],
+        "bounds": [X0, Y0e, X1e, Y1], "size": [W, H], "legend": legend, "source": source,
+    }
+    json.dump(meta, open(os.path.join(ctx["out"], lid + ".json"), "w"))
+    stanza = {
+        "id": lid, "group": group, "type": "image", "source": lid + ".json",
+        "label": label, "default": default, "opacityControl": True, "opacity": opacity,
+        "info": info, "legendFrom": "source",
+    }
+    if subgroup:
+        stanza["subgroup"] = subgroup
+    return [stanza]
+
+
+# ---------------------------------------------------------------- terrain (GLO-30)
+
+def terrain_glo30(ctx):
+    import numpy as np
+    from rasterio.features import geometry_mask
+    from PIL import Image
+
+    sel = ctx["sel"]; w, s, e, n = sel.bounds
+    res = _clip_span([w, s, e, n], 1800, 0.00028)
+    z, transform, (W, H), extent = read_cog_window(
+        [w, s, e, n], res, glo30_tiles([w, s, e, n]), "terrain",
+        resampling="bilinear", dtype="float32", fill=np.nan)
+    if z is None:
+        warn("terrain skipped — no Copernicus DEM tiles for this region")
+        return []
+    valid = np.isfinite(z) & (z > -1000)
+    if not valid.any():
+        return []
+    vals = z[valid]
+    edges = np.unique(np.percentile(vals, [20, 40, 60, 80]))
+    colors = ["#5a7346", "#9bab63", "#d8c489", "#b98b54", "#7c5a3a"][: len(edges) + 1]
+
+    # hypsometric tint modulated by hillshade. Shade amplitude scales with the
+    # region's actual relief so flat plains render as clean elevation bands
+    # (no amplified DEM noise) while hills/mountains get strong shaded relief.
+    relief = float(np.percentile(vals, 98) - np.percentile(vals, 2))
+    amp = 0.06 + 0.40 * float(np.clip((relief - 30.0) / 270.0, 0.0, 1.0))
+    px = max(res * 111000.0, 1.0)
+    zf = np.where(valid, z, np.nanmedian(vals))
+    gy, gx = np.gradient(zf, px, px)
+    slope = np.pi / 2 - np.arctan(np.hypot(gx, gy))
+    aspect = np.arctan2(-gx, gy)
+    az_r = np.deg2rad(360 - 315 + 90); alt_r = np.deg2rad(45)
+    hs = np.clip(np.sin(alt_r) * np.sin(slope) + np.cos(alt_r) * np.cos(slope) * np.cos(az_r - aspect), 0, 1)
+    shade = (1.0 + amp * (hs - 0.5) * 2.0)[..., None]
+
+    idx = np.digitize(z, edges)
+    rgba = np.zeros((H, W, 4), dtype=np.uint8)
+    present = []
+    for i, hexc in enumerate(colors):
+        m = valid & (idx == i)
+        if m.any():
+            rgba[m] = (*_hex(hexc), 255)
+            present.append(i)
+    # modulate the flat hypsometric tint by the hillshade for shaded relief
+    rgba[..., :3] = np.clip(rgba[..., :3].astype("float32") * shade, 0, 255).astype(np.uint8)
+    inside = geometry_mask([sel.__geo_interface__], out_shape=(H, W), transform=transform, invert=True)
+    rgba[~(inside & valid)] = (0, 0, 0, 0)
+    Image.fromarray(rgba, "RGBA").save(os.path.join(ctx["out"], "terrain.png"), optimize=True)
+
+    X0, Y0e, X1e, Y1 = extent
+    labels = _range_labels(edges, unit=" m", fmt="{:.0f}")
+    legend = [{"color": colors[i], "label": labels[i]} for i in present]
+    meta = {"image": "terrain.png",
+            "coordinates": [[X0, Y1], [X1e, Y1], [X1e, Y0e], [X0, Y0e]],
+            "bounds": [X0, Y0e, X1e, Y1], "size": [W, H], "legend": legend,
+            "source": "Copernicus GLO-30 DEM (30 m), shaded relief clipped to your region"}
+    json.dump(meta, open(os.path.join(ctx["out"], "terrain.json"), "w"))
+    progress("terrain", 95, f"{W}x{H} px")
+    return [{
+        "id": "terrain", "group": "context", "type": "image", "source": "terrain.json",
+        "label": "Terrain & elevation", "default": False, "opacityControl": True, "opacity": 0.62,
+        "info": "Shaded relief coloured by elevation, from the Copernicus GLO-30 DEM (30 m).",
+        "legendFrom": "source",
+    }]
+
+
+# ---------------------------------------------------------------- rainfall (CHIRPS)
+
+def rainfall_chirps(ctx):
+    import numpy as np
+    sel = ctx["sel"]; w, s, e, n = sel.bounds
+    if s > 50 or n < -50:
+        warn("rainfall skipped — CHIRPS covers 50°S–50°N only")
+        return []
+    res = _clip_span([w, s, e, n], 1200, 0.05)
+    arr, transform, size, extent = read_cog_window(
+        [w, s, e, n], res, [(f"CHIRPS {CHIRPS_YEAR}", CHIRPS % CHIRPS_YEAR)], "rainfall",
+        resampling="bilinear", dtype="float32", fill=-9999.0)
+    if arr is None:
+        return []
+    valid = arr >= 0
+    if not valid.any():
+        return []
+    edges = np.unique(np.percentile(arr[valid], [20, 40, 60, 80]))
+    colors = ["#dce9e0", "#a9ccc9", "#6fb0bd", "#3d86ad", "#264f96"][: len(edges) + 1]
+    labels = _range_labels(edges, unit=" mm", fmt="{:.0f}")
+    progress("rainfall", 90, "colorizing")
+    return _emit_ramp(ctx, "rainfall", arr, valid, transform, size, extent, edges, colors, labels,
+                      f"CHIRPS v2.0 annual rainfall {CHIRPS_YEAR} (~5 km), clipped to your region",
+                      f"Total rainfall in {CHIRPS_YEAR} from CHIRPS (UCSB Climate Hazards Center, ~5 km).",
+                      "Annual rainfall", subgroup="Climate", opacity=0.7)
+
+
+# ---------------------------------------------------------------- forest cover & loss (Hansen)
+
+def forest_hansen(ctx):
+    import numpy as np
+    from rasterio.features import geometry_mask
+    from PIL import Image
+
+    sel = ctx["sel"]; w, s, e, n = sel.bounds
+    res = _clip_span([w, s, e, n], 2400, 0.00025)
+    tc, transform, (W, H), extent = read_cog_window(
+        [w, s, e, n], res, hansen_tiles([w, s, e, n], "treecover2000"), "forest",
+        resampling="average", dtype="float32", fill=0.0)
+    if tc is None:
+        warn("forest skipped — no Hansen tiles for this region")
+        return []
+    ly, _, _, _ = read_cog_window(
+        [w, s, e, n], res, hansen_tiles([w, s, e, n], "lossyear"), "forest",
+        resampling="nearest", dtype="float32", fill=0.0)
+    if ly is None:
+        ly = np.zeros_like(tc)
+
+    rgba = np.zeros((H, W, 4), dtype=np.uint8)
+    dense = tc >= 50
+    open_f = (tc >= 15) & (tc < 50)
+    loss = ly > 0
+    rgba[open_f] = (*_hex("#8cbf6a"), 255)
+    rgba[dense] = (*_hex("#1f5c2e"), 255)
+    rgba[loss] = (*_hex("#d1462f"), 255)  # loss overrides cover
+    inside = geometry_mask([sel.__geo_interface__], out_shape=(H, W), transform=transform, invert=True)
+    keep = inside & (dense | open_f | loss)
+    rgba[~keep] = (0, 0, 0, 0)
+    Image.fromarray(rgba, "RGBA").save(os.path.join(ctx["out"], "forest.png"), optimize=True)
+
+    legend = []
+    if dense.any(): legend.append({"color": "#1f5c2e", "label": "Dense forest (≥50%)"})
+    if open_f.any(): legend.append({"color": "#8cbf6a", "label": "Open forest (15–50%)"})
+    if loss.any(): legend.append({"color": "#d1462f", "label": "Forest loss 2001–2024"})
+    if not legend:
+        warn("forest: no forest cover in this region — layer omitted")
+        return []
+    X0, Y0e, X1e, Y1 = extent
+    meta = {"image": "forest.png",
+            "coordinates": [[X0, Y1], [X1e, Y1], [X1e, Y0e], [X0, Y0e]],
+            "bounds": [X0, Y0e, X1e, Y1], "size": [W, H], "legend": legend,
+            "source": "Hansen/UMD Global Forest Change v1.12 (30 m), tree cover 2000 & loss to 2024"}
+    json.dump(meta, open(os.path.join(ctx["out"], "forest.json"), "w"))
+    progress("forest", 95, f"{W}x{H} px")
+    return [{
+        "id": "forest", "group": "context", "type": "image", "source": "forest.json",
+        "label": "Forest cover & loss", "default": False, "opacityControl": True, "opacity": 0.8,
+        "info": "Tree cover in 2000 (green) and forest lost 2001–2024 (red), from Hansen/UMD Global Forest Change (30 m).",
+        "legendFrom": "source",
+    }]
+
+
+# ---------------------------------------------------------------- surface water (JRC GSW)
+
+def water_jrc(ctx):
+    import numpy as np
+    sel = ctx["sel"]; w, s, e, n = sel.bounds
+    res = _clip_span([w, s, e, n], 2400, 0.00025)
+    occ, transform, size, extent = read_cog_window(
+        [w, s, e, n], res, gsw_tiles([w, s, e, n], "occurrence"), "water_jrc",
+        resampling="nearest", dtype="float32", fill=0.0)
+    if occ is None:
+        warn("surface water skipped — no JRC tiles for this region")
+        return []
+    valid = (occ > 0) & (occ <= 100)
+    if not valid.any():
+        warn("surface water: none detected in this region — layer omitted")
+        return []
+    edges = np.array([25, 75])
+    colors = ["#bcd6e8", "#6aa8d8", "#2166ac"]
+    labels = ["Occasional (1–25%)", "Seasonal (25–75%)", "Permanent (75–100%)"]
+    progress("water_jrc", 90, "colorizing")
+    return _emit_ramp(ctx, "water_jrc", occ, valid, transform, size, extent, edges, colors, labels,
+                      "JRC Global Surface Water occurrence 1984–2021 (30 m), clipped to your region",
+                      "How often each pixel held water 1984–2021 (JRC Global Surface Water, 30 m).",
+                      "Surface water", subgroup="Water", opacity=0.85)
+
+
+# ---------------------------------------------------------------- soil carbon (SoilGrids)
+
+def soil_soilgrids(ctx):
+    import numpy as np
+    b = ctx["bbox"]
+    url = SOILGRIDS % ("soc", "soc_0-5cm_mean", b[0], b[2], b[1], b[3])
+    try:
+        arr, transform, size, extent = fetch_wcs_array(url, "soil", "SoilGrids soil carbon")
+    except Exception as ex:
+        warn(f"soil carbon skipped — SoilGrids unavailable: {ex}")
+        return []
+    arr = arr / 10.0  # SoilGrids soc is dg/kg → g/kg
+    valid = arr > 0
+    if not valid.any():
+        return []
+    edges = np.unique(np.percentile(arr[valid], [20, 40, 60, 80]))
+    colors = ["#eadfc0", "#d3b578", "#b3894a", "#8a5f30", "#5c3b1a"][: len(edges) + 1]
+    labels = _range_labels(edges, unit=" g/kg", fmt="{:.0f}")
+    progress("soil", 88, "colorizing")
+    return _emit_ramp(ctx, "soil", arr, valid, transform, size, extent, edges, colors, labels,
+                      "SoilGrids 2.0 soil organic carbon, 0–5 cm (250 m), clipped to your region",
+                      "Topsoil organic carbon (0–5 cm) from ISRIC SoilGrids 2.0 (250 m) — a soil-health proxy.",
+                      "Soil organic carbon", opacity=0.7)
+
+
+# ---------------------------------------------------------------- access (Malaria Atlas)
+
+def access_healthcare(ctx):
+    import numpy as np
+    b = ctx["bbox"]
+    url = MAP_WCS % ("Accessibility__202001_Global_Motorized_Travel_Time_to_Healthcare", b[0], b[2], b[1], b[3])
+    try:
+        arr, transform, size, extent = fetch_wcs_array(url, "access", "travel time to healthcare")
+    except Exception as ex:
+        warn(f"travel-time skipped — Malaria Atlas unavailable: {ex}")
+        return []
+    valid = arr >= 0
+    if not valid.any():
+        return []
+    edges = np.array([30, 60, 120])
+    colors = ["#3f8f5a", "#c9c05a", "#e0913a", "#b23a2a"]
+    labels = ["< 30 min", "30–60 min", "1–2 hr", "≥ 2 hr"]
+    progress("access", 88, "colorizing")
+    return _emit_ramp(ctx, "access", arr, valid, transform, size, extent, edges, colors, labels,
+                      "Malaria Atlas Project — motorized travel time to healthcare, 2020 (~1 km)",
+                      "Estimated motorized travel time to the nearest health facility (Malaria Atlas Project, 2020, ~1 km).",
+                      "Travel time to healthcare", subgroup="Access", opacity=0.72)
+
+
 RECIPES = {
     "admin": admin,
     "subadmin": subadmin,
@@ -497,4 +849,10 @@ RECIPES = {
     "lulc_worldcover": lulc_worldcover,
     "builtup_worldcover": builtup_worldcover,
     "labels_esri": labels_esri,
+    "terrain_glo30": terrain_glo30,
+    "rainfall_chirps": rainfall_chirps,
+    "forest_hansen": forest_hansen,
+    "water_jrc": water_jrc,
+    "soil_soilgrids": soil_soilgrids,
+    "access_healthcare": access_healthcare,
 }

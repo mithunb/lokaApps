@@ -429,12 +429,12 @@
     }).catch(function (e) { msg(3, esc(errMsg(e))); });
   }
 
-  var GROUP_LABELS = { base: "Base", eco: "Ecological landscape", agri: "Crops & value chain" };
+  var GROUP_LABELS = { base: "Base", context: "Terrain, climate & access", eco: "Ecological landscape", agri: "Crops & value chain" };
 
   function renderCatalog() {
     var box = $("#cat-list");
     box.innerHTML = "";
-    ["base", "eco", "agri"].forEach(function (gid) {
+    ["base", "context", "eco", "agri"].forEach(function (gid) {
       var entries = S.catalog.layers.filter(function (l) { return l.group === gid; });
       if (!entries.length) return;
       var g = document.createElement("div");

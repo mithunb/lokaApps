@@ -120,6 +120,75 @@
       "estSeconds": 1,
       "cost": "free",
       "attribution": { "global": "Labels © Esri / © CARTO" }
+    },
+    {
+      "id": "terrain",
+      "label": "Terrain & elevation",
+      "info": "Shaded relief coloured by elevation — the lie of the land, from the Copernicus 30 m global DEM.",
+      "tiers": ["global", "india"],
+      "group": "context",
+      "recipe": "terrain_glo30",
+      "estSeconds": 90,
+      "cost": "free",
+      "attribution": { "global": "Copernicus GLO-30 DEM (© DLR/Airbus, ESA), free & open" }
+    },
+    {
+      "id": "rainfall",
+      "label": "Annual rainfall",
+      "info": "Total rainfall for the latest full year, from CHIRPS satellite-gauge data (~5 km).",
+      "tiers": ["global", "india"],
+      "group": "context",
+      "subgroup": "Climate",
+      "recipe": "rainfall_chirps",
+      "estSeconds": 60,
+      "cost": "free",
+      "attribution": { "global": "CHIRPS v2.0 (UCSB Climate Hazards Center), public domain" }
+    },
+    {
+      "id": "forest",
+      "label": "Forest cover & loss",
+      "info": "Tree cover in 2000 and forest lost since, from Hansen/UMD Global Forest Change (30 m).",
+      "tiers": ["global", "india"],
+      "group": "context",
+      "recipe": "forest_hansen",
+      "estSeconds": 120,
+      "cost": "free",
+      "attribution": { "global": "Hansen/UMD/Google/USGS/NASA Global Forest Change v1.12, CC-BY 4.0" }
+    },
+    {
+      "id": "water-jrc",
+      "label": "Surface water",
+      "info": "How often each place held water 1984–2021 — permanent vs seasonal, from JRC Global Surface Water (30 m).",
+      "tiers": ["global", "india"],
+      "group": "context",
+      "subgroup": "Water",
+      "recipe": "water_jrc",
+      "estSeconds": 90,
+      "cost": "free",
+      "attribution": { "global": "EC JRC / Google Global Surface Water, free & open" }
+    },
+    {
+      "id": "soil",
+      "label": "Soil organic carbon",
+      "info": "Topsoil organic carbon (0–5 cm), a soil-health proxy, from ISRIC SoilGrids (250 m).",
+      "tiers": ["global", "india"],
+      "group": "context",
+      "recipe": "soil_soilgrids",
+      "estSeconds": 60,
+      "cost": "free",
+      "attribution": { "global": "ISRIC SoilGrids 2.0, CC-BY 4.0" }
+    },
+    {
+      "id": "access",
+      "label": "Travel time to healthcare",
+      "info": "Estimated motorized travel time to the nearest health facility — an access-equity layer (Malaria Atlas Project, ~1 km).",
+      "tiers": ["global", "india"],
+      "group": "context",
+      "subgroup": "Access",
+      "recipe": "access_healthcare",
+      "estSeconds": 60,
+      "cost": "free",
+      "attribution": { "global": "Malaria Atlas Project (Oxford), CC-BY 4.0" }
     }
   ]
 }
