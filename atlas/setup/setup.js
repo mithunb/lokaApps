@@ -53,6 +53,34 @@
       chip.classList.toggle("done", i < step);
     }
     window.scrollTo({ top: 0 });
+    if (step >= 1 && step <= 3) saveLocal(); // keep a browser-local backup of in-progress work
+  }
+
+  /* ---- browser-local autosave: survives a reload or the sign-in link opening a new tab.
+     Separate from server drafts (which need an account); this is best-effort resilience. ---- */
+  var LS_KEY = "loka-atlas-wizard";
+  function saveLocal() {
+    try {
+      var st = draftState();
+      var meaningful = (st.fields && st.fields.title) || (st.geo && st.geo.selected && st.geo.selected.length);
+      if (!meaningful) return;
+      localStorage.setItem(LS_KEY, JSON.stringify({ state: st, at: Date.now() }));
+    } catch (e) { /* private mode / quota — ignore */ }
+  }
+  function clearLocal() { try { localStorage.removeItem(LS_KEY); } catch (e) {} }
+  function offerLocalResume() {
+    var raw;
+    try { raw = localStorage.getItem(LS_KEY); } catch (e) { return; }
+    if (!raw) return;
+    var saved; try { saved = JSON.parse(raw); } catch (e) { clearLocal(); return; }
+    if (!saved || !saved.state || (Date.now() - (saved.at || 0)) > 7 * 864e5) { clearLocal(); return; }
+    var title = (saved.state.fields && saved.state.fields.title) || "your atlas";
+    var box = $("#resume-local");
+    box.hidden = false;
+    box.innerHTML = '<div class="msg ok">Pick up where you left off with <b>' + esc(title) + '</b>? ' +
+      '<a href="#" id="lr-yes">Resume</a> · <a href="#" id="lr-no">Start fresh</a></div>';
+    $("#lr-yes").onclick = function (ev) { ev.preventDefault(); box.hidden = true; applyDraft({ id: S.draftId, state: saved.state }); };
+    $("#lr-no").onclick = function (ev) { ev.preventDefault(); box.hidden = true; clearLocal(); };
   }
 
   /* ================= step 1: org & branding ================= */
@@ -296,8 +324,9 @@
           var open = document.createElement("button");
           open.type = "button";
           open.className = "geo-open";
-          open.textContent = "Open ›";
-          open.title = "Pick smaller areas inside " + f.properties.name;
+          var childNoun = LEVEL_NOUN[S.geo.viewLevel + 1] || "smaller areas";
+          open.textContent = "Open " + childNoun + " ›";
+          open.title = "Pick individual " + childNoun + " inside " + f.properties.name;
           open.onclick = function (ev) {
             ev.preventDefault(); ev.stopPropagation();
             S.geo.crumbs.push({ id: id, name: f.properties.name, level: S.geo.viewLevel });
@@ -551,19 +580,37 @@
 
   function pollJob(jobId) {
     $("#build-title").textContent = "Building your atlas…";
+    $("#prog-bar").classList.add("working");
+    var layerEl = $("#prog-layer");
     var t = setInterval(function () {
       api("jobs/" + jobId).then(function (j) {
         $("#prog-fill").style.width = Math.max(4, j.pct) + "%";
-        $("#prog-msg").textContent = (j.queuedBehind ? "Queued (" + j.queuedBehind + " ahead) — " : "") + (j.message || j.status);
+        if (j.queuedBehind) {
+          layerEl.hidden = true;
+          $("#prog-msg").textContent = "Waiting in line — " + j.queuedBehind +
+            (j.queuedBehind === 1 ? " atlas" : " atlases") + " building ahead of yours…";
+        } else {
+          if (j.layer) {
+            layerEl.hidden = false;
+            var count = (j.lnum >= 1 && j.ltot) ? ' <span class="count">· layer ' + j.lnum + " of " + j.ltot + "</span>" : "";
+            layerEl.innerHTML = esc(j.layer) + count;
+          } else {
+            layerEl.hidden = true;
+          }
+          // the raw step message is the fine-grained activity (e.g. "reading Copernicus tile …")
+          $("#prog-msg").textContent = j.message || j.status || "working…";
+        }
         if (j.logTail && j.logTail.length) {
           var log = $("#prog-log");
           log.hidden = false;
           log.textContent = j.logTail.join("\n");
           log.scrollTop = log.scrollHeight;
         }
-        if (j.status === "done") { clearInterval(t); onBuilt(); }
+        if (j.status === "done") { clearInterval(t); $("#prog-bar").classList.remove("working"); onBuilt(); }
         if (j.status === "failed") {
           clearInterval(t);
+          $("#prog-bar").classList.remove("working");
+          layerEl.hidden = true;
           $("#build-title").textContent = "Build failed";
           $("#prog-msg").textContent = j.message || "build failed";
           $("#back-4").hidden = false;
@@ -581,6 +628,8 @@
 
   function onBuilt() {
     $("#prog-fill").style.width = "100%";
+    $("#prog-bar").classList.remove("working");
+    $("#prog-layer").hidden = true;
     $("#build-title").innerHTML =
       '<svg class="done-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>' +
       "Your atlas is ready";
@@ -612,6 +661,7 @@
   function publish() {
     api("instances/" + S.build.slug + "/publish", { method: "POST", headers: authHeaders(), body: {} })
       .then(function () {
+        clearLocal(); // published — the browser-local backup is no longer needed
         show(5);
         renderPublished();
         loadDirectory();
@@ -717,7 +767,8 @@
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
       $("#auth-msg").innerHTML = '<div class="msg err">Enter a valid email.</div>'; return;
     }
-    api("auth/request-link", { method: "POST", body: { email: email, next: location.pathname } })
+    saveLocal(); // capture the in-progress atlas before the user leaves to click the link
+    api("auth/request-link", { method: "POST", body: { email: email } })
       .then(function (r) {
         $("#auth-step-email").hidden = true;
         $("#auth-step-wait").hidden = false;
@@ -862,4 +913,5 @@
   }).catch(function () {});
   loadDirectory();
   show(1);
+  offerLocalResume();
 })();

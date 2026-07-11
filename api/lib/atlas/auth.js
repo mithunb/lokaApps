@@ -57,12 +57,59 @@ export function verifyToken(token) {
 
 /* ---------- purpose-specific wrappers ---------- */
 
-export function makeLoginToken(email) {
-  return signToken({ t: 'login', email }, LOGIN_TTL_MS);
+// Login links carry a SHORT random single-use code (not a self-contained
+// signed token) so the emailed URL stays compact. The code maps to {email, exp}
+// in a small persisted file (survives restarts within the 15-min TTL); it is
+// deleted the first time it's read, so a link works exactly once.
+const LOGIN_CODES_FILE = path.join(DATA_DIR, 'login-codes.json');
+let loginCodes = null; // Map: code -> { email, exp }
+
+function loadLoginCodes() {
+  if (loginCodes) return loginCodes;
+  loginCodes = new Map();
+  try {
+    const obj = JSON.parse(fs.readFileSync(LOGIN_CODES_FILE, 'utf8'));
+    const now = Date.now();
+    for (const [code, rec] of Object.entries(obj)) {
+      if (rec && rec.exp > now) loginCodes.set(code, rec);
+    }
+  } catch { /* no file yet */ }
+  return loginCodes;
 }
-export function readLoginToken(token) {
-  const p = verifyToken(token);
-  return p && p.t === 'login' ? p : null;
+
+function persistLoginCodes() {
+  const codes = loadLoginCodes();
+  const now = Date.now();
+  const obj = {};
+  for (const [code, rec] of codes) if (rec.exp > now) obj[code] = rec;
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    const tmp = LOGIN_CODES_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(obj), { mode: 0o600 });
+    fs.renameSync(tmp, LOGIN_CODES_FILE);
+  } catch (e) {
+    console.warn('[atlas] login-codes persist failed:', e.message);
+  }
+}
+
+export function makeLoginToken(email) {
+  const codes = loadLoginCodes();
+  const now = Date.now();
+  for (const [c, rec] of codes) if (rec.exp <= now) codes.delete(c); // prune
+  const code = crypto.randomBytes(16).toString('base64url'); // ~22 URL-safe chars
+  codes.set(code, { email, exp: now + LOGIN_TTL_MS });
+  persistLoginCodes();
+  return code;
+}
+export function readLoginToken(code) {
+  if (typeof code !== 'string' || !code) return null;
+  const codes = loadLoginCodes();
+  const rec = codes.get(code);
+  if (!rec) return null;
+  codes.delete(code);       // single-use — invalidate immediately
+  persistLoginCodes();
+  if (rec.exp <= Date.now()) return null;
+  return { t: 'login', email: rec.email };
 }
 
 export function makeActionToken(slug, action) {

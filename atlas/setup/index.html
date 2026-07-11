@@ -101,6 +101,19 @@
     #geo-map { height:22rem; border:1px solid var(--color-border); border-radius:4px; background:#EAE9E3; }
     .geo-meta { grid-column:1 / -1; font-size:.85rem; color:var(--color-text-secondary); }
     .geo-meta b { color:var(--color-text-primary); }
+    /* persistent legend so the two per-row actions are never ambiguous */
+    .geo-legend { display:flex; flex-wrap:wrap; gap:.4rem 1.1rem; margin:.1rem 0 .5rem; font-size:.82rem; color:var(--color-text-secondary); }
+    .geo-legend span { display:inline-flex; align-items:center; gap:.4rem; }
+    .geo-legend .tick { width:15px; height:15px; border:1.5px solid var(--color-moss); border-radius:3px; flex:0 0 auto; }
+    .geo-legend .drill { font-family:'Figtree',sans-serif; font-weight:600; color:var(--color-moss); }
+    /* each row: tick + name = "include" zone (fills the row); drill button sits apart on the right */
+    .geo-item { display:flex; align-items:center; gap:.55rem; padding:.35rem .5rem; border-radius:4px; cursor:pointer; }
+    .geo-item:hover { background:var(--color-moss-tint); }
+    .geo-item .nm { flex:1 1 auto; }
+    .geo-open { flex:0 0 auto; display:inline-flex; align-items:center; gap:.25rem; font:inherit; font-size:.82rem; font-weight:600;
+      font-family:'Figtree',sans-serif; color:var(--color-moss); background:var(--color-surface); border:1px solid var(--color-border);
+      border-radius:4px; padding:.28rem .55rem; cursor:pointer; white-space:nowrap; }
+    .geo-open:hover { border-color:var(--color-moss); background:var(--color-moss-tint); }
 
     /* layers */
     .cat-group { margin-top:1rem; }
@@ -123,7 +136,14 @@
     @keyframes ds-draw { to { stroke-dashoffset:0; } }
     .prog-bar { height:10px; border-radius:999px; background:var(--color-bg-alt); overflow:hidden; }
     .prog-bar i { display:block; height:100%; width:0; background:var(--color-moss); border-radius:999px; transition:width .5s ease-out; }
-    .prog-msg { margin:.5rem 0 0; font-size:.9rem; color:var(--color-text-secondary); }
+    /* a moving sheen while a build is active, so a slow download never looks frozen */
+    .prog-bar.working i { background-image:linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent);
+      background-size:2rem 100%; background-repeat:no-repeat; animation:prog-sheen 1.2s linear infinite; }
+    @keyframes prog-sheen { from { background-position:-2rem 0; } to { background-position:calc(100% + 2rem) 0; } }
+    .prog-layer { margin:.6rem 0 0; font-family:'Figtree',sans-serif; font-weight:600; font-size:.95rem; color:var(--color-text-primary); }
+    .prog-layer .count { color:var(--color-text-muted); font-weight:500; }
+    .prog-msg { margin:.3rem 0 0; font-size:.85rem; color:var(--color-text-secondary); }
+    @media (prefers-reduced-motion:reduce){ .prog-bar.working i { animation:none; } }
     .prog-log { margin:.75rem 0 0; font:11px/1.5 ui-monospace,Menlo,monospace; color:var(--color-text-muted);
       background:#FFFFFF; border:1px solid var(--color-border); border-radius:4px; padding:.5rem .65rem; max-height:9rem; overflow-y:auto; white-space:pre-wrap; }
     #preview-frame { width:100%; height:560px; border:1px solid var(--color-border); border-radius:6px; margin-top:1rem; background:#EAE9E3; }
@@ -176,6 +196,7 @@
       then we build it from open data and hand you the link. Free to start — you sign in
       with your email when you publish.</p>
 
+    <div id="resume-local" hidden></div>
     <div id="resume-drafts"></div>
 
     <nav class="stepper" aria-label="Steps">
@@ -245,6 +266,10 @@
         </div>
       </div>
       <nav class="geo-crumbs" id="geo-crumbs" aria-label="Region drill-down"></nav>
+      <div class="geo-legend" aria-hidden="true">
+        <span><i class="tick"></i> Tick an area to <b>include</b> it in your atlas</span>
+        <span><i class="drill">Open&nbsp;›</i> Go inside it to pick <b>smaller</b> areas</span>
+      </div>
       <div class="geo-wrap">
         <div class="geo-list" id="geo-list"><span class="hint" style="padding:.5rem">Choose a country to load its boundaries.</span></div>
         <div id="geo-map" role="application" aria-label="Region selection map — click areas to select them"></div>
@@ -276,7 +301,8 @@
       <h2 id="build-title">Building your atlas…</h2>
       <p class="hint" id="build-sub">This usually takes one to a few minutes — layers are assembled from open data on the fly.</p>
       <div class="prog">
-        <div class="prog-bar"><i id="prog-fill"></i></div>
+        <div class="prog-bar" id="prog-bar"><i id="prog-fill"></i></div>
+        <p class="prog-layer" id="prog-layer" hidden></p>
         <p class="prog-msg" id="prog-msg">Queued…</p>
         <div class="prog-log" id="prog-log" hidden></div>
       </div>
@@ -318,9 +344,10 @@
       </div>
     </div>
     <div id="auth-step-wait" hidden>
-      <p>We sent a sign-in link to <b id="auth-sent-to"></b>. Click it (check spam too) —
-        this page will continue automatically.</p>
-      <p class="hint">Waiting for verification…</p>
+      <p>We sent a sign-in link to <b id="auth-sent-to"></b>. Open it (check spam too) — it
+        confirms in a new tab, then <b>come back to this tab</b> and your atlas will continue
+        right where you left off.</p>
+      <p class="hint">Waiting for you to click the link…</p>
       <div class="btnrow"><button class="btn ghost" id="auth-cancel-2">Cancel</button></div>
     </div>
     <div id="auth-msg"></div>

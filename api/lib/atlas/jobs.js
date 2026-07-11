@@ -84,6 +84,7 @@ export function getJob(id) {
   return {
     id: j.id, slug: j.slug, status: j.status, step: j.step || '',
     pct: j.pct || 0, message: j.message || '', queuedBehind: queuePosition(j),
+    layer: j.layer || '', lnum: j.lnum || 0, ltot: j.ltot || 0,
     logTail: (j.log || []).slice(-12),
   };
 }
@@ -217,7 +218,9 @@ function handleLine(job, line) {
   }
   if (evt.event === 'progress') {
     job.step = String(evt.step || job.step || '');
-    if (Number.isFinite(evt.pct)) job.pct = Math.max(0, Math.min(99, Math.round(evt.pct)));
+    // pct is already the monotonic overall value (the builder scales per-layer)
+    if (Number.isFinite(evt.pct)) job.pct = Math.max(job.pct || 0, Math.min(99, Math.round(evt.pct)));
+    if (evt.layer != null) { job.layer = String(evt.layer); job.lnum = evt.lnum | 0; job.ltot = evt.ltot | 0; }
     if (evt.msg) { job.message = String(evt.msg); pushLog(job, `[${job.step}] ${evt.msg}`); }
   } else if (evt.event === 'warn') {
     pushLog(job, 'warning: ' + (evt.msg || ''));

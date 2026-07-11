@@ -22,8 +22,28 @@ def emit(obj):
     sys.stdout.flush()
 
 
+# Each recipe reports its own 0–100% progress; the orchestrator assigns it a
+# window (base + span) of the overall bar via set_window() so the bar only ever
+# moves forward. The active layer's name/number ride along for the UI headline.
+_WIN = {"base": 0.0, "span": 100.0, "label": "", "num": 0, "total": 0}
+
+
+def set_window(base, span, label="", num=0, total=0):
+    _WIN["base"] = float(base)
+    _WIN["span"] = float(span)
+    _WIN["label"] = label or ""
+    _WIN["num"] = int(num or 0)
+    _WIN["total"] = int(total or 0)
+
+
 def progress(step, pct, msg=""):
-    emit({"event": "progress", "step": step, "pct": pct, "msg": msg})
+    try:
+        local = max(0.0, min(100.0, float(pct)))
+    except Exception:
+        local = 0.0
+    overall = int(max(0, min(99, round(_WIN["base"] + local / 100.0 * _WIN["span"]))))
+    emit({"event": "progress", "step": step, "pct": overall, "msg": msg,
+          "layer": _WIN["label"], "lnum": _WIN["num"], "ltot": _WIN["total"]})
 
 
 def warn(msg):

@@ -552,10 +552,7 @@ router.post('/auth/request-link', async (req, res) => {
   linkRate.set(ip, hits);
 
   reg.upsertAccount(email);
-  let next = String((req.body && req.body.next) || '');
-  if (!/^\/[a-zA-Z0-9/_\-.?=&%]*$/.test(next)) next = '';
-  const link = `${siteBase(req)}/apps/atlas/api/auth/verify?token=${makeSafe(auth.makeLoginToken(email))}` +
-    (next ? `&next=${encodeURIComponent(next)}` : '');
+  const link = `${siteBase(req)}/apps/atlas/api/auth/verify?t=${makeSafe(auth.makeLoginToken(email))}`;
   const result = await sendMail({
     to: email,
     subject: 'Sign in to LOKA Atlas',
@@ -566,14 +563,15 @@ router.post('/auth/request-link', async (req, res) => {
 function makeSafe(t) { return encodeURIComponent(t); }
 
 router.get('/auth/verify', (req, res) => {
-  const p = auth.readLoginToken(String(req.query.token || ''));
-  if (!p) return res.status(400).send(page('Link expired', 'This sign-in link is invalid or has expired. Request a new one from the wizard.'));
+  const p = auth.readLoginToken(String(req.query.t || req.query.token || ''));
+  if (!p) return res.status(400).send(page('Link expired', 'This sign-in link is invalid or has already been used. Request a fresh one from the wizard.'));
   reg.markVerified(p.email);
   res.setHeader('Set-Cookie', auth.sessionCookie(p.email));
-  let next = String(req.query.next || '');
-  if (!/^\/[a-zA-Z0-9/_\-.?=&%]*$/.test(next)) next = '';
-  if (next) return res.redirect(302, next);
-  res.send(page('Signed in', `You're signed in as <b>${p.email}</b>. Return to the wizard tab — it will pick this up automatically.`));
+  // No redirect: the wizard tab you came from is polling and will continue on its
+  // own with your work intact. Redirecting here would open a second, empty wizard.
+  res.send(page('Signed in',
+    `You're signed in as <b>${p.email}</b>.<br><br>` +
+    `Return to the <b>LOKA Atlas</b> tab you were using — your atlas is still there and will continue automatically. You can close this tab.`));
 });
 
 router.get('/auth/me', (req, res) => {

@@ -15,7 +15,7 @@ import os
 import sys
 import traceback
 
-from common import bbox_geom, emit, pad_bbox, progress, warn, load_selection
+from common import bbox_geom, emit, pad_bbox, progress, set_window, warn, load_selection
 import recipes as recipe_mod
 
 
@@ -124,7 +124,14 @@ def main():
     catalog = json.load(open(spec["catalogFile"]))
     by_id = {l["id"]: l for l in catalog["layers"]}
 
-    progress("region", 2, "resolving your region")
+    chosen = [by_id[i] for i in spec["layers"] if i in by_id]
+    n = len(chosen)
+
+    # Reserve small bookends (region prep, manifest assembly) and give the layers
+    # the middle of the bar; each layer gets an equal, forward-only slice.
+    LAYER_LO, LAYER_HI = 5.0, 95.0
+    set_window(0.0, LAYER_LO, "Preparing your region", 0, n)
+    progress("region", 40, "resolving your region")
     sel, sel_bounds, _ = load_selection(spec)
     bbox = pad_bbox(sel_bounds, 0.06)
     ctx = {
@@ -133,14 +140,14 @@ def main():
     }
 
     layers = []
-    chosen = [by_id[i] for i in spec["layers"] if i in by_id]
-    n = len(chosen)
+    span = (LAYER_HI - LAYER_LO) / max(n, 1)
     for idx, entry in enumerate(chosen):
         fn = recipe_mod.RECIPES.get(entry["recipe"])
         if not fn:
             warn(f"unknown recipe {entry['recipe']} — skipped")
             continue
-        progress(entry["id"], int(100 * idx / max(n, 1)), f"building “{entry['label']}”")
+        set_window(LAYER_LO + span * idx, span, entry["label"], idx + 1, n)
+        progress(entry["id"], 0, f"Building “{entry['label']}”")
         try:
             stanzas = fn(ctx)
         except Exception as ex:
@@ -158,7 +165,8 @@ def main():
         emit({"event": "error", "msg": "no layers could be built for this region"})
         sys.exit(1)
 
-    progress("manifest", 96, "assembling manifest")
+    set_window(95.0, 5.0, "Finishing up", 0, 0)
+    progress("manifest", 40, "assembling your atlas")
     # region may have been sharpened by the admin recipe (LGD polygons)
     final_bounds = pad_bbox(list(ctx["sel"].bounds), 0.08)
     center = [round((final_bounds[0] + final_bounds[2]) / 2, 4),
