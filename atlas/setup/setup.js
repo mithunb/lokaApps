@@ -530,7 +530,7 @@
       $("#tier-note").textContent = (r.tier === "india"
         ? "India tier — the full catalogue, including LGD blocks and WRIS water layers."
         : "Global tier — boundaries, OSM waterways and ESA WorldCover land cover.")
-        + " Layers come pre-selected from the Bioregion atlas template — the Deoria · Kushinagar · Gorakhpur reference instance. Adjust freely.";
+        + " Sensible layers come pre-selected — adjust freely.";
       renderCatalog();
     }).catch(function (e) { msg(3, esc(errMsg(e))); });
   }
@@ -653,7 +653,7 @@
     show(4);
     $("#build-title").textContent = "Building your atlas…";
     $("#prog-fill").style.width = "3%";
-    $("#prog-msg").textContent = "Creating instance…";
+    $("#prog-msg").textContent = "Creating your atlas…";
     $("#preview-wrap").hidden = true;
     // publish is the destination of this step — visible from the start, inactive until built
     $("#next-4").hidden = false;

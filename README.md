@@ -71,8 +71,8 @@ LOKA Atlas is a self-serve map publishing platform — organisations pick a regi
 `atlas/` is its code: a reusable map engine, not a one-off. `atlas.js` renders
 whatever a **dataset manifest** describes; a dataset is a self-contained folder of a
 `manifest.json` plus its data files. Nothing about a specific geography is hard-coded.
-The first instance is the Deoria–Kushinagar–Gorakhpur bioregion atlas, built with the
-Systems Practice at Socratus and Jagriti. Orgs interested in their own instance start
+The first atlas covers Deoria–Kushinagar–Gorakhpur, built with the
+Systems Practice at Socratus and Jagriti. Orgs interested in their own atlas start
 at `atlas/create/`.
 
 ```

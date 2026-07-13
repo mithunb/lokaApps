@@ -68,7 +68,7 @@
     document.title = "LOKA Atlas \u2014 layered maps for any geography";
     setText("#atlas-title", "LOKA Atlas");
     setText("#atlas-subtitle", "Layered, shareable maps for any geography \u2014 built from open data.");
-    setText("#atlas-about", "Every atlas below is an instance of the same engine: pick a region, choose layers, add your data, and share it. Public tech by Socratus.");
+    setText("#atlas-about", "Every atlas below is built with the same engine: pick a region, choose layers, add your data, and share it. Public tech by Socratus.");
     var home = $("#atlas-home");
     var stage = document.querySelector(".atlas-stage");
     if (stage) stage.style.display = "none";
@@ -89,10 +89,9 @@
       return a;
     }
 
-    // the reference instance doubles as the template for new atlases
-    grid.appendChild(card("./?dataset=deoria-bioregion", "Reference instance \u00b7 template", "template",
+    grid.appendChild(card("./?dataset=deoria-bioregion", "Featured atlas", "template",
       "Deoria \u00b7 Kushinagar \u00b7 Gorakhpur",
-      "The bioregional atlas built with the Systems Practice at Socratus and Jagriti \u2014 crops, value chains and ecology across three eastern-UP districts. New atlases start from its template.",
+      "Built with the Systems Practice at Socratus and Jagriti \u2014 crops, value chains and ecology across three eastern-UP districts.",
       "Open the atlas"));
 
     var build = card("./setup/", "For organisations", "",
@@ -109,8 +108,8 @@
         if (!data || !data.instances) return;
         data.instances.forEach(function (i) {
           if (i.slug === "deoria-bioregion") return;
-          var c = card("./?dataset=" + encodeURIComponent(i.slug), "Instance", "",
-            i.title, [i.org, i.regionLabel].filter(Boolean).join(" \u00b7 ") || "A LOKA Atlas instance.",
+          var c = card("./?dataset=" + encodeURIComponent(i.slug), "Atlas", "",
+            i.title, [i.org, i.regionLabel].filter(Boolean).join(" \u00b7 ") || "Built with LOKA Atlas.",
             "Open the atlas");
           grid.insertBefore(c, build);
         });
