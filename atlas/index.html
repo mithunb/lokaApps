@@ -62,7 +62,8 @@
     .share-btn { display:inline-flex; align-items:center; gap:.4rem; font:inherit; font-size:.85rem; font-weight:600;
       padding:.45rem .85rem; border:1px solid var(--color-border); border-radius:var(--radius-md);
       background:var(--color-surface); color:var(--color-text-primary); cursor:pointer; }
-    .share-btn[hidden] { display:none; }
+    /* the hidden attribute must always win, whatever display a class sets */
+    [hidden] { display:none !important; }
     .share-btn:hover { border-color:var(--color-moss); color:var(--color-canopy); }
     .share-btn svg { width:15px; height:15px; }
     .org-brand-line { display:inline-flex; align-items:center; gap:.5rem; margin-top:.4rem;

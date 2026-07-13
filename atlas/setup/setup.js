@@ -15,6 +15,7 @@
 
   var S = {
     step: 1,
+    mode: "wizard",        // 'home' = dashboard only; 'wizard' = the step flow
     visibility: "public",
     logoData: null,
     slugTouched: false,
@@ -60,6 +61,23 @@
     window.scrollTo({ top: 0 });
     if (step >= 1 && step <= 3) saveLocal(); // keep a browser-local backup of in-progress work
   }
+
+  // Landing view for returning creators: just their atlases — the wizard stays
+  // out of sight until "Build a new atlas".
+  function showHome() {
+    S.mode = "home";
+    $(".stepper").hidden = true;
+    for (var i = 1; i <= 5; i++) $("#step-" + i).hidden = true;
+    renderMyAtlases();
+    window.scrollTo({ top: 0 });
+  }
+  function startWizard() {
+    S.mode = "wizard";
+    $(".stepper").hidden = false;
+    renderMyAtlases(); // dashboard steps aside while building
+    show(1);
+  }
+  $("#start-new").onclick = startWizard;
 
   /* ---- browser-local autosave: survives a reload or the sign-in link opening a new tab.
      Separate from server drafts (which need an account); this is best-effort resilience. ---- */
@@ -980,6 +998,9 @@
       }, 300);
     }
     (st.chosen || []).forEach(function (id) { S.catalog.chosen[id] = true; });
+    S.mode = "wizard";
+    $(".stepper").hidden = false;
+    renderMyAtlases();
     show(Math.min(st.step || 1, 3));
   }
 
@@ -1051,7 +1072,7 @@
     var sec = $("#my-atlases"), list = $("#my-atlases-list");
     var mine = (S.session && S.session.instances) || [];
     if (!mine.length) { sec.hidden = true; return; }
-    sec.hidden = false;
+    sec.hidden = S.mode !== "home"; // dashboard only on the landing view
     list.className = "mine";
     list.innerHTML = "";
     mine.forEach(function (i) {
@@ -1100,6 +1121,7 @@
     $("#f-org").value = inst.org || bnd.orgName || "";
     $("#f-orgurl").value = bnd.orgUrl || "";
     $("#f-about").value = inst.about || "";
+    $("#f-email").value = inst.email || "";
     $("#f-footer").value = bnd.footerLine || "";
     S.logoData = null; S.removeLogo = false;
     var lh = $("#logo-hint");
@@ -1112,7 +1134,7 @@
   function editDetails(slug) {
     api("instances/" + slug).then(function (inst) {
       if (!inst.canEdit) { alert("You can't edit this atlas."); return; }
-      S.editSlug = slug; S.editMode = "details"; S.editInst = inst;
+      S.editSlug = slug; S.editMode = "details"; S.editInst = inst; S.mode = "wizard";
       fillDetails(inst);
       var eb = $("#edit-banner"); eb.hidden = false;
       eb.innerHTML = "Editing <b>" + esc(inst.title) + "</b> — details, branding &amp; visibility. " +
@@ -1156,7 +1178,7 @@
   function changeLayers(slug) {
     api("instances/" + slug).then(function (inst) {
       if (!inst.canEdit) { alert("You can't edit this atlas."); return; }
-      S.editSlug = slug; S.editMode = "rebuild"; S.editInst = inst; S.regionKept = true;
+      S.editSlug = slug; S.editMode = "rebuild"; S.editInst = inst; S.regionKept = true; S.mode = "wizard";
       // fully reset the drill state — leftover crumbs/features would read as a
       // "new region" and defeat the keep-current-region default
       S.geo = { iso3: inst.region.iso3, levels: [1], crumbs: [], viewLevel: 1, features: [], selected: {} };
@@ -1197,8 +1219,12 @@
     S.catalog = { tier: "", layers: [], chosen: {} };
     setVisibility("public");
     msg(1, ""); msg(4, "");
-    renderMyAtlases();
-    show(1);
+    if (((S.session && S.session.instances) || []).length) {
+      showHome(); // back to the dashboard, not a blank form
+    } else {
+      renderMyAtlases();
+      show(1);
+    }
   }
 
   // Deep-link from the viewer's "Manage this atlas" button: ?edit=<slug> scrolls
@@ -1213,6 +1239,7 @@
       }
       return;
     }
+    showHome(); // the dashboard is the manage surface
     var row = document.querySelector('.mine-item[data-slug="' + (window.CSS && CSS.escape ? CSS.escape(slug) : slug) + '"]');
     if (row) {
       row.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -1233,9 +1260,15 @@
     loadDrafts();
     renderMyAtlases();
     if (EDIT_PARAM) focusManage(EDIT_PARAM);
+    else if ((me.instances || []).length) showHome(); // returning creator → dashboard, not the form
   }).catch(function () {
     if (EDIT_PARAM) focusManage(EDIT_PARAM); // not signed in → focusManage will prompt
-    else if (SIGNIN_PARAM) signIn("Sign in to see and manage your atlases.").then(function (ok) { if (ok) loadDrafts(); });
+    else if (SIGNIN_PARAM) signIn("Sign in to see and manage your atlases.").then(function (ok) {
+      if (ok) {
+        loadDrafts();
+        if (((S.session && S.session.instances) || []).length) showHome();
+      }
+    });
   });
   loadDirectory();
   show(1);
