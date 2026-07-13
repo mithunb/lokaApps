@@ -76,6 +76,12 @@
         } catch (e) { msg("#msg-start", "Couldn't read that Excel file: " + esc(e.message)); }
       };
       rd.readAsArrayBuffer(file);
+    } else if (/\.(json|geojson)$/i.test(name)) {
+      readText(file, function (text) { fromJsonText(name, text); });
+    } else if (/\.kml$/i.test(name)) {
+      readText(file, function (text) { fromKml(name, text); });
+    } else if (/\.gpx$/i.test(name)) {
+      readText(file, function (text) { fromGpx(name, text); });
     } else {
       Papa.parse(file, {
         header: true, skipEmptyLines: true,
@@ -83,6 +89,131 @@
         error: function (e) { msg("#msg-start", "Couldn't parse that file: " + esc(e.message)); },
       });
     }
+  }
+
+  function readText(file, cb) {
+    var rd = new FileReader();
+    rd.onload = function () { cb(String(rd.result)); };
+    rd.readAsText(file);
+  }
+
+  // scalar-ise nested values so column profiling stays sane
+  function flatVal(v) {
+    if (v == null) return "";
+    if (typeof v === "object") return JSON.stringify(v);
+    return v;
+  }
+
+  function rowsFromObjects(list) {
+    var cols = [], seen = {};
+    list.forEach(function (o) {
+      Object.keys(o || {}).forEach(function (k) { if (!seen[k]) { seen[k] = 1; cols.push(k); } });
+    });
+    var rows = list.map(function (o) {
+      var r = {};
+      cols.forEach(function (k) { r[k] = flatVal(o ? o[k] : ""); });
+      return r;
+    });
+    return { cols: cols, rows: rows };
+  }
+
+  // Tabular JSON (array of objects, or {data|rows|records:[…]}) — or GeoJSON.
+  function fromJsonText(name, text) {
+    var data;
+    try { data = JSON.parse(text); }
+    catch (e) { msg("#msg-start", "That file isn't valid JSON: " + esc(e.message)); return; }
+    if (data && data.type === "FeatureCollection" && Array.isArray(data.features)) return fromGeojson(name, data);
+    if (data && data.type === "Feature") return fromGeojson(name, { type: "FeatureCollection", features: [data] });
+    var list = Array.isArray(data) ? data
+      : (data && Array.isArray(data.data)) ? data.data
+      : (data && Array.isArray(data.rows)) ? data.rows
+      : (data && Array.isArray(data.records)) ? data.records
+      : null;
+    if (!list || !list.length || typeof list[0] !== "object") {
+      msg("#msg-start", "Couldn't find a table in that JSON — expected an array of objects, or GeoJSON.");
+      return;
+    }
+    var t = rowsFromObjects(list);
+    fromTable(name, t.cols, t.rows);
+  }
+
+  // GeoJSON: point features become rows (properties + latitude/longitude).
+  function fromGeojson(name, fc) {
+    var pts = [], skipped = 0;
+    (fc.features || []).forEach(function (f) {
+      var g = f && f.geometry;
+      var c = g && g.type === "Point" ? g.coordinates
+        : (g && g.type === "MultiPoint" && g.coordinates.length) ? g.coordinates[0] : null;
+      if (!c || c.length < 2) { skipped++; return; }
+      var row = {};
+      Object.keys((f && f.properties) || {}).forEach(function (k) { row[k] = flatVal(f.properties[k]); });
+      row.longitude = c[0];
+      row.latitude = c[1];
+      pts.push(row);
+    });
+    if (!pts.length) {
+      msg("#msg-start", "No point features found — polygon and line layers aren't supported yet. Export points, or a table joined by place names.");
+      return;
+    }
+    if (skipped) msg("#msg-start", skipped + " non-point feature" + (skipped > 1 ? "s" : "") + " skipped — points carried through.", "ok");
+    var t = rowsFromObjects(pts);
+    fromTable(name, t.cols, t.rows);
+  }
+
+  // namespace-proof tag lookup (KML/GPX files vary in namespace usage)
+  function xtags(el, name) {
+    return Array.prototype.slice.call(el.getElementsByTagNameNS("*", name));
+  }
+  function xtext(el, name) {
+    var n = xtags(el, name)[0];
+    return n ? n.textContent.trim() : "";
+  }
+
+  // KML: Placemarks with a <Point> become rows; ExtendedData carried through.
+  function fromKml(name, text) {
+    var doc = new DOMParser().parseFromString(text, "text/xml");
+    if (doc.getElementsByTagName("parsererror").length) { msg("#msg-start", "Couldn't read that KML file."); return; }
+    var pts = [], skipped = 0;
+    xtags(doc, "Placemark").forEach(function (pm) {
+      var pt = xtags(pm, "Point")[0];
+      var coords = pt ? xtext(pt, "coordinates") : "";
+      var c = coords ? coords.split(",") : [];
+      if (c.length < 2) { skipped++; return; }
+      var row = { name: xtext(pm, "name"), description: xtext(pm, "description") };
+      xtags(pm, "Data").forEach(function (d) {
+        var k = d.getAttribute("name");
+        if (k) row[k] = xtext(d, "value");
+      });
+      xtags(pm, "SimpleData").forEach(function (d) {
+        var k = d.getAttribute("name");
+        if (k) row[k] = d.textContent.trim();
+      });
+      row.longitude = parseFloat(c[0]);
+      row.latitude = parseFloat(c[1]);
+      pts.push(row);
+    });
+    if (!pts.length) { msg("#msg-start", "No point placemarks found in that KML — polygon and line layers aren't supported yet."); return; }
+    if (skipped) msg("#msg-start", skipped + " non-point placemark" + (skipped > 1 ? "s" : "") + " skipped — points carried through.", "ok");
+    var t = rowsFromObjects(pts);
+    fromTable(name, t.cols, t.rows);
+  }
+
+  // GPX: waypoints become rows.
+  function fromGpx(name, text) {
+    var doc = new DOMParser().parseFromString(text, "text/xml");
+    if (doc.getElementsByTagName("parsererror").length) { msg("#msg-start", "Couldn't read that GPX file."); return; }
+    var pts = [];
+    xtags(doc, "wpt").forEach(function (w) {
+      var lat = parseFloat(w.getAttribute("lat")), lng = parseFloat(w.getAttribute("lon"));
+      if (isNaN(lat) || isNaN(lng)) return;
+      pts.push({
+        name: xtext(w, "name"), description: xtext(w, "desc"),
+        elevation: xtext(w, "ele"), latitude: lat, longitude: lng,
+      });
+    });
+    if (!pts.length) { msg("#msg-start", "No waypoints found in that GPX file — tracks and routes aren't supported yet."); return; }
+    var t = rowsFromObjects(pts);
+    fromTable(name, t.cols, t.rows);
   }
 
   function fromTable(filename, columns, rows) {
@@ -265,24 +396,54 @@
       .catch(function (e) { chatAdd("ai", "⚠ " + errMsg(e)); });
   }
 
-  /* ---------------- commit ---------------- */
+  /* ---------------- commit (signed-in owner) ---------------- */
 
-  var savedToken = null;
-  try { savedToken = localStorage.getItem("atlas-token-" + (qsDataset || "")); } catch (e) {}
-  if (savedToken) $("#f-token").value = savedToken;
+  function refreshAuth() {
+    return api("auth/me").then(function (me) {
+      $("#commit-auth").innerHTML = "Signed in as <b>" + esc(me.email) + "</b> — publishing adds the layer to this atlas.";
+      $("#commit-signin").hidden = true;
+      return me;
+    }).catch(function () {
+      $("#commit-auth").textContent = "Publishing needs the atlas's owner — sign in with your email.";
+      $("#commit-signin").hidden = false;
+      return null;
+    });
+  }
+  refreshAuth();
+
+  var authPoll = null;
+  $("#auth-send").onclick = function () {
+    var email = $("#f-auth-email").value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { msg("#msg-commit", "Enter a valid email."); return; }
+    api("auth/request-link", { method: "POST", body: { email: email } }).then(function (r) {
+      msg("#msg-commit", r.sent
+        ? "Check your inbox and click the sign-in link — this page will notice automatically."
+        : "This server can't send email yet — ask the LOKA team (mithun@socratus.org) for your sign-in link.", r.sent ? "ok" : "err");
+      clearInterval(authPoll);
+      authPoll = setInterval(function () {
+        api("auth/me").then(function () {
+          clearInterval(authPoll);
+          refreshAuth().then(function () { msg("#msg-commit", "Signed in ✓ — you can add the layer now.", "ok"); });
+        }).catch(function () {});
+      }, 3000);
+    }).catch(function (e) { msg("#msg-commit", esc(errMsg(e))); });
+  };
 
   $("#commit").onclick = function () {
     if (!S.result) return;
-    var token = $("#f-token").value.trim();
-    if (!token) { msg("#msg-commit", "Paste the atlas's edit token first."); return; }
-    try { localStorage.setItem("atlas-token-" + S.dataset, token); } catch (e) {}
-    api("layers/commit", { method: "POST", headers: { Authorization: "Bearer " + token },
-      body: { importId: S.result.importId } })
+    api("layers/commit", { method: "POST", body: { importId: S.result.importId } })
       .then(function (r) {
         msg("#msg-commit", 'Layer added 🎉 — <a href="./?dataset=' + encodeURIComponent(r.dataset) + '" target="_blank">open the atlas</a>', "ok");
         $("#preview-frame").src = "./?dataset=" + encodeURIComponent(r.dataset);
       })
-      .catch(function (e) { msg("#msg-commit", esc(errMsg(e))); });
+      .catch(function (e) {
+        if (e.needsAuth) {
+          $("#commit-signin").hidden = false;
+          msg("#msg-commit", "Sign in as this atlas's owner first — email field above.");
+          return;
+        }
+        msg("#msg-commit", esc(errMsg(e)));
+      });
   };
   $("#discard").onclick = function () {
     if (!S.result) return;

@@ -255,6 +255,11 @@
         if (inst && inst.canEdit) {
           btn.href = "./setup/?edit=" + encodeURIComponent(DATASET);
           btn.hidden = false;
+          var add = $("#add-data-btn");
+          if (add) {
+            add.href = "./layers.html?dataset=" + encodeURIComponent(DATASET);
+            add.hidden = false;
+          }
         }
       })
       .catch(function () {});

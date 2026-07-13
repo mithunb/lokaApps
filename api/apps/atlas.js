@@ -1303,11 +1303,10 @@ router.post('/layers/commit', (req, res) => {
   const session = imports.getImport(String(b.importId || ''));
   if (!session) return res.status(404).json({ error: 'import expired or unknown' });
 
-  // auth: instance edit token (registry) or admin token (e.g. the deoria dataset)
+  // auth: the atlas's signed-in owner, its edit token, or admin (e.g. the deoria dataset)
   const inst = reg.getInstance(session.dataset);
-  const bearer = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  const ok = (inst && bearer && reg.hashToken(bearer) === inst.tokenHash) || auth.isAdmin(req);
-  if (!ok) return res.status(403).json({ error: 'edit token required to change this atlas' });
+  const ok = (inst && callerCanEdit(req, inst)) || auth.isAdmin(req);
+  if (!ok) return res.status(403).json({ error: 'sign in as this atlas’s owner to change it', needsAuth: true });
 
   try {
     const { frag, features } = (function () {

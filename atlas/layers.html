@@ -39,6 +39,9 @@
     .eyebrow { display:inline-block; font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:600;
       letter-spacing:.14em; text-transform:uppercase; color:var(--color-moss); margin:0 0 .8rem;
       padding:.25rem .6rem; background:var(--color-moss-tint); border-radius:4px; }
+    .beta { display:inline-block; font-family:'Figtree',sans-serif; font-size:.68rem; font-weight:700;
+      letter-spacing:.1em; text-transform:uppercase; color:var(--color-rust-deep); background:var(--color-rust-tint);
+      border-radius:4px; padding:.22rem .55rem; vertical-align:.45em; margin-left:.5rem; }
 
     .panel { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:1.35rem; }
     label.f { display:flex; flex-direction:column; gap:.3rem; font-size:.85rem; font-weight:600; color:var(--color-text-secondary); margin-bottom:.8rem; }
@@ -109,10 +112,13 @@
 
   <main>
     <span class="eyebrow">loka atlas · your data</span>
-    <h1>Add your data to the map</h1>
-    <p style="max-width:46rem">Drop in a spreadsheet — survey results by village, a facility list, field GPS points —
-      and it becomes a styled map layer: joined to your atlas's boundaries or plotted from coordinates.
-      Steer the result in plain language, check every uncertain match yourself, then publish it to your atlas.</p>
+    <h1>Add your data to the map<span class="beta">Experimental</span></h1>
+    <p style="max-width:46rem">Every atlas starts with its default open-data layers — this is where you make it yours.
+      Drop in your data — survey results by village, a facility list, field GPS points — and it becomes a styled
+      map layer: joined to your atlas's boundaries or plotted from coordinates. Steer the result in plain language,
+      check every uncertain match yourself, then publish it to your atlas.</p>
+    <p style="max-width:46rem" class="hint">This workbench is experimental and under active development — expect rough
+      edges. Nothing touches your atlas until you press “Add layer to atlas”.</p>
 
     <section class="panel" id="start">
       <label class="f" style="max-width:24rem">Which atlas?
@@ -121,9 +127,9 @@
       </label>
       <div class="drop" id="drop">
         <svg class="drop-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg>
-        <b>Drop a CSV or Excel file here</b>
-        <span>or click to choose — up to 5,000 rows</span>
-        <input type="file" id="f-file" accept=".csv,.tsv,.xlsx,.xls" />
+        <b>Drop a CSV, Excel, JSON, GeoJSON, KML or GPX file here</b>
+        <span>or click to choose — up to 5,000 rows / points</span>
+        <input type="file" id="f-file" accept=".csv,.tsv,.xlsx,.xls,.json,.geojson,.kml,.gpx" />
       </div>
       <details class="paste">
         <summary>…or paste a table (from Excel / Sheets)</summary>
@@ -183,9 +189,13 @@
 
         <div class="card">
           <h2>Publish to the atlas</h2>
-          <label class="f"><span>Edit token <span class="hint">(from when the atlas was created)</span></span>
-            <input type="text" id="f-token" placeholder="paste your edit token" autocomplete="off" spellcheck="false" />
-          </label>
+          <p class="hint" id="commit-auth">Checking who you are…</p>
+          <div id="commit-signin" hidden>
+            <label class="f" style="max-width:22rem"><span>Your email <span class="hint">(the one that owns this atlas)</span></span>
+              <input type="email" id="f-auth-email" placeholder="you@example.org" autocomplete="email" />
+            </label>
+            <div style="margin:.4rem 0 .6rem"><button class="btn secondary" id="auth-send">Email me a sign-in link</button></div>
+          </div>
           <div style="display:flex; gap:.6rem; flex-wrap:wrap">
             <button class="btn" id="commit">Add layer to atlas</button>
             <button class="btn secondary" id="discard">Discard</button>

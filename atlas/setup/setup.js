@@ -530,7 +530,7 @@
       $("#tier-note").textContent = (r.tier === "india"
         ? "India tier — the full catalogue, including LGD blocks and WRIS water layers."
         : "Global tier — boundaries, OSM waterways and ESA WorldCover land cover.")
-        + " Sensible layers come pre-selected — adjust freely.";
+        + " Sensible layers come pre-selected — adjust freely. These are your atlas's default layers; after it's built you can add your own data on top.";
       renderCatalog();
     }).catch(function (e) { msg(3, esc(errMsg(e))); });
   }
@@ -828,6 +828,13 @@
       : "Manage, edit or delete it anytime from <b>Your atlases</b> in this wizard.");
     body.appendChild(manage);
 
+    var next = document.createElement("p");
+    next.className = "hint";
+    next.innerHTML = "Your atlas ships with its default open-data layers — now make it yours: " +
+      '<a href="../layers.html?dataset=' + encodeURIComponent(S.build.slug) + '"><b>add your own data</b></a> ' +
+      "(CSV, Excel, JSON, GeoJSON, KML or GPX). Experimental — under active development.";
+    body.appendChild(next);
+
     body.appendChild(window.AtlasShare.panel({
       url: prettyUrl(),
       title: $("#f-title").value.trim(),
@@ -1038,6 +1045,13 @@
         actions.appendChild(open);
       }
       var busy = i.status === "building" || i.status === "pending-approval";
+      if (!busy && (i.status === "published" || i.status === "built")) {
+        var addData = document.createElement("a");
+        addData.href = "../layers.html?dataset=" + encodeURIComponent(i.slug);
+        addData.textContent = "Add data";
+        addData.title = "Add your own data as a map layer (CSV, Excel, JSON, GeoJSON, KML, GPX) — experimental, under development";
+        actions.appendChild(addData);
+      }
       var edit = document.createElement("button"); edit.textContent = "Edit details";
       edit.disabled = busy; edit.onclick = function () { editDetails(i.slug); };
       var reb = document.createElement("button"); reb.textContent = "Change layers";
