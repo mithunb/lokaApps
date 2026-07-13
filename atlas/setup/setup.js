@@ -67,7 +67,8 @@
   function saveLocal() {
     try {
       var st = draftState();
-      var meaningful = (st.fields && st.fields.title) || (st.geo && st.geo.selected && st.geo.selected.length);
+      var meaningful = (st.fields && st.fields.title) ||
+        (st.geo && ((st.geo.selected && st.geo.selected.length) || (st.geo.crumbs && st.geo.crumbs.length)));
       if (!meaningful) return;
       localStorage.setItem(LS_KEY, JSON.stringify({ state: st, at: Date.now() }));
     } catch (e) { /* private mode / quota — ignore */ }
@@ -190,13 +191,11 @@
     geoMap.on("load", function () {
       geoMap.addSource("units", { type: "geojson", data: { type: "FeatureCollection", features: [] }, promoteId: "id" });
       geoMap.addLayer({ id: "units-fill", type: "fill", source: "units", paint: {
-        "fill-color": ["case", ["boolean", ["feature-state", "sel"], false], "#40573D", "#B0863A"],
-        "fill-opacity": ["case", ["boolean", ["feature-state", "sel"], false], 0.45,
-          ["boolean", ["feature-state", "hover"], false], 0.25, 0.08],
+        "fill-color": "#40573D",
+        "fill-opacity": ["case", ["boolean", ["feature-state", "hover"], false], 0.42, 0.26],
       } });
       geoMap.addLayer({ id: "units-line", type: "line", source: "units", paint: {
-        "line-color": ["case", ["boolean", ["feature-state", "sel"], false], "#2F4230", "#9C5A34"],
-        "line-width": ["case", ["boolean", ["feature-state", "sel"], false], 2, 0.8] } });
+        "line-color": "#2F4230", "line-width": 1.1 } });
       geoMap.on("click", "units-fill", function (e) {
         if (e.features && e.features[0]) toggleUnit(e.features[0].properties.id);
       });
@@ -214,14 +213,48 @@
     });
   }
 
-  // Drill state: crumbs = the units opened so far; the list shows children of the
-  // last crumb (or the country's top level). Selections can mix siblings freely
-  // but must all sit at one depth — the built atlas is one set of units.
+  // Drill state: the LIST navigates (click a place → open it), the MAP composes
+  // (tap areas → keep just those). Nothing tapped = everything on the map is the
+  // atlas. Selection lives only inside the current view; navigating clears it.
   function resetGeo() {
     S.geo.crumbs = [];
     S.geo.viewLevel = 1;
     S.geo.features = [];
     S.geo.selected = {};
+  }
+
+  // two map moods: nothing tapped = the whole view is included (all lit);
+  // a tapped subset = chosen areas glow, the rest fade to faint context
+  function syncMapPaint() {
+    if (!geoMapReady) return;
+    var hasSel = Object.keys(S.geo.selected).length > 0;
+    geoMap.setPaintProperty("units-fill", "fill-color", hasSel
+      ? ["case", ["boolean", ["feature-state", "sel"], false], "#40573D", "#B0863A"]
+      : "#40573D");
+    geoMap.setPaintProperty("units-fill", "fill-opacity", hasSel
+      ? ["case", ["boolean", ["feature-state", "sel"], false], 0.5,
+          ["boolean", ["feature-state", "hover"], false], 0.18, 0.04]
+      : ["case", ["boolean", ["feature-state", "hover"], false], 0.42, 0.26]);
+    geoMap.setPaintProperty("units-line", "line-color", hasSel
+      ? ["case", ["boolean", ["feature-state", "sel"], false], "#2F4230", "#9C5A34"]
+      : "#2F4230");
+    geoMap.setPaintProperty("units-line", "line-width", hasSel
+      ? ["case", ["boolean", ["feature-state", "sel"], false], 2, 0.7]
+      : 1.1);
+  }
+
+  function clearSelection() {
+    if (geoMapReady) Object.keys(S.geo.selected).forEach(function (k) {
+      geoMap.setFeatureState({ source: "units", id: k }, { sel: false });
+    });
+    S.geo.selected = {};
+  }
+
+  function drillInto(f) {
+    clearSelection();
+    S.geo.crumbs.push({ id: f.properties.id, name: f.properties.name, level: S.geo.viewLevel, bbox: f.bbox });
+    S.geo.viewLevel += 1;
+    loadUnits();
   }
 
   function countryName() {
@@ -253,8 +286,9 @@
         S.geo.features.forEach(function (f) {
           geoMap.setFeatureState({ source: "units", id: f.properties.id }, { sel: !!S.geo.selected[f.properties.id] });
         });
-        var bb = parent ? null : unionBbox(S.geo.features);
-        var fit = bb || (S.geo.features.length ? unionBbox(S.geo.features) : null);
+        syncMapPaint();
+        var fit = (parent && parent.bbox && parent.bbox.length === 4) ? parent.bbox
+          : (S.geo.features.length ? unionBbox(S.geo.features) : null);
         if (fit) geoMap.fitBounds([[fit[0], fit[1]], [fit[2], fit[3]]], { padding: 30, duration: 400 });
       }
       updateGeoMeta();
@@ -272,7 +306,7 @@
     var root = document.createElement(S.geo.crumbs.length ? "button" : "span");
     root.className = S.geo.crumbs.length ? "" : "cur";
     root.textContent = countryName();
-    if (S.geo.crumbs.length) root.onclick = function () { S.geo.crumbs = []; S.geo.viewLevel = 1; loadUnits(); };
+    if (S.geo.crumbs.length) root.onclick = function () { clearSelection(); S.geo.crumbs = []; S.geo.viewLevel = 1; loadUnits(); };
     add(root);
     S.geo.crumbs.forEach(function (c, i) {
       sep();
@@ -281,6 +315,7 @@
       el.className = last ? "cur" : "";
       el.textContent = c.name;
       if (!last) el.onclick = function () {
+        clearSelection();
         S.geo.crumbs = S.geo.crumbs.slice(0, i + 1);
         S.geo.viewLevel = c.level + 1;
         loadUnits();
@@ -309,38 +344,47 @@
     var box = $("#geo-list");
     box.innerHTML = "";
     var canDrill = S.geo.viewLevel < maxLevel();
+    var childNoun = LEVEL_NOUN[S.geo.viewLevel + 1] || "smaller areas";
     S.geo.features
       .slice()
       .sort(function (a, b) { return a.properties.name.localeCompare(b.properties.name); })
       .forEach(function (f) {
         var id = f.properties.id;
-        var row = document.createElement("label");
-        row.className = "geo-item";
+        var row = document.createElement("button");
+        row.type = "button";
+        row.className = "geo-item" + (S.geo.selected[id] ? " on" : "");
         row.dataset.id = id;
-        var cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.checked = !!S.geo.selected[id];
-        cb.onchange = function () { toggleUnit(id); };
-        row.appendChild(cb);
         var nm = document.createElement("span");
         nm.className = "nm";
         nm.textContent = f.properties.name;
         row.appendChild(nm);
+        var chip = document.createElement("span");
+        chip.className = "in";
+        chip.textContent = "in the atlas";
+        chip.hidden = !S.geo.selected[id];
+        row.appendChild(chip);
         if (canDrill) {
-          var open = document.createElement("button");
-          open.type = "button";
-          open.className = "geo-open";
-          var childNoun = LEVEL_NOUN[S.geo.viewLevel + 1] || "smaller areas";
-          open.textContent = "Open " + childNoun + " ›";
-          open.title = "Pick individual " + childNoun + " inside " + f.properties.name;
-          open.onclick = function (ev) {
-            ev.preventDefault(); ev.stopPropagation();
-            S.geo.crumbs.push({ id: id, name: f.properties.name, level: S.geo.viewLevel });
-            S.geo.viewLevel += 1;
-            loadUnits();
-          };
-          row.appendChild(open);
+          var chev = document.createElement("span");
+          chev.className = "chev";
+          chev.setAttribute("aria-hidden", "true");
+          chev.textContent = "›";
+          row.appendChild(chev);
+          row.title = "Open " + f.properties.name + " — see its " + childNoun;
+          row.onclick = function () { drillInto(f); };
+        } else {
+          row.title = "Keep or remove " + f.properties.name;
+          row.onclick = function () { toggleUnit(id); };
         }
+        // hovering a name lights up its shape, so names and shapes stay connected
+        row.onmouseenter = function () {
+          if (!geoMapReady) return;
+          if (hoverId && hoverId !== id) geoMap.setFeatureState({ source: "units", id: hoverId }, { hover: false });
+          hoverId = id;
+          geoMap.setFeatureState({ source: "units", id: id }, { hover: true });
+        };
+        row.onmouseleave = function () {
+          if (geoMapReady && hoverId === id) { geoMap.setFeatureState({ source: "units", id: id }, { hover: false }); hoverId = null; }
+        };
         box.appendChild(row);
       });
     if (!S.geo.features.length) {
@@ -354,61 +398,83 @@
       delete S.geo.selected[id];
     } else {
       if (!f) return;
-      var levels = Object.keys(S.geo.selected).map(function (k) { return S.geo.selected[k].level; });
-      if (levels.length && levels[0] !== S.geo.viewLevel) {
-        if (!confirm("Your earlier picks are at a different level — clear them and start from here?")) return;
-        Object.keys(S.geo.selected).forEach(function (k) {
-          if (geoMapReady) geoMap.setFeatureState({ source: "units", id: k }, { sel: false });
-        });
-        S.geo.selected = {};
-        renderGeoList();
-      }
-      S.geo.selected[id] = { name: f.properties.name, bbox: f.bbox, level: S.geo.viewLevel };
+      S.geo.selected[id] = { name: f.properties.name, bbox: f.bbox };
     }
-    var row = document.querySelector('.geo-item[data-id="' + CSS.escape(id) + '"] input');
-    if (row) row.checked = !!S.geo.selected[id];
+    var row = document.querySelector('.geo-item[data-id="' + CSS.escape(id) + '"]');
+    if (row) {
+      row.classList.toggle("on", !!S.geo.selected[id]);
+      var chip = row.querySelector(".in");
+      if (chip) chip.hidden = !S.geo.selected[id];
+    }
     if (geoMapReady) geoMap.setFeatureState({ source: "units", id: id }, { sel: !!S.geo.selected[id] });
+    syncMapPaint();
     updateGeoMeta();
   }
 
-  function selection() {
-    return Object.keys(S.geo.selected).map(function (id) {
-      var s = S.geo.selected[id];
-      return { id: id, name: s.name, bbox: s.bbox, level: s.level };
-    });
+  // The region the atlas will cover — always exactly what the map shows:
+  // the tapped subset if any, else the place that was opened (whole view),
+  // else the whole country.
+  function effectiveRegion() {
+    if (!S.geo.iso3) return null;
+    var ids = Object.keys(S.geo.selected);
+    if (ids.length) {
+      return { mode: "subset", level: S.geo.viewLevel, units: ids.map(function (id) {
+        var s = S.geo.selected[id];
+        return { id: id, name: s.name, bbox: s.bbox };
+      }) };
+    }
+    var crumb = S.geo.crumbs.length ? S.geo.crumbs[S.geo.crumbs.length - 1] : null;
+    if (crumb) return { mode: "scope", level: crumb.level, units: [{ id: crumb.id, name: crumb.name, bbox: crumb.bbox }] };
+    if (S.geo.features.length) {
+      return { mode: "country", level: S.geo.viewLevel, units: S.geo.features.map(function (f) {
+        return { id: f.properties.id, name: f.properties.name, bbox: f.bbox };
+      }) };
+    }
+    return null;
   }
 
-  function selectionArea() {
-    var sel = selection();
-    if (!sel.length) return 0;
-    var bb = unionBbox(sel.map(function (s) { return { bbox: s.bbox }; }));
+  function regionArea(eff) {
+    if (!eff || !eff.units.length) return 0;
+    var bb = unionBbox(eff.units.map(function (u) { return { bbox: u.bbox }; }));
+    if (!bb) return 0;
     return (bb[2] - bb[0]) * (bb[3] - bb[1]);
   }
 
-  function selectionSizeState() {
-    var area = selectionArea();
+  function regionSizeState(eff) {
+    var area = regionArea(eff);
     if (area > LIMITS.hardAreaDeg2) return "blocked";
     if (area > LIMITS.freeAreaDeg2) return "approval";
     return "free";
   }
 
   function updateGeoMeta() {
-    var sel = selection();
     var meta = $("#geo-meta");
-    if (!sel.length) {
-      meta.innerHTML = "Tick areas to include them in your atlas — or <b>Open ›</b> one to pick smaller areas inside it.";
+    var eff = effectiveRegion();
+    if (!eff) {
+      meta.innerHTML = "Choose a country to begin — the map always shows exactly what your atlas will cover.";
       return;
     }
-    var names = sel.slice(0, 4).map(function (s) { return esc(s.name); }).join(", ") +
-      (sel.length > 4 ? " +" + (sel.length - 4) : "");
-    var state = selectionSizeState();
-    var line = "<b>" + sel.length + "</b> area" + (sel.length > 1 ? "s" : "") + " selected — " + names + ". ";
+    var noun = LEVEL_NOUN[S.geo.viewLevel] || "areas";
+    var crumb = S.geo.crumbs.length ? S.geo.crumbs[S.geo.crumbs.length - 1] : null;
+    var canDrill = S.geo.viewLevel < maxLevel();
+    var line;
+    if (eff.mode === "subset") {
+      var names = eff.units.slice(0, 4).map(function (u) { return esc(u.name); }).join(", ") +
+        (eff.units.length > 4 ? " +" + (eff.units.length - 4) : "");
+      line = "Your atlas: <b>" + names + "</b> — " + eff.units.length + " of " + S.geo.features.length + " " + noun +
+        (crumb ? " in " + esc(crumb.name) : "") + ". Tap the map to add or remove areas. ";
+    } else {
+      var scopeName = crumb ? crumb.name : countryName();
+      line = "Your atlas: <b>all of " + esc(scopeName) + "</b> — everything on the map. Tap areas to keep just some" +
+        (canDrill ? ", or open a place in the list to go deeper. " : ". ");
+    }
+    var state = regionSizeState(eff);
     if (state === "free") {
       line += '<span class="hint ok">Ready to build.</span>';
     } else if (state === "approval") {
-      line += '<span style="color:var(--color-sienna)">That\u2019s a big region. You can continue — it just needs a quick, free approval from the LOKA team before it builds (we\u2019ll email you). Prefer not to wait? <b>Open ›</b> an area and pick smaller parts of it.</span>';
+      line += '<span style="color:var(--color-sienna)">That\u2019s a big region. You can continue — it just needs a quick, free approval from the LOKA team before it builds (we\u2019ll email you). Prefer not to wait? Keep a smaller part of it.</span>';
     } else {
-      line += '<span class="hint bad">That\u2019s more than one atlas can cover. <b>Open ›</b> an area and pick smaller parts inside it.</span>';
+      line += '<span class="hint bad">That\u2019s more than one atlas can cover — open a place in the list and keep a smaller part of it.</span>';
     }
     meta.innerHTML = line;
   }
@@ -430,16 +496,16 @@
   $("#back-2").onclick = function () { show(1); };
   $("#next-2").onclick = function () {
     msg(2, "");
-    var sel = selection();
-    if (S.editMode === "rebuild" && !sel.length) {
+    var eff = effectiveRegion();
+    if (S.editMode === "rebuild" && !eff) {
       // no new pick → keep the atlas's current region, just change layers
       S.regionKept = true; show(3); loadCatalog(); return;
     }
     if (S.editMode === "rebuild") S.regionKept = false;
-    if (!sel.length) return msg(2, "Pick at least one area first.");
-    var state = selectionSizeState();
+    if (!eff) return msg(2, "Choose a country first — the map shows what your atlas will cover.");
+    var state = regionSizeState(eff);
     if (state === "blocked") {
-      return msg(2, "That region is more than one atlas can cover — <b>Open ›</b> an area in the list and pick smaller parts inside it.");
+      return msg(2, "That region is more than one atlas can cover — open a place in the list and keep a smaller part of it.");
     }
     if (state === "approval" && !$("#f-email").value.trim()) {
       msg(2, 'This region needs a quick approval from the LOKA team, so we need a way to reach you. <a href="#" id="goto-email">Add your contact email in step 1 →</a>');
@@ -536,8 +602,7 @@
   /* ================= step 4: create + poll + preview ================= */
 
   function payload() {
-    var sel = selection();
-    var level = sel.length ? sel[0].level : S.geo.viewLevel;
+    var eff = effectiveRegion() || { level: S.geo.viewLevel, units: [] };
     return {
       slug: $("#f-slug").value.trim() || undefined,
       title: $("#f-title").value.trim(),
@@ -552,7 +617,7 @@
         footerLine: $("#f-footer").value.trim() || undefined,
         logoData: S.logoData || undefined,
       },
-      region: { iso3: S.geo.iso3, level: level, shapeIDs: sel.map(function (f) { return f.id; }) },
+      region: { iso3: S.geo.iso3, level: eff.level, shapeIDs: eff.units.map(function (u) { return u.id; }) },
       layers: Object.keys(S.catalog.chosen),
     };
   }
@@ -568,12 +633,14 @@
     msg(4, "");
     var body = { layers: Object.keys(S.catalog.chosen) };
     if (!S.regionKept) {
-      var sel = selection();
-      if (sel.length) body.region = { iso3: S.geo.iso3, level: sel[0].level, shapeIDs: sel.map(function (f) { return f.id; }) };
+      var eff = effectiveRegion();
+      if (eff) body.region = { iso3: S.geo.iso3, level: eff.level, shapeIDs: eff.units.map(function (u) { return u.id; }) };
     }
     api("instances/" + S.editSlug + "/rebuild", { method: "POST", body: body }).then(function (r) {
       S.build = { slug: r.slug, jobId: r.jobId };
       S._rebuildWasPublished = r.wasPublished;
+      // an unpublished rebuild ends in a publish step — show it now, inactive until built
+      if (!r.wasPublished) { $("#next-4").hidden = false; $("#next-4").disabled = true; }
       pollJob(r.jobId);
     }).catch(function (e) {
       show(3);
@@ -588,7 +655,9 @@
     $("#prog-fill").style.width = "3%";
     $("#prog-msg").textContent = "Creating instance…";
     $("#preview-wrap").hidden = true;
-    $("#next-4").hidden = true;
+    // publish is the destination of this step — visible from the start, inactive until built
+    $("#next-4").hidden = false;
+    $("#next-4").disabled = true;
     $("#back-4").hidden = true;
     msg(4, "");
 
@@ -668,6 +737,7 @@
           layerEl.hidden = true;
           $("#build-title").textContent = "Build failed";
           $("#prog-msg").textContent = j.message || "build failed";
+          $("#next-4").disabled = true; // nothing to publish
           $("#back-4").hidden = false;
           msg(4, "You can adjust your region or layers and try again.");
         }
@@ -704,6 +774,7 @@
     $("#build-title").innerHTML = CHECK_SVG + (S.editMode === "rebuild" ? "Rebuilt" : "Your atlas is ready");
     $("#prog-msg").textContent = "Built. Explore the preview below, then publish.";
     $("#next-4").hidden = false;
+    $("#next-4").disabled = false; // build complete — publishing unlocks
     $("#back-4").hidden = false;
   }
 
@@ -749,55 +820,13 @@
     $("#pub-title").textContent = isPrivate ? "Your private atlas is live" : "Your atlas is live 🎉";
     body.innerHTML = "";
 
-    var tokenBox = document.createElement("div");
-    tokenBox.className = "token-box";
-    tokenBox.innerHTML = "<b>Save your edit token — it's shown only once.</b>" +
-      "<code>" + esc(S.build.editToken) + "</code>" +
-      '<span class="hint">It\'s the only way to manage or delete this atlas later' +
-      (S.session ? " (also linked to your account " + esc(S.session.email) + ")" : "") + ".</span> ";
-    var cp = document.createElement("button");
-    cp.className = "btn secondary"; cp.style.marginTop = ".5rem"; cp.textContent = "Copy token";
-    cp.onclick = function () { navigator.clipboard.writeText(S.build.editToken); cp.textContent = "Copied ✓"; };
-    tokenBox.appendChild(cp);
-
-    // …or have it emailed, so it isn't lost when this tab closes
-    var mailRow = document.createElement("div");
-    mailRow.style.cssText = "display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.7rem;align-items:center";
-    var mailIn = document.createElement("input");
-    mailIn.type = "email"; mailIn.placeholder = "you@example.org";
-    mailIn.style.cssText = "flex:1 1 12rem;min-width:0";
-    mailIn.value = (S.session && S.session.email) || $("#f-email").value.trim() || "";
-    var mailBtn = document.createElement("button");
-    mailBtn.className = "btn secondary"; mailBtn.textContent = "Email me the token";
-    mailBtn.onclick = function () {
-      var to = mailIn.value.trim();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(to)) { mailBtn.textContent = "Enter a valid email"; return; }
-      mailBtn.disabled = true; mailBtn.textContent = "Sending…";
-      api("instances/" + S.build.slug + "/email-token", {
-        method: "POST", headers: authHeaders(), body: { email: to },
-      }).then(function (r) {
-        mailBtn.textContent = r.sent ? "Sent ✓ — check " + to : "Couldn't send — copy it instead";
-      }).catch(function (e) {
-        mailBtn.disabled = false; mailBtn.textContent = errMsg(e);
-      });
-    };
-    mailRow.appendChild(mailIn); mailRow.appendChild(mailBtn);
-    tokenBox.appendChild(mailRow);
-    body.appendChild(tokenBox);
-
-    if (!S.session && S.build.editToken) {
-      var claim = document.createElement("p");
-      claim.className = "hint";
-      claim.innerHTML = 'Prefer not to keep a token? <a href="#" id="claim-link">Sign in with email</a> to attach this atlas to an account.';
-      body.appendChild(claim);
-      claim.querySelector("#claim-link").onclick = function (ev) {
-        ev.preventDefault();
-        signIn("Attach this atlas to your email so you can manage it without the token.").then(function (ok) {
-          if (ok) api("instances/" + S.build.slug + "/claim", { method: "POST", body: { editToken: S.build.editToken } })
-            .then(function () { msg(5, "Linked to " + esc(S.session.email), "ok"); });
-        });
-      };
-    }
+    // publishing bound the atlas to the signed-in account — that's the whole story
+    var manage = document.createElement("p");
+    manage.className = "hint";
+    manage.innerHTML = (S.session && S.session.email
+      ? "It’s linked to <b>" + esc(S.session.email) + "</b> — manage, edit or delete it anytime from <b>Your atlases</b> in this wizard."
+      : "Manage, edit or delete it anytime from <b>Your atlases</b> in this wizard.");
+    body.appendChild(manage);
 
     body.appendChild(window.AtlasShare.panel({
       url: prettyUrl(),
@@ -874,7 +903,7 @@
       visibility: S.visibility,
       geo: {
         iso3: S.geo.iso3,
-        level: selection().length ? selection()[0].level : S.geo.viewLevel,
+        level: S.geo.viewLevel,
         selected: Object.keys(S.geo.selected),
         crumbs: S.geo.crumbs,
       },
@@ -1086,7 +1115,9 @@
     api("instances/" + slug).then(function (inst) {
       if (!inst.canEdit) { alert("You can't edit this atlas."); return; }
       S.editSlug = slug; S.editMode = "rebuild"; S.editInst = inst; S.regionKept = true;
-      S.geo.iso3 = inst.region.iso3; S.geo.selected = {};
+      // fully reset the drill state — leftover crumbs/features would read as a
+      // "new region" and defeat the keep-current-region default
+      S.geo = { iso3: inst.region.iso3, levels: [1], crumbs: [], viewLevel: 1, features: [], selected: {} };
       S.catalog = { tier: "", layers: [], chosen: {} };
       (inst.layers || []).forEach(function (id) { S.catalog.chosen[id] = true; });
       $("#my-atlases").hidden = true;
