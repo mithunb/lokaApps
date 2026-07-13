@@ -110,13 +110,21 @@
     .geo-legend .tap { width:15px; height:15px; background:var(--color-moss); opacity:.55; border-radius:3px; flex:0 0 auto; }
     .geo-legend .drill { font-family:'Figtree',sans-serif; font-weight:700; color:var(--color-moss); font-size:1rem; }
 
-    /* layers */
-    .cat-group { margin-top:1rem; }
-    .cat-group h3 { font-size:.78rem; letter-spacing:.06em; text-transform:uppercase; color:var(--color-text-secondary); margin:0 0 .4rem; }
+    /* layers — collapsed groups so the long catalogue reads as five headings */
+    details.cat-group { margin-top:.7rem; border:1px solid var(--color-border); border-radius:6px; background:#FFFFFF; }
+    .cat-group summary { display:flex; align-items:center; gap:.55rem; cursor:pointer; list-style:none; padding:.75rem .95rem; border-radius:6px; }
+    .cat-group summary::-webkit-details-marker { display:none; }
+    .cat-group summary:hover { background:var(--color-moss-tint); }
+    .cat-group[open] summary { border-bottom:1px solid var(--color-divider); border-radius:6px 6px 0 0; }
+    .cat-group .g-chev { font-family:'Figtree',sans-serif; font-weight:700; color:var(--color-moss); transition:transform .15s ease-out; }
+    .cat-group[open] .g-chev { transform:rotate(90deg); }
+    @media (prefers-reduced-motion:reduce){ .cat-group .g-chev { transition:none; } }
+    .cat-group h3 { font-size:.78rem; letter-spacing:.06em; text-transform:uppercase; color:var(--color-text-secondary); margin:0; }
+    .cat-count { margin-left:auto; font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:600; color:var(--color-text-muted); white-space:nowrap; }
     .cat-sub { font-family:'Figtree',sans-serif; font-size:.74rem; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
-      color:var(--color-text-muted); margin:.85rem 0 .1rem; padding-left:.1rem; }
-    .cat-sub:first-child { margin-top:.2rem; }
-    .cat-row { display:flex; gap:.7rem; align-items:flex-start; padding:.6rem .2rem; border-top:1px solid var(--color-divider); }
+      color:var(--color-text-muted); margin:.85rem 0 .1rem; padding-left:.95rem; }
+    .cat-row { display:flex; gap:.7rem; align-items:flex-start; padding:.6rem .95rem; }
+    .cat-row + .cat-row, .cat-sub + .cat-row { border-top:1px solid var(--color-divider); }
     .cat-row input { margin-top:.25rem; accent-color:var(--color-moss); width:16px; height:16px; flex:0 0 auto; }
     .cat-row b { font-weight:600; }
     .cat-row .info { display:block; font-size:.85rem; color:var(--color-text-secondary); }
@@ -198,6 +206,7 @@
         <a href="../create/">about</a>
         <a href="../">explore atlases</a>
         <button id="nav-auth" type="button">Sign in</button>
+        <button id="nav-logout" type="button" hidden>Sign out</button>
       </div>
     </nav>
   </header>

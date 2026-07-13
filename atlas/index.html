@@ -48,8 +48,11 @@
     .nav { width:var(--container); margin:0 auto; padding:1rem 0; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
     .brand { font-family:'Figtree',sans-serif; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--color-text-primary); font-size:.875rem; }
     .brand:hover { color:var(--color-text-primary); text-decoration:none; }
-    .nav .links { display:flex; gap:1.25rem; }
-    .nav .links a { color:var(--color-text-secondary); font-size:.9rem; }
+    .nav .links { display:flex; gap:1.25rem; align-items:center; flex-wrap:wrap; }
+    .nav .links a, .nav .links button { color:var(--color-text-secondary); font-size:.9rem;
+      background:none; border:none; font-family:inherit; cursor:pointer; padding:0; }
+    .nav .links button:hover { color:var(--color-canopy); text-decoration:underline; }
+    #nav-user { color:var(--color-text-primary); font-size:.9rem; font-weight:600; }
 
     .atlas-hero { width:var(--container); margin:0 auto; padding:2rem 0 1.25rem; }
     #atlas-about { max-width:46rem; font-size:.95rem; color:var(--color-text-secondary); margin:.35rem 0 0; }
@@ -340,6 +343,9 @@
         <a href="./">all atlases</a>
         <a href="../">all apps</a>
         <a href="https://discoverloka.org" target="_blank" rel="noopener">discoverloka.org</a>
+        <span id="nav-user" hidden></span>
+        <a id="nav-signin" href="./setup/?signin=1">sign in</a>
+        <button id="nav-signout" type="button" hidden>sign out</button>
       </div>
     </nav>
   </header>

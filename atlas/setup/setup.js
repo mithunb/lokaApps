@@ -546,6 +546,7 @@
     cb.disabled = !!l.required;
     cb.onchange = function () {
       if (cb.checked) S.catalog.chosen[l.id] = true; else delete S.catalog.chosen[l.id];
+      updateCatCounts();
     };
     var body = document.createElement("div");
     var badge = l.required ? '<span class="badge locked">always on</span>'
@@ -560,15 +561,30 @@
     return row;
   }
 
+  // selected-count badge per group, so collapsed groups still tell the story
+  function updateCatCounts() {
+    document.querySelectorAll("#cat-list .cat-count").forEach(function (el) {
+      var gid = el.dataset.group;
+      var entries = S.catalog.layers.filter(function (l) { return l.group === gid; });
+      var on = entries.filter(function (l) { return S.catalog.chosen[l.id] || l.required; }).length;
+      el.textContent = on + " of " + entries.length + " selected";
+    });
+  }
+
   function renderCatalog() {
     var box = $("#cat-list");
     box.innerHTML = "";
+    // collapsed <details> per group — the catalogue is long, so users scan
+    // five headings with counts instead of a wall of checkboxes
     ["base", "context", "people", "eco", "agri"].forEach(function (gid) {
       var entries = S.catalog.layers.filter(function (l) { return l.group === gid; });
       if (!entries.length) return;
-      var g = document.createElement("div");
+      var g = document.createElement("details");
       g.className = "cat-group";
-      g.innerHTML = "<h3>" + esc(GROUP_LABELS[gid]) + "</h3>";
+      var sum = document.createElement("summary");
+      sum.innerHTML = '<span class="g-chev" aria-hidden="true">›</span><h3>' + esc(GROUP_LABELS[gid]) + "</h3>" +
+        '<span class="cat-count" data-group="' + esc(gid) + '"></span>';
+      g.appendChild(sum);
       // group by named subgroup in first-appearance order (mirrors the viewer's panel)
       var order = [], subMap = {};
       entries.forEach(function (l) {
@@ -589,6 +605,7 @@
       });
       box.appendChild(g);
     });
+    updateCatCounts();
   }
 
   $("#back-3").onclick = function () { show(2); };
@@ -884,7 +901,7 @@
         authPollTimer = setInterval(function () {
           api("auth/me").then(function (me) {
             S.session = me;
-            $("#nav-auth").textContent = me.email;
+            showSignedIn(me);
             renderMyAtlases();
             endAuth(true);
           }).catch(function () {});
@@ -893,9 +910,20 @@
       .catch(function (e) { $("#auth-msg").innerHTML = '<div class="msg err">' + esc(errMsg(e)) + "</div>"; });
   };
 
+  function showSignedIn(me) {
+    $("#nav-auth").textContent = me.email;
+    $("#nav-logout").hidden = false;
+  }
+
   $("#nav-auth").onclick = function () {
     if (S.session) return;
     signIn("Sign in to see your drafts and atlases.").then(function (ok) { if (ok) loadDrafts(); });
+  };
+
+  $("#nav-logout").onclick = function () {
+    api("auth/logout", { method: "POST", body: {} })
+      .catch(function () {})
+      .then(function () { location.href = "./"; }); // fresh wizard, signed out
   };
 
   /* ================= drafts ================= */
@@ -1013,7 +1041,7 @@
   function refreshMe() {
     return api("auth/me").then(function (me) {
       S.session = me;
-      $("#nav-auth").textContent = me.email;
+      showSignedIn(me);
       renderMyAtlases();
       return me;
     }).catch(function () {});
@@ -1195,16 +1223,19 @@
 
   /* ================= init ================= */
 
-  var EDIT_PARAM = new URLSearchParams(location.search).get("edit");
+  var QS = new URLSearchParams(location.search);
+  var EDIT_PARAM = QS.get("edit");
+  var SIGNIN_PARAM = QS.get("signin");
 
   api("auth/me").then(function (me) {
     S.session = me;
-    $("#nav-auth").textContent = me.email;
+    showSignedIn(me);
     loadDrafts();
     renderMyAtlases();
     if (EDIT_PARAM) focusManage(EDIT_PARAM);
   }).catch(function () {
     if (EDIT_PARAM) focusManage(EDIT_PARAM); // not signed in → focusManage will prompt
+    else if (SIGNIN_PARAM) signIn("Sign in to see and manage your atlases.").then(function (ok) { if (ok) loadDrafts(); });
   });
   loadDirectory();
   show(1);

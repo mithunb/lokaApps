@@ -49,6 +49,28 @@
 
   var map, MANIFEST, activeBasemap, DATA = {}, markersByLayer = {}, cropState = {};
 
+  // Signed-in state in the nav — on the home gallery and on every atlas.
+  function initAuthNav() {
+    var user = $("#nav-user"), signin = $("#nav-signin"), signout = $("#nav-signout");
+    if (!user || !signin || !signout) return;
+    fetch("./api/auth/me", { credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (me) {
+        if (!me || !me.email) return; // stays: "sign in" link
+        user.textContent = me.email;
+        user.hidden = false;
+        signin.hidden = true;
+        signout.hidden = false;
+      })
+      .catch(function () {});
+    signout.onclick = function () {
+      fetch("./api/auth/logout", { method: "POST", credentials: "same-origin" })
+        .catch(function () {})
+        .then(function () { location.reload(); });
+    };
+  }
+  initAuthNav();
+
   if (!DATASET) {
     renderHome();
   } else {
