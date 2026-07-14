@@ -559,6 +559,14 @@
   function catRow(l) {
     var row = document.createElement("label");
     row.className = "cat-row";
+    // Clicking a label focuses its checkbox, and the browser scrolls a
+    // partially-off-screen checkbox into view — which jumps the whole page when
+    // toggling layers low on the list (e.g. Ecological landscape). Pre-focus the
+    // checkbox without scrolling so the browser's own focus-on-press is a no-op;
+    // the click still toggles it, and keyboard/tab focus is unaffected.
+    row.addEventListener("pointerdown", function () {
+      try { cb.focus({ preventScroll: true }); } catch (e) { /* older browsers */ }
+    });
     var cb = document.createElement("input");
     cb.type = "checkbox";
     cb.checked = !!S.catalog.chosen[l.id] || !!l.required;
