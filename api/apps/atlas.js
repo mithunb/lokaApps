@@ -593,6 +593,7 @@ router.post('/instances/:slug/details', (req, res) => {
     title,
     subtitle: has('subtitle') ? cap(b.subtitle, 160) : (inst.subtitle || ''),
     about: has('about') ? cap(b.about, 500) : (inst.about || ''),
+    email: has('email') && b.email ? cap(b.email, 120) : inst.email,
     org, branding,
   };
 
