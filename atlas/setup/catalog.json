@@ -274,6 +274,40 @@
       "attribution": { "india": "NFHS-5 (IIPS / MoHFW); district table via jvargh7" }
     },
     {
+      "id": "agro",
+      "label": "Agro-ecological zones",
+      "info": "ICAR agro-ecological regions — broad soil-climate framing for your landscape.",
+      "tiers": ["india"],
+      "group": "eco",
+      "recipe": "agro_zones",
+      "estSeconds": 40,
+      "cost": "free",
+      "attribution": { "india": "ICAR agro-ecological regions via Bharatlas, CC0" }
+    },
+    {
+      "id": "forests-soi",
+      "label": "Reserved & protected forests",
+      "info": "Reserved- and protected-forest polygons from Survey of India topo maps, as two toggleable layers.",
+      "tiers": ["india"],
+      "group": "eco",
+      "subgroup": "Forests",
+      "recipe": "soi_forests",
+      "estSeconds": 120,
+      "cost": "free",
+      "attribution": { "india": "Survey of India via Bharatlas, CC0" }
+    },
+    {
+      "id": "wasteland",
+      "label": "Wasteland (open / barren land)",
+      "info": "Share of uncultivated open, scrub & barren land per block — a land-cover proxy for revenue wasteland (ESA WorldCover 2021).",
+      "tiers": ["india"],
+      "group": "eco",
+      "recipe": "wasteland_worldcover",
+      "estSeconds": 120,
+      "cost": "free",
+      "attribution": { "india": "ESA WorldCover 2021 (Copernicus), CC-BY 4.0; LGD blocks via Bharatlas" }
+    },
+    {
       "id": "buildings",
       "label": "Buildings",
       "info": "Building footprints from OpenStreetMap, streamed live from the global Protomaps tiles — zoom in to see them. No build time.",

@@ -70,6 +70,13 @@ def fetch_cached(url, cache_dir, name=None, step="fetch"):
                 if total > 4 << 20:
                     progress(step, min(99, int(100 * got / total)) if total else 0,
                              f"downloading {name} ({got >> 20} MB)")
+    # never cache a cut-short download — a poisoned cache breaks every later build
+    if total and got != total:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise RuntimeError(f"download of {name} was cut short ({got} of {total} bytes) — retry the build")
     os.replace(tmp, dest)
     return dest
 

@@ -469,6 +469,179 @@ def builtup_worldcover(ctx):
     }]
 
 
+# ---------------------------------------------------------------- eco: agro zones, SOI forests, wasteland (india)
+
+def agro_zones(ctx):
+    """ICAR agro-ecological regions clipped to the atlas bbox — a framing layer."""
+    progress("agro", 5, "fetching agro-ecological zones (cached after first build)")
+    path = fetch_cached(R2 + "agriculture/agro-ecological-zones/Agro_Ecological_Zones.geojson",
+                        ctx["cache"], step="agro")
+    d = json.load(open(path))
+    b = ctx["bbox"]; clip = ctx["clip"]
+    feats = []
+    for f in d["features"]:
+        g = shape(f["geometry"]).buffer(0)
+        gb = g.bounds
+        if gb[2] < b[0] or gb[0] > b[2] or gb[3] < b[1] or gb[1] > b[3]:
+            continue
+        g = g.intersection(clip)
+        if g.is_empty:
+            continue
+        g = g.simplify(0.008, preserve_topology=True)  # framing layer — coarse is fine
+        if g.is_empty:
+            continue
+        name = " ".join(w.capitalize() for w in str(f["properties"].get("physio_reg") or "").split()) \
+            or "Agro-ecological region"
+        feats.append({"type": "Feature", "properties": {"name": name, "kind": "agro_zone"},
+                      "geometry": mapping(g)})
+    progress("agro", 90, f"{len(feats)} zones")
+    if not feats:
+        return []
+    write_geojson(ctx["out"], "agro_zones.geojson", feats)
+    return [{
+        "id": "agro", "group": "eco", "type": "fill", "source": "agro_zones.geojson",
+        "label": "Agro-ecological zones", "default": False,
+        "info": "ICAR agro-ecological regions — broad soil-climate framing for the landscape.",
+        "paint": {"fillColor": "#9aad5b", "fillOpacity": 0.1, "outlineColor": "#6b7a3f",
+                  "outlineWidth": 1.2, "outlineDash": [2, 2]},
+        "legend": [{"color": "#6b7a3f", "label": "Agro-ecological region", "shape": "dashed"}],
+        "popup": {"title": "name"},
+    }]
+
+
+def _soi_clean(s):
+    """SOI topo-sheet names come with encoding artefacts; tidy them up."""
+    s = (s or "").strip().replace(">", "A").replace("|", "I").replace("@", "A")
+    s = re.sub(r"\s+", " ", s)
+    return " ".join(w if w in ("RF", "PF") else w.capitalize() for w in s.split())
+
+
+def soi_forests(ctx):
+    import pyarrow.parquet as pq
+    progress("forests-soi", 3, "fetching SOI forests (~80 MB, cached after first build)")
+    path = fetch_cached(R2 + "environment/forests/SOI_Forests.parquet", ctx["cache"], step="forests-soi")
+    b = ctx["bbox"]; sel = ctx["sel"]
+    t = pq.read_table(path, columns=["type", "addl_info", "geometry",
+                                     "xmin", "ymin", "xmax", "ymax"]).to_pylist()
+    feats = []; kinds = {}
+    for r in t:
+        if not bbi(r, b):
+            continue
+        g = wkb.loads(bytes(r["geometry"])).buffer(0).intersection(sel)
+        if g.is_empty or g.area == 0:
+            continue
+        g = g.simplify(0.0003, preserve_topology=True)
+        if g.is_empty:
+            continue
+        typ = (r.get("type") or "").strip().title() or "Forest"
+        kinds[typ] = kinds.get(typ, 0) + 1
+        feats.append({"type": "Feature", "properties": {
+            "name": _soi_clean(r.get("addl_info")) or None, "type": typ, "kind": "forest"},
+            "geometry": mapping(g)})
+    progress("forests-soi", 90, f"{len(feats)} forest polygons ({kinds})")
+    if not feats:
+        return []
+    write_geojson(ctx["out"], "forests.geojson", feats)
+    stanzas = []
+    if kinds.get("Reserved"):
+        stanzas.append({
+            "id": "forests-reserved", "group": "eco", "subgroup": "Forests", "type": "fill",
+            "source": "forests.geojson", "label": "Reserved forest", "default": False,
+            "filter": ["==", ["get", "type"], "Reserved"],
+            "info": "Reserved-forest polygons from Survey of India topo maps.",
+            "paint": {"fillColor": "#2f4a30", "fillOpacity": 0.6, "outlineColor": "#22371f", "outlineWidth": 0.8},
+            "legend": [{"color": "#2f4a30", "label": "Reserved forest"}],
+            "popup": {"title": "name", "titleFallback": "type", "subtitle": "Reserved forest", "fields": []},
+        })
+    if kinds.get("Protected"):
+        stanzas.append({
+            "id": "forests-protected", "group": "eco", "subgroup": "Forests", "type": "fill",
+            "source": "forests.geojson", "label": "Protected forest", "default": False,
+            "filter": ["==", ["get", "type"], "Protected"],
+            "info": "Protected-forest polygons from Survey of India topo maps.",
+            "paint": {"fillColor": "#6f7d43", "fillOpacity": 0.6, "outlineColor": "#556232", "outlineWidth": 0.8},
+            "legend": [{"color": "#6f7d43", "label": "Protected forest"}],
+            "popup": {"title": "name", "titleFallback": "type", "subtitle": "Protected forest", "fields": []},
+        })
+    if not stanzas:  # region only has other SOI forest classes — show them plainly
+        stanzas.append({
+            "id": "forests-soi", "group": "eco", "subgroup": "Forests", "type": "fill",
+            "source": "forests.geojson", "label": "Forest (Survey of India)", "default": False,
+            "info": "Forest polygons from Survey of India topo maps.",
+            "paint": {"fillColor": "#2f4a30", "fillOpacity": 0.6, "outlineColor": "#22371f", "outlineWidth": 0.8},
+            "legend": [{"color": "#2f4a30", "label": "Forest (SOI)"}],
+            "popup": {"title": "name", "titleFallback": "type", "fields": []},
+        })
+    return stanzas
+
+
+def wasteland_worldcover(ctx):
+    """Share of uncultivated open/scrub/barren land per block (WorldCover 20/30/60
+    zonal stats) — an open, reproducible proxy for revenue wasteland, which isn't
+    openly available as GIS."""
+    import numpy as np
+    from rasterio.features import rasterize
+
+    progress("wasteland", 3, "fetching LGD blocks (cached after first build)")
+    path = fetch_cached(R2 + "admin/blocks/LGD_Blocks.geojson", ctx["cache"], step="wasteland")
+    gj = json.load(open(path))
+    sel = ctx["sel"]
+    w, s, e, n = sel.bounds
+    units = []
+    for f in gj["features"]:
+        g = shape(f["geometry"])
+        gb = g.bounds
+        if gb[2] < w or gb[0] > e or gb[3] < s or gb[1] > n:
+            continue
+        g = g.buffer(0)
+        if not g.representative_point().within(sel):
+            continue
+        p = f["properties"]
+        units.append((g, str(p.get("block_name") or "").strip().title(),
+                      str(p.get("district") or "").strip().title()))
+    if not units:
+        warn("wasteland: no LGD blocks in the region")
+        return []
+
+    res = 0.001  # ~100 m — zonal statistics, not cartography
+    cls, transform, (W, H), _ = _read_worldcover([w - 0.01, s - 0.01, e + 0.01, n + 0.01], res, "wasteland")
+    progress("wasteland", 78, f"zonal stats over {len(units)} blocks")
+    open_land = np.isin(cls, (20, 30, 60))  # shrub, grassland, bare/sparse
+    valid = cls > 0
+    ids = rasterize(((g, i + 1) for i, (g, _, _) in enumerate(units)),
+                    out_shape=cls.shape, transform=transform, fill=0, dtype="int32")
+    feats = []
+    for i, (g, name, district) in enumerate(units):
+        m = ids == i + 1
+        tot = int(np.count_nonzero(m & valid))
+        if not tot:
+            continue
+        pct = 100.0 * np.count_nonzero(m & open_land) / tot
+        gg = g.simplify(0.0004, preserve_topology=True)
+        feats.append({"type": "Feature", "properties": {
+            "name": name, "district": district, "wl_pct": round(pct, 1), "kind": "wasteland"},
+            "geometry": mapping(gg)})
+    progress("wasteland", 92, f"{len(feats)} blocks scored")
+    if not feats:
+        return []
+    write_geojson(ctx["out"], "wasteland.geojson", feats)
+    return [{
+        "id": "wasteland", "group": "eco", "type": "fill", "source": "wasteland.geojson",
+        "label": "Wasteland (open / barren land)", "default": False,
+        "opacityControl": True, "opacity": 0.7,
+        "info": "No open revenue-wasteland GIS exists, so this is a land-cover proxy: the share of "
+                "uncultivated open, scrub & barren land per block (ESA WorldCover 2021).",
+        "paint": {"fillColor": ["step", ["get", "wl_pct"], "#efe6d9", 1.5, "#ddc4a0", 3, "#caa06f",
+                                5, "#a8703f", 7, "#824e26"],
+                  "fillOpacity": 0.7, "outlineColor": "#7a5a3a", "outlineWidth": 0.4},
+        "legend": [{"color": "#efe6d9", "label": "< 1.5%"}, {"color": "#ddc4a0", "label": "1.5–3%"},
+                   {"color": "#caa06f", "label": "3–5%"}, {"color": "#a8703f", "label": "5–7%"},
+                   {"color": "#824e26", "label": "> 7%"}],
+        "popup": {"title": "name", "subtitleProperty": "district", "fields": [
+            {"label": "Open / barren land", "property": "wl_pct", "suffix": "% of block area"}]},
+    }]
+
+
 # ---------------------------------------------------------------- pure-stanza recipes
 
 def labels_esri(ctx):
@@ -1130,4 +1303,7 @@ RECIPES = {
     "nfhs_literacy": nfhs_literacy,
     "nfhs_cleanfuel": nfhs_cleanfuel,
     "nfhs_stunting": nfhs_stunting,
+    "agro_zones": agro_zones,
+    "soi_forests": soi_forests,
+    "wasteland_worldcover": wasteland_worldcover,
 }

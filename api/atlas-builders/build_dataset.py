@@ -75,6 +75,8 @@ SOURCE_ATTRIBUTIONS = {
     "DataMeet": {"url": "https://github.com/datameet/maps", "note": "Lok Sabha constituency boundaries", "license": "CC-BY 4.0"},
     "OpenStreetMap / Protomaps": {"url": "https://protomaps.com", "note": "Buildings & roads (global vector tiles)", "license": "ODbL"},
     "NFHS-5 (IIPS / MoHFW)": {"url": "https://rchiips.org/nfhs/", "note": "District health & living-standard indicators", "license": "Government of India (public)"},
+    "ICAR agro-ecological regions via Bharatlas": {"url": "https://bharatlas.com", "note": "Agro-ecological zones", "license": "CC0"},
+    "Survey of India via Bharatlas": {"url": "https://bharatlas.com", "note": "Reserved & protected forests", "license": "CC0"},
 }
 
 RECIPE_SOURCES = {
@@ -103,6 +105,9 @@ RECIPE_SOURCES = {
     "nfhs_literacy": {"india": ["NFHS-5 (IIPS / MoHFW)"]},
     "nfhs_cleanfuel": {"india": ["NFHS-5 (IIPS / MoHFW)"]},
     "nfhs_stunting": {"india": ["NFHS-5 (IIPS / MoHFW)"]},
+    "agro_zones": {"india": ["ICAR agro-ecological regions via Bharatlas"]},
+    "soi_forests": {"india": ["Survey of India via Bharatlas"]},
+    "wasteland_worldcover": {"india": ["ESA WorldCover 2021 (Copernicus)", "Local Government Directory (LGD) via Bharatlas"]},
 }
 
 
