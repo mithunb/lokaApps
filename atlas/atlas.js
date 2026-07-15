@@ -691,7 +691,10 @@
     MANIFEST.groups.forEach(function (g) {
       var layers = MANIFEST.layers.filter(function (L) { return L.group === g.id; });
       if (!layers.length) return;
-      var sec = el("section", "ctl-group" + (g.open === false ? " collapsed" : ""));
+      // Only Base is expanded on load; all other groups collapse so the panel
+      // isn't overwhelming (users open the ones they want). The engine owns this
+      // — manifests' per-group `open` flag is intentionally ignored here.
+      var sec = el("section", "ctl-group" + (g.id === "base" ? "" : " collapsed"));
       var head = el("button", "ctl-group-head");
       head.innerHTML = '<span>' + esc(g.label) + '</span><span class="chev">' + ICONS.chevron + '</span>';
       head.onclick = function () { sec.classList.toggle("collapsed"); };
