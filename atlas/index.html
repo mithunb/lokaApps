@@ -220,6 +220,15 @@
     .pop-tag { font-size:.74rem; padding:.15rem .5rem; background:var(--color-moss-tint); color:var(--color-canopy); border-radius:4px; font-weight:500; }
     .pop-notes { margin-top:.6rem; display:flex; flex-direction:column; gap:.5rem; }
     .pop-note { font-size:.82rem; }
+    /* at-a-glance hover tooltip (crop distribution) — never intercepts the pointer */
+    .atlas-tooltip { pointer-events:none; }
+    .atlas-tooltip .maplibregl-popup-content { border-radius:var(--radius-md); padding:.5rem .6rem; box-shadow:var(--shadow-md);
+      font-family:'DM Sans',sans-serif; background:rgba(255,255,255,.97); border:1px solid var(--color-border); }
+    .atlas-tooltip .maplibregl-popup-tip { display:none; }
+    .tt-name { font-family:'Figtree',sans-serif; font-weight:700; font-size:.82rem; color:var(--color-text-primary); margin-bottom:.3rem; }
+    .tt-crops { display:flex; flex-wrap:wrap; gap:.25rem; max-width:15rem; }
+    .tt-crop { font-size:.72rem; font-weight:500; padding:.1rem .4rem; border-radius:4px; color:#fff;
+      background:var(--c,#8a8f7a); white-space:nowrap; }
     .pop-note b { display:block; color:var(--color-canopy); font-family:'Figtree',sans-serif; }
     .pop-note span { color:var(--color-text-secondary); }
 

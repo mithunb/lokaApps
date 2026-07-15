@@ -582,6 +582,20 @@
     return [{ color: cat ? cat.color : "#888", label: "Grows " + mode }, { color: "#5b6b5b", label: "Not grown", faint: true }];
   }
 
+  // compact hover tooltip: the feature's crops as chips coloured to match the legend
+  function catTooltipHTML(L, props) {
+    var raw = props[L.arrayProperty];
+    var crops = Array.isArray(raw) ? raw : safeArr(raw);
+    if (!crops || !crops.length) return "";
+    var colorOf = {};
+    (L.categories || []).forEach(function (c) { colorOf[c.name] = c.color; });
+    var name = (L.nameProperty && props[L.nameProperty]) ? esc(props[L.nameProperty]) : "";
+    var chips = crops.map(function (cr) {
+      return '<span class="tt-crop" style="--c:' + (colorOf[cr] || "#8a8f7a") + '">' + esc(cr) + "</span>";
+    }).join("");
+    return (name ? '<div class="tt-name">' + name + "</div>" : "") + '<div class="tt-crops">' + chips + "</div>";
+  }
+
   /* ---- markers (DOM) ---- */
   function addMarker(L) {
     markersByLayer[L.id] = [];
@@ -897,17 +911,35 @@
     function clearHover() { if (hoverRef) { try { map.setFeatureState(hoverRef, { hover: false }); } catch (e) {} hoverRef = null; } }
     function clearSel() { if (selRef) { try { map.setFeatureState(selRef, { selected: false }); } catch (e) {} selRef = null; } }
 
+    // at-a-glance crop tooltip: hovering a categories layer (crop distribution)
+    // lists that feature's crops without a click, coloured to match the legend.
+    var catTip = null;
+    function hideTip() { if (catTip) { catTip.remove(); catTip = null; } }
+    function showTip(L, feature, lngLat) {
+      var html = catTooltipHTML(L, feature.properties);
+      if (!html) { hideTip(); return; }
+      if (!catTip) catTip = new maplibregl.Popup({ closeButton: false, closeOnClick: false, className: "atlas-tooltip", offset: 12 });
+      catTip.setLngLat(lngLat).setHTML(html).addTo(map);
+    }
+
     map.on("mousemove", function (e) {
       var top = pick(e.point);
       map.getCanvas().style.cursor = top ? "pointer" : "";
-      if (!top || top.f.id == null) { clearHover(); return; }
+      if (!top || top.f.id == null) { clearHover(); hideTip(); return; }
       var ref = { source: top.f.source, id: top.f.id };
-      if (!hoverRef || hoverRef.id !== ref.id || hoverRef.source !== ref.source) {
+      var changed = !hoverRef || hoverRef.id !== ref.id || hoverRef.source !== ref.source;
+      if (changed) {
         clearHover(); hoverRef = ref;
         try { map.setFeatureState(ref, { hover: true }); } catch (e) {}
       }
+      if (top.L.type === "categories" && top.L.arrayProperty) {
+        if (changed || !catTip) showTip(top.L, top.f, e.lngLat);
+        else catTip.setLngLat(e.lngLat); // follow the cursor without rebuilding
+      } else {
+        hideTip();
+      }
     });
-    map.on("mouseout", clearHover);
+    map.on("mouseout", function () { clearHover(); hideTip(); });
 
     map.on("click", function (e) {
       var top = pick(e.point);
