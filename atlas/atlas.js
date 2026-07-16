@@ -186,11 +186,14 @@
 
     map.on("load", function () {
       try {
-        buildLayers();
         buildControls();
         buildCredits();
-        wirePopups();
-        fitToData(false);
+        // buildLayers preloads sources async, so layer ids (L._ids) only exist once
+        // it resolves. wirePopups + fitToData depend on those, so run them after.
+        buildLayers().then(function () {
+          wirePopups();
+          fitToData(false);
+        }).catch(function (err) { console.error("Atlas build error:", err && err.message, err && err.stack); });
         // re-frame when the layout flips between the floating panel (desktop) and the bottom sheet (mobile)
         window.matchMedia("(max-width: 720px)").addEventListener("change", function () {
           setTimeout(function () { fitToData(true); }, 80);
@@ -347,7 +350,9 @@
     var layers = MANIFEST.layers;
     // Preload every source first, THEN add layers in manifest order so draw order
     // is deterministic (array order = bottom→top; markers are DOM and sit on top).
-    Promise.all(layers.map(function (L) {
+    // Returns a promise that resolves once layers are added (so callers that need
+    // layer ids — wirePopups, fitToData — can wait for it).
+    return Promise.all(layers.map(function (L) {
       if (L.type === "raster" || !L.source) return Promise.resolve();
       return fetch(dataUrl(L.source)).then(function (r) { return r.json(); })
         .then(function (d) { DATA[L.id] = d; })
