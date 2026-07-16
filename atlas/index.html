@@ -78,10 +78,15 @@
     #org-credit:not(:empty) { padding-bottom:.9rem; margin-bottom:.9rem; border-bottom:1px solid var(--color-divider); }
 
     /* ---- map stage ---- */
-    .atlas-stage { position:relative; width:var(--container); margin:0 auto 1.5rem;
+    .atlas-stage { position:relative; width:var(--container); margin:0 auto .4rem;
       height:clamp(560px,80vh,940px); border-radius:var(--radius-lg); overflow:hidden;
       box-shadow:var(--shadow-lg); background:#EAE9E3; border:1px solid var(--color-border); }
     #atlas-map { position:absolute; inset:0; }
+    /* basemap attribution rendered below the map, not overlaying it */
+    .map-attrib { width:var(--container); margin:0 auto 1.5rem; text-align:right;
+      font-size:.7rem; line-height:1.4; color:var(--color-text-muted); }
+    .map-attrib:empty { display:none; }
+    .map-attrib a { color:inherit; text-decoration:underline; }
     .atlas-error { position:absolute; inset:0; display:flex; flex-direction:column; gap:.5rem;
       align-items:center; justify-content:center; color:var(--color-text-secondary); font-size:1.05rem; text-align:center; padding:2rem; }
 
@@ -400,6 +405,7 @@
       <div id="atlas-controls"></div>
     </aside>
   </div>
+  <div class="map-attrib" id="map-attrib" aria-label="Map data attribution"></div>
 
   <section class="atlas-credits">
     <div class="credits-grid">

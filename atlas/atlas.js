@@ -180,7 +180,7 @@
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-right");
-    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+    // attribution is rendered in a strip below the map (renderMapAttrib), not over it
     window.__map = map;   // debug hook
     map.on("error", function (e) { console.error("Atlas map error:", e && e.error && e.error.message); });
 
@@ -190,9 +190,11 @@
         buildCredits();
         // buildLayers preloads sources async, so layer ids (L._ids) only exist once
         // it resolves. wirePopups + fitToData depend on those, so run them after.
+        renderMapAttrib();
         buildLayers().then(function () {
           wirePopups();
           fitToData(false);
+          renderMapAttrib(); // re-run once layer sources (e.g. labels) are added
         }).catch(function (err) { console.error("Atlas build error:", err && err.message, err && err.stack); });
         // re-frame when the layout flips between the floating panel (desktop) and the bottom sheet (mobile)
         window.matchMedia("(max-width: 720px)").addEventListener("change", function () {
@@ -671,11 +673,27 @@
     if (markersByLayer[L.id]) applyMarkerVisibility(L);
   }
 
+  // Basemap + tile attributions, rendered in a strip BELOW the map (not overlaying
+  // it). Shows the active basemap's credit plus any raster tile source (e.g. Esri
+  // labels); dataset/source credits live in the credits section further down.
+  function renderMapAttrib() {
+    var el = $("#map-attrib"); if (!el || !map) return;
+    var srcs = (map.getStyle() && map.getStyle().sources) || {};
+    var seen = {}, parts = [];
+    Object.keys(srcs).forEach(function (k) {
+      if (/^base-/.test(k) && k !== "base-" + activeBasemap) return; // only the active basemap
+      var a = srcs[k] && srcs[k].attribution;
+      if (a && !seen[a]) { seen[a] = 1; parts.push(a); }
+    });
+    el.innerHTML = parts.join(" · ");
+  }
+
   function switchBasemap(id) {
     activeBasemap = id;
     MANIFEST.basemaps.forEach(function (b) {
       if (map.getLayer("base-" + b.id)) map.setLayoutProperty("base-" + b.id, "visibility", b.id === id ? "visible" : "none");
     });
+    renderMapAttrib();
     // sub-layers tied to a specific basemap (e.g. per-basemap place names)
     MANIFEST.layers.forEach(function (L) {
       if (!L._idBasemap || !Object.keys(L._idBasemap).length) return;
