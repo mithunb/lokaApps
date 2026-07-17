@@ -112,6 +112,40 @@ export function readLoginToken(code) {
   return { t: 'login', email: rec.email };
 }
 
+/* ---------- sign-in OTP: a 6-digit code typed into the wizard ----------
+   Stored alongside the legacy link codes (same file): key "otp:<email>",
+   value { hash, exp, tries }. One active code per email; verifying consumes
+   it, and 5 wrong tries burn it. */
+
+const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const OTP_MAX_TRIES = 5;
+
+export function makeOtp(email) {
+  const codes = loadLoginCodes();
+  const now = Date.now();
+  for (const [c, rec] of codes) if (rec.exp <= now) codes.delete(c); // prune
+  const otp = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+  const key = 'otp:' + String(email).toLowerCase();
+  codes.set(key, { email: String(email).toLowerCase(), hash: hmac('otp' + otp), exp: now + OTP_TTL_MS, tries: 0 });
+  persistLoginCodes();
+  return otp;
+}
+
+export function verifyOtp(email, otp) {
+  const key = 'otp:' + String(email || '').toLowerCase();
+  const codes = loadLoginCodes();
+  const rec = codes.get(key);
+  if (!rec || !rec.hash) return false;
+  if (rec.exp <= Date.now()) { codes.delete(key); persistLoginCodes(); return false; }
+  rec.tries = (rec.tries || 0) + 1;
+  const want = hmac('otp' + String(otp || '').trim());
+  const ok = want.length === rec.hash.length &&
+    crypto.timingSafeEqual(Buffer.from(want), Buffer.from(rec.hash));
+  if (ok || rec.tries >= OTP_MAX_TRIES) codes.delete(key); // single-use; lockout after 5 tries
+  persistLoginCodes();
+  return ok;
+}
+
 export function makeActionToken(slug, action) {
   return signToken({ t: 'action', slug, action }, ACTION_TTL_MS);
 }

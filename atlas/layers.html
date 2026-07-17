@@ -192,10 +192,17 @@
           <h2>Publish to the atlas</h2>
           <p class="hint" id="commit-auth">Checking who you are…</p>
           <div id="commit-signin" hidden>
-            <label class="f" style="max-width:22rem"><span>Your email <span class="hint">(the one that owns this atlas)</span></span>
+            <label class="f" style="max-width:22rem"><span>Your email <span class="hint">(the one that owns or contributes to this atlas)</span></span>
               <input type="email" id="f-auth-email" placeholder="you@example.org" autocomplete="email" />
             </label>
-            <div style="margin:.4rem 0 .6rem"><button class="btn secondary" id="auth-send">Email me a sign-in link</button></div>
+            <label class="f" id="commit-code-wrap" style="max-width:11rem" hidden><span>6-digit code</span>
+              <input type="text" id="f-auth-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6"
+                     placeholder="123456" style="letter-spacing:.3em; font-variant-numeric:tabular-nums" />
+            </label>
+            <div style="margin:.4rem 0 .6rem; display:flex; gap:.5rem; flex-wrap:wrap">
+              <button class="btn secondary" id="auth-send">Email me a code</button>
+              <button class="btn secondary" id="auth-verify" hidden>Sign in</button>
+            </div>
           </div>
           <div style="display:flex; gap:.6rem; flex-wrap:wrap">
             <button class="btn" id="commit">Add layer to atlas</button>

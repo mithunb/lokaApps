@@ -907,33 +907,61 @@
   }
   $("#auth-cancel").onclick = $("#auth-cancel-2").onclick = function () { endAuth(false); };
 
-  $("#auth-send").onclick = function () {
-    var email = $("#auth-email").value.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
-      $("#auth-msg").innerHTML = '<div class="msg err">Enter a valid email.</div>'; return;
-    }
-    saveLocal(); // capture the in-progress atlas before the user leaves to click the link
+  // OTP flow: we email a 6-digit code, the user types it right here — no link,
+  // no tab-switching, and the session lands on this tab directly.
+  function requestCode(email) {
     api("auth/request-link", { method: "POST", body: { email: email } })
       .then(function (r) {
         $("#auth-step-email").hidden = true;
         $("#auth-step-wait").hidden = false;
         $("#auth-sent-to").textContent = email;
-        if (!r.sent) {
-          $("#auth-msg").innerHTML = '<div class="msg err">This server can’t send email yet, so no message reached your inbox. ' +
-            'Your sign-in link was written to the server log — ask the LOKA team (mithun@socratus.org) to send it to you, ' +
-            'or try again once email is set up.</div>';
-        }
-        authPollTimer = setInterval(function () {
-          api("auth/me").then(function (me) {
-            S.session = me;
-            showSignedIn(me);
-            renderMyAtlases();
-            endAuth(true);
-          }).catch(function () {});
-        }, 3000);
+        $("#auth-code").value = "";
+        setTimeout(function () { $("#auth-code").focus(); }, 60);
+        $("#auth-msg").innerHTML = r.sent ? "" :
+          '<div class="msg err">This server can’t send email yet, so no code reached your inbox. ' +
+          'Ask the LOKA team (mithun@socratus.org) for your code, or try again once email is set up.</div>';
       })
       .catch(function (e) { $("#auth-msg").innerHTML = '<div class="msg err">' + esc(errMsg(e)) + "</div>"; });
+  }
+
+  $("#auth-send").onclick = function () {
+    var email = $("#auth-email").value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      $("#auth-msg").innerHTML = '<div class="msg err">Enter a valid email.</div>'; return;
+    }
+    saveLocal(); // capture the in-progress atlas before signing in
+    requestCode(email);
   };
+  $("#auth-resend").onclick = function (ev) {
+    ev.preventDefault();
+    requestCode($("#auth-email").value.trim());
+  };
+
+  function submitCode() {
+    var email = $("#auth-email").value.trim();
+    var code = $("#auth-code").value.trim();
+    if (!/^\d{6}$/.test(code)) {
+      $("#auth-msg").innerHTML = '<div class="msg err">Enter the 6-digit code from the email.</div>'; return;
+    }
+    $("#auth-verify").disabled = true;
+    api("auth/verify-code", { method: "POST", body: { email: email, code: code } })
+      .then(function () { return api("auth/me"); })
+      .then(function (me) {
+        $("#auth-verify").disabled = false;
+        S.session = me;
+        showSignedIn(me);
+        renderMyAtlases();
+        endAuth(true);
+      })
+      .catch(function (e) {
+        $("#auth-verify").disabled = false;
+        $("#auth-msg").innerHTML = '<div class="msg err">' + esc(errMsg(e)) + "</div>";
+      });
+  }
+  $("#auth-verify").onclick = submitCode;
+  $("#auth-code").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); submitCode(); }
+  });
 
   function showSignedIn(me) {
     $("#nav-auth").textContent = me.email;

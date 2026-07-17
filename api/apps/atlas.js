@@ -444,14 +444,21 @@ router.get('/jobs/:id', (req, res) => {
 
 /* ================= instances: read, publish, claim, delete ================= */
 
-function callerCanEdit(req, inst) {
+// Roles: 'owner' (full control: delete, manage collaborators) or 'editor'
+// (an invited collaborator — may edit details/region/layers and add data).
+// The edit token and the admin token both act as the owner.
+function callerRole(req, inst) {
   const bearer = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  if (bearer && reg.hashToken(bearer) === inst.tokenHash) return true;
+  if (bearer && reg.hashToken(bearer) === inst.tokenHash) return 'owner';
+  if (auth.isAdmin(req)) return 'owner';
   const session = auth.sessionFromReq(req);
-  if (session && inst.ownerAccount && session.email === inst.ownerAccount) return true;
-  if (auth.isAdmin(req)) return true;
-  return false;
+  if (session) {
+    if (inst.ownerAccount && session.email === inst.ownerAccount) return 'owner';
+    if (reg.isCollaborator(inst, session.email)) return 'editor';
+  }
+  return null;
 }
+function callerCanEdit(req, inst) { return callerRole(req, inst) !== null; }
 
 router.get('/instances', (_req, res) => {
   res.json({ instances: reg.listPublic() });
@@ -460,9 +467,10 @@ router.get('/instances', (_req, res) => {
 router.get('/instances/:slug', (req, res) => {
   const inst = reg.getInstance(String(req.params.slug));
   if (!inst) return res.status(404).json({ error: 'not found' });
-  if (callerCanEdit(req, inst)) {
+  const role = callerRole(req, inst);
+  if (role) {
     const { tokenHash, viewKeyHash, spec, ...rest } = inst;
-    return res.json({ ...rest, canEdit: true });
+    return res.json({ ...rest, canEdit: true, role });
   }
   if (inst.status === 'published' && inst.visibility === 'public') {
     return res.json(reg.publicFields(inst));
@@ -713,13 +721,64 @@ router.post('/instances/:slug/rebuild', async (req, res) => {
 router.delete('/instances/:slug', (req, res) => {
   const inst = reg.getInstance(String(req.params.slug));
   if (!inst) return res.status(404).json({ error: 'not found' });
-  if (!callerCanEdit(req, inst)) return res.status(403).json({ error: 'not allowed' });
+  if (callerRole(req, inst) !== 'owner') return res.status(403).json({ error: 'only the owner can delete this atlas' });
   for (const root of [DATASETS_ROOT, PRIVATE_ROOT]) {
     const dir = path.join(root, inst.slug);
     if (dir.startsWith(root) && fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
   }
   reg.deleteInstance(inst.slug);
   res.json({ ok: true });
+});
+
+/* ================= collaborators (owner invites editors by email) =================
+   Use case: several orgs working one geography pool their data on a single atlas.
+   Editors get the full edit flow (details, region, layers, add-data) but cannot
+   delete the atlas or manage collaborators. */
+
+const MAX_COLLABORATORS = 20;
+
+function collabList(inst) {
+  return (inst.collaborators || []).map((c) => ({
+    email: c.email, invitedAt: c.invitedAt, acceptedAt: c.acceptedAt || null,
+  }));
+}
+
+router.post('/instances/:slug/collaborators', async (req, res) => {
+  const inst = reg.getInstance(String(req.params.slug));
+  if (!inst) return res.status(404).json({ error: 'not found' });
+  if (callerRole(req, inst) !== 'owner') return res.status(403).json({ error: 'only the owner can invite collaborators' });
+  const email = reg.normEmail(req.body && req.body.email);
+  if (!reg.validEmail(email)) return res.status(400).json({ error: 'valid email required' });
+  if (inst.ownerAccount && email === inst.ownerAccount) return res.status(400).json({ error: 'that email already owns this atlas' });
+  if ((inst.collaborators || []).length >= MAX_COLLABORATORS) {
+    return res.status(400).json({ error: `collaborator limit reached (${MAX_COLLABORATORS})` });
+  }
+  const c = reg.addCollaborator(inst.slug, email);
+  const invitedBy = inst.ownerAccount || inst.email || 'the atlas owner';
+  const result = await sendMail({
+    to: email,
+    subject: `You're invited to contribute to “${inst.title}” — LOKA Atlas`,
+    text:
+      `${invitedBy} invited you to contribute to “${inst.title}”` +
+      (inst.regionLabel ? ` (${inst.regionLabel})` : '') + ` on LOKA Atlas.\n\n` +
+      `As a collaborator you can edit the atlas and add your organisation's data layers.\n\n` +
+      `To get started:\n` +
+      `1. Open ${siteBase(req)}/apps/atlas/setup/\n` +
+      `2. Sign in with this email address — we'll send you a 6-digit code.\n` +
+      `3. “${inst.title}” will appear under Your atlases.\n\n` +
+      `If you weren't expecting this, you can ignore this email.\n`,
+  });
+  res.json({ ok: true, collaborator: { email: c.email, invitedAt: c.invitedAt, acceptedAt: c.acceptedAt || null }, sent: !!result.sent, collaborators: collabList(inst) });
+});
+
+router.delete('/instances/:slug/collaborators', (req, res) => {
+  const inst = reg.getInstance(String(req.params.slug));
+  if (!inst) return res.status(404).json({ error: 'not found' });
+  if (callerRole(req, inst) !== 'owner') return res.status(403).json({ error: 'only the owner can remove collaborators' });
+  const email = reg.normEmail(req.body && req.body.email);
+  if (!reg.validEmail(email)) return res.status(400).json({ error: 'valid email required' });
+  reg.removeCollaborator(inst.slug, email);
+  res.json({ ok: true, collaborators: collabList(inst) });
 });
 
 /* ================= auth (magic links) ================= */
@@ -736,20 +795,37 @@ router.post('/auth/request-link', async (req, res) => {
   linkRate.set(ip, hits);
 
   reg.upsertAccount(email);
-  const link = `${siteBase(req)}/apps/atlas/api/auth/verify?t=${makeSafe(auth.makeLoginToken(email))}`;
+  const otp = auth.makeOtp(email);
   const result = await sendMail({
     to: email,
-    subject: 'Sign in to LOKA Atlas',
-    text: `Click to sign in (valid 15 minutes):\n\n${link}\n\nIf you didn't request this, ignore this email.`,
+    subject: `${otp} is your LOKA Atlas sign-in code`,
+    text: `Your sign-in code is:\n\n    ${otp}\n\nType it into the LOKA Atlas sign-in box. It works once and expires in 10 minutes.\n\nIf you didn't request this, ignore this email.`,
   });
   res.json({ ok: true, sent: !!result.sent, via: result.via || 'log' });
 });
-function makeSafe(t) { return encodeURIComponent(t); }
+
+// The 6-digit code from the email, typed straight into the wizard — no link,
+// no tab-switching. Sets the session cookie on this same tab.
+router.post('/auth/verify-code', (req, res) => {
+  const email = reg.normEmail(req.body && req.body.email);
+  const code = String((req.body && req.body.code) || '').trim();
+  if (!reg.validEmail(email) || !/^\d{6}$/.test(code)) {
+    return res.status(400).json({ error: 'email and the 6-digit code are required' });
+  }
+  if (!auth.verifyOtp(email, code)) {
+    return res.status(401).json({ error: 'that code isn’t right or has expired — request a fresh one' });
+  }
+  reg.markVerified(email);
+  reg.acceptInvites(email); // pending collaborator invites become active on first sign-in
+  res.setHeader('Set-Cookie', auth.sessionCookie(email));
+  res.json({ ok: true, email });
+});
 
 router.get('/auth/verify', (req, res) => {
   const p = auth.readLoginToken(String(req.query.t || req.query.token || ''));
   if (!p) return res.status(400).send(page('Link expired', 'This sign-in link is invalid or has already been used. Request a fresh one from the wizard.'));
   reg.markVerified(p.email);
+  reg.acceptInvites(p.email);
   res.setHeader('Set-Cookie', auth.sessionCookie(p.email));
   // No redirect: the wizard tab you came from is polling and will continue on its
   // own with your work intact. Redirecting here would open a second, empty wizard.
@@ -765,7 +841,10 @@ router.get('/auth/me', (req, res) => {
   const instances = (acc ? acc.instances : [])
     .map((slug) => reg.getInstance(slug))
     .filter(Boolean)
-    .map((i) => ({ slug: i.slug, title: i.title, regionLabel: i.regionLabel || '', status: i.status, visibility: i.visibility }));
+    .map((i) => ({
+      slug: i.slug, title: i.title, regionLabel: i.regionLabel || '', status: i.status, visibility: i.visibility,
+      role: i.ownerAccount === session.email ? 'owner' : 'editor',
+    }));
   res.json({
     email: session.email,
     verifiedAt: acc ? acc.verifiedAt : null,

@@ -149,6 +149,60 @@ export function bindInstance(email, slug) {
   if (inst) inst.ownerAccount = normEmail(email);
   persist();
 }
+// Link an atlas to an account WITHOUT transferring ownership — used for invited
+// collaborators, so the atlas shows up under their "Your atlases".
+export function linkInstance(email, slug) {
+  const acc = upsertAccount(email);
+  if (!acc.instances.includes(slug)) acc.instances.push(slug);
+  persist();
+}
+export function unlinkInstance(email, slug) {
+  const acc = db.accounts[normEmail(email)];
+  if (acc) acc.instances = acc.instances.filter((s) => s !== slug);
+  persist();
+}
+
+/* ---------- collaborators (invited by the owner; role: editor) ---------- */
+
+export function addCollaborator(slug, email) {
+  const inst = db.instances[slug];
+  if (!inst) return null;
+  const key = normEmail(email);
+  inst.collaborators = inst.collaborators || [];
+  let c = inst.collaborators.find((x) => x.email === key);
+  if (!c) {
+    c = { email: key, invitedAt: Date.now(), acceptedAt: null };
+    inst.collaborators.push(c);
+  }
+  linkInstance(key, slug);
+  persist();
+  return c;
+}
+export function removeCollaborator(slug, email) {
+  const inst = db.instances[slug];
+  if (!inst) return false;
+  const key = normEmail(email);
+  const before = (inst.collaborators || []).length;
+  inst.collaborators = (inst.collaborators || []).filter((x) => x.email !== key);
+  if (inst.ownerAccount !== key) unlinkInstance(key, slug); // never detach the owner
+  persist();
+  return inst.collaborators.length < before;
+}
+export function isCollaborator(inst, email) {
+  const key = normEmail(email);
+  return !!(inst && (inst.collaborators || []).some((x) => x.email === key));
+}
+// First sign-in after an invite marks it accepted (called on OTP verification).
+export function acceptInvites(email) {
+  const key = normEmail(email);
+  let n = 0;
+  for (const inst of Object.values(db.instances)) {
+    const c = (inst.collaborators || []).find((x) => x.email === key && !x.acceptedAt);
+    if (c) { c.acceptedAt = Date.now(); n++; }
+  }
+  if (n) persist();
+  return n;
+}
 export function normEmail(email) {
   return String(email || '').trim().toLowerCase();
 }

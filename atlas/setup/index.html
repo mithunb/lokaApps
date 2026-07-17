@@ -374,16 +374,22 @@
         <input type="email" id="auth-email" placeholder="you@example.org" />
       </label>
       <div class="btnrow">
-        <button class="btn" id="auth-send">Email me a sign-in link</button>
+        <button class="btn" id="auth-send">Email me a code</button>
         <button class="btn ghost" id="auth-cancel">Cancel</button>
       </div>
     </div>
     <div id="auth-step-wait" hidden>
-      <p>We sent a sign-in link to <b id="auth-sent-to"></b>. Open it (check spam too) — it
-        confirms in a new tab, then <b>come back to this tab</b> and your atlas will continue
-        right where you left off.</p>
-      <p class="hint">Waiting for you to click the link…</p>
-      <div class="btnrow"><button class="btn ghost" id="auth-cancel-2">Cancel</button></div>
+      <p>We emailed a 6-digit code to <b id="auth-sent-to"></b> (check spam too). Type it here:</p>
+      <label class="f">Sign-in code
+        <input type="text" id="auth-code" inputmode="numeric" autocomplete="one-time-code"
+               pattern="[0-9]*" maxlength="6" placeholder="123456"
+               style="letter-spacing:.35em; font-size:1.25rem; font-variant-numeric:tabular-nums; max-width:11rem" />
+      </label>
+      <div class="btnrow">
+        <button class="btn" id="auth-verify">Sign in</button>
+        <button class="btn ghost" id="auth-cancel-2">Cancel</button>
+      </div>
+      <p class="hint">Didn’t get it? <a href="#" id="auth-resend">Send a fresh code</a></p>
     </div>
     <div id="auth-msg"></div>
   </dialog>

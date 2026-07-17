@@ -411,22 +411,32 @@
   }
   refreshAuth();
 
-  var authPoll = null;
   $("#auth-send").onclick = function () {
     var email = $("#f-auth-email").value.trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { msg("#msg-commit", "Enter a valid email."); return; }
     api("auth/request-link", { method: "POST", body: { email: email } }).then(function (r) {
       msg("#msg-commit", r.sent
-        ? "Check your inbox and click the sign-in link — this page will notice automatically."
-        : "This server can't send email yet — ask the LOKA team (mithun@socratus.org) for your sign-in link.", r.sent ? "ok" : "err");
-      clearInterval(authPoll);
-      authPoll = setInterval(function () {
-        api("auth/me").then(function () {
-          clearInterval(authPoll);
-          refreshAuth().then(function () { msg("#msg-commit", "Signed in ✓ — you can add the layer now.", "ok"); });
-        }).catch(function () {});
-      }, 3000);
+        ? "We emailed you a 6-digit code — type it above and sign in."
+        : "This server can't send email yet — ask the LOKA team (mithun@socratus.org) for your code.", r.sent ? "ok" : "err");
+      $("#commit-code-wrap").hidden = false;
+      $("#auth-verify").hidden = false;
+      $("#f-auth-code").value = "";
+      $("#f-auth-code").focus();
     }).catch(function (e) { msg("#msg-commit", esc(errMsg(e))); });
+  };
+
+  $("#auth-verify").onclick = function () {
+    var email = $("#f-auth-email").value.trim();
+    var code = $("#f-auth-code").value.trim();
+    if (!/^\d{6}$/.test(code)) { msg("#msg-commit", "Enter the 6-digit code from the email."); return; }
+    api("auth/verify-code", { method: "POST", body: { email: email, code: code } })
+      .then(function () {
+        $("#commit-code-wrap").hidden = true;
+        $("#auth-verify").hidden = true;
+        return refreshAuth();
+      })
+      .then(function () { msg("#msg-commit", "Signed in ✓ — you can add the layer now.", "ok"); })
+      .catch(function (e) { msg("#msg-commit", esc(errMsg(e))); });
   };
 
   $("#commit").onclick = function () {
