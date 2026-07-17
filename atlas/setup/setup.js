@@ -1118,8 +1118,9 @@
         : i.status === "building" ? "Building…" : i.status === "pending-approval" ? "Awaiting approval"
         : i.status === "built" ? "Unpublished" : i.status;
       row.innerHTML = '<div class="mine-main"><b>' + esc(i.title || i.slug) + "</b><span>" +
-        esc(i.regionLabel || "") + '</span></div><span class="mine-badge ' +
-        (i.status === "published" ? "" : "draft") + '">' + esc(label) + "</span>";
+        esc(i.regionLabel || "") + "</span></div>" +
+        (i.role === "editor" ? '<span class="mine-badge shared">Shared with you</span>' : "") +
+        '<span class="mine-badge ' + (i.status === "published" ? "" : "draft") + '">' + esc(label) + "</span>";
       var actions = document.createElement("div");
       actions.className = "mine-actions";
       if (i.status === "published" && i.visibility !== "private") {
@@ -1139,9 +1140,11 @@
         addData.title = "Add your own data as a map layer (CSV, Excel, JSON, GeoJSON, KML, GPX) — experimental, under development";
         actions.appendChild(addData);
       }
-      var del = document.createElement("button"); del.className = "danger"; del.textContent = "Delete";
-      del.onclick = function () { deleteAtlas(i.slug, i.title); };
-      actions.appendChild(del);
+      if (i.role !== "editor") { // only the owner can delete
+        var del = document.createElement("button"); del.className = "danger"; del.textContent = "Delete";
+        del.onclick = function () { deleteAtlas(i.slug, i.title); };
+        actions.appendChild(del);
+      }
       row.appendChild(actions);
       list.appendChild(row);
     });
@@ -1173,9 +1176,15 @@
       if (!inst.canEdit) { alert("You can't edit this atlas."); return; }
       S.editSlug = slug; S.editMode = "full"; S.editInst = inst; S.mode = "wizard";
       S.regionKept = true;
+      S.editRole = inst.role || "owner";
       S._origLayers = (inst.layers || []).slice().sort().join(",");
 
       fillDetails(inst);
+      // collaborators: only the owner can see and manage the panel
+      if (S.editRole === "owner") {
+        $("#collab-panel").hidden = false;
+        renderCollaborators(inst.collaborators || []);
+      }
       // region: carry the current one; the country is preset so the catalogue
       // (step 3) resolves, and drilling/tapping later flips regionKept off
       S.geo = { iso3: inst.region.iso3, levels: [1], crumbs: [], viewLevel: 1, features: [], selected: {} };
@@ -1280,6 +1289,53 @@
       });
   }
 
+  /* ---- collaborators (edit mode, owner only) ---- */
+
+  function collabMsg(text, cls) {
+    $("#collab-msg").innerHTML = text ? '<div class="msg ' + (cls || "err") + '">' + text + "</div>" : "";
+  }
+
+  function renderCollaborators(list) {
+    var box = $("#collab-list");
+    box.innerHTML = "";
+    if (!list.length) {
+      box.innerHTML = '<p class="hint" style="margin:.3rem 0 0">No collaborators yet — invite a partner organisation below.</p>';
+      return;
+    }
+    list.forEach(function (c) {
+      var row = document.createElement("div");
+      row.className = "collab-row";
+      row.innerHTML = '<span class="em">' + esc(c.email) + "</span>" +
+        '<span class="mine-badge' + (c.acceptedAt ? "" : " draft") + '">' + (c.acceptedAt ? "Active" : "Invited") + "</span>";
+      var rm = document.createElement("button");
+      rm.type = "button"; rm.textContent = "Remove";
+      rm.onclick = function () {
+        if (!confirm("Remove " + c.email + " from this atlas? They lose edit access immediately.")) return;
+        api("instances/" + S.editSlug + "/collaborators", { method: "DELETE", body: { email: c.email } })
+          .then(function (r) { collabMsg(""); renderCollaborators(r.collaborators || []); })
+          .catch(function (e) { collabMsg(esc(errMsg(e))); });
+      };
+      row.appendChild(rm);
+      box.appendChild(row);
+    });
+  }
+
+  $("#collab-invite").onclick = function () {
+    var email = $("#collab-email").value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { collabMsg("Enter a valid email."); return; }
+    $("#collab-invite").disabled = true;
+    api("instances/" + S.editSlug + "/collaborators", { method: "POST", body: { email: email } })
+      .then(function (r) {
+        $("#collab-invite").disabled = false;
+        $("#collab-email").value = "";
+        renderCollaborators(r.collaborators || []);
+        collabMsg(r.sent
+          ? "Invite sent to " + esc(email) + " — they sign in with that email and this atlas appears under their atlases."
+          : "Added — but the invite email couldn’t be sent. Share the sign-in steps with them directly.", r.sent ? "ok" : "err");
+      })
+      .catch(function (e) { $("#collab-invite").disabled = false; collabMsg(esc(errMsg(e))); });
+  };
+
   function deleteAtlas(slug, title) {
     if (!confirm("Delete “" + (title || slug) + "”? This removes the atlas and its data, and can't be undone.")) return;
     api("instances/" + slug, { method: "DELETE" })
@@ -1289,9 +1345,11 @@
 
   function exitEdit() {
     S.editSlug = null; S.editMode = null; S.editInst = null; S.regionKept = false;
-    S._origLayers = null; S._pendingViewKey = null;
+    S._origLayers = null; S._pendingViewKey = null; S.editRole = null;
     $("#edit-banner").hidden = true;
     $("#geo-current").hidden = true;
+    $("#collab-panel").hidden = true;
+    $("#collab-list").innerHTML = ""; $("#collab-msg").innerHTML = ""; $("#collab-email").value = "";
     exitEditChrome();
     $("#f-slug").disabled = false;
     $(".stepper").hidden = false;

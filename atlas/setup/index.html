@@ -189,6 +189,20 @@
     .mine-item.flash { animation:mine-flash 2.2s ease-out; }
     @keyframes mine-flash { 0%,40% { border-color:var(--color-moss); box-shadow:0 0 0 3px var(--color-moss-tint); } 100% { border-color:var(--color-border); box-shadow:none; } }
     @media (prefers-reduced-motion:reduce){ .mine-item.flash { animation:none; border-color:var(--color-moss); } }
+    .mine-badge.shared { background:var(--color-bg-alt); color:var(--color-text-secondary); }
+
+    /* collaborators panel (edit mode, owner only) */
+    #collab-panel { margin-top:1.4rem; padding-top:1.1rem; border-top:1px solid var(--color-divider); }
+    .collab-head { font-size:.78rem; letter-spacing:.06em; text-transform:uppercase; color:var(--color-text-secondary); margin:0 0 .3rem; }
+    .collab-row { display:flex; align-items:center; gap:.6rem; padding:.5rem 0; border-top:1px solid var(--color-divider); font-size:.9rem; }
+    .collab-row:first-child { border-top:none; }
+    .collab-row .em { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+    .collab-row button { font:inherit; font-size:.8rem; font-weight:600; font-family:'Figtree',sans-serif;
+      padding:.25rem .55rem; border-radius:4px; border:1px solid var(--color-border); background:var(--color-surface);
+      color:var(--color-text-primary); cursor:pointer; }
+    .collab-row button:hover { border-color:var(--color-rust); color:var(--color-rust-deep); }
+    .collab-invite { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.7rem; }
+    .collab-invite input { flex:1 1 14rem; min-width:0; }
 
     .msg { padding:.7rem .9rem; border-radius:4px; font-size:.9rem; margin-top:1rem; }
     .msg.err { background:var(--color-rust-tint); color:var(--color-rust-deep); }
@@ -277,6 +291,19 @@
             <button type="button" id="vis-private">Private — link + view key only <span class="hint">(sign-in required)</span></button>
           </div>
         </label>
+      </div>
+      <!-- owner-only, edit mode: invite other orgs to co-edit and add data -->
+      <div id="collab-panel" hidden>
+        <h3 class="collab-head">Collaborators</h3>
+        <p class="hint">Invite other organisations to edit this atlas and add their data.
+          They sign in with their email (we send a 6-digit code); they can do everything
+          except delete the atlas or manage collaborators.</p>
+        <div id="collab-list"></div>
+        <div class="collab-invite">
+          <input type="email" id="collab-email" placeholder="partner@example.org" autocomplete="off" />
+          <button class="btn secondary" type="button" id="collab-invite">Invite</button>
+        </div>
+        <div id="collab-msg"></div>
       </div>
       <div class="btnrow">
         <button class="btn" id="next-1">Choose your region →</button>
