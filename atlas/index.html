@@ -265,6 +265,14 @@
     #data-credits .cr-name { font-weight:600; color:var(--color-text-primary); }
     #data-credits .cr-note { color:var(--color-text-secondary); font-size:.75rem; }
     #data-credits .cr-lic { color:var(--color-text-muted); font-size:.68rem; letter-spacing:.02em; }
+    /* layers contributed by collaborating orgs */
+    #contrib-credits { margin-top:1.1rem; }
+    .contrib-head { font-family:'Figtree',sans-serif; font-size:.68rem; font-weight:600; letter-spacing:.1em;
+      text-transform:uppercase; color:var(--color-text-muted); margin:0 0 .5rem; }
+    #contrib-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.4rem; }
+    #contrib-list li { font-size:.8rem; line-height:1.35; }
+    #contrib-list .cr-name { font-weight:600; color:var(--color-text-primary); }
+    #contrib-list .cr-by { color:var(--color-text-secondary); }
     .credits-foot { margin-top:1rem; font-size:.78rem; color:var(--color-text-muted); display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
 
     /* ---- app home: instance gallery ---- */
@@ -428,6 +436,10 @@
           Data &amp; sources
         </h3>
         <ul id="data-credits"></ul>
+        <div id="contrib-credits" hidden>
+          <h4 class="contrib-head">Contributed data</h4>
+          <ul id="contrib-list"></ul>
+        </div>
         <div class="credits-foot">
           Built with <a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre GL</a>, the open-source map engine. Open data, openly credited.
         </div>

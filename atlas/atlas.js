@@ -147,7 +147,14 @@
       .catch(function () { return null; })
       .then(function (local) {
         if (!local) return manifest;
-        (local.layers || []).forEach(function (L) { manifest.layers.push(L); });
+        (local.layers || []).forEach(function (L) {
+          // contributed layers carry their credit into the layer's info tooltip
+          if (L.addedBy && (L.addedBy.org || L.addedBy.name)) {
+            var by = "Added by " + (L.addedBy.org || L.addedBy.name);
+            L.info = L.info ? L.info + " — " + by : by;
+          }
+          manifest.layers.push(L);
+        });
         (local.groups || []).forEach(function (g) {
           if (!manifest.groups.some(function (x) { return x.id === g.id; })) manifest.groups.push(g);
         });
@@ -1031,6 +1038,22 @@
         (a.note ? '<span class="cr-note">' + esc(a.note) + "</span>" : "") +
         (a.license ? '<span class="cr-lic">' + esc(a.license) + "</span>" : "") + "</li>";
     }).join("");
+
+    // layers contributed by collaborating orgs — credit them by name
+    var contrib = (MANIFEST.layers || []).filter(function (L) {
+      return L.addedBy && (L.addedBy.org || L.addedBy.name);
+    });
+    var wrap = $("#contrib-credits"), list = $("#contrib-list");
+    if (wrap && list && contrib.length) {
+      wrap.hidden = false;
+      list.innerHTML = contrib.map(function (L) {
+        var org = L.addedBy.org || "";
+        var person = L.addedBy.name || "";
+        var by = org && person ? org + " (" + person + ")" : (org || person);
+        return '<li><span class="cr-name">' + esc(L.label || L.id) + "</span> " +
+          '<span class="cr-by">— added by ' + esc(by) + "</span></li>";
+      }).join("");
+    }
   }
 
   function setText(sel, txt) { var e = $(sel); if (e) e.textContent = txt; }

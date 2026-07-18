@@ -895,6 +895,7 @@
     $("#auth-why").textContent = why || "";
     $("#auth-step-email").hidden = false;
     $("#auth-step-wait").hidden = true;
+    $("#auth-step-profile").hidden = true;
     $("#auth-msg").innerHTML = "";
     if ($("#f-email").value) $("#auth-email").value = $("#f-email").value;
     dlg.showModal();
@@ -937,6 +938,13 @@
     requestCode($("#auth-email").value.trim());
   };
 
+  function finishSignIn(me) {
+    S.session = me;
+    showSignedIn(me);
+    renderMyAtlases();
+    endAuth(true);
+  }
+
   function submitCode() {
     var email = $("#auth-email").value.trim();
     var code = $("#auth-code").value.trim();
@@ -948,10 +956,16 @@
       .then(function () { return api("auth/me"); })
       .then(function (me) {
         $("#auth-verify").disabled = false;
-        S.session = me;
-        showSignedIn(me);
-        renderMyAtlases();
-        endAuth(true);
+        $("#auth-msg").innerHTML = "";
+        // first sign-in: capture who they are, so contributed layers carry a credit
+        if (!me.name || !me.org) {
+          S._pendingMe = me;
+          $("#auth-step-wait").hidden = true;
+          $("#auth-step-profile").hidden = false;
+          setTimeout(function () { $("#auth-name").focus(); }, 60);
+          return;
+        }
+        finishSignIn(me);
       })
       .catch(function (e) {
         $("#auth-verify").disabled = false;
@@ -962,6 +976,27 @@
   $("#auth-code").addEventListener("keydown", function (e) {
     if (e.key === "Enter") { e.preventDefault(); submitCode(); }
   });
+
+  $("#auth-profile-save").onclick = function () {
+    var name = $("#auth-name").value.trim();
+    var org = $("#auth-org").value.trim();
+    if (!name || !org) {
+      $("#auth-msg").innerHTML = '<div class="msg err">Both your name and organisation are needed.</div>'; return;
+    }
+    $("#auth-profile-save").disabled = true;
+    api("auth/profile", { method: "POST", body: { name: name, org: org } })
+      .then(function () {
+        $("#auth-profile-save").disabled = false;
+        $("#auth-step-profile").hidden = true;
+        var me = S._pendingMe || {};
+        me.name = name; me.org = org;
+        finishSignIn(me);
+      })
+      .catch(function (e) {
+        $("#auth-profile-save").disabled = false;
+        $("#auth-msg").innerHTML = '<div class="msg err">' + esc(errMsg(e)) + "</div>";
+      });
+  };
 
   function showSignedIn(me) {
     $("#nav-auth").textContent = me.email;

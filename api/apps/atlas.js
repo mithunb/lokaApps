@@ -848,9 +848,23 @@ router.get('/auth/me', (req, res) => {
   res.json({
     email: session.email,
     verifiedAt: acc ? acc.verifiedAt : null,
+    name: (acc && acc.name) || '',
+    org: (acc && acc.org) || '',
     instances,
     drafts: reg.listDrafts(session.email).map((d) => ({ id: d.id, title: d.title || '', updatedAt: d.updatedAt })),
   });
+});
+
+// Captured once after the first sign-in: who the person is and which org they
+// belong to. Used to credit contributed layers ("Added by <org>").
+router.post('/auth/profile', (req, res) => {
+  const session = auth.sessionFromReq(req);
+  if (!session) return res.status(401).json({ error: 'not signed in' });
+  const name = String((req.body && req.body.name) || '').trim();
+  const org = String((req.body && req.body.org) || '').trim();
+  if (!name || !org) return res.status(400).json({ error: 'your full name and organisation are both needed' });
+  const acc = reg.setProfile(session.email, { name, org });
+  res.json({ ok: true, name: acc.name, org: acc.org });
 });
 
 router.post('/auth/logout', (_req, res) => {
@@ -1393,6 +1407,13 @@ router.post('/layers/commit', (req, res) => {
       const t = transform(session);
       return { frag: t.frag, features: t.features };
     })();
+    // credit the contributor: which org (and person) added this layer
+    const who = auth.sessionFromReq(req);
+    if (who) {
+      const acc = reg.getAccount(who.email);
+      frag.stanza.addedBy = { email: who.email, name: (acc && acc.name) || '', org: (acc && acc.org) || '' };
+      frag.stanza.addedAt = Date.now();
+    }
     const out = imports.commitLayer(session.dataset, frag.stanza, frag.sourceFile,
       { type: 'FeatureCollection', features });
     imports.discardImport(session.id);
@@ -1400,6 +1421,47 @@ router.post('/layers/commit', (req, res) => {
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
+});
+
+// The atlas's contributed (overlay) layers — for the bench's manage list.
+router.get('/layers/list', (req, res) => {
+  const dataset = String(req.query.dataset || '');
+  const inst = reg.getInstance(dataset);
+  const role = inst ? callerRole(req, inst) : (auth.isAdmin(req) ? 'owner' : null);
+  if (!role) return res.status(403).json({ error: 'sign in as this atlas’s owner or a collaborator', needsAuth: true });
+  let m = null;
+  try { m = imports.readManifest(dataset); } catch { /* dataset dir missing */ }
+  const who = auth.sessionFromReq(req);
+  const layers = ((m && m.local && m.local.layers) || []).map((l) => ({
+    id: l.id, label: l.label || l.id,
+    addedBy: l.addedBy ? { email: l.addedBy.email, name: l.addedBy.name || '', org: l.addedBy.org || '' } : null,
+    addedAt: l.addedAt || null,
+    // owner removes any layer; an editor only the ones they added themselves
+    canRemove: role === 'owner' || !!(who && l.addedBy && l.addedBy.email === who.email),
+  }));
+  res.json({ layers, role });
+});
+
+// Remove a contributed layer — owner: any; editor: only their own.
+router.post('/layers/remove', (req, res) => {
+  const b = req.body || {};
+  const dataset = String(b.dataset || '');
+  const layerId = String(b.layerId || '');
+  const inst = reg.getInstance(dataset);
+  const role = inst ? callerRole(req, inst) : (auth.isAdmin(req) ? 'owner' : null);
+  if (!role) return res.status(403).json({ error: 'sign in as this atlas’s owner or a collaborator', needsAuth: true });
+  let m = null;
+  try { m = imports.readManifest(dataset); } catch { /* dataset dir missing */ }
+  const layer = ((m && m.local && m.local.layers) || []).find((l) => l.id === layerId);
+  if (!layer) return res.status(404).json({ error: 'layer not found' });
+  if (role !== 'owner') {
+    const who = auth.sessionFromReq(req);
+    if (!who || !layer.addedBy || layer.addedBy.email !== who.email) {
+      return res.status(403).json({ error: 'you can only remove layers your organisation added' });
+    }
+  }
+  const gone = imports.removeLayer(dataset, layerId);
+  res.json({ ok: gone });
 });
 
 router.post('/layers/discard', (req, res) => {

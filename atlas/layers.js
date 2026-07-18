@@ -36,6 +36,40 @@
   var qsDataset = new URLSearchParams(location.search).get("dataset");
   if (qsDataset) $("#f-dataset").value = qsDataset;
 
+  /* ---------------- layers already added to this atlas ----------------
+     Owner can remove any; a collaborator only the layers their org added. */
+
+  function loadAddedLayers() {
+    var ds = $("#f-dataset").value.trim();
+    if (!ds) return;
+    api("layers/list?dataset=" + encodeURIComponent(ds)).then(function (r) {
+      var wrap = $("#added-layers"), list = $("#added-layers-list");
+      list.innerHTML = "";
+      if (!r.layers.length) { wrap.hidden = true; return; }
+      wrap.hidden = false;
+      r.layers.forEach(function (l) {
+        var row = document.createElement("div");
+        row.style.cssText = "display:flex; align-items:center; gap:.6rem; padding:.45rem 0; border-top:1px solid var(--color-divider); font-size:.9rem";
+        var credit = l.addedBy ? (l.addedBy.org || l.addedBy.name || l.addedBy.email) : "";
+        row.innerHTML = '<span style="flex:1 1 auto; min-width:0"><b>' + esc(l.label) + "</b>" +
+          (credit ? ' <span class="hint">— added by ' + esc(credit) + "</span>" : "") + "</span>";
+        if (l.canRemove) {
+          var rm = document.createElement("button");
+          rm.className = "btn secondary"; rm.textContent = "Remove";
+          rm.onclick = function () {
+            if (!confirm("Remove the layer “" + l.label + "” from this atlas?")) return;
+            api("layers/remove", { method: "POST", body: { dataset: ds, layerId: l.id } })
+              .then(loadAddedLayers)
+              .catch(function (e) { msg("#msg-start", esc(errMsg(e))); });
+          };
+          row.appendChild(rm);
+        }
+        list.appendChild(row);
+      });
+    }).catch(function () { $("#added-layers").hidden = true; /* not signed in / no access */ });
+  }
+  loadAddedLayers();
+
   function datasetReady() {
     S.dataset = $("#f-dataset").value.trim();
     if (!S.dataset) { msg("#msg-start", "Enter the atlas dataset id first (it's in the atlas URL after ?dataset=)."); return false; }
@@ -435,7 +469,7 @@
         $("#auth-verify").hidden = true;
         return refreshAuth();
       })
-      .then(function () { msg("#msg-commit", "Signed in ✓ — you can add the layer now.", "ok"); })
+      .then(function () { msg("#msg-commit", "Signed in ✓ — you can add the layer now.", "ok"); loadAddedLayers(); })
       .catch(function (e) { msg("#msg-commit", esc(errMsg(e))); });
   };
 
@@ -445,6 +479,7 @@
       .then(function (r) {
         msg("#msg-commit", 'Layer added 🎉 — <a href="./?dataset=' + encodeURIComponent(r.dataset) + '" target="_blank">open the atlas</a>', "ok");
         $("#preview-frame").src = "./?dataset=" + encodeURIComponent(r.dataset);
+        loadAddedLayers();
       })
       .catch(function (e) {
         if (e.needsAuth) {

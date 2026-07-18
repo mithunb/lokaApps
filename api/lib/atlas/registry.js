@@ -142,6 +142,15 @@ export function markVerified(email) {
   persist();
   return acc;
 }
+// Who the person is — captured once after their first sign-in; used to credit
+// contributed layers ("Added by <org>").
+export function setProfile(email, { name, org }) {
+  const acc = upsertAccount(email);
+  if (name != null) acc.name = String(name).trim().slice(0, 80);
+  if (org != null) acc.org = String(org).trim().slice(0, 60);
+  persist();
+  return acc;
+}
 export function bindInstance(email, slug) {
   const acc = upsertAccount(email);
   if (!acc.instances.includes(slug)) acc.instances.push(slug);

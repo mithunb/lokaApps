@@ -418,6 +418,18 @@
       </div>
       <p class="hint">Didn’t get it? <a href="#" id="auth-resend">Send a fresh code</a></p>
     </div>
+    <div id="auth-step-profile" hidden>
+      <p>You're in! One last thing — this is how your contributions are credited on the map.</p>
+      <label class="f">Your full name
+        <input type="text" id="auth-name" maxlength="80" placeholder="Asha Rao" autocomplete="name" />
+      </label>
+      <label class="f">Organisation
+        <input type="text" id="auth-org" maxlength="60" placeholder="Your organisation" autocomplete="organization" />
+      </label>
+      <div class="btnrow">
+        <button class="btn" id="auth-profile-save">Continue</button>
+      </div>
+    </div>
     <div id="auth-msg"></div>
   </dialog>
 
