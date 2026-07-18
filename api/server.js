@@ -10,7 +10,6 @@ const PORT = Number(process.env.LOKA_PORT) || 8181;
 startModelResolver();
 
 const app = express();
-app.use(express.json({ limit: '256kb' }));
 app.disable('x-powered-by');
 
 app.use((req, res, next) => {
@@ -25,6 +24,8 @@ app.use((req, res, next) => {
 // Dev-only prod parity: serve the repo statically under /apps and mimic Apache's
 // ProxyPassMatch (/apps/<app>/api/* -> /api/<app>/*) so one origin serves everything,
 // exactly like loka.place. Enable with LOKA_DEV_STATIC=1; never set in production.
+// Must run before body parsing so the /api/atlas parser exemption sees the
+// rewritten URL.
 if (process.env.LOKA_DEV_STATIC) {
   const repoRoot = path.join(__dirname, '..');
   app.use((req, res, next) => {
@@ -37,6 +38,11 @@ if (process.env.LOKA_DEV_STATIC) {
   app.use('/apps', express.static(repoRoot));
   console.log(`[dev] serving ${repoRoot} at /apps with API rewrite`);
 }
+
+// The atlas router does its own body parsing (larger limits for data uploads);
+// everything else gets the small default.
+const smallJson = express.json({ limit: '256kb' });
+app.use((req, res, next) => (req.url.startsWith('/api/atlas') ? next() : smallJson(req, res, next)));
 
 app.get('/healthz', (_req, res) => res.type('text/plain').send('ok'));
 app.get('/status', (_req, res) => res.json({ ok: true, model: getResolverStatus() }));

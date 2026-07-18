@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Add your data — LOKA Atlas</title>
-  <meta name="description" content="Upload a spreadsheet and turn it into a map layer on your LOKA Atlas — joined to boundaries or plotted from coordinates, styled with plain-language instructions." />
+  <meta name="description" content="Upload a spreadsheet and turn it into a map layer on your LOKA Atlas — checked in a typed table, joined to boundaries or plotted from coordinates, previewed on the real map before it's added." />
   <meta name="robots" content="noindex" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -18,6 +18,7 @@
       --color-text-primary:#2A241A; --color-text-secondary:#564E3C; --color-text-muted:#6B6350;
       --color-divider:rgba(42,36,26,.10); --color-border:rgba(42,36,26,.16);
       --color-moss-tint:rgba(74,90,51,.13); --color-rust-tint:rgba(174,80,40,.13);
+      --color-ochre-tint:rgba(184,134,47,.14); --color-purple-tint:rgba(106,77,117,.12);
       --radius-md:.25rem; --radius-lg:.375rem;
       --container:min(78rem,100% - 2.5rem);
     }
@@ -45,7 +46,7 @@
 
     .panel { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:1.35rem; }
     label.f { display:flex; flex-direction:column; gap:.3rem; font-size:.85rem; font-weight:600; color:var(--color-text-secondary); margin-bottom:.8rem; }
-    input[type=text], select, textarea { font:inherit; font-size:.92rem; padding:.5rem .6rem; border:1px solid var(--color-border); border-radius:4px; background:#FFFFFF; color:var(--color-text-primary); width:100%; }
+    input[type=text], input[type=email], select, textarea { font:inherit; font-size:.92rem; padding:.5rem .6rem; border:1px solid var(--color-border); border-radius:4px; background:#FFFFFF; color:var(--color-text-primary); width:100%; }
     .btn { display:inline-flex; align-items:center; gap:.4rem; padding:.55rem 1.1rem; border-radius:var(--radius-md); border:none;
       background:var(--color-moss); color:#fff; font:inherit; font-weight:600; font-size:.92rem; cursor:pointer; }
     .btn:hover { background:var(--color-canopy); }
@@ -57,6 +58,22 @@
     .msg { padding:.6rem .8rem; border-radius:4px; font-size:.88rem; margin:.8rem 0 0; }
     .msg.err { background:var(--color-rust-tint); color:var(--color-rust-deep); }
     .msg.ok { background:var(--color-moss-tint); color:var(--color-canopy); }
+    [hidden] { display:none !important; }
+
+    /* stepper */
+    .steps { display:flex; gap:.4rem; flex-wrap:wrap; list-style:none; padding:0; margin:0 0 1.2rem; counter-reset:step; }
+    .steps li { counter-increment:step; display:flex; align-items:center; gap:.45rem; font-family:'Figtree',sans-serif;
+      font-size:.82rem; font-weight:600; color:var(--color-text-muted); padding:.4rem .8rem .4rem .5rem;
+      border:1px solid var(--color-divider); border-radius:999px; background:var(--color-surface); }
+    .steps li::before { content:counter(step); display:inline-flex; align-items:center; justify-content:center;
+      width:1.35rem; height:1.35rem; border-radius:50%; background:var(--color-divider); color:var(--color-text-secondary);
+      font-size:.75rem; }
+    .steps li.now { color:var(--color-canopy); border-color:var(--color-moss); }
+    .steps li.now::before { background:var(--color-moss); color:#fff; }
+    .steps li.done { color:var(--color-text-secondary); }
+    .steps li.done::before { content:"✓"; background:var(--color-moss-tint); color:var(--color-canopy); }
+
+    .step-nav { display:flex; gap:.6rem; flex-wrap:wrap; margin-top:1rem; align-items:center; }
 
     /* drop zone */
     .drop { border:2px dashed var(--color-border); border-radius:var(--radius-lg); background:var(--color-surface);
@@ -69,23 +86,69 @@
     details.paste { margin-top:.8rem; }
     details.paste summary { cursor:pointer; font-size:.85rem; color:var(--color-text-secondary); }
 
-    /* workbench */
-    .bench { display:grid; grid-template-columns:minmax(21rem,1fr) 1.4fr; gap:1rem; margin-top:1rem; }
-    /* the hidden attribute must always win, whatever display a class sets */
-    [hidden] { display:none !important; }
+    /* sign-in strip (step 1) */
+    .signin { border-top:1px solid var(--color-divider); margin-top:1rem; padding-top:1rem; }
+    .signin-row { display:flex; gap:.5rem; flex-wrap:wrap; align-items:flex-end; }
+    .signin-row label.f { margin:0; flex:1 1 14rem; max-width:20rem; }
+    .signin-row label.f.code { flex:0 1 9rem; }
+
+    /* sheet picker */
+    .sheet-list { display:flex; flex-direction:column; gap:.5rem; margin:.6rem 0 0; }
+    .sheet-list button { display:flex; justify-content:space-between; gap:1rem; text-align:left; font:inherit;
+      padding:.65rem .9rem; border:1px solid var(--color-border); border-radius:var(--radius-md); background:#fff; cursor:pointer; }
+    .sheet-list button:hover { border-color:var(--color-moss); background:var(--color-moss-tint); }
+    .sheet-list .dim { color:var(--color-text-muted); font-size:.85rem; white-space:nowrap; }
+
+    /* check table */
+    .ck-notices { display:flex; flex-direction:column; gap:.4rem; margin-bottom:.7rem; }
+    .ck-notice { background:var(--color-ochre-tint); color:var(--color-text-secondary); border-radius:4px; padding:.5rem .75rem; font-size:.85rem; }
+    .ck-notice.ck-err { background:var(--color-rust-tint); color:var(--color-rust-deep); }
+    .ck-chips { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.7rem; }
+    .ck-chip { font-size:.78rem; padding:.25rem .6rem; border-radius:999px; background:var(--color-rust-tint); color:var(--color-rust-deep); border:none; }
+    .ck-chip.ck-act { cursor:pointer; font:inherit; font-size:.78rem; border:1px solid var(--color-rust); }
+    .ck-scroll { overflow-x:auto; border:1px solid var(--color-border); border-radius:var(--radius-md); background:#fff; }
+    .ck-table { border-collapse:collapse; font-size:.84rem; min-width:100%; }
+    .ck-table th { position:sticky; top:0; background:var(--color-surface); border-bottom:2px solid var(--color-border);
+      padding:.45rem .5rem .5rem; text-align:left; min-width:9rem; vertical-align:top; }
+    .ck-table td { border-bottom:1px solid var(--color-divider); padding:.32rem .55rem; white-space:nowrap; max-width:16rem; overflow:hidden; text-overflow:ellipsis; }
+    .ck-name { font-weight:600; font-size:.84rem; padding:.3rem .4rem; margin-bottom:.3rem; }
+    .ck-coltools { display:flex; gap:.3rem; align-items:center; flex-wrap:wrap; }
+    .ck-type { font-size:.75rem; padding:.22rem .3rem; width:auto; }
+    .ck-mini, .ck-mini2 { font:inherit; font-size:.72rem; padding:.2rem .5rem; border:1px solid var(--color-border); border-radius:4px; background:#fff; color:var(--color-text-secondary); cursor:pointer; }
+    .ck-mini:hover { border-color:var(--color-moss); color:var(--color-canopy); }
+    .ck-mini.on { background:var(--color-rust-tint); color:var(--color-rust-deep); border-color:var(--color-rust); }
+    td.ck-number { background:var(--color-moss-tint); text-align:right; font-variant-numeric:tabular-nums; }
+    td.ck-date { background:var(--color-purple-tint); }
+    td.ck-boolean { background:var(--color-ochre-tint); }
+    td.ck-off { background:var(--color-rust-tint); color:var(--color-rust-deep); }
+    td.ck-empty { color:var(--color-text-muted); }
+    td.ck-ignored, th.ck-ignored .ck-name { opacity:.45; }
+    .ck-foot { font-size:.8rem; color:var(--color-text-muted); margin:.5rem 0 0; }
+    .ck-derive { margin-top:.8rem; }
+    .ck-derive summary { cursor:pointer; font-size:.85rem; color:var(--color-text-secondary); }
+    .ck-derive-cols { display:flex; gap:.8rem; flex-wrap:wrap; font-size:.85rem; margin:.5rem 0; }
+    .ck-derive-row { display:flex; gap:.5rem; align-items:center; max-width:22rem; }
+
+    /* place-on-map + style cards */
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:.35rem .8rem; }
+    @media (max-width:700px){ .grid2 { grid-template-columns:1fr; } }
+    .infer-note { font-size:.88rem; color:var(--color-text-secondary); background:var(--color-moss-tint); border-radius:4px; padding:.6rem .75rem; margin:.4rem 0 .9rem; }
+    .stat { font-size:.88rem; color:var(--color-text-secondary); }
+    .stat b { color:var(--color-text-primary); }
+    .fix-row { display:flex; align-items:center; gap:.5rem; padding:.4rem 0; border-top:1px solid var(--color-divider); font-size:.88rem; flex-wrap:wrap; }
+    .fix-row b { flex:0 0 9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .fix-row select { flex:1; min-width:8rem; width:auto; }
+    .fix-row button { font-size:.75rem; padding:.3rem .55rem; }
+    .radio-row { display:flex; gap:1rem; flex-wrap:wrap; font-size:.88rem; color:var(--color-text-secondary); }
+    .radio-row label { display:flex; gap:.35rem; align-items:center; font-weight:400; }
+
+    /* preview bench */
+    .bench { display:grid; grid-template-columns:minmax(21rem,1fr) 1.4fr; gap:1rem; }
     @media (max-width:900px){ .bench { grid-template-columns:1fr; } }
     .bench-left { display:flex; flex-direction:column; gap:1rem; min-width:0; }
     #preview-frame { width:100%; height:640px; border:1px solid var(--color-border); border-radius:var(--radius-lg); background:#F3E9CE; position:sticky; top:1rem; }
     .card { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:1.1rem 1.2rem; }
     .card h2 { display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
-    .infer-note { font-size:.88rem; color:var(--color-text-secondary); background:var(--color-moss-tint); border-radius:4px; padding:.6rem .75rem; margin:.4rem 0 .9rem; }
-    .stat { font-size:.88rem; color:var(--color-text-secondary); }
-    .stat b { color:var(--color-text-primary); }
-    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:.35rem .8rem; }
-    .fix-row { display:flex; align-items:center; gap:.5rem; padding:.4rem 0; border-top:1px solid var(--color-divider); font-size:.88rem; flex-wrap:wrap; }
-    .fix-row b { flex:0 0 9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .fix-row select { flex:1; min-width:8rem; width:auto; }
-    .fix-row button { font-size:.75rem; padding:.3rem .55rem; }
     details.frag { margin-top:.6rem; }
     details.frag summary { cursor:pointer; font-size:.82rem; color:var(--color-text-muted); }
     details.frag pre { font:11px/1.5 ui-monospace,Menlo,monospace; background:#FFFFFF; border:1px solid var(--color-border);
@@ -115,13 +178,19 @@
     <span class="eyebrow">loka atlas · your data</span>
     <h1>Add your data to the map<span class="beta">Experimental</span></h1>
     <p style="max-width:46rem">Every atlas starts with its default open-data layers — this is where you make it yours.
-      Drop in your data — survey results by village, a facility list, field GPS points — and it becomes a styled
-      map layer: joined to your atlas's boundaries or plotted from coordinates. Steer the result in plain language,
-      check every uncertain match yourself, then publish it to your atlas.</p>
-    <p style="max-width:46rem" class="hint">This workbench is experimental and under active development — expect rough
-      edges. Nothing touches your atlas until you press “Add layer to atlas”.</p>
+      Drop in your data — survey results by village, a facility list, field GPS points — and walk it onto the map in
+      four steps: <b>check</b> the table we read, <b>place</b> the rows, <b>preview</b> the styled layer on the real
+      map, then add it. Nothing touches your atlas until the last step.</p>
 
-    <section class="panel" id="start">
+    <ol class="steps" id="stepper">
+      <li data-step="1" class="now">Upload</li>
+      <li data-step="2">Check &amp; fix</li>
+      <li data-step="3">Place on map</li>
+      <li data-step="4">Preview &amp; add</li>
+    </ol>
+
+    <!-- ============ STEP 1 · UPLOAD ============ -->
+    <section class="panel step" id="step-1">
       <label class="f" style="max-width:24rem">Which atlas?
         <input type="text" id="f-dataset" placeholder="dataset id, e.g. deoria-bioregion" />
         <span class="hint" id="dataset-hint"></span>
@@ -129,7 +198,7 @@
       <div class="drop" id="drop">
         <svg class="drop-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg>
         <b>Drop a CSV, Excel, JSON, GeoJSON, KML or GPX file here</b>
-        <span>or click to choose — up to 5,000 rows / points</span>
+        <span>or click to choose — up to 5,000 rows / points, 25 MB</span>
         <input type="file" id="f-file" accept=".csv,.tsv,.xlsx,.xls,.json,.geojson,.kml,.gpx" />
       </div>
       <details class="paste">
@@ -138,6 +207,26 @@
         <div style="margin-top:.5rem"><button class="btn secondary" id="paste-go">Use pasted table</button></div>
       </details>
       <div id="msg-start"></div>
+
+      <!-- adding data changes the atlas, so who-you-are comes first -->
+      <div class="signin">
+        <p class="hint" id="auth-state" style="margin:0 0 .6rem">Checking who you are…</p>
+        <div id="signin-form" hidden>
+          <div class="signin-row">
+            <label class="f"><span>Your email <span class="hint">(the atlas's owner, or an invited collaborator)</span></span>
+              <input type="email" id="f-auth-email" placeholder="you@example.org" autocomplete="email" />
+            </label>
+            <label class="f code" id="code-wrap" hidden><span>6-digit code</span>
+              <input type="text" id="f-auth-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6"
+                     placeholder="123456" style="letter-spacing:.3em; font-variant-numeric:tabular-nums" />
+            </label>
+            <button class="btn secondary" id="auth-send">Email me a code</button>
+            <button class="btn secondary" id="auth-verify" hidden>Sign in</button>
+          </div>
+          <div id="msg-auth"></div>
+        </div>
+      </div>
+
       <!-- layers already contributed to this atlas (owner removes any; a
            collaborator only their own) -->
       <div id="added-layers" hidden>
@@ -146,42 +235,88 @@
       </div>
     </section>
 
-    <section class="bench" id="bench" hidden>
+    <!-- ============ STEP 2 · CHECK & FIX ============ -->
+    <section class="panel step" id="step-2" hidden>
+      <h2 id="check-title">Check your table</h2>
+      <p class="hint" style="max-width:46rem">This is exactly what we read from your file — colours show each column's
+        type (<span style="background:var(--color-moss-tint); padding:0 .3rem">number</span>,
+        <span style="background:var(--color-purple-tint); padding:0 .3rem">date</span>,
+        <span style="background:var(--color-ochre-tint); padding:0 .3rem">yes / no</span>, plain text) and
+        <span style="background:var(--color-rust-tint); padding:0 .3rem">values that don't fit</span>.
+        Rename, re-type, fill or skip columns until it looks right.</p>
+      <div id="sheet-pick" hidden>
+        <p>That workbook has several sheets — which one holds the table?</p>
+        <div class="sheet-list" id="sheet-list"></div>
+      </div>
+      <div id="check-table"></div>
+      <div class="step-nav">
+        <button class="btn secondary" id="back-1">← Start over</button>
+        <button class="btn" id="to-place">Looks right — place it on the map</button>
+      </div>
+      <div id="msg-check"></div>
+    </section>
+
+    <!-- ============ STEP 3 · PLACE ON MAP ============ -->
+    <section class="panel step" id="step-3" hidden>
+      <h2>Place your rows on the map</h2>
+      <div class="infer-note" id="infer-note" hidden></div>
+      <p class="stat" id="stat-line"></p>
+      <div class="grid2" style="max-width:44rem">
+        <label class="f">Locate rows by
+          <select id="s-strategy">
+            <option value="adminJoin">Match place names to boundaries</option>
+            <option value="coordinates">Latitude / longitude columns</option>
+          </select>
+        </label>
+        <label class="f" id="w-join">Join to
+          <select id="s-join"></select>
+        </label>
+        <label class="f" id="w-name">Place-name column<select id="s-name"></select></label>
+        <label class="f" id="w-parent"><span>Parent column <span class="hint">(optional — district/state, disambiguates same-named places)</span></span><select id="s-parent"></select></label>
+        <label class="f" id="w-lat" hidden>Latitude column<select id="s-lat"></select></label>
+        <label class="f" id="w-lng" hidden>Longitude column<select id="s-lng"></select></label>
+      </div>
+      <div id="w-outside" hidden style="margin:.4rem 0 .8rem">
+        <span class="hint" id="outside-note"></span>
+        <div class="radio-row">
+          <label><input type="radio" name="outside" value="keep" checked /> keep them on the map</label>
+          <label><input type="radio" name="outside" value="drop" /> leave them out</label>
+        </div>
+      </div>
+
+      <div id="card-fixes" hidden style="border-top:1px solid var(--color-divider); margin-top:.6rem; padding-top:.8rem">
+        <h2 style="font-size:.95rem">Needs your eye <span class="hint" id="fix-count"></span></h2>
+        <p class="hint">Rows we couldn't confidently match. Pick the right boundary or skip the row.</p>
+        <div id="fix-list"></div>
+      </div>
+
+      <div class="step-nav">
+        <button class="btn secondary" id="back-2">← Back to the table</button>
+        <button class="btn" id="to-style">Continue — preview the layer</button>
+      </div>
+      <div id="msg-place"></div>
+    </section>
+
+    <!-- ============ STEP 4 · PREVIEW & ADD ============ -->
+    <section class="bench step" id="step-4" hidden>
       <div class="bench-left">
-        <div class="card" id="card-infer">
-          <h2>What we read from your file</h2>
-          <div class="infer-note" id="infer-note" hidden></div>
-          <p class="stat" id="stat-line"></p>
+        <div class="card">
+          <h2>Style the layer</h2>
           <div class="grid2">
             <label class="f">Layer name<input type="text" id="s-label" maxlength="60" /></label>
             <label class="f">Layer kind
               <select id="s-kind"><option value="markers">Points / markers</option><option value="choropleth">Choropleth (colour by value)</option></select>
             </label>
-            <label class="f">Locate rows by
-              <select id="s-strategy"><option value="adminJoin">Match names to boundaries</option><option value="coordinates">Lat / lng columns</option></select>
-            </label>
-            <label class="f" id="w-join">Join to
-              <select id="s-join"></select>
-            </label>
-            <label class="f" id="w-name">Place-name column<select id="s-name"></select></label>
-            <label class="f" id="w-parent"><span>Parent column <span class="hint">(optional)</span></span><select id="s-parent"></select></label>
-            <label class="f" id="w-lat" hidden>Latitude column<select id="s-lat"></select></label>
-            <label class="f" id="w-lng" hidden>Longitude column<select id="s-lng"></select></label>
             <label class="f" id="w-value">Value column<select id="s-value"></select></label>
             <label class="f" id="w-palette">Colour ramp<select id="s-palette"></select></label>
             <label class="f" id="w-marker">Marker colour<select id="s-marker"></select></label>
             <label class="f">Group
               <select id="s-group"><option value="agri">Crops &amp; value chain</option><option value="base">Base</option><option value="eco">Ecological landscape</option></select>
             </label>
+            <label class="f">Popup title<select id="s-poptitle"></select></label>
           </div>
-          <div style="margin-top:.6rem"><button class="btn secondary" id="apply">Apply changes</button></div>
+          <p class="hint" id="style-state" style="margin:.4rem 0 0"></p>
           <details class="frag"><summary>Layer definition (JSON)</summary><pre id="frag-json"></pre></details>
-        </div>
-
-        <div class="card" id="card-fixes" hidden>
-          <h2>Needs your eye <span class="hint" id="fix-count"></span></h2>
-          <p class="hint">Rows we couldn't confidently match. Pick the right boundary or skip the row.</p>
-          <div id="fix-list"></div>
         </div>
 
         <div class="card" id="card-chat">
@@ -195,26 +330,17 @@
         </div>
 
         <div class="card">
-          <h2>Publish to the atlas</h2>
-          <p class="hint" id="commit-auth">Checking who you are…</p>
-          <div id="commit-signin" hidden>
-            <label class="f" style="max-width:22rem"><span>Your email <span class="hint">(the one that owns or contributes to this atlas)</span></span>
-              <input type="email" id="f-auth-email" placeholder="you@example.org" autocomplete="email" />
-            </label>
-            <label class="f" id="commit-code-wrap" style="max-width:11rem" hidden><span>6-digit code</span>
-              <input type="text" id="f-auth-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6"
-                     placeholder="123456" style="letter-spacing:.3em; font-variant-numeric:tabular-nums" />
-            </label>
-            <div style="margin:.4rem 0 .6rem; display:flex; gap:.5rem; flex-wrap:wrap">
-              <button class="btn secondary" id="auth-send">Email me a code</button>
-              <button class="btn secondary" id="auth-verify" hidden>Sign in</button>
-            </div>
-          </div>
+          <h2>Add to the atlas</h2>
+          <p class="hint" id="commit-auth"></p>
           <div style="display:flex; gap:.6rem; flex-wrap:wrap">
             <button class="btn" id="commit">Add layer to atlas</button>
             <button class="btn secondary" id="discard">Discard</button>
           </div>
           <div id="msg-commit"></div>
+        </div>
+
+        <div class="step-nav">
+          <button class="btn secondary" id="back-3">← Back to placement</button>
         </div>
       </div>
 
@@ -231,8 +357,9 @@
     </div>
   </footer>
 
-  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
-  <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="./vendor/papaparse.min.js"></script>
+  <script src="./ingest.js"></script>
+  <script src="./checktable.js"></script>
   <script src="./layers.js"></script>
 </body>
 </html>

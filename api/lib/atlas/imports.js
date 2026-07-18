@@ -122,6 +122,7 @@ export function writeDraft(datasetId, importId, stanza, sourceFile, geojson) {
   }
   draft.layers.push(stanza);           // the proposal, its source local to the draft dir
   draft.id = draftId;
+  draft.focusLayer = stanza.id;        // preview zooms to the proposed layer
 
   fs.writeFileSync(path.join(draftDir, sourceFile), JSON.stringify(geojson));
   fs.writeFileSync(path.join(draftDir, 'manifest.json'), JSON.stringify(draft));

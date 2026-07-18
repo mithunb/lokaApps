@@ -200,7 +200,7 @@
         renderMapAttrib();
         buildLayers().then(function () {
           wirePopups();
-          fitToData(false);
+          if (!focusFit()) fitToData(false);
           renderMapAttrib(); // re-run once layer sources (e.g. labels) are added
         }).catch(function (err) { console.error("Atlas build error:", err && err.message, err && err.stack); });
         // re-frame when the layout flips between the floating panel (desktop) and the bottom sheet (mobile)
@@ -315,6 +315,28 @@
 
   // Frame the data within the map area that's actually visible — i.e. to the right of the
   // control widget when it floats over the map (desktop), full width when it's docked below (mobile).
+  // Draft previews set MANIFEST.focusLayer — frame the proposed layer, not the
+  // whole atlas, so the user lands on their own data.
+  function focusFit() {
+    var d = MANIFEST.focusLayer && DATA[MANIFEST.focusLayer];
+    if (!d || !d.features || !d.features.length) return false;
+    var w = 180, s = 90, e = -180, n = -90;
+    d.features.forEach(function (f) {
+      (function walk(c) {
+        if (!Array.isArray(c)) return;
+        if (typeof c[0] === "number") {
+          if (c[0] < w) w = c[0]; if (c[0] > e) e = c[0];
+          if (c[1] < s) s = c[1]; if (c[1] > n) n = c[1];
+        } else c.forEach(walk);
+      })((f.geometry && f.geometry.coordinates) || []);
+    });
+    if (e < w || n < s) return false;
+    if (e - w < 0.01) { w -= 0.02; e += 0.02; }   // single point: give it room
+    if (n - s < 0.01) { s -= 0.02; n += 0.02; }
+    map.fitBounds([[w, s], [e, n]], { padding: 60, duration: 0, maxZoom: 13 });
+    return true;
+  }
+
   function fitToData(animate) {
     if (!MANIFEST.bounds || !map) return;
     var pad = { top: 40, right: 40, bottom: 40, left: 40 };
@@ -931,6 +953,15 @@
     // wins over the transparent district fill that sits above it).
     function pick(pt) {
       var hits = map.queryRenderedFeatures(pt, { layers: idList });
+      // Contributed layers draw on top of everything and win the click (hit
+      // order = topmost first) — ranking them by manifest order would let a
+      // base layer's popup shadow them forever.
+      for (var k = 0; k < hits.length; k++) {
+        var i = ids.findIndex(function (x) { return x.id === hits[k].layer.id; });
+        if (i >= 0 && ids[i].L.userLayer) return { f: hits[k], L: ids[i].L };
+      }
+      // Among the curated layers, manifest order stays the popup priority —
+      // bespoke atlases (Deoria) place the richest popup first on purpose.
       var best = null, bestRank = Infinity;
       hits.forEach(function (h) {
         var i = ids.findIndex(function (x) { return x.id === h.layer.id; });

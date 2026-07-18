@@ -127,8 +127,10 @@ function prettify(col) {
 const MAX_FEATURES = 5000;
 const MAX_STR = 500;
 
-/** Whitelist-copy properties onto null-prototype objects; validate coords. */
-export function sanitizeFeatures(feats, keepProps, bounds) {
+/** Whitelist-copy properties onto null-prototype objects; validate coords.
+    outsideAction 'drop' removes points beyond the padded atlas bounds instead
+    of only counting them — a visible Check-step decision, not a silent one. */
+export function sanitizeFeatures(feats, keepProps, bounds, outsideAction) {
   const out = [];
   let outside = 0;
   const pad = bounds ? padBounds(bounds, 0.5) : null;
@@ -137,7 +139,10 @@ export function sanitizeFeatures(feats, keepProps, bounds) {
     if (!validGeom(f.geometry)) continue;
     if (pad && f.geometry.type === 'Point') {
       const [x, y] = f.geometry.coordinates;
-      if (x < pad[0] || x > pad[2] || y < pad[1] || y > pad[3]) outside++;
+      if (x < pad[0] || x > pad[2] || y < pad[1] || y > pad[3]) {
+        outside++;
+        if (outsideAction === 'drop') continue;
+      }
     }
     const props = Object.create(null);
     for (const k of keepProps) {

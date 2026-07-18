@@ -1,17 +1,24 @@
 // Column profiling for uploaded tables — pure code, no model calls.
 // The compact profile (not the full table) is what goes into the Gemini prompt.
 
+const BOOL_RE = /^(true|false|yes|no)$/i;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}([T ].*)?$/;
+
 export function profileColumns(columns, rows) {
   return columns.map((name) => {
     const vals = rows.map((r) => r[name]).filter((v) => v !== null && v !== undefined && v !== '');
-    const nums = vals.map(Number).filter((n) => Number.isFinite(n));
-    const allNumeric = vals.length > 0 && nums.length === vals.length;
+    const bools = vals.filter((v) => typeof v === 'boolean' || BOOL_RE.test(String(v).trim()));
+    const allBool = vals.length > 0 && bools.length === vals.length;
+    const dates = vals.filter((v) => DATE_RE.test(String(v).trim()));
+    const allDate = vals.length > 0 && dates.length === vals.length;
+    const nums = vals.filter((v) => typeof v !== 'boolean').map(Number).filter((n) => Number.isFinite(n));
+    const allNumeric = !allBool && vals.length > 0 && nums.length === vals.length;
     const distinct = new Set(vals.map((v) => String(v).trim().toLowerCase()));
     const strVals = vals.map(String);
     const avgLen = strVals.length ? strVals.reduce((a, s) => a + s.length, 0) / strVals.length : 0;
     const p = {
       name,
-      type: allNumeric ? 'number' : 'string',
+      type: allBool ? 'boolean' : allDate ? 'date' : allNumeric ? 'number' : 'string',
       filled: vals.length,
       nullShare: rows.length ? +(1 - vals.length / rows.length).toFixed(2) : 1,
       distinct: distinct.size,
