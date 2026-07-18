@@ -101,6 +101,16 @@
     .panel-collapse { border:none; background:none; cursor:pointer; color:var(--color-text-muted); padding:.2rem .4rem; border-radius:4px; display:none; align-items:center; justify-content:center; }
     .panel-collapse svg { width:18px; height:18px; display:block; }
     #atlas-controls { overflow-y:auto; padding:.6rem .8rem .8rem; scrollbar-width:thin; }
+    /* Desktop: the panel folds to a compact "Map layers" pill, freeing the whole
+       canvas — the choice is remembered per visitor. */
+    @media (min-width:721px){
+      .panel-head { cursor:pointer; }
+      .panel-collapse { display:inline-flex; transition:transform .2s cubic-bezier(.25,1,.5,1); }
+      .atlas-panel.collapsed { width:auto; }
+      .atlas-panel.collapsed #atlas-controls { display:none; }
+      .atlas-panel.collapsed .panel-head { border-bottom:none; }
+      .atlas-panel.collapsed .panel-collapse { transform:rotate(180deg); }
+    }
 
     .ctl-basemaps { display:flex; gap:.35rem; margin-bottom:.7rem; }
     .bm-btn { flex:1; padding:.4rem .5rem; font:inherit; font-size:.8rem; font-weight:500; cursor:pointer;
@@ -467,7 +477,10 @@
   </footer>
 
   <script>
-    /* Layer widget as a bottom sheet on mobile: collapsed by default, tap the header to expand. */
+    /* Layer widget: a bottom sheet on mobile (collapsed by default, tap the
+       header to expand) and a collapsible floating panel on desktop — always
+       expanded on load so the layers are discoverable; folding it frees the
+       full map width for the rest of the visit. */
     (function () {
       var panel = document.getElementById("atlas-panel");
       if (!panel) return;
@@ -479,7 +492,7 @@
       function apply() { panel.classList.toggle("collapsed", mq.matches); sync(); resizeMap(); }
       apply();
       mq.addEventListener("change", apply);
-      head.addEventListener("click", function () { if (mq.matches) { panel.classList.toggle("collapsed"); sync(); resizeMap(); } });
+      head.addEventListener("click", function () { panel.classList.toggle("collapsed"); sync(); resizeMap(); });
     })();
   </script>
 
