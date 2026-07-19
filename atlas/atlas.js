@@ -202,10 +202,20 @@
           wirePopups();
           if (!focusFit()) fitToData(false);
           renderMapAttrib(); // re-run once layer sources (e.g. labels) are added
+          // If the container had no real size when we fit (hidden iframe or a
+          // backgrounded tab), the frame is garbage — refit once it gets one.
+          var r = map.getContainer().getBoundingClientRect();
+          if (r.width < 60 || r.height < 60) {
+            var once = function () {
+              window.removeEventListener("resize", once);
+              setTimeout(function () { map.resize(); if (!focusFit()) fitToData(false); }, 60);
+            };
+            window.addEventListener("resize", once);
+          }
         }).catch(function (err) { console.error("Atlas build error:", err && err.message, err && err.stack); });
         // re-frame when the layout flips between the floating panel (desktop) and the bottom sheet (mobile)
         window.matchMedia("(max-width: 720px)").addEventListener("change", function () {
-          setTimeout(function () { fitToData(true); }, 80);
+          setTimeout(function () { if (!focusFit(true)) fitToData(true); }, 80);
         });
       } catch (err) { console.error("Atlas build error:", err && err.message, err && err.stack); }
     });
@@ -317,7 +327,7 @@
   // control widget when it floats over the map (desktop), full width when it's docked below (mobile).
   // Draft previews set MANIFEST.focusLayer — frame the proposed layer, not the
   // whole atlas, so the user lands on their own data.
-  function focusFit() {
+  function focusFit(animate) {
     var d = MANIFEST.focusLayer && DATA[MANIFEST.focusLayer];
     if (!d || !d.features || !d.features.length) return false;
     var w = 180, s = 90, e = -180, n = -90;
@@ -333,7 +343,7 @@
     if (e < w || n < s) return false;
     if (e - w < 0.01) { w -= 0.02; e += 0.02; }   // single point: give it room
     if (n - s < 0.01) { s -= 0.02; n += 0.02; }
-    map.fitBounds([[w, s], [e, n]], { padding: 60, duration: 0, maxZoom: 13 });
+    map.fitBounds([[w, s], [e, n]], { padding: 60, duration: animate ? 350 : 0, maxZoom: 13 });
     return true;
   }
 

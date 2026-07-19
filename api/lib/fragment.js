@@ -15,7 +15,8 @@ export const PALETTES = {
 export const MARKER_COLORS = {
   rust: '#A6522F', moss: '#40573D', ochre: '#B0863A', sienna: '#9C5A34', slate: '#5f7f92',
 };
-export const KINDS = ['markers', 'choropleth'];
+export const KINDS = ['markers', 'choropleth', 'line', 'polygon'];
+const MAX_TOTAL_VERTICES = 300000;
 
 const MAX_CIRCLE_SWITCH = 300;   // DOM markers don't scale past this
 const CLASS_MIN = 3, CLASS_MAX = 7;
@@ -66,7 +67,33 @@ export function buildFragment(spec, feats, existingIds) {
   }
 
   let stanza;
-  if (kind === 'choropleth') {
+  if (kind === 'line') {
+    const color = MARKER_COLORS[spec.lineColor] || MARKER_COLORS[spec.markerColor] || MARKER_COLORS.rust;
+    const width = Math.min(6, Math.max(0.5, Number(spec.lineWidth) || 2));
+    const paint = { color, width, opacity: 0.9 };
+    if (spec.lineDash) paint.dash = [2, 1.6];
+    stanza = {
+      id, group, type: 'line', source: sourceFile,
+      label: String(spec.label).slice(0, 60), default: true,
+      paint,
+      legend: [{ color, label: String(spec.label).slice(0, 40), shape: spec.lineDash ? 'dashed' : 'line' }],
+      popup: { title: popup.title || 'name', fields: popup.fields },
+      userLayer: true,
+    };
+  } else if (kind === 'polygon') {
+    const color = MARKER_COLORS[spec.fillColor] || MARKER_COLORS[spec.markerColor] || MARKER_COLORS.moss;
+    const fillOpacity = Math.min(0.9, Math.max(0.15, Number(spec.fillOpacity) || 0.45));
+    const paint = { fillColor: color, fillOpacity };
+    if (spec.outline !== false) { paint.outlineColor = '#5c544a'; paint.outlineWidth = 0.8; }
+    stanza = {
+      id, group, type: 'fill', source: sourceFile,
+      label: String(spec.label).slice(0, 60), default: true,
+      paint,
+      legend: [{ color, label: String(spec.label).slice(0, 40) }],
+      popup: { title: popup.title || 'name', fields: popup.fields },
+      userLayer: true,
+    };
+  } else if (kind === 'choropleth') {
     const prop = String(spec.valueColumn || '');
     const values = feats.map((f) => Number(f.properties[prop])).filter(Number.isFinite);
     const ramp = PALETTES[spec.palette] || PALETTES.greens;
@@ -132,18 +159,21 @@ const MAX_STR = 500;
     of only counting them — a visible Check-step decision, not a silent one. */
 export function sanitizeFeatures(feats, keepProps, bounds, outsideAction) {
   const out = [];
-  let outside = 0;
+  let outside = 0, totalVerts = 0;
   const pad = bounds ? padBounds(bounds, 0.5) : null;
   for (const f of feats.slice(0, MAX_FEATURES)) {
     if (!f || !f.geometry) continue;
     if (!validGeom(f.geometry)) continue;
-    if (pad && f.geometry.type === 'Point') {
-      const [x, y] = f.geometry.coordinates;
+    if (pad) {
+      // points by position, lines/polygons by their bbox centre
+      const [x, y] = f.geometry.type === 'Point' ? f.geometry.coordinates : bboxCenter(f.geometry);
       if (x < pad[0] || x > pad[2] || y < pad[1] || y > pad[3]) {
         outside++;
         if (outsideAction === 'drop') continue;
       }
     }
+    totalVerts += countVerts(f.geometry);
+    if (totalVerts > MAX_TOTAL_VERTICES) break;
     const props = Object.create(null);
     for (const k of keepProps) {
       const v = f.properties ? f.properties[k] : undefined;
@@ -160,6 +190,26 @@ function padBounds(b, frac) {
   const w = b[0][0], s = b[0][1], e = b[1][0], n = b[1][1];
   const dx = (e - w) * frac, dy = (n - s) * frac;
   return [w - dx, s - dy, e + dx, n + dy];
+}
+
+function bboxCenter(g) {
+  let w = 180, s = 90, e = -180, n = -90;
+  (function walk(c) {
+    if (typeof c[0] === 'number') {
+      if (c[0] < w) w = c[0]; if (c[0] > e) e = c[0];
+      if (c[1] < s) s = c[1]; if (c[1] > n) n = c[1];
+    } else c.forEach(walk);
+  })(g.coordinates);
+  return [(w + e) / 2, (s + n) / 2];
+}
+
+function countVerts(g) {
+  let n = 0;
+  (function walk(c) {
+    if (typeof c[0] === 'number') { n++; return; }
+    c.forEach(walk);
+  })(g.coordinates);
+  return n;
 }
 
 function validGeom(g) {

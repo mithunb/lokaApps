@@ -65,6 +65,7 @@ export function getImport(id) {
 }
 export function discardImport(id) {
   try { fs.rmSync(path.join(IMPORTS_DIR, id + '.json'), { force: true }); } catch {}
+  try { fs.rmSync(path.join(IMPORTS_DIR, id + '.geom.json'), { force: true }); } catch {}
   // remove any draft folder for this import
   try {
     for (const d of fs.readdirSync(DATASETS_ROOT)) {
@@ -73,6 +74,21 @@ export function discardImport(id) {
       }
     }
   } catch {}
+}
+
+/* Geometry rides in a side file so the session JSON stays small — the
+   spatial track can carry ~150k vertices per import. */
+export function writeGeoms(importId, geoms) {
+  fs.mkdirSync(IMPORTS_DIR, { recursive: true });
+  const p = path.join(IMPORTS_DIR, importId + '.geom.json');
+  const tmp = p + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(geoms));
+  fs.renameSync(tmp, p);
+}
+export function readGeoms(importId) {
+  if (!/^imp_[a-f0-9]{16}$/.test(String(importId))) return null;
+  try { return JSON.parse(fs.readFileSync(path.join(IMPORTS_DIR, importId + '.geom.json'), 'utf8')); }
+  catch { return null; }
 }
 export function listImports(dataset) {
   try {
@@ -87,6 +103,13 @@ export function sweepImports() {
   try {
     for (const f of fs.readdirSync(IMPORTS_DIR)) {
       const p = path.join(IMPORTS_DIR, f);
+      if (f.endsWith('.geom.json')) {
+        // orphaned geometry side files (session gone) are swept here
+        if (!fs.existsSync(path.join(IMPORTS_DIR, f.replace('.geom.json', '.json')))) {
+          fs.rmSync(p, { force: true });
+        }
+        continue;
+      }
       try {
         const s = JSON.parse(fs.readFileSync(p, 'utf8'));
         if (Date.now() - s.createdAt > TTL_MS) discardImport(s.id);

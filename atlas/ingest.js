@@ -160,7 +160,7 @@
     catch (e) { return { kind: "unsupported", message: "That file isn't valid JSON: " + e.message }; }
     if (data && (data.type === "FeatureCollection" || data.type === "Feature")) {
       var fc = data.type === "Feature" ? { type: "FeatureCollection", features: [data] } : data;
-      return geojsonToTable(name, dec.encoding, fc);
+      return geojsonToSpatial(name, "geojson", dec.encoding, fc);
     }
     var list = Array.isArray(data) ? data
       : (data && Array.isArray(data.data)) ? data.data
@@ -179,75 +179,358 @@
       return { kind: "unsupported", message: "Couldn't read that XML file." };
     }
     var root = doc.documentElement ? doc.documentElement.localName.toLowerCase() : "";
-    if (root === "kml") return kmlToTable(name, dec.encoding, doc);
-    if (root === "gpx") return gpxToTable(name, dec.encoding, doc);
+    if (root === "kml") return geojsonToSpatial(name, "kml", dec.encoding, kmlToFC(doc));
+    if (root === "gpx") return geojsonToSpatial(name, "gpx", dec.encoding, gpxToFC(doc));
     return { kind: "unsupported", message: "Unrecognised XML — KML and GPX are the supported XML formats." };
   }
 
-  /* ---- spatial → point table (full geometry lands with the spatial track) ---- */
+  /* ================= the spatial track =================
+     GeoJSON / KML / GPX already know where they live — no place-matching
+     needed. Every feature is normalized to clean WGS84 (altitude stripped,
+     rings closed, winding per RFC 7946, degenerates dropped), one layer holds
+     ONE geometry class (a class picker appears for mixed files), and the
+     total vertex count is simplified down to a budget the browser and the
+     draft pipeline can carry. */
 
-  function geojsonToTable(name, encoding, fc) {
-    var rows = [], skipped = 0;
+  var VERTEX_BUDGET = 150000;
+  var SELF_INTERSECT_MAX = 2000;   // O(n²) check cap per ring
+  var MAX_SPATIAL_FEATURES = 5000;
+
+  function classOf(type) {
+    if (type === "Point" || type === "MultiPoint") return "point";
+    if (type === "LineString" || type === "MultiLineString") return "line";
+    if (type === "Polygon" || type === "MultiPolygon") return "polygon";
+    return null;
+  }
+  var CLASS_LABEL = { point: "points", line: "lines", polygon: "areas (polygons)" };
+
+  function geojsonToSpatial(name, sourceType, encoding, fc) {
+    var buckets = { point: [], line: [], polygon: [] };
+    var skipped = 0, exploded = 0;
     (fc.features || []).forEach(function (f) {
       var g = f && f.geometry;
-      var c = g && g.type === "Point" ? g.coordinates
-        : (g && g.type === "MultiPoint" && g.coordinates.length) ? g.coordinates[0] : null;
-      if (!c || c.length < 2) { skipped++; return; }
-      var row = {};
-      Object.keys((f && f.properties) || {}).forEach(function (k) {
-        var v = f.properties[k];
-        row[k] = v != null && typeof v === "object" ? JSON.stringify(v) : v;
-      });
-      row.longitude = c[0];
-      row.latitude = c[1];
-      rows.push(row);
+      var cls = g && classOf(g.type);
+      if (!cls) {
+        // GeometryCollections and null geometries: keep the richest member if any
+        if (g && g.type === "GeometryCollection" && Array.isArray(g.geometries)) {
+          var best = null;
+          g.geometries.forEach(function (m) { if (!best && classOf(m.type)) best = m; });
+          if (best) { g = best; cls = classOf(best.type); }
+        }
+        if (!cls) { skipped++; return; }
+      }
+      var props = (f && f.properties) || {};
+      if (g.type === "MultiPoint") {
+        (g.coordinates || []).forEach(function (c) {
+          buckets.point.push({ props: props, geom: { type: "Point", coordinates: c } });
+        });
+        if ((g.coordinates || []).length > 1) exploded++;
+      } else {
+        buckets[cls].push({ props: props, geom: g });
+      }
     });
-    if (!rows.length) {
-      return { kind: "unsupported", message:
-        "No point features found — polygon and line layers aren't supported yet. Export points, or a table joined by place names." };
+
+    var present = ["point", "line", "polygon"].filter(function (c) { return buckets[c].length; });
+    if (!present.length) {
+      // no usable geometry at all — fall back to the tabular track on properties
+      var propRows = (fc.features || []).map(function (f) { return (f && f.properties) || {}; })
+        .filter(function (p) { return Object.keys(p).length; });
+      if (propRows.length) {
+        var t = tableFromObjects(name, sourceType, encoding, propRows);
+        if (t.kind === "table") t.canonical.meta.notices.push("The file had no usable geometry — its attribute table was read instead.");
+        return t;
+      }
+      return { kind: "unsupported", message: "No usable features found in that file." };
     }
-    var t = tableFromObjects(name, "geojson", encoding, rows);
-    if (skipped && t.kind === "table") {
-      t.canonical.meta.notices.push(skipped + " non-point feature" + (skipped > 1 ? "s were" : " was") + " skipped — points carried through.");
-    }
-    return t;
+
+    var build = function (cls) {
+      return buildSpatial(name, sourceType, encoding, buckets[cls], cls, {
+        skipped: skipped, exploded: exploded,
+        others: present.filter(function (c) { return c !== cls; })
+          .map(function (c) { return buckets[c].length + " " + CLASS_LABEL[c]; }),
+      });
+    };
+    if (present.length === 1) return build(present[0]);
+    return {
+      kind: "classes", name: name,
+      classes: present.map(function (c) { return { cls: c, label: CLASS_LABEL[c], count: buckets[c].length }; }),
+      pick: function (cls, cb) { cb(null, build(cls)); },
+    };
   }
+
+  /* ---- geometry cleaning (pure functions, no dependencies) ---- */
+
+  function stripAlt(g) {
+    (function walk(c) {
+      if (typeof c[0] === "number") { if (c.length > 2) c.length = 2; return; }
+      c.forEach(walk);
+    })(g.coordinates);
+    return g;
+  }
+  function coordsValid(g) {
+    var ok = true;
+    (function walk(c) {
+      if (!ok || !Array.isArray(c)) { ok = false; return; }
+      if (typeof c[0] === "number") {
+        if (c.length < 2 || !isFinite(c[0]) || !isFinite(c[1]) ||
+            c[0] < -180 || c[0] > 180 || c[1] < -90 || c[1] > 90) ok = false;
+      } else c.forEach(walk);
+    })(g.coordinates);
+    return ok;
+  }
+  function vertexCount(g) {
+    var n = 0;
+    (function walk(c) {
+      if (typeof c[0] === "number") { n++; return; }
+      c.forEach(walk);
+    })(g.coordinates);
+    return n;
+  }
+  function signedArea(ring) {
+    var a = 0;
+    for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      a += (ring[j][0] * ring[i][1]) - (ring[i][0] * ring[j][1]);
+    }
+    return a / 2;
+  }
+  function samePt(a, b) { return a[0] === b[0] && a[1] === b[1]; }
+
+  // close, deduplicate-endpoints, orient (outer CCW, holes CW), drop degenerates
+  function cleanPolygonRings(rings, stats) {
+    var out = [];
+    rings.forEach(function (ring, ri) {
+      var r = ring.slice();
+      if (r.length && !samePt(r[0], r[r.length - 1])) { r.push(r[0].slice()); stats.closed++; }
+      if (r.length < 4) { stats.degenerate++; return; }
+      var area = signedArea(r);
+      if (area === 0) { stats.degenerate++; return; }
+      var wantCCW = ri === 0 && out.length === 0;   // first surviving ring is the outer
+      var isCCW = area > 0;
+      if (out.length === 0 ? !isCCW : isCCW) { r.reverse(); stats.rewound++; }
+      out.push(r);
+    });
+    return out;
+  }
+
+  // flag (not fix) self-intersecting outer rings — O(n²) segment test, capped
+  function ringSelfIntersects(ring) {
+    var n = ring.length - 1;
+    if (n > SELF_INTERSECT_MAX) return null;   // "not checked"
+    function ccw(A, B, C) { return (C[1] - A[1]) * (B[0] - A[0]) > (B[1] - A[1]) * (C[0] - A[0]); }
+    function cross(A, B, C, D) { return ccw(A, C, D) !== ccw(B, C, D) && ccw(A, B, C) !== ccw(A, B, D); }
+    for (var i = 0; i < n; i++) {
+      for (var j = i + 2; j < n; j++) {
+        if (i === 0 && j === n - 1) continue;   // closing segment adjacency
+        if (cross(ring[i], ring[i + 1], ring[j], ring[j + 1])) return true;
+      }
+    }
+    return false;
+  }
+
+  function simplifyLine(pts, tol) {
+    if (typeof simplify !== "function" || pts.length < 3) return pts;
+    var xs = pts.map(function (p) { return { x: p[0], y: p[1] }; });
+    return simplify(xs, tol, true).map(function (p) { return [p.x, p.y]; });
+  }
+  function simplifyGeom(g, tol) {
+    if (g.type === "LineString") {
+      var s = simplifyLine(g.coordinates, tol);
+      if (s.length >= 2) g.coordinates = s;
+    } else if (g.type === "MultiLineString") {
+      g.coordinates = g.coordinates.map(function (line) {
+        var s = simplifyLine(line, tol);
+        return s.length >= 2 ? s : line;
+      });
+    } else if (g.type === "Polygon") {
+      g.coordinates = g.coordinates.map(function (ring) {
+        var open = ring.slice(0, -1);
+        var s = simplifyLine(open, tol);
+        if (s.length >= 3) { s.push(s[0].slice()); return s; }
+        return ring;
+      });
+    } else if (g.type === "MultiPolygon") {
+      g.coordinates = g.coordinates.map(function (poly) {
+        return poly.map(function (ring) {
+          var open = ring.slice(0, -1);
+          var s = simplifyLine(open, tol);
+          if (s.length >= 3) { s.push(s[0].slice()); return s; }
+          return ring;
+        });
+      });
+    }
+    return g;
+  }
+
+  function buildSpatial(name, sourceType, encoding, items, cls, ctx) {
+    var notices = [];
+    if (ctx.others && ctx.others.length) {
+      notices.push("This layer keeps the " + CLASS_LABEL[cls] + " — the file also held " + ctx.others.join(" and ") +
+        " (upload again and pick that class for a second layer).");
+    }
+    if (ctx.skipped) notices.push(ctx.skipped + " feature" + (ctx.skipped > 1 ? "s" : "") + " had no usable geometry and " + (ctx.skipped > 1 ? "were" : "was") + " skipped.");
+    if (ctx.exploded) notices.push("Multi-point features were split into individual points.");
+    var truncatedFeats = 0;
+    if (items.length > MAX_SPATIAL_FEATURES) {
+      truncatedFeats = items.length - MAX_SPATIAL_FEATURES;
+      items = items.slice(0, MAX_SPATIAL_FEATURES);
+      notices.push("Only the first " + MAX_SPATIAL_FEATURES.toLocaleString() + " features were kept — " + truncatedFeats.toLocaleString() + " more were cut.");
+    }
+
+    var stats = { closed: 0, rewound: 0, degenerate: 0, invalid: 0, selfIntersecting: 0, unchecked: 0 };
+    var geoms = [], rows = [];
+    items.forEach(function (it) {
+      var g = { type: it.geom.type, coordinates: JSON.parse(JSON.stringify(it.geom.coordinates)) };
+      stripAlt(g);
+      if (!coordsValid(g)) { stats.invalid++; return; }
+      if (g.type === "Polygon") {
+        g.coordinates = cleanPolygonRings(g.coordinates, stats);
+        if (!g.coordinates.length) { stats.degenerate++; return; }
+      } else if (g.type === "MultiPolygon") {
+        g.coordinates = g.coordinates.map(function (poly) { return cleanPolygonRings(poly, stats); })
+          .filter(function (poly) { return poly.length; });
+        if (!g.coordinates.length) { stats.degenerate++; return; }
+      } else if (g.type === "LineString") {
+        if (g.coordinates.length < 2) { stats.degenerate++; return; }
+      } else if (g.type === "MultiLineString") {
+        g.coordinates = g.coordinates.filter(function (l) { return l.length >= 2; });
+        if (!g.coordinates.length) { stats.degenerate++; return; }
+      }
+      if (g.type === "Polygon" || g.type === "MultiPolygon") {
+        var outer = g.type === "Polygon" ? g.coordinates[0] : g.coordinates[0][0];
+        var si = ringSelfIntersects(outer);
+        if (si === true) stats.selfIntersecting++;
+        else if (si === null) stats.unchecked++;
+      }
+      var row = {};
+      Object.keys(it.props).forEach(function (k) {
+        var v = it.props[k];
+        row[k] = v != null && typeof v === "object" ? JSON.stringify(v) : (v == null ? "" : v);
+      });
+      rows.push(row);
+      geoms.push(g);
+    });
+
+    if (!geoms.length) return { kind: "unsupported", message: "No valid geometry survived cleaning — check the file's coordinates (they must be WGS84 longitude/latitude)." };
+
+    if (stats.invalid) notices.push(stats.invalid + " feature" + (stats.invalid > 1 ? "s" : "") + " had out-of-range coordinates (not WGS84?) and " + (stats.invalid > 1 ? "were" : "was") + " dropped.");
+    if (stats.degenerate) notices.push(stats.degenerate + " degenerate shape" + (stats.degenerate > 1 ? "s were" : " was") + " dropped.");
+    if (stats.closed) notices.push(stats.closed + " unclosed ring" + (stats.closed > 1 ? "s were" : " was") + " closed.");
+    if (stats.rewound) notices.push(stats.rewound + " ring" + (stats.rewound > 1 ? "s" : "") + " had reversed winding — fixed.");
+    if (stats.selfIntersecting) notices.push(stats.selfIntersecting + " polygon" + (stats.selfIntersecting > 1 ? "s look" : " looks") + " self-intersecting — the map will render them, but check the source if shapes look wrong.");
+    if (stats.unchecked) notices.push(stats.unchecked + " large polygon" + (stats.unchecked > 1 ? "s were" : " was") + " not checked for self-intersection.");
+
+    // vertex budget: escalate the simplification tolerance until it fits
+    var total = 0;
+    geoms.forEach(function (g) { total += vertexCount(g); });
+    if (total > VERTEX_BUDGET && cls !== "point") {
+      var tol = 0.00005, before = total;
+      for (var k = 0; k < 8 && total > VERTEX_BUDGET; k++) {
+        geoms.forEach(function (g) { simplifyGeom(g, tol); });
+        total = 0;
+        geoms.forEach(function (g) { total += vertexCount(g); });
+        tol *= 2.5;
+      }
+      notices.push("The geometry was simplified to keep the map fast — " +
+        Math.max(1, Math.round((total / before) * 100)) + "% of the original detail kept (" +
+        before.toLocaleString() + " → " + total.toLocaleString() + " points).");
+    }
+
+    // properties → typed table (same canonicalization as the tabular track)
+    var t = tableFromObjects(name, sourceType, encoding, rows.length ? rows : geoms.map(function () { return {}; }));
+    if (t.kind !== "table") {
+      // features with no properties at all still make a layer
+      t = { kind: "table", canonical: { schema: [], rows: geoms.map(function () { return {}; }), meta: {
+        sourceName: name, sourceType: sourceType, encoding: encoding || "", sheet: "",
+        truncated: { rows: 0, cols: 0 }, notices: [] } } };
+    }
+    var canonical = t.canonical;
+    // tableFromObjects can only have dropped trailing rows via MAX_ROWS — geoms are capped
+    // at MAX_SPATIAL_FEATURES (= MAX_ROWS) above, so rows and geoms stay index-aligned
+    canonical.geoms = geoms;
+    canonical.geomIdx = canonical.rows.map(function (_, i) { return i; });
+    canonical.meta.geometry = {
+      class: cls,
+      count: geoms.length,
+      vertices: total,
+      notices: notices.slice(),
+    };
+    notices.forEach(function (n) { canonical.meta.notices.push(n); });
+    return { kind: "table", canonical: canonical };
+  }
+
+  /* ---- KML / GPX → GeoJSON, then the same spatial pipeline ---- */
 
   function xtags(el, n) { return Array.prototype.slice.call(el.getElementsByTagNameNS("*", n)); }
   function xtext(el, n) { var x = xtags(el, n)[0]; return x ? x.textContent.trim() : ""; }
-
-  function kmlToTable(name, encoding, doc) {
-    var rows = [], skipped = 0;
-    xtags(doc, "Placemark").forEach(function (pm) {
-      var pt = xtags(pm, "Point")[0];
-      var coords = pt ? xtext(pt, "coordinates") : "";
-      var c = coords ? coords.split(",") : [];
-      if (c.length < 2) { skipped++; return; }
-      var row = { name: xtext(pm, "name"), description: xtext(pm, "description") };
-      xtags(pm, "Data").forEach(function (d) { var k = d.getAttribute("name"); if (k) row[k] = xtext(d, "value"); });
-      xtags(pm, "SimpleData").forEach(function (d) { var k = d.getAttribute("name"); if (k) row[k] = d.textContent.trim(); });
-      row.longitude = parseFloat(c[0]);
-      row.latitude = parseFloat(c[1]);
-      rows.push(row);
-    });
-    if (!rows.length) return { kind: "unsupported", message: "No point placemarks found in that KML — polygon and line layers aren't supported yet." };
-    var t = tableFromObjects(name, "kml", encoding, rows);
-    if (skipped && t.kind === "table") {
-      t.canonical.meta.notices.push(skipped + " non-point placemark" + (skipped > 1 ? "s were" : " was") + " skipped — points carried through.");
-    }
-    return t;
+  function kmlCoords(text) {
+    return String(text || "").trim().split(/\s+/).map(function (tok) {
+      var p = tok.split(",").map(Number);
+      return [p[0], p[1]];
+    }).filter(function (c) { return isFinite(c[0]) && isFinite(c[1]); });
   }
 
-  function gpxToTable(name, encoding, doc) {
-    var rows = [];
+  function kmlToFC(doc) {
+    var features = [];
+    xtags(doc, "Placemark").forEach(function (pm) {
+      var props = { name: xtext(pm, "name"), description: xtext(pm, "description") };
+      xtags(pm, "Data").forEach(function (d) { var k = d.getAttribute("name"); if (k) props[k] = xtext(d, "value"); });
+      xtags(pm, "SimpleData").forEach(function (d) { var k = d.getAttribute("name"); if (k) props[k] = d.textContent.trim(); });
+      var geoms = [];
+      function readGeom(el) {
+        var tag = el.localName;
+        if (tag === "Point") {
+          var c = kmlCoords(xtext(el, "coordinates"))[0];
+          if (c) geoms.push({ type: "Point", coordinates: c });
+        } else if (tag === "LineString") {
+          var line = kmlCoords(xtext(el, "coordinates"));
+          if (line.length >= 2) geoms.push({ type: "LineString", coordinates: line });
+        } else if (tag === "Polygon") {
+          var rings = [];
+          var outer = xtags(el, "outerBoundaryIs")[0];
+          if (outer) rings.push(kmlCoords(xtext(outer, "coordinates")));
+          xtags(el, "innerBoundaryIs").forEach(function (ib) { rings.push(kmlCoords(xtext(ib, "coordinates"))); });
+          rings = rings.filter(function (r) { return r.length >= 3; });
+          if (rings.length) geoms.push({ type: "Polygon", coordinates: rings });
+        } else if (tag === "MultiGeometry") {
+          Array.prototype.slice.call(el.children).forEach(readGeom);
+        }
+      }
+      Array.prototype.slice.call(pm.children).forEach(readGeom);
+      geoms.forEach(function (g) { features.push({ type: "Feature", properties: props, geometry: g }); });
+    });
+    return { type: "FeatureCollection", features: features };
+  }
+
+  function gpxToFC(doc) {
+    var features = [];
     xtags(doc, "wpt").forEach(function (w) {
       var lat = parseFloat(w.getAttribute("lat")), lng = parseFloat(w.getAttribute("lon"));
       if (isNaN(lat) || isNaN(lng)) return;
-      rows.push({ name: xtext(w, "name"), description: xtext(w, "desc"),
-        elevation: xtext(w, "ele"), latitude: lat, longitude: lng });
+      features.push({ type: "Feature",
+        properties: { name: xtext(w, "name"), description: xtext(w, "desc"), elevation: xtext(w, "ele") },
+        geometry: { type: "Point", coordinates: [lng, lat] } });
     });
-    if (!rows.length) return { kind: "unsupported", message: "No waypoints found in that GPX file — tracks and routes aren't supported yet." };
-    return tableFromObjects(name, "gpx", encoding, rows);
+    function segPts(seg) {
+      return xtags(seg, "trkpt").concat(xtags(seg, "rtept")).map(function (p) {
+        return [parseFloat(p.getAttribute("lon")), parseFloat(p.getAttribute("lat"))];
+      }).filter(function (c) { return isFinite(c[0]) && isFinite(c[1]); });
+    }
+    xtags(doc, "trk").forEach(function (trk) {
+      var segs = xtags(trk, "trkseg").map(segPts).filter(function (s) { return s.length >= 2; });
+      if (!segs.length) return;
+      features.push({ type: "Feature",
+        properties: { name: xtext(trk, "name"), description: xtext(trk, "desc") },
+        geometry: segs.length === 1 ? { type: "LineString", coordinates: segs[0] }
+          : { type: "MultiLineString", coordinates: segs } });
+    });
+    xtags(doc, "rte").forEach(function (rte) {
+      var pts = segPts(rte);
+      if (pts.length < 2) return;
+      features.push({ type: "Feature",
+        properties: { name: xtext(rte, "name"), description: xtext(rte, "desc") },
+        geometry: { type: "LineString", coordinates: pts } });
+    });
+    return { type: "FeatureCollection", features: features };
   }
 
   /* ================= grid / objects → canonical ================= */

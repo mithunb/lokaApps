@@ -1034,7 +1034,7 @@ const LAYER_SPEC_SCHEMA = {
   type: Type.OBJECT,
   required: ['kind', 'label', 'group'],
   properties: {
-    kind: { type: Type.STRING, enum: ['markers', 'choropleth'] },
+    kind: { type: Type.STRING, enum: ['markers', 'choropleth', 'line', 'polygon'] },
     label: { type: Type.STRING },
     group: { type: Type.STRING, enum: ['base', 'agri', 'eco'] },
     subgroup: { type: Type.STRING },
@@ -1044,6 +1044,12 @@ const LAYER_SPEC_SCHEMA = {
     reverse: { type: Type.BOOLEAN },
     classCount: { type: Type.INTEGER },
     markerColor: { type: Type.STRING, enum: Object.keys(MARKER_COLORS) },
+    lineColor: { type: Type.STRING, enum: Object.keys(MARKER_COLORS) },
+    lineWidth: { type: Type.NUMBER },
+    lineDash: { type: Type.BOOLEAN },
+    fillColor: { type: Type.STRING, enum: Object.keys(MARKER_COLORS) },
+    fillOpacity: { type: Type.NUMBER },
+    outline: { type: Type.BOOLEAN },
     popupTitleColumn: { type: Type.STRING },
     popupColumns: { type: Type.ARRAY, items: { type: Type.STRING } },
   },
@@ -1119,7 +1125,21 @@ function transform(session) {
   const report = { strategy, matched: 0, unmatched: [], ambiguous: [], outside: 0, total: rows.length };
   let feats = [];
 
-  if (strategy === 'coordinates') {
+  if (strategy === 'geometry') {
+    // spatial track: shapes came with the upload, side-file holds them
+    const geoms = imports.readGeoms(session.id);
+    if (!geoms) throw new Error('the uploaded geometry expired — start the upload again');
+    rows.forEach((r, i) => {
+      const gi = session.geomIdx ? session.geomIdx[i] : i;
+      const g = gi != null && gi >= 0 ? geoms[gi] : null;
+      if (!g) {
+        report.unmatched.push({ row: i, name: String(r[roles.placeName] || 'row ' + (i + 1)), reason: 'no geometry' });
+        return;
+      }
+      feats.push({ type: 'Feature', properties: { ...r }, geometry: g });
+      report.matched++;
+    });
+  } else if (strategy === 'coordinates') {
     let latCol = roles.latitude, lngCol = roles.longitude;
     if (!latCol || !lngCol) throw new Error('latitude/longitude columns not set');
     // auto-detect swapped columns
@@ -1178,6 +1198,12 @@ function transform(session) {
   const roles2 = session.columns || [];
   for (const c of roles2) if (!['ignore'].includes(c.role)) keep.add(c.name);
   const spec = session.spec || {};
+  // one layer = one geometry class; the kind must be renderable for that class
+  const cls = session.meta && session.meta.geometry && session.meta.geometry.class;
+  if (strategy === 'geometry' && cls) {
+    const allowed = cls === 'line' ? ['line'] : cls === 'polygon' ? ['polygon', 'choropleth'] : ['markers'];
+    if (!allowed.includes(spec.kind)) spec.kind = allowed[0];
+  }
   const frag = buildFragment(spec, feats, existingIds);
   const clean = sanitizeFeatures(feats, [...keep], m.manifest.bounds, spec.outsideAction);
   report.outside = clean.outside;
@@ -1256,7 +1282,18 @@ router.post('/layers/ingest', async (req, res) => {
     sheet: String(b.meta.sheet || '').slice(0, 60),
     truncated: b.meta.truncated || null,
     notices: (Array.isArray(b.meta.notices) ? b.meta.notices : []).slice(0, 10).map((n) => String(n).slice(0, 200)),
+    geometry: b.meta.geometry && typeof b.meta.geometry === 'object' ? {
+      class: ['point', 'line', 'polygon'].includes(b.meta.geometry.class) ? b.meta.geometry.class : null,
+      count: Number(b.meta.geometry.count) || 0,
+      vertices: Number(b.meta.geometry.vertices) || 0,
+    } : null,
   } : null;
+
+  // the spatial track: geometry rides alongside the rows, index-aligned
+  const geoms = Array.isArray(b.geoms) && b.geoms.length ? b.geoms.slice(0, MAX_ROWS) : null;
+  const geomIdx = geoms && Array.isArray(b.geomIdx)
+    ? b.geomIdx.slice(0, MAX_ROWS).map((v) => (Number.isInteger(v) && v >= 0 && v < geoms.length ? v : null))
+    : null;
 
   const profiles = profileColumns(columns, rows);
   const { options } = boundaryOptions(dataset);
@@ -1265,7 +1302,39 @@ router.post('/layers/ingest', async (req, res) => {
   const session = imports.newImport({
     dataset, filename: String(b.filename || '').slice(0, 120), meta,
     columnsRaw: columns, rows, profilesSummary: profiles.map((p) => ({ name: p.name, type: p.type })),
+    geomIdx: geomIdx || undefined,
   });
+  if (geoms) imports.writeGeoms(session.id, geoms);
+
+  // Spatial uploads know where they live — no inference or joins needed, just
+  // a sensible spec by geometry class. Chat refine remains available later.
+  if (geoms) {
+    const cls = (meta && meta.geometry && meta.geometry.class) || 'point';
+    const numeric = profiles.find((p) => p.type === 'number');
+    const nameCol = profiles.find((p) => p.type === 'string' && p.looksLikeName);
+    session.strategy = 'geometry';
+    session.columns = columns.map((c) => ({
+      name: c,
+      role: nameCol && c === nameCol.name ? 'placeName' : numeric && c === numeric.name ? 'value' : 'text',
+    }));
+    session.spec = {
+      kind: cls === 'line' ? 'line' : cls === 'polygon' ? 'polygon' : 'markers',
+      label: (session.filename || 'My data').replace(/\.[a-z]+$/i, '') || 'My data',
+      group: 'agri',
+      valueColumn: numeric ? numeric.name : undefined,
+      palette: 'greens',
+      markerColor: 'rust',
+      lineColor: 'slate',
+      fillColor: 'moss',
+      popupTitleColumn: nameCol ? nameCol.name : columns[0],
+      popupColumns: columns.slice(0, 4),
+    };
+    try {
+      return res.json(applyResult(session, false));
+    } catch (e) {
+      return res.status(400).json({ error: e.message, importId: session.id, columns: session.columns, strategy: session.strategy });
+    }
+  }
 
   let inference = null;
   if (ai && !b.manual && geminiAllowed(clientIp(req))) {
@@ -1412,15 +1481,18 @@ router.post('/layers/refine', async (req, res) => {
   if (!ai) return res.status(503).json({ error: 'AI refine is unavailable — use the pickers instead' });
   if (!geminiAllowed(clientIp(req))) return res.status(429).json({ error: 'AI limit reached — try later' });
 
+  const gcls = session.meta && session.meta.geometry && session.meta.geometry.class;
   const prompt = [
     'Patch this atlas layer spec according to the user instruction. Keep unrelated fields unchanged.',
     'Current spec: ' + JSON.stringify(session.spec),
     'Available numeric columns: ' + JSON.stringify((session.columns || []).filter((c) => c.role === 'value').map((c) => c.name)),
     'All columns: ' + JSON.stringify(session.columnsRaw),
     'Palettes: ' + Object.keys(PALETTES).join(', ') + ' (rdylgn = red→green, gnrd = green→red).',
+    gcls ? 'This layer holds ' + gcls + ' geometry — valid kinds: ' +
+      (gcls === 'line' ? 'line' : gcls === 'polygon' ? 'polygon, choropleth' : 'markers') + '.' : '',
     'User instruction: ' + message,
     'reply: one short friendly sentence describing what you changed.',
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 
   try {
     let out;

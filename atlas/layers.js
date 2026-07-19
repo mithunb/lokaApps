@@ -36,8 +36,9 @@
 
   var S = {
     dataset: "", canonical: null, names: [], result: null, options: null,
-    step: 1, me: null, styleReady: false,
+    step: 1, me: null, styleReady: false, spatial: false,
   };
+  var CLASS_LABEL = { point: "points", line: "lines", polygon: "areas (polygons)" };
 
   /* ================= steps ================= */
 
@@ -166,30 +167,46 @@
       if (err) { msg("#msg-start", esc(err.message)); return; }
       if (out.kind === "unsupported") { msg("#msg-start", esc(out.message)); return; }
       msg("#msg-start", "");
-      if (out.kind === "sheets") { showSheetPicker(out); return; }
+      if (out.kind === "sheets") {
+        showPicker("That workbook has several sheets — which one holds the table?",
+          out.sheets.map(function (sh) {
+            return { label: sh.name, dim: sh.rows.toLocaleString() + " × " + sh.cols,
+                     pick: function (cb) { out.pick(sh.name, cb); } };
+          }));
+        return;
+      }
+      if (out.kind === "classes") {
+        showPicker("That file mixes geometry types — one layer shows one type. Which should this layer show?",
+          out.classes.map(function (c) {
+            return { label: c.label, dim: c.count.toLocaleString() + " features",
+                     pick: function (cb) { out.pick(c.cls, cb); } };
+          }));
+        return;
+      }
       startCheck(out.canonical);
     });
   }
 
-  /* ================= step 2 · check & fix ================= */
+  /* ================= step 2 · check & fix / geometry check ================= */
 
-  function showSheetPicker(res) {
+  function showPicker(title, entries) {
     goStep(2);
     $("#check-table").innerHTML = "";
+    $("#geom-summary").hidden = true;
     $("#to-place").disabled = true;
     var pickWrap = $("#sheet-pick");
     pickWrap.hidden = false;
+    $("#sheet-pick-title").textContent = title;
     var list = $("#sheet-list");
     list.innerHTML = "";
-    res.sheets.forEach(function (sh) {
+    entries.forEach(function (en) {
       var b = document.createElement("button");
       b.type = "button";
-      b.innerHTML = "<b>" + esc(sh.name) + '</b><span class="dim">' +
-        sh.rows.toLocaleString() + " × " + sh.cols + "</span>";
+      b.innerHTML = "<b>" + esc(en.label) + '</b><span class="dim">' + esc(en.dim) + "</span>";
       b.onclick = function () {
-        res.pick(sh.name, function (err, out) {
+        en.pick(function (err, out) {
           if (err) { msg("#msg-check", esc(err.message)); return; }
-          if (out.kind !== "table") { msg("#msg-check", esc(out.message || "That sheet has no table.")); return; }
+          if (out.kind !== "table") { msg("#msg-check", esc(out.message || "Nothing usable there.")); return; }
           pickWrap.hidden = true;
           startCheck(out.canonical);
         });
@@ -198,13 +215,35 @@
     });
   }
 
+  function setTrack(spatial) {
+    S.spatial = spatial;
+    var chip2 = document.querySelector('#stepper [data-step="2"]');
+    var chip3 = document.querySelector('#stepper [data-step="3"]');
+    chip2.textContent = spatial ? "Geometry check" : "Check & fix";
+    chip3.hidden = spatial;    // shapes place themselves — no matching step
+  }
+
   function startCheck(canonical) {
     S.canonical = canonical;
     S.result = null;
     S.styleReady = false;
     $("#sheet-pick").hidden = true;
-    $("#check-title").textContent = "Check your table" +
-      (canonical.meta.sheet ? " — sheet “" + canonical.meta.sheet + "”" : "");
+    var g = canonical.geoms && canonical.meta.geometry;
+    setTrack(!!g);
+    var gs = $("#geom-summary");
+    if (g) {
+      gs.hidden = false;
+      gs.innerHTML = "<b>" + g.count.toLocaleString() + " " + esc(CLASS_LABEL[g.class] || g.class) + "</b>" +
+        (g.vertices ? " · " + g.vertices.toLocaleString() + " points after cleaning" : "") +
+        "<br>Shapes carry their own location — after this check they go straight to the map preview.";
+      $("#check-title").textContent = "Check the attributes";
+      $("#to-place").textContent = "Looks right — preview the layer";
+    } else {
+      gs.hidden = true;
+      $("#check-title").textContent = "Check your table" +
+        (canonical.meta.sheet ? " — sheet “" + canonical.meta.sheet + "”" : "");
+      $("#to-place").textContent = "Looks right — place it on the map";
+    }
     LokaCheck.render($("#check-table"), canonical, { onChange: checkChanged });
     checkChanged(canonical);
     msg("#msg-check", "");
@@ -215,7 +254,8 @@
     return (S.canonical ? S.canonical.schema : []).filter(function (c) { return !c.ignored; });
   }
   function checkChanged() {
-    var ok = S.canonical && S.canonical.rows.length > 0 && activeColumns().length > 0;
+    var ok = S.canonical && S.canonical.rows.length > 0 &&
+      (activeColumns().length > 0 || S.spatial);   // geometry-only layers need no columns
     $("#to-place").disabled = !ok;
   }
 
@@ -230,20 +270,37 @@
       names.forEach(function (n) { o[n] = r[n]; });
       return o;
     });
+    var body = {
+      dataset: S.dataset,
+      filename: S.canonical.meta.sourceName,
+      schema: cols.map(function (c) { return { name: c.name, type: c.type }; }),
+      rows: rows,
+      meta: S.canonical.meta,
+    };
+    if (S.spatial) { body.geoms = S.canonical.geoms; body.geomIdx = S.canonical.geomIdx; }
     $("#to-place").disabled = true;
-    msg("#msg-check", "Reading your table and matching it to the atlas…", "ok");
+    msg("#msg-check", S.spatial ? "Placing your shapes on the map…" : "Reading your table and matching it to the atlas…", "ok");
     Promise.all([
       api("layers/options?dataset=" + encodeURIComponent(S.dataset)),
-      api("layers/ingest", { method: "POST", body: {
-        dataset: S.dataset,
-        filename: S.canonical.meta.sourceName,
-        schema: cols.map(function (c) { return { name: c.name, type: c.type }; }),
-        rows: rows,
-        meta: S.canonical.meta,
-      } }),
+      api("layers/ingest", { method: "POST", body: body }),
     ]).then(function (out) {
       S.options = out[0];
       S.names = names;
+      if (S.spatial) {
+        // shapes place themselves — build the draft and go straight to the preview
+        S.result = out[1];
+        runApply(function () {
+          return api("layers/apply", { method: "POST", body: applyBody(true, S.result.spec) })
+            .then(function (r) {
+              S.result = r;
+              msg("#msg-check", "");
+              $("#to-place").disabled = false;
+              enterStyle(r);
+            })
+            .catch(function (e) { $("#to-place").disabled = false; msg("#msg-check", esc(errMsg(e))); });
+        });
+        return;
+      }
       msg("#msg-check", "");
       $("#to-place").disabled = false;
       enterPlace(out[1]);
@@ -371,6 +428,30 @@
     });
   }
 
+  // spatial sessions have no placement pickers — keep the server's roles,
+  // updating only the value column from the style step
+  function spatialColumns() {
+    var placeName = S.result ? role(S.result, "placeName") : "";
+    return S.names.map(function (c) {
+      var r = "text";
+      if (c === placeName) r = "placeName";
+      else if (c === $("#s-value").value) r = "value";
+      return { name: c, role: r };
+    });
+  }
+
+  function applyBody(draft, spec) {
+    var body = { importId: S.result.importId, draft: draft, spec: spec };
+    if (S.spatial) {
+      body.columns = spatialColumns();
+    } else {
+      body.strategy = $("#s-strategy").value;
+      body.joinLayer = $("#s-join").value;
+      body.columns = buildColumns();
+    }
+    return body;
+  }
+
   /* single-in-flight, debounced apply */
   var applyTimer = null, applyBusy = false, applyQueued = null;
   function scheduleApply(fn, delay) {
@@ -389,10 +470,8 @@
   function applyPlace() {
     if (!S.result) return Promise.resolve();
     var spec = Object.assign({}, S.result.spec, { outsideAction: outsideChoice() });
-    return api("layers/apply", { method: "POST", body: {
-      importId: S.result.importId, draft: false, spec: spec,
-      strategy: $("#s-strategy").value, joinLayer: $("#s-join").value, columns: buildColumns(),
-    } }).then(function (r) { S.result = r; renderReport(r); msg("#msg-place", ""); })
+    return api("layers/apply", { method: "POST", body: applyBody(false, spec) })
+      .then(function (r) { S.result = r; renderReport(r); msg("#msg-place", ""); })
       .catch(function (e) { msg("#msg-place", esc(errMsg(e))); });
   }
 
@@ -429,10 +508,7 @@
     msg("#msg-place", "Building the preview…", "ok");
     runApply(function () {
       var spec = Object.assign({}, S.result.spec, { outsideAction: outsideChoice() });
-      return api("layers/apply", { method: "POST", body: {
-        importId: S.result.importId, draft: true, spec: spec,
-        strategy: $("#s-strategy").value, joinLayer: $("#s-join").value, columns: buildColumns(),
-      } }).then(function (r) {
+      return api("layers/apply", { method: "POST", body: applyBody(true, spec) }).then(function (r) {
         S.result = r;
         msg("#msg-place", "");
         $("#to-style").disabled = false;
@@ -454,14 +530,32 @@
     }
   }
 
+  function kindChoices() {
+    if (!S.spatial) {
+      return [{ value: "markers", label: "Points / markers" }, { value: "choropleth", label: "Choropleth (colour by value)" }];
+    }
+    var cls = (S.canonical.meta.geometry || {}).class;
+    if (cls === "line") return [{ value: "line", label: "Lines" }];
+    if (cls === "polygon") return [
+      { value: "polygon", label: "Areas (single colour)" },
+      { value: "choropleth", label: "Choropleth (colour by value)" },
+    ];
+    return [{ value: "markers", label: "Points / markers" }];
+  }
+
   function enterStyle(result) {
     var spec = result.spec || {};
     if (!S.styleReady) {
       $("#s-label").value = spec.label || "";
-      $("#s-kind").value = spec.kind || "markers";
+      fillSelect("#s-kind", kindChoices(), spec.kind || "markers");
       fillSelect("#s-value", S.names, spec.valueColumn || role(result, "value"), true);
       fillSelect("#s-palette", S.options.palettes || [], spec.palette || "greens");
       fillSelect("#s-marker", S.options.markerColors || [], spec.markerColor || "rust");
+      fillSelect("#s-linecolor", S.options.markerColors || [], spec.lineColor || "slate");
+      fillSelect("#s-fillcolor", S.options.markerColors || [], spec.fillColor || "moss");
+      if (spec.lineWidth) $("#s-linewidth").value = String(spec.lineWidth);
+      $("#s-linedash").checked = !!spec.lineDash;
+      if (spec.fillOpacity) $("#s-fillopacity").value = String(spec.fillOpacity);
       $("#s-group").value = ["base", "agri", "eco"].indexOf(spec.group) >= 0 ? spec.group : "agri";
       fillSelect("#s-poptitle", S.names, spec.popupTitleColumn || role(result, "placeName"), true);
       $("#chat-hint").textContent = S.options.geminiAvailable ? "" :
@@ -471,7 +565,11 @@
     syncStyleVisibility();
     renderReport(result);
     if (result.draftDataset) refreshPreview(result.draftDataset);
-    $("#style-state").textContent = "";
+    var rep = result.matchReport || {};
+    var un = (rep.unmatched || []).length;
+    $("#style-state").textContent = un
+      ? un + " row" + (un > 1 ? "s" : "") + " had no geometry and " + (un > 1 ? "are" : "is") + " left off the map."
+      : "";
     goStep(4);
   }
 
@@ -480,6 +578,11 @@
     $("#w-value").hidden = kind !== "choropleth";
     $("#w-palette").hidden = kind !== "choropleth";
     $("#w-marker").hidden = kind !== "markers";
+    $("#w-linecolor").hidden = kind !== "line";
+    $("#w-linewidth").hidden = kind !== "line";
+    $("#w-linedash").hidden = kind !== "line";
+    $("#w-fillcolor").hidden = kind !== "polygon";
+    $("#w-fillopacity").hidden = kind !== "polygon";
   }
 
   function applyStyle() {
@@ -491,14 +594,16 @@
       valueColumn: $("#s-value").value || undefined,
       palette: $("#s-palette").value,
       markerColor: $("#s-marker").value,
+      lineColor: $("#s-linecolor").value || undefined,
+      lineWidth: Number($("#s-linewidth").value) || undefined,
+      lineDash: $("#s-linedash").checked || undefined,
+      fillColor: $("#s-fillcolor").value || undefined,
+      fillOpacity: Number($("#s-fillopacity").value) || undefined,
       popupTitleColumn: $("#s-poptitle").value || undefined,
       outsideAction: outsideChoice(),
     });
     $("#style-state").textContent = "Updating the preview…";
-    return api("layers/apply", { method: "POST", body: {
-      importId: S.result.importId, draft: true, spec: spec,
-      strategy: $("#s-strategy").value, joinLayer: $("#s-join").value, columns: buildColumns(),
-    } }).then(function (r) {
+    return api("layers/apply", { method: "POST", body: applyBody(true, spec) }).then(function (r) {
       S.result = r;
       $("#frag-json").textContent = JSON.stringify(r.fragment, null, 2);
       $("#style-state").textContent = "";
@@ -509,7 +614,8 @@
     });
   }
 
-  ["#s-label", "#s-kind", "#s-value", "#s-palette", "#s-marker", "#s-group", "#s-poptitle"].forEach(function (sel) {
+  ["#s-label", "#s-kind", "#s-value", "#s-palette", "#s-marker", "#s-group", "#s-poptitle",
+   "#s-linecolor", "#s-linewidth", "#s-linedash", "#s-fillcolor", "#s-fillopacity"].forEach(function (sel) {
     $(sel).addEventListener("change", function () {
       syncStyleVisibility();
       scheduleApply(applyStyle);
@@ -517,7 +623,7 @@
   });
   $("#s-label").addEventListener("input", function () { scheduleApply(applyStyle, 700); });
 
-  $("#back-3").onclick = function () { goStep(3); };
+  $("#back-3").onclick = function () { goStep(S.spatial ? 2 : 3); };
 
   /* ---- chat refine ---- */
 
