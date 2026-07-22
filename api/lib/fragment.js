@@ -15,8 +15,37 @@ export const PALETTES = {
 export const MARKER_COLORS = {
   rust: '#A6522F', moss: '#40573D', ochre: '#B0863A', sienna: '#9C5A34', slate: '#5f7f92',
 };
-export const KINDS = ['markers', 'choropleth', 'line', 'polygon'];
+// Categorical palette in the atlas's register — distinct hues, one per value,
+// warm neutral for "other". Values beyond 8 fold into "other".
+export const CATEGORY_COLORS = ['#A6522F', '#40573D', '#5f7f92', '#B0863A', '#6a4d75', '#7f9c65', '#9C5A34', '#446e80'];
+export const CATEGORY_OTHER = '#9a938a';
+export const MAX_CATEGORIES = 8;
+export const KINDS = ['markers', 'choropleth', 'line', 'polygon', 'category'];
 const MAX_TOTAL_VERTICES = 300000;
+const CAT_KEY = '_category';   // derived per-feature primary tag (multi-value columns)
+
+// Multi-value cells like "Culture; Heritage" or "a, b, c". Returns the separator
+// if a strong majority of values carry it, else null. ';' wins over ',' (commas
+// appear in prose/addresses). Shared by profiling (which column is categorical)
+// and rendering (how to colour it) so both agree.
+export function detectDelimiter(values) {
+  const n = values.length;
+  if (!n) return null;
+  for (const d of [';', ',']) {
+    if (values.filter((v) => String(v).includes(d)).length >= n * 0.4) return d;
+  }
+  return null;
+}
+export function primaryToken(value, delim) {
+  const s = String(value);
+  if (!delim) return s.trim();
+  const i = s.indexOf(delim);
+  return (i < 0 ? s : s.slice(0, i)).trim();
+}
+export function splitTokens(value, delim) {
+  if (!delim) return [String(value).trim()].filter(Boolean);
+  return String(value).split(delim).map((t) => t.trim()).filter(Boolean);
+}
 
 const MAX_CIRCLE_SWITCH = 300;   // DOM markers don't scale past this
 const CLASS_MIN = 3, CLASS_MAX = 7;
@@ -60,14 +89,85 @@ export function buildFragment(spec, feats, existingIds) {
   const sourceFile = 'user-' + id + '.geojson';
   const group = ['base', 'agri', 'eco'].includes(spec.group) ? spec.group : 'agri';
 
+  const sampleVals = (col) => feats.slice(0, 200)
+    .map((f) => (f.properties ? f.properties[col] : undefined))
+    .filter((v) => v !== undefined && v !== null && v !== '').map(String);
+
   const popup = { title: null, fields: [] };
   if (spec.popupTitleColumn) popup.title = String(spec.popupTitleColumn);
+  // a photo column renders as an image at the top of the popup
+  if (spec.imageColumn) popup.fields.push({ label: prettify(spec.imageColumn), property: String(spec.imageColumn), type: 'image' });
   for (const c of (spec.popupColumns || []).slice(0, 6)) {
-    if (c !== popup.title) popup.fields.push({ label: prettify(c), property: String(c) });
+    if (c === popup.title || c === spec.imageColumn) continue;
+    const fld = { label: prettify(c), property: String(c) };
+    // ';'-delimited columns (labels, categories) render as tag chips — ';' is a
+    // deliberate tag separator; commas stay plain text (prose, addresses)
+    if (detectDelimiter(sampleVals(c)) === ';') fld.type = 'tags';
+    popup.fields.push(fld);
   }
 
   let stanza;
-  if (kind === 'line') {
+  let derivedKeys = [];
+  if (kind === 'category') {
+    // colour by the observed distinct values of a column — the values come from
+    // the data itself (ordered by frequency), never generated
+    const prop = String(spec.categoryColumn || '');
+    // multi-value columns ("Culture; Heritage") colour by their PRIMARY tag —
+    // derived per-feature in code (not the LLM), stored on a hidden property so
+    // MapLibre's match can hit an exact value
+    const delim = detectDelimiter(feats.map((f) => (f.properties ? f.properties[prop] : '')).filter(Boolean).map(String));
+    const matchProp = delim ? CAT_KEY : prop;
+    const counts = new Map();
+    for (const f of feats) {
+      const v = f.properties ? f.properties[prop] : undefined;
+      if (v === undefined || v === null || v === '') continue;
+      const rep = (delim ? primaryToken(v, delim) : String(v)).slice(0, 40);
+      if (!rep) continue;
+      if (delim) f.properties[CAT_KEY] = rep;
+      counts.set(rep, (counts.get(rep) || 0) + 1);
+    }
+    if (delim) derivedKeys = [CAT_KEY];
+    const values = [...counts.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]);
+    const kept = values.slice(0, MAX_CATEGORIES);
+    let color;
+    if (kept.length) {
+      color = ['match', ['to-string', ['get', matchProp]]];
+      kept.forEach((v, i) => { color.push(v, CATEGORY_COLORS[i % CATEGORY_COLORS.length]); });
+      color.push(CATEGORY_OTHER);
+    } else {
+      color = CATEGORY_OTHER;   // empty column — still renders, just unclassed
+    }
+    const gt = feats.length && feats[0].geometry ? feats[0].geometry.type : 'Point';
+    const shape = /LineString/.test(gt) ? 'line' : /Point/.test(gt) ? 'dot' : undefined;
+    const legend = kept.map((v, i) => {
+      const it = { color: CATEGORY_COLORS[i % CATEGORY_COLORS.length], label: v };
+      if (shape) it.shape = shape;
+      return it;
+    });
+    if (values.length > kept.length || !kept.length) {
+      const it = { color: CATEGORY_OTHER, label: 'other' };
+      if (shape) it.shape = shape;
+      legend.push(it);
+    }
+    const base = {
+      id, group, source: sourceFile,
+      label: String(spec.label).slice(0, 60), default: true,
+      legend,
+      popup: { title: popup.title || 'name', fields: popup.fields },
+      userLayer: true,
+    };
+    if (/Point/.test(gt)) {
+      stanza = { ...base, type: 'circle',
+        paint: { radius: 5, color, strokeColor: '#ffffff', strokeWidth: 1.2 } };
+    } else if (/LineString/.test(gt)) {
+      stanza = { ...base, type: 'line',
+        paint: { color, width: Math.min(6, Math.max(0.5, Number(spec.lineWidth) || 2.5)), opacity: 0.9 } };
+    } else {
+      stanza = { ...base, type: 'fill',
+        paint: { fillColor: color, fillOpacity: Math.min(0.9, Math.max(0.15, Number(spec.fillOpacity) || 0.55)),
+                 outlineColor: '#5c544a', outlineWidth: 0.5 } };
+    }
+  } else if (kind === 'line') {
     const color = MARKER_COLORS[spec.lineColor] || MARKER_COLORS[spec.markerColor] || MARKER_COLORS.rust;
     const width = Math.min(6, Math.max(0.5, Number(spec.lineWidth) || 2));
     const paint = { color, width, opacity: 0.9 };
@@ -141,7 +241,7 @@ export function buildFragment(spec, feats, existingIds) {
     }
   }
   if (spec.subgroup) stanza.subgroup = String(spec.subgroup).slice(0, 30);
-  return { stanza, sourceFile, kindUsed: stanza.type };
+  return { stanza, sourceFile, kindUsed: stanza.type, derivedKeys };
 }
 
 function prettify(col) {

@@ -76,6 +76,26 @@ export function discardImport(id) {
   } catch {}
 }
 
+/* The induced category set is persisted per-atlas so a second upload (or a
+   partner org's contribution) classifies into the SAME emergent set — coherent
+   colours across contributions. Stored next to the dataset, gitignored. */
+export function readCatSet(datasetId) {
+  const dir = datasetDir(datasetId);
+  if (!dir) return [];
+  try {
+    const s = JSON.parse(fs.readFileSync(path.join(dir, 'categories.local.json'), 'utf8'));
+    return Array.isArray(s.categories) ? s.categories : [];
+  } catch { return []; }
+}
+export function writeCatSet(datasetId, categories) {
+  const dir = datasetDir(datasetId);
+  if (!dir) return;
+  const p = path.join(dir, 'categories.local.json');
+  const tmp = p + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify({ categories }, null, 1));
+  fs.renameSync(tmp, p);
+}
+
 /* Geometry rides in a side file so the session JSON stays small — the
    spatial track can carry ~150k vertices per import. */
 export function writeGeoms(importId, geoms) {

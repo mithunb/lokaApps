@@ -943,10 +943,41 @@ import { profileColumns, bestNameColumn } from '../lib/tabular.js';
 import { norm, joinByName, AUTO_ACCEPT } from '../lib/matching.js';
 import { PALETTES, MARKER_COLORS, buildFragment, sanitizeFeatures } from '../lib/fragment.js';
 import * as imports from '../lib/atlas/imports.js';
+import * as enrich from '../lib/atlas/enrich.js';
 
 const ai = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) : null;
 imports.sweepImports();
 setInterval(imports.sweepImports, 3600 * 1000).unref();
+
+// Admin-hierarchy columns (district/block/…) make poor category colourings even
+// when low-cardinality — the map already shows those boundaries.
+const ADMINISH_RE = /^(country|state|district|division|block|tehsil|taluk|taluka|mandal|subdistrict|village|gram|panchayat|ward|region)s?([ _-]?name)?$/i;
+function pickCategoryColumn(profiles, placeNameCol) {
+  return profiles.find((p) => p.categorical && p.name !== placeNameCol && !ADMINISH_RE.test(p.name.trim()));
+}
+
+const NAMEISH_RE = /^(name|title|label|place|description|desc|site|spot)s?$/i;
+// A human-readable title beats an id/coordinate. Prefer an explicit name/desc
+// column, then any short-text name-like column, else the first column.
+function pickTitleColumn(profiles, columns) {
+  const byName = profiles.find((p) => NAMEISH_RE.test(p.name.trim()) && p.type === 'string');
+  if (byName) return byName.name;
+  const nameish = profiles.find((p) => p.looksLikeName && !p.looksLikeImage);
+  return (nameish && nameish.name) || columns[0];
+}
+// Popup fields worth showing: skip id-like, coordinates, and the image/title
+// columns (handled separately); lead with category + tag-set + descriptive cols.
+function pickPopupColumns(profiles, { title, image }) {
+  const ok = profiles.filter((p) => {
+    if (p.name === title || p.name === image) return false;
+    if (p.looksLikeLat || p.looksLikeLng || p.maybeLatIndia || p.maybeLngIndia) return false;
+    if (p.looksLikeImage) return false;
+    if (p.type === 'string' && p.distinct === p.filled && p.filled > 20 && !p.multiValue) return false; // id-like
+    return true;
+  });
+  const rank = (p) => (p.categorical ? 0 : p.tagList ? 1 : p.type !== 'string' ? 2 : 3);
+  return ok.sort((a, b) => rank(a) - rank(b)).slice(0, 5).map((p) => p.name);
+}
 
 // Every import route mutates disk (sessions, draft folders) — owner/editor only.
 // Datasets without a registry entry (hand-built ones like deoria) are admin-only.
@@ -1034,7 +1065,9 @@ const LAYER_SPEC_SCHEMA = {
   type: Type.OBJECT,
   required: ['kind', 'label', 'group'],
   properties: {
-    kind: { type: Type.STRING, enum: ['markers', 'choropleth', 'line', 'polygon'] },
+    kind: { type: Type.STRING, enum: ['markers', 'choropleth', 'line', 'polygon', 'category'] },
+    categoryColumn: { type: Type.STRING },
+    imageColumn: { type: Type.STRING },
     label: { type: Type.STRING },
     group: { type: Type.STRING, enum: ['base', 'agri', 'eco'] },
     subgroup: { type: Type.STRING },
@@ -1201,10 +1234,14 @@ function transform(session) {
   // one layer = one geometry class; the kind must be renderable for that class
   const cls = session.meta && session.meta.geometry && session.meta.geometry.class;
   if (strategy === 'geometry' && cls) {
-    const allowed = cls === 'line' ? ['line'] : cls === 'polygon' ? ['polygon', 'choropleth'] : ['markers'];
+    const allowed = cls === 'line' ? ['line', 'category']
+      : cls === 'polygon' ? ['polygon', 'choropleth', 'category']
+      : ['markers', 'category'];
     if (!allowed.includes(spec.kind)) spec.kind = allowed[0];
   }
   const frag = buildFragment(spec, feats, existingIds);
+  // derived properties (e.g. the primary-tag category key) must survive the whitelist
+  (frag.derivedKeys || []).forEach((k) => keep.add(k));
   const clean = sanitizeFeatures(feats, [...keep], m.manifest.bounds, spec.outsideAction);
   report.outside = clean.outside;
   if (spec.outsideAction === 'drop' && clean.outside) report.outsideDropped = true;
@@ -1312,22 +1349,31 @@ router.post('/layers/ingest', async (req, res) => {
     const cls = (meta && meta.geometry && meta.geometry.class) || 'point';
     const numeric = profiles.find((p) => p.type === 'number');
     const nameCol = profiles.find((p) => p.type === 'string' && p.looksLikeName);
+    const catCol = pickCategoryColumn(profiles, nameCol && nameCol.name);
+    const imgCol = profiles.find((p) => p.looksLikeImage);
     session.strategy = 'geometry';
     session.columns = columns.map((c) => ({
       name: c,
       role: nameCol && c === nameCol.name ? 'placeName' : numeric && c === numeric.name ? 'value' : 'text',
     }));
     session.spec = {
-      kind: cls === 'line' ? 'line' : cls === 'polygon' ? 'polygon' : 'markers',
+      // a low-cardinality column classes the map better than any default colour
+      kind: catCol ? 'category'
+        : cls === 'line' ? 'line'
+        : cls === 'polygon' ? (numeric ? 'choropleth' : 'polygon')
+        : 'markers',
       label: (session.filename || 'My data').replace(/\.[a-z]+$/i, '') || 'My data',
       group: 'agri',
       valueColumn: numeric ? numeric.name : undefined,
+      categoryColumn: catCol ? catCol.name : undefined,
+      imageColumn: imgCol ? imgCol.name : undefined,
+      categoryDelimiter: catCol && catCol.multiValue ? catCol.multiValue.delimiter : undefined,
       palette: 'greens',
       markerColor: 'rust',
       lineColor: 'slate',
       fillColor: 'moss',
-      popupTitleColumn: nameCol ? nameCol.name : columns[0],
-      popupColumns: columns.slice(0, 4),
+      popupTitleColumn: pickTitleColumn(profiles, columns),
+      popupColumns: pickPopupColumns(profiles, { title: pickTitleColumn(profiles, columns), image: imgCol && imgCol.name }),
     };
     try {
       return res.json(applyResult(session, false));
@@ -1377,6 +1423,8 @@ router.post('/layers/ingest', async (req, res) => {
       } catch {}
     }
     const numeric = profiles.find((p) => p.type === 'number' && !p.looksLikeLat && !p.looksLikeLng);
+    const catCol = pickCategoryColumn(profiles, nameGuess && nameGuess.column);
+    const imgCol = profiles.find((p) => p.looksLikeImage);
     session.strategy = lat && lng ? 'coordinates' : 'adminJoin';
     session.joinLayer = joinGuess;
     session.columns = columns.map((c) => ({
@@ -1387,14 +1435,20 @@ router.post('/layers/ingest', async (req, res) => {
         : numeric && c === numeric.name ? 'value' : 'text',
     }));
     session.spec = {
-      kind: session.strategy === 'coordinates' ? 'markers' : (numeric ? 'choropleth' : 'markers'),
+      // joined polygons: numbers → choropleth; points have no numeric rendering,
+      // so a categorical column beats plain markers there
+      kind: session.strategy === 'coordinates' ? (catCol ? 'category' : 'markers')
+        : numeric ? 'choropleth' : catCol ? 'category' : 'markers',
       label: (session.filename || 'My data').replace(/\.[a-z]+$/i, '') || 'My data',
       group: 'agri',
       valueColumn: numeric ? numeric.name : undefined,
+      categoryColumn: catCol ? catCol.name : undefined,
+      imageColumn: imgCol ? imgCol.name : undefined,
+      categoryDelimiter: catCol && catCol.multiValue ? catCol.multiValue.delimiter : undefined,
       palette: 'greens',
       markerColor: 'rust',
-      popupTitleColumn: nameGuess ? nameGuess.column : columns[0],
-      popupColumns: columns.slice(0, 4),
+      popupTitleColumn: nameGuess ? nameGuess.column : pickTitleColumn(profiles, columns),
+      popupColumns: pickPopupColumns(profiles, { title: nameGuess ? nameGuess.column : pickTitleColumn(profiles, columns), image: imgCol && imgCol.name }),
     };
   }
 
@@ -1487,6 +1541,8 @@ router.post('/layers/refine', async (req, res) => {
     'Current spec: ' + JSON.stringify(session.spec),
     'Available numeric columns: ' + JSON.stringify((session.columns || []).filter((c) => c.role === 'value').map((c) => c.name)),
     'All columns: ' + JSON.stringify(session.columnsRaw),
+    'kind "category" colours features by a low-cardinality column (set categoryColumn);',
+    'imageColumn: a column of https image URLs shown as a photo in the popup.',
     'Palettes: ' + Object.keys(PALETTES).join(', ') + ' (rdylgn = red→green, gnrd = green→red).',
     gcls ? 'This layer holds ' + gcls + ' geometry — valid kinds: ' +
       (gcls === 'line' ? 'line' : gcls === 'polygon' ? 'polygon, choropleth' : 'markers') + '.' : '',
@@ -1592,4 +1648,47 @@ router.get('/layers/imports', (req, res) => {
   const dataset = String(req.query.dataset || '');
   if (!requireDatasetEditor(req, res, dataset)) return;
   res.json({ imports: imports.listImports(dataset) });
+});
+
+// Derive a coarse category + fine labels from a free-text description column,
+// for uploads that arrive without their own categories. The LLM only induces
+// the set + assigns; enrich.js applies deterministic grounding/dedupe/caps and
+// the result is returned for the user to edit in the Check step (nothing is
+// committed here). Reuses/extends the atlas's persisted emergent category set.
+router.post('/layers/enrich', async (req, res) => {
+  const b = req.body || {};
+  const dataset = String(b.dataset || '');
+  if (!imports.datasetDir(dataset)) return res.status(404).json({ error: 'unknown dataset' });
+  if (!requireDatasetEditor(req, res, dataset)) return;
+  const descCol = String(b.descriptionColumn || '');
+  const labelsCol = b.labelsColumn ? String(b.labelsColumn) : '';
+  const rows = Array.isArray(b.rows) ? b.rows.slice(0, MAX_ROWS) : null;
+  if (!descCol || !rows || !rows.length) return res.status(400).json({ error: 'descriptionColumn and rows required' });
+  if (!rows.some((r) => r && String(r[descCol] || '').trim())) {
+    return res.status(400).json({ error: 'that column has no text to work from' });
+  }
+
+  // AI is optional — without it enrich falls back to extractive labels (no
+  // invented categories). Rate-limited like the other Gemini features.
+  const callJSON = (ai && geminiAllowed(clientIp(req)))
+    ? (model, prompt, schema) => geminiJSON(model, prompt, schema)
+    : null;
+  try {
+    const out = await enrich.enrichRows({
+      rows, descCol, existingLabelsCol: labelsCol,
+      seedSet: imports.readCatSet(dataset),
+      callJSON,
+      models: { flash: getFlashModel(), flashLite: getFlashLiteModel() },
+    });
+    if (out.categorySet.length) imports.writeCatSet(dataset, out.categorySet);
+    res.json({
+      categorySet: out.categorySet,
+      rows: out.rows,                      // [{category, labels[]}] index-aligned
+      aiUsed: !!callJSON,
+      // surface for the UI: what got generated, so the user knows what to review
+      generated: { categories: out.categorySet.length, labelledRows: out.rows.filter((r) => r.labels.length).length },
+    });
+  } catch (e) {
+    res.status(502).json({ error: 'enrichment failed: ' + e.message });
+  }
 });

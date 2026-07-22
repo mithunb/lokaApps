@@ -1043,7 +1043,7 @@
       var v = props[fld.property];
       if (v == null || v === "" || v === "[]") return;
       if (fld.type === "tags") {
-        var arr = Array.isArray(v) ? v : safeArr(v);
+        var arr = Array.isArray(v) ? v : tagArr(v);
         if (!arr.length) return;
         h += '<div class="pop-field"><div class="pop-lbl">' + esc(fld.label) + '</div><div class="pop-tags">' +
           arr.map(function (t) { return '<span class="pop-tag">' + esc(t) + "</span>"; }).join("") + "</div></div>";
@@ -1053,6 +1053,12 @@
         h += '<div class="pop-notes">' + notes.map(function (n) {
           return '<div class="pop-note"><b>' + esc(n.title) + "</b>" + (n.body ? "<span>" + esc(n.body) + "</span>" : "") + "</div>";
         }).join("") + "</div>";
+      } else if (fld.type === "image") {
+        // photo column: https-only, lazy, silently hidden when the link is dead
+        var u = String(v).trim();
+        if (/^https:\/\/\S+$/i.test(u)) {
+          h += '<img class="pop-img" src="' + esc(u) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" />';
+        }
       } else if (fld.type === "cropProfile") {
         var cp = Array.isArray(v) ? v : safeArr(v);
         if (!cp.length) return;
@@ -1066,6 +1072,13 @@
     return h + "</div>";
   }
   function safeArr(v) { try { return JSON.parse(v); } catch (e) { return []; } }
+  // tag chips from either a JSON array or a "a; b, c"-delimited string
+  function tagArr(v) {
+    if (Array.isArray(v)) return v;
+    var j = safeArr(v);
+    if (j.length) return j;
+    return String(v).split(/[;,]/).map(function (t) { return t.trim(); }).filter(Boolean);
+  }
 
   /* ==================================================================
      CREDITS (data sources from manifest)

@@ -245,9 +245,104 @@
       $("#to-place").textContent = "Looks right — place it on the map";
     }
     LokaCheck.render($("#check-table"), canonical, { onChange: checkChanged });
+    setupEnrich(canonical);
     checkChanged(canonical);
     msg("#msg-check", "");
     goStep(2);
+  }
+
+  /* ---- generate category + labels from a free-text description ----
+     Offered when a longish text column is present. The generated columns are
+     added to the canonical table (editable), then flow through the normal
+     pickers — 'category' auto-colours, 'labels' becomes popup chips. */
+  function avgLen(col) {
+    var v = S.canonical.rows.map(function (r) { return String(r[col] == null ? "" : r[col]); }).filter(Boolean);
+    return v.length ? v.reduce(function (a, s) { return a + s.length; }, 0) / v.length : 0;
+  }
+  function looksDelimited(col) {
+    var n = 0, t = 0;
+    S.canonical.rows.forEach(function (r) { var s = String(r[col] == null ? "" : r[col]); if (s) { t++; if (s.indexOf(";") >= 0) n++; } });
+    return t && n / t >= 0.4;
+  }
+  // prose has spaces (multi-word); ids/URLs don't — cleanly excludes tag_id / image_urls
+  function looksProse(col) {
+    var n = 0, t = 0;
+    S.canonical.rows.forEach(function (r) { var s = String(r[col] == null ? "" : r[col]).trim(); if (s) { t++; if (/\s/.test(s)) n++; } });
+    return t && n / t >= 0.6;
+  }
+  function setupEnrich(canonical) {
+    var panel = $("#enrich-panel");
+    // candidate description columns = free-text prose (has spaces, avg length ≥ 20), not delimited tag lists
+    var textCols = canonical.schema.filter(function (c) {
+      return c.type === "string" && !c.ignored && !looksDelimited(c.name) && looksProse(c.name) && avgLen(c.name) >= 20;
+    }).sort(function (a, b) { return avgLen(b.name) - avgLen(a.name); });
+    if (!textCols.length) { panel.hidden = true; return; }
+    panel.hidden = false;
+    fillSelect("#s-desccol", textCols.map(function (c) { return c.name; }), textCols[0].name);
+    msg("#msg-enrich", "");
+  }
+
+  $("#enrich-go").onclick = function () {
+    if (!S.canonical) return;
+    var descCol = $("#s-desccol").value;
+    if (!descCol) return;
+    // pass any existing ';'-delimited column as labels, so we gap-fill not overwrite
+    var labelsCol = (S.canonical.schema.find(function (c) {
+      return c.name !== descCol && !c.ignored && c.type === "string" && looksDelimited(c.name) && avgLen(c.name) <= 80;
+    }) || {}).name || "";
+    var rows = S.canonical.rows.map(function (r) {
+      var o = {}; o[descCol] = r[descCol]; if (labelsCol) o[labelsCol] = r[labelsCol]; return o;
+    });
+    $("#enrich-go").disabled = true;
+    msg("#msg-enrich", "Reading the descriptions…", "ok");
+    api("layers/enrich", { method: "POST", body: {
+      dataset: S.dataset, descriptionColumn: descCol, labelsColumn: labelsCol || undefined, rows: rows,
+    } }).then(function (r) {
+      $("#enrich-go").disabled = false;
+      applyEnrichment(r, labelsCol);
+    }).catch(function (e) {
+      $("#enrich-go").disabled = false;
+      msg("#msg-enrich", esc(errMsg(e)));
+    });
+  };
+
+  function applyEnrichment(r, labelsCol) {
+    var per = r.rows || [];
+    var addCat = r.categorySet && r.categorySet.length;
+    // add / update the columns on the canonical table
+    if (addCat) ensureColumn("category", "string");
+    var labelTarget = labelsCol || ensureColumn("labels", "string").name;
+    S.canonical.rows.forEach(function (row, i) {
+      var e = per[i] || {};
+      if (addCat) row.category = e.category || "";
+      if (e.labels && e.labels.length) row[labelTarget] = e.labels.join("; ");
+    });
+    // re-type so 'category' reads categorical and 'labels' reads as a tag set
+    var names = S.canonical.schema.map(function (c) { return c.name; });
+    var forced = {}; S.canonical.schema.forEach(function (c) { if (c.forced) forced[c.name] = c.forced; });
+    var typed = LokaIngest.retype(names, S.canonical.rows, forced);
+    typed.schema.forEach(function (c) {
+      var prev = S.canonical.schema.find(function (p) { return p.name === c.name; });
+      if (prev) { c.ignored = prev.ignored; c.forced = prev.forced; }
+    });
+    S.canonical.schema = typed.schema; S.canonical.rows = typed.rows;
+    LokaCheck.render($("#check-table"), S.canonical, { onChange: checkChanged });
+    setupEnrich(S.canonical);
+    var bits = [];
+    if (addCat) bits.push(r.categorySet.length + " categories");
+    bits.push((r.generated ? r.generated.labelledRows : 0) + " rows labelled");
+    msg("#msg-enrich", "Added " + bits.join(" + ") + (r.aiUsed ? "" : " (basic keywords — AI was unavailable, edit as needed)") +
+      ". Review and edit the new columns below.", "ok");
+    checkChanged();
+  }
+
+  // add a column to the canonical (unique name), return its schema entry
+  function ensureColumn(base, type) {
+    var name = base, n = 2;
+    while (S.canonical.schema.some(function (c) { return c.name === name; })) name = base + "_" + n++;
+    var entry = { name: name, type: type, issues: [] };
+    S.canonical.schema.push(entry);
+    return entry;
   }
 
   function activeColumns() {
@@ -530,17 +625,20 @@
     }
   }
 
+  var CATEGORY_CHOICE = { value: "category", label: "Coloured by category" };
   function kindChoices() {
     if (!S.spatial) {
-      return [{ value: "markers", label: "Points / markers" }, { value: "choropleth", label: "Choropleth (colour by value)" }];
+      return [{ value: "markers", label: "Points / markers" },
+              { value: "choropleth", label: "Choropleth (colour by value)" }, CATEGORY_CHOICE];
     }
     var cls = (S.canonical.meta.geometry || {}).class;
-    if (cls === "line") return [{ value: "line", label: "Lines" }];
+    if (cls === "line") return [{ value: "line", label: "Lines" }, CATEGORY_CHOICE];
     if (cls === "polygon") return [
       { value: "polygon", label: "Areas (single colour)" },
       { value: "choropleth", label: "Choropleth (colour by value)" },
+      CATEGORY_CHOICE,
     ];
-    return [{ value: "markers", label: "Points / markers" }];
+    return [{ value: "markers", label: "Points / markers" }, CATEGORY_CHOICE];
   }
 
   function enterStyle(result) {
@@ -549,6 +647,8 @@
       $("#s-label").value = spec.label || "";
       fillSelect("#s-kind", kindChoices(), spec.kind || "markers");
       fillSelect("#s-value", S.names, spec.valueColumn || role(result, "value"), true);
+      fillSelect("#s-catcol", S.names, spec.categoryColumn || "", true);
+      fillSelect("#s-image", S.names, spec.imageColumn || "", true);
       fillSelect("#s-palette", S.options.palettes || [], spec.palette || "greens");
       fillSelect("#s-marker", S.options.markerColors || [], spec.markerColor || "rust");
       fillSelect("#s-linecolor", S.options.markerColors || [], spec.lineColor || "slate");
@@ -575,14 +675,16 @@
 
   function syncStyleVisibility() {
     var kind = $("#s-kind").value;
+    var cls = S.spatial ? (S.canonical.meta.geometry || {}).class : "";
     $("#w-value").hidden = kind !== "choropleth";
+    $("#w-catcol").hidden = kind !== "category";
     $("#w-palette").hidden = kind !== "choropleth";
     $("#w-marker").hidden = kind !== "markers";
     $("#w-linecolor").hidden = kind !== "line";
-    $("#w-linewidth").hidden = kind !== "line";
+    $("#w-linewidth").hidden = !(kind === "line" || (kind === "category" && cls === "line"));
     $("#w-linedash").hidden = kind !== "line";
     $("#w-fillcolor").hidden = kind !== "polygon";
-    $("#w-fillopacity").hidden = kind !== "polygon";
+    $("#w-fillopacity").hidden = !(kind === "polygon" || (kind === "category" && cls === "polygon"));
   }
 
   function applyStyle() {
@@ -592,6 +694,8 @@
       kind: $("#s-kind").value,
       group: $("#s-group").value,
       valueColumn: $("#s-value").value || undefined,
+      categoryColumn: $("#s-catcol").value || undefined,
+      imageColumn: $("#s-image").value || undefined,
       palette: $("#s-palette").value,
       markerColor: $("#s-marker").value,
       lineColor: $("#s-linecolor").value || undefined,
@@ -614,7 +718,7 @@
     });
   }
 
-  ["#s-label", "#s-kind", "#s-value", "#s-palette", "#s-marker", "#s-group", "#s-poptitle",
+  ["#s-label", "#s-kind", "#s-value", "#s-catcol", "#s-image", "#s-palette", "#s-marker", "#s-group", "#s-poptitle",
    "#s-linecolor", "#s-linewidth", "#s-linedash", "#s-fillcolor", "#s-fillopacity"].forEach(function (sel) {
     $(sel).addEventListener("change", function () {
       syncStyleVisibility();
