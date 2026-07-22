@@ -190,6 +190,8 @@
     .leg-swatch { flex:0 0 auto; width:14px; height:14px; }
     .leg-icon { flex:0 0 auto; width:15px; height:15px; color:var(--c); display:inline-flex; align-items:center; justify-content:center; }
     .leg-icon svg { width:15px; height:15px; }
+    .leg-badge { flex:0 0 auto; width:15px; height:15px; border-radius:50%; background:var(--c); color:#fff;
+      font-size:8px; font-weight:700; line-height:1; display:inline-flex; align-items:center; justify-content:center; }
     .leg-swatch.box { background:var(--c); border-radius:2px; }
     .leg-swatch.dot { background:var(--c); border-radius:50%; width:11px; height:11px; margin:0 1.5px; }
     .leg-swatch.line { height:0; border-top:3px solid var(--c); border-radius:2px; align-self:center; }
@@ -203,6 +205,7 @@
       color:var(--pin,#AE5028); font-size:11px; line-height:1; display:flex; align-items:center; justify-content:center;
       box-shadow:0 1px 3px rgba(42,36,26,.32); transition:transform .18s cubic-bezier(.25,1,.5,1), box-shadow .18s ease; }
     .atlas-pin.ring { background:var(--pin,#AE5028); border-color:#fff; }
+    .atlas-pin.badge { background:var(--pin,#AE5028); color:#fff; font-size:9px; font-weight:700; }
     .atlas-pin svg { width:12px; height:12px; display:block; }
     /* lift the pin (a child) on hover — never the marker element itself; MapLibre owns its transform */
     @media (hover:hover){ .atlas-marker:hover .atlas-pin { transform:translateY(-2px) scale(1.14); box-shadow:0 3px 8px rgba(42,36,26,.4); } }

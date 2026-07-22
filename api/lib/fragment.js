@@ -47,6 +47,20 @@ export function splitTokens(value, delim) {
   return String(value).split(delim).map((t) => t.trim()).filter(Boolean);
 }
 
+// Only SHORT, single-line, name-like values belong drawn on the map face.
+// Long/descriptive text (a `description` column) must stay in the popup — on the
+// map it overlaps into an unreadable mess. Decides whether a title column may be
+// used as an on-map label_text.
+export function isMapLabelColumn(feats, col) {
+  if (!col) return false;
+  const vals = feats.map((f) => (f.properties ? f.properties[col] : undefined))
+    .filter((v) => v !== undefined && v !== null && v !== '').map(String);
+  if (!vals.length) return false;
+  const avg = vals.reduce((a, s) => a + s.length, 0) / vals.length;
+  const anyLong = vals.some((s) => s.length > 40 || /[\r\n]/.test(s));
+  return avg <= 25 && !anyLong;
+}
+
 const MAX_CIRCLE_SWITCH = 300;   // DOM markers don't scale past this
 const CLASS_MIN = 3, CLASS_MAX = 7;
 
@@ -139,13 +153,15 @@ export function buildFragment(spec, feats, existingIds) {
     }
     const gt = feats.length && feats[0].geometry ? feats[0].geometry.type : 'Point';
     const shape = /LineString/.test(gt) ? 'line' : /Point/.test(gt) ? 'dot' : undefined;
+    // categorical:true tells the viewer to derive an icon/badge per value
+    // (colour + icon reinforce each other — the agreed default)
     const legend = kept.map((v, i) => {
-      const it = { color: CATEGORY_COLORS[i % CATEGORY_COLORS.length], label: v };
+      const it = { color: CATEGORY_COLORS[i % CATEGORY_COLORS.length], label: v, categorical: true };
       if (shape) it.shape = shape;
       return it;
     });
     if (values.length > kept.length || !kept.length) {
-      const it = { color: CATEGORY_OTHER, label: 'other' };
+      const it = { color: CATEGORY_OTHER, label: 'other', categorical: true };
       if (shape) it.shape = shape;
       legend.push(it);
     }
@@ -156,7 +172,14 @@ export function buildFragment(spec, feats, existingIds) {
       popup: { title: popup.title || 'name', fields: popup.fields },
       userLayer: true,
     };
-    if (/Point/.test(gt)) {
+    if (/Point/.test(gt) && feats.length <= MAX_CIRCLE_SWITCH) {
+      // ≤300 points → DOM marker pins carrying colour AND a per-category icon/badge
+      const markers = {};
+      kept.forEach((v, i) => { markers[v] = { color: CATEGORY_COLORS[i % CATEGORY_COLORS.length] }; });
+      stanza = { ...base, type: 'marker', markerBy: matchProp, markers,
+        markerDefault: { color: CATEGORY_OTHER }, categoryIcons: true,
+        label_text: (popup.title && isMapLabelColumn(feats, popup.title)) ? { property: popup.title } : undefined };
+    } else if (/Point/.test(gt)) {
       stanza = { ...base, type: 'circle',
         paint: { radius: 5, color, strokeColor: '#ffffff', strokeWidth: 1.2 } };
     } else if (/LineString/.test(gt)) {
@@ -233,7 +256,8 @@ export function buildFragment(spec, feats, existingIds) {
         id, group, type: 'marker', source: sourceFile,
         label: String(spec.label).slice(0, 60), default: true,
         marker: { color },
-        label_text: popup.title ? { property: popup.title } : undefined,
+        // long/descriptive titles stay in the popup, never drawn on the map
+        label_text: (popup.title && isMapLabelColumn(feats, popup.title)) ? { property: popup.title } : undefined,
         legend: [{ color, label: String(spec.label).slice(0, 40), shape: 'dot' }],
         popup: { title: popup.title || 'name', fields: popup.fields },
         userLayer: true,
