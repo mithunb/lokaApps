@@ -236,11 +236,11 @@
       gs.innerHTML = "<b>" + g.count.toLocaleString() + " " + esc(CLASS_LABEL[g.class] || g.class) + "</b>" +
         (g.vertices ? " · " + g.vertices.toLocaleString() + " points after cleaning" : "") +
         "<br>Shapes carry their own location — after this check they go straight to the map preview.";
-      $("#check-title").textContent = "Check the attributes";
+      $("#check-title").textContent = "Check the shape details";
       $("#to-place").textContent = "Looks right — preview the layer";
     } else {
       gs.hidden = true;
-      $("#check-title").textContent = "Check your table" +
+      $("#check-title").textContent = "Choose the fields for your map" +
         (canonical.meta.sheet ? " — sheet “" + canonical.meta.sheet + "”" : "");
       $("#to-place").textContent = "Looks right — place it on the map";
     }
@@ -293,15 +293,18 @@
     var rows = S.canonical.rows.map(function (r) {
       var o = {}; o[descCol] = r[descCol]; if (labelsCol) o[labelsCol] = r[labelsCol]; return o;
     });
-    $("#enrich-go").disabled = true;
+    var btn = $("#enrich-go"), label = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin" aria-hidden="true"></span>Generating…';
+    function done() { btn.disabled = false; btn.innerHTML = label; }
     msg("#msg-enrich", "Reading the descriptions…", "ok");
     api("layers/enrich", { method: "POST", body: {
       dataset: S.dataset, descriptionColumn: descCol, labelsColumn: labelsCol || undefined, rows: rows,
     } }).then(function (r) {
-      $("#enrich-go").disabled = false;
+      done();
       applyEnrichment(r, labelsCol);
     }).catch(function (e) {
-      $("#enrich-go").disabled = false;
+      done();
       msg("#msg-enrich", esc(errMsg(e)));
     });
   };
