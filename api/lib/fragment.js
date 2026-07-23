@@ -101,7 +101,8 @@ export function buildFragment(spec, feats, existingIds) {
   let i = 2;
   while (existingIds.includes(id)) id = slugifyId(spec.label) + '-' + i++;
   const sourceFile = 'user-' + id + '.geojson';
-  const group = ['base', 'agri', 'eco'].includes(spec.group) ? spec.group : 'agri';
+  // contributed layers default to their own "Your data" group, not a themed one
+  const group = ['base', 'agri', 'eco', 'userdata'].includes(spec.group) ? spec.group : 'userdata';
 
   const sampleVals = (col) => feats.slice(0, 200)
     .map((f) => (f.properties ? f.properties[col] : undefined))

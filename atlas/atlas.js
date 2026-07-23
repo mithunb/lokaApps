@@ -809,9 +809,22 @@
     });
     panel.appendChild(bm);
 
-    // groups + layers
-    MANIFEST.groups.forEach(function (g) {
-      var layers = MANIFEST.layers.filter(function (L) { return L.group === g.id; });
+    // groups + layers — declared groups first, then a synthesized group for any
+    // layer whose group id isn't declared (e.g. contributed "userdata" layers),
+    // so nothing is ever orphaned out of the panel
+    var GROUP_LABELS = { userdata: "Your data", base: "Base", agri: "Crops & value chain", eco: "Ecological landscape" };
+    var declaredIds = {};
+    MANIFEST.groups.forEach(function (g) { declaredIds[g.id] = true; });
+    var groupList = MANIFEST.groups.slice();
+    MANIFEST.layers.forEach(function (L) {
+      var gid = L.group || "userdata";
+      if (!declaredIds[gid]) {
+        declaredIds[gid] = true;
+        groupList.push({ id: gid, label: GROUP_LABELS[gid] || gid.charAt(0).toUpperCase() + gid.slice(1).replace(/[-_]/g, " ") });
+      }
+    });
+    groupList.forEach(function (g) {
+      var layers = MANIFEST.layers.filter(function (L) { return (L.group || "userdata") === g.id; });
       if (!layers.length) return;
       // Only Base is expanded on load; all other groups collapse so the panel
       // isn't overwhelming (users open the ones they want). The engine owns this

@@ -656,7 +656,7 @@
       if (spec.lineWidth) $("#s-linewidth").value = String(spec.lineWidth);
       $("#s-linedash").checked = !!spec.lineDash;
       if (spec.fillOpacity) $("#s-fillopacity").value = String(spec.fillOpacity);
-      $("#s-group").value = ["base", "agri", "eco"].indexOf(spec.group) >= 0 ? spec.group : "agri";
+      $("#s-group").value = ["base", "agri", "eco", "userdata"].indexOf(spec.group) >= 0 ? spec.group : "userdata";
       fillSelect("#s-poptitle", S.names, spec.popupTitleColumn || role(result, "placeName"), true);
       $("#chat-hint").textContent = S.options.geminiAvailable ? "" :
         "AI refine is off (no key configured) — the pickers above do everything manually.";

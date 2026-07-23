@@ -543,13 +543,14 @@
       S.catalog.tier = r.tier;
       S.catalog.layers = r.layers;
       if (!Object.keys(S.catalog.chosen).length) {
-        r.layers.forEach(function (l) { if (l.required || l.cost === "free") S.catalog.chosen[l.id] = true; });
-        delete S.catalog.chosen["floodplain-ndem"];
+        // start lean: only Admin boundaries + Place names — the user adds the
+        // rest deliberately rather than deselecting a wall of pre-checked layers
+        r.layers.forEach(function (l) { if (l.required || l.default) S.catalog.chosen[l.id] = true; });
       }
       $("#tier-note").textContent = (r.tier === "india"
         ? "India tier — the full catalogue, including LGD blocks and WRIS water layers."
         : "Global tier — boundaries, OSM waterways and ESA WorldCover land cover.")
-        + " Sensible layers come pre-selected — adjust freely. These are your atlas's default layers; after it's built you can add your own data on top.";
+        + " We start with just the admin boundaries and place names — add any layers you want on top. After it's built you can also add your own data.";
       renderCatalog();
     }).catch(function (e) { msg(3, esc(errMsg(e))); });
   }
