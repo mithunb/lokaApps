@@ -66,6 +66,7 @@ export function getImport(id) {
 export function discardImport(id) {
   try { fs.rmSync(path.join(IMPORTS_DIR, id + '.json'), { force: true }); } catch {}
   try { fs.rmSync(path.join(IMPORTS_DIR, id + '.geom.json'), { force: true }); } catch {}
+  try { fs.rmSync(path.join(IMPORTS_DIR, id + '.targets.json'), { force: true }); } catch {}
   // remove any draft folder for this import
   try {
     for (const d of fs.readdirSync(DATASETS_ROOT)) {
@@ -108,6 +109,23 @@ export function writeGeoms(importId, geoms) {
 export function readGeoms(importId) {
   if (!/^imp_[a-f0-9]{16}$/.test(String(importId))) return null;
   try { return JSON.parse(fs.readFileSync(path.join(IMPORTS_DIR, importId + '.geom.json'), 'utf8')); }
+  catch { return null; }
+}
+
+/* geoBoundaries join targets (name→admin matching against the atlas region's
+   admin units, materialised once at ingest) live in their own side file too —
+   they can be a few MB for a district's worth of villages. Keyed by option id
+   (e.g. "geo:ADM4") so the placement step can switch levels without a refetch. */
+export function writeGeoTargets(importId, byOption) {
+  fs.mkdirSync(IMPORTS_DIR, { recursive: true });
+  const p = path.join(IMPORTS_DIR, importId + '.targets.json');
+  const tmp = p + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(byOption));
+  fs.renameSync(tmp, p);
+}
+export function readGeoTargets(importId) {
+  if (!/^imp_[a-f0-9]{16}$/.test(String(importId))) return null;
+  try { return JSON.parse(fs.readFileSync(path.join(IMPORTS_DIR, importId + '.targets.json'), 'utf8')); }
   catch { return null; }
 }
 export function listImports(dataset) {

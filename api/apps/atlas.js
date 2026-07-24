@@ -1034,7 +1034,19 @@ function boundaryOptions(datasetId) {
   return { options, manifest: m };
 }
 
-function boundaryTargets(datasetId, optionId) {
+// Resolve a boundary option id to its {code,name,parent,geometry} match targets.
+// `session` may be a session object (needed for geoBoundaries ids, whose targets
+// were materialised to the import side-file at ingest) or a bare dataset id.
+function boundaryTargets(session, optionId) {
+  const datasetId = typeof session === 'string' ? session : session.dataset;
+  if (typeof optionId === 'string' && optionId.startsWith('geo:') && typeof session === 'object') {
+    const byOpt = imports.readGeoTargets(session.id) || {};
+    const entry = byOpt[optionId];
+    if (entry && entry.targets) {
+      return { opt: { id: optionId, label: entry.label, group: 'geo', count: entry.targets.length }, targets: entry.targets };
+    }
+    // side file expired — fall through to the dataset's own layers
+  }
   const { options, manifest } = boundaryOptions(datasetId);
   const opt = options.find((o) => o.id === optionId) || options[0];
   if (!opt || !manifest) return null;
@@ -1046,6 +1058,57 @@ function boundaryTargets(datasetId, optionId) {
     geometry: f.geometry,
   }));
   return { opt, targets };
+}
+
+const LEVEL_NOUN = { 1: 'states / provinces', 2: 'districts', 3: 'sub-districts', 4: 'localities' };
+const MAX_GEO_TARGETS = 4000;
+function bboxOverlap(a, b) { // [w,s,e,n]
+  return !!(a && b && a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1]);
+}
+
+// Match targets from geoBoundaries for the atlas's own region, at levels FINER
+// than the atlas was built at — so village / locality names the atlas's own
+// boundary layers don't carry can still be placed. Fetched once (cached) and
+// materialised into the import side-file; returns option metadata + targets.
+async function geoBoundaryOptions(region) {
+  if (!region || !region.iso3) return [];
+  const iso3 = String(region.iso3).toUpperCase();
+  const baseLevel = Number(region.level) || 1;
+  const rbb = Array.isArray(region.bbox) && region.bbox.length === 4 ? region.bbox : null;
+  let avail = null;
+  try { avail = JSON.parse(fs.readFileSync(path.join(GEOCACHE_DIR, `${iso3}-levels.json`), 'utf8')).levels; } catch {}
+  let parents = null;   // atlas's own level, clipped to the region — for parent disambiguation
+  const out = [];
+  for (const L of [baseLevel + 1, baseLevel + 2]) {
+    if (L > MAX_LEVEL) break;
+    if (avail && !avail.includes(L)) continue;
+    let doc;
+    try { doc = await loadAdmin(iso3, L); } catch { continue; }
+    let feats = doc.features || [];
+    if (rbb) feats = feats.filter((f) => bboxOverlap(f.bbox, rbb));
+    if (feats.length < 2 || feats.length > MAX_GEO_TARGETS) continue;
+    if (parents == null) {
+      try {
+        let pf = (await loadAdmin(iso3, baseLevel)).features;
+        parents = rbb ? pf.filter((p) => bboxOverlap(p.bbox, rbb)) : pf;
+      } catch { parents = []; }
+    }
+    const targets = feats.map((f, i) => {
+      let parent = '';
+      if (parents.length > 1) {   // only worth disambiguating when >1 parent overlaps
+        const c = centroidOf(f.geometry);
+        const hit = parents.find((p) => bboxOverlap(p.bbox, f.bbox) && pointInGeom(c[0], c[1], p.geometry));
+        if (hit) parent = hit.properties.name || '';
+      }
+      return { code: String(i), name: String(f.properties.name || ''), parent, geometry: f.geometry };
+    });
+    out.push({
+      id: `geo:ADM${L}`, level: L, group: 'geo', count: targets.length,
+      label: (LEVEL_NOUN[L] || ('level ' + L)) + ' · geoBoundaries',
+      exampleNames: targets.slice(0, 10).map((t) => t.name), targets,
+    });
+  }
+  return out;
 }
 
 function centroidOf(geom) {
@@ -1192,7 +1255,7 @@ function transform(session) {
       report.matched++;
     });
   } else {
-    const bt = boundaryTargets(session.dataset, session.joinLayer);
+    const bt = boundaryTargets(session, session.joinLayer);
     if (!bt) throw new Error('no joinable boundary layer in this dataset');
     session.joinLayer = bt.opt.id;
     report.joinLayer = bt.opt.id;
@@ -1268,6 +1331,7 @@ function applyResult(session, withDraft) {
     spec: session.spec,
     strategy: session.strategy,
     joinLayer: session.joinLayer || null,
+    boundaries: session.boundaryOptions || null,
     columns: session.columns,
     matchReport: report,
     fragment: frag.stanza,
@@ -1382,6 +1446,23 @@ router.post('/layers/ingest', async (req, res) => {
     }
   }
 
+  // Robust name→admin matching: besides the atlas's own boundary layers, offer
+  // geoBoundaries admin units for the atlas region at finer levels, so place
+  // names the atlas doesn't carry (villages / localities) still match. Targets
+  // are materialised to the import side-file so the sync placement path can read
+  // them without a refetch.
+  const inst = reg.getInstance(dataset);
+  let geoOpts = [];
+  try { geoOpts = await geoBoundaryOptions(inst && inst.region); }
+  catch (e) { console.warn('[atlas] geo boundary options failed:', e.message); }
+  if (geoOpts.length) {
+    const byOpt = {};
+    geoOpts.forEach((o) => { byOpt[o.id] = { label: o.label, level: o.level, targets: o.targets }; });
+    imports.writeGeoTargets(session.id, byOpt);
+  }
+  const allOptions = options.concat(geoOpts.map((o) => ({ id: o.id, label: o.label, group: 'geo', count: o.count, exampleNames: o.exampleNames })));
+  session.boundaryOptions = allOptions.map((o) => ({ id: o.id, label: o.label, group: o.group || '', count: o.count, exampleNames: (o.exampleNames || []).slice(0, 5) }));
+
   let inference = null;
   if (ai && !b.manual && geminiAllowed(clientIp(req))) {
     try {
@@ -1390,8 +1471,8 @@ router.post('/layers/ingest', async (req, res) => {
         'Column profiles (from code, trustworthy):', JSON.stringify(profiles),
         'First rows (sample):', JSON.stringify(rows.slice(0, 30)),
         'Atlas context: groups are userdata (default for contributed data), base, agri, eco. Use "userdata" unless the layer clearly belongs to one of the others. Map bounds ' + JSON.stringify(m.manifest.bounds) + '.',
-        'Joinable boundary layers (choose joinLayer from these ids when rows are admin units):',
-        JSON.stringify(options.map((o) => ({ id: o.id, label: o.label, count: o.count, exampleNames: o.exampleNames }))),
+        'Joinable boundary layers (choose joinLayer from these ids when rows are admin units; "geo:" ids are geoBoundaries admin levels for the atlas region — prefer them for village/locality names):',
+        JSON.stringify(allOptions.map((o) => ({ id: o.id, label: o.label, count: o.count, exampleNames: o.exampleNames }))),
         'Rules: strategy "coordinates" only when usable lat/lng columns exist; otherwise "adminJoin"',
         'with the boundary layer whose names match the place-name column. kind "choropleth" needs a',
         'numeric valueColumn; otherwise "markers". Pick popupTitleColumn = the place/name column.',
@@ -1406,18 +1487,19 @@ router.post('/layers/ingest', async (req, res) => {
   if (inference) {
     session.inference = { rowSubject: inference.rowSubject, notes: inference.notes || '' };
     session.strategy = inference.strategy;
-    session.joinLayer = inference.joinLayer || (options[0] && options[0].id);
+    session.joinLayer = inference.joinLayer || (allOptions[0] && allOptions[0].id);
     session.columns = (inference.columns || []).filter((c) => columns.includes(c.name));
     session.spec = inference.layer;
   } else {
     // heuristic pre-fill (also the no-Gemini path)
     const lat = profiles.find((p) => p.looksLikeLat || p.maybeLatIndia);
     const lng = profiles.find((p) => p.looksLikeLng || p.maybeLngIndia);
-    // best (name column, boundary layer) pair by join hit-rate across the options
-    let nameGuess = null, joinGuess = options[0] && options[0].id;
-    for (const opt of options.slice(0, 8)) {
+    // best (name column, boundary layer) pair by join hit-rate across all options
+    // (the atlas's own layers + geoBoundaries levels for the region)
+    let nameGuess = null, joinGuess = allOptions[0] && allOptions[0].id;
+    for (const opt of allOptions.slice(0, 8)) {
       try {
-        const bt = boundaryTargets(dataset, opt.id);
+        const bt = boundaryTargets(session, opt.id);
         const g = bestNameColumn(profiles, rows, bt.targets.map((t) => t.name), norm);
         if (g.column && (!nameGuess || g.rate > nameGuess.rate)) { nameGuess = g; joinGuess = opt.id; }
       } catch {}

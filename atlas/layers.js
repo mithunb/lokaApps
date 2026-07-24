@@ -439,13 +439,24 @@
     }
 
     $("#s-strategy").value = result.strategy || "adminJoin";
-    fillSelect("#s-join", (S.options.boundaries || []).map(function (b) {
-      return { value: b.id, label: b.label + " (" + b.count + (b.group === "base" ? ", boundary layer" : "") + ")" };
+    // boundary options come from ingest (atlas's own layers + geoBoundaries levels
+    // for the region); fall back to the options endpoint if absent
+    var bounds = (result.boundaries && result.boundaries.length) ? result.boundaries : (S.options.boundaries || []);
+    fillSelect("#s-join", bounds.map(function (b) {
+      var tag = b.group === "geo" ? ", geoBoundaries" : b.group === "base" ? ", boundary layer" : "";
+      return { value: b.id, label: b.label.replace(/ · geoBoundaries$/, "") + " (" + b.count + tag + ")" };
     }), result.joinLayer);
     fillSelect("#s-name", S.names, role(result, "placeName"), true);
     fillSelect("#s-parent", S.names, role(result, "adminParent"), true);
     fillSelect("#s-lat", S.names, role(result, "latitude"), true);
     fillSelect("#s-lng", S.names, role(result, "longitude"), true);
+    // collapse the controls when we confidently detected a placement; open them
+    // automatically only when the user still has to choose
+    var detected = result.strategy === "coordinates"
+      ? !!(role(result, "latitude") && role(result, "longitude"))
+      : !!role(result, "placeName");
+    $("#place-details").hidden = detected;
+    $("#ps-change").textContent = detected ? "Change" : "Done";
     syncPlaceVisibility();
     renderReport(result);
     goStep(3);
@@ -453,11 +464,33 @@
 
   function syncPlaceVisibility() {
     var strat = $("#s-strategy").value;
-    $("#w-join").hidden = strat !== "adminJoin";
-    $("#w-name").hidden = strat !== "adminJoin";
-    $("#w-parent").hidden = strat !== "adminJoin";
-    $("#w-lat").hidden = strat !== "coordinates";
-    $("#w-lng").hidden = strat !== "coordinates";
+    $("#pd-name-fields").hidden = strat !== "adminJoin";
+    $("#pd-coord-fields").hidden = strat !== "coordinates";
+    document.querySelectorAll("#pd-seg .pd-opt").forEach(function (b) {
+      b.classList.toggle("on", b.dataset.strat === strat);
+    });
+    updatePlaceSummary();
+  }
+
+  // the plain-language answer shown above the (collapsible) controls
+  function updatePlaceSummary() {
+    var strat = $("#s-strategy").value, line = $("#ps-line"), ico = $("#ps-ico");
+    if (!line) return;
+    if (strat === "coordinates") {
+      var la = $("#s-lat").value, ln = $("#s-lng").value;
+      ico.textContent = "🧭";
+      line.innerHTML = la && ln
+        ? "Placed by their coordinates — <b>" + esc(la) + "</b> and <b>" + esc(ln) + "</b>."
+        : '<span class="warn">Pick the latitude and longitude columns.</span>';
+    } else {
+      var nm = $("#s-name").value, jo = $("#s-join");
+      var joLabel = jo.options[jo.selectedIndex] ? jo.options[jo.selectedIndex].textContent.replace(/\s*\(.*\)$/, "") : "";
+      var pa = $("#s-parent").value;
+      ico.textContent = "📍";
+      line.innerHTML = nm
+        ? "Matched by name — <b>" + esc(nm) + "</b> → <b>" + esc(joLabel) + "</b>" + (pa ? ", within <b>" + esc(pa) + "</b>" : "") + "."
+        : '<span class="warn">Pick the column that holds the place names.</span>';
+    }
   }
 
   function outsideChoice() {
@@ -573,11 +606,25 @@
       .catch(function (e) { msg("#msg-place", esc(errMsg(e))); });
   }
 
-  ["#s-strategy", "#s-join", "#s-name", "#s-parent", "#s-lat", "#s-lng"].forEach(function (sel) {
+  ["#s-join", "#s-name", "#s-parent", "#s-lat", "#s-lng"].forEach(function (sel) {
     $(sel).addEventListener("change", function () {
       syncPlaceVisibility();
       scheduleApply(applyPlace, 100);
     });
+  });
+  // segmented "By place name / By coordinates" drives the hidden strategy select
+  document.querySelectorAll("#pd-seg .pd-opt").forEach(function (b) {
+    b.addEventListener("click", function () {
+      $("#s-strategy").value = b.dataset.strat;
+      syncPlaceVisibility();
+      scheduleApply(applyPlace, 100);
+    });
+  });
+  // "Change" reveals the controls; "Done" collapses back to the summary
+  $("#ps-change").addEventListener("click", function () {
+    var d = $("#place-details");
+    d.hidden = !d.hidden;
+    $("#ps-change").textContent = d.hidden ? "Change" : "Done";
   });
   document.querySelectorAll('input[name="outside"]').forEach(function (r) {
     r.addEventListener("change", function () { scheduleApply(applyPlace, 100); });

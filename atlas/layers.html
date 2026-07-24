@@ -174,6 +174,22 @@
     .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:.35rem .8rem; }
     @media (max-width:700px){ .grid2 { grid-template-columns:1fr; } }
     .infer-note { font-size:.88rem; color:var(--color-text-secondary); background:var(--color-moss-tint); border-radius:4px; padding:.6rem .75rem; margin:.4rem 0 .9rem; }
+
+    /* the single "where are these located?" answer + its confirm/change control */
+    .place-summary { display:flex; align-items:center; gap:.6rem; padding:.7rem .9rem; margin:.2rem 0 .6rem; border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface); max-width:44rem; }
+    .ps-ico { font-size:1.05rem; line-height:1; flex:0 0 auto; }
+    .ps-text { flex:1 1 auto; font-size:.92rem; color:var(--color-text-primary); }
+    .ps-text b { font-weight:600; }
+    .ps-text .warn { color:var(--color-rust-deep); }
+    .ps-change { flex:0 0 auto; font-size:.8rem; padding:.32rem .7rem; }
+    .place-details { max-width:44rem; margin:0 0 .8rem; padding:.85rem .9rem; border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-bg-alt); }
+    .pd-seg { display:inline-flex; gap:.25rem; padding:.2rem; margin-bottom:.8rem; background:var(--color-surface); border:1px solid var(--color-border); border-radius:999px; }
+    .pd-opt { font:inherit; font-size:.82rem; padding:.34rem .9rem; border:none; border-radius:999px; background:transparent; color:var(--color-text-secondary); cursor:pointer; }
+    .pd-opt.on { background:var(--color-moss); color:#fff; font-weight:600; }
+    .pd-fields { display:grid; grid-template-columns:1fr 1fr; gap:.35rem .8rem; }
+    .pd-fields label.f { grid-column:1 / -1; margin-bottom:.4rem; }
+    .pd-fields label.f:first-child, #pd-coord-fields label.f { grid-column:auto; }
+    @media (max-width:640px){ .pd-fields { grid-template-columns:1fr; } .pd-fields label.f { grid-column:auto; } }
     .stat { font-size:.88rem; color:var(--color-text-secondary); }
     .stat b { color:var(--color-text-primary); }
     .fix-row { display:flex; align-items:center; gap:.5rem; padding:.4rem 0; border-top:1px solid var(--color-divider); font-size:.88rem; flex-wrap:wrap; }
@@ -310,24 +326,39 @@
 
     <!-- ============ STEP 3 · PLACE ON MAP ============ -->
     <section class="panel step" id="step-3" hidden>
-      <h2>Place your rows on the map</h2>
+      <h2>Where are these located?</h2>
       <div class="infer-note" id="infer-note" hidden></div>
-      <p class="stat" id="stat-line"></p>
-      <div class="grid2" style="max-width:44rem">
-        <label class="f">Locate rows by
-          <select id="s-strategy">
-            <option value="adminJoin">Match place names to boundaries</option>
-            <option value="coordinates">Latitude / longitude columns</option>
-          </select>
-        </label>
-        <label class="f" id="w-join">Join to
-          <select id="s-join"></select>
-        </label>
-        <label class="f" id="w-name">Place-name column<select id="s-name"></select></label>
-        <label class="f" id="w-parent"><span>Parent column <span class="hint">(optional — district/state, disambiguates same-named places)</span></span><select id="s-parent"></select></label>
-        <label class="f" id="w-lat" hidden>Latitude column<select id="s-lat"></select></label>
-        <label class="f" id="w-lng" hidden>Longitude column<select id="s-lng"></select></label>
+
+      <!-- the auto-detected placement, in plain language, with a way to change it -->
+      <div class="place-summary" id="place-summary">
+        <span class="ps-ico" aria-hidden="true" id="ps-ico">📍</span>
+        <span class="ps-text" id="ps-line"></span>
+        <button class="btn secondary ps-change" id="ps-change" type="button">Change</button>
       </div>
+
+      <!-- hidden strategy state the segmented control drives (keeps apply logic simple) -->
+      <select id="s-strategy" hidden>
+        <option value="adminJoin">Match place names to boundaries</option>
+        <option value="coordinates">Latitude / longitude columns</option>
+      </select>
+
+      <div class="place-details" id="place-details" hidden>
+        <div class="pd-seg" id="pd-seg" role="radiogroup" aria-label="How to place the rows">
+          <button type="button" class="pd-opt" data-strat="adminJoin">By place name</button>
+          <button type="button" class="pd-opt" data-strat="coordinates">By latitude &amp; longitude</button>
+        </div>
+        <div class="pd-fields" id="pd-name-fields">
+          <label class="f">Place-name column<select id="s-name"></select></label>
+          <label class="f">Match against<select id="s-join"></select></label>
+          <label class="f">Parent column <span class="hint">(optional — district / state, tells apart same-named places)</span><select id="s-parent"></select></label>
+        </div>
+        <div class="pd-fields" id="pd-coord-fields" hidden>
+          <label class="f">Latitude column<select id="s-lat"></select></label>
+          <label class="f">Longitude column<select id="s-lng"></select></label>
+        </div>
+      </div>
+
+      <p class="stat" id="stat-line"></p>
       <div id="w-outside" hidden style="margin:.4rem 0 .8rem">
         <span class="hint" id="outside-note"></span>
         <div class="radio-row">
