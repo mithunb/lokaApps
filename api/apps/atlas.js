@@ -201,6 +201,105 @@ router.get('/geo/admin', async (req, res) => {
   }
 });
 
+/* ============ data-first: infer the region from the uploaded data ============ */
+
+const INFER_MIN_COVERAGE = 0.9;
+function unionBboxOf(units) {
+  let w = 180, s = 90, e = -180, n = -90;
+  for (const u of units) {
+    const b = u.bbox;
+    if (!b || b.length !== 4) continue;
+    if (b[0] < w) w = b[0]; if (b[1] < s) s = b[1]; if (b[2] > e) e = b[2]; if (b[3] > n) n = b[3];
+  }
+  return w <= e && s <= n ? [w, s, e, n] : null;
+}
+
+// points [[lng,lat]…] → admin units whose union covers them. Prefer the district
+// level (a fragmented finer set "steps up" to its district parent naturally);
+// fall back to level 1 only when district coverage is poor.
+async function inferRegionFromPoints(iso3, points, avail) {
+  const order = [2, 1, 3, 4].filter((l) => avail.includes(l));
+  let best = null;
+  for (const L of order) {
+    let doc; try { doc = await loadAdmin(iso3, L); } catch { continue; }
+    const feats = doc.features || [];
+    const counts = new Map();
+    let covered = 0;
+    for (const [x, y] of points) {
+      let hit = null;
+      for (const f of feats) {
+        const b = f.bbox;
+        if (b && b[0] <= x && x <= b[2] && b[1] <= y && y <= b[3] && pointInGeom(x, y, f.geometry)) { hit = f; break; }
+      }
+      if (hit) { covered++; counts.set(hit.properties.id, (counts.get(hit.properties.id) || 0) + 1); }
+    }
+    const coverage = points.length ? covered / points.length : 0;
+    const units = [...counts.keys()].map((id) => {
+      const f = feats.find((f) => f.properties.id === id);
+      return { id, name: f.properties.name, bbox: f.bbox, geometry: f.geometry };
+    });
+    const cand = { level: L, coverage, units, bbox: unionBboxOf(units) };
+    if (coverage >= INFER_MIN_COVERAGE && units.length) return cand;
+    if (!best || coverage > best.coverage) best = cand;
+  }
+  return best;
+}
+
+// names [str…] → best (level, units) by exact/dice hit-rate against admin names.
+async function inferRegionFromNames(iso3, names, avail) {
+  const order = [2, 3, 4, 1].filter((l) => avail.includes(l));
+  let best = null;
+  for (const L of order) {
+    let doc; try { doc = await loadAdmin(iso3, L); } catch { continue; }
+    const feats = doc.features || [];
+    const idx = new Map();
+    for (const f of feats) { const k = norm(f.properties.name); if (!idx.has(k)) idx.set(k, f); }
+    const hitU = new Map(); let hits = 0;
+    for (const nm of names) {
+      let f = idx.get(norm(nm));
+      if (!f) { let bs = 0, bf = null; for (const g of feats) { const sc = dice(nm, g.properties.name); if (sc > bs) { bs = sc; bf = g; } } if (bs >= AUTO_ACCEPT) f = bf; }
+      if (f) { hits++; hitU.set(f.properties.id, 1); }
+    }
+    const rate = names.length ? hits / names.length : 0;
+    const units = [...hitU.keys()].map((id) => {
+      const f = feats.find((f) => f.properties.id === id);
+      return { id, name: f.properties.name, bbox: f.bbox, geometry: f.geometry };
+    });
+    const cand = { level: L, coverage: rate, units, bbox: unionBboxOf(units) };
+    if (!best || rate > best.coverage) best = cand;
+  }
+  return best;
+}
+
+router.post('/geo/infer', async (req, res) => {
+  const b = req.body || {};
+  const iso3 = String(b.iso3 || '').toUpperCase();
+  if (!/^[A-Z]{3}$/.test(iso3)) return res.status(400).json({ error: 'iso3 required' });
+  let avail;
+  try { avail = JSON.parse(fs.readFileSync(path.join(GEOCACHE_DIR, `${iso3}-levels.json`), 'utf8')).levels; }
+  catch { avail = [1, 2, 3, 4]; }
+  const points = Array.isArray(b.points) ? b.points
+    .map((p) => [Number(p && p[0]), Number(p && p[1])])
+    .filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]) && Math.abs(p[1]) <= 90 && Math.abs(p[0]) <= 180)
+    .slice(0, 500) : [];
+  const names = Array.isArray(b.names)
+    ? b.names.map((n) => String(n == null ? '' : n).trim()).filter(Boolean).slice(0, 500) : [];
+  try {
+    let r = null, mode = null;
+    if (points.length) { r = await inferRegionFromPoints(iso3, points, avail); mode = 'points'; }
+    else if (names.length) { r = await inferRegionFromNames(iso3, names, avail); mode = 'names'; }
+    else return res.status(400).json({ error: 'points or names required' });
+    if (!r || !r.units.length) return res.json({ iso3, mode, level: null, units: [], bbox: null, coverage: 0 });
+    // geometry rides along for the confirmation map, but a huge covering set
+    // (data spread across dozens of units) would bloat the response — drop it then
+    const units = r.units.length <= 60 ? r.units : r.units.map(({ geometry, ...u }) => u);
+    res.json({ iso3, mode, level: r.level, units, bbox: r.bbox, coverage: Number(r.coverage.toFixed(3)) });
+  } catch (e) {
+    console.warn('[atlas] geo/infer failed:', e.message);
+    res.status(502).json({ error: 'inference failed: ' + e.message });
+  }
+});
+
 /* ================= slug ================= */
 
 router.get('/slug-check', (req, res) => {
@@ -940,7 +1039,7 @@ router.get('/datasets/:slug/:file', (req, res) => {
 import { GoogleGenAI, Type } from '@google/genai';
 import { getFlashModel, getFlashLiteModel } from '../lib/models.js';
 import { profileColumns, bestNameColumn } from '../lib/tabular.js';
-import { norm, joinByName, AUTO_ACCEPT } from '../lib/matching.js';
+import { norm, dice, joinByName, AUTO_ACCEPT } from '../lib/matching.js';
 import { PALETTES, MARKER_COLORS, buildFragment, sanitizeFeatures } from '../lib/fragment.js';
 import * as imports from '../lib/atlas/imports.js';
 import * as enrich from '../lib/atlas/enrich.js';

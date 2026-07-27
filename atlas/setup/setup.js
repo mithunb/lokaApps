@@ -73,11 +73,180 @@
   }
   function startWizard() {
     S.mode = "wizard";
+    S.geoInferred = false;   // place-first: the drill step chooses the region
+    $("#data-first").hidden = true;
     $(".stepper").hidden = false;
     renderMyAtlases(); // dashboard steps aside while building
     show(1);
   }
   $("#start-new").onclick = startWizard;
+
+  /* ================= data-first: upload → infer region → wizard ================= */
+  var dfMap = null, dfReady = false;
+  function dfmsg(text, cls) { var el = $("#df-status"); if (!el) return; el.textContent = text || ""; el.className = text ? ("msg " + (cls || "")) : ""; }
+
+  function startDataFirst() {
+    S.mode = "wizard";
+    S.dataFirst = { canonical: null, file: null, filename: "", iso3: "", inf: null, locators: null };
+    S.geoInferred = false;
+    $("#my-atlases").hidden = true;
+    $(".stepper").hidden = true;
+    for (var i = 1; i <= 5; i++) $("#step-" + i).hidden = true;
+    $("#df-result").hidden = true;
+    dfmsg("");
+    $("#data-first").hidden = false;
+    populateDfCountries();
+    window.scrollTo({ top: 0 });
+  }
+  $("#start-data").onclick = startDataFirst;
+  var sd1 = $("#start-data-1"); if (sd1) sd1.onclick = startDataFirst;
+  $("#df-back").onclick = function () {
+    $("#data-first").hidden = true;
+    if (((S.session && S.session.instances) || []).length) showHome(); else startWizard();
+  };
+
+  function populateDfCountries() {
+    var sel = $("#df-country");
+    if (sel.options.length > 1) return;
+    fetch("./countries.json").then(function (r) { return r.json(); }).then(function (list) {
+      list.forEach(function (c) { var o = document.createElement("option"); o.value = c.iso3; o.textContent = c.name; sel.appendChild(o); });
+    });
+  }
+
+  (function wireDropZone() {
+    var drop = $("#df-drop"), file = $("#df-file");
+    if (!drop) return;
+    drop.onclick = function () { file.click(); };
+    drop.onkeydown = function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); file.click(); } };
+    drop.ondragover = function (e) { e.preventDefault(); drop.style.borderColor = "var(--color-moss)"; };
+    drop.ondragleave = function () { drop.style.borderColor = "var(--color-border)"; };
+    drop.ondrop = function (e) { e.preventDefault(); drop.style.borderColor = "var(--color-border)"; if (e.dataTransfer.files && e.dataTransfer.files[0]) handleDfFile(e.dataTransfer.files[0]); };
+    file.onchange = function () { if (this.files[0]) handleDfFile(this.files[0]); };
+    $("#df-country").addEventListener("change", function () { S.dataFirst.iso3 = this.value; if (S.dataFirst.canonical) runDfInfer(); });
+    $("#df-redo").onclick = function () { $("#df-result").hidden = true; S.dataFirst.canonical = null; dfmsg("Drop another file to try again.", "ok"); };
+    $("#df-use").onclick = dfUseRegion;
+  })();
+
+  function resolveCanonical(out, cb) {
+    if (out.kind === "unsupported") return cb(new Error(out.message || "That file type isn't supported."));
+    if (out.kind === "sheets") return out.pick(out.sheets[0].name, function (e, o) { e ? cb(e) : resolveCanonical(o, cb); });
+    if (out.kind === "classes") return out.pick(out.classes[0].cls, function (e, o) { e ? cb(e) : resolveCanonical(o, cb); });
+    if (out.canonical) return cb(null, out.canonical);
+    cb(new Error("Couldn't read that file."));
+  }
+
+  function handleDfFile(file) {
+    dfmsg("Reading " + (file.name || "file") + "…", "ok");
+    $("#df-result").hidden = true;
+    LokaIngest.fromFile(file, function (err, out) {
+      if (err) { dfmsg(errMsg(err), "err"); return; }
+      resolveCanonical(out, function (e, canonical) {
+        if (e) { dfmsg(errMsg(e), "err"); return; }
+        S.dataFirst.canonical = canonical;
+        S.dataFirst.file = file;
+        S.dataFirst.filename = file.name || "";
+        if (!S.dataFirst.iso3) { dfmsg("Read " + canonical.rows.length.toLocaleString() + " rows — now choose the country above.", "ok"); return; }
+        dfmsg("");
+        runDfInfer();
+      });
+    });
+  }
+
+  function dfCentroid(geom) {
+    var w = 180, s = 90, e = -180, n = -90;
+    (function walk(c) { if (typeof c[0] === "number") { if (c[0] < w) w = c[0]; if (c[0] > e) e = c[0]; if (c[1] < s) s = c[1]; if (c[1] > n) n = c[1]; } else c.forEach(walk); })(geom.coordinates || []);
+    return [(w + e) / 2, (s + n) / 2];
+  }
+  var DF_PLACE_RE = /(name|place|village|town|city|district|ward|block|panchayat|taluk|tehsil|mandal|location|locality|area|region|state|constituency)/i;
+  function deriveLocators(canon) {
+    var schema = canon.schema, rows = canon.rows;
+    if (canon.geoms && canon.geoms.length) {
+      var pts = [], idx = canon.geomIdx;
+      rows.forEach(function (r, i) { var gi = idx ? idx[i] : i; var g = (gi != null && gi >= 0) ? canon.geoms[gi] : null; if (g) { var c = dfCentroid(g); if (isFinite(c[0]) && isFinite(c[1])) pts.push(c); } });
+      if (pts.length) return { points: pts.slice(0, 500) };
+    }
+    var num = schema.filter(function (c) { return c.type === "number"; });
+    var latc = num.find(function (c) { return /lat/i.test(c.name); });
+    var lngc = num.find(function (c) { return /(lon|lng)/i.test(c.name); });
+    if (latc && lngc) {
+      var p2 = [];
+      rows.forEach(function (r) { var la = Number(r[latc.name]), ln = Number(r[lngc.name]); if (isFinite(la) && isFinite(ln) && Math.abs(la) <= 90 && Math.abs(ln) <= 180) p2.push([ln, la]); });
+      if (p2.length) return { points: p2.slice(0, 500) };
+    }
+    var strs = schema.filter(function (c) { return c.type === "string" && !c.ignored; });
+    var cand = strs.find(function (c) { return DF_PLACE_RE.test(c.name); }) || strs[0];
+    if (cand) {
+      var seen = {}, names = [];
+      rows.forEach(function (r) { var v = String(r[cand.name] == null ? "" : r[cand.name]).trim(); if (v && v.length <= 60 && !seen[v]) { seen[v] = 1; names.push(v); } });
+      if (names.length) return { names: names.slice(0, 500), nameCol: cand.name };
+    }
+    return {};
+  }
+
+  function runDfInfer() {
+    var iso3 = S.dataFirst.iso3, canon = S.dataFirst.canonical;
+    if (!iso3 || !canon) return;
+    var loc = deriveLocators(canon);
+    if (!loc.points && !loc.names) { dfmsg("Couldn't find locations in this file — it needs coordinates or a place-name column.", "err"); return; }
+    S.dataFirst.locators = loc;
+    dfmsg("Finding your region…", "ok");
+    var body = { iso3: iso3 };
+    if (loc.points) body.points = loc.points; else body.names = loc.names;
+    api("geo/infer", { method: "POST", body: body }).then(function (r) {
+      if (!r.units || !r.units.length) { dfmsg("Couldn't match your data to admin areas there — pick the region manually with “Build a new atlas”.", "err"); return; }
+      S.dataFirst.inf = r;
+      dfmsg("");
+      renderDfResult(r, loc);
+    }).catch(function (e) { dfmsg(errMsg(e), "err"); });
+  }
+
+  function renderDfResult(r, loc) {
+    $("#df-result").hidden = false;
+    var noun = LEVEL_NOUN[r.level] || "areas";
+    var names = r.units.map(function (u) { return u.name; });
+    var head = names.length === 1
+      ? "<b>" + esc(names[0]) + "</b> (" + noun.replace(/s$/, "") + ")"
+      : "<b>" + names.length + "</b> " + noun + " (" + esc(names.slice(0, 3).join(", ")) + (names.length > 3 ? " +" + (names.length - 3) : "") + ")";
+    var pct = Math.round(r.coverage * 100);
+    var detail = loc.points ? (pct + "% of " + loc.points.length + " points inside") : (pct + "% of " + loc.names.length + " names matched");
+    $("#df-line").innerHTML = "📍 Your data is in " + head + " — " + detail + ".";
+    drawDfMap(r);
+  }
+
+  function drawDfMap(r) {
+    var fc = { type: "FeatureCollection", features: r.units.filter(function (u) { return u.geometry; }).map(function (u) { return { type: "Feature", properties: { name: u.name }, geometry: u.geometry }; }) };
+    function apply() { var src = dfMap.getSource("inf"); if (src) src.setData(fc); if (r.bbox) dfMap.fitBounds([[r.bbox[0], r.bbox[1]], [r.bbox[2], r.bbox[3]]], { padding: 28, duration: 0 }); }
+    if (!dfMap) {
+      dfMap = new maplibregl.Map({ container: "df-map", style: { version: 8, sources: { carto: { type: "raster", tiles: ["https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png", "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"], tileSize: 256 } }, layers: [{ id: "carto", type: "raster", source: "carto" }] }, center: [20, 10], zoom: 1, attributionControl: false });
+      dfMap.on("load", function () {
+        dfReady = true;
+        dfMap.addSource("inf", { type: "geojson", data: fc });
+        dfMap.addLayer({ id: "inf-fill", type: "fill", source: "inf", paint: { "fill-color": "#4A5A33", "fill-opacity": 0.25 } });
+        dfMap.addLayer({ id: "inf-line", type: "line", source: "inf", paint: { "line-color": "#4A5A33", "line-width": 1.5 } });
+        apply();
+      });
+    } else if (dfReady) { apply(); }
+  }
+
+  function dfUseRegion() {
+    var r = S.dataFirst.inf; if (!r) return;
+    S.geo.iso3 = r.iso3; S.geo.viewLevel = r.level; S.geo.level = r.level; S.geo.crumbs = []; S.geo.selected = {};
+    r.units.forEach(function (u) { S.geo.selected[u.id] = { name: u.name, bbox: u.bbox }; });
+    S.geo.features = r.units.map(function (u) { return { properties: { id: u.id, name: u.name }, geometry: u.geometry, bbox: u.bbox }; });
+    S.geoInferred = true;
+    // region-size gate (normally enforced on the geography step we're skipping)
+    var eff = effectiveRegion(), state = eff ? regionSizeState(eff) : "free";
+    if (state === "blocked") { dfmsg("That data covers too large an area for one atlas — pick a smaller region with “Build a new atlas”.", "err"); S.geoInferred = false; return; }
+    var t = $("#f-title");
+    if (!t.value.trim() && S.dataFirst.filename) {
+      t.value = S.dataFirst.filename.replace(/\.[a-z0-9]+$/i, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim().replace(/\b\w/g, function (c) { return c.toUpperCase(); }).slice(0, 80);
+      if (!$("#f-slug").value.trim()) $("#f-slug").value = slugify(t.value);
+    }
+    $("#data-first").hidden = true;
+    $(".stepper").hidden = false;
+    renderMyAtlases();
+    show(1);
+  }
 
   /* ---- browser-local autosave: survives a reload or the sign-in link opening a new tab.
      Separate from server drafts (which need an account); this is best-effort resilience. ---- */
@@ -166,6 +335,8 @@
     if (!$("#f-title").value.trim()) return msg(1, "Give your atlas a title first.");
     var slug = $("#f-slug").value.trim();
     if (!slug) { $("#f-slug").value = slugify($("#f-title").value); }
+    // data-first: the region was inferred from the upload, so skip the drill step
+    if (S.geoInferred) { show(3); loadCatalog(); return; }
     show(2);
     initCountries();
   };
@@ -636,7 +807,7 @@
     updateCatCounts();
   }
 
-  $("#back-3").onclick = function () { show(2); };
+  $("#back-3").onclick = function () { show(S.geoInferred ? 1 : 2); };
   $("#next-3").onclick = function () {
     msg(3, "");
     var chosen = Object.keys(S.catalog.chosen);
@@ -819,6 +990,38 @@
     $("#next-4").hidden = false;
     $("#next-4").disabled = false; // build complete — publishing unlocks
     $("#back-4").hidden = false;
+    // data-first: the dataset folder now exists, so add the upload as the first layer
+    if (S.geoInferred && S.dataFirst && S.dataFirst.canonical) autoAddData();
+  }
+
+  // chain ingest → commit against the freshly-built dataset, authed with the
+  // edit token. Failure is non-fatal — the atlas is built, we just point the
+  // user at the data bench to add it by hand.
+  function autoAddData() {
+    var canon = S.dataFirst.canonical;
+    if (!canon || !S.build || !S.build.slug) return;
+    var cols = canon.schema.filter(function (c) { return !c.ignored; });
+    var names = cols.map(function (c) { return c.name; });
+    var rows = canon.rows.map(function (r) { var o = {}; names.forEach(function (n) { o[n] = r[n]; }); return o; });
+    var body = {
+      dataset: S.build.slug, filename: S.dataFirst.filename || "data",
+      schema: cols.map(function (c) { return { name: c.name, type: c.type }; }),
+      rows: rows, meta: canon.meta,
+    };
+    if (canon.geoms && canon.geoms.length) { body.geoms = canon.geoms; body.geomIdx = canon.geomIdx; }
+    var H = authHeaders();
+    $("#prog-msg").textContent = "Adding your data as the first layer…";
+    api("layers/ingest", { method: "POST", headers: H, body: body })
+      .then(function (r) { return api("layers/commit", { method: "POST", headers: H, body: { importId: r.importId } }); })
+      .then(function () {
+        S.dataFirst.canonical = null;
+        try { $("#preview-frame").src = previewUrl(); } catch (e) {}
+        $("#prog-msg").textContent = "Built with your data added as the first layer. Explore the preview, then publish.";
+      })
+      .catch(function (e) {
+        msg(4, "Your atlas is built. Add your data from the data bench — " +
+          '<a href="../layers.html?dataset=' + encodeURIComponent(S.build.slug) + '">open it →</a> (' + esc(errMsg(e)) + ")", "ok");
+      });
   }
 
   $("#back-4").onclick = function () { show(3); };
