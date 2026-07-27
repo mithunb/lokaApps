@@ -65,6 +65,14 @@ export function getFlashLiteModel() {
   return flashModel + '-lite';
 }
 
+// Text-embedding model for the viewer's semantic search. Defaults to Google's
+// multilingual embedding model (100+ languages) so search works across languages
+// as atlases grow beyond English. Env-overridable; the flash resolver never
+// returns an embedding model, so this stays a fixed default rather than a probe.
+export function getEmbedModel() {
+  return process.env.GEMINI_EMBED_MODEL || 'gemini-embedding-001';
+}
+
 export function getResolverStatus() {
   return { flashModel, lastRefreshedAt, overridden: Boolean(process.env.GEMINI_MODEL) };
 }

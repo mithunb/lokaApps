@@ -1037,7 +1037,7 @@ router.get('/datasets/:slug/:file', (req, res) => {
    to the manifest.local.json overlay. Gemini never writes manifest JSON.
 ================================================================== */
 import { GoogleGenAI, Type } from '@google/genai';
-import { getFlashModel, getFlashLiteModel } from '../lib/models.js';
+import { getFlashModel, getFlashLiteModel, getEmbedModel } from '../lib/models.js';
 import { profileColumns, bestNameColumn } from '../lib/tabular.js';
 import { norm, dice, joinByName, AUTO_ACCEPT } from '../lib/matching.js';
 import { PALETTES, MARKER_COLORS, buildFragment, sanitizeFeatures } from '../lib/fragment.js';
@@ -1747,6 +1747,88 @@ router.post('/layers/refine', async (req, res) => {
   }
 });
 
+/* ---------- semantic search: embed a layer's tag vocabulary at commit, ----------
+   ---------- match a viewer query against it at request time --------------------- */
+const SEARCH_MAX_TERMS = 300;
+const SEARCH_MIN_COSINE = 0.62;
+// gemini-embedding-001 defaults to 3072 dims; 768 (a supported MRL size) keeps
+// the side-file small. Query + vocab share this, so cosine stays comparable.
+const EMBED_DIM = 768;
+
+async function embedTexts(texts) {
+  if (!ai || !texts.length) return null;
+  try {
+    const r = await ai.models.embedContent({ model: getEmbedModel(), contents: texts, config: { outputDimensionality: EMBED_DIM } });
+    const embs = r && (r.embeddings || r.embedding);
+    if (!embs) return null;
+    const arr = Array.isArray(embs) ? embs : [embs];
+    return arr.map((e) => (e && (e.values || e))).filter((v) => Array.isArray(v));
+  } catch (e) { console.warn('[atlas] embed failed:', e.message); return null; }
+}
+function cosine(a, b) {
+  let dot = 0, na = 0, nb = 0;
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+  return na && nb ? dot / (Math.sqrt(na) * Math.sqrt(nb)) : 0;
+}
+function layerVocabTerms(stanza, features) {
+  const fields = [];
+  if (stanza.markerBy) fields.push(stanza.markerBy);
+  ((stanza.popup && stanza.popup.fields) || []).forEach((f) => { if (f.type === 'tags') fields.push(f.property); });
+  if (!fields.length) return [];
+  const seen = new Set();
+  for (const f of features) {
+    const p = f.properties || {};
+    for (const fld of fields) {
+      String(p[fld] == null ? '' : p[fld]).split(/[;,]/).forEach((tok) => {
+        const t = tok.trim().toLowerCase();
+        if (t && t.length <= 40) seen.add(t);
+      });
+    }
+    if (seen.size >= SEARCH_MAX_TERMS) break;
+  }
+  return [...seen].slice(0, SEARCH_MAX_TERMS);
+}
+// fire-and-forget after commit: embed the layer's tags so the viewer can search
+// them semantically. No embeddings available → nothing stored, keyword search still works.
+async function embedAndStoreVocab(dataset, layerId, stanza, features) {
+  const terms = layerVocabTerms(stanza, features);
+  if (!terms.length) return;
+  const vecs = await embedTexts(terms);
+  if (!vecs || vecs.length !== terms.length) return;
+  imports.writeSearchIndex(dataset, layerId, {
+    model: getEmbedModel(), dim: vecs[0].length,
+    terms: terms.map((t, i) => ({ t, v: vecs[i] })),
+  });
+}
+
+router.post('/layers/search', async (req, res) => {
+  const b = req.body || {};
+  const dataset = String(b.dataset || '');
+  const q = String(b.q || '').trim().slice(0, 200);
+  if (!dataset || !q) return res.json({ tags: [] });
+  const idx = imports.readSearchIndex(dataset);
+  if (!idx || !ai || !geminiAllowed(clientIp(req))) return res.json({ tags: [] });
+  try {
+    const qv = await embedTexts([q]);
+    if (!qv || !qv[0]) return res.json({ tags: [] });
+    const seen = new Set(), scored = [];
+    for (const layerId in idx) {
+      for (const term of (idx[layerId].terms || [])) {
+        if (seen.has(term.t)) continue;
+        seen.add(term.t);
+        scored.push({ term: term.t, score: cosine(qv[0], term.v) });
+      }
+    }
+    scored.sort((a, b) => b.score - a.score);
+    const tags = scored.filter((s) => s.score >= SEARCH_MIN_COSINE).slice(0, 8).map((s) => s.term);
+    res.json({ tags });
+  } catch (e) {
+    console.warn('[atlas] search failed:', e.message);
+    res.json({ tags: [] });
+  }
+});
+
 router.post('/layers/commit', (req, res) => {
   const b = req.body || {};
   const session = imports.getImport(String(b.importId || ''));
@@ -1773,6 +1855,8 @@ router.post('/layers/commit', (req, res) => {
       { type: 'FeatureCollection', features });
     imports.discardImport(session.id);
     res.json({ ok: true, layerId: out.layerId, dataset: session.dataset });
+    // embed this layer's tag vocabulary for semantic search (non-blocking)
+    embedAndStoreVocab(session.dataset, out.layerId, frag.stanza, features).catch(() => {});
   } catch (e) {
     res.status(400).json({ error: e.message });
   }

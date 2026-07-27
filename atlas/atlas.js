@@ -704,9 +704,9 @@
       wrap.appendChild(pin);
       if (L.label_text) wrap.appendChild(el("span", "atlas-mlabel", esc(f.properties[L.label_text.property])));
       wrap.addEventListener("click", function (e) { e.stopPropagation(); openPopup(L, f, f.geometry.coordinates); });
-      markersByLayer[L.id].push(
-        new maplibregl.Marker({ element: wrap, anchor: "bottom" }).setLngLat(f.geometry.coordinates).addTo(map)
-      );
+      var mk = new maplibregl.Marker({ element: wrap, anchor: "bottom" }).setLngLat(f.geometry.coordinates).addTo(map);
+      // keep the feature alongside its marker so search can gate it by content
+      markersByLayer[L.id].push({ mk: mk, f: f });
       pts.push(f.geometry.coordinates);
     });
     L._pts = pts;
@@ -731,7 +731,7 @@
   function applyMarkerVisibility(L) {
     var shown = L._visible !== false;
     var clustered = L.cluster && L._clusterMarker && map.getZoom() < L.cluster.belowZoom;
-    (markersByLayer[L.id] || []).forEach(function (mk) { mk.getElement().style.display = (shown && !clustered) ? "" : "none"; });
+    (markersByLayer[L.id] || []).forEach(function (e) { e.mk.getElement().style.display = (shown && !clustered && !e.hidden) ? "" : "none"; });
     if (L._clusterMarker) L._clusterMarker.getElement().style.display = (shown && clustered) ? "" : "none";
   }
 
@@ -739,6 +739,81 @@
     var b = new maplibregl.LngLatBounds(pts[0], pts[0]);
     pts.forEach(function (p) { b.extend(p); });
     map.fitBounds(b, { padding: 110, maxZoom: 13, duration: 600 });
+  }
+
+  /* ==================================================================
+     SEARCH — a hybrid box over marker layers: a query matches a feature
+     by plain text (title / tags), and on public atlases the server expands
+     it semantically (query → nearest vocabulary tags) so "temples" can find
+     features tagged "heritage". Keyword works with no AI; semantic adds to it.
+  ================================================================== */
+  var searchTags = [], searchSeq = 0, searchTimer = null;
+
+  function tagFieldsOf(L) {
+    var out = ((L.popup && L.popup.fields) || []).filter(function (f) { return f.type === "tags"; }).map(function (f) { return f.property; });
+    if (L.markerBy && out.indexOf(L.markerBy) < 0) out.push(L.markerBy);
+    return out;
+  }
+  function splitTags(v) {
+    if (v == null) return [];
+    return String(v).split(/[;,]/).map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+  }
+  function featureTagSet(L, f) { var s = {}; tagFieldsOf(L).forEach(function (p) { splitTags(f.properties[p]).forEach(function (t) { s[t] = 1; }); }); return s; }
+  function featureText(L, f) {
+    var parts = [];
+    if (L.popup && L.popup.title) parts.push(f.properties[L.popup.title]);
+    tagFieldsOf(L).forEach(function (p) { parts.push(f.properties[p]); });
+    return parts.filter(Boolean).join(" ").toLowerCase();
+  }
+  function manifestSearchable() { return (MANIFEST.layers || []).filter(function (L) { return L.type === "marker" && tagFieldsOf(L).length; }); }
+  function searchableLayers() { return (MANIFEST.layers || []).filter(function (L) { return markersByLayer[L.id] && markersByLayer[L.id].length; }); }
+  function layerVocab() {
+    var v = {};
+    searchableLayers().forEach(function (L) { (markersByLayer[L.id] || []).forEach(function (e) { for (var t in featureTagSet(L, e.f)) v[t] = 1; }); });
+    return Object.keys(v);
+  }
+  function updateSearchCount(shown, total) {
+    var c = $("#atlas-search-count"); if (!c) return;
+    if (shown == null) { c.hidden = true; c.textContent = ""; }
+    else { c.hidden = false; c.textContent = shown ? (shown + " of " + total + " shown") : "nothing matched — try another word"; }
+  }
+  function applySearch(q, tags) {
+    var tagSet = {}; tags.forEach(function (t) { tagSet[String(t).toLowerCase()] = 1; });
+    var shown = 0, total = 0;
+    searchableLayers().forEach(function (L) {
+      (markersByLayer[L.id] || []).forEach(function (e) {
+        total++;
+        var match = q && featureText(L, e.f).indexOf(q) >= 0;
+        if (!match) { var fs = featureTagSet(L, e.f); for (var t in fs) { if (tagSet[t]) { match = true; break; } } }
+        e.hidden = !match; if (match) shown++;
+      });
+      applyMarkerVisibility(L);
+    });
+    updateSearchCount(shown, total);
+  }
+  function clearSearch() {
+    searchTags = [];
+    searchableLayers().forEach(function (L) { (markersByLayer[L.id] || []).forEach(function (e) { e.hidden = false; }); applyMarkerVisibility(L); });
+    updateSearchCount(null);
+  }
+  function runSearch(raw) {
+    var q = (raw || "").trim().toLowerCase();
+    if (!q) { clearSearch(); return; }
+    var kw = layerVocab().filter(function (t) { return t.indexOf(q) >= 0 || q.indexOf(t) >= 0; });
+    applySearch(q, kw.concat(searchTags));   // instant keyword pass
+    var seq = ++searchSeq;                    // semantic expansion (public atlases with embeddings)
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () {
+      fetch("./api/layers/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dataset: DATASET, q: q }) })
+        .then(function (r) { return r.json(); })
+        .then(function (r) {
+          if (seq !== searchSeq) return;      // a newer keystroke won
+          searchTags = (r && r.tags) || [];
+          if (!searchTags.length) return;
+          var kw2 = layerVocab().filter(function (t) { return t.indexOf(q) >= 0 || q.indexOf(t) >= 0; });
+          applySearch(q, kw2.concat(searchTags));
+        }).catch(function () {});
+    }, 250);
   }
 
   /* ==================================================================
@@ -808,6 +883,20 @@
       bm.appendChild(btn);
     });
     panel.appendChild(bm);
+
+    // search box — over marker layers that carry tags (keyword now, semantic on
+    // public atlases with embeddings). Hidden when there's nothing to search.
+    if (manifestSearchable().length) {
+      var sc = el("div", "ctl-search");
+      var si = el("input", "ctl-search-input");
+      si.type = "search"; si.placeholder = "Search the map…"; si.setAttribute("aria-label", "Search the map");
+      si.addEventListener("input", function () { runSearch(si.value); });
+      si.addEventListener("search", function () { runSearch(si.value); });
+      sc.appendChild(si);
+      var cnt = el("div", "ctl-search-count"); cnt.id = "atlas-search-count"; cnt.hidden = true;
+      sc.appendChild(cnt);
+      panel.appendChild(sc);
+    }
 
     // groups + layers — declared groups first, then a synthesized group for any
     // layer whose group id isn't declared (e.g. contributed "userdata" layers),

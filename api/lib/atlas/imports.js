@@ -97,6 +97,26 @@ export function writeCatSet(datasetId, categories) {
   fs.renameSync(tmp, p);
 }
 
+/* Semantic-search vocabulary: embedded tag/category terms per contributed layer,
+   for the viewer's search box. Stored next to the dataset, gitignored, keyed by
+   layer id so re-committing a layer refreshes just its terms. */
+export function readSearchIndex(datasetId) {
+  const dir = datasetDir(datasetId);
+  if (!dir) return null;
+  try { return JSON.parse(fs.readFileSync(path.join(dir, 'search.local.json'), 'utf8')); }
+  catch { return null; }
+}
+export function writeSearchIndex(datasetId, layerId, entry) {
+  const dir = datasetDir(datasetId);
+  if (!dir) return;
+  const p = path.join(dir, 'search.local.json');
+  const idx = readSearchIndex(datasetId) || {};
+  idx[layerId] = entry;
+  const tmp = p + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(idx));
+  fs.renameSync(tmp, p);
+}
+
 /* Geometry rides in a side file so the session JSON stays small — the
    spatial track can carry ~150k vertices per import. */
 export function writeGeoms(importId, geoms) {
