@@ -93,6 +93,7 @@
   }
   function startWizard() {
     S.mode = "wizard";
+    S.dataFirst = null; S.userFiles = []; S._lostFiles = []; S._dfDraft = null;
     renderMyAtlases(); // dashboard steps aside while building
     show(1);           // show() hides the fork + data-first, restores the stepper
   }
@@ -124,7 +125,8 @@
 
   function startDataFirst() {
     S.mode = "wizard";
-    S.dataFirst = { canonical: null, file: null, filename: "", iso3: "", inf: null, locators: null, pending: false };
+    S.dataFirst = { canonical: null, file: null, filename: "", iso3: "", inf: null, locators: null };
+    S.userFiles = []; S._lostFiles = []; S._dfDraft = null;
     S._dfGeoApplied = false;
     $("#my-atlases").hidden = true;
     $(".stepper").hidden = true;
@@ -302,9 +304,9 @@
     }] : [];
     var eff = effectiveRegion(), state = eff ? regionSizeState(eff) : "free";
     if (state === "blocked") { dfmsg("That data covers too large an area for one atlas — trim the file, or pick a smaller region via “Start from a place”.", "err"); return; }
-    S.dataFirst.pending = true;   // after the build, add the upload as the first layer
+    // this upload becomes the atlas's first data layer after the build
+    addUserFile(S.dataFirst.filename || "data", S.dataFirst.canonical);
     S._dfGeoApplied = false;      // the geography step shows this selection on first entry
-    cacheDataFirstDraft();        // the upload survives a reload via the draft
     var t = $("#f-title");
     if (!t.value.trim() && S.dataFirst.filename) {
       t.value = S.dataFirst.filename.replace(/\.[a-z0-9]+$/i, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim().replace(/\b\w/g, function (c) { return c.toUpperCase(); }).slice(0, 80);
@@ -838,29 +840,34 @@
       box.onclick = function () { location.href = "../layers.html?dataset=" + encodeURIComponent(S.editSlug); };
       return;
     }
-    var df = S.dataFirst;
-    if (df && df.pending && df.canonical) {
+    var list = userFiles();
+    var lost = S._lostFiles || [];
+    if (list.length) {
       box.classList.add("attached");
-      box.innerHTML = '<span class="od-ico" aria-hidden="true">📄</span><div class="od-body"><b>' +
-        esc(df.filename || "Your data") + "</b>" +
-        '<span class="hint">' + df.canonical.rows.length.toLocaleString() +
-        " rows ready — added as the first layer right after the build. Pick any extra layers below.</span>" +
-        '<button type="button" class="od-act" id="od-replace">Replace the file</button></div>';
-      var rep = $("#od-replace");
-      if (rep) rep.onclick = function (e) { e.stopPropagation(); $("#od-file").click(); };
-      return;
-    }
-    if (df && df.lost) {
-      box.classList.add("clickable");
-      box.innerHTML = '<span class="od-ico" aria-hidden="true">＋</span><div class="od-body"><b>Re-attach your data</b>' +
-        '<span class="hint">' + esc(df.filename || "Your file") +
-        " was too large to ride along with the draft — attach it again and it becomes the first layer after the build.</span></div>";
-      box.onclick = function () { $("#od-file").click(); };
+      var rows = list.map(function (f, i) {
+        return '<div class="od-file"><span class="odf-name">' + esc(f.filename || "data") + "</span>" +
+          '<span class="odf-rows">' + f.canonical.rows.length.toLocaleString() + " rows</span>" +
+          '<button type="button" class="odf-x" data-i="' + i + '" title="Remove this file" aria-label="Remove ' + esc(f.filename) + '">✕</button></div>';
+      }).join("");
+      box.innerHTML = '<span class="od-ico" aria-hidden="true">📄</span><div class="od-body"><b>Your data · ' +
+        list.length + (list.length === 1 ? " file" : " files") + "</b>" +
+        '<div class="od-files">' + rows + "</div>" +
+        '<span class="hint">Each file becomes its own map layer right after the build — we pick colours, icons and popup fields from your columns and show you exactly what we did. Pick any extra open-data layers below.</span>' +
+        (lost.length ? '<span class="hint" style="color:var(--color-rust-deep)">' + esc(lost.join(", ")) +
+          " couldn't ride along with the saved draft — attach again if you still want it.</span>" : "") +
+        '<button type="button" class="od-act" id="od-more">＋ Add another file</button></div>';
+      box.querySelectorAll(".odf-x").forEach(function (b) {
+        b.onclick = function (e) { e.stopPropagation(); removeUserFile(Number(b.dataset.i)); };
+      });
+      var more = $("#od-more");
+      if (more) more.onclick = function (e) { e.stopPropagation(); $("#od-file").click(); };
       return;
     }
     box.classList.add("clickable");
     box.innerHTML = '<span class="od-ico" aria-hidden="true">＋</span><div class="od-body"><b>Add your own data</b>' +
-      '<span class="hint">Attach a CSV, Excel, GeoJSON, KML or GPX now and it becomes the first layer after the build — or add it any time later from the data bench.</span></div>';
+      '<span class="hint">Attach one or more files — CSV, Excel, GeoJSON, KML or GPX. Each becomes its own map layer after the build, styled from your columns, and you can add more any time from the data bench.</span>' +
+      (lost.length ? '<span class="hint" style="color:var(--color-rust-deep)">' + esc(lost.join(", ")) +
+        " couldn't ride along with the saved draft — attach again if you still want it.</span>" : "") + "</div>";
     box.onclick = function () { $("#od-file").click(); };
   }
 
@@ -868,24 +875,27 @@
     var input = $("#od-file");
     if (!input) return;
     input.addEventListener("change", function () {
-      var file = this.files && this.files[0];
+      var files = Array.prototype.slice.call(this.files || []);
       this.value = "";
-      if (!file) return;
-      msg(3, "Reading " + esc(file.name || "file") + "…", "ok");
-      LokaIngest.fromFile(file, function (err, out) {
-        if (err) { msg(3, esc(errMsg(err))); return; }
-        resolveCanonical(out, function (e, canonical) {
-          if (e) { msg(3, esc(errMsg(e))); return; }
-          S.dataFirst = S.dataFirst || { iso3: "", inf: null, locators: null };
-          S.dataFirst.canonical = canonical;
-          S.dataFirst.file = file;
-          S.dataFirst.filename = file.name || "";
-          S.dataFirst.pending = true;
-          S.dataFirst.lost = false;
-          if (!S.dataFirst.iso3) S.dataFirst.iso3 = S.geo.iso3;
-          cacheDataFirstDraft();
-          msg(3, "");
-          renderOwnDataCard();
+      if (!files.length) return;
+      var done = 0, failed = [];
+      msg(3, "Reading " + files.length + (files.length === 1 ? " file" : " files") + "…", "ok");
+      files.forEach(function (file) {
+        LokaIngest.fromFile(file, function (err, out) {
+          function finish(errText) {
+            if (errText) failed.push((file.name || "file") + " — " + errText);
+            if (++done < files.length) return;
+            renderOwnDataCard();
+            msg(3, failed.length ? failed.map(esc).join("<br>") : "");
+          }
+          if (err) return finish(errMsg(err));
+          resolveCanonical(out, function (e, canonical) {
+            if (e) return finish(errMsg(e));
+            S.dataFirst = S.dataFirst || { iso3: "", inf: null, locators: null };
+            if (!S.dataFirst.iso3) S.dataFirst.iso3 = S.geo.iso3;
+            addUserFile(file.name || "data", canonical);
+            finish(null);
+          });
         });
       });
     });
@@ -985,6 +995,7 @@
 
   function rebuildCurrent() {
     show(4);
+    var ds = $("#data-summary"); if (ds) { ds.hidden = true; ds.innerHTML = ""; }
     $("#build-title").textContent = "Rebuilding your atlas…";
     $("#prog-fill").style.width = "3%";
     $("#prog-msg").textContent = "Applying your changes…";
@@ -1058,6 +1069,7 @@
 
   function createInstance() {
     show(4);
+    var ds = $("#data-summary"); if (ds) { ds.hidden = true; ds.innerHTML = ""; }
     $("#build-title").textContent = "Building your atlas…";
     $("#prog-fill").style.width = "3%";
     $("#prog-msg").textContent = "Creating your atlas…";
@@ -1152,10 +1164,16 @@
     }, 2000);
   }
 
+  // `v` busts any cached manifest/geojson from an earlier load of this slug —
+  // the preview must always show the layers that exist right now.
   function previewUrl() {
     var u = "../?dataset=" + encodeURIComponent(S.build.slug);
     if (S.build.viewKey) u += "&key=" + encodeURIComponent(S.build.viewKey);
-    return u;
+    return u + "&v=" + Date.now();
+  }
+  function loadPreview() {
+    $("#preview-wrap").hidden = false;
+    $("#preview-frame").src = previewUrl();
   }
 
   var CHECK_SVG = '<svg class="done-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
@@ -1164,11 +1182,10 @@
     $("#prog-fill").style.width = "100%";
     $("#prog-bar").classList.remove("working");
     $("#prog-layer").hidden = true;
-    $("#preview-wrap").hidden = false;
-    $("#preview-frame").src = previewUrl();
 
     // full-wizard edit (Save & exit with a rebuild): changes are live — open the atlas
     if (S.editMode === "full") {
+      loadPreview();
       $("#build-title").innerHTML = CHECK_SVG + "Saved — opening your atlas…";
       $("#prog-msg").textContent = "Your changes are live.";
       leaveToAtlas(S._pendingViewKey);
@@ -1176,51 +1193,138 @@
     }
 
     $("#build-title").innerHTML = CHECK_SVG + "Your atlas is ready";
-    $("#prog-msg").textContent = "Built. Explore the preview below, then publish.";
     $("#next-4").hidden = false;
-    $("#next-4").disabled = false; // build complete — publishing unlocks
     $("#back-4").hidden = false;
-    // data-first: the dataset folder now exists, so add the upload as the first layer
-    if (S.dataFirst && S.dataFirst.pending && S.dataFirst.canonical) autoAddData();
-    else if (S.dataFirst && S.dataFirst.lost) {
-      msg(4, "Your data file (" + esc(S.dataFirst.filename || "upload") + ") couldn't ride along with the resumed draft — add it from the " +
-        '<a href="../layers.html?dataset=' + encodeURIComponent(S.build.slug) + '">data bench</a>.', "ok");
+
+    var pending = userFiles();
+    var lost = S._lostFiles || [];
+    if (pending.length) {
+      // The dataset folder exists now, so the uploads can be committed. Hold the
+      // preview until they are: loading it first and reloading afterwards raced
+      // the commit, and a preview that lost the race showed an atlas with no
+      // data layer — exactly the "no tag markers" report.
+      $("#next-4").disabled = true;   // publish once the data is really in
+      $("#prog-msg").textContent = pending.length === 1
+        ? "Adding your data as a map layer…"
+        : "Adding your " + pending.length + " data files as map layers…";
+      autoAddData();
+    } else {
+      loadPreview();
+      $("#prog-msg").textContent = "Built. Explore the preview below, then publish.";
+      $("#next-4").disabled = false;
+      if (lost.length) {
+        msg(4, esc(lost.join(", ")) + " couldn't ride along with the resumed draft — add it from the " +
+          '<a href="../layers.html?dataset=' + encodeURIComponent(S.build.slug) + '">data bench</a>.', "ok");
+      }
     }
   }
 
-  // chain ingest → commit against the freshly-built dataset, authed with the
-  // edit token. Failure is non-fatal — the atlas is built, we just point the
-  // user at the data bench to add it by hand.
+  // Commit each attached file as its own layer (ingest → commit, sequentially so
+  // layer ids and manifest writes can't interleave), then load the preview once
+  // and report exactly how each layer was styled. A failure is non-fatal: the
+  // atlas is built either way, and we point at the data bench.
   function autoAddData() {
-    var canon = S.dataFirst.canonical;
-    if (!canon || !S.build || !S.build.slug) return;
-    var cols = canon.schema.filter(function (c) { return !c.ignored; });
-    var names = cols.map(function (c) { return c.name; });
-    var rows = canon.rows.map(function (r) { var o = {}; names.forEach(function (n) { o[n] = r[n]; }); return o; });
-    var body = {
-      dataset: S.build.slug, filename: S.dataFirst.filename || "data",
-      schema: cols.map(function (c) { return { name: c.name, type: c.type }; }),
-      rows: rows, meta: canon.meta,
-    };
-    if (canon.geoms && canon.geoms.length) { body.geoms = canon.geoms; body.geomIdx = canon.geomIdx; }
-    var H = authHeaders();
-    $("#prog-msg").textContent = "Adding your data as the first layer…";
-    api("layers/ingest", { method: "POST", headers: H, body: body })
-      .then(function (r) { return api("layers/commit", { method: "POST", headers: H, body: { importId: r.importId } }); })
-      .then(function () {
-        S.dataFirst.canonical = null;
-        S.dataFirst.pending = false;
-        // hard-reload the preview so the fresh manifest.local layer shows up
-        try {
-          var w = $("#preview-frame").contentWindow;
-          if (w) w.location.reload(); else $("#preview-frame").src = previewUrl();
-        } catch (e) { $("#preview-frame").src = previewUrl(); }
-        $("#prog-msg").textContent = "Built with your data added as the first layer. Explore the preview, then publish.";
-      })
-      .catch(function (e) {
-        msg(4, "Your atlas is built. Add your data from the data bench — " +
-          '<a href="../layers.html?dataset=' + encodeURIComponent(S.build.slug) + '">open it →</a> (' + esc(errMsg(e)) + ")", "ok");
+    if (!S.build || !S.build.slug) return;
+    var H = authHeaders(), added = [], failed = [];
+    var queue = userFiles().slice();
+
+    function bodyFor(item) {
+      var canon = item.canonical;
+      var cols = canon.schema.filter(function (c) { return !c.ignored; });
+      var names = cols.map(function (c) { return c.name; });
+      var body = {
+        dataset: S.build.slug, filename: item.filename || "data",
+        schema: cols.map(function (c) { return { name: c.name, type: c.type }; }),
+        rows: canon.rows.map(function (r) { var o = {}; names.forEach(function (n) { o[n] = r[n]; }); return o; }),
+        meta: canon.meta,
+      };
+      if (canon.geoms && canon.geoms.length) { body.geoms = canon.geoms; body.geomIdx = canon.geomIdx; }
+      return body;
+    }
+
+    function step(i) {
+      if (i >= queue.length) return finish();
+      var item = queue[i];
+      if (queue.length > 1) $("#prog-msg").textContent = "Adding " + (item.filename || "your data") + " (" + (i + 1) + " of " + queue.length + ")…";
+      var ing = null;
+      api("layers/ingest", { method: "POST", headers: H, body: bodyFor(item) })
+        .then(function (r) {
+          ing = r;
+          return api("layers/commit", { method: "POST", headers: H, body: { importId: r.importId } });
+        })
+        .then(function (c) {
+          added.push({ filename: item.filename, layerId: c.layerId, stanza: ing.fragment || {}, stats: ing.stats || {} });
+          step(i + 1);
+        })
+        .catch(function (e) { failed.push({ filename: item.filename, error: errMsg(e) }); step(i + 1); });
+    }
+
+    function finish() {
+      // committed files leave the queue; anything that failed stays attachable
+      S.userFiles = queue.filter(function (q) {
+        return failed.some(function (f) { return f.filename === q.filename; });
       });
+      cacheDataFirstDraft();
+      loadPreview();   // first and only load — the layers are on disk by now
+      $("#next-4").disabled = false;
+      $("#prog-msg").textContent = added.length
+        ? (added.length === 1 ? "Built, with your data on the map." : "Built, with your " + added.length + " data layers on the map.")
+        : "Built. Explore the preview below, then publish.";
+      renderDataSummary(added);
+      if (failed.length) {
+        msg(4, failed.map(function (f) { return esc(f.filename) + " — " + esc(f.error); }).join("<br>") +
+          '<br>Add it by hand from the <a href="../layers.html?dataset=' + encodeURIComponent(S.build.slug) + '">data bench</a>.');
+      }
+    }
+
+    step(0);
+  }
+
+  /* "How is my data shown?" — read the committed layer stanza back and say, in
+     plain language, what the map does with it. Everything here comes from the
+     stanza the server actually produced, not from a guess. */
+  function renderDataSummary(added) {
+    var box = $("#data-summary");
+    if (!box) return;
+    if (!added || !added.length) { box.hidden = true; box.innerHTML = ""; return; }
+    var KIND_TEXT = {
+      marker: "pins at each point", circle: "dots at each point", categories: "coloured areas",
+      fill: "shaded areas", line: "lines", choropleth: "areas shaded by value", raster: "an image overlay",
+    };
+    var html = "<h3>How your data is shown</h3>";
+    added.forEach(function (a) {
+      var L = a.stanza || {}, facts = [];
+      var n = (a.stats && a.stats.features) || 0;
+      facts.push("<b>" + n.toLocaleString() + "</b> " + (n === 1 ? "feature" : "features") +
+        " drawn as " + (KIND_TEXT[L.type] || L.type || "map features"));
+      var legend = L.legend || [];
+      if (L.markerBy && legend.length) {
+        facts.push("coloured by <b>" + esc(L.markerBy === "_category" ? "category" : L.markerBy) + "</b> — " +
+          legend.length + " values, each with its own colour" + (L.categoryIcons ? " and icon" : "") + ", listed in the map legend");
+      } else if (legend.length) {
+        facts.push("legend with " + legend.length + " " + (legend.length === 1 ? "entry" : "entries"));
+      }
+      var popup = L.popup || {};
+      if (popup.title || (popup.fields || []).length) {
+        var fieldNames = (popup.fields || []).map(function (f) { return f.label || f.property; });
+        facts.push("click a feature for a popup titled by <b>" + esc(popup.title || "your title column") + "</b>" +
+          (fieldNames.length ? ", showing " + esc(fieldNames.slice(0, 6).join(", ")) : ""));
+        if ((popup.fields || []).some(function (f) { return f.type === "image"; })) facts.push("images in the popup where your rows have image links");
+        if ((popup.fields || []).some(function (f) { return f.type === "tags"; })) facts.push("tags shown as chips, and searchable from the map's search box");
+      }
+      html += '<div class="ds-layer"><b>' + esc(a.filename || a.layerId) + "</b> → layer “" + esc(L.label || a.layerId) + "”" +
+        '<ul class="ds-facts">' + facts.map(function (f) { return "<li>" + f + "</li>"; }).join("") + "</ul>";
+      if (legend.length) {
+        html += '<div class="ds-swatches">' + legend.slice(0, 12).map(function (x) {
+          return '<span class="ds-chip"><span class="ds-dot" style="background:' + esc(x.color || "#999") + '"></span>' + esc(x.label) + "</span>";
+        }).join("") + "</div>";
+      }
+      html += "</div>";
+    });
+    html += '<p class="hint" style="margin:.6rem 0 0">Want it styled differently? Open the ' +
+      '<a href="../layers.html?dataset=' + encodeURIComponent(S.build.slug) + '">data bench</a> — you can restyle, rename or remove any layer there.</p>';
+    box.innerHTML = '<div class="ds-card">' + html + "</div>";
+    box.hidden = false;
   }
 
   $("#back-4").onclick = function () { show(3); };
@@ -1427,24 +1531,45 @@
 
   /* ================= drafts ================= */
 
+  /* ---- custom data queue: every attached file becomes its own map layer ----
+     Files live in S.userFiles = [{filename, canonical}]. The data-first entry
+     seeds the first one (it also drives region inference); the Layers-step card
+     adds more. They commit in order after the build. */
+  function userFiles() { return (S.userFiles = S.userFiles || []); }
+  function userFileRows() { return userFiles().reduce(function (n, f) { return n + f.canonical.rows.length; }, 0); }
+  function addUserFile(filename, canonical) {
+    var list = userFiles();
+    var dup = list.findIndex(function (f) { return f.filename === filename; });
+    if (dup >= 0) list[dup] = { filename: filename, canonical: canonical };   // re-drop replaces
+    else list.push({ filename: filename, canonical: canonical });
+    cacheDataFirstDraft();
+  }
+  function removeUserFile(i) { userFiles().splice(i, 1); cacheDataFirstDraft(); renderOwnDataCard(); }
+
   // The attached data must survive a reload: without it a resumed data-first
   // session builds an atlas with no data layer (and no markers). Cached once
-  // per attach — serializing 5,000 rows on every step change would jank — and
-  // size-capped so drafts stay within localStorage / server-draft limits.
+  // per attach — serializing thousands of rows on every step change would jank —
+  // and size-capped so drafts stay within localStorage / server-draft limits.
   var DF_DRAFT_MAX = 700000;   // bytes of JSON, roughly
   function cacheDataFirstDraft() {
     S._dfDraft = null;
-    if (!S.dataFirst || !S.dataFirst.pending || !S.dataFirst.canonical) return;
+    var list = userFiles();
+    if (!list.length) return;
     try {
-      var inf = S.dataFirst.inf ? {
+      var inf = S.dataFirst && S.dataFirst.inf ? {
         iso3: S.dataFirst.inf.iso3, mode: S.dataFirst.inf.mode, level: S.dataFirst.inf.level,
         coverage: S.dataFirst.inf.coverage, bbox: S.dataFirst.inf.bbox,
         units: (S.dataFirst.inf.units || []).map(function (u) { return { id: u.id, name: u.name, bbox: u.bbox }; }),
         parents: S.dataFirst.inf.parents || [],
       } : null;
-      var payload = { filename: S.dataFirst.filename, iso3: S.dataFirst.iso3, inf: inf, canonical: S.dataFirst.canonical };
-      if (JSON.stringify(payload).length <= DF_DRAFT_MAX) S._dfDraft = payload;
-      else S._dfDraft = { filename: S.dataFirst.filename, iso3: S.dataFirst.iso3, tooBig: true };
+      var base = { iso3: (S.dataFirst && S.dataFirst.iso3) || "", inf: inf };
+      // keep as many whole files as fit; anything dropped is reported, never silent
+      var kept = [], dropped = [], budget = DF_DRAFT_MAX;
+      list.forEach(function (f) {
+        var size = JSON.stringify(f).length;
+        if (size <= budget) { kept.push(f); budget -= size; } else dropped.push(f.filename);
+      });
+      S._dfDraft = { files: kept, droppedNames: dropped, iso3: base.iso3, inf: base.inf };
     } catch (e) { S._dfDraft = null; }
   }
 
@@ -1481,17 +1606,19 @@
     S.slugTouched = !!f.slug;
     if (st.visibility) setVisibility(st.visibility);
     S.draftId = d.id;
-    // the attached data-first upload rides in the draft — restoring it is what
-    // keeps the auto-add-as-first-layer promise across a reload
-    if (st.dataFirst && st.dataFirst.canonical) {
-      S.dataFirst = { canonical: st.dataFirst.canonical, file: null, filename: st.dataFirst.filename || "",
-        iso3: st.dataFirst.iso3 || "", inf: st.dataFirst.inf || null, locators: null, pending: true };
+    // the attached uploads ride in the draft — restoring them is what keeps the
+    // add-as-layers promise across a reload
+    if (st.dataFirst) {
+      S.dataFirst = { canonical: null, file: null, filename: "", iso3: st.dataFirst.iso3 || "",
+        inf: st.dataFirst.inf || null, locators: null };
+      S.userFiles = (st.dataFirst.files || []).filter(function (f) { return f && f.canonical; });
+      if (S.userFiles.length) {
+        S.dataFirst.canonical = S.userFiles[0].canonical;
+        S.dataFirst.filename = S.userFiles[0].filename;
+      }
+      S._lostFiles = st.dataFirst.droppedNames || [];   // too large to stash — needs re-attaching
       S._dfGeoApplied = true;   // the saved geo state below already reflects it
       cacheDataFirstDraft();
-    } else if (st.dataFirst && st.dataFirst.tooBig) {
-      // the file was too large to stash — surface that it needs re-attaching
-      S.dataFirst = { canonical: null, file: null, filename: st.dataFirst.filename || "",
-        iso3: st.dataFirst.iso3 || "", inf: null, locators: null, pending: false, lost: true };
     }
     if (st.geo && st.geo.iso3) {
       S.geo.iso3 = st.geo.iso3;

@@ -75,6 +75,26 @@
     .own-data b { font-family:'Figtree',sans-serif; }
     .own-data .od-act { background:none; border:none; padding:0; font:inherit; font-size:.8rem;
       color:var(--color-moss); text-decoration:underline; cursor:pointer; align-self:flex-start; }
+    .od-files { display:flex; flex-direction:column; gap:.3rem; margin:.15rem 0 .1rem; }
+    .od-file { display:flex; align-items:baseline; gap:.4rem; font-size:.85rem; }
+    .od-file .odf-name { font-weight:600; color:var(--color-text-primary); }
+    .od-file .odf-rows { color:var(--color-text-muted); font-size:.8rem; }
+    .od-file .odf-x { margin-left:auto; background:none; border:none; cursor:pointer; padding:0 .2rem;
+      color:var(--color-text-muted); font-size:.95rem; line-height:1; }
+    .od-file .odf-x:hover { color:var(--color-rust-deep); }
+
+    /* how your data was visualised, after the build */
+    .ds-card { margin:1.2rem 0 0; padding:.9rem 1rem; border:1px solid var(--color-border);
+      border-radius:var(--radius-md); background:var(--color-surface); }
+    .ds-card h3 { margin:0 0 .5rem; font-family:'Figtree',sans-serif; font-size:.95rem; }
+    .ds-layer { padding:.5rem 0; border-top:1px solid var(--color-divider); font-size:.87rem; }
+    .ds-layer:first-of-type { border-top:none; }
+    .ds-layer b { font-family:'Figtree',sans-serif; }
+    .ds-facts { margin:.25rem 0 0; padding-left:1.1rem; color:var(--color-text-secondary); }
+    .ds-facts li { margin:.1rem 0; }
+    .ds-swatches { display:flex; flex-wrap:wrap; gap:.3rem .5rem; margin-top:.35rem; }
+    .ds-chip { display:inline-flex; align-items:center; gap:.3rem; font-size:.78rem; color:var(--color-text-secondary); }
+    .ds-dot { width:.7rem; height:.7rem; border-radius:50%; border:1px solid rgba(0,0,0,.15); flex:0 0 auto; }
 
     /* publish hero: the atlas link, unmissable */
     .pub-hero { display:flex; align-items:center; gap:.9rem; flex-wrap:wrap; margin:.2rem 0 1.2rem;
@@ -429,7 +449,7 @@
       <div id="cat-list"></div>
       <!-- your-data card: shows the attached upload, or attaches one — rendered by renderOwnDataCard() -->
       <div id="own-data-note"></div>
-      <input type="file" id="od-file" hidden accept=".csv,.tsv,.txt,.json,.geojson,.kml,.gpx,.xlsx,.xls" />
+      <input type="file" id="od-file" hidden multiple accept=".csv,.tsv,.txt,.json,.geojson,.kml,.gpx,.xlsx,.xls" />
       <div class="btnrow">
         <button class="btn secondary" id="back-3">← Back</button>
         <button class="btn" id="next-3">Build my atlas →</button>
@@ -449,6 +469,8 @@
         <p class="prog-msg" id="prog-msg">Queued…</p>
         <div class="prog-log" id="prog-log" hidden></div>
       </div>
+      <!-- how the uploaded data ended up on the map (rendered by renderDataSummary) -->
+      <div id="data-summary" hidden></div>
       <div id="preview-wrap" hidden>
         <h2 style="margin-top:1.5rem">Preview</h2>
         <iframe id="preview-frame" title="Atlas preview"></iframe>
