@@ -52,6 +52,11 @@
 
   function show(step) {
     S.step = step;
+    // any step visible means we're inside the wizard proper — the fork and the
+    // data-first panel step aside, the stepper comes back
+    $("#path-choice").hidden = true;
+    $("#data-first").hidden = true;
+    $(".stepper").hidden = false;
     for (var i = 1; i <= 5; i++) {
       $("#step-" + i).hidden = i !== step;
       var chip = document.querySelector('.stp[data-step="' + i + '"]');
@@ -67,19 +72,48 @@
   function showHome() {
     S.mode = "home";
     $(".stepper").hidden = true;
+    $("#path-choice").hidden = true;
+    $("#data-first").hidden = true;
     for (var i = 1; i <= 5; i++) $("#step-" + i).hidden = true;
     renderMyAtlases();
     window.scrollTo({ top: 0 });
   }
+  // Every new atlas starts at the fork: begin from a place, or from a data file.
+  function showFork() {
+    S.mode = "wizard";
+    $("#my-atlases").hidden = true;
+    $(".stepper").hidden = true;
+    for (var i = 1; i <= 5; i++) $("#step-" + i).hidden = true;
+    $("#data-first").hidden = true;
+    $("#path-choice").hidden = false;
+    window.scrollTo({ top: 0 });
+  }
   function startWizard() {
     S.mode = "wizard";
-    S.geoInferred = false;   // place-first: the drill step chooses the region
-    $("#data-first").hidden = true;
-    $(".stepper").hidden = false;
     renderMyAtlases(); // dashboard steps aside while building
-    show(1);
+    show(1);           // show() hides the fork + data-first, restores the stepper
   }
-  $("#start-new").onclick = startWizard;
+  $("#start-new").onclick = showFork;
+  $("#path-place").onclick = startWizard;
+  $("#path-data").onclick = function () { startDataFirst(); };
+
+  // The stepper is a map, not a mural: any chip is a way back (or forward, once
+  // that step exists — the build must have run before 4, publish before 5).
+  document.querySelectorAll(".stepper .stp").forEach(function (chip) {
+    chip.addEventListener("click", function () {
+      if (S.mode !== "wizard") return;
+      var n = Number(chip.dataset.step);
+      if (!n || n === S.step) return;
+      if (n === 1) { show(1); return; }
+      if (n === 2) { show(2); initCountries(); maybeApplyDfGeo(); return; }
+      if (n === 3) {
+        if (!S.geo.iso3) { show(2); initCountries(); msg(2, "Choose your region first — then pick the layers.", "ok"); return; }
+        show(3); loadCatalog(); return;
+      }
+      if (n === 4 && S.build) { show(4); return; }
+      if (n === 5 && S._published) { show(5); return; }
+    });
+  });
 
   /* ================= data-first: upload → infer region → wizard ================= */
   var dfMap = null, dfReady = false;
@@ -87,30 +121,35 @@
 
   function startDataFirst() {
     S.mode = "wizard";
-    S.dataFirst = { canonical: null, file: null, filename: "", iso3: "", inf: null, locators: null };
-    S.geoInferred = false;
+    S.dataFirst = { canonical: null, file: null, filename: "", iso3: "", inf: null, locators: null, pending: false };
+    S._dfGeoApplied = false;
     $("#my-atlases").hidden = true;
     $(".stepper").hidden = true;
+    $("#path-choice").hidden = true;
     for (var i = 1; i <= 5; i++) $("#step-" + i).hidden = true;
     $("#df-result").hidden = true;
+    $("#df-country-wrap").hidden = true;   // country is detected from the data; shown only to override
     dfmsg("");
     $("#data-first").hidden = false;
     populateDfCountries();
     window.scrollTo({ top: 0 });
   }
-  $("#start-data").onclick = startDataFirst;
   var sd1 = $("#start-data-1"); if (sd1) sd1.onclick = startDataFirst;
-  $("#df-back").onclick = function () {
-    $("#data-first").hidden = true;
-    if (((S.session && S.session.instances) || []).length) showHome(); else startWizard();
-  };
+  $("#df-back").onclick = function () { showFork(); };
 
+  var dfCountriesReady = null;
   function populateDfCountries() {
     var sel = $("#df-country");
-    if (sel.options.length > 1) return;
-    fetch("./countries.json").then(function (r) { return r.json(); }).then(function (list) {
-      list.forEach(function (c) { var o = document.createElement("option"); o.value = c.iso3; o.textContent = c.name; sel.appendChild(o); });
-    });
+    if (!dfCountriesReady) {
+      dfCountriesReady = fetch("./countries.json").then(function (r) { return r.json(); }).then(function (list) {
+        list.forEach(function (c) { var o = document.createElement("option"); o.value = c.iso3; o.textContent = c.name; sel.appendChild(o); });
+      }).catch(function () {});
+    }
+    return dfCountriesReady;
+  }
+  function countryNameOf(iso3) {
+    var o = document.querySelector('#df-country option[value="' + iso3 + '"]');
+    return o ? o.textContent : iso3;
   }
 
   (function wireDropZone() {
@@ -145,9 +184,8 @@
         S.dataFirst.canonical = canonical;
         S.dataFirst.file = file;
         S.dataFirst.filename = file.name || "";
-        if (!S.dataFirst.iso3) { dfmsg("Read " + canonical.rows.length.toLocaleString() + " rows — now choose the country above.", "ok"); return; }
         dfmsg("");
-        runDfInfer();
+        runDfInfer();   // country comes from the data; the select appears only if we can't tell
       });
     });
   }
@@ -184,20 +222,37 @@
   }
 
   function runDfInfer() {
-    var iso3 = S.dataFirst.iso3, canon = S.dataFirst.canonical;
-    if (!iso3 || !canon) return;
+    var canon = S.dataFirst.canonical;
+    if (!canon) return;
     var loc = deriveLocators(canon);
     if (!loc.points && !loc.names) { dfmsg("Couldn't find locations in this file — it needs coordinates or a place-name column.", "err"); return; }
     S.dataFirst.locators = loc;
     dfmsg("Finding your region…", "ok");
-    var body = { iso3: iso3 };
+    var body = {};
+    if (S.dataFirst.iso3) body.iso3 = S.dataFirst.iso3;   // set only by the override select
     if (loc.points) body.points = loc.points; else body.names = loc.names;
     api("geo/infer", { method: "POST", body: body }).then(function (r) {
-      if (!r.units || !r.units.length) { dfmsg("Couldn't match your data to admin areas there — pick the region manually with “Build a new atlas”.", "err"); return; }
+      if (!r.units || !r.units.length) { dfmsg("Couldn't match your data to admin areas there — pick the region manually with “Start from a place”.", "err"); return; }
       S.dataFirst.inf = r;
+      S.dataFirst.iso3 = r.iso3;
       dfmsg("");
-      renderDfResult(r, loc);
-    }).catch(function (e) { dfmsg(errMsg(e), "err"); });
+      // reveal the country as a pre-filled override, so a wrong detection is one click away
+      populateDfCountries().then(function () {
+        $("#df-country").value = r.iso3;
+        $("#df-country-label").innerHTML = 'Country <span class="hint">(detected from your data — change if it looks wrong)</span>';
+        $("#df-country-wrap").hidden = false;
+        renderDfResult(r, loc);
+      });
+    }).catch(function (e) {
+      if (e && e.needsCountry) {
+        // names-only tables (or unmatched coordinates) can't tell us the country
+        populateDfCountries().then(function () {
+          $("#df-country-label").textContent = "Country";
+          $("#df-country-wrap").hidden = false;
+          dfmsg("We couldn't tell the country from this file — choose it above and we'll take it from there.", "err");
+        });
+      } else dfmsg(errMsg(e), "err");
+    });
   }
 
   function renderDfResult(r, loc) {
@@ -209,7 +264,7 @@
       : "<b>" + names.length + "</b> " + noun + " (" + esc(names.slice(0, 3).join(", ")) + (names.length > 3 ? " +" + (names.length - 3) : "") + ")";
     var pct = Math.round(r.coverage * 100);
     var detail = loc.points ? (pct + "% of " + loc.points.length + " points inside") : (pct + "% of " + loc.names.length + " names matched");
-    $("#df-line").innerHTML = "📍 Your data is in " + head + " — " + detail + ".";
+    $("#df-line").innerHTML = "📍 Your data is in " + head + ", " + esc(countryNameOf(r.iso3)) + " — " + detail + ".";
     drawDfMap(r);
   }
 
@@ -230,22 +285,45 @@
 
   function dfUseRegion() {
     var r = S.dataFirst.inf; if (!r) return;
-    S.geo.iso3 = r.iso3; S.geo.viewLevel = r.level; S.geo.level = r.level; S.geo.crumbs = []; S.geo.selected = {};
+    S.geo.iso3 = r.iso3; S.geo.viewLevel = r.level; S.geo.level = r.level; S.geo.selected = {};
     r.units.forEach(function (u) { S.geo.selected[u.id] = { name: u.name, bbox: u.bbox }; });
     S.geo.features = r.units.map(function (u) { return { properties: { id: u.id, name: u.name }, geometry: u.geometry, bbox: u.bbox }; });
-    S.geoInferred = true;
-    // region-size gate (normally enforced on the geography step we're skipping)
+    // a synthetic crumb of the units' parents keeps the geography step scoped to
+    // the relevant slice (loadUnits passes crumb ids as the geo/admin parents filter)
+    var parents = r.parents || [];
+    S.geo.crumbs = (r.level > 1 && parents.length) ? [{
+      id: parents.map(function (p) { return p.id; }).join(","),
+      name: parents.map(function (p) { return p.name; }).join(" + "),
+      level: r.level - 1,
+      bbox: r.bbox,
+    }] : [];
     var eff = effectiveRegion(), state = eff ? regionSizeState(eff) : "free";
-    if (state === "blocked") { dfmsg("That data covers too large an area for one atlas — pick a smaller region with “Build a new atlas”.", "err"); S.geoInferred = false; return; }
+    if (state === "blocked") { dfmsg("That data covers too large an area for one atlas — trim the file, or pick a smaller region via “Start from a place”.", "err"); return; }
+    S.dataFirst.pending = true;   // after the build, add the upload as the first layer
+    S._dfGeoApplied = false;      // the geography step shows this selection on first entry
     var t = $("#f-title");
     if (!t.value.trim() && S.dataFirst.filename) {
       t.value = S.dataFirst.filename.replace(/\.[a-z0-9]+$/i, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim().replace(/\b\w/g, function (c) { return c.toUpperCase(); }).slice(0, 80);
       if (!$("#f-slug").value.trim()) $("#f-slug").value = slugify(t.value);
     }
-    $("#data-first").hidden = true;
-    $(".stepper").hidden = false;
     renderMyAtlases();
     show(1);
+  }
+
+  // First entry to the geography step after "Use this region": reflect the
+  // inferred selection in the country select, level hint, list and map.
+  function maybeApplyDfGeo() {
+    if (S._dfGeoApplied || !S.dataFirst || !S.dataFirst.inf || !S.geo.iso3) return;
+    S._dfGeoApplied = true;
+    var iso3 = S.geo.iso3;
+    initCountries().then(function () { $("#f-country").value = iso3; });
+    api("geo/levels?iso3=" + iso3).then(function (r2) {
+      S.geo.levels = r2.levels || [1];
+      $("#level-hint").textContent = maxLevel() > 1
+        ? "Boundary data goes down to " + (LEVEL_NOUN[maxLevel()] || "smaller areas") + " here."
+        : "This country has one boundary level available.";
+      loadUnits();
+    }).catch(function () { loadUnits(); });
   }
 
   /* ---- browser-local autosave: survives a reload or the sign-in link opening a new tab.
@@ -335,10 +413,9 @@
     if (!$("#f-title").value.trim()) return msg(1, "Give your atlas a title first.");
     var slug = $("#f-slug").value.trim();
     if (!slug) { $("#f-slug").value = slugify($("#f-title").value); }
-    // data-first: the region was inferred from the upload, so skip the drill step
-    if (S.geoInferred) { show(3); loadCatalog(); return; }
     show(2);
     initCountries();
+    maybeApplyDfGeo();   // data-first: surface the inferred region for confirmation
   };
 
   /* ================= step 2: geography (drill-down) ================= */
@@ -349,17 +426,20 @@
 
   var LEVEL_NOUN = { 1: "states / provinces", 2: "districts", 3: "sub-districts", 4: "localities" };
 
+  var wizCountriesReady = null;
   function initCountries() {
     var sel = $("#f-country");
-    if (sel.options.length > 1) return;
-    fetch("./countries.json").then(function (r) { return r.json(); }).then(function (list) {
-      list.forEach(function (c) {
-        var o = document.createElement("option");
-        o.value = c.iso3; o.textContent = c.name;
-        sel.appendChild(o);
-      });
-    });
+    if (!wizCountriesReady) {
+      wizCountriesReady = fetch("./countries.json").then(function (r) { return r.json(); }).then(function (list) {
+        list.forEach(function (c) {
+          var o = document.createElement("option");
+          o.value = c.iso3; o.textContent = c.name;
+          sel.appendChild(o);
+        });
+      }).catch(function () {});
+    }
     initGeoMap();
+    return wizCountriesReady;
   }
 
   function initGeoMap() {
@@ -398,6 +478,19 @@
         if (hoverId) { geoMap.setFeatureState({ source: "units", id: hoverId }, { hover: false }); hoverId = null; }
       });
       geoMapReady = true;
+      // units loaded before the map finished (e.g. a data-first preselection):
+      // push them now, restore selection states, and frame the region
+      if (S.geo.features.length) {
+        geoMap.getSource("units").setData({ type: "FeatureCollection", features: S.geo.features.map(function (f) {
+          return { type: "Feature", id: f.properties.id, properties: f.properties, geometry: f.geometry };
+        }) });
+        S.geo.features.forEach(function (f) {
+          geoMap.setFeatureState({ source: "units", id: f.properties.id }, { sel: !!S.geo.selected[f.properties.id] });
+        });
+        syncMapPaint();
+        var fit = unionBbox(S.geo.features);
+        if (fit) geoMap.fitBounds([[fit[0], fit[1]], [fit[2], fit[3]]], { padding: 30, duration: 0 });
+      }
     });
   }
 
@@ -807,13 +900,38 @@
     updateCatCounts();
   }
 
-  $("#back-3").onclick = function () { show(S.geoInferred ? 1 : 2); };
+  $("#back-3").onclick = function () { show(2); initCountries(); maybeApplyDfGeo(); };
   $("#next-3").onclick = function () {
     msg(3, "");
     var chosen = Object.keys(S.catalog.chosen);
     if (!chosen.length) return msg(3, "Pick at least one layer.");
+    // navigating back to tweak region/layers must update THIS atlas, not mint a
+    // twin — once an instance exists in this session, further builds are rebuilds
+    if (!S.editMode && S.build && S.build.slug && S.build.editToken) { rebuildCurrent(); return; }
     createInstance();
   };
+
+  function rebuildCurrent() {
+    show(4);
+    $("#build-title").textContent = "Rebuilding your atlas…";
+    $("#prog-fill").style.width = "3%";
+    $("#prog-msg").textContent = "Applying your changes…";
+    $("#preview-wrap").hidden = true;
+    $("#next-4").hidden = false;
+    $("#next-4").disabled = true;
+    $("#back-4").hidden = true;
+    msg(4, "");
+    var eff = effectiveRegion();
+    var body = { layers: Object.keys(S.catalog.chosen) };
+    if (eff) body.region = { iso3: S.geo.iso3, level: eff.level, shapeIDs: eff.units.map(function (u) { return u.id; }) };
+    api("instances/" + S.build.slug + "/rebuild", { method: "POST", headers: authHeaders(), body: body }).then(function (r) {
+      S.build.jobId = r.jobId;
+      pollJob(r.jobId);
+    }).catch(function (e) {
+      show(3);
+      msg(3, esc(errMsg(e)));
+    });
+  }
 
   /* ================= step 4: create + poll + preview ================= */
 
@@ -991,7 +1109,7 @@
     $("#next-4").disabled = false; // build complete — publishing unlocks
     $("#back-4").hidden = false;
     // data-first: the dataset folder now exists, so add the upload as the first layer
-    if (S.geoInferred && S.dataFirst && S.dataFirst.canonical) autoAddData();
+    if (S.dataFirst && S.dataFirst.pending && S.dataFirst.canonical) autoAddData();
   }
 
   // chain ingest → commit against the freshly-built dataset, authed with the
@@ -1015,7 +1133,12 @@
       .then(function (r) { return api("layers/commit", { method: "POST", headers: H, body: { importId: r.importId } }); })
       .then(function () {
         S.dataFirst.canonical = null;
-        try { $("#preview-frame").src = previewUrl(); } catch (e) {}
+        S.dataFirst.pending = false;
+        // hard-reload the preview so the fresh manifest.local layer shows up
+        try {
+          var w = $("#preview-frame").contentWindow;
+          if (w) w.location.reload(); else $("#preview-frame").src = previewUrl();
+        } catch (e) { $("#preview-frame").src = previewUrl(); }
         $("#prog-msg").textContent = "Built with your data added as the first layer. Explore the preview, then publish.";
       })
       .catch(function (e) {
@@ -1046,6 +1169,7 @@
     api("instances/" + S.build.slug + "/publish", { method: "POST", headers: authHeaders(), body: {} })
       .then(function () {
         clearLocal(); // published — the browser-local backup is no longer needed
+        S._published = true;   // step 5 becomes a stepper destination
         show(5);
         renderPublished();
         loadDirectory();
@@ -1065,6 +1189,13 @@
     var isPrivate = S.visibility === "private";
     $("#pub-title").textContent = isPrivate ? "Your private atlas is live" : "Your atlas is live 🎉";
     body.innerHTML = "";
+
+    // the link is the deliverable — it leads, everything else follows
+    var hero = document.createElement("div");
+    hero.className = "pub-hero";
+    hero.innerHTML = '<a class="btn" target="_blank" rel="noopener" href="' + esc(prettyUrl()) + '">Open your atlas →</a>' +
+      '<span class="pub-url">' + esc(prettyUrl()) + "</span>";
+    body.appendChild(hero);
 
     // publishing bound the atlas to the signed-in account — that's the whole story
     var manage = document.createElement("p");
@@ -1651,6 +1782,6 @@
     });
   });
   loadDirectory();
-  show(1);
+  showFork();   // every fresh visit starts at the fork; auth may swap in the dashboard
   if (!EDIT_PARAM) offerLocalResume();
 })();

@@ -231,10 +231,16 @@
     window.__map = map;   // debug hook
     map.on("error", function (e) { console.error("Atlas map error:", e && e.error && e.error.message); });
 
+    // The layers panel and credits are plain DOM built from the manifest — they
+    // must never wait on the basemap. On a slow tile fetch (or a throttled
+    // iframe) the map's "load" can be seconds away, and the atlas looked empty:
+    // no controls, no legend, nothing. Build them immediately; only the map
+    // layers themselves wait for "load".
+    try { buildControls(); buildCredits(); }
+    catch (err) { console.error("Atlas controls error:", err && err.message, err && err.stack); }
+
     map.on("load", function () {
       try {
-        buildControls();
-        buildCredits();
         // buildLayers preloads sources async, so layer ids (L._ids) only exist once
         // it resolves. wirePopups + fitToData depend on those, so run them after.
         renderMapAttrib();

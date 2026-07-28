@@ -45,13 +45,29 @@
       padding:.25rem .6rem; background:var(--color-moss-tint); border-radius:4px; }
     .lead { max-width:44rem; }
 
-    /* stepper */
+    /* stepper — every chip is a real navigation target */
     .stepper { display:flex; gap:.25rem; margin:1.75rem 0 1.5rem; flex-wrap:wrap; }
     .stp { display:flex; align-items:center; gap:.45rem; padding:.45rem .8rem; border-radius:4px;
-      font-size:.85rem; color:var(--color-text-muted); border:1px solid transparent; }
+      font-size:.85rem; color:var(--color-text-muted); border:1px solid transparent; cursor:pointer; }
+    .stp:hover { border-color:var(--color-border); color:var(--color-text-secondary); }
     .stp em { font-style:normal; font-family:'Figtree',sans-serif; font-weight:700; }
     .stp.active { background:var(--color-surface); border-color:var(--color-border); color:var(--color-text-primary); }
     .stp.done { color:var(--color-moss); }
+
+    /* the fork: place-first or data-first */
+    .path-cards { display:grid; grid-template-columns:1fr 1fr; gap:1rem; max-width:44rem; margin-top:.4rem; }
+    @media (max-width:640px){ .path-cards { grid-template-columns:1fr; } }
+    .path-card { display:flex; flex-direction:column; align-items:flex-start; gap:.45rem; text-align:left;
+      font:inherit; padding:1.1rem 1.2rem; border:1px solid var(--color-border); border-radius:var(--radius-md);
+      background:#FFFFFF; cursor:pointer; }
+    .path-card:hover { border-color:var(--color-moss); box-shadow:var(--shadow-sm); }
+    .path-card .pc-ico { font-size:1.5rem; line-height:1; }
+    .path-card b { font-family:'Figtree',sans-serif; font-size:1rem; color:var(--color-text-primary); }
+
+    /* publish hero: the atlas link, unmissable */
+    .pub-hero { display:flex; align-items:center; gap:.9rem; flex-wrap:wrap; margin:.2rem 0 1.2rem;
+      padding:.9rem 1rem; background:var(--color-moss-tint); border-radius:var(--radius-md); }
+    .pub-hero .pub-url { font-size:.9rem; color:var(--color-text-secondary); word-break:break-all; }
 
     /* panels */
     .panel { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:1.5rem; }
@@ -64,6 +80,8 @@
     input[type=text], input[type=email], input[type=url], textarea, select {
       font:inherit; font-size:.95rem; padding:.55rem .65rem; border:1px solid var(--color-border);
       border-radius:4px; background:#FFFFFF; color:var(--color-text-primary); width:100%; }
+    /* placeholders must read as suggestions, never as entered text */
+    input::placeholder, textarea::placeholder { color:var(--color-text-muted); opacity:.5; }
     textarea { resize:vertical; }
     .hint { font-size:.8rem; font-weight:400; color:var(--color-text-muted); }
     .hint.ok { color:var(--color-moss); }
@@ -240,9 +258,8 @@
       <h2>Your atlases</h2>
       <p class="hint">Atlases you've created. Edit the details, change the layers, or open them.</p>
       <div id="my-atlases-list"></div>
-      <div style="margin-top:1.1rem; display:flex; gap:.6rem; flex-wrap:wrap">
+      <div style="margin-top:1.1rem">
         <button class="btn" id="start-new" type="button">Build a new atlas →</button>
-        <button class="btn secondary" id="start-data" type="button">Start from your data →</button>
       </div>
     </section>
 
@@ -254,12 +271,31 @@
       <span class="stp" data-step="5"><em>5</em> Publish &amp; share</span>
     </nav>
 
+    <!-- The fork: every new atlas starts by choosing an entry path -->
+    <section class="panel" id="path-choice" hidden>
+      <h2>How do you want to start?</h2>
+      <p class="hint" style="max-width:44rem">Both paths end in the same atlas — pick whichever is closer to what you have in hand.</p>
+      <div class="path-cards">
+        <button type="button" class="path-card" id="path-place">
+          <span class="pc-ico" aria-hidden="true">🗺️</span>
+          <b>Start from a place</b>
+          <span class="hint">Pick your region on a map, choose the layers, then build.</span>
+        </button>
+        <button type="button" class="path-card" id="path-data">
+          <span class="pc-ico" aria-hidden="true">📄</span>
+          <b>Start from your data</b>
+          <span class="hint">Drop a CSV, GeoJSON, KML or GPX — we work out the region and add your data as the first layer.</span>
+        </button>
+      </div>
+    </section>
+
     <!-- Data-first entry: upload, infer the region, then into the wizard -->
     <section class="panel" id="data-first" hidden>
       <button class="linklike" id="df-back" type="button" style="background:none;border:none;color:var(--color-text-secondary);cursor:pointer;padding:0;font:inherit;margin-bottom:.6rem">← Back</button>
       <h2>Start from your data</h2>
       <p class="hint" style="max-width:46rem">Drop a file with locations — a CSV with latitude/longitude or place names, or a GeoJSON / KML / GPX. We read where your rows are and suggest the smallest region that covers them. You confirm, then we build the atlas around it and add your data as the first layer.</p>
-      <label class="f" style="max-width:24rem">Country
+      <!-- shown only when detection needs help (name-only tables, unmatched coords) or as an override -->
+      <label class="f" id="df-country-wrap" style="max-width:24rem" hidden><span id="df-country-label">Country</span>
         <select id="df-country"><option value="">Choose a country…</option></select>
       </label>
       <div id="df-drop" tabindex="0" role="button" aria-label="Upload a data file"
@@ -294,7 +330,7 @@
           <span class="hint" id="slug-hint">lowercase letters, numbers and dashes</span>
         </label>
         <label class="f"><span>Subtitle <span class="opt">(optional)</span></span>
-          <input type="text" id="f-subtitle" maxlength="160" placeholder="A shared map for our watershed programme" />
+          <input type="text" id="f-subtitle" maxlength="160" placeholder="One line under the title — e.g. Wells, springs and water points across Kilifi" />
         </label>
         <label class="f">Organisation name
           <input type="text" id="f-org" maxlength="60" placeholder="Your organisation" />

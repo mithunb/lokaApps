@@ -271,29 +271,91 @@ async function inferRegionFromNames(iso3, names, avail) {
   return best;
 }
 
+// Country bounding boxes (Natural Earth-derived, 173 countries) — the coarse
+// sieve for resolving the country FROM the data, so data-first uploads don't
+// have to ask. Candidates are verified against real ADM1 geometry, so a loose
+// or overlapping bbox only costs a check, never a wrong answer.
+const COUNTRY_BBOXES = (() => {
+  try { return JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'lib', 'atlas', 'country-bboxes.json'), 'utf8')); }
+  catch (e) { console.warn('[atlas] country-bboxes.json missing:', e.message); return {}; }
+})();
+const COUNTRY_PAD = 0.75;   // degrees of slack around each bbox
+
+async function resolveCountryFromPoints(points) {
+  const sample = points.slice(0, 50);
+  const cx = sample.reduce((s, p) => s + p[0], 0) / sample.length;
+  const cy = sample.reduce((s, p) => s + p[1], 0) / sample.length;
+  const candidates = Object.entries(COUNTRY_BBOXES)
+    .filter(([, b]) => cx >= b[0] - COUNTRY_PAD && cx <= b[2] + COUNTRY_PAD &&
+                       cy >= b[1] - COUNTRY_PAD && cy <= b[3] + COUNTRY_PAD)
+    .sort((a, b) => ((a[1][2] - a[1][0]) * (a[1][3] - a[1][1])) - ((b[1][2] - b[1][0]) * (b[1][3] - b[1][1])))
+    .slice(0, 5)
+    .map(([iso3]) => iso3);
+  let best = null;
+  for (const iso3 of candidates) {
+    let doc; try { doc = await loadAdmin(iso3, 1); } catch { continue; }
+    const feats = doc.features || [];
+    let inside = 0;
+    for (const [x, y] of sample) {
+      if (feats.some((f) => f.bbox && x >= f.bbox[0] && x <= f.bbox[2] && y >= f.bbox[1] && y <= f.bbox[3] && pointInGeom(x, y, f.geometry))) inside++;
+    }
+    const coverage = inside / sample.length;
+    if (!best || coverage > best.coverage) best = { iso3, coverage };
+    if (coverage >= 0.9) break;   // confident — skip the remaining candidates
+  }
+  return best && best.coverage >= 0.5 ? best.iso3 : null;
+}
+
+// Immediate parents (level-1 up) of the inferred units — lets the wizard's
+// geography step fetch just the relevant slice instead of the whole country.
+async function parentUnitsOf(iso3, level, units) {
+  if (level <= 1) return [];
+  let doc; try { doc = await loadAdmin(iso3, level - 1); } catch { return []; }
+  const parents = new Map();
+  for (const u of units) {
+    const c = u.geometry ? centroidOf(u.geometry)
+      : (u.bbox ? [(u.bbox[0] + u.bbox[2]) / 2, (u.bbox[1] + u.bbox[3]) / 2] : null);
+    if (!c) continue;
+    const hit = (doc.features || []).find((f) =>
+      f.bbox && c[0] >= f.bbox[0] && c[0] <= f.bbox[2] && c[1] >= f.bbox[1] && c[1] <= f.bbox[3] && pointInGeom(c[0], c[1], f.geometry));
+    if (hit && !parents.has(hit.properties.id)) parents.set(hit.properties.id, { id: hit.properties.id, name: hit.properties.name, bbox: hit.bbox });
+  }
+  return [...parents.values()];
+}
+
 router.post('/geo/infer', async (req, res) => {
   const b = req.body || {};
-  const iso3 = String(b.iso3 || '').toUpperCase();
-  if (!/^[A-Z]{3}$/.test(iso3)) return res.status(400).json({ error: 'iso3 required' });
-  let avail;
-  try { avail = JSON.parse(fs.readFileSync(path.join(GEOCACHE_DIR, `${iso3}-levels.json`), 'utf8')).levels; }
-  catch { avail = [1, 2, 3, 4]; }
+  let iso3 = String(b.iso3 || '').toUpperCase();
   const points = Array.isArray(b.points) ? b.points
     .map((p) => [Number(p && p[0]), Number(p && p[1])])
     .filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]) && Math.abs(p[1]) <= 90 && Math.abs(p[0]) <= 180)
     .slice(0, 500) : [];
   const names = Array.isArray(b.names)
     ? b.names.map((n) => String(n == null ? '' : n).trim()).filter(Boolean).slice(0, 500) : [];
+  if (!points.length && !names.length) return res.status(400).json({ error: 'points or names required' });
   try {
+    // no country given: coordinates can resolve it; bare place names can't
+    if (!/^[A-Z]{3}$/.test(iso3)) {
+      if (!points.length) {
+        return res.status(400).json({ error: 'couldn’t tell the country from place names alone — choose it', needsCountry: true });
+      }
+      iso3 = await resolveCountryFromPoints(points);
+      if (!iso3) {
+        return res.status(400).json({ error: 'couldn’t tell the country from this data — choose it', needsCountry: true });
+      }
+    }
+    let avail;
+    try { avail = JSON.parse(fs.readFileSync(path.join(GEOCACHE_DIR, `${iso3}-levels.json`), 'utf8')).levels; }
+    catch { avail = [1, 2, 3, 4]; }
     let r = null, mode = null;
     if (points.length) { r = await inferRegionFromPoints(iso3, points, avail); mode = 'points'; }
-    else if (names.length) { r = await inferRegionFromNames(iso3, names, avail); mode = 'names'; }
-    else return res.status(400).json({ error: 'points or names required' });
-    if (!r || !r.units.length) return res.json({ iso3, mode, level: null, units: [], bbox: null, coverage: 0 });
+    else { r = await inferRegionFromNames(iso3, names, avail); mode = 'names'; }
+    if (!r || !r.units.length) return res.json({ iso3, mode, level: null, units: [], bbox: null, coverage: 0, parents: [] });
+    const parents = await parentUnitsOf(iso3, r.level, r.units);
     // geometry rides along for the confirmation map, but a huge covering set
     // (data spread across dozens of units) would bloat the response — drop it then
     const units = r.units.length <= 60 ? r.units : r.units.map(({ geometry, ...u }) => u);
-    res.json({ iso3, mode, level: r.level, units, bbox: r.bbox, coverage: Number(r.coverage.toFixed(3)) });
+    res.json({ iso3, mode, level: r.level, units, bbox: r.bbox, coverage: Number(r.coverage.toFixed(3)), parents });
   } catch (e) {
     console.warn('[atlas] geo/infer failed:', e.message);
     res.status(502).json({ error: 'inference failed: ' + e.message });
