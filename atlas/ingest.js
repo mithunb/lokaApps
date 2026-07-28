@@ -18,6 +18,18 @@
   var TYPE_DOMINANCE = 0.95;            // share of non-empty values a type needs to win
   var ISSUE_ROWS_KEPT = 20;
 
+  // Where this script lives — lazy-loaded vendor files (the Excel reader) must
+  // resolve relative to ingest.js itself, not the page: the bench sits next to
+  // it but the setup wizard includes it from a subdirectory.
+  var SCRIPT_BASE = (function () {
+    var s = document.currentScript;
+    if (!s || !s.src) {
+      var tags = document.querySelectorAll('script[src*="ingest"]');
+      s = tags.length ? tags[tags.length - 1] : null;
+    }
+    return s && s.src ? s.src.replace(/[^/]*$/, "") : "./";
+  })();
+
   /* ================= entry points ================= */
 
   // fromFile(file, cb) → cb(err, result)
@@ -101,7 +113,7 @@
     if (!xlsxLoading) {
       xlsxLoading = new Promise(function (resolve, reject) {
         var s = document.createElement("script");
-        s.src = "./vendor/xlsx.full.min.js";
+        s.src = SCRIPT_BASE + "vendor/xlsx.full.min.js";
         s.onload = resolve;
         s.onerror = function () { reject(new Error("couldn't load the Excel reader")); };
         document.head.appendChild(s);

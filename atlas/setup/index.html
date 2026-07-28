@@ -284,7 +284,7 @@
         <button type="button" class="path-card" id="path-data">
           <span class="pc-ico" aria-hidden="true">📄</span>
           <b>Start from your data</b>
-          <span class="hint">Drop a CSV, GeoJSON, KML or GPX — we work out the region and add your data as the first layer.</span>
+          <span class="hint">Drop a CSV, Excel, GeoJSON, KML or GPX — we work out the region and add your data as the first layer.</span>
         </button>
       </div>
     </section>
@@ -293,7 +293,7 @@
     <section class="panel" id="data-first" hidden>
       <button class="linklike" id="df-back" type="button" style="background:none;border:none;color:var(--color-text-secondary);cursor:pointer;padding:0;font:inherit;margin-bottom:.6rem">← Back</button>
       <h2>Start from your data</h2>
-      <p class="hint" style="max-width:46rem">Drop a file with locations — a CSV with latitude/longitude or place names, or a GeoJSON / KML / GPX. We read where your rows are and suggest the smallest region that covers them. You confirm, then we build the atlas around it and add your data as the first layer.</p>
+      <p class="hint" style="max-width:46rem">Drop a file with locations — a CSV or Excel sheet with latitude/longitude or place names, or a GeoJSON / KML / GPX. We read where your rows are and suggest the smallest region that covers them. You confirm, then we build the atlas around it and add your data as the first layer.</p>
       <!-- shown only when detection needs help (name-only tables, unmatched coords) or as an override -->
       <label class="f" id="df-country-wrap" style="max-width:24rem" hidden><span id="df-country-label">Country</span>
         <select id="df-country"><option value="">Choose a country…</option></select>
@@ -301,7 +301,7 @@
       <div id="df-drop" tabindex="0" role="button" aria-label="Upload a data file"
            style="margin:.4rem 0 .8rem;padding:1.6rem 1rem;border:2px dashed var(--color-border);border-radius:var(--radius-md);background:var(--color-surface);text-align:center;cursor:pointer;max-width:44rem">
         <div style="font-size:1.6rem;line-height:1">🗺️</div>
-        <b style="display:block;margin:.4rem 0 .2rem;font-family:'Figtree',sans-serif">Drop a CSV, GeoJSON, KML or GPX here</b>
+        <b style="display:block;margin:.4rem 0 .2rem;font-family:'Figtree',sans-serif">Drop a CSV, Excel, GeoJSON, KML or GPX here</b>
         <span class="hint">or click to choose — up to 5,000 rows / points</span>
         <input type="file" id="df-file" hidden accept=".csv,.tsv,.txt,.json,.geojson,.kml,.gpx,.xlsx,.xls" />
       </div>
