@@ -64,6 +64,18 @@
     .path-card .pc-ico { font-size:1.5rem; line-height:1; }
     .path-card b { font-family:'Figtree',sans-serif; font-size:1rem; color:var(--color-text-primary); }
 
+    /* your-data card on the Layers step */
+    .own-data { display:flex; gap:.7rem; align-items:flex-start; margin-top:1rem; padding:.85rem 1rem;
+      border:1px dashed var(--color-border); border-radius:8px; background:var(--color-moss-tint); }
+    .own-data.clickable { cursor:pointer; }
+    .own-data.clickable:hover { border-color:var(--color-moss); }
+    .own-data.attached { border-style:solid; }
+    .own-data .od-ico { font-size:1.15rem; line-height:1.3; color:var(--color-moss); flex:0 0 auto; }
+    .own-data .od-body { display:flex; flex-direction:column; gap:.15rem; }
+    .own-data b { font-family:'Figtree',sans-serif; }
+    .own-data .od-act { background:none; border:none; padding:0; font:inherit; font-size:.8rem;
+      color:var(--color-moss); text-decoration:underline; cursor:pointer; align-self:flex-start; }
+
     /* publish hero: the atlas link, unmissable */
     .pub-hero { display:flex; align-items:center; gap:.9rem; flex-wrap:wrap; margin:.2rem 0 1.2rem;
       padding:.9rem 1rem; background:var(--color-moss-tint); border-radius:var(--radius-md); }
@@ -415,13 +427,9 @@
       <h2>What goes on the map?</h2>
       <p class="hint" id="tier-note"></p>
       <div id="cat-list"></div>
-      <div id="own-data-note" style="display:flex; gap:.7rem; align-items:flex-start; margin-top:1rem; padding:.85rem 1rem; border:1px dashed var(--color-border,#cbb); border-radius:8px; background:var(--color-moss-tint,rgba(74,90,51,.08))">
-        <span aria-hidden="true" style="font-size:1.15rem; line-height:1.3; color:var(--color-moss,#4A5A33)">＋</span>
-        <div style="display:flex; flex-direction:column; gap:.15rem">
-          <b style="font-family:'Figtree',sans-serif">Add your own data</b>
-          <span class="hint">Survey results, a facility list, tagged photos, GeoJSON — once your atlas is built you can upload your own data as new map layers (CSV, spreadsheets, JSON, GeoJSON, KML, GPX).</span>
-        </div>
-      </div>
+      <!-- your-data card: shows the attached upload, or attaches one — rendered by renderOwnDataCard() -->
+      <div id="own-data-note"></div>
+      <input type="file" id="od-file" hidden accept=".csv,.tsv,.txt,.json,.geojson,.kml,.gpx,.xlsx,.xls" />
       <div class="btnrow">
         <button class="btn secondary" id="back-3">← Back</button>
         <button class="btn" id="next-3">Build my atlas →</button>
