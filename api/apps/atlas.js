@@ -323,6 +323,34 @@ async function parentUnitsOf(iso3, level, units) {
   return [...parents.values()];
 }
 
+// Resolve a SAVED region (iso3 + level + shapeIDs) back into full units and
+// their parents — what the edit flow needs to show an existing atlas's region
+// preselected on the geography step, without shipping a whole admin level to
+// the browser.
+router.post('/geo/resolve', async (req, res) => {
+  const b = req.body || {};
+  const iso3 = String(b.iso3 || '').toUpperCase();
+  const level = Number(b.level) || 1;
+  const ids = (Array.isArray(b.shapeIDs) ? b.shapeIDs : []).map(String).slice(0, 100);
+  if (!/^[A-Z]{3}$/.test(iso3) || level < 1 || level > MAX_LEVEL || !ids.length) {
+    return res.status(400).json({ error: 'iso3, level and shapeIDs required' });
+  }
+  try {
+    const doc = await loadAdmin(iso3, level);
+    const want = new Set(ids);
+    const units = (doc.features || [])
+      .filter((f) => want.has(f.properties.id))
+      .map((f) => ({ id: f.properties.id, name: f.properties.name, bbox: f.bbox, geometry: f.geometry }));
+    if (!units.length) return res.status(404).json({ error: 'no matching boundary units' });
+    const parents = await parentUnitsOf(iso3, level, units);
+    const out = units.length <= 60 ? units : units.map(({ geometry, ...u }) => u);
+    res.json({ iso3, level, units: out, bbox: unionBboxOf(units), parents });
+  } catch (e) {
+    console.warn('[atlas] geo/resolve failed:', e.message);
+    res.status(502).json({ error: 'boundary source unavailable: ' + e.message });
+  }
+});
+
 router.post('/geo/infer', async (req, res) => {
   const b = req.body || {};
   let iso3 = String(b.iso3 || '').toUpperCase();

@@ -288,13 +288,15 @@
     } else if (dfReady) { apply(); }
   }
 
-  function dfUseRegion() {
-    var r = S.dataFirst.inf; if (!r) return;
+  /* Put a resolved region ({iso3, level, units, parents, bbox}) into wizard state:
+     units become the selection, and a synthetic crumb of their parents keeps the
+     geography step scoped to the relevant slice (loadUnits passes crumb ids as
+     the geo/admin parents filter). Shared by data-first inference and by editing
+     an existing atlas, so both show a real, editable selection. */
+  function applyRegionUnits(r) {
     S.geo.iso3 = r.iso3; S.geo.viewLevel = r.level; S.geo.level = r.level; S.geo.selected = {};
-    r.units.forEach(function (u) { S.geo.selected[u.id] = { name: u.name, bbox: u.bbox }; });
-    S.geo.features = r.units.map(function (u) { return { properties: { id: u.id, name: u.name }, geometry: u.geometry, bbox: u.bbox }; });
-    // a synthetic crumb of the units' parents keeps the geography step scoped to
-    // the relevant slice (loadUnits passes crumb ids as the geo/admin parents filter)
+    (r.units || []).forEach(function (u) { S.geo.selected[u.id] = { name: u.name, bbox: u.bbox }; });
+    S.geo.features = (r.units || []).map(function (u) { return { properties: { id: u.id, name: u.name }, geometry: u.geometry, bbox: u.bbox }; });
     var parents = r.parents || [];
     S.geo.crumbs = (r.level > 1 && parents.length) ? [{
       id: parents.map(function (p) { return p.id; }).join(","),
@@ -302,6 +304,11 @@
       level: r.level - 1,
       bbox: r.bbox,
     }] : [];
+  }
+
+  function dfUseRegion() {
+    var r = S.dataFirst.inf; if (!r) return;
+    applyRegionUnits(r);
     var eff = effectiveRegion(), state = eff ? regionSizeState(eff) : "free";
     if (state === "blocked") { dfmsg("That data covers too large an area for one atlas — trim the file, or pick a smaller region via “Start from a place”.", "err"); return; }
     // this upload becomes the atlas's first data layer after the build
@@ -316,10 +323,13 @@
     show(1);
   }
 
-  // First entry to the geography step after "Use this region": reflect the
-  // inferred selection in the country select, level hint, list and map.
+  // First entry to the geography step when the region came from somewhere other
+  // than the drill picker (data-first inference, or editing an existing atlas):
+  // reflect it in the country select, level hint, list and map.
   function maybeApplyDfGeo() {
-    if (S._dfGeoApplied || !S.dataFirst || !S.dataFirst.inf || !S.geo.iso3) return;
+    if (S._dfGeoApplied || !S.geo.iso3) return;
+    var haveUnits = Object.keys(S.geo.selected || {}).length > 0;
+    if (!haveUnits) return;   // nothing preselected — the drill picker owns this step
     S._dfGeoApplied = true;
     var iso3 = S.geo.iso3;
     initCountries().then(function () { $("#f-country").value = iso3; });
@@ -831,13 +841,32 @@
   function renderOwnDataCard() {
     var box = $("#own-data-note");
     if (!box) return;
+    box.classList.add("own-data");          // base card styling (modifiers below)
     box.classList.remove("clickable", "attached");
+    box.hidden = false;
     box.onclick = null;
     if (S.editMode) {
-      box.classList.add("clickable");
-      box.innerHTML = '<span class="od-ico" aria-hidden="true">＋</span><div class="od-body"><b>Add your own data</b>' +
-        '<span class="hint">This atlas is already built — open the data bench to upload CSV, Excel, GeoJSON, KML or GPX as new layers.</span></div>';
-      box.onclick = function () { location.href = "../layers.html?dataset=" + encodeURIComponent(S.editSlug); };
+      // an existing atlas: say what's already on it, then offer one clear action
+      var existing = S.editLayers;
+      var benchHref = "../layers.html?dataset=" + encodeURIComponent(S.editSlug);
+      var head, body;
+      if (existing === null) {
+        head = "Your own data"; body = '<span class="hint">Checking what\'s already on this atlas…</span>';
+      } else if (existing.length) {
+        head = "Your own data · " + existing.length + (existing.length === 1 ? " layer" : " layers");
+        body = '<div class="od-files">' + existing.map(function (l) {
+          var by = l.addedBy && (l.addedBy.org || l.addedBy.name);
+          return '<div class="od-file"><span class="odf-name">' + esc(l.label || l.id) + "</span>" +
+            (by ? '<span class="odf-rows">added by ' + esc(by) + "</span>" : "") + "</div>";
+        }).join("") + "</div>" +
+          '<span class="hint">Already on the map. Add more files, restyle or remove them in the data bench.</span>';
+      } else {
+        head = "Your own data";
+        body = '<span class="hint">No data of your own yet — add survey results, a facility list, tagged photos or shapes (CSV, Excel, JSON, GeoJSON, KML, GPX) as new map layers.</span>';
+      }
+      box.innerHTML = '<span class="od-ico" aria-hidden="true">📄</span><div class="od-body"><b>' + head + "</b>" + body +
+        '<a class="btn secondary od-btn" href="' + benchHref + '">' +
+        (existing && existing.length ? "Manage data layers →" : "Add your own data →") + "</a></div>";
       return;
     }
     var list = userFiles();
@@ -1810,12 +1839,34 @@
       }
       // region: carry the current one; the country is preset so the catalogue
       // (step 3) resolves, and drilling/tapping later flips regionKept off
-      S.geo = { iso3: inst.region.iso3, levels: [1], crumbs: [], viewLevel: 1, features: [], selected: {} };
+      S.geo = { iso3: inst.region.iso3, levels: [1], crumbs: [], viewLevel: inst.region.level || 1, features: [], selected: {} };
       S.catalog = { tier: "", layers: [], chosen: {} };
       (inst.layers || []).forEach(function (id) { S.catalog.chosen[id] = true; });
+      S.userFiles = []; S._lostFiles = []; S._dfDraft = null; S.dataFirst = null;
+      S._dfGeoApplied = false;
 
-      if ($("#f-country").options.length < 2) initCountries();
-      setTimeout(function () { $("#f-country").value = inst.region.iso3; }, 300);
+      initCountries().then(function () { $("#f-country").value = inst.region.iso3; });
+
+      // resolve the saved shapeIDs into real units so step 2 shows the region
+      // selected and framed, not just described in a banner
+      var reg0 = inst.region || {};
+      if (reg0.iso3 && (reg0.shapeIDs || []).length) {
+        api("geo/resolve", { method: "POST", body: { iso3: reg0.iso3, level: reg0.level || 1, shapeIDs: reg0.shapeIDs } })
+          .then(function (r) {
+            if (S.editSlug !== slug) return;      // user navigated away meanwhile
+            applyRegionUnits(r);
+            S.regionKept = true;                  // showing it isn't changing it
+            S._dfGeoApplied = false;
+            if (S.step === 2) maybeApplyDfGeo();  // already looking at it → paint now
+          }).catch(function () { /* banner still tells them the current region */ });
+      }
+
+      // contributed data layers already on this atlas (manifest.local overlay)
+      S.editLayers = null;
+      api("layers/list?dataset=" + encodeURIComponent(slug)).then(function (r) {
+        S.editLayers = r.layers || [];
+        if (S.step === 3) renderOwnDataCard();
+      }).catch(function () { S.editLayers = []; });
 
       var eb = $("#edit-banner"); eb.hidden = false;
       eb.innerHTML = "Editing <b>" + esc(inst.title) + "</b> — walk through each step and " +

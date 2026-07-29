@@ -75,6 +75,9 @@
     .own-data b { font-family:'Figtree',sans-serif; }
     .own-data .od-act { background:none; border:none; padding:0; font:inherit; font-size:.8rem;
       color:var(--color-moss); text-decoration:underline; cursor:pointer; align-self:flex-start; }
+    .own-data .od-btn { align-self:flex-start; margin-top:.55rem; text-decoration:none; font-size:.85rem;
+      padding:.45rem .9rem; }
+    .own-data .od-btn:hover { text-decoration:none; }
     .od-files { display:flex; flex-direction:column; gap:.3rem; margin:.15rem 0 .1rem; }
     .od-file { display:flex; align-items:baseline; gap:.4rem; font-size:.85rem; }
     .od-file .odf-name { font-weight:600; color:var(--color-text-primary); }
@@ -448,7 +451,7 @@
       <p class="hint" id="tier-note"></p>
       <div id="cat-list"></div>
       <!-- your-data card: shows the attached upload, or attaches one — rendered by renderOwnDataCard() -->
-      <div id="own-data-note"></div>
+      <div id="own-data-note" class="own-data" hidden></div>
       <input type="file" id="od-file" hidden multiple accept=".csv,.tsv,.txt,.json,.geojson,.kml,.gpx,.xlsx,.xls" />
       <div class="btnrow">
         <button class="btn secondary" id="back-3">← Back</button>
