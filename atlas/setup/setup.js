@@ -1396,7 +1396,6 @@
     api("instances/" + S.build.slug + "/publish", { method: "POST", headers: authHeaders(), body: {} })
       .then(function () {
         clearLocal(); // published — the browser-local backup is no longer needed
-        clearPublishStash();
         S._published = true;   // step 5 becomes a stepper destination
         show(5);
         renderPublished();
@@ -2046,26 +2045,11 @@
   /* Come back to publishing after setting data up in the bench (or from the
      dashboard). The wizard's in-memory edit token is gone by then, so this
      leans on the signed-in session — the publish route accepts the owner. */
-  function readPublishStash() {
-    try {
-      var s = JSON.parse(sessionStorage.getItem("loka-atlas-publish") || "null");
-      return s && s.slug ? s : null;
-    } catch (e) { return null; }
-  }
-  function clearPublishStash() { try { sessionStorage.removeItem("loka-atlas-publish"); } catch (e) {} }
-
   function resumePublish(slug) {
-    var stash = readPublishStash();
-    if (stash && stash.slug !== slug) stash = null;
-    var hdrs = (stash && stash.editToken) ? { Authorization: "Bearer " + stash.editToken } : {};
-    api("instances/" + slug, { headers: hdrs }).then(function (inst) {
+    api("instances/" + slug).then(function (inst) {
       if (!inst.canEdit) { showHome(); return; }
       S.mode = "wizard";
-      S.build = {
-        slug: slug,
-        viewKey: inst.viewKey || (stash && stash.viewKey) || null,
-        editToken: (stash && stash.editToken) || null,
-      };
+      S.build = { slug: slug, viewKey: inst.viewKey || null };
       S.visibility = inst.visibility || "public";
       fillDetails(inst);
       if (inst.status === "published") {
