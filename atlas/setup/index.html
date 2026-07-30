@@ -112,6 +112,10 @@
     @media (max-width:720px){ .grid2 { grid-template-columns:1fr; } }
     label.f { display:flex; flex-direction:column; gap:.3rem; font-size:.85rem; font-weight:600; color:var(--color-text-secondary); }
     label.f span.opt { font-weight:400; color:var(--color-text-muted); }
+    label.f span.req { font-weight:400; font-size:.75rem; color:var(--color-text-muted); }
+    /* a field that failed validation names its own problem, next to the input */
+    label.f.bad input, label.f.bad textarea, label.f.bad select { border-color:var(--color-rust); }
+    label.f .fielderr { font-size:.78rem; color:var(--color-rust-deep); }
     input[type=text], input[type=email], input[type=url], textarea, select {
       font:inherit; font-size:.95rem; padding:.55rem .65rem; border:1px solid var(--color-border);
       border-radius:4px; background:#FFFFFF; color:var(--color-text-primary); width:100%; }
@@ -354,33 +358,20 @@
     <!-- Step 1 -->
     <section class="panel" id="step-1">
       <div id="edit-banner" class="msg ok" hidden></div>
-      <p class="hint" id="df-hint" style="margin:0 0 1rem">Have a data file already? <button type="button" id="start-data-1" style="background:none;border:none;color:var(--color-moss);cursor:pointer;padding:0;font:inherit;text-decoration:underline">Start from your data →</button> and we'll pick the region for you.</p>
       <h2>Your organisation &amp; atlas</h2>
       <div class="grid2">
-        <label class="f">Atlas title
-          <input type="text" id="f-title" maxlength="80" placeholder="Kilifi Coastal Atlas" />
+        <label class="f"><span>Atlas title <span class="req" aria-hidden="true">required</span></span>
+          <input type="text" id="f-title" maxlength="80" placeholder="Kilifi Coastal Atlas" required />
+          <span class="hint" id="slug-hint"></span>
         </label>
-        <label class="f">Web address (slug)
-          <input type="text" id="f-slug" maxlength="40" placeholder="kilifi-coastal" />
-          <span class="hint" id="slug-hint">lowercase letters, numbers and dashes</span>
+        <label class="f"><span>Organisation / project name <span class="req" aria-hidden="true">required</span></span>
+          <input type="text" id="f-org" maxlength="60" placeholder="Your organisation" required />
         </label>
-        <label class="f"><span>Subtitle <span class="opt">(optional)</span></span>
-          <input type="text" id="f-subtitle" maxlength="160" placeholder="One line under the title — e.g. Wells, springs and water points across Kilifi" />
-        </label>
-        <label class="f">Organisation name
-          <input type="text" id="f-org" maxlength="60" placeholder="Your organisation" />
-        </label>
-        <label class="f"><span>Contact email <span class="opt">(needed for approvals &amp; private maps)</span></span>
-          <input type="email" id="f-email" placeholder="you@example.org" />
+        <label class="f" style="grid-column:1/-1"><span>Description <span class="opt">(optional, shown under the title)</span></span>
+          <textarea id="f-about" rows="2" maxlength="500" placeholder="What this atlas is for — e.g. Wells, springs and water points across Kilifi, mapped with community surveyors."></textarea>
         </label>
         <label class="f"><span>Organisation website <span class="opt">(optional, https)</span></span>
           <input type="url" id="f-orgurl" maxlength="200" placeholder="https://example.org" />
-        </label>
-        <label class="f" style="grid-column:1/-1"><span>About this atlas <span class="opt">(optional, shown under the title)</span></span>
-          <textarea id="f-about" rows="2" maxlength="500"></textarea>
-        </label>
-        <label class="f"><span>Footer line <span class="opt">(optional)</span></span>
-          <input type="text" id="f-footer" maxlength="160" placeholder="A programme of Your Org, 2026" />
         </label>
         <label class="f"><span>Logo <span class="opt">(optional, PNG up to 200 KB)</span></span>
           <input type="file" id="f-logo" accept="image/png" />

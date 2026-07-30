@@ -18,7 +18,6 @@
     mode: "wizard",        // 'home' = dashboard only; 'wizard' = the step flow
     visibility: "public",
     logoData: null,
-    slugTouched: false,
     geo: { iso3: "", level: 1, features: [], selected: {} },
     catalog: { tier: "", layers: [], chosen: {} },
     build: null,           // {slug, jobId, editToken, viewKey, status}
@@ -97,9 +96,16 @@
     renderMyAtlases(); // dashboard steps aside while building
     show(1);           // show() hides the fork + data-first, restores the stepper
   }
-  $("#start-new").onclick = showFork;
-  $("#path-place").onclick = startWizard;
-  $("#path-data").onclick = function () { startDataFirst(); };
+  // Building requires a verified email, so ask once at the door rather than
+  // letting someone fill in five steps and hit a wall at publish.
+  function requireSignIn(why, then) {
+    if (S.session && S.session.email) { then(); return; }
+    signIn(why || "Building an atlas needs a verified email — we'll send you a 6-digit code.")
+      .then(function (ok) { if (ok) then(); });
+  }
+  $("#start-new").onclick = function () { requireSignIn(null, showFork); };
+  $("#path-place").onclick = function () { requireSignIn(null, startWizard); };
+  $("#path-data").onclick = function () { requireSignIn(null, startDataFirst); };
 
   // The stepper is a map, not a mural: any chip is a way back (or forward, once
   // that step exists — the build must have run before 4, publish before 5).
@@ -139,7 +145,6 @@
     populateDfCountries();
     window.scrollTo({ top: 0 });
   }
-  var sd1 = $("#start-data-1"); if (sd1) sd1.onclick = startDataFirst;
   $("#df-back").onclick = function () { showFork(); };
 
   var dfCountriesReady = null;
@@ -317,7 +322,6 @@
     var t = $("#f-title");
     if (!t.value.trim() && S.dataFirst.filename) {
       t.value = S.dataFirst.filename.replace(/\.[a-z0-9]+$/i, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim().replace(/\b\w/g, function (c) { return c.toUpperCase(); }).slice(0, 80);
-      if (!$("#f-slug").value.trim()) $("#f-slug").value = slugify(t.value);
     }
     renderMyAtlases();
     show(1);
@@ -378,25 +382,67 @@
       .replace(/^-+|-+$/g, "").slice(0, 40);
   }
 
+  // The web address is derived from the title, not asked for — we just show
+  // where the atlas will live. The server owns uniqueness (it suffixes a taken
+  // address), so this is information, never a blocker.
   var slugTimer;
   function checkSlug() {
-    var slug = $("#f-slug").value.trim();
     var hint = $("#slug-hint");
-    if (!slug) { hint.textContent = "lowercase letters, numbers and dashes"; hint.className = "hint"; return; }
+    if (!hint || S.editMode) return;           // editing: the address is fixed
+    var slug = slugify($("#f-title").value.trim());
+    if (!slug) { hint.textContent = ""; hint.className = "hint"; return; }
     clearTimeout(slugTimer);
     slugTimer = setTimeout(function () {
       api("slug-check?slug=" + encodeURIComponent(slug)).then(function (r) {
-        if (!r.valid) { hint.textContent = "not a valid address"; hint.className = "hint bad"; }
-        else if (!r.available) { hint.textContent = "already taken"; hint.className = "hint bad"; }
-        else { hint.textContent = "available — your atlas will live at …/atlas/a/" + slug; hint.className = "hint ok"; }
+        hint.className = "hint";
+        hint.textContent = r.available
+          ? "Your atlas will live at …/atlas/a/" + slug
+          : "…/atlas/a/" + slug + " is taken — yours will get a number on the end";
       }).catch(function () {});
     }, 300);
   }
 
-  $("#f-title").addEventListener("input", function () {
-    if (!S.slugTouched) { $("#f-slug").value = slugify(this.value); checkSlug(); }
-  });
-  $("#f-slug").addEventListener("input", function () { S.slugTouched = true; this.value = this.value.toLowerCase(); checkSlug(); });
+  $("#f-title").addEventListener("input", function () { clearFieldError("f-title"); checkSlug(); });
+  $("#f-org").addEventListener("input", function () { clearFieldError("f-org"); });
+  $("#f-orgurl").addEventListener("input", function () { clearFieldError("f-orgurl"); });
+
+  /* ---- field validation: say what's wrong, next to the field that's wrong ---- */
+  function fieldLabel(id) {
+    var el = $("#" + id);
+    return el ? el.closest("label.f") : null;
+  }
+  function clearFieldError(id) {
+    var lab = fieldLabel(id);
+    if (!lab) return;
+    lab.classList.remove("bad");
+    var e = lab.querySelector(".fielderr");
+    if (e) e.remove();
+    // the summary line is only true while something is still wrong
+    if (S.step === 1 && !document.querySelectorAll("#step-1 label.f.bad").length) msg(1, "");
+  }
+  function setFieldError(id, text) {
+    var lab = fieldLabel(id);
+    if (!lab) return;
+    clearFieldError(id);
+    lab.classList.add("bad");
+    var s = document.createElement("span");
+    s.className = "fielderr";
+    s.textContent = text;
+    lab.appendChild(s);
+  }
+  // returns the id of the first invalid field, or null
+  function validateIdentity() {
+    ["f-title", "f-org", "f-orgurl"].forEach(clearFieldError);
+    var bad = null;
+    if (!$("#f-title").value.trim()) { setFieldError("f-title", "Your atlas needs a title."); bad = bad || "f-title"; }
+    if (!$("#f-org").value.trim()) { setFieldError("f-org", "Add the organisation or project this atlas belongs to."); bad = bad || "f-org"; }
+    var url = $("#f-orgurl").value.trim();
+    if (url && !/^https:\/\/[^\s.]+\.[^\s]+$/.test(url)) {
+      setFieldError("f-orgurl", "Use a full https:// address, or leave it empty.");
+      bad = bad || "f-orgurl";
+    }
+    return bad;
+  }
 
   $("#f-logo").addEventListener("change", function () {
     var f = this.files && this.files[0];
@@ -426,9 +472,13 @@
 
   $("#next-1").onclick = function () {
     msg(1, "");
-    if (!$("#f-title").value.trim()) return msg(1, "Give your atlas a title first.");
-    var slug = $("#f-slug").value.trim();
-    if (!slug) { $("#f-slug").value = slugify($("#f-title").value); }
+    var bad = validateIdentity();
+    if (bad) {
+      msg(1, "Check the highlighted fields.");
+      var el = $("#" + bad);
+      if (el) el.focus();
+      return;
+    }
     show(2);
     initCountries();
     maybeApplyDfGeo();   // data-first: surface the inferred region for confirmation
@@ -806,10 +856,11 @@
     if (state === "blocked") {
       return msg(2, "That region is more than one atlas can cover — open a place in the list and keep a smaller part of it.");
     }
-    if (state === "approval" && !$("#f-email").value.trim()) {
-      msg(2, 'This region needs a quick approval from the LOKA team, so we need a way to reach you. <a href="#" id="goto-email">Add your contact email in step 1 →</a>');
-      var a = document.getElementById("goto-email");
-      if (a) a.onclick = function (ev) { ev.preventDefault(); show(1); setTimeout(function () { $("#f-email").focus(); }, 50); };
+    // approval mail goes to the signed-in address; sign-in is required to build,
+    // so this only guards a session that expired mid-flow
+    if (state === "approval" && !(S.session && S.session.email)) {
+      msg(2, "This region needs a quick approval from the LOKA team, so we need a way to reach you — sign in again to continue.");
+      signIn("Sign in so we can reach you about the approval.").then(function (ok) { if (ok) msg(2, ""); });
       return;
     }
     show(3);
@@ -1049,17 +1100,13 @@
   function payload() {
     var eff = effectiveRegion() || { level: S.geo.viewLevel, units: [] };
     return {
-      slug: $("#f-slug").value.trim() || undefined,
       title: $("#f-title").value.trim(),
-      subtitle: $("#f-subtitle").value.trim(),
       about: $("#f-about").value.trim(),
       org: $("#f-org").value.trim(),
-      email: $("#f-email").value.trim() || undefined,
       visibility: S.visibility,
       branding: {
         orgName: $("#f-org").value.trim(),
         orgUrl: $("#f-orgurl").value.trim() || undefined,
-        footerLine: $("#f-footer").value.trim() || undefined,
         logoData: S.logoData || undefined,
       },
       region: { iso3: S.geo.iso3, level: eff.level, shapeIDs: eff.units.map(function (u) { return u.id; }) },
@@ -1114,7 +1161,7 @@
         $("#build-title").textContent = "Waiting for a quick approval";
         $("#prog-msg").textContent = "Your atlas needs a bit more computing than the free tier covers (a large region or heavy data layers), " +
           "so the LOKA team gets a quick look first — it's free and usually same-day. " +
-          "We'll email you at " + $("#f-email").value + " when it's approved. You can safely leave this page.";
+          "We'll email you at " + ((S.session && S.session.email) || "your address") + " when it's approved. You can safely leave this page.";
         $("#prog-fill").style.width = "6%";
         pollInstanceUntilBuilding();
       } else {
@@ -1369,7 +1416,6 @@
     $("#auth-step-wait").hidden = true;
     $("#auth-step-profile").hidden = true;
     $("#auth-msg").innerHTML = "";
-    if ($("#f-email").value) $("#auth-email").value = $("#f-email").value;
     dlg.showModal();
     return new Promise(function (resolve) { authResolve = resolve; });
   }
@@ -1547,9 +1593,8 @@
   function draftState() {
     return {
       fields: {
-        title: $("#f-title").value, slug: $("#f-slug").value, subtitle: $("#f-subtitle").value,
-        org: $("#f-org").value, email: $("#f-email").value, orgUrl: $("#f-orgurl").value,
-        about: $("#f-about").value, footer: $("#f-footer").value,
+        title: $("#f-title").value, org: $("#f-org").value,
+        orgUrl: $("#f-orgurl").value, about: $("#f-about").value,
       },
       visibility: S.visibility,
       geo: {
@@ -1570,11 +1615,10 @@
   function applyDraft(d) {
     var st = d.state || {};
     var f = st.fields || {};
-    $("#f-title").value = f.title || ""; $("#f-slug").value = f.slug || "";
-    $("#f-subtitle").value = f.subtitle || ""; $("#f-org").value = f.org || "";
-    $("#f-email").value = f.email || ""; $("#f-orgurl").value = f.orgUrl || "";
-    $("#f-about").value = f.about || ""; $("#f-footer").value = f.footer || "";
-    S.slugTouched = !!f.slug;
+    $("#f-title").value = f.title || ""; $("#f-org").value = f.org || "";
+    $("#f-orgurl").value = f.orgUrl || ""; $("#f-about").value = f.about || "";
+    // older drafts carried a separate subtitle — fold it into the description
+    if (f.subtitle && !f.about) $("#f-about").value = f.subtitle;
     if (st.visibility) setVisibility(st.visibility);
     S.draftId = d.id;
     // the attached uploads ride in the draft — restoring them is what keeps the
@@ -1757,19 +1801,14 @@
   function fillDetails(inst) {
     var bnd = inst.branding || {};
     $("#f-title").value = inst.title || "";
-    $("#f-slug").value = inst.slug || "";
-    $("#f-subtitle").value = inst.subtitle || "";
     $("#f-org").value = inst.org || bnd.orgName || "";
     $("#f-orgurl").value = bnd.orgUrl || "";
     $("#f-about").value = inst.about || "";
-    $("#f-email").value = inst.email || "";
-    $("#f-footer").value = bnd.footerLine || "";
     S.logoData = null; S.removeLogo = false;
     var lh = $("#logo-hint");
     lh.className = "hint";
     lh.textContent = bnd.hasLogo ? "current logo kept — choose a file to replace it" : "";
     setVisibility(inst.visibility || "public");
-    $("#f-slug").disabled = true; // the slug is the atlas URL — fixed after creation
   }
 
   // One edit flow: the full wizard, prefilled. Step 1 (identity) → step 2
@@ -1905,15 +1944,12 @@
   function detailsBody() {
     return {
       title: $("#f-title").value.trim(),
-      subtitle: $("#f-subtitle").value.trim(),
       about: $("#f-about").value.trim(),
       org: $("#f-org").value.trim(),
-      email: $("#f-email").value.trim() || undefined,
       visibility: S.visibility,
       branding: {
         orgName: $("#f-org").value.trim(),
         orgUrl: $("#f-orgurl").value.trim() || undefined,
-        footerLine: $("#f-footer").value.trim() || undefined,
         logoData: S.logoData || undefined,
         removeLogo: S.removeLogo || undefined,
       },
@@ -2021,10 +2057,10 @@
     $("#collab-panel").hidden = true;
     $("#collab-list").innerHTML = ""; $("#collab-msg").innerHTML = ""; $("#collab-email").value = "";
     exitEditChrome();
-    $("#f-slug").disabled = false;
     $(".stepper").hidden = false;
-    ["f-title", "f-slug", "f-subtitle", "f-org", "f-orgurl", "f-email", "f-about", "f-footer"].forEach(function (id) { $("#" + id).value = ""; });
-    S.logoData = null; S.removeLogo = false; S.slugTouched = false;
+    ["f-title", "f-org", "f-orgurl", "f-about"].forEach(function (id) { $("#" + id).value = ""; });
+    ["f-title", "f-org", "f-orgurl"].forEach(clearFieldError);
+    S.logoData = null; S.removeLogo = false;
     $("#logo-hint").textContent = "";
     S.geo = { iso3: "", level: 1, features: [], selected: {}, viewLevel: 1, crumbs: [] };
     S.catalog = { tier: "", layers: [], chosen: {} };

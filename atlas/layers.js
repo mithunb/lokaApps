@@ -70,15 +70,20 @@
   }
 
   function refreshAuth() {
+    var nav = $("#nav-user");
     return api("auth/me").then(function (me) {
       S.me = me;
       var who = me.org || me.name ? " (" + esc(me.org || me.name) + ")" : "";
-      $("#auth-state").innerHTML = "Signed in as <b>" + esc(me.email) + "</b>" + who + ".";
+      // identity belongs in the header; the sign-in card steps out of the way
+      if (nav) { nav.innerHTML = esc(me.email) + who; nav.hidden = false; }
+      $("#signin-card").hidden = true;
       $("#signin-form").hidden = true;
       $("#commit-auth").innerHTML = "Signed in as <b>" + esc(me.email) + "</b> — adding publishes the layer to this atlas.";
       return me;
     }).catch(function () {
       S.me = null;
+      if (nav) { nav.hidden = true; nav.textContent = ""; }
+      $("#signin-card").hidden = false;
       $("#auth-state").textContent = "Adding data changes the atlas, so sign in first — the owner or an invited collaborator.";
       $("#signin-form").hidden = false;
       $("#commit-auth").textContent = "You'll need to be signed in as this atlas's owner or a collaborator.";

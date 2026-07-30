@@ -435,6 +435,13 @@ router.post('/instances', async (req, res) => {
   const session = auth.sessionFromReq(req);
   const ip = clientIp(req);
 
+  // Building an atlas requires a verified email (owner decision, 2026-07-30):
+  // the signed-in account IS the owner and the contact, so there's no separate
+  // contact field and no anonymous instances to reconcile later.
+  if (!session && !auth.isAdmin(req)) {
+    return res.status(401).json({ error: 'sign in to build an atlas', needsAuth: true });
+  }
+
   // limits first
   if (reg.instanceCount() >= MAX_INSTANCES) {
     return res.status(429).json({ error: 'instance limit reached — contact us to raise it' });
@@ -448,14 +455,11 @@ router.post('/instances', async (req, res) => {
   const subtitle = cap(b.subtitle, 160);
   const about = cap(b.about, 500);
   const org = cap(b.org, 60);
+  // the signed-in account is the owner and the contact (admin token may pass one)
   const email = reg.normEmail(session ? session.email : b.email);
   const visibility = b.visibility === 'private' ? 'private' : 'public';
-  if (!title) return res.status(400).json({ error: 'title is required' });
-  if (b.email && !reg.validEmail(b.email)) return res.status(400).json({ error: 'invalid email' });
-
-  if (visibility === 'private' && !session) {
-    return res.status(401).json({ error: 'private atlases need a verified email', needsAuth: true });
-  }
+  if (!title) return res.status(400).json({ error: 'give your atlas a title' });
+  if (!org) return res.status(400).json({ error: 'add the organisation or project this atlas belongs to' });
 
   const branding = {
     orgName: cap(b.branding && b.branding.orgName, 60) || org,
@@ -504,10 +508,23 @@ router.post('/instances', async (req, res) => {
   for (const l of allowed.values()) if (l.required && !layerIds.includes(l.id)) layerIds.unshift(l.id);
   if (!layerIds.length) return res.status(400).json({ error: 'no valid layers chosen' });
 
-  // slug
-  const slug = b.slug ? String(b.slug) : reg.slugify(`${title}`);
-  if (!reg.slugAvailable(slug, DATASETS_ROOT) || fs.existsSync(path.join(PRIVATE_ROOT, slug))) {
-    return res.status(409).json({ error: 'slug unavailable', slug });
+  // Slug: derived from the title, never asked for. Uniqueness is the server's
+  // job — two atlases may legitimately share a title, so a taken address gets a
+  // numeric suffix rather than an error the user can't act on. A caller that
+  // pins an explicit slug still gets the strict 409.
+  const slugTaken = (s) => !reg.slugAvailable(s, DATASETS_ROOT) || fs.existsSync(path.join(PRIVATE_ROOT, s));
+  let slug;
+  if (b.slug) {
+    slug = String(b.slug);
+    if (slugTaken(slug)) return res.status(409).json({ error: 'slug unavailable', slug });
+  } else {
+    const base = reg.validSlug(reg.slugify(`${title}`)) ? reg.slugify(`${title}`) : 'atlas';
+    slug = slugTaken(base) ? null : base;
+    for (let n = 2; !slug && n <= 99; n++) {
+      const cand = (base + '-' + n).slice(0, 40);
+      if (!slugTaken(cand)) slug = cand;
+    }
+    if (!slug) return res.status(409).json({ error: 'couldn’t find a free web address for that title — try a different one' });
   }
 
   // cost gate: heavy layers OR a large region both go through admin approval

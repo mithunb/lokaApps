@@ -36,6 +36,7 @@
     .nav { width:var(--container); margin:0 auto; padding:1rem 0; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
     .brand { font-family:'Figtree',sans-serif; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--color-text-primary); font-size:.875rem; }
     .nav .links a { color:var(--color-text-secondary); font-size:.9rem; margin-left:1.25rem; }
+    #nav-user { color:var(--color-text-primary); font-size:.9rem; font-weight:600; }
     main { width:var(--container); margin:0 auto; padding:2rem 0 3rem; }
     .eyebrow { display:inline-block; font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:600;
       letter-spacing:.14em; text-transform:uppercase; color:var(--color-moss); margin:0 0 .8rem;
@@ -225,6 +226,7 @@
     <nav class="nav" aria-label="Primary">
       <a href="../" class="brand">LOKA / apps</a>
       <div class="links">
+        <span id="nav-user" hidden></span>
         <a href="./setup/">setup wizard</a>
         <a href="./" id="nav-atlas">open the atlas</a>
       </div>
@@ -268,8 +270,10 @@
       </details>
       <div id="msg-start"></div>
 
-      <!-- adding data changes the atlas, so who-you-are comes first -->
-      <div class="signin">
+      <!-- Adding data changes the atlas, so sign-in comes first. When you ARE
+           signed in this whole block disappears — your identity shows in the
+           header, not as a stray sentence in the middle of the upload step. -->
+      <div class="signin" id="signin-card" hidden>
         <p class="hint" id="auth-state" style="margin:0 0 .6rem">Checking who you are…</p>
         <div id="signin-form" hidden>
           <div class="signin-row">
