@@ -922,8 +922,7 @@
             if (e) return finish(errMsg(e));
             S.dataFirst = S.dataFirst || { iso3: "", inf: null, locators: null };
             if (!S.dataFirst.iso3) S.dataFirst.iso3 = S.geo.iso3;
-            addUserFile(file.name || "data", canonical);
-            finish(null);
+            finish(addUserFile(file.name || "data", canonical));   // null unless it's a duplicate
           });
         });
       });
@@ -1225,22 +1224,21 @@
     $("#next-4").hidden = false;
     $("#back-4").hidden = false;
 
+    loadPreview();
+    $("#next-4").disabled = false;
     var pending = userFiles();
     var lost = S._lostFiles || [];
     if (pending.length) {
-      // The dataset folder exists now, so the uploads can be committed. Hold the
-      // preview until they are: loading it first and reloading afterwards raced
-      // the commit, and a preview that lost the race showed an atlas with no
-      // data layer — exactly the "no tag markers" report.
-      $("#next-4").disabled = true;   // publish once the data is really in
+      // Your data is NOT added silently with guessed defaults. The atlas exists
+      // now, so hand the file(s) to the add-data wizard, where you choose the
+      // fields, review the generated categories and labels, confirm placement
+      // and styling, and add the layer yourself.
       $("#prog-msg").textContent = pending.length === 1
-        ? "Adding your data as a map layer…"
-        : "Adding your " + pending.length + " data files as map layers…";
-      autoAddData();
+        ? "Your atlas is built. Next: set up your data as a map layer."
+        : "Your atlas is built. Next: set up your " + pending.length + " data files as map layers.";
+      renderHandoffCta(pending);
     } else {
-      loadPreview();
       $("#prog-msg").textContent = "Built. Explore the preview below, then publish.";
-      $("#next-4").disabled = false;
       if (lost.length) {
         msg(4, esc(lost.join(", ")) + " couldn't ride along with the resumed draft — add it from the " +
           '<a href="../layers.html?dataset=' + encodeURIComponent(S.build.slug) + '">data bench</a>.', "ok");
@@ -1248,113 +1246,42 @@
     }
   }
 
-  // Commit each attached file as its own layer (ingest → commit, sequentially so
-  // layer ids and manifest writes can't interleave), then load the preview once
-  // and report exactly how each layer was styled. A failure is non-fatal: the
-  // atlas is built either way, and we point at the data bench.
-  function autoAddData() {
-    if (!S.build || !S.build.slug) return;
-    var H = authHeaders(), added = [], failed = [];
-    var queue = userFiles().slice();
-
-    function bodyFor(item) {
-      var canon = item.canonical;
-      var cols = canon.schema.filter(function (c) { return !c.ignored; });
-      var names = cols.map(function (c) { return c.name; });
-      var body = {
-        dataset: S.build.slug, filename: item.filename || "data",
-        schema: cols.map(function (c) { return { name: c.name, type: c.type }; }),
-        rows: canon.rows.map(function (r) { var o = {}; names.forEach(function (n) { o[n] = r[n]; }); return o; }),
-        meta: canon.meta,
-      };
-      if (canon.geoms && canon.geoms.length) { body.geoms = canon.geoms; body.geomIdx = canon.geomIdx; }
-      return body;
-    }
-
-    function step(i) {
-      if (i >= queue.length) return finish();
-      var item = queue[i];
-      if (queue.length > 1) $("#prog-msg").textContent = "Adding " + (item.filename || "your data") + " (" + (i + 1) + " of " + queue.length + ")…";
-      var ing = null;
-      api("layers/ingest", { method: "POST", headers: H, body: bodyFor(item) })
-        .then(function (r) {
-          ing = r;
-          return api("layers/commit", { method: "POST", headers: H, body: { importId: r.importId } });
-        })
-        .then(function (c) {
-          added.push({ filename: item.filename, layerId: c.layerId, stanza: ing.fragment || {}, stats: ing.stats || {} });
-          step(i + 1);
-        })
-        .catch(function (e) { failed.push({ filename: item.filename, error: errMsg(e) }); step(i + 1); });
-    }
-
-    function finish() {
-      // committed files leave the queue; anything that failed stays attachable
-      S.userFiles = queue.filter(function (q) {
-        return failed.some(function (f) { return f.filename === q.filename; });
-      });
-      cacheDataFirstDraft();
-      loadPreview();   // first and only load — the layers are on disk by now
-      $("#next-4").disabled = false;
-      $("#prog-msg").textContent = added.length
-        ? (added.length === 1 ? "Built, with your data on the map." : "Built, with your " + added.length + " data layers on the map.")
-        : "Built. Explore the preview below, then publish.";
-      renderDataSummary(added);
-      if (failed.length) {
-        msg(4, failed.map(function (f) { return esc(f.filename) + " — " + esc(f.error); }).join("<br>") +
-          '<br>Add it by hand from the <a href="../layers.html?dataset=' + encodeURIComponent(S.build.slug) + '">data bench</a>.');
-      }
-    }
-
-    step(0);
-  }
-
-  /* "How is my data shown?" — read the committed layer stanza back and say, in
-     plain language, what the map does with it. Everything here comes from the
-     stanza the server actually produced, not from a guess. */
-  function renderDataSummary(added) {
+  // The bridge into the add-data wizard: the files (and the atlas's edit token,
+  // so this works even before the atlas is bound to an account) ride in
+  // sessionStorage; the bench picks them up and skips its upload step.
+  function renderHandoffCta(pending) {
     var box = $("#data-summary");
     if (!box) return;
-    if (!added || !added.length) { box.hidden = true; box.innerHTML = ""; return; }
-    var KIND_TEXT = {
-      marker: "pins at each point", circle: "dots at each point", categories: "coloured areas",
-      fill: "shaded areas", line: "lines", choropleth: "areas shaded by value", raster: "an image overlay",
-    };
-    var html = "<h3>How your data is shown</h3>";
-    added.forEach(function (a) {
-      var L = a.stanza || {}, facts = [];
-      var n = (a.stats && a.stats.features) || 0;
-      facts.push("<b>" + n.toLocaleString() + "</b> " + (n === 1 ? "feature" : "features") +
-        " drawn as " + (KIND_TEXT[L.type] || L.type || "map features"));
-      var legend = L.legend || [];
-      if (L.markerBy && legend.length) {
-        facts.push("coloured by <b>" + esc(L.markerBy === "_category" ? "category" : L.markerBy) + "</b> — " +
-          legend.length + " values, each with its own colour" + (L.categoryIcons ? " and icon" : "") + ", listed in the map legend");
-      } else if (legend.length) {
-        facts.push("legend with " + legend.length + " " + (legend.length === 1 ? "entry" : "entries"));
-      }
-      var popup = L.popup || {};
-      if (popup.title || (popup.fields || []).length) {
-        var fieldNames = (popup.fields || []).map(function (f) { return f.label || f.property; });
-        facts.push("click a feature for a popup titled by <b>" + esc(popup.title || "your title column") + "</b>" +
-          (fieldNames.length ? ", showing " + esc(fieldNames.slice(0, 6).join(", ")) : ""));
-        if ((popup.fields || []).some(function (f) { return f.type === "image"; })) facts.push("images in the popup where your rows have image links");
-        if ((popup.fields || []).some(function (f) { return f.type === "tags"; })) facts.push("tags shown as chips, and searchable from the map's search box");
-      }
-      html += '<div class="ds-layer"><b>' + esc(a.filename || a.layerId) + "</b> → layer “" + esc(L.label || a.layerId) + "”" +
-        '<ul class="ds-facts">' + facts.map(function (f) { return "<li>" + f + "</li>"; }).join("") + "</ul>";
-      if (legend.length) {
-        html += '<div class="ds-swatches">' + legend.slice(0, 12).map(function (x) {
-          return '<span class="ds-chip"><span class="ds-dot" style="background:' + esc(x.color || "#999") + '"></span>' + esc(x.label) + "</span>";
-        }).join("") + "</div>";
-      }
-      html += "</div>";
-    });
-    html += '<p class="hint" style="margin:.6rem 0 0">Want it styled differently? Open the ' +
-      '<a href="../layers.html?dataset=' + encodeURIComponent(S.build.slug) + '">data bench</a> — you can restyle, rename or remove any layer there.</p>';
-    box.innerHTML = '<div class="ds-card">' + html + "</div>";
     box.hidden = false;
+    var names = pending.map(function (f) { return esc(f.filename); }).join(", ");
+    box.innerHTML = '<div class="ds-card"><h3>Your data is ready to set up</h3>' +
+      '<p class="hint">' + names + " — you'll choose which fields go on the map, review any generated " +
+      "categories and labels, confirm how the rows are placed, and see the styled layer before it's added. " +
+      "Nothing touches the atlas until you say so.</p>" +
+      '<button type="button" class="btn" id="ds-go">Set up my data →</button>' +
+      ' <span class="hint">or publish first and add it later</span></div>';
+    $("#ds-go").onclick = function () {
+      try {
+        sessionStorage.setItem("loka-atlas-handoff", JSON.stringify({
+          slug: S.build.slug, editToken: S.build.editToken || null, returnTo: "publish", i: 0,
+          files: pending.map(function (f) { return { filename: f.filename, canonical: f.canonical }; }),
+        }));
+        // Leaving the wizard drops its in-memory edit token, and an atlas built
+        // anonymously has no account to fall back on — so stash what publishing
+        // needs (same tab, same origin) rather than putting a token in the URL.
+        sessionStorage.setItem("loka-atlas-publish", JSON.stringify({
+          slug: S.build.slug, editToken: S.build.editToken || null, viewKey: S.build.viewKey || null,
+        }));
+      } catch (e) {
+        msg(4, "This browser wouldn't hold the file for the hand-off — open the " +
+          '<a href="../layers.html?dataset=' + encodeURIComponent(S.build.slug) + '">data bench</a> and drop it there.');
+        return;
+      }
+      S.userFiles = []; cacheDataFirstDraft();   // the bench owns them now
+      location.href = "../layers.html?dataset=" + encodeURIComponent(S.build.slug) + "&handoff=1";
+    };
   }
+
 
   $("#back-4").onclick = function () { show(3); };
   $("#next-4").onclick = function () {
@@ -1378,6 +1305,7 @@
     api("instances/" + S.build.slug + "/publish", { method: "POST", headers: authHeaders(), body: {} })
       .then(function () {
         clearLocal(); // published — the browser-local backup is no longer needed
+        clearPublishStash();
         S._published = true;   // step 5 becomes a stepper destination
         show(5);
         renderPublished();
@@ -1566,12 +1494,26 @@
      adds more. They commit in order after the build. */
   function userFiles() { return (S.userFiles = S.userFiles || []); }
   function userFileRows() { return userFiles().reduce(function (n, f) { return n + f.canonical.rows.length; }, 0); }
+  // cheap content fingerprint (FNV-1a over the typed rows) — enough to spot the
+  // same file attached twice under a different name; the server hashes the built
+  // features and has the final say at commit
+  function contentKey(canonical) {
+    var s = JSON.stringify(canonical.rows), h = 0x811c9dc5;
+    for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = (h * 0x01000193) >>> 0; }
+    return canonical.rows.length + "-" + h.toString(16);
+  }
+
+  // Returns null when queued, or a message explaining why it wasn't.
   function addUserFile(filename, canonical) {
     var list = userFiles();
+    var key = contentKey(canonical);
+    var same = list.find(function (f) { return f.key === key && f.filename !== filename; });
+    if (same) return "duplicate of " + same.filename + " — not attached again.";
     var dup = list.findIndex(function (f) { return f.filename === filename; });
-    if (dup >= 0) list[dup] = { filename: filename, canonical: canonical };   // re-drop replaces
-    else list.push({ filename: filename, canonical: canonical });
+    if (dup >= 0) list[dup] = { filename: filename, canonical: canonical, key: key };   // re-drop replaces
+    else list.push({ filename: filename, canonical: canonical, key: key });
     cacheDataFirstDraft();
+    return null;
   }
   function removeUserFile(i) { userFiles().splice(i, 1); cacheDataFirstDraft(); renderOwnDataCard(); }
 
@@ -1640,7 +1582,8 @@
     if (st.dataFirst) {
       S.dataFirst = { canonical: null, file: null, filename: "", iso3: st.dataFirst.iso3 || "",
         inf: st.dataFirst.inf || null, locators: null };
-      S.userFiles = (st.dataFirst.files || []).filter(function (f) { return f && f.canonical; });
+      S.userFiles = (st.dataFirst.files || []).filter(function (f) { return f && f.canonical; })
+        .map(function (f) { return { filename: f.filename, canonical: f.canonical, key: contentKey(f.canonical) }; });
       if (S.userFiles.length) {
         S.dataFirst.canonical = S.userFiles[0].canonical;
         S.dataFirst.filename = S.userFiles[0].filename;
@@ -1788,9 +1731,18 @@
       if (!busy && (i.status === "published" || i.status === "built")) {
         var addData = document.createElement("a");
         addData.href = "../layers.html?dataset=" + encodeURIComponent(i.slug);
-        addData.textContent = "Add data";
-        addData.title = "Add your own data as a map layer (CSV, Excel, JSON, GeoJSON, KML, GPX) — experimental, under development";
+        addData.textContent = "Add & manage data";
+        addData.title = "Add your own data as map layers (CSV, Excel, JSON, GeoJSON, KML, GPX), restyle or remove the ones already there";
         actions.appendChild(addData);
+      }
+      // built-but-unpublished: publishing was only reachable inside the wizard,
+      // so leaving it (e.g. to set data up) used to strand the atlas unpublished
+      if (i.status === "built") {
+        var pub = document.createElement("button");
+        pub.textContent = "Publish";
+        pub.title = "Make this atlas live at its shareable link";
+        pub.onclick = function () { resumePublish(i.slug); };
+        actions.appendChild(pub);
       }
       if (i.role !== "editor") { // only the owner can delete
         var del = document.createElement("button"); del.className = "danger"; del.textContent = "Delete";
@@ -1904,6 +1856,50 @@
     $("#next-1").textContent = "Choose your region →";
     $("#next-2").textContent = "Choose layers →";
     $("#next-3").hidden = false;
+  }
+
+  /* Come back to publishing after setting data up in the bench (or from the
+     dashboard). The wizard's in-memory edit token is gone by then, so this
+     leans on the signed-in session — the publish route accepts the owner. */
+  function readPublishStash() {
+    try {
+      var s = JSON.parse(sessionStorage.getItem("loka-atlas-publish") || "null");
+      return s && s.slug ? s : null;
+    } catch (e) { return null; }
+  }
+  function clearPublishStash() { try { sessionStorage.removeItem("loka-atlas-publish"); } catch (e) {} }
+
+  function resumePublish(slug) {
+    var stash = readPublishStash();
+    if (stash && stash.slug !== slug) stash = null;
+    var hdrs = (stash && stash.editToken) ? { Authorization: "Bearer " + stash.editToken } : {};
+    api("instances/" + slug, { headers: hdrs }).then(function (inst) {
+      if (!inst.canEdit) { showHome(); return; }
+      S.mode = "wizard";
+      S.build = {
+        slug: slug,
+        viewKey: inst.viewKey || (stash && stash.viewKey) || null,
+        editToken: (stash && stash.editToken) || null,
+      };
+      S.visibility = inst.visibility || "public";
+      fillDetails(inst);
+      if (inst.status === "published") {
+        S._published = true;
+        show(5);
+        renderPublished();
+        return;
+      }
+      show(4);
+      $("#build-title").innerHTML = CHECK_SVG + "Your atlas is ready";
+      $("#prog-fill").style.width = "100%";
+      $("#prog-bar").classList.remove("working");
+      $("#prog-layer").hidden = true;
+      $("#prog-msg").textContent = "Your data is set up. Publish when you're ready.";
+      loadPreview();
+      $("#next-4").hidden = false;
+      $("#next-4").disabled = false;
+      $("#back-4").hidden = true;   // the wizard's earlier steps aren't loaded in this session
+    }).catch(function () { showHome(); });
   }
 
   function detailsBody() {
@@ -2068,16 +2064,19 @@
   var QS = new URLSearchParams(location.search);
   var EDIT_PARAM = QS.get("edit");
   var SIGNIN_PARAM = QS.get("signin");
+  var PUBLISH_PARAM = QS.get("publish");
 
   api("auth/me").then(function (me) {
     S.session = me;
     showSignedIn(me);
     loadDrafts();
     renderMyAtlases();
-    if (EDIT_PARAM) focusManage(EDIT_PARAM);
+    if (PUBLISH_PARAM) resumePublish(PUBLISH_PARAM);
+    else if (EDIT_PARAM) focusManage(EDIT_PARAM);
     else if ((me.instances || []).length) showHome(); // returning creator → dashboard, not the form
   }).catch(function () {
-    if (EDIT_PARAM) focusManage(EDIT_PARAM); // not signed in → focusManage will prompt
+    if (PUBLISH_PARAM) resumePublish(PUBLISH_PARAM);
+    else if (EDIT_PARAM) focusManage(EDIT_PARAM); // not signed in → focusManage will prompt
     else if (SIGNIN_PARAM) signIn("Sign in to see and manage your atlases.").then(function (ok) {
       if (ok) {
         loadDrafts();
@@ -2086,6 +2085,6 @@
     });
   });
   loadDirectory();
-  showFork();   // every fresh visit starts at the fork; auth may swap in the dashboard
-  if (!EDIT_PARAM) offerLocalResume();
+  if (!PUBLISH_PARAM) showFork();   // fresh visit starts at the fork; auth may swap in the dashboard
+  if (!EDIT_PARAM && !PUBLISH_PARAM) offerLocalResume();
 })();

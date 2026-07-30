@@ -21,6 +21,9 @@
   function api(path, opts) {
     opts = opts || {};
     opts.headers = Object.assign({ "Content-Type": "application/json" }, opts.headers || {});
+    // Arriving from the setup wizard we carry its edit token, so the atlas's
+    // creator can set up their data even before the atlas is bound to an account.
+    if (S.editToken && !opts.headers.Authorization) opts.headers.Authorization = "Bearer " + S.editToken;
     if (opts.body && typeof opts.body !== "string") opts.body = JSON.stringify(opts.body);
     return fetch(API + path, opts).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (j) {
@@ -37,6 +40,7 @@
   var S = {
     dataset: "", canonical: null, names: [], result: null, options: null,
     step: 1, me: null, styleReady: false, spatial: false,
+    editToken: null, handoff: null,   // set when the setup wizard sends files here
   };
   var CLASS_LABEL = { point: "points", line: "lines", polygon: "areas (polygons)" };
 
@@ -139,6 +143,64 @@
   }
   loadAddedLayers();
   $("#f-dataset").addEventListener("change", loadAddedLayers);
+
+  /* ---- handoff from the setup wizard ----
+     A freshly built atlas sends its attached file(s) here instead of committing
+     them with defaults, so every field, category and style choice is reviewed.
+     The queue lives in sessionStorage so a reload mid-setup resumes. */
+  var HANDOFF_KEY = "loka-atlas-handoff";
+
+  function readHandoff() {
+    try { return JSON.parse(sessionStorage.getItem(HANDOFF_KEY) || "null"); }
+    catch (e) { return null; }
+  }
+  function writeHandoff(h) {
+    try {
+      if (h && h.files && h.i < h.files.length) sessionStorage.setItem(HANDOFF_KEY, JSON.stringify(h));
+      else sessionStorage.removeItem(HANDOFF_KEY);
+    } catch (e) { /* private mode — the flow still works, just not across reloads */ }
+  }
+  function handoffBanner() {
+    var h = S.handoff, box = $("#handoff-note");
+    if (!box) return;
+    if (!h || h.i >= h.files.length) { box.hidden = true; return; }
+    box.hidden = false;
+    var f = h.files[h.i];
+    box.innerHTML = "<b>Setting up your data" +
+      (h.files.length > 1 ? " — file " + (h.i + 1) + " of " + h.files.length : "") + ":</b> " +
+      esc(f.filename) + ". Walk the steps, then <b>Add to the atlas</b> when it looks right." +
+      (h.returnTo === "publish" ? " Your atlas is built and waiting to be published." : "");
+  }
+  function startHandoffFile() {
+    var h = S.handoff;
+    if (!h || h.i >= h.files.length) return false;
+    handoffBanner();
+    startCheck(h.files[h.i].canonical);
+    return true;
+  }
+  // called after a successful commit: advance the queue, or finish up
+  function handoffNext() {
+    var h = S.handoff;
+    if (!h) return false;
+    h.i += 1;
+    writeHandoff(h);
+    if (h.i < h.files.length) return true;   // caller offers the next file
+    return false;
+  }
+
+  (function initHandoff() {
+    var qs = new URLSearchParams(location.search);
+    if (qs.get("handoff") !== "1") return;
+    var h = readHandoff();
+    if (!h || !h.files || !h.files.length || h.i >= h.files.length) return;
+    if (qsDataset && h.slug && h.slug !== qsDataset) return;   // stale handoff for another atlas
+    S.handoff = h;
+    S.dataset = h.slug || qsDataset || "";
+    if (h.editToken) S.editToken = h.editToken;
+    $("#f-dataset").value = S.dataset;
+    loadAddedLayers();
+    startHandoffFile();
+  })();
 
   /* ---- file intake ---- */
 
@@ -811,8 +873,29 @@
     if (!S.result) return;
     api("layers/commit", { method: "POST", body: { importId: S.result.importId } })
       .then(function (r) {
-        msg("#msg-commit", 'Layer added 🎉 — <a href="./?dataset=' + encodeURIComponent(r.dataset) + '" target="_blank">open the atlas</a>', "ok");
         loadAddedLayers();
+        var openLink = '<a href="./?dataset=' + encodeURIComponent(r.dataset) + '" target="_blank">open the atlas</a>';
+        if (S.handoff) {
+          var more = handoffNext();
+          if (more) {
+            var nf = S.handoff.files[S.handoff.i];
+            msg("#msg-commit", "Layer added 🎉 — " + openLink +
+              '.<br><button type="button" class="btn" id="handoff-go">Set up the next file: ' + esc(nf.filename) +
+              " (" + (S.handoff.i + 1) + " of " + S.handoff.files.length + ") →</button>", "ok");
+            var go = $("#handoff-go");
+            if (go) go.onclick = function () { msg("#msg-commit", ""); startHandoffFile(); };
+            return;
+          }
+          // queue done — hand them back to publishing if that's where they came from
+          var back = S.handoff.returnTo === "publish"
+            ? '<br><a class="btn" href="./setup/?publish=' + encodeURIComponent(r.dataset) + '">Back to publishing →</a>'
+            : "";
+          S.handoff = null;
+          handoffBanner();
+          msg("#msg-commit", "Layer added 🎉 — " + openLink + "." + back, "ok");
+          return;
+        }
+        msg("#msg-commit", "Layer added 🎉 — " + openLink, "ok");
       })
       .catch(function (e) {
         if (e.needsAuth) {

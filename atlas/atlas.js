@@ -115,13 +115,23 @@
     renderHome();
   } else {
   fetch(dataUrl("manifest.json"))
-    .then(function (r) { if (!r.ok) throw new Error("manifest " + r.status); return r.json(); })
+    .then(function (r) {
+      if (!r.ok) throw new Error(r.status === 404
+        ? "There's no atlas at that address — it may have been removed, or it's still being built."
+        : "The atlas data couldn't be loaded (error " + r.status + "). Try again in a moment.");
+      // A web-server error page answering 200 would otherwise surface as a raw
+      // JSON parse error; say something the reader can act on instead.
+      return r.text().then(function (t) {
+        try { return JSON.parse(t); }
+        catch (e) { throw new Error("The atlas data came back unreadable — reload the page, and tell us if it keeps happening."); }
+      });
+    })
     .then(mergeLocalOverlay)
     .then(start)
     .then(checkOwner)
     .catch(function (err) {
       $("#atlas-map").innerHTML =
-        '<div class="atlas-error">Could not load dataset “' + esc(DATASET) + '”.<br><small>' + esc(err.message) + "</small></div>";
+        '<div class="atlas-error">Could not load “' + esc(DATASET) + '”.<br><small>' + esc(err.message) + "</small></div>";
     });
   }
 
@@ -441,9 +451,16 @@
     // layer ids — wirePopups, fitToData — can wait for it).
     return Promise.all(layers.map(function (L) {
       if (L.type === "raster" || !L.source) return Promise.resolve();
-      return fetch(dataUrl(L.source)).then(function (r) { return r.json(); })
+      // One unreachable layer file must not take the atlas down — skip that
+      // layer and say so in the console (silently empty layers are worse to
+      // debug than a named miss).
+      return fetch(dataUrl(L.source))
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
         .then(function (d) { DATA[L.id] = d; })
-        .catch(function () {});
+        .catch(function (e) {
+          L._missing = true;
+          console.warn("Atlas: layer “" + L.id + "” couldn't load its data (" + L.source + "): " + e.message);
+        });
     })).then(function () {
       layers.forEach(function (L) {
         if (L.type === "fill") addFill(L);

@@ -10,6 +10,7 @@
 import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import * as reg from '../lib/atlas/registry.js';
 import * as auth from '../lib/atlas/auth.js';
@@ -1934,6 +1935,26 @@ router.post('/layers/commit', (req, res) => {
       const t = transform(session);
       return { frag: t.frag, features: t.features };
     })();
+    // Same data twice is almost always a mistake (a re-upload, or the wizard's
+    // auto-add racing a manual one). Fingerprint the resulting features and
+    // refuse a second copy — the authoritative check, since every path (bench,
+    // data-first auto-add) commits through here.
+    const contentHash = crypto.createHash('sha256')
+      .update(JSON.stringify(features)).digest('hex').slice(0, 16);
+    let existing = [];
+    try {
+      const m0 = imports.readManifest(session.dataset);
+      existing = (m0 && m0.local && m0.local.layers) || [];
+    } catch { /* no overlay yet */ }
+    const twin = existing.find((l) => l.contentHash === contentHash && l.id !== frag.stanza.id);
+    if (twin) {
+      return res.status(409).json({
+        error: 'this data is already on the atlas as “' + (twin.label || twin.id) +
+          '” — remove that layer first if you want to add it again',
+        duplicate: true, layerId: twin.id,
+      });
+    }
+    frag.stanza.contentHash = contentHash;
     // credit the contributor: which org (and person) added this layer
     const who = auth.sessionFromReq(req);
     if (who) {
