@@ -1567,6 +1567,11 @@ function applyResult(session, withDraft) {
     fragment: frag.stanza,
     draftDataset: draftId,
     stats: { features: features.length, kind: frag.kindUsed },
+    duplicateOf: (function () {
+      const hit = findLayerByContent(session.dataset, hashRows(session.rows),
+        frag.stanza && frag.stanza.label, null);
+      return hit ? { layerId: hit.layer.id, label: hit.layer.label || hit.layer.id, exact: hit.exact } : null;
+    })(),
   };
 }
 
@@ -1978,6 +1983,30 @@ async function embedAndStoreVocab(dataset, layerId, stanza, features) {
   });
 }
 
+// Fingerprint the data the user UPLOADED, not the features we derived from it:
+// the same file styled two ways must still be recognised as the same data.
+function hashRows(rows) {
+  return crypto.createHash('sha256').update(JSON.stringify(rows || [])).digest('hex').slice(0, 16);
+}
+
+// Is this data already on the atlas? Exact for anything committed since we
+// started storing the hash; for older layers all we can honestly compare is the
+// name they were given (which came from the filename), so that warns rather
+// than claims certainty.
+function findLayerByContent(datasetId, contentHash, label, exceptId) {
+  if (!datasetId) return null;
+  let m = null;
+  try { m = imports.readManifest(datasetId); } catch { return null; }
+  const layers = (m && m.local && m.local.layers) || [];
+  const norm = (x) => String(x || '').trim().toLowerCase();
+  for (const l of layers) {
+    if (exceptId && l.id === exceptId) continue;
+    if (l.contentHash) { if (l.contentHash === contentHash) return { layer: l, exact: true }; continue; }
+    if (label && norm(l.label) === norm(label)) return { layer: l, exact: false };
+  }
+  return null;
+}
+
 router.post('/layers/search', async (req, res) => {
   const b = req.body || {};
   const dataset = String(b.dataset || '');
@@ -2034,19 +2063,13 @@ router.post('/layers/commit', (req, res) => {
     // auto-add racing a manual one). Fingerprint the resulting features and
     // refuse a second copy — the authoritative check, since every path (bench,
     // data-first auto-add) commits through here.
-    const contentHash = crypto.createHash('sha256')
-      .update(JSON.stringify(features)).digest('hex').slice(0, 16);
-    let existing = [];
-    try {
-      const m0 = imports.readManifest(session.dataset);
-      existing = (m0 && m0.local && m0.local.layers) || [];
-    } catch { /* no overlay yet */ }
-    const twin = existing.find((l) => l.contentHash === contentHash && l.id !== frag.stanza.id);
-    if (twin) {
+    const contentHash = hashRows(session.rows);
+    const hit = findLayerByContent(session.dataset, contentHash, frag.stanza.label, frag.stanza.id);
+    if (hit && hit.exact) {
       return res.status(409).json({
-        error: 'this data is already on the atlas as “' + (twin.label || twin.id) +
+        error: 'this data is already on the atlas as “' + (hit.layer.label || hit.layer.id) +
           '” — remove that layer first if you want to add it again',
-        duplicate: true, layerId: twin.id,
+        duplicate: true, layerId: hit.layer.id,
       });
     }
     frag.stanza.contentHash = contentHash;

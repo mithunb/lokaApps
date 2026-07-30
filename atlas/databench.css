@@ -147,3 +147,17 @@
     .chat-row { display:flex; gap:.5rem; }
     .chat-row input { flex:1; }
     footer.site { margin-top:3rem; border-top:1px solid var(--color-divider); background:var(--color-bg-alt); }
+
+    /* the location answer, stated before anything about styling */
+    .loc-first { font-size:.9rem; padding:.6rem .8rem; border-radius:4px; margin:0 0 .9rem; }
+    .loc-first.ok { background:var(--color-moss-tint); color:var(--color-canopy); }
+    .loc-first.warn { background:var(--color-rust-tint); color:var(--color-rust-deep); }
+    .loc-first b { font-weight:600; }
+
+    /* styling step: one question per line, finer control folded away */
+    .style-more { margin-top:.6rem; }
+    .style-more > summary { cursor:pointer; font-size:.85rem; color:var(--color-text-secondary); }
+    #style-lead { margin:0 0 .8rem; }
+    /* a closed <details> stops hiding a child that sets its own display (our
+       .grid2), so make the collapse explicit */
+    details:not([open]) > *:not(summary) { display:none !important; }

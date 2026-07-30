@@ -13,7 +13,8 @@
   "use strict";
 
   var STEP1_HTML = `    <section class="panel step" id="step-1">
-      <label class="f" style="max-width:24rem">Which atlas?
+      <p id="dataset-known" hidden>Adding data to <b id="dataset-name"></b>. <a href="#" id="dataset-change">Choose a different atlas</a></p>
+      <label class="f" id="dataset-ask" style="max-width:24rem">Which atlas?
         <input type="text" id="f-dataset" placeholder="dataset id, e.g. deoria-bioregion" />
         <span class="hint" id="dataset-hint"></span>
       </label>
@@ -70,6 +71,8 @@
       </div>
       <!-- spatial uploads: what the geometry cleaning found -->
       <div id="geom-summary" class="infer-note" hidden></div>
+      <!-- the first question: where are these rows? -->
+      <div id="loc-first" class="loc-first" hidden></div>
       <!-- text descriptions with no categories: derive category + labels -->
       <div id="enrich-panel" class="enrich-panel" hidden>
         <div class="enrich-head">
@@ -150,58 +153,56 @@
     <section class="bench step" id="step-4" hidden>
       <div class="bench-left">
         <div class="card">
-          <h2>Style the layer</h2>
-          <div class="grid2">
-            <label class="f">Layer name<input type="text" id="s-label" maxlength="60" /></label>
-            <label class="f">Layer kind
-              <select id="s-kind"><option value="markers">Points / markers</option><option value="choropleth">Choropleth (colour by value)</option></select>
-            </label>
-            <label class="f" id="w-value">Value column<select id="s-value"></select></label>
-            <label class="f" id="w-catcol" hidden>Colour by<select id="s-catcol"></select></label>
-            <label class="f" id="w-palette">Colour ramp<select id="s-palette"></select></label>
-            <label class="f" id="w-marker">Marker colour<select id="s-marker"></select></label>
-            <label class="f" id="w-linecolor" hidden>Line colour<select id="s-linecolor"></select></label>
-            <label class="f" id="w-linewidth" hidden>Line width
-              <select id="s-linewidth"><option value="1">Thin</option><option value="2" selected>Regular</option><option value="3.5">Bold</option><option value="5">Heavy</option></select>
-            </label>
-            <label class="f" id="w-linedash" hidden style="flex-direction:row; align-items:center; gap:.5rem"><input type="checkbox" id="s-linedash" style="width:auto" /> Dashed line</label>
-            <label class="f" id="w-fillcolor" hidden>Fill colour<select id="s-fillcolor"></select></label>
-            <label class="f" id="w-fillopacity" hidden>Fill opacity
-              <select id="s-fillopacity"><option value="0.25">Light</option><option value="0.45" selected>Medium</option><option value="0.7">Strong</option></select>
-            </label>
-            <label class="f">Group
-              <select id="s-group"><option value="userdata">Your data</option><option value="agri">Crops &amp; value chain</option><option value="base">Base</option><option value="eco">Ecological landscape</option></select>
-            </label>
-            <label class="f">Popup title<select id="s-poptitle"></select></label>
-            <label class="f"><span>Photo column <span class="hint">(image URLs, optional)</span></span><select id="s-image"></select></label>
-          </div>
-          <p class="hint" id="style-state" style="margin:.4rem 0 0"></p>
-          <details class="frag"><summary>Layer definition (JSON)</summary><pre id="frag-json"></pre></details>
-        </div>
+          <h2>How it looks</h2>
+          <p class="hint" id="style-lead">The map on the right updates as you change these.</p>
+          <label class="f">Layer name<input type="text" id="s-label" maxlength="60" /></label>
+          <label class="f" id="w-kind">Draw the rows as
+            <select id="s-kind"><option value="markers">Points / markers</option><option value="choropleth">Choropleth (colour by value)</option></select>
+          </label>
 
-        <div class="card" id="card-chat">
-          <h2>Refine in plain language</h2>
-          <div class="chat-log" id="chat-log"></div>
-          <div class="chat-row">
-            <input type="text" id="chat-input" placeholder='e.g. "red-to-green choropleth of literacy rate"' />
-            <button class="btn" id="chat-send">Send</button>
-          </div>
-          <p class="hint" id="chat-hint" style="margin:.5rem 0 0"></p>
-        </div>
+          <!-- colour: only the control that applies to the chosen kind is shown -->
+          <label class="f" id="w-catcol" hidden><span>Give each <b>value</b> its own colour, from</span>
+            <select id="s-catcol"></select>
+          </label>
+          <label class="f" id="w-value" hidden>Shade areas by
+            <select id="s-value"></select>
+          </label>
+          <label class="f" id="w-palette" hidden>Colour ramp<select id="s-palette"></select></label>
+          <label class="f" id="w-marker" hidden>Pin colour<select id="s-marker"></select></label>
+          <label class="f" id="w-linecolor" hidden>Line colour<select id="s-linecolor"></select></label>
+          <label class="f" id="w-fillcolor" hidden>Fill colour<select id="s-fillcolor"></select></label>
 
-        <div class="card">
-          <h2>Add to the atlas</h2>
-          <p class="hint" id="commit-auth"></p>
-          <div style="display:flex; gap:.6rem; flex-wrap:wrap">
-            <button class="btn" id="commit">Add layer to atlas</button>
-            <button class="btn secondary" id="discard">Discard</button>
-          </div>
-          <div id="msg-commit"></div>
+          <label class="f">When someone clicks a feature, the popup is titled by
+            <select id="s-poptitle"></select>
+          </label>
+          <label class="f" id="w-image"><span>Show photos in the popup from <span class="hint">(optional)</span></span><select id="s-image"></select></label>
+
+          <details class="style-more">
+            <summary>Finer control</summary>
+            <div class="grid2">
+              <label class="f" id="w-linewidth" hidden>Line width
+                <select id="s-linewidth"><option value="1">Thin</option><option value="2" selected>Regular</option><option value="3.5">Bold</option><option value="5">Heavy</option></select>
+              </label>
+              <label class="f" id="w-linedash" hidden style="flex-direction:row; align-items:center; gap:.5rem"><input type="checkbox" id="s-linedash" style="width:auto" /> Dashed line</label>
+              <label class="f" id="w-fillopacity" hidden>Fill opacity
+                <select id="s-fillopacity"><option value="0.25">Light</option><option value="0.45" selected>Medium</option><option value="0.7">Strong</option></select>
+              </label>
+              <label class="f">Which panel group it appears under
+                <select id="s-group"><option value="userdata">Your data</option><option value="agri">Crops &amp; value chain</option><option value="base">Base</option><option value="eco">Ecological landscape</option></select>
+              </label>
+            </div>
+            <p class="hint" id="style-state" style="margin:.4rem 0 0"></p>
+            <details class="frag"><summary>Layer definition (JSON)</summary><pre id="frag-json"></pre></details>
+          </details>
         </div>
 
         <div class="step-nav">
-          <button class="btn secondary" id="back-3">← Back to placement</button>
+          <button class="btn" id="commit">Add to the atlas →</button>
+          <button class="btn secondary" id="back-3">← Back</button>
+          <button class="btn secondary" id="discard">Discard</button>
         </div>
+        <div id="msg-commit"></div>
+        <p class="hint" id="commit-auth" hidden></p>
       </div>
 
       <iframe id="preview-frame" title="Layer preview"></iframe>
@@ -300,7 +301,7 @@
       if (nav) { nav.innerHTML = esc(me.email) + who; nav.hidden = false; }
       $("#signin-card").hidden = true;
       $("#signin-form").hidden = true;
-      $("#commit-auth").innerHTML = "Signed in as <b>" + esc(me.email) + "</b> — adding publishes the layer to this atlas.";
+      if ($("#commit-auth")) $("#commit-auth").hidden = true;
       return me;
     }).catch(function () {
       S.me = null;
@@ -308,7 +309,10 @@
       $("#signin-card").hidden = false;
       $("#auth-state").textContent = "Adding data changes the atlas, so sign in first — the owner or an invited collaborator.";
       $("#signin-form").hidden = false;
-      $("#commit-auth").textContent = "You'll need to be signed in as this atlas's owner or a collaborator.";
+      if ($("#commit-auth")) {
+        $("#commit-auth").hidden = false;
+        $("#commit-auth").textContent = "You'll need to be signed in as this atlas's owner or a collaborator.";
+      }
       return null;
     });
   }
@@ -371,7 +375,26 @@
   }
   if (MODE === "standalone") {
     loadAddedLayers();
-    $("#f-dataset").addEventListener("change", loadAddedLayers);
+    $("#f-dataset").addEventListener("change", function () { showDatasetContext(); loadAddedLayers(); });
+    showDatasetContext();
+  }
+
+  // Known atlas → a statement naming it; unknown → the question.
+  function showDatasetContext() {
+    var known = $("#dataset-known"), ask = $("#dataset-ask");
+    if (!known || !ask) return;
+    var ds = ($("#f-dataset") && $("#f-dataset").value.trim()) || S.dataset;
+    if (!ds) { known.hidden = true; ask.hidden = false; return; }
+    known.hidden = false; ask.hidden = true;
+    $("#dataset-name").textContent = ds;
+    api("instances/" + encodeURIComponent(ds))
+      .then(function (inst) { if (inst && inst.title) $("#dataset-name").textContent = inst.title; })
+      .catch(function () {});
+    $("#dataset-change").onclick = function (e) {
+      e.preventDefault();
+      known.hidden = true; ask.hidden = false;
+      $("#f-dataset").focus();
+    };
   }
 
   /* ---- file intake ---- */
@@ -475,6 +498,7 @@
       gs.hidden = true;
       $("#check-title").textContent = "Choose the fields for your map" +
         (canonical.meta.sheet ? " — sheet “" + canonical.meta.sheet + "”" : "");
+      showLocationFirst(canonical);
       $("#to-place").textContent = "Looks right — place it on the map";
     }
     LokaCheck.render($("#check-table"), canonical, { onChange: checkChanged });
@@ -482,6 +506,34 @@
     checkChanged(canonical);
     msg("#msg-check", "");
     goStep(2);
+  }
+
+  /* Where the rows are is the first question worth answering — a map with the
+     right colours and no location is useless. State what we found at the top of
+     the fields step, before anything about styling. */
+  function showLocationFirst(canonical) {
+    var box = $("#loc-first");
+    if (!box) return;
+    var num = canonical.schema.filter(function (c) { return c.type === "number"; });
+    var lat = num.find(function (c) { return /lat/i.test(c.name); });
+    var lng = num.find(function (c) { return /(lon|lng)/i.test(c.name); });
+    var PLACE = /(name|place|village|town|city|district|ward|block|panchayat|taluk|tehsil|mandal|location|locality|area|region|state)/i;
+    var place = canonical.schema.find(function (c) { return c.type === "string" && PLACE.test(c.name); });
+    var geo = canonical.geoms && canonical.geoms.length;
+    box.hidden = false;
+    if (geo) {
+      box.className = "loc-first ok";
+      box.innerHTML = "📍 <b>Location: the shapes in your file.</b> They carry their own coordinates.";
+    } else if (lat && lng) {
+      box.className = "loc-first ok";
+      box.innerHTML = "📍 <b>Location: " + esc(lat.name) + " + " + esc(lng.name) + ".</b> Your rows will be placed at those coordinates.";
+    } else if (place) {
+      box.className = "loc-first ok";
+      box.innerHTML = "📍 <b>Location: the place names in " + esc(place.name) + ".</b> We'll match them to boundaries — you confirm on the next step.";
+    } else {
+      box.className = "loc-first warn";
+      box.innerHTML = "📍 <b>No location found yet.</b> A map needs either latitude and longitude columns, or a column of place names. Check the fields below — you can rename or re-type one if we read it wrongly.";
+    }
   }
 
   /* ---- generate category + labels from a free-text description ----
@@ -641,6 +693,7 @@
       msg("#msg-check", "");
       $("#to-place").disabled = false;
       enterPlace(out[1]);
+      warnDuplicate(out[1]);
       if (STAGES === "checkPlace") readyCheck();
     }).catch(function (e) {
       $("#to-place").disabled = false;
@@ -687,6 +740,20 @@
   function role(result, r) {
     var c = (result.columns || []).find(function (x) { return x.role === r; });
     return c ? c.name : "";
+  }
+
+  // Already-on-the-atlas is worth saying before styling, not after: the commit
+  // will refuse it, and by then the user has done work for nothing.
+  function warnDuplicate(result) {
+    var d = result && result.duplicateOf;
+    if (!d) return;
+    if (d.exact) {
+      msg("#msg-place", "This is the same data as the layer <b>" + esc(d.label) +
+        "</b> already on this atlas — adding it will be refused. Remove that layer first if you meant to replace it.", "err");
+    } else {
+      msg("#msg-place", "A layer called <b>" + esc(d.label) + "</b> is already on this atlas. If this file replaces it, " +
+        "remove that one first — otherwise you'll end up with both.", "ok");
+    }
   }
 
   function enterPlace(result) {
@@ -977,8 +1044,6 @@
       if (spec.fillOpacity) $("#s-fillopacity").value = String(spec.fillOpacity);
       $("#s-group").value = ["base", "agri", "eco", "userdata"].indexOf(spec.group) >= 0 ? spec.group : "userdata";
       fillSelect("#s-poptitle", S.names, spec.popupTitleColumn || role(result, "placeName"), true);
-      $("#chat-hint").textContent = S.options.geminiAvailable ? "" :
-        "AI refine is off (no key configured) — the pickers above do everything manually.";
       S.styleReady = true;
     }
     syncStyleVisibility();
@@ -1004,6 +1069,19 @@
     $("#w-linedash").hidden = kind !== "line";
     $("#w-fillcolor").hidden = kind !== "polygon";
     $("#w-fillopacity").hidden = !(kind === "polygon" || (kind === "category" && cls === "polygon"));
+    // "colour by value" belongs to the category kind; markers/areas get one colour
+    var img = $("#s-image");
+    if ($("#w-image")) $("#w-image").hidden = !img || img.options.length <= 1;
+    // say in words what this kind will do, so the controls aren't the only cue
+    var lead = $("#style-lead");
+    if (lead) {
+      var what = kind === "category" ? "Each value gets its own colour, an icon and a legend entry."
+        : kind === "choropleth" ? "Areas are shaded darker as the value rises, with a legend."
+        : kind === "line" ? "Each row is drawn as a line."
+        : kind === "polygon" ? "Each row is drawn as a filled area."
+        : "Each row is a pin on the map.";
+      lead.textContent = what + " The map on the right updates as you change these.";
+    }
   }
 
   function applyStyle() {
@@ -1047,32 +1125,6 @@
   $("#s-label").addEventListener("input", function () { scheduleApply(applyStyle, 700); });
 
   $("#back-3").onclick = function () { goStep(S.spatial ? 2 : 3); };
-
-  /* ---- chat refine ---- */
-
-  function chatAdd(cls, text) {
-    var d = document.createElement("div");
-    d.className = cls;
-    d.textContent = text;
-    $("#chat-log").appendChild(d);
-    $("#chat-log").scrollTop = 1e6;
-  }
-  $("#chat-send").onclick = sendChat;
-  $("#chat-input").addEventListener("keydown", function (e) { if (e.key === "Enter") sendChat(); });
-  function sendChat() {
-    var m = $("#chat-input").value.trim();
-    if (!m || !S.result) return;
-    $("#chat-input").value = "";
-    chatAdd("me", m);
-    api("layers/refine", { method: "POST", body: { importId: S.result.importId, message: m } })
-      .then(function (r) {
-        chatAdd("ai", r.reply || "Updated.");
-        S.result = r;
-        S.styleReady = false;           // AI may have changed style fields — re-fill pickers
-        enterStyle(r);
-      })
-      .catch(function (e) { chatAdd("ai", "⚠ " + errMsg(e)); });
-  }
 
   /* ---- commit ---- */
 
