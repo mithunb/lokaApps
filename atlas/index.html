@@ -204,6 +204,12 @@
     .leg-swatch.dashed { height:0; border-top:3px dashed var(--c); }
     .leg-swatch.triangle { width:0; height:0; border-left:7px solid transparent; border-right:7px solid transparent; border-bottom:12px solid var(--c); }
     .leg-swatch.diamond { width:11px; height:11px; background:var(--c); transform:rotate(45deg); margin:0 1.5px; }
+    /* bubble layers: reference circles at true on-map size, value beneath each */
+    .leg-size { display:flex; align-items:flex-end; gap:.75rem; padding:.2rem 0 .1rem; }
+    .leg-size-item { display:flex; flex-direction:column; align-items:center; gap:.2rem; }
+    .leg-size-circle { flex:0 0 auto; border-radius:50%; background:var(--c); opacity:.78;
+      border:1.2px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.08); box-sizing:border-box; }
+    .leg-size-val { font-size:.7rem; color:var(--color-text-secondary); font-variant-numeric:tabular-nums; line-height:1; }
 
     /* ---- DOM markers ---- */
     .atlas-marker { display:flex; flex-direction:column; align-items:center; cursor:pointer; }
@@ -212,6 +218,7 @@
       box-shadow:0 1px 3px rgba(42,36,26,.32); transition:transform .18s cubic-bezier(.25,1,.5,1), box-shadow .18s ease; }
     .atlas-pin.ring { background:var(--pin,#AE5028); border-color:#fff; }
     .atlas-pin.badge { background:var(--pin,#AE5028); color:#fff; font-size:9px; font-weight:700; }
+    .atlas-pin.badge.pale, .leg-badge.pale { color:#2A241A; }   /* dark ink on pale fills */
     .atlas-pin svg { width:12px; height:12px; display:block; }
     /* lift the pin (a child) on hover — never the marker element itself; MapLibre owns its transform */
     @media (hover:hover){ .atlas-marker:hover .atlas-pin { transform:translateY(-2px) scale(1.14); box-shadow:0 3px 8px rgba(42,36,26,.4); } }
@@ -227,6 +234,40 @@
     .atlas-cluster .cl-label { font-size:12px; font-weight:600; color:var(--color-rust-deep); white-space:nowrap; }
     .atlas-mlabel { margin-top:2px; font-family:'Figtree',sans-serif; font-size:11px; font-weight:600; color:#14261a;
       text-shadow:0 0 2px #fff,0 0 3px #fff,0 0 4px #fff,0 1px 1px #fff; white-space:nowrap; pointer-events:none; }
+
+    /* ---- spiderfy: stacked markers fan out on click ---- */
+    /* MapLibre transforms the wrap (true position); the inner node carries the
+       pin and takes the fan displacement, so the two transforms never fight.
+       The global prefers-reduced-motion rule below zeroes the transition, so
+       reduced-motion users get the fanned positions instantly. */
+    .atlas-mnode { display:flex; flex-direction:column; align-items:center;
+      transition:transform .22s cubic-bezier(.22,1,.36,1); }
+    /* while fanned, the wrap ignores the pointer so a click on the emptied
+       anchor falls through to the map (which folds the fan); the displaced
+       node keeps its own pointer */
+    .atlas-marker.fanned { pointer-events:none; }
+    .atlas-marker.fanned .atlas-mnode { pointer-events:auto;
+      transform:translate(var(--fan-x,0px),var(--fan-y,0px)); }
+    /* thin leader lines from the shared point to each displaced pin */
+    .spider-legs { position:absolute; top:0; left:0; pointer-events:none; overflow:visible; }
+    .spider-leg { stroke:#4D6050; stroke-width:1.1; stroke-opacity:.55; animation:leg-in .22s ease-out; }
+    @keyframes leg-in { from { stroke-opacity:0; } }
+
+    /* ---- hover tooltip: a pin or bubble names itself under the pointer ---- */
+    /* One element for the whole map, moved by transform to whichever symbol is
+       hovered. It sits in the map container (never inside a marker) so it can't
+       disturb a spiderfied fan, and never takes the pointer, so the click still
+       reaches the pin. Kept in flow while hidden — the JS measures it to clamp
+       it inside the map. The global prefers-reduced-motion rule below flattens
+       the fade to nothing. */
+    .atlas-hint { position:absolute; top:0; left:0; z-index:4; pointer-events:none;
+      max-width:16rem; padding:.18rem .45rem; border-radius:4px;
+      background:rgba(255,255,255,.97); border:1px solid var(--color-border);
+      box-shadow:0 1px 4px rgba(42,36,26,.2);
+      font-family:'DM Sans',sans-serif; font-size:.78rem; font-weight:500; line-height:1.3;
+      color:var(--color-text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      opacity:0; visibility:hidden; transition:opacity .12s ease; }
+    .atlas-hint.on { opacity:1; visibility:visible; }
 
     /* ---- popups ---- */
     .atlas-popup .maplibregl-popup-content { border-radius:var(--radius-md); padding:0; box-shadow:var(--shadow-md);

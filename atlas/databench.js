@@ -73,14 +73,14 @@
       <div id="geom-summary" class="infer-note" hidden></div>
       <!-- the first question: where are these rows? -->
       <div id="loc-first" class="loc-first" hidden></div>
-      <!-- text descriptions with no categories: derive category + labels -->
+      <!-- data enrichment: one NEW categorical field derived from a text column -->
       <div id="enrich-panel" class="enrich-panel" hidden>
         <div class="enrich-head">
-          <b>Add categories &amp; tags from a description</b>
-          <span class="hint">No category column? Turn a free-text description into a colour-able category and fine tags — they land as new fields you review and edit before anything hits the map.</span>
+          <b>Data enrichment</b>
+          <span class="hint">Reads every value of a text field and derives one category scheme from the whole set — a new way to inspect your data. It lands as one new field you review and edit; your original fields are never changed.</span>
         </div>
         <div class="enrich-row">
-          <label class="f" style="margin:0">Describe from<select id="s-desccol"></select></label>
+          <label class="f" style="margin:0">Derive from<select id="s-desccol"></select></label>
           <button class="btn secondary" id="enrich-go">✨ Generate</button>
         </div>
         <div id="msg-enrich"></div>
@@ -160,16 +160,18 @@
           <label class="f" id="w-kind">Draw the rows as
             <select id="s-kind"><option value="markers">Points / markers</option><option value="choropleth">Choropleth (colour by value)</option></select>
           </label>
+          <!-- steering, not blocking: shown when shading is the wrong encoding -->
+          <p class="kind-steer" id="kind-steer" hidden>Counts compare better as sized circles — shading suits rates and averages.</p>
 
           <!-- colour: only the control that applies to the chosen kind is shown -->
           <label class="f" id="w-catcol" hidden><span>Give each <b>value</b> its own colour, from</span>
             <select id="s-catcol"></select>
           </label>
-          <label class="f" id="w-value" hidden>Shade areas by
+          <label class="f" id="w-value" hidden><span id="w-value-lbl">Shade areas by</span>
             <select id="s-value"></select>
           </label>
           <label class="f" id="w-palette" hidden>Colour ramp<select id="s-palette"></select></label>
-          <label class="f" id="w-marker" hidden>Pin colour<select id="s-marker"></select></label>
+          <label class="f" id="w-marker" hidden><span id="w-marker-lbl">Pin colour</span><select id="s-marker"></select></label>
           <label class="f" id="w-linecolor" hidden>Line colour<select id="s-linecolor"></select></label>
           <label class="f" id="w-fillcolor" hidden>Fill colour<select id="s-fillcolor"></select></label>
 
@@ -576,10 +578,11 @@
     }
   }
 
-  /* ---- generate category + labels from a free-text description ----
-     Offered when a longish text column is present. The generated columns are
-     added to the canonical table (editable), then flow through the normal
-     pickers — 'category' auto-colours, 'labels' becomes popup chips. */
+  /* ---- data enrichment: one new categorical field from a text column ----
+     Offered when a longish text column is present. Every value of the chosen
+     column is read together and one category scheme is derived from the whole
+     corpus; the result lands as a single NEW column (marked "generated") that
+     the user reviews and edits. Existing fields are never written. */
   function avgLen(col) {
     var v = S.canonical.rows.map(function (r) { return String(r[col] == null ? "" : r[col]); }).filter(Boolean);
     return v.length ? v.reduce(function (a, s) { return a + s.length; }, 0) / v.length : 0;
@@ -611,56 +614,56 @@
     if (!S.canonical) return;
     var descCol = $("#s-desccol").value;
     if (!descCol) return;
-    // pass any existing ';'-delimited column as labels, so we gap-fill not overwrite
-    var labelsCol = (S.canonical.schema.find(function (c) {
-      return c.name !== descCol && !c.ignored && c.type === "string" && looksDelimited(c.name) && avgLen(c.name) <= 80;
-    }) || {}).name || "";
+    // only the source column travels — enrichment never sees the other fields,
+    // so it cannot touch them
     var rows = S.canonical.rows.map(function (r) {
-      var o = {}; o[descCol] = r[descCol]; if (labelsCol) o[labelsCol] = r[labelsCol]; return o;
+      var o = {}; o[descCol] = r[descCol]; return o;
     });
     var btn = $("#enrich-go"), label = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<span class="spin" aria-hidden="true"></span>Generating…';
     function done() { btn.disabled = false; btn.innerHTML = label; }
-    msg("#msg-enrich", "Reading the descriptions…", "ok");
+    msg("#msg-enrich", "Reading every value of " + esc(descCol) + "…", "ok");
     api("layers/enrich", { method: "POST", body: {
-      dataset: S.dataset, descriptionColumn: descCol, labelsColumn: labelsCol || undefined, rows: rows,
+      dataset: S.dataset || undefined, descriptionColumn: descCol, rows: rows,
     } }).then(function (r) {
       done();
-      applyEnrichment(r, labelsCol);
+      applyEnrichment(r, descCol);
     }).catch(function (e) {
       done();
       msg("#msg-enrich", esc(errMsg(e)));
     });
   };
 
-  function applyEnrichment(r, labelsCol) {
-    var per = r.rows || [];
-    var addCat = r.categorySet && r.categorySet.length;
-    // add / update the columns on the canonical table
-    if (addCat) ensureColumn("category", "string");
-    var labelTarget = labelsCol || ensureColumn("labels", "string").name;
+  function applyEnrichment(r, descCol) {
+    var cats = r.categories || [];
+    if (!r.categorySet || !r.categorySet.length) {
+      msg("#msg-enrich", "Couldn't derive a category scheme from " + esc(descCol) + " — try a more descriptive field.");
+      return;
+    }
+    // exactly one NEW column — existing fields are never written
+    var target = ensureColumn("themes", "string");
+    target.derived = true;               // checktable shows its "generated" chip
+    var sourced = 0;
     S.canonical.rows.forEach(function (row, i) {
-      var e = per[i] || {};
-      if (addCat) row.category = e.category || "";
-      if (e.labels && e.labels.length) row[labelTarget] = e.labels.join("; ");
+      row[target.name] = cats[i] || "";
+      if (String(row[descCol] == null ? "" : row[descCol]).trim()) sourced++;
     });
-    // re-type so 'category' reads categorical and 'labels' reads as a tag set
+    // re-type so the new column reads categorical, keeping per-column flags
     var names = S.canonical.schema.map(function (c) { return c.name; });
     var forced = {}; S.canonical.schema.forEach(function (c) { if (c.forced) forced[c.name] = c.forced; });
     var typed = LokaIngest.retype(names, S.canonical.rows, forced);
     typed.schema.forEach(function (c) {
       var prev = S.canonical.schema.find(function (p) { return p.name === c.name; });
-      if (prev) { c.ignored = prev.ignored; c.forced = prev.forced; }
+      if (prev) { c.ignored = prev.ignored; c.forced = prev.forced; c.derived = prev.derived; }
     });
     S.canonical.schema = typed.schema; S.canonical.rows = typed.rows;
     LokaCheck.render($("#check-table"), S.canonical, { onChange: checkChanged });
     setupEnrich(S.canonical);
-    var bits = [];
-    if (addCat) bits.push(r.categorySet.length + " categories");
-    bits.push((r.generated ? r.generated.labelledRows : 0) + " rows labelled");
-    msg("#msg-enrich", "Added " + bits.join(" + ") + (r.aiUsed ? "" : " (basic keywords — AI was unavailable, edit as needed)") +
-      ". Review and edit the new columns below.", "ok");
+    msg("#msg-enrich", 'Created new field "' + esc(target.name) + '" — ' + r.categorySet.length +
+      " categories derived from " + sourced + " descriptions" +
+      (r.aiUsed ? "" : " (basic keywords — AI was unavailable, edit as needed)") +
+      ". Your original fields are unchanged.", "ok");
     checkChanged();
   }
 
@@ -1060,19 +1063,63 @@
   }
 
   var CATEGORY_CHOICE = { value: "category", label: "Coloured by category" };
-  function kindChoices() {
-    if (!S.spatial) {
-      return [{ value: "markers", label: "Points / markers" },
-              { value: "choropleth", label: "Choropleth (colour by value)" }, CATEGORY_CHOICE];
+  var BUBBLE_CHOICE = { value: "bubble", label: "Bubbles — circle size shows a number" };
+
+  // The geometry class the PLACEMENT produced, not what the upload carried:
+  // a lat/lng CSV is points however tabular the file looked, an admin-name
+  // join hands back the matched polygons. Kinds must be offered against this.
+  function placedClass() {
+    if (S.spatial) return geomClass();
+    var strat = (S.result && S.result.strategy) || $("#s-strategy").value;
+    return strat === "adminJoin" ? "polygon" : "point";
+  }
+
+  // Numeric columns a bubble/choropleth could encode — lat/lng aren't values.
+  function numericColumns() {
+    var drop = {};
+    ((S.result && S.result.columns) || []).forEach(function (c) {
+      if (c.role === "latitude" || c.role === "longitude") drop[c.name] = 1;
+    });
+    if (S.canonical) {
+      return S.canonical.schema.filter(function (c) {
+        return c.type === "number" && !c.ignored && !drop[c.name];
+      }).map(function (c) { return c.name; });
     }
-    var cls = geomClass();
-    if (cls === "line") return [{ value: "line", label: "Lines" }, CATEGORY_CHOICE];
-    if (cls === "polygon") return [
+    // editing an existing layer: rows live on the server — trust the saved spec
+    var v = S.result && S.result.spec && S.result.spec.valueColumn;
+    return v ? [v] : [];
+  }
+
+  // Does this column hold an absolute count (vs a rate/average)? Counts belong
+  // on sized circles: big areas dominate shading whatever their rate says.
+  function looksLikeCount(col) {
+    if (!col) return false;
+    if (/count|total|number|pop|households|qty/i.test(col)) return true;
+    if (!S.canonical) return false;
+    var seen = 0;
+    for (var i = 0; i < S.canonical.rows.length; i++) {
+      var v = S.canonical.rows[i][col];
+      if (v === "" || v == null) continue;
+      var n = Number(v);
+      if (!isFinite(n) || n % 1 !== 0) return false;
+      seen++;
+    }
+    return seen > 0;
+  }
+
+  function kindChoices() {
+    var cls = placedClass();
+    var out;
+    if (cls === "line") out = [{ value: "line", label: "Lines" }, CATEGORY_CHOICE];
+    else if (cls === "polygon") out = [
       { value: "polygon", label: "Areas (single colour)" },
       { value: "choropleth", label: "Choropleth (colour by value)" },
       CATEGORY_CHOICE,
     ];
-    return [{ value: "markers", label: "Points / markers" }, CATEGORY_CHOICE];
+    else out = [{ value: "markers", label: "Points / markers" }, CATEGORY_CHOICE];
+    // sized circles need a number to size by; lines have nowhere to put one
+    if (cls !== "line" && numericColumns().length) out.push(BUBBLE_CHOICE);
+    return out;
   }
 
   function enterStyle(result) {
@@ -1080,6 +1127,10 @@
     if (!S.styleReady) {
       $("#s-label").value = spec.label || "";
       fillSelect("#s-kind", kindChoices(), spec.kind || "markers");
+      // the inferred kind may not be offered for this geometry (e.g. choropleth
+      // on points) — the select fell back to its first option; rebuild the
+      // preview so the map matches what the control now says
+      if ($("#s-kind").value !== (spec.kind || "markers")) scheduleApply(applyStyle, 60);
       fillSelect("#s-value", S.names, spec.valueColumn || role(result, "value"), true);
       fillSelect("#s-catcol", S.names, spec.categoryColumn || "", true);
       fillSelect("#s-image", S.names, spec.imageColumn || "", true);
@@ -1108,10 +1159,15 @@
   function syncStyleVisibility() {
     var kind = $("#s-kind").value;
     var cls = S.spatial ? geomClass() : "";
-    $("#w-value").hidden = kind !== "choropleth";
+    $("#w-value").hidden = !(kind === "choropleth" || kind === "bubble");
+    // the same value select serves both encodings — say which job it's doing
+    var vl = $("#w-value-lbl");
+    if (vl) vl.textContent = kind === "bubble" ? "Size circles by" : "Shade areas by";
     $("#w-catcol").hidden = kind !== "category";
     $("#w-palette").hidden = kind !== "choropleth";
-    $("#w-marker").hidden = kind !== "markers";
+    $("#w-marker").hidden = !(kind === "markers" || kind === "bubble");
+    var ml = $("#w-marker-lbl");
+    if (ml) ml.textContent = kind === "bubble" ? "Circle colour" : "Pin colour";
     $("#w-linecolor").hidden = kind !== "line";
     $("#w-linewidth").hidden = !(kind === "line" || (kind === "category" && cls === "line"));
     $("#w-linedash").hidden = kind !== "line";
@@ -1120,11 +1176,16 @@
     // "colour by value" belongs to the category kind; markers/areas get one colour
     var img = $("#s-image");
     if ($("#w-image")) $("#w-image").hidden = !img || img.options.length <= 1;
+    // steering, not blocking: shading an absolute count misleads (big areas
+    // dominate the eye whatever their rate) — nudge towards sized circles
+    var steer = $("#kind-steer");
+    if (steer) steer.hidden = !(kind === "choropleth" && looksLikeCount($("#s-value").value));
     // say in words what this kind will do, so the controls aren't the only cue
     var lead = $("#style-lead");
     if (lead) {
       var what = kind === "category" ? "Each value gets its own colour, an icon and a legend entry."
         : kind === "choropleth" ? "Areas are shaded darker as the value rises, with a legend."
+        : kind === "bubble" ? "Each row is a circle sized by its number — bigger circle, bigger value."
         : kind === "line" ? "Each row is drawn as a line."
         : kind === "polygon" ? "Each row is drawn as a filled area."
         : "Each row is a pin on the map.";

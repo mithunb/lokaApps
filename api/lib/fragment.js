@@ -2,25 +2,45 @@
 // (enums + column names); THIS code builds the actual stanza, so the dangerous
 // manifest surface (tile URLs, raster types, raw expressions) is unreachable.
 
-// Curated ramps in the atlas's rustic-pastel register (light → dark).
+// Curated ramps in the atlas's rustic-pastel register (light → dark). The
+// single-hue sequential ramps stay readable with any colour-vision deficiency
+// because lightness — not hue — carries the order. The diverging pair runs
+// brown↔teal: red↔green diverging ramps collapse either side of their midpoint
+// for deuteranopes (the two middle classes of the old rdylgn were 4.4 ΔE00
+// apart once simulated, i.e. the same colour).
 export const PALETTES = {
   greens: ['#e7e3d8', '#cdd3b4', '#a9bd8e', '#7f9c65', '#566f42', '#39502f'],
   blues: ['#e6ebec', '#c2d2d8', '#93b1bd', '#6690a1', '#446e80', '#2d4f5e'],
   rust: ['#f0e6dd', '#e0c4ab', '#cb9c77', '#b06f47', '#8f4d2c', '#6e371d'],
   ylorbr: ['#efe6d9', '#ddc4a0', '#caa06f', '#a8703f', '#824e26', '#5e3618'],
-  rdylgn: ['#a8503b', '#c98a5a', '#e0c48c', '#b8bd7e', '#7f9c65', '#4c6b40'],
-  gnrd: ['#4c6b40', '#7f9c65', '#b8bd7e', '#e0c48c', '#c98a5a', '#a8503b'],
+  brteal: ['#8a5a25', '#bb8f4e', '#e2cfa4', '#9fc7bd', '#4e8f86', '#2c625d'],
+  tealbr: ['#2c625d', '#4e8f86', '#9fc7bd', '#e2cfa4', '#bb8f4e', '#8a5a25'],
   purples: ['#e9e4ea', '#cfc3d4', '#ac97b6', '#8a6e96', '#6a4d75', '#4c3454'],
 };
+// Retired ramp names keep resolving, at the same polarity (low → high), so a
+// spec saved before the swap still applies instead of silently falling back.
+export const PALETTE_ALIASES = { rdylgn: 'brteal', gnrd: 'tealbr' };
+export function rampFor(name) {
+  return PALETTES[name] || PALETTES[PALETTE_ALIASES[name]] || PALETTES.greens;
+}
+// Named single colours a HUMAN picks for a whole layer — brand choices, not
+// auto-assignment, so they stay exactly as chosen.
 export const MARKER_COLORS = {
   rust: '#A6522F', moss: '#40573D', ochre: '#B0863A', sienna: '#9C5A34', slate: '#5f7f92',
 };
-// Categorical palette in the atlas's register — distinct hues, one per value,
-// warm neutral for "other". Values beyond 8 fold into "other".
-export const CATEGORY_COLORS = ['#A6522F', '#40573D', '#5f7f92', '#B0863A', '#6a4d75', '#7f9c65', '#9C5A34', '#446e80'];
-export const CATEGORY_OTHER = '#9a938a';
+// AUTO-assigned categorical palette: Paul Tol's colourblind-safe "muted" scheme
+// (indigo, olive, teal, purple, green, wine, cyan, sand — its rose is left out
+// because it lands on the neutral used for "other" under protanopia). Ordered so
+// (a) every prefix stays distinct, since a layer with k categories only uses
+// slots 1..k, and (b) the two palest colours come last — the cream page/basemap
+// (#FFFAEB family) swallows them. Checked with Viénot-Brettel dichromacy
+// simulation + CIEDE2000: worst pair 14.5 ΔE00 under deuteranopia and 15.0
+// under protanopia (the previous earth palette collapsed to 1.4).
+export const CATEGORY_COLORS = ['#332288', '#999933', '#44AA99', '#AA4499', '#117733', '#882255', '#88CCEE', '#DDCC77'];
+// warm grey for the residual bucket: ≥14.5 ΔE00 from all eight in every mode.
+export const CATEGORY_OTHER = '#7a756c';
 export const MAX_CATEGORIES = 8;
-export const KINDS = ['markers', 'choropleth', 'line', 'polygon', 'category'];
+export const KINDS = ['markers', 'choropleth', 'line', 'polygon', 'category', 'bubble'];
 const MAX_TOTAL_VERTICES = 300000;
 const CAT_KEY = '_category';   // derived per-feature primary tag (multi-value columns)
 
@@ -63,6 +83,15 @@ export function isMapLabelColumn(feats, col) {
 
 const MAX_CIRCLE_SWITCH = 300;   // DOM markers don't scale past this
 const CLASS_MIN = 3, CLASS_MAX = 7;
+const BUBBLE_MIN_R = 4, BUBBLE_MAX_R = 26;   // px — the proportional-symbol range
+
+// Largest "nice" number (1/2/5 × 10^k) not above x — legend reference values.
+function niceBelow(x) {
+  if (!(x > 0)) return 0;
+  const pow = Math.pow(10, Math.floor(Math.log10(x)));
+  const m = x / pow;
+  return (m >= 5 ? 5 : m >= 2 ? 2 : 1) * pow;
+}
 
 export function slugifyId(text) {
   const s = String(text || '').toLowerCase().normalize('NFKD')
@@ -220,7 +249,7 @@ export function buildFragment(spec, feats, existingIds) {
   } else if (kind === 'choropleth') {
     const prop = String(spec.valueColumn || '');
     const values = feats.map((f) => Number(f.properties[prop])).filter(Number.isFinite);
-    const ramp = PALETTES[spec.palette] || PALETTES.greens;
+    const ramp = rampFor(spec.palette);
     const colors = spec.reverse ? [...ramp].reverse() : ramp;
     const breaks = quantileBreaks(values, spec.classCount);
     const used = colors.slice(0, breaks.length + 1);
@@ -238,6 +267,47 @@ export function buildFragment(spec, feats, existingIds) {
       label: String(spec.label).slice(0, 60), default: true,
       paint: { fillColor: expr, fillOpacity: 0.72, outlineColor: '#5c544a', outlineWidth: 0.5 },
       legend,
+      popup: { title: popup.title || 'name', fields: popup.fields },
+      userLayer: true,
+    };
+  } else if (kind === 'bubble') {
+    // proportional symbols: the circle's AREA carries the number, so radius
+    // follows sqrt(value) — the honest encoding for absolute counts (shading
+    // suits rates and averages). Fixed pixel radii, so bubbles keep their
+    // meaning at every zoom instead of swallowing the map when zoomed out.
+    const prop = String(spec.valueColumn || '');
+    const color = MARKER_COLORS[spec.markerColor] || MARKER_COLORS.rust;
+    const values = feats.map((f) => Number(f.properties ? f.properties[prop] : NaN))
+      .filter((v) => Number.isFinite(v) && v > 0);
+    const vmax = values.length ? Math.max(...values) : 0;
+    const radius = vmax > 0
+      ? ['interpolate', ['linear'],
+         ['sqrt', ['max', 0, ['to-number', ['get', prop], 0]]],
+         0, BUBBLE_MIN_R, Math.sqrt(vmax), BUBBLE_MAX_R]
+      : 5;   // no usable numbers — plain dots beat a broken expression
+    // three reference circles for the size legend: the max and two nice round
+    // values below it (quarter / sixteenth of max → clearly distinct radii)
+    const sizeLegend = [];
+    if (vmax > 0) {
+      const seen = new Set();
+      for (const v of [vmax, vmax / 4, vmax / 16]) {
+        const nice = niceBelow(v);
+        if (nice <= 0 || seen.has(nice)) continue;
+        seen.add(nice);
+        sizeLegend.push({
+          radius: Math.round((BUBBLE_MIN_R + (BUBBLE_MAX_R - BUBBLE_MIN_R) * Math.sqrt(nice / vmax)) * 10) / 10,
+          label: fmt(nice),
+          color,
+        });
+      }
+    }
+    stanza = {
+      id, group, type: 'circle', source: sourceFile,
+      label: String(spec.label).slice(0, 60), default: true,
+      paint: { radius, color, strokeColor: '#ffffff', strokeWidth: 1, opacity: 0.75 },
+      sizeLegend: sizeLegend.length ? sizeLegend : undefined,
+      // the unit rides the ordinary legend as a faint note, like choropleth's
+      legend: spec.unit ? [{ color: 'transparent', label: '(' + String(spec.unit).slice(0, 20) + ')', faint: true }] : undefined,
       popup: { title: popup.title || 'name', fields: popup.fields },
       userLayer: true,
     };

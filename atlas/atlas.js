@@ -86,6 +86,12 @@
     var initials = words.slice(0, 2).map(function (w) { return w.charAt(0); }).join("").toUpperCase();
     return { badge: initials || "?" };
   }
+  // pale fills (the auto palette's cyan and sand) need dark ink, not white
+  function paleHex(h) {
+    if (!/^#[0-9a-fA-F]{6}$/.test(h || "")) return false;
+    var r = parseInt(h.slice(1, 3), 16), g = parseInt(h.slice(3, 5), 16), b = parseInt(h.slice(5, 7), 16);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 145;
+  }
 
   var map, MANIFEST, activeBasemap, DATA = {}, markersByLayer = {}, cropState = {};
 
@@ -256,6 +262,7 @@
         renderMapAttrib();
         buildLayers().then(function () {
           wirePopups();
+          syncSearchBox();   // the data is in: keep the search box only if it has text to search
           if (!focusFit()) fitToData(false);
           renderMapAttrib(); // re-run once layer sources (e.g. labels) are added
           // If the container had no real size when we fit (hidden iframe or a
@@ -714,6 +721,11 @@
     gj.features.forEach(function (f) {
       var cfg = (L.markers && L.markers[f.properties[L.markerBy]]) || L.markerDefault || L.marker || {};
       var wrap = el("div", "atlas-marker");
+      var paleFill = paleHex(cfg.color);
+      // pin + label live in an inner node: MapLibre owns the wrap's transform
+      // (true position), the node alone takes the spiderfy displacement — see
+      // the SPIDERFY section below.
+      var node = el("div", "atlas-mnode");
       var pin = el("div", "atlas-pin" + (cfg.ring ? " ring" : ""));
       pin.style.setProperty("--pin", cfg.color || "#f97316");
       if (cfg.icon && ICONS[cfg.icon]) pin.innerHTML = ICONS[cfg.icon];
@@ -722,14 +734,23 @@
         // category layers: derive an icon (or monogram badge) from the value
         var ic = iconFor(f.properties[L.markerBy]);
         if (ic.icon && ICONS[ic.icon]) pin.innerHTML = ICONS[ic.icon];
-        else { pin.textContent = ic.badge; pin.classList.add("badge"); }
+        else {
+          pin.textContent = ic.badge; pin.classList.add("badge");
+          if (paleFill) pin.classList.add("pale");   // dark ink on the pale palette slots
+        }
       }
-      wrap.appendChild(pin);
-      if (L.label_text) wrap.appendChild(el("span", "atlas-mlabel", esc(f.properties[L.label_text.property])));
-      wrap.addEventListener("click", function (e) { e.stopPropagation(); openPopup(L, f, f.geometry.coordinates); });
+      node.appendChild(pin);
+      if (L.label_text) node.appendChild(el("span", "atlas-mlabel", esc(f.properties[L.label_text.property])));
+      wrap.appendChild(node);
       var mk = new maplibregl.Marker({ element: wrap, anchor: "bottom" }).setLngLat(f.geometry.coordinates).addTo(map);
       // keep the feature alongside its marker so search can gate it by content
-      markersByLayer[L.id].push({ mk: mk, f: f });
+      var entry = { mk: mk, f: f };
+      // clicks route through the spiderfy gate: a lone pin pops up as before,
+      // a stacked pin fans its stack out first
+      wrap.addEventListener("click", function (e) { e.stopPropagation(); spiderClick(L, entry); });
+      // hovering names the pin without a click (see HOVER TOOLTIP)
+      wireMarkerHint(node, function () { return popupTitleText(L, f.properties); });
+      markersByLayer[L.id].push(entry);
       pts.push(f.geometry.coordinates);
     });
     L._pts = pts;
@@ -752,6 +773,10 @@
   }
 
   function applyMarkerVisibility(L) {
+    // whatever is changing here (layer toggle, cluster zoom, search) can change
+    // who is stacked with whom — fold any open fan rather than chase it
+    if (SPIDER.items) spiderCollapse();
+    hideHint();   // a pin can vanish from under the pointer; no mouseleave follows
     var shown = L._visible !== false;
     var clustered = L.cluster && L._clusterMarker && map.getZoom() < L.cluster.belowZoom;
     (markersByLayer[L.id] || []).forEach(function (e) { e.mk.getElement().style.display = (shown && !clustered && !e.hidden) ? "" : "none"; });
@@ -765,9 +790,315 @@
   }
 
   /* ==================================================================
+     SPIDERFY — markers sitting on (nearly) the same point fan out on
+     click so each one can be reached. The wrap element stays MapLibre's
+     (true lngLat — it pans for free); the inner .atlas-mnode takes a
+     pure-CSS pixel displacement, so the fan holds its shape through a
+     pan and the two transforms never fight. Pixel offsets only mean
+     something at one zoom, so starting a zoom folds the fan instead of
+     chasing it. Stacks are found lazily, on click — nothing is
+     maintained while the user just browses.
+  ================================================================== */
+  var SPIDER = { items: null, anchor: null, svg: null, pop: null };
+  var SPIDER_PX = 12;   // markers closer than this on screen count as one stack
+  var FAN_GAP = 28;     // displaced pins keep at least a marker-width apart
+
+  // fan feet in px around (0,0): a ring while neighbours fit, an archimedean
+  // spiral past 8 (a ring wide enough for many pins drifts too far out)
+  function fanFeet(n) {
+    var feet = [], i;
+    if (n <= 8) {
+      // ring radius grows so neighbouring pins stay a marker-width apart
+      var r = Math.max(34, (FAN_GAP / 2 + 2) / Math.sin(Math.PI / n));
+      for (i = 0; i < n; i++) {
+        var a = (2 * Math.PI * i) / n - Math.PI / 2;
+        feet.push([r * Math.cos(a), r * Math.sin(a)]);
+      }
+      return feet;
+    }
+    var angle = 0, leg = 30, cx = 0, cy = 0;
+    for (i = 0; i < n; i++) {
+      angle += (FAN_GAP + 5) / leg;         // a constant arc between feet
+      feet.push([leg * Math.cos(angle), leg * Math.sin(angle)]);
+      cx += feet[i][0] / n; cy += feet[i][1] / n;
+      leg += 2 * Math.PI * 4.5 / angle;     // creep outward as the spiral winds
+    }
+    // recentre the spiral so the fan sits around the anchor, not to one side
+    for (i = 0; i < n; i++) { feet[i][0] -= cx; feet[i][1] -= cy; }
+    return feet;
+  }
+
+  // only markers the user can currently see may stack: layer on, not folded
+  // into a cluster badge, not hidden by search — applyMarkerVisibility has
+  // already folded all three into the element's display (e.hidden re-checked
+  // for safety: it flips before the display does).
+  function visibleMarkerEntries() {
+    var out = [];
+    (MANIFEST.layers || []).forEach(function (L) {
+      (markersByLayer[L.id] || []).forEach(function (e) {
+        if (e.hidden) return;
+        if (e.mk.getElement().style.display === "none") return;
+        out.push({ L: L, e: e });
+      });
+    });
+    return out;
+  }
+
+  function stackFor(entry) {
+    var p0 = map.project(entry.mk.getLngLat());
+    return visibleMarkerEntries().filter(function (it) {
+      var p = map.project(it.e.mk.getLngLat());
+      var dx = p.x - p0.x, dy = p.y - p0.y;
+      return dx * dx + dy * dy <= SPIDER_PX * SPIDER_PX;
+    });
+  }
+
+  // every marker click lands here: a fanned pin opens its own popup (fan
+  // stays); a stacked pin fans its stack out; a lone pin behaves as ever
+  function spiderClick(L, entry) {
+    if (SPIDER.items) {
+      for (var i = 0; i < SPIDER.items.length; i++) {
+        var it = SPIDER.items[i];
+        if (it.e === entry) {
+          SPIDER.pop = openPopup(it.L, it.e.f, it.e.mk.getLngLat(), it.off);
+          return;
+        }
+      }
+      spiderCollapse(); // a marker outside the open fan: fold it first
+    }
+    var stack = stackFor(entry);
+    if (stack.length < 2) { openPopup(L, entry.f, entry.mk.getLngLat()); return; }
+    spiderfy(stack, entry.mk.getLngLat());
+  }
+
+  function spiderfy(stack, anchor) {
+    wireSpider();
+    var a = map.project(anchor);
+    var feet = fanFeet(stack.length);
+    SPIDER.anchor = anchor;
+    SPIDER.items = stack.map(function (it, i) {
+      // offset from the member's own point to its foot; both endpoints shift
+      // by the same delta when the map pans, so it stays right until a zoom
+      var p = map.project(it.e.mk.getLngLat());
+      var off = [a.x + feet[i][0] - p.x, a.y + feet[i][1] - p.y];
+      var w = it.e.mk.getElement();
+      w.style.setProperty("--fan-x", off[0] + "px");
+      w.style.setProperty("--fan-y", off[1] + "px");
+      w.classList.add("fanned");
+      return { L: it.L, e: it.e, off: off, foot: feet[i] };
+    });
+    drawLegs();
+  }
+
+  function spiderCollapse() {
+    if (!SPIDER.items) return;
+    SPIDER.items.forEach(function (it) {
+      var w = it.e.mk.getElement();
+      w.classList.remove("fanned");
+      w.style.removeProperty("--fan-x");
+      w.style.removeProperty("--fan-y");
+    });
+    SPIDER.items = null;
+    SPIDER.anchor = null;
+    if (SPIDER.svg) { SPIDER.svg.remove(); SPIDER.svg = null; }
+    // a popup opened from a fanned pin points at a spot that no longer exists
+    if (SPIDER.pop) { SPIDER.pop.remove(); SPIDER.pop = null; }
+  }
+
+  // thin leader lines from the shared point to each displaced pin — an SVG
+  // overlay in the canvas container (above the tiles, below the markers),
+  // redrawn on every map move. Screen-space like the fan itself.
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  function drawLegs() {
+    if (!SPIDER.items) return;
+    if (!SPIDER.svg) {
+      SPIDER.svg = document.createElementNS(SVG_NS, "svg");
+      SPIDER.svg.setAttribute("class", "spider-legs");
+      map.getCanvasContainer().insertBefore(SPIDER.svg, map.getCanvas().nextSibling);
+    }
+    var box = map.getContainer().getBoundingClientRect();
+    SPIDER.svg.setAttribute("width", box.width);
+    SPIDER.svg.setAttribute("height", box.height);
+    var a = map.project(SPIDER.anchor);
+    SPIDER.items.forEach(function (it, i) {
+      var ln = SPIDER.svg.childNodes[i];
+      if (!ln) {
+        ln = document.createElementNS(SVG_NS, "line");
+        ln.setAttribute("class", "spider-leg");
+        SPIDER.svg.appendChild(ln);
+      }
+      ln.setAttribute("x1", a.x); ln.setAttribute("y1", a.y);
+      ln.setAttribute("x2", a.x + it.foot[0]); ln.setAttribute("y2", a.y + it.foot[1]);
+    });
+  }
+
+  var spiderWired = false;
+  function wireSpider() {
+    if (spiderWired) return;
+    spiderWired = true;
+    map.on("click", spiderCollapse);      // a background click folds the fan
+    map.on("zoomstart", spiderCollapse);  // px offsets belong to one zoom level
+    map.on("move", drawLegs);             // markers pan natively; legs follow here
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") spiderCollapse(); });
+  }
+
+  /* ==================================================================
+     HOVER TOOLTIP — a symbol names itself when the pointer rests on it,
+     so a dense map can be read without clicking through it. One element
+     for the whole map, moved to whichever symbol is hovered: nothing is
+     built per marker, and sliding along a row of pins repositions that
+     single element instead of tearing one down and building the next
+     (which flickers). It lives in the map container rather than inside
+     the marker, so it can never disturb a spiderfied fan, and it never
+     takes the pointer — clicks always reach the pin underneath.
+  ================================================================== */
+  var HINT = { el: null, key: null };
+  var HINT_LIFT = 9;   // px between the tooltip's bottom and the symbol's top
+  var HINT_EDGE = 6;   // never come closer than this to the map's edge
+  // Hover is a pointer idea. On a touch screen the same gesture is a tap, which
+  // opens the popup — a tooltip would only sit stranded on top of it.
+  var HOVER_OK = !(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+
+  function hintEl() {
+    if (!HINT.el) {
+      HINT.el = el("div", "atlas-hint");
+      HINT.el.setAttribute("aria-hidden", "true");  // decorative: the popup carries the real text
+      map.getContainer().appendChild(HINT.el);
+    }
+    return HINT.el;
+  }
+
+  // `at` is the top-centre of the thing being labelled, in map-container px:
+  // the tooltip is centred above it and clamped inside the container on all
+  // four sides. `key` identifies the target, so re-entering the same one is a
+  // no-op. Empty text means no tooltip at all (never an empty bubble).
+  function showHint(text, at, key) {
+    if (hintTimer) { clearTimeout(hintTimer); hintTimer = null; }
+    if (!HOVER_OK || !text || !at) { hideHint(); return; }
+    var t = hintEl();
+    if (key !== HINT.key) { t.textContent = text; HINT.key = key; }
+    t.classList.add("on");
+    var box = map.getContainer().getBoundingClientRect();
+    var w = t.offsetWidth, h = t.offsetHeight;   // measured with the text in place
+    var x = clamp(at.x - w / 2, HINT_EDGE, box.width - w - HINT_EDGE);
+    var y = clamp(at.y - h - HINT_LIFT, HINT_EDGE, box.height - h - HINT_EDGE);
+    t.style.transform = "translate(" + Math.round(x) + "px," + Math.round(y) + "px)";
+  }
+  function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), hi < lo ? lo : hi); }
+
+  function hideHint() {
+    if (hintTimer) { clearTimeout(hintTimer); hintTimer = null; }
+    if (!HINT.el) return;
+    HINT.el.classList.remove("on");
+    HINT.key = null;
+  }
+
+  // Leaving a symbol defers the hide by a beat. Crossing the sliver of map
+  // between two adjacent pins fires a leave then an enter; showHint cancels the
+  // pending hide, so the tooltip slides across instead of blinking off and on.
+  var hintTimer = null;
+  function hideHintSoon() {
+    if (hintTimer) clearTimeout(hintTimer);
+    hintTimer = setTimeout(hideHint, 70);
+  }
+
+  var hintWired = false;
+  function wireHintGlobals() {
+    if (hintWired || !HOVER_OK) return;
+    hintWired = true;
+    // The tooltip is placed in screen px, so any camera change strands it.
+    map.on("movestart", hideHint);
+    map.on("zoomstart", hideHint);
+    map.on("mouseout", hideHint);        // pointer left the map entirely
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") hideHint(); });
+  }
+
+  // DOM markers: hover is wired on the inner .atlas-mnode, not the wrap — a
+  // fanned marker drops pointer events on its wrap, and the node is the part
+  // that actually moves, so the rect we measure is the one the user sees.
+  // `titleOf` is read at hover time; nothing is cached per marker.
+  function wireMarkerHint(node, titleOf) {
+    if (!HOVER_OK) return;
+    wireHintGlobals();
+    function show() {
+      if (HINT.key === node) return;      // already ours — mousemove must not thrash layout
+      var text = titleOf();
+      if (!text) return;                  // nothing names this pin: no tooltip, and no measuring
+      showHint(text, nodeTop(node), node);
+    }
+    node.addEventListener("mouseenter", show);
+    node.addEventListener("mousemove", show);   // bring it back if a pan cleared it
+    node.addEventListener("mouseleave", function () { if (HINT.key === node) hideHintSoon(); });
+  }
+
+  // top-centre of the pin in map-container px — measured on the pin itself so a
+  // label underneath it never pushes the tooltip down
+  function nodeTop(node) {
+    var r = (node.firstElementChild || node).getBoundingClientRect();
+    var box = map.getContainer().getBoundingClientRect();
+    return { x: r.left + r.width / 2 - box.left, y: r.top - box.top };
+  }
+
+  // Circle layers (plain dots and the data-driven bubble kind) are drawn by the
+  // GL style, not as DOM nodes, so their hover comes from the map: ask what is
+  // rendered under the pointer, restricted to those layer ids.
+  var hintSkip = null;   // last circle feature that resolved to no title
+  function wireCircleHints() {
+    if (!HOVER_OK) return;
+    var targets = [];
+    (MANIFEST.layers || []).forEach(function (L) {
+      if (!L.popup) return;               // no popup spec, no title to show
+      (L._ids || []).forEach(function (id) {
+        if (/-circle$/.test(id) && map.getLayer(id)) targets.push({ id: id, L: L });
+      });
+    });
+    if (!targets.length) return;
+    wireHintGlobals();
+    targets.forEach(function (t) {
+      map.on("mousemove", t.id, function (e) {
+        var f = e.features && e.features[0];
+        if (!f) return;
+        var key = t.id + "|" + (f.id != null ? f.id : coordKey(f));
+        if (key === HINT.key || key === hintSkip) return;  // same bubble as last move
+        map.getCanvas().style.cursor = "pointer";
+        var text = popupTitleText(t.L, f.properties);
+        // A bubble with nothing to say is remembered as such, so the rest of the
+        // hover doesn't re-measure it on every mousemove.
+        if (!text) { hintSkip = key; hideHint(); return; }
+        hintSkip = null;
+        showHint(text, circleTop(t.id, f), key);
+      });
+      map.on("mouseleave", t.id, function () {
+        hintSkip = null;
+        if (typeof HINT.key === "string" && HINT.key.indexOf(t.id + "|") === 0) hideHintSoon();
+      });
+    });
+  }
+  // vector features often carry no id; a point's own coordinates identify it
+  function coordKey(f) {
+    var g = f.geometry && f.geometry.coordinates;
+    return Array.isArray(g) ? g.join(",") : "?";
+  }
+
+  // How far above a circle's centre its drawn edge sits. Bubble layers scale
+  // the radius by value, and a paint expression can't be read back evaluated —
+  // so ask the renderer instead: step up from the centre until the hit test
+  // stops finding the layer. Coarse and capped, and only run when the hovered
+  // feature changes.
+  function circleTop(id, f) {
+    var g = f.geometry && f.geometry.coordinates;
+    if (!Array.isArray(g)) return null;
+    var c = map.project(g), d = 0;
+    while (d < 48 && map.queryRenderedFeatures([c.x, c.y - d - 4], { layers: [id] }).length) d += 4;
+    return { x: c.x, y: c.y - d };
+  }
+
+  /* ==================================================================
      SEARCH — a hybrid box over marker layers: a query matches a feature
-     by plain text (title / tags), and on public atlases the server expands
-     it semantically (query → nearest vocabulary tags) so "temples" can find
+     against EVERY text-bearing property it carries (what the contributor
+     uploaded and whatever enrichment added — both are just properties by the
+     time a layer is committed), and on public atlases the server expands the
+     query semantically (query → nearest vocabulary terms) so "temples" can find
      features tagged "heritage". Keyword works with no AI; semantic adds to it.
   ================================================================== */
   var searchTags = [], searchSeq = 0, searchTimer = null;
@@ -782,14 +1113,70 @@
     return String(v).split(/[;,]/).map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
   }
   function featureTagSet(L, f) { var s = {}; tagFieldsOf(L).forEach(function (p) { splitTags(f.properties[p]).forEach(function (t) { s[t] = 1; }); }); return s; }
-  function featureText(L, f) {
-    var parts = [];
-    if (L.popup && L.popup.title) parts.push(f.properties[L.popup.title]);
-    tagFieldsOf(L).forEach(function (p) { parts.push(f.properties[p]); });
-    return parts.filter(Boolean).join(" ").toLowerCase();
+  // Ids, urls, coordinates, colours and timestamps are noise in a search box —
+  // they'd let a stray digit or date match every feature. Everything else that
+  // carries letters is fair game. Mirrors the server's index coverage.
+  function skipSearchProp(n) {
+    n = String(n == null ? "" : n).toLowerCase();
+    if (/(^|[^a-z])(id|ids|uuid|guid|url|uri|link|href|image|images|img|photo|photos|thumb|thumbnail|icon|lat|latitude|lon|lng|long|longitude|x|y|geom|geometry|wkt|color|colour)([^a-z]|$)/.test(n)) return true;
+    return /(created|updated|modified|timestamp)/.test(n);
   }
-  function manifestSearchable() { return (MANIFEST.layers || []).filter(function (L) { return L.type === "marker" && tagFieldsOf(L).length; }); }
-  function searchableLayers() { return (MANIFEST.layers || []).filter(function (L) { return markersByLayer[L.id] && markersByLayer[L.id].length; }); }
+  function cellText(v) {
+    if (v == null) return "";
+    if (Array.isArray(v)) return v.join("; ");
+    if (typeof v === "object") return "";
+    return String(v);
+  }
+  function skipSearchValue(v) {
+    var s = cellText(v).trim();
+    if (s.length < 2) return true;
+    if (!/[a-z]/i.test(s)) return true;
+    if (/^(https?:|www\.|data:|\/\/)/i.test(s)) return true;
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-/i.test(s)) return true;
+    if (/^\d{4}-\d{2}-\d{2}[t ]/i.test(s)) return true;
+    return false;
+  }
+  // cached on the feature: a search runs on every keystroke over every marker
+  function featureText(L, f) {
+    if (f._stext != null) return f._stext;
+    var parts = [];
+    for (var k in f.properties) {
+      if (skipSearchProp(k) || skipSearchValue(f.properties[k])) continue;
+      parts.push(cellText(f.properties[k]));
+    }
+    f._stext = parts.join(" · ").toLowerCase();
+    return f._stext;
+  }
+  // The box is built from the manifest, before any layer data has arrived, so
+  // the question here is "could this layer have text?": a contributed layer's
+  // rows always carry text columns, and a declared popup means there is
+  // something to read. syncSearchBox() removes the box after load if it turns
+  // out nothing had text — that's what keeps the promise honest without hiding
+  // the box from every atlas whose layers simply have no tag column.
+  function manifestSearchable() {
+    return (MANIFEST.layers || []).filter(function (L) {
+      if (L.type !== "marker") return false;
+      var p = L.popup || {};
+      return !!(L.userLayer || L.markerBy || p.title || (p.fields && p.fields.length));
+    });
+  }
+  function layerHasText(L) {
+    if (L._hasText == null) {
+      L._hasText = (markersByLayer[L.id] || []).some(function (e) { return featureText(L, e.f).length > 1; });
+    }
+    return L._hasText;
+  }
+  // layers search can actually act on: markers on the map, carrying real text.
+  // A layer with nothing searchable is left alone by a query rather than blanked.
+  function searchableLayers() {
+    return (MANIFEST.layers || []).filter(function (L) {
+      return markersByLayer[L.id] && markersByLayer[L.id].length && layerHasText(L);
+    });
+  }
+  function syncSearchBox() {
+    var sc = $(".ctl-search"); if (!sc) return;
+    sc.style.display = searchableLayers().length ? "" : "none";
+  }
   function layerVocab() {
     var v = {};
     searchableLayers().forEach(function (L) { (markersByLayer[L.id] || []).forEach(function (e) { for (var t in featureTagSet(L, e.f)) v[t] = 1; }); });
@@ -800,14 +1187,26 @@
     if (shown == null) { c.hidden = true; c.textContent = ""; }
     else { c.hidden = false; c.textContent = shown ? (shown + " of " + total + " shown") : "nothing matched — try another word"; }
   }
+  // An expansion term must land on a word boundary ("art" shouldn't match
+  // "smart"); the user's own query stays a plain substring, as typed.
+  var termRes = {};
+  function termRe(t) {
+    if (!termRes[t]) {
+      var esc2 = String(t).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      termRes[t] = new RegExp("(^|[^a-z0-9])" + esc2 + "([^a-z0-9]|$)", "i");
+    }
+    return termRes[t];
+  }
   function applySearch(q, tags) {
-    var tagSet = {}; tags.forEach(function (t) { tagSet[String(t).toLowerCase()] = 1; });
+    var terms = [];
+    tags.forEach(function (t) { t = String(t || "").toLowerCase(); if (t && terms.indexOf(t) < 0) terms.push(t); });
     var shown = 0, total = 0;
     searchableLayers().forEach(function (L) {
       (markersByLayer[L.id] || []).forEach(function (e) {
         total++;
-        var match = q && featureText(L, e.f).indexOf(q) >= 0;
-        if (!match) { var fs = featureTagSet(L, e.f); for (var t in fs) { if (tagSet[t]) { match = true; break; } } }
+        var text = featureText(L, e.f);
+        var match = !!(q && text.indexOf(q) >= 0);
+        for (var i = 0; !match && i < terms.length; i++) match = termRe(terms[i]).test(text);
         e.hidden = !match; if (match) shown++;
       });
       applyMarkerVisibility(L);
@@ -822,8 +1221,9 @@
   function runSearch(raw) {
     var q = (raw || "").trim().toLowerCase();
     if (!q) { clearSearch(); return; }
+    searchTags = [];                         // expansion belongs to the query that fetched it
     var kw = layerVocab().filter(function (t) { return t.indexOf(q) >= 0 || q.indexOf(t) >= 0; });
-    applySearch(q, kw.concat(searchTags));   // instant keyword pass
+    applySearch(q, kw);                      // instant keyword pass
     var seq = ++searchSeq;                    // semantic expansion (public atlases with embeddings)
     clearTimeout(searchTimer);
     searchTimer = setTimeout(function () {
@@ -907,8 +1307,9 @@
     });
     panel.appendChild(bm);
 
-    // search box — over marker layers that carry tags (keyword now, semantic on
-    // public atlases with embeddings). Hidden when there's nothing to search.
+    // search box — over marker layers that could carry text (keyword now,
+    // semantic on public atlases with embeddings). syncSearchBox() takes it away
+    // again once the data is in if none of them actually had any.
     if (manifestSearchable().length) {
       var sc = el("div", "ctl-search");
       var si = el("input", "ctl-search-input");
@@ -1086,9 +1487,26 @@
     var old = $(".ctl-legend", L._extra); if (old) old.remove();
     var data = L.type === "categories" ? categoryLegend(L) : (L._legend || L.legend);
     if (!data) data = legendFromPaint(L);   // derive from a match/step colour expression
-    if (!data) return;
+    var size = L.sizeLegend;                // bubble layers: reference circles by value
+    if (!data && !(size && size.length)) return;
     var leg = el("div", "ctl-legend");
-    if (data.ramp) {
+    if (size && size.length) {
+      // proportional-symbol key: reference circles at their true on-map size,
+      // largest first, each labelled with the value it stands for
+      var row = el("div", "leg-size");
+      size.forEach(function (it) {
+        var item = el("div", "leg-size-item");
+        var c = el("span", "leg-size-circle");
+        var d = Math.max(6, Math.round(2 * (it.radius || 4)));
+        c.style.width = d + "px"; c.style.height = d + "px";
+        c.style.setProperty("--c", it.color || (L.paint && L.paint.color) || "#888");
+        item.appendChild(c);
+        item.appendChild(el("span", "leg-size-val", esc(it.label)));
+        row.appendChild(item);
+      });
+      leg.appendChild(row);
+    }
+    if (data && data.ramp) {
       // sequential scale → one graduated bar with endpoint labels, not a row per step
       var bar = el("div", "leg-ramp");
       data.ramp.forEach(function (c) { var s = el("span", "leg-ramp-seg"); s.style.background = c; bar.appendChild(s); });
@@ -1098,8 +1516,7 @@
       lab.appendChild(el("span", "leg-ramp-end", esc(data.max)));
       leg.appendChild(bar);
       leg.appendChild(lab);
-    } else {
-      if (!data.length) return;
+    } else if (data && data.length) {
       data.forEach(function (it) {
         var r = el("div", "leg-item" + (it.faint ? " faint" : ""));
         r.appendChild(swatch(it));
@@ -1107,6 +1524,7 @@
         leg.appendChild(r);
       });
     }
+    if (!leg.childNodes.length) return;
     L._extra.appendChild(leg);
   }
 
@@ -1145,7 +1563,7 @@
       return w;
     }
     if (badge) {
-      var b = el("span", "leg-badge", badge);
+      var b = el("span", "leg-badge" + (paleHex(it.color) ? " pale" : ""), badge);
       b.style.setProperty("--c", it.color);
       return b;
     }
@@ -1227,19 +1645,39 @@
       }
       openPopup(top.L, top.f, e.lngLat);
     });
+
+    wireCircleHints();   // hover tooltips for circle/bubble layers (style-drawn, not DOM)
   }
 
-  function openPopup(L, feature, lngLat) {
+  function openPopup(L, feature, lngLat, offsetPx) {
+    hideHint();   // the popup says everything the tooltip did, and more
     var html = popupHTML(L, feature.properties);
     if (!html) return;
-    new maplibregl.Popup({ closeButton: true, maxWidth: "320px", className: "atlas-popup" })
-      .setLngLat(lngLat).setHTML(html).addTo(map);
+    var opts = { closeButton: true, maxWidth: "320px", className: "atlas-popup" };
+    // a spiderfied marker keeps its true lngLat plus a px displacement — the
+    // popup takes the same displacement so it points at the pin the user sees
+    if (offsetPx) opts.offset = offsetPx;
+    return new maplibregl.Popup(opts).setLngLat(lngLat).setHTML(html).addTo(map);
+  }
+
+  // The popup title and the hover tooltip must call a feature the same thing,
+  // so both resolve it here: the stanza's title property, then its fallback. A
+  // manifest can name a property the data doesn't carry (a column renamed or
+  // dropped after the stanza was written) — that resolves to "", and callers
+  // skip the title rather than print "undefined".
+  function popupTitleText(L, props) {
+    var spec = L && L.popup;
+    if (!spec || !props) return "";
+    var t = spec.title ? props[spec.title] : "";
+    if ((t == null || t === "") && spec.titleFallback) t = props[spec.titleFallback];
+    if (t == null) return "";
+    t = String(t).trim();
+    return (t && t !== "null" && t !== "undefined") ? t : "";
   }
 
   function popupHTML(L, props) {
     var spec = L.popup; if (!spec) return "";
-    var title = spec.title ? props[spec.title] : "";
-    if (!title && spec.titleFallback) title = props[spec.titleFallback];
+    var title = popupTitleText(L, props);
     var sub = spec.subtitle || (spec.subtitleProperty ? props[spec.subtitleProperty] : "");
     var h = '<div class="pop">';
     if (title) h += '<div class="pop-title">' + esc(title) + "</div>";

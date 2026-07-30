@@ -1148,7 +1148,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { getFlashModel, getFlashLiteModel, getEmbedModel } from '../lib/models.js';
 import { profileColumns, bestNameColumn } from '../lib/tabular.js';
 import { norm, dice, joinByName, AUTO_ACCEPT } from '../lib/matching.js';
-import { PALETTES, MARKER_COLORS, buildFragment, sanitizeFeatures } from '../lib/fragment.js';
+import { PALETTES, PALETTE_ALIASES, MARKER_COLORS, buildFragment, sanitizeFeatures } from '../lib/fragment.js';
 import * as imports from '../lib/atlas/imports.js';
 import * as enrich from '../lib/atlas/enrich.js';
 
@@ -1345,7 +1345,7 @@ const LAYER_SPEC_SCHEMA = {
   type: Type.OBJECT,
   required: ['kind', 'label', 'group'],
   properties: {
-    kind: { type: Type.STRING, enum: ['markers', 'choropleth', 'line', 'polygon', 'category'] },
+    kind: { type: Type.STRING, enum: ['markers', 'choropleth', 'line', 'polygon', 'category', 'bubble'] },
     categoryColumn: { type: Type.STRING },
     imageColumn: { type: Type.STRING },
     label: { type: Type.STRING },
@@ -1494,7 +1494,10 @@ function transform(session) {
     if (!nameCol) throw new Error('place-name column not set');
     const results = joinByName(rows, nameCol, roles.adminParent || null, bt.targets);
     session.matchState = session.matchState || {};   // row -> code | 'skip' (manual fixes)
-    const wantChoropleth = session.spec && session.spec.kind === 'choropleth';
+    // area kinds keep the joined polygon; point kinds (markers / category /
+    // bubble) collapse it to its centroid — one symbol per admin unit
+    const joinKind = session.spec && session.spec.kind;
+    const wantAreas = joinKind === 'choropleth' || joinKind === 'polygon';
     results.forEach((res) => {
       const manual = session.matchState[res.row];
       const code = manual === 'skip' ? null : (manual || res.match);
@@ -1511,7 +1514,7 @@ function transform(session) {
       const props = { ...r, name: target.name };
       feats.push({
         type: 'Feature', properties: props,
-        geometry: wantChoropleth ? target.geometry : { type: 'Point', coordinates: centroidOf(target.geometry) },
+        geometry: wantAreas ? target.geometry : { type: 'Point', coordinates: centroidOf(target.geometry) },
       });
       report.matched++;
     });
@@ -1524,13 +1527,28 @@ function transform(session) {
   const roles2 = session.columns || [];
   for (const c of roles2) if (!['ignore'].includes(c.role)) keep.add(c.name);
   const spec = session.spec || {};
-  // one layer = one geometry class; the kind must be renderable for that class
-  const cls = session.meta && session.meta.geometry && session.meta.geometry.class;
-  if (strategy === 'geometry' && cls) {
+  // a retired ramp name (the red↔green diverging pair) becomes its safe
+  // successor here, not just at paint time, so the workbench's ramp picker shows
+  // what the layer actually uses instead of falling blank on an unknown option
+  if (spec.palette && PALETTE_ALIASES[spec.palette]) spec.palette = PALETTE_ALIASES[spec.palette];
+  // one layer = one geometry class; the kind must be renderable for that class.
+  // Coordinates ALWAYS produce points (adminJoin is exempt: it can hand back
+  // areas or centroids, whichever the kind needs) — so a choropleth asked of a
+  // lat/lng table becomes sized circles, not invisible shading.
+  const cls = strategy === 'coordinates' ? 'point'
+    : session.meta && session.meta.geometry && session.meta.geometry.class;
+  if (strategy !== 'adminJoin' && cls) {
     const allowed = cls === 'line' ? ['line', 'category']
-      : cls === 'polygon' ? ['polygon', 'choropleth', 'category']
-      : ['markers', 'category'];
-    if (!allowed.includes(spec.kind)) spec.kind = allowed[0];
+      : cls === 'polygon' ? ['polygon', 'choropleth', 'category', 'bubble']
+      : ['markers', 'category', 'bubble'];
+    if (!allowed.includes(spec.kind)) {
+      spec.kind = (spec.kind === 'choropleth' && spec.valueColumn && cls === 'point') ? 'bubble' : allowed[0];
+    }
+  }
+  // bubbles are point symbols — any shapes that reached here collapse to centroids
+  if (spec.kind === 'bubble') {
+    feats = feats.map((f) => (f.geometry && !/Point/.test(f.geometry.type)
+      ? { ...f, geometry: { type: 'Point', coordinates: centroidOf(f.geometry) } } : f));
   }
   const frag = buildFragment(spec, feats, existingIds);
   // derived properties (e.g. the primary-tag category key) must survive the whitelist
@@ -1905,7 +1923,8 @@ router.post('/layers/refine', async (req, res) => {
     'All columns: ' + JSON.stringify(session.columnsRaw),
     'kind "category" colours features by a low-cardinality column (set categoryColumn);',
     'imageColumn: a column of https image URLs shown as a photo in the popup.',
-    'Palettes: ' + Object.keys(PALETTES).join(', ') + ' (rdylgn = red→green, gnrd = green→red).',
+    'Palettes: ' + Object.keys(PALETTES).join(', ') +
+      ' (brteal = brown→teal diverging, tealbr = teal→brown; the rest are single-hue light→dark).',
     gcls ? 'This layer holds ' + gcls + ' geometry — valid kinds: ' +
       (gcls === 'line' ? 'line' : gcls === 'polygon' ? 'polygon, choropleth' : 'markers') + '.' : '',
     'User instruction: ' + message,
@@ -1928,8 +1947,14 @@ router.post('/layers/refine', async (req, res) => {
   }
 });
 
-/* ---------- semantic search: embed a layer's tag vocabulary at commit, ----------
-   ---------- match a viewer query against it at request time --------------------- */
+/* ---------- search: a lexical vocabulary per contributed layer, built on -------
+   ---------- demand (and refreshed at commit), plus optional semantic ----------
+   ---------- expansion of the query when embeddings are available --------------
+   The index used to be written ONLY after a commit, and only if embedding
+   succeeded — so every layer committed before the feature shipped (and every
+   atlas on an instance without an embedding key) had no index at all. It is now
+   built lazily on the first search too, lexically, with vectors added
+   afterwards only if the model answers. */
 const SEARCH_MAX_TERMS = 300;
 const SEARCH_MIN_COSINE = 0.62;
 // gemini-embedding-001 defaults to 3072 dims; 768 (a supported MRL size) keeps
@@ -1952,33 +1977,207 @@ function cosine(a, b) {
   for (let i = 0; i < n; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
   return na && nb ? dot / (Math.sqrt(na) * Math.sqrt(nb)) : 0;
 }
-function layerVocabTerms(stanza, features) {
-  const fields = [];
-  if (stanza.markerBy) fields.push(stanza.markerBy);
-  ((stanza.popup && stanza.popup.fields) || []).forEach((f) => { if (f.type === 'tags') fields.push(f.property); });
-  if (!fields.length) return [];
-  const seen = new Set();
-  for (const f of features) {
-    const p = f.properties || {};
-    for (const fld of fields) {
-      String(p[fld] == null ? '' : p[fld]).split(/[;,]/).forEach((tok) => {
-        const t = tok.trim().toLowerCase();
-        if (t && t.length <= 40) seen.add(t);
-      });
-    }
-    if (seen.size >= SEARCH_MAX_TERMS) break;
-  }
-  return [...seen].slice(0, SEARCH_MAX_TERMS);
+/* What counts as searchable text. Enrichment writes its output (category,
+   labels) into the row as ordinary properties before the layer is committed, so
+   "user-submitted" and "enriched" are the same thing by the time we get here:
+   index EVERY text-bearing property rather than a curated tag column. Ids,
+   urls, coordinates and timestamps are excluded — they would make a stray digit
+   or date match on every feature. */
+function searchSkipProp(name) {
+  const n = String(name == null ? '' : name).toLowerCase();
+  if (/(^|[^a-z])(id|ids|uuid|guid|url|uri|link|href|image|images|img|photo|photos|thumb|thumbnail|icon|lat|latitude|lon|lng|long|longitude|x|y|geom|geometry|wkt|color|colour)([^a-z]|$)/.test(n)) return true;
+  return /(created|updated|modified|timestamp)/.test(n);
 }
-// fire-and-forget after commit: embed the layer's tags so the viewer can search
-// them semantically. No embeddings available → nothing stored, keyword search still works.
+function searchCellText(v) {
+  if (v == null) return '';
+  if (Array.isArray(v)) return v.map((x) => (x == null ? '' : String(x))).join('; ');
+  if (typeof v === 'object') return '';
+  return String(v);
+}
+function searchSkipValue(v) {
+  const s = searchCellText(v).trim();
+  if (s.length < 2) return true;
+  if (!/[a-z]/i.test(s)) return true;                        // numbers, codes, coordinates
+  if (/^(https?:|www\.|data:|\/\/)/i.test(s)) return true;   // urls
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-/i.test(s)) return true;  // uuids
+  if (/^\d{4}-\d{2}-\d{2}[t ]/i.test(s)) return true;        // timestamps
+  return false;
+}
+// One searchable blob per feature: what the viewer matches a raw query against.
+function featureSearchText(props) {
+  const parts = [];
+  for (const k in (props || {})) {
+    if (searchSkipProp(k)) continue;
+    const v = props[k];
+    if (searchSkipValue(v)) continue;
+    parts.push(searchCellText(v));
+  }
+  return parts.join(' · ').toLowerCase().slice(0, 4000);
+}
+
+const SEARCH_STOP = new Set(('the a an and or of in on at to for with from by is are was were this that these those it its as be' +
+  ' been near not no you your our their they he she we i but if then than so such very more most other some any all each' +
+  ' one two three new near around about into over under out up down off can will just also').split(' '));
+// A cell becomes either one term (a tag / short phrase) or its significant words
+// (free text), so "bamboo-wall" survives whole while a sentence contributes
+// "recycled", "library".
+function termsFromValue(v, out) {
+  const s = searchCellText(v);
+  if (!s) return;
+  for (const cell of s.split(/\s*[;|\n]\s*|\s*,\s+/)) {
+    const c = cell.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (!/[a-z]/.test(c)) continue;
+    const words = c.split(' ');
+    if (c.length <= 40 && words.length <= 4) { out.push(c); continue; }
+    for (const w of words) {
+      const t = w.replace(/^[^a-z0-9]+/, '').replace(/[^a-z0-9]+$/, '');
+      if (t.length >= 4 && t.length <= 40 && !SEARCH_STOP.has(t)) out.push(t);
+    }
+  }
+}
+// The layer's vocabulary. Declared tag columns and everything else are gathered
+// separately, then merged under a quota: a layer with a rich tag column must not
+// spend the whole cap (and the whole embedding budget) before its descriptions
+// and addresses get a look in.
+const SEARCH_TAG_QUOTA = 0.6;
+function layerVocabTerms(stanza, features) {
+  const tagFields = [];
+  if (stanza.markerBy) tagFields.push(stanza.markerBy);
+  ((stanza.popup && stanza.popup.fields) || []).forEach((f) => { if (f.type === 'tags' && f.property) tagFields.push(f.property); });
+
+  const seen = new Set();
+  const gather = (pick) => {
+    const list = [];
+    for (const f of features) {
+      if (list.length >= SEARCH_MAX_TERMS) break;
+      const out = [];
+      pick(f.properties || {}, out);
+      for (const t of out) {
+        if (seen.has(t) || list.length >= SEARCH_MAX_TERMS) continue;
+        seen.add(t); list.push(t);
+      }
+    }
+    return list;
+  };
+  const tagged = gather((p, out) => { for (const fld of tagFields) termsFromValue(p[fld], out); });
+  const free = gather((p, out) => {
+    for (const k in p) {
+      if (tagFields.indexOf(k) >= 0 || searchSkipProp(k) || searchSkipValue(p[k])) continue;
+      termsFromValue(p[k], out);
+    }
+  });
+  const quota = Math.round(SEARCH_MAX_TERMS * SEARCH_TAG_QUOTA);
+  const merged = tagged.slice(0, quota).concat(free.slice(0, SEARCH_MAX_TERMS - Math.min(tagged.length, quota)));
+  // room left over (few free-text terms) goes back to the tag column
+  return merged.concat(tagged.slice(quota)).slice(0, SEARCH_MAX_TERMS);
+}
+
+/* ---- the index: which layers, when to rebuild, and reading their text ---- */
+
+// Only contributed layers: their geojson lives next to the manifest overlay and
+// is small enough to scan, and they are what the viewer's search lights up.
+function searchLayers(m) {
+  return imports.mergedLayers(m).filter((L) => L && L.id && L.source &&
+    (L.userLayer || /^user-[a-z0-9-]+\.geojson$/.test(String(L.source))));
+}
+// Cheap staleness check — an enrich or a re-commit rewrites the geojson.
+function layerSig(dir, stanza) {
+  try {
+    const st = fs.statSync(path.join(dir, String(stanza.source)));
+    return st.size + ':' + Math.round(st.mtimeMs);
+  } catch { return ''; }
+}
+const layerTextCache = new Map();   // dir|source|sig -> [{ i, title, text }]
+function layerSearchRows(dir, stanza, sig) {
+  const key = dir + '|' + stanza.source + '|' + sig;
+  const hit = layerTextCache.get(key);
+  if (hit) return hit;
+  let gj = null;
+  try { gj = JSON.parse(fs.readFileSync(path.join(dir, String(stanza.source)), 'utf8')); } catch { return []; }
+  const titleProp = (stanza.popup && stanza.popup.title) || '';
+  const rows = ((gj && gj.features) || []).map((f, i) => {
+    const p = (f && f.properties) || {};
+    const text = featureSearchText(p);
+    // the stanza's title property can be missing from the data (older layers) —
+    // fall back to the head of the searchable text so a hit is still legible
+    const title = (searchCellText(p[titleProp]).trim() || text).slice(0, 120);
+    return { i, title, text };
+  });
+  if (layerTextCache.size >= 8) layerTextCache.delete(layerTextCache.keys().next().value);
+  layerTextCache.set(key, rows);
+  return rows;
+}
+
+// Build (or refresh) the lexical index for every contributed layer that needs
+// it. Synchronous and embedding-free, so a search request can always call it.
+function ensureSearchIndex(dataset) {
+  const out = { dir: null, layers: [], idx: {}, built: [] };
+  let m = null;
+  try { m = imports.readManifest(dataset); } catch { return out; }
+  if (!m) return out;
+  out.dir = m.dir;
+  out.layers = searchLayers(m);
+  out.idx = imports.readSearchIndex(dataset) || {};
+  for (const L of out.layers) {
+    const sig = layerSig(m.dir, L);
+    const cur = out.idx[L.id];
+    if (cur && cur.terms && cur.terms.length && cur.sig === sig) continue;
+    let features = null;
+    try { features = JSON.parse(fs.readFileSync(path.join(m.dir, String(L.source)), 'utf8')).features || []; } catch { continue; }
+    if (!features.length) continue;
+    const terms = layerVocabTerms(L, features);
+    if (!terms.length) continue;
+    // Keep any vectors we already have for terms that survived the rebuild —
+    // re-embedding is the expensive part and may not be possible at all here.
+    const had = new Map(((cur && cur.terms) || []).filter((t) => Array.isArray(t.v)).map((t) => [t.t, t.v]));
+    const entry = {
+      v: 2, sig, model: cur && cur.model, dim: cur && cur.dim,
+      terms: terms.map((t) => (had.has(t) ? { t, v: had.get(t) } : { t })),
+    };
+    out.idx[L.id] = entry;
+    out.built.push(L.id);
+    try { imports.writeSearchIndex(dataset, L.id, entry); } catch (e) { console.warn('[atlas] search index write failed:', e.message); }
+  }
+  return out;
+}
+
+// Vectors, when the model is around: fire-and-forget, one pass per dataset at a
+// time, so the search that triggered the build still answers immediately.
+const embedInFlight = new Set();
+function queueVocabEmbeddings(dataset, built) {
+  if (!ai || embedInFlight.has(dataset)) return;
+  embedInFlight.add(dataset);
+  (async () => {
+    try {
+      const idx = imports.readSearchIndex(dataset) || {};
+      for (const layerId of built) {
+        const entry = idx[layerId];
+        const terms = ((entry && entry.terms) || []).map((t) => t.t);
+        if (!terms.length || (entry.terms[0] && Array.isArray(entry.terms[0].v))) continue;
+        const vecs = await embedTexts(terms);
+        if (!vecs || vecs.length !== terms.length) continue;   // no key / model error → stay lexical
+        imports.writeSearchIndex(dataset, layerId, {
+          ...entry, model: getEmbedModel(), dim: vecs[0].length,
+          terms: terms.map((t, i) => ({ t, v: vecs[i] })),
+        });
+      }
+    } catch (e) { console.warn('[atlas] vocab embedding failed:', e.message); }
+    finally { embedInFlight.delete(dataset); }
+  })();
+}
+
+// After a commit: store the layer's vocabulary immediately (lexical, always) and
+// add vectors if the embedding model answers. No embeddings → search still works.
 async function embedAndStoreVocab(dataset, layerId, stanza, features) {
   const terms = layerVocabTerms(stanza, features);
   if (!terms.length) return;
+  const dir = imports.datasetDir(dataset);
+  const sig = dir ? layerSig(dir, stanza) : '';
+  imports.writeSearchIndex(dataset, layerId, { v: 2, sig, terms: terms.map((t) => ({ t })) });
   const vecs = await embedTexts(terms);
   if (!vecs || vecs.length !== terms.length) return;
   imports.writeSearchIndex(dataset, layerId, {
-    model: getEmbedModel(), dim: vecs[0].length,
+    v: 2, sig, model: getEmbedModel(), dim: vecs[0].length,
     terms: terms.map((t, i) => ({ t, v: vecs[i] })),
   });
 }
@@ -2007,31 +2206,85 @@ function findLayerByContent(datasetId, contentHash, label, exceptId) {
   return null;
 }
 
+/* The viewer's search box asks for query expansion: terms from the atlas's own
+   vocabulary that its (client-side) marker matching should also light up. Two
+   passes, the first of which needs no AI:
+     1. lexical  — vocabulary terms that share text with the query
+     2. semantic — nearest vocabulary terms by embedding, when vectors exist
+   `hits` is diagnostic: which layer/features the server itself would match, so a
+   silent search box can be debugged with curl. The viewer lights markers from
+   its own copy of the data — this endpoint never has to be reachable for plain
+   keyword search to work. */
+const SEARCH_MAX_TAGS = 24;
 router.post('/layers/search', async (req, res) => {
   const b = req.body || {};
   const dataset = String(b.dataset || '');
-  const q = String(b.q || '').trim().slice(0, 200);
-  if (!dataset || !q) return res.json({ tags: [] });
-  const idx = imports.readSearchIndex(dataset);
-  if (!idx || !ai || !geminiAllowed(clientIp(req))) return res.json({ tags: [] });
-  try {
-    const qv = await embedTexts([q]);
-    if (!qv || !qv[0]) return res.json({ tags: [] });
-    const seen = new Set(), scored = [];
-    for (const layerId in idx) {
-      for (const term of (idx[layerId].terms || [])) {
-        if (seen.has(term.t)) continue;
-        seen.add(term.t);
-        scored.push({ term: term.t, score: cosine(qv[0], term.v) });
-      }
+  const q = String(b.q || '').trim().slice(0, 200).toLowerCase();
+  const empty = { tags: [], hits: [] };
+  if (!dataset || q.length < 2 || !imports.datasetDir(dataset)) return res.json(empty);
+
+  let built = { dir: null, layers: [], idx: {}, built: [] };
+  try { built = ensureSearchIndex(dataset); }
+  catch (e) { console.warn('[atlas] search index build failed:', e.message); }
+  if (built.built.length) queueVocabEmbeddings(dataset, built.built);
+  if (!built.layers.length) return res.json(empty);
+
+  // whole query first, then its individual words — so "shadow puppet" can still
+  // reach a "shadow-theatre" tag that no single feature spells out verbatim
+  const words = q.split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !SEARCH_STOP.has(w) && w !== q);
+  const seen = new Set(), tags = [], byWord = [];
+  const vecTerms = [];
+  for (const L of built.layers) {
+    for (const t of ((built.idx[L.id] || {}).terms || [])) {
+      const term = String(t && t.t || '');
+      if (!term) continue;
+      if (Array.isArray(t.v)) vecTerms.push(t);
+      if (seen.has(term)) continue;
+      if (term.indexOf(q) >= 0 || q.indexOf(term) >= 0) { seen.add(term); tags.push(term); }
+      else if (words.some((w) => term.indexOf(w) >= 0)) { seen.add(term); byWord.push(term); }
     }
-    scored.sort((a, b) => b.score - a.score);
-    const tags = scored.filter((s) => s.score >= SEARCH_MIN_COSINE).slice(0, 8).map((s) => s.term);
-    res.json({ tags });
-  } catch (e) {
-    console.warn('[atlas] search failed:', e.message);
-    res.json({ tags: [] });
   }
+  tags.push(...byWord.slice(0, SEARCH_MAX_TAGS));
+
+  let semantic = false;
+  if (vecTerms.length && ai && geminiAllowed(clientIp(req))) {
+    try {
+      const qv = await embedTexts([q]);          // embedTexts swallows its own errors
+      if (qv && qv[0]) {
+        const scored = [];
+        const done = new Set();
+        for (const t of vecTerms) {
+          if (done.has(t.t)) continue;
+          done.add(t.t);
+          scored.push({ term: t.t, score: cosine(qv[0], t.v) });
+        }
+        scored.sort((x, y) => y.score - x.score);
+        for (const s of scored.filter((s) => s.score >= SEARCH_MIN_COSINE).slice(0, 8)) {
+          if (seen.has(s.term)) continue;
+          seen.add(s.term); tags.push(s.term); semantic = true;
+        }
+      }
+    } catch (e) { console.warn('[atlas] semantic search failed:', e.message); }
+  }
+
+  const needles = [q].concat(tags);
+  const hits = [];
+  let matched = 0;
+  try {
+    for (const L of built.layers) {
+      const rows = layerSearchRows(built.dir, L, layerSig(built.dir, L));
+      const fs_ = [];
+      for (const r of rows) {
+        if (!needles.some((n) => n && r.text.indexOf(n) >= 0)) continue;
+        fs_.push({ i: r.i, title: r.title });
+      }
+      if (!fs_.length) continue;
+      matched += fs_.length;
+      hits.push({ layer: L.id, label: L.label || L.id, count: fs_.length, features: fs_.slice(0, 50) });
+    }
+  } catch (e) { console.warn('[atlas] search scan failed:', e.message); }
+
+  res.json({ tags: tags.slice(0, SEARCH_MAX_TAGS), hits, matched, semantic, layers: built.layers.length });
 });
 
 router.post('/layers/commit', (req, res) => {
@@ -2145,7 +2398,10 @@ router.post('/layers/reopen', (req, res) => {
   // the spec it was built with when we have it; otherwise read it back off the
   // stanza as faithfully as the stanza allows
   const spec = layer.spec || {
-    kind: layer.type === 'marker' || layer.type === 'circle' ? (layer.markerBy ? 'category' : 'markers')
+    kind: layer.type === 'marker' || layer.type === 'circle'
+      ? (layer.markerBy ? 'category'
+        : layer.paint && Array.isArray(layer.paint.radius) ? 'bubble'   // data-driven radius = proportional symbols
+        : 'markers')
       : layer.type === 'fill' ? (layer.paint && layer.paint.fillColor && Array.isArray(layer.paint.fillColor) ? 'choropleth' : 'polygon')
       : layer.type === 'line' ? 'line' : 'markers',
     label: layer.label || layerId,
@@ -2230,43 +2486,47 @@ router.get('/layers/imports', (req, res) => {
   res.json({ imports: imports.listImports(dataset) });
 });
 
-// Derive a coarse category + fine labels from a free-text description column,
-// for uploads that arrive without their own categories. The LLM only induces
-// the set + assigns; enrich.js applies deterministic grounding/dedupe/caps and
-// the result is returned for the user to edit in the Check step (nothing is
-// committed here). Reuses/extends the atlas's persisted emergent category set.
+// Data enrichment: derive ONE new categorical field from a free-text column.
+// The whole corpus is read together — the LLM induces a small category set
+// across all values and assigns each row one of them; without AI a corpus-
+// level keyword clustering does the same extractively. Existing columns are
+// never written — the result lands as a NEW column the user reviews in the
+// Check step (nothing is committed here). With a dataset the induced set is
+// persisted so later contributions classify into the same scheme; pre-build
+// there is nothing to persist against, so a signed-in session is the gate.
 router.post('/layers/enrich', async (req, res) => {
   const b = req.body || {};
   const dataset = String(b.dataset || '');
-  if (!imports.datasetDir(dataset)) return res.status(404).json({ error: 'unknown dataset' });
-  if (!requireDatasetEditor(req, res, dataset)) return;
+  if (dataset) {
+    if (!imports.datasetDir(dataset)) return res.status(404).json({ error: 'unknown dataset' });
+    if (!requireDatasetEditor(req, res, dataset)) return;
+  } else if (!auth.sessionFromReq(req) && !auth.isAdmin(req)) {
+    return res.status(401).json({ error: 'sign in to enrich your data', needsAuth: true });
+  }
   const descCol = String(b.descriptionColumn || '');
-  const labelsCol = b.labelsColumn ? String(b.labelsColumn) : '';
   const rows = Array.isArray(b.rows) ? b.rows.slice(0, MAX_ROWS) : null;
   if (!descCol || !rows || !rows.length) return res.status(400).json({ error: 'descriptionColumn and rows required' });
   if (!rows.some((r) => r && String(r[descCol] || '').trim())) {
     return res.status(400).json({ error: 'that column has no text to work from' });
   }
 
-  // AI is optional — without it enrich falls back to extractive labels (no
-  // invented categories). Rate-limited like the other Gemini features.
+  // AI is optional — without it enrich falls back to corpus keyword clustering
+  // (no invented themes). Rate-limited like the other Gemini features.
   const callJSON = (ai && geminiAllowed(clientIp(req)))
     ? (model, prompt, schema) => geminiJSON(model, prompt, schema)
     : null;
   try {
     const out = await enrich.enrichRows({
-      rows, descCol, existingLabelsCol: labelsCol,
-      seedSet: imports.readCatSet(dataset),
+      rows, descCol,
+      seedSet: dataset ? imports.readCatSet(dataset) : [],
       callJSON,
       models: { flash: getFlashModel(), flashLite: getFlashLiteModel() },
     });
-    if (out.categorySet.length) imports.writeCatSet(dataset, out.categorySet);
+    if (dataset && out.categorySet.length) imports.writeCatSet(dataset, out.categorySet);
     res.json({
       categorySet: out.categorySet,
-      rows: out.rows,                      // [{category, labels[]}] index-aligned
+      categories: out.categories,          // one per row, index-aligned
       aiUsed: !!callJSON,
-      // surface for the UI: what got generated, so the user knows what to review
-      generated: { categories: out.categorySet.length, labelledRows: out.rows.filter((r) => r.labels.length).length },
     });
   } catch (e) {
     res.status(502).json({ error: 'enrichment failed: ' + e.message });

@@ -161,6 +161,9 @@
     /* editing an existing layer: state it, since saving replaces rather than adds */
     .edit-note { font-size:.88rem; padding:.6rem .8rem; border-radius:4px; margin:0 0 .8rem;
       background:var(--color-ochre-tint); color:var(--color-text-primary); }
+    /* steering, not blocking: a nudge when the chosen encoding misleads */
+    .kind-steer { font-size:.82rem; padding:.45rem .7rem; border-radius:4px; margin:-.2rem 0 .7rem;
+      background:var(--color-ochre-tint); color:var(--color-text-primary); }
     /* a closed <details> stops hiding a child that sets its own display (our
        .grid2), so make the collapse explicit */
     details:not([open]) > *:not(summary) { display:none !important; }
