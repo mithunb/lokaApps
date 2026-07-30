@@ -223,7 +223,11 @@
       onStep: typeof opts.onStep === "function" ? opts.onStep : function () {},
       onCommitted: typeof opts.onCommitted === "function" ? opts.onCommitted : function () {},
       onBack: typeof opts.onBack === "function" ? opts.onBack : null,
+      // called when check+place are settled and styling is all that's left
+      onReady: typeof opts.onReady === "function" ? opts.onReady : null,
     };
+    // "checkPlace" stops after placement; "all" runs through style and commit
+    var STAGES = opts.stages === "checkPlace" ? "checkPlace" : "all";
 
 
     // the host page knows its own depth to the API mount
@@ -662,6 +666,7 @@
     });
     var body = {
       dataset: S.dataset,
+      region: (!S.dataset && opts.region) ? opts.region : undefined,
       filename: S.canonical.meta.sourceName,
       schema: cols.map(function (c) { return { name: c.name, type: c.type }; }),
       rows: rows,
@@ -685,6 +690,7 @@
               S.result = r;
               msg("#msg-check", "");
               $("#to-place").disabled = false;
+              if (STAGES === "checkPlace") { readyCheck(); return; }
               enterStyle(r);
             })
             .catch(function (e) { $("#to-place").disabled = false; msg("#msg-check", esc(errMsg(e))); });
@@ -694,12 +700,35 @@
       msg("#msg-check", "");
       $("#to-place").disabled = false;
       enterPlace(out[1]);
+      if (STAGES === "checkPlace") readyCheck();
     }).catch(function (e) {
       $("#to-place").disabled = false;
       if (e.needsAuth) msg("#msg-check", "Sign in first — it's on the previous step, under the drop zone.");
       else msg("#msg-check", esc(errMsg(e)));
     });
   };
+
+  // What the host needs to render a per-file verdict, and to know whether the
+  // user still has to look at something.
+  function readySummary() {
+    var rep = (S.result && S.result.matchReport) || {};
+    var open = (rep.ambiguous || []).length + (rep.unmatched || []).length;
+    return {
+      importId: S.result && S.result.importId,
+      filename: (S.canonical && S.canonical.meta && S.canonical.meta.sourceName) || "",
+      features: (S.result && S.result.stats && S.result.stats.features) || 0,
+      rows: (S.canonical && S.canonical.rows.length) || 0,
+      fields: activeColumns().length,
+      spatial: S.spatial,
+      strategy: S.result && S.result.strategy,
+      joinLabel: rep.joinLabel || "",
+      needsAttention: open,
+      kind: (S.result && S.result.spec && S.result.spec.kind) || "",
+    };
+  }
+  function readyCheck(explicit) {
+    if (HOST.onReady) HOST.onReady(readySummary(), !!explicit);
+  }
 
   /* ================= step 3 · place on map ================= */
 
@@ -937,6 +966,13 @@
     if (!S.result) return;
     var rep = S.result.matchReport || {};
     var open = (rep.ambiguous || []).length + (rep.unmatched || []).length;
+    if (STAGES === "checkPlace") {
+      if (!S.result.stats || !S.result.stats.features) {
+        msg("#msg-place", "Nothing matched yet — pick the place-name column (or lat/lng) above."); return;
+      }
+      readyCheck(true);
+      return;
+    }
     if (!S.result.stats || !S.result.stats.features) {
       msg("#msg-place", "Nothing matched yet — pick the place-name column (or lat/lng) above."); return;
     }
@@ -1101,7 +1137,7 @@
 
   $("#commit").onclick = function () {
     if (!S.result) return;
-    api("layers/commit", { method: "POST", body: { importId: S.result.importId } })
+    api("layers/commit", { method: "POST", body: { importId: S.result.importId, dataset: S.dataset } })
       .then(function (r) {
         loadAddedLayers();
         HOST.onCommitted({ layerId: r.layerId, dataset: r.dataset });
@@ -1144,9 +1180,30 @@
   };
 
     return {
-      start: function (canonical) { startCheck(canonical); },
+      start: function (canonical) {
+        startCheck(canonical);
+        // auto-resolve so the host can show a one-line verdict straight away
+        if (STAGES === "checkPlace" && !$("#to-place").disabled) $("#to-place").click();
+      },
       step: function () { return S.step; },
       state: S,
+      summary: function () { return readySummary(); },
+      // the atlas exists now: adopt its slug so apply can write a draft and
+      // commit knows where the layer goes
+      bindDataset: function (slug) { S.dataset = slug; },
+      // build the draft preview and show the style step for this file
+      enterStyle: function () {
+        if (!S.result) return Promise.reject(new Error("nothing to style yet"));
+        var spec = Object.assign({}, S.result.spec, { outsideAction: outsideChoice() });
+        return api("layers/apply", { method: "POST", body: applyBody(true, spec) })
+          .then(function (r) { S.result = r; enterStyle(r); return readySummary(); });
+      },
+      commit: function () {
+        if (!S.result) return Promise.reject(new Error("nothing to add yet"));
+        return api("layers/commit", { method: "POST", body: { importId: S.result.importId, dataset: S.dataset } })
+          .then(function (r) { HOST.onCommitted({ layerId: r.layerId, dataset: r.dataset }); return r; });
+      },
+      destroy: function () { root.innerHTML = ""; },
     };
   }
 

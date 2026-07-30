@@ -90,6 +90,22 @@
       color:var(--color-text-muted); font-size:.95rem; line-height:1; }
     .od-file .odf-x:hover { color:var(--color-rust-deep); }
 
+    /* per-file setup panels: a one-line verdict, expanding into the data
+       wizard's own steps (mounted inline — never a second wizard) */
+    #file-setups, #style-setups { display:flex; flex-direction:column; gap:.6rem; margin-top:1rem; }
+    .fs-panel { border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface); }
+    .fs-head { display:flex; align-items:center; gap:.6rem; padding:.7rem .9rem; flex-wrap:wrap; }
+    .fs-name { font-family:'Figtree',sans-serif; font-weight:600; font-size:.92rem; }
+    .fs-verdict { flex:1 1 auto; font-size:.82rem; color:var(--color-text-muted); }
+    .fs-verdict.ok { color:var(--color-moss); }
+    .fs-verdict.warn { color:var(--color-rust-deep); }
+    .fs-toggle { font:inherit; font-size:.82rem; padding:.3rem .7rem; border:1px solid var(--color-border);
+      border-radius:5px; background:#FFFFFF; color:var(--color-moss); cursor:pointer; flex:0 0 auto; }
+    .fs-toggle:hover { border-color:var(--color-moss); }
+    .fs-body { padding:0 .9rem .9rem; border-top:1px solid var(--color-divider); }
+    /* the module renders its own panels inside; they're sections, not pages here */
+    .fs-body .panel, .fs-body .bench { border:none; background:none; padding:0; }
+
     /* how your data was visualised, after the build */
     .ds-card { margin:1.2rem 0 0; padding:.9rem 1rem; border:1px solid var(--color-border);
       border-radius:var(--radius-md); background:var(--color-surface); }
@@ -448,6 +464,9 @@
       <!-- your-data card: shows the attached upload, or attaches one — rendered by renderOwnDataCard() -->
       <div id="own-data-note" class="own-data" hidden></div>
       <input type="file" id="od-file" hidden multiple accept=".csv,.tsv,.txt,.json,.geojson,.kml,.gpx,.xlsx,.xls" />
+      <!-- one panel per attached file: its verdict, expanding into the field
+           chooser and the placement question (the data wizard, inline) -->
+      <div id="file-setups"></div>
       <div class="btnrow">
         <button class="btn secondary" id="back-3">← Back</button>
         <button class="btn" id="next-3">Build my atlas →</button>
@@ -469,6 +488,8 @@
       </div>
       <!-- how the uploaded data ended up on the map (rendered by renderDataSummary) -->
       <div id="data-summary" hidden></div>
+      <!-- per-file styling, over the freshly built map, before the layer lands -->
+      <div id="style-setups"></div>
       <div id="preview-wrap" hidden>
         <h2 style="margin-top:1.5rem">Preview</h2>
         <iframe id="preview-frame" title="Atlas preview"></iframe>
@@ -548,6 +569,8 @@
   <script src="../vendor/papaparse.min.js"></script>
   <script src="../vendor/simplify.js"></script>
   <script src="../ingest.js"></script>
+  <script src="../checktable.js"></script>
+  <script src="../databench.js"></script>
   <script src="../share.js"></script>
   <script src="./setup.js"></script>
 </body>

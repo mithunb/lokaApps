@@ -884,6 +884,7 @@
         + " We start with just the admin boundaries and place names — add any layers you want on top. After it's built you can also add your own data.";
       renderCatalog();
       renderOwnDataCard();
+      renderFileSetups();
     }).catch(function (e) { msg(3, esc(errMsg(e))); });
   }
 
@@ -924,21 +925,12 @@
     var lost = S._lostFiles || [];
     if (list.length) {
       box.classList.add("attached");
-      var rows = list.map(function (f, i) {
-        return '<div class="od-file"><span class="odf-name">' + esc(f.filename || "data") + "</span>" +
-          '<span class="odf-rows">' + f.canonical.rows.length.toLocaleString() + " rows</span>" +
-          '<button type="button" class="odf-x" data-i="' + i + '" title="Remove this file" aria-label="Remove ' + esc(f.filename) + '">✕</button></div>';
-      }).join("");
       box.innerHTML = '<span class="od-ico" aria-hidden="true">📄</span><div class="od-body"><b>Your data · ' +
         list.length + (list.length === 1 ? " file" : " files") + "</b>" +
-        '<div class="od-files">' + rows + "</div>" +
-        '<span class="hint">Each file becomes its own map layer right after the build — we pick colours, icons and popup fields from your columns and show you exactly what we did. Pick any extra open-data layers below.</span>' +
+        '<span class="hint">Each file below becomes its own map layer. We read the fields and work out where the rows go — open <b>Review</b> on any file to change that. You\'ll style them on the real map after the build.</span>' +
         (lost.length ? '<span class="hint" style="color:var(--color-rust-deep)">' + esc(lost.join(", ")) +
           " couldn't ride along with the saved draft — attach again if you still want it.</span>" : "") +
         '<button type="button" class="od-act" id="od-more">＋ Add another file</button></div>';
-      box.querySelectorAll(".odf-x").forEach(function (b) {
-        b.onclick = function (e) { e.stopPropagation(); removeUserFile(Number(b.dataset.i)); };
-      });
       var more = $("#od-more");
       if (more) more.onclick = function (e) { e.stopPropagation(); $("#od-file").click(); };
       return;
@@ -973,7 +965,9 @@
             if (e) return finish(errMsg(e));
             S.dataFirst = S.dataFirst || { iso3: "", inf: null, locators: null };
             if (!S.dataFirst.iso3) S.dataFirst.iso3 = S.geo.iso3;
-            finish(addUserFile(file.name || "data", canonical));   // null unless it's a duplicate
+            var dupMsg = addUserFile(file.name || "data", canonical);
+            if (!dupMsg) renderFileSetups();
+            finish(dupMsg);   // null unless it's a duplicate
           });
         });
       });
@@ -1271,20 +1265,20 @@
     $("#next-4").hidden = false;
     $("#back-4").hidden = false;
 
-    loadPreview();
-    $("#next-4").disabled = false;
     var pending = userFiles();
     var lost = S._lostFiles || [];
     if (pending.length) {
-      // Your data is NOT added silently with guessed defaults. The atlas exists
-      // now, so hand the file(s) to the add-data wizard, where you choose the
-      // fields, review the generated categories and labels, confirm placement
-      // and styling, and add the layer yourself.
+      // The atlas exists now, so each reviewed file can be styled over the real
+      // map and then added. Publishing waits until they're in — an atlas that
+      // goes live without the data you attached would be a broken promise.
+      $("#next-4").disabled = true;
       $("#prog-msg").textContent = pending.length === 1
-        ? "Your atlas is built. Next: set up your data as a map layer."
-        : "Your atlas is built. Next: set up your " + pending.length + " data files as map layers.";
-      renderHandoffCta(pending);
+        ? "Your atlas is built. Style your data layer, then add it."
+        : "Your atlas is built. Style your " + pending.length + " data layers, then add them.";
+      styleAttachedFiles();
     } else {
+      loadPreview();
+      $("#next-4").disabled = false;
       $("#prog-msg").textContent = "Built. Explore the preview below, then publish.";
       if (lost.length) {
         msg(4, esc(lost.join(", ")) + " couldn't ride along with the resumed draft — add it from the " +
@@ -1293,42 +1287,92 @@
     }
   }
 
-  // The bridge into the add-data wizard: the files (and the atlas's edit token,
-  // so this works even before the atlas is bound to an account) ride in
-  // sessionStorage; the bench picks them up and skips its upload step.
-  function renderHandoffCta(pending) {
-    var box = $("#data-summary");
-    if (!box) return;
-    box.hidden = false;
-    var names = pending.map(function (f) { return esc(f.filename); }).join(", ");
-    box.innerHTML = '<div class="ds-card"><h3>Your data is ready to set up</h3>' +
-      '<p class="hint">' + names + " — you'll choose which fields go on the map, review any generated " +
-      "categories and labels, confirm how the rows are placed, and see the styled layer before it's added. " +
-      "Nothing touches the atlas until you say so.</p>" +
-      '<button type="button" class="btn" id="ds-go">Set up my data →</button>' +
-      ' <span class="hint">or publish first and add it later</span></div>';
-    $("#ds-go").onclick = function () {
-      try {
-        sessionStorage.setItem("loka-atlas-handoff", JSON.stringify({
-          slug: S.build.slug, editToken: S.build.editToken || null, returnTo: "publish", i: 0,
-          files: pending.map(function (f) { return { filename: f.filename, canonical: f.canonical }; }),
-        }));
-        // Leaving the wizard drops its in-memory edit token, and an atlas built
-        // anonymously has no account to fall back on — so stash what publishing
-        // needs (same tab, same origin) rather than putting a token in the URL.
-        sessionStorage.setItem("loka-atlas-publish", JSON.stringify({
-          slug: S.build.slug, editToken: S.build.editToken || null, viewKey: S.build.viewKey || null,
-        }));
-      } catch (e) {
-        msg(4, "This browser wouldn't hold the file for the hand-off — open the " +
-          '<a href="../layers.html?dataset=' + encodeURIComponent(S.build.slug) + '">data bench</a> and drop it there.');
+  /* ---- step 4: style each attached file over the built map, then add it ----
+     The wizard's own module panels move here from step 3 (moving a node keeps
+     its state and listeners), so the session the user already reviewed is the
+     one being styled — no re-upload, no re-ingest. ---- */
+  function styleAttachedFiles() {
+    var wrap = $("#style-setups");
+    if (!wrap) return;
+    wrap.hidden = false;
+    wrap.innerHTML = "";
+    var files = userFiles();
+    var remaining = files.length;
+
+    files.forEach(function (f) {
+      var card = document.createElement("div");
+      card.className = "fs-panel";
+      card.innerHTML = '<div class="fs-head"><span class="fs-name">' + esc(f.filename) +
+        '</span><span class="fs-verdict">styling…</span></div><div class="fs-body"></div>';
+      wrap.appendChild(card);
+      var body = card.querySelector(".fs-body");
+      var verdict = card.querySelector(".fs-verdict");
+
+      if (!f.bench) {   // resumed draft: no live session, so fall back to the bench
+        verdict.textContent = "needs the data bench";
+        verdict.className = "fs-verdict warn";
+        body.innerHTML = '<p class="hint">This file came back with a resumed draft, so it has to be added from the ' +
+          '<a href="../layers.html?dataset=' + encodeURIComponent(S.build.slug) + '">data bench</a>.</p>';
+        if (--remaining === 0) finishStyling();
         return;
       }
-      S.userFiles = []; cacheDataFirstDraft();   // the bench owns them now
-      location.href = "../layers.html?dataset=" + encodeURIComponent(S.build.slug) + "&handoff=1";
-    };
-  }
 
+      // the panel the user already reviewed, moved into this step
+      if (f.panel) {
+        var moved = f.panel.querySelector(".fs-body");
+        if (moved) body.appendChild(moved);
+      }
+      f.bench.bindDataset(S.build.slug);
+      f.bench.enterStyle().then(function (sum) {
+        verdict.textContent = "ready to add · " + sum.features + " features";
+        verdict.className = "fs-verdict ok";
+      }).catch(function (e) {
+        verdict.textContent = errMsg(e);
+        verdict.className = "fs-verdict warn";
+      }).then(function () {
+        if (--remaining === 0) finishStyling();
+      });
+    });
+
+    function finishStyling() {
+      // one button adds every reviewed layer, in order, then unlocks publishing
+      var bar = document.createElement("div");
+      bar.className = "btnrow";
+      bar.innerHTML = '<button type="button" class="btn" id="add-layers">' +
+        (files.length === 1 ? "Add this layer to my atlas →" : "Add these " + files.length + " layers to my atlas →") +
+        '</button> <span class="hint">then you can publish</span>';
+      wrap.appendChild(bar);
+      $("#add-layers").onclick = function () {
+        var btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spin" aria-hidden="true"></span>Adding…';
+        var queue = files.filter(function (f) { return f.bench; }), added = [], failed = [];
+        (function next(i) {
+          if (i >= queue.length) {
+            userFiles().length = 0;
+            cacheDataFirstDraft();
+            wrap.hidden = true;
+            wrap.innerHTML = "";
+            loadPreview();                 // the layers are on disk now
+            $("#next-4").disabled = false;
+            $("#prog-msg").textContent = added.length
+              ? (added.length === 1 ? "Your data is on the map. Publish when you're ready."
+                                    : "Your " + added.length + " layers are on the map. Publish when you're ready.")
+              : "Built. Explore the preview below, then publish.";
+            if (failed.length) {
+              msg(4, failed.join("<br>") + '<br>Add it from the <a href="../layers.html?dataset=' +
+                encodeURIComponent(S.build.slug) + '">data bench</a>.');
+            }
+            return;
+          }
+          queue[i].bench.commit()
+            .then(function () { added.push(queue[i].filename); })
+            .catch(function (e) { failed.push(esc(queue[i].filename) + " — " + esc(errMsg(e))); })
+            .then(function () { next(i + 1); });
+        })(0);
+      };
+    }
+  }
 
   $("#back-4").onclick = function () { show(3); };
   $("#next-4").onclick = function () {
@@ -1561,7 +1605,109 @@
     cacheDataFirstDraft();
     return null;
   }
-  function removeUserFile(i) { userFiles().splice(i, 1); cacheDataFirstDraft(); renderOwnDataCard(); }
+  function removeUserFile(i) {
+    var f = userFiles()[i];
+    if (f && f.bench) { try { f.bench.destroy(); } catch (e) {} }
+    if (f && f.panel && f.panel.parentNode) f.panel.parentNode.removeChild(f.panel);
+    userFiles().splice(i, 1);
+    cacheDataFirstDraft();
+    renderOwnDataCard();
+    renderFileSetups();
+  }
+
+  /* ---- the merged Layers step: each attached file gets its own panel holding
+     the data wizard's own Check & fix and Place-on-map steps, mounted from the
+     shared module. Nothing is a separate wizard and nothing navigates away; a
+     file that resolves cleanly needs no clicks, and only a file that needs a
+     look asks for one. Styling waits for step 4, where the real map exists. ---- */
+
+  function fileVerdict(sum) {
+    if (!sum) return { cls: "", text: "reading…" };
+    if (sum.needsAttention) {
+      return { cls: "warn", text: sum.needsAttention + (sum.needsAttention === 1 ? " row needs" : " rows need") +
+        " a look · " + sum.features + " of " + sum.rows + " placed" };
+    }
+    var how = sum.spatial ? "shapes carry their own location"
+      : sum.strategy === "coordinates" ? "placed by coordinates"
+      : "matched to " + (sum.joinLabel || "boundaries");
+    return { cls: "ok", text: "ready · " + sum.features + " on the map · " + how + " · " + sum.fields + " fields" };
+  }
+
+  function renderFileSetups() {
+    var wrap = $("#file-setups");
+    if (!wrap) return;
+    var files = userFiles();
+    if (S.editMode || !files.length) { wrap.hidden = true; wrap.innerHTML = ""; return; }
+    wrap.hidden = false;
+    files.forEach(function (f, i) {
+      if (!f.panel) {
+        f.panel = document.createElement("div");
+        f.panel.className = "fs-panel";
+        f.panel.innerHTML = '<div class="fs-head">' +
+          '<span class="fs-name"></span><span class="fs-verdict"></span>' +
+          '<button type="button" class="fs-toggle">Review</button>' +
+          '<button type="button" class="odf-x" title="Remove this file" aria-label="Remove this file">✕</button></div>' +
+          '<div class="fs-body" hidden></div>';
+        wrap.appendChild(f.panel);
+        f.panel.querySelector(".odf-x").onclick = function () {
+          removeUserFile(userFiles().indexOf(f));
+        };
+        f.panel.querySelector(".fs-toggle").onclick = function () {
+          var body = f.panel.querySelector(".fs-body");
+          body.hidden = !body.hidden;
+          this.textContent = body.hidden ? "Review" : "Hide";
+        };
+      }
+      f.panel.querySelector(".fs-name").textContent = f.filename;
+      var v = fileVerdict(f.summary);
+      var vEl = f.panel.querySelector(".fs-verdict");
+      vEl.textContent = v.text;
+      vEl.className = "fs-verdict " + v.cls;
+      // mount the wizard's check+place for this file, once
+      if (!f.bench) {
+        var body = f.panel.querySelector(".fs-body");
+        f.bench = window.LokaDataBench.mount(body, {
+          mode: "embedded",
+          stages: "checkPlace",
+          api: "../api/",
+          region: regionForIngest(),
+          onReady: function (sum, explicit) {
+            f.summary = sum;
+            f.ready = true;
+            renderFileSetups();
+            checkFilesReady();
+            // an explicit "continue" means the user is done with this panel
+            if (explicit) {
+              var b = f.panel.querySelector(".fs-body");
+              b.hidden = true;
+              f.panel.querySelector(".fs-toggle").textContent = "Review";
+            }
+          },
+        });
+        f.bench.start(f.canonical);
+      }
+    });
+    checkFilesReady();
+  }
+
+  // the region the pre-build ingest needs (no atlas exists yet)
+  function regionForIngest() {
+    var eff = effectiveRegion();
+    if (!eff) return null;
+    var bb = unionBbox(eff.units.map(function (u) { return { bbox: u.bbox }; }));
+    return { iso3: S.geo.iso3, level: eff.level, shapeIDs: eff.units.map(function (u) { return u.id; }), bbox: bb };
+  }
+
+  function checkFilesReady() {
+    var files = userFiles();
+    var pending = files.filter(function (f) { return !f.summary; }).length;
+    var attention = files.filter(function (f) { return f.summary && f.summary.needsAttention; }).length;
+    var btn = $("#next-3");
+    if (!btn || S.editMode) return;
+    btn.disabled = pending > 0;
+    btn.textContent = pending > 0 ? "Reading your data…" : "Build my atlas →";
+    if (!pending && attention) msg(3, attention + " file" + (attention > 1 ? "s have" : " has") + " rows that need a look — open Review, or build and fix them later.", "ok");
+  }
 
   // The attached data must survive a reload: without it a resumed data-first
   // session builds an atlas with no data layer (and no markers). Cached once
