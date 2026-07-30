@@ -1549,7 +1549,7 @@ function applyResult(session, withDraft) {
   let draftId = null;
   if (withDraft) {
     draftId = imports.writeDraft(session.dataset, session.id, frag.stanza,
-      frag.sourceFile, { type: 'FeatureCollection', features });
+      frag.sourceFile, { type: 'FeatureCollection', features }, session.replacingLayerId);
   }
   session.fragment = frag.stanza;
   session.sourceFile = frag.sourceFile;
@@ -2064,7 +2064,8 @@ router.post('/layers/commit', (req, res) => {
     // refuse a second copy — the authoritative check, since every path (bench,
     // data-first auto-add) commits through here.
     const contentHash = hashRows(session.rows);
-    const hit = findLayerByContent(session.dataset, contentHash, frag.stanza.label, frag.stanza.id);
+    const hit = findLayerByContent(session.dataset, contentHash, frag.stanza.label,
+      session.replacingLayerId || frag.stanza.id);
     if (hit && hit.exact) {
       return res.status(409).json({
         error: 'this data is already on the atlas as “' + (hit.layer.label || hit.layer.id) +
@@ -2073,6 +2074,7 @@ router.post('/layers/commit', (req, res) => {
       });
     }
     frag.stanza.contentHash = contentHash;
+    frag.stanza.spec = session.spec || undefined;   // so "edit this layer" can start from it
     // credit the contributor: which org (and person) added this layer
     const who = auth.sessionFromReq(req);
     if (who) {
@@ -2080,12 +2082,96 @@ router.post('/layers/commit', (req, res) => {
       frag.stanza.addedBy = { email: who.email, name: (acc && acc.name) || '', org: (acc && acc.org) || '' };
       frag.stanza.addedAt = Date.now();
     }
+    // Editing a committed layer replaces it in place: same id (so the atlas's
+    // manifest identity and any links to it survive a restyle), same source
+    // file, and the original contributor keeps the credit.
+    if (session.replacingLayerId) {
+      frag.stanza.id = session.replacingLayerId;
+      frag.sourceFile = 'user-' + session.replacingLayerId + '.geojson';
+      frag.stanza.source = frag.sourceFile;   // the stanza must name the file we write
+      if (session.replacingAddedBy) {
+        frag.stanza.addedBy = session.replacingAddedBy;
+        frag.stanza.addedAt = session.replacingAddedAt || Date.now();
+      }
+    }
     const out = imports.commitLayer(session.dataset, frag.stanza, frag.sourceFile,
       { type: 'FeatureCollection', features });
     imports.discardImport(session.id);
     res.json({ ok: true, layerId: out.layerId, dataset: session.dataset });
     // embed this layer's tag vocabulary for semantic search (non-blocking)
     embedAndStoreVocab(session.dataset, out.layerId, frag.stanza, features).catch(() => {});
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+/* Editing a layer that is already on the atlas. Its geometry and properties are
+   settled — what the user wants to change is how it looks — so this rebuilds an
+   import session straight from the committed geojson (strategy 'geometry', so
+   transform passes the shapes through) and hands back the same shape as ingest.
+   The style step then works unchanged, and commit replaces the layer in place.
+   Permission is the same rule as removal: the owner may edit any layer, an
+   invited editor only the ones they added. */
+router.post('/layers/reopen', (req, res) => {
+  const b = req.body || {};
+  const dataset = String(b.dataset || '');
+  const layerId = String(b.layerId || '');
+  const inst = reg.getInstance(dataset);
+  const role = inst ? callerRole(req, inst) : (auth.isAdmin(req) ? 'owner' : null);
+  if (!role) return res.status(403).json({ error: 'sign in as this atlas’s owner or a collaborator', needsAuth: true });
+
+  let m = null;
+  try { m = imports.readManifest(dataset); } catch { /* handled below */ }
+  const layer = ((m && m.local && m.local.layers) || []).find((l) => l.id === layerId);
+  if (!layer) return res.status(404).json({ error: 'no such layer on this atlas' });
+  const who = auth.sessionFromReq(req);
+  const mine = !!(who && layer.addedBy && layer.addedBy.email === who.email);
+  if (role !== 'owner' && !mine && !auth.isAdmin(req)) {
+    return res.status(403).json({ error: 'only the person who added this layer, or the atlas owner, can edit it' });
+  }
+
+  let feats;
+  try {
+    feats = JSON.parse(fs.readFileSync(path.join(m.dir, layer.source), 'utf8')).features || [];
+  } catch (e) { return res.status(400).json({ error: 'this layer’s data file is missing — remove it and add it again' }); }
+  if (!feats.length) return res.status(400).json({ error: 'this layer has no features to edit' });
+
+  const rows = feats.map((f) => Object.assign({}, f.properties));
+  const geoms = feats.map((f) => f.geometry);
+  const columns = Object.keys(rows[0] || {}).slice(0, MAX_COLS);
+  const cls = /Polygon/.test(geoms[0] && geoms[0].type) ? 'polygon'
+    : /LineString/.test(geoms[0] && geoms[0].type) ? 'line' : 'point';
+
+  // the spec it was built with when we have it; otherwise read it back off the
+  // stanza as faithfully as the stanza allows
+  const spec = layer.spec || {
+    kind: layer.type === 'marker' || layer.type === 'circle' ? (layer.markerBy ? 'category' : 'markers')
+      : layer.type === 'fill' ? (layer.paint && layer.paint.fillColor && Array.isArray(layer.paint.fillColor) ? 'choropleth' : 'polygon')
+      : layer.type === 'line' ? 'line' : 'markers',
+    label: layer.label || layerId,
+    group: layer.group || 'userdata',
+    categoryColumn: layer.markerBy && layer.markerBy !== '_category' ? layer.markerBy : undefined,
+    popupTitleColumn: layer.popup && layer.popup.title,
+    popupColumns: ((layer.popup && layer.popup.fields) || []).map((f) => f.property),
+    imageColumn: (((layer.popup && layer.popup.fields) || []).find((f) => f.type === 'image') || {}).property,
+    palette: 'greens', markerColor: 'rust', lineColor: 'slate', fillColor: 'moss',
+  };
+
+  const session = imports.newImport({
+    dataset, filename: (layer.label || layerId) + ' (existing layer)',
+    meta: { notices: [], geometry: { class: cls, count: feats.length, vertices: 0 } },
+    columnsRaw: columns, rows,
+    geomIdx: feats.map((_, i) => i),
+    replacingLayerId: layerId,
+    replacingAddedBy: layer.addedBy || null,
+    replacingAddedAt: layer.addedAt || null,
+  });
+  imports.writeGeoms(session.id, geoms);
+  session.strategy = 'geometry';
+  session.columns = columns.map((c) => ({ name: c, role: c === spec.popupTitleColumn ? 'placeName' : 'text' }));
+  session.spec = spec;
+  try {
+    res.json(applyResult(session, true));   // draft written: the preview works immediately
   } catch (e) {
     res.status(400).json({ error: e.message });
   }

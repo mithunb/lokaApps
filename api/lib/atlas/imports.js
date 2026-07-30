@@ -178,7 +178,7 @@ export function sweepImports() {
 
 /* ---------------- draft preview dataset ---------------- */
 
-export function writeDraft(datasetId, importId, stanza, sourceFile, geojson) {
+export function writeDraft(datasetId, importId, stanza, sourceFile, geojson, replacingId) {
   const m = readManifest(datasetId);
   if (!m) throw new Error('dataset not found');
   const suffix = importId.replace('imp_', '');
@@ -193,15 +193,18 @@ export function writeDraft(datasetId, importId, stanza, sourceFile, geojson) {
     if (L.source && !/^(https?:)?\//.test(L.source)) L.source = '../' + datasetId + '/' + L.source;
   }
   if (draft.branding && draft.branding.logo) draft.branding.logo = '../' + datasetId + '/' + draft.branding.logo;
-  // committed user layers too
+  // committed user layers too — except the one being edited, which the proposal
+  // stands in for, at its own place in the order so the preview draws honestly
+  let stood = false;
   if (m.local && m.local.layers) {
     for (const L of m.local.layers) {
+      if (replacingId && L.id === replacingId) { draft.layers.push(stanza); stood = true; continue; }
       const c = JSON.parse(JSON.stringify(L));
       if (c.source && !/^(https?:)?\//.test(c.source)) c.source = '../' + datasetId + '/' + c.source;
       draft.layers.push(c);
     }
   }
-  draft.layers.push(stanza);           // the proposal, its source local to the draft dir
+  if (!stood) draft.layers.push(stanza);   // the proposal, its source local to the draft dir
   draft.id = draftId;
   draft.focusLayer = stanza.id;        // preview zooms to the proposed layer
 

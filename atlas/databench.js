@@ -154,6 +154,7 @@
       <div class="bench-left">
         <div class="card">
           <h2>How it looks</h2>
+          <p class="edit-note" id="edit-note" hidden></p>
           <p class="hint" id="style-lead">The map on the right updates as you change these.</p>
           <label class="f">Layer name<input type="text" id="s-label" maxlength="60" /></label>
           <label class="f" id="w-kind">Draw the rows as
@@ -359,6 +360,11 @@
         row.innerHTML = '<span style="flex:1 1 auto; min-width:0"><b>' + esc(l.label) + "</b>" +
           (credit ? ' <span class="hint">— added by ' + esc(credit) + "</span>" : "") + "</span>";
         if (l.canRemove) {
+          var ed = document.createElement("button");
+          ed.className = "btn secondary"; ed.textContent = "Edit";
+          ed.title = "Change how this layer looks — its name, colours and popup";
+          ed.onclick = function () { editLayer(l); };
+          row.appendChild(ed);
           var rm = document.createElement("button");
           rm.className = "btn secondary"; rm.textContent = "Remove";
           rm.onclick = function () {
@@ -395,6 +401,37 @@
       known.hidden = true; ask.hidden = false;
       $("#f-dataset").focus();
     };
+  }
+
+  /* ---- editing a layer already on the atlas ----
+     Its shapes and fields are settled; what changes is how it looks. So this
+     skips straight to the styling step with a live preview, and adding replaces
+     the layer in place rather than making a second copy. ---- */
+  function editLayer(l) {
+    msg("#msg-start", "Opening “" + esc(l.label || l.id) + "”…", "ok");
+    api("layers/reopen", { method: "POST", body: { dataset: S.dataset || ($("#f-dataset") && $("#f-dataset").value.trim()), layerId: l.id } })
+      .then(function (r) {
+        msg("#msg-start", "");
+        S.result = r;
+        S.canonical = null;            // nothing to re-check: the data is already on the map
+        S.spatial = true;              // shapes carry their own location
+        S.styleReady = false;
+        S.names = (r.columns || []).map(function (c) { return c.name; });
+        S.editingLayerId = l.id;
+        return api("layers/options?dataset=" + encodeURIComponent(S.dataset)).then(function (o) {
+          S.options = o;
+          enterStyle(r);
+          // its own line, not #style-lead: that one is rewritten on every field change
+          var note = $("#edit-note");
+          if (note) {
+            note.textContent = "Editing “" + (l.label || l.id) + "” — saving replaces it on the atlas, keeping its place in the layer list. The preview already shows the swap.";
+            note.hidden = false;
+          }
+          var c = $("#commit");
+          if (c) c.textContent = "Save changes to the atlas →";
+        });
+      })
+      .catch(function (e) { msg("#msg-start", esc(errMsg(e))); });
   }
 
   /* ---- file intake ---- */
@@ -483,6 +520,9 @@
     S.canonical = canonical;
     S.result = null;
     S.styleReady = false;
+    S.editingLayerId = null;                       // a fresh upload adds, it doesn't replace
+    if ($("#edit-note")) $("#edit-note").hidden = true;
+    if ($("#commit")) $("#commit").textContent = "Add to the atlas →";
     $("#sheet-pick").hidden = true;
     var g = canonical.geoms && canonical.meta.geometry;
     setTrack(!!g);
@@ -900,6 +940,14 @@
     });
   }
 
+  // point / line / polygon — from the upload when there is one, otherwise from
+  // the session the server rebuilt for an existing layer
+  function geomClass() {
+    if (S.canonical && S.canonical.meta && S.canonical.meta.geometry) return S.canonical.meta.geometry.class;
+    var t = S.result && S.result.fragment && S.result.fragment.type;
+    return t === "fill" ? "polygon" : t === "line" ? "line" : "point";
+  }
+
   function applyBody(draft, spec) {
     var body = { importId: S.result.importId, draft: draft, spec: spec };
     if (S.spatial) {
@@ -1017,7 +1065,7 @@
       return [{ value: "markers", label: "Points / markers" },
               { value: "choropleth", label: "Choropleth (colour by value)" }, CATEGORY_CHOICE];
     }
-    var cls = (S.canonical.meta.geometry || {}).class;
+    var cls = geomClass();
     if (cls === "line") return [{ value: "line", label: "Lines" }, CATEGORY_CHOICE];
     if (cls === "polygon") return [
       { value: "polygon", label: "Areas (single colour)" },
@@ -1059,7 +1107,7 @@
 
   function syncStyleVisibility() {
     var kind = $("#s-kind").value;
-    var cls = S.spatial ? (S.canonical.meta.geometry || {}).class : "";
+    var cls = S.spatial ? geomClass() : "";
     $("#w-value").hidden = kind !== "choropleth";
     $("#w-catcol").hidden = kind !== "category";
     $("#w-palette").hidden = kind !== "choropleth";
