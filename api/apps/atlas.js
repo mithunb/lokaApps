@@ -1254,6 +1254,16 @@ function boundaryTargets(session, optionId) {
     }
     // side file expired — fall through to the dataset's own layers
   }
+  if (!datasetId) {
+    // pre-build: the only targets are the geoBoundaries units for the region
+    const byOpt = imports.readGeoTargets(session.id) || {};
+    const first = Object.keys(byOpt)[0];
+    if (!first) return null;
+    return {
+      opt: { id: first, label: byOpt[first].label, group: 'geo', count: byOpt[first].targets.length },
+      targets: byOpt[first].targets,
+    };
+  }
   const { options, manifest } = boundaryOptions(datasetId);
   const opt = options.find((o) => o.id === optionId) || options[0];
   if (!opt || !manifest) return null;
@@ -1422,6 +1432,19 @@ function rolesMap(columns) {
   return map;
 }
 
+// The map's bounds: from the built manifest when there is one, otherwise from
+// the region the wizard chose (as [[w,s],[e,n]], the manifest's shape).
+function sessionBounds(session) {
+  if (session.dataset) {
+    try {
+      const m = imports.readManifest(session.dataset);
+      if (m && m.manifest && m.manifest.bounds) return m.manifest.bounds;
+    } catch { /* not built yet */ }
+  }
+  const bb = session.region && session.region.bbox;
+  return (bb && bb.length === 4) ? [[bb[0], bb[1]], [bb[2], bb[3]]] : null;
+}
+
 function transform(session) {
   const { rows, strategy } = session;
   const roles = rolesMap(session.columns);
@@ -1495,8 +1518,8 @@ function transform(session) {
   }
 
   // build the fragment + sanitize
-  const m = imports.readManifest(session.dataset);
-  const existingIds = imports.mergedLayers(m).map((l) => l.id);
+  const m = session.dataset ? imports.readManifest(session.dataset) : null;
+  const existingIds = m ? imports.mergedLayers(m).map((l) => l.id) : [];
   const keep = new Set(['name']);
   const roles2 = session.columns || [];
   for (const c of roles2) if (!['ignore'].includes(c.role)) keep.add(c.name);
@@ -1512,7 +1535,7 @@ function transform(session) {
   const frag = buildFragment(spec, feats, existingIds);
   // derived properties (e.g. the primary-tag category key) must survive the whitelist
   (frag.derivedKeys || []).forEach((k) => keep.add(k));
-  const clean = sanitizeFeatures(feats, [...keep], m.manifest.bounds, spec.outsideAction);
+  const clean = sanitizeFeatures(feats, [...keep], sessionBounds(session), spec.outsideAction);
   report.outside = clean.outside;
   if (spec.outsideAction === 'drop' && clean.outside) report.outsideDropped = true;
 
@@ -1551,8 +1574,12 @@ function applyResult(session, withDraft) {
 
 router.get('/layers/options', (req, res) => {
   const dataset = String(req.query.dataset || '');
-  if (!requireDatasetEditor(req, res, dataset)) return;
-  const { options } = boundaryOptions(dataset);
+  if (dataset) {
+    if (!requireDatasetEditor(req, res, dataset)) return;
+  } else if (!auth.sessionFromReq(req) && !auth.isAdmin(req)) {
+    return res.status(401).json({ error: 'sign in to set up your data', needsAuth: true });
+  }
+  const { options } = dataset ? boundaryOptions(dataset) : { options: [] };
   res.json({
     boundaries: options.map(({ id, label, group, count, exampleNames }) => ({ id, label, group, count, exampleNames: exampleNames.slice(0, 5) })),
     palettes: Object.keys(PALETTES),
@@ -1567,8 +1594,29 @@ router.get('/layers/options', (req, res) => {
 router.post('/layers/ingest', async (req, res) => {
   const b = req.body || {};
   const dataset = String(b.dataset || '');
-  if (!imports.datasetDir(dataset)) return res.status(404).json({ error: 'unknown dataset' });
-  if (!requireDatasetEditor(req, res, dataset)) return;
+  // Two callers: the workbench working on a built atlas, and the setup wizard
+  // setting data up BEFORE the atlas exists. The second has no dataset to read,
+  // so it sends the region it just chose instead; the session stays "pending"
+  // until the build finishes and the layer is committed against the new slug.
+  const pendingRegion = (!dataset && b.region && b.region.iso3) ? {
+    iso3: String(b.region.iso3).toUpperCase(),
+    level: Number(b.region.level) || 1,
+    shapeIDs: (Array.isArray(b.region.shapeIDs) ? b.region.shapeIDs : []).map(String).slice(0, 100),
+    bbox: Array.isArray(b.region.bbox) && b.region.bbox.length === 4 ? b.region.bbox.map(Number) : null,
+  } : null;
+  if (pendingRegion) {
+    // no instance to authorise against yet — building requires a session, so
+    // that (or the admin token) is the gate
+    if (!auth.sessionFromReq(req) && !auth.isAdmin(req)) {
+      return res.status(401).json({ error: 'sign in to set up your data', needsAuth: true });
+    }
+    if (!/^[A-Z]{3}$/.test(pendingRegion.iso3) || !pendingRegion.shapeIDs.length) {
+      return res.status(400).json({ error: 'region iso3 and shapeIDs are required before the atlas exists' });
+    }
+  } else {
+    if (!imports.datasetDir(dataset)) return res.status(404).json({ error: 'unknown dataset' });
+    if (!requireDatasetEditor(req, res, dataset)) return;
+  }
   const schema = Array.isArray(b.schema) ? b.schema : null;
   if (!schema || !Array.isArray(b.rows) || !b.rows.length) {
     return res.status(400).json({ error: 'schema and rows required' });
@@ -1604,11 +1652,12 @@ router.post('/layers/ingest', async (req, res) => {
     : null;
 
   const profiles = profileColumns(columns, rows);
-  const { options } = boundaryOptions(dataset);
-  const m = imports.readManifest(dataset);
+  const { options } = dataset ? boundaryOptions(dataset) : { options: [] };
+  const m = dataset ? imports.readManifest(dataset) : null;
 
   const session = imports.newImport({
-    dataset, filename: String(b.filename || '').slice(0, 120), meta,
+    dataset, region: pendingRegion || undefined,
+    filename: String(b.filename || '').slice(0, 120), meta,
     columnsRaw: columns, rows, profilesSummary: profiles.map((p) => ({ name: p.name, type: p.type })),
     geomIdx: geomIdx || undefined,
   });
@@ -1658,9 +1707,9 @@ router.post('/layers/ingest', async (req, res) => {
   // names the atlas doesn't carry (villages / localities) still match. Targets
   // are materialised to the import side-file so the sync placement path can read
   // them without a refetch.
-  const inst = reg.getInstance(dataset);
+  const inst = dataset ? reg.getInstance(dataset) : null;
   let geoOpts = [];
-  try { geoOpts = await geoBoundaryOptions(inst && inst.region); }
+  try { geoOpts = await geoBoundaryOptions(pendingRegion || (inst && inst.region)); }
   catch (e) { console.warn('[atlas] geo boundary options failed:', e.message); }
   if (geoOpts.length) {
     const byOpt = {};
@@ -1677,7 +1726,7 @@ router.post('/layers/ingest', async (req, res) => {
         'You are helping map a tabular dataset onto an interactive atlas. Infer its schema.',
         'Column profiles (from code, trustworthy):', JSON.stringify(profiles),
         'First rows (sample):', JSON.stringify(rows.slice(0, 30)),
-        'Atlas context: groups are userdata (default for contributed data), base, agri, eco. Use "userdata" unless the layer clearly belongs to one of the others. Map bounds ' + JSON.stringify(m.manifest.bounds) + '.',
+        'Atlas context: groups are userdata (default for contributed data), base, agri, eco. Use "userdata" unless the layer clearly belongs to one of the others. Map bounds ' + JSON.stringify(sessionBounds(session)) + '.',
         'Joinable boundary layers (choose joinLayer from these ids when rows are admin units; "geo:" ids are geoBoundaries admin levels for the atlas region — prefer them for village/locality names):',
         JSON.stringify(allOptions.map((o) => ({ id: o.id, label: o.label, count: o.count, exampleNames: o.exampleNames }))),
         'Rules: strategy "coordinates" only when usable lat/lng columns exist; otherwise "adminJoin"',
@@ -1780,7 +1829,12 @@ router.post('/layers/apply', (req, res) => {
   const b = req.body || {};
   const session = imports.getImport(String(b.importId || ''));
   if (!session) return res.status(404).json({ error: 'import expired or unknown' });
-  if (!requireDatasetEditor(req, res, session.dataset)) return;
+  if (session.dataset) {
+    if (!requireDatasetEditor(req, res, session.dataset)) return;
+  } else if (!auth.sessionFromReq(req) && !auth.isAdmin(req)) {
+    // pre-build session: no instance to authorise against, so sign-in is the gate
+    return res.status(401).json({ error: 'sign in to set up your data', needsAuth: true });
+  }
   if (b.spec && typeof b.spec === 'object') session.spec = b.spec;
   if (b.strategy && ['coordinates', 'adminJoin'].includes(b.strategy)) session.strategy = b.strategy;
   if (b.joinLayer) session.joinLayer = String(b.joinLayer);
@@ -1790,7 +1844,9 @@ router.post('/layers/apply', (req, res) => {
       .map((c) => ({ name: c.name, role: String(c.role) }));
   }
   try {
-    res.json(applyResult(session, b.draft !== false));
+    // no dataset folder before the build, so no draft to write — the styled
+    // layer is previewed on the real map once it's committed
+    res.json(applyResult(session, session.dataset ? b.draft !== false : false));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
@@ -1800,7 +1856,12 @@ router.post('/layers/resolve', (req, res) => {
   const b = req.body || {};
   const session = imports.getImport(String(b.importId || ''));
   if (!session) return res.status(404).json({ error: 'import expired or unknown' });
-  if (!requireDatasetEditor(req, res, session.dataset)) return;
+  if (session.dataset) {
+    if (!requireDatasetEditor(req, res, session.dataset)) return;
+  } else if (!auth.sessionFromReq(req) && !auth.isAdmin(req)) {
+    // pre-build session: no instance to authorise against, so sign-in is the gate
+    return res.status(401).json({ error: 'sign in to set up your data', needsAuth: true });
+  }
   session.matchState = session.matchState || {};
   for (const f of (Array.isArray(b.fixes) ? b.fixes : [])) {
     if (!Number.isInteger(f.row)) continue;
@@ -1808,7 +1869,9 @@ router.post('/layers/resolve', (req, res) => {
     else if (typeof f.code === 'string') session.matchState[f.row] = f.code;
   }
   try {
-    res.json(applyResult(session, b.draft !== false));
+    // no dataset folder before the build, so no draft to write — the styled
+    // layer is previewed on the real map once it's committed
+    res.json(applyResult(session, session.dataset ? b.draft !== false : false));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
@@ -1818,7 +1881,12 @@ router.post('/layers/refine', async (req, res) => {
   const b = req.body || {};
   const session = imports.getImport(String(b.importId || ''));
   if (!session) return res.status(404).json({ error: 'import expired or unknown' });
-  if (!requireDatasetEditor(req, res, session.dataset)) return;
+  if (session.dataset) {
+    if (!requireDatasetEditor(req, res, session.dataset)) return;
+  } else if (!auth.sessionFromReq(req) && !auth.isAdmin(req)) {
+    // pre-build session: no instance to authorise against, so sign-in is the gate
+    return res.status(401).json({ error: 'sign in to set up your data', needsAuth: true });
+  }
   const message = String(b.message || '').slice(0, 500);
   if (!message) return res.status(400).json({ error: 'message required' });
   if (!ai) return res.status(503).json({ error: 'AI refine is unavailable — use the pickers instead' });
@@ -1941,6 +2009,16 @@ router.post('/layers/commit', (req, res) => {
   const b = req.body || {};
   const session = imports.getImport(String(b.importId || ''));
   if (!session) return res.status(404).json({ error: 'import expired or unknown' });
+
+  // A session set up before the atlas existed is bound to it here — the wizard
+  // sends the slug it got back from the build.
+  if (!session.dataset && b.dataset) {
+    const slug = String(b.dataset);
+    if (!imports.datasetDir(slug)) return res.status(404).json({ error: 'unknown dataset' });
+    session.dataset = slug;
+    imports.saveImport(session);
+  }
+  if (!session.dataset) return res.status(400).json({ error: 'which atlas should this layer go on?' });
 
   // auth: the atlas's signed-in owner, its edit token, or admin (e.g. the deoria dataset)
   const inst = reg.getInstance(session.dataset);
