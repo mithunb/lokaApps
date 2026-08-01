@@ -155,30 +155,29 @@
         <div class="card">
           <h2>How it looks</h2>
           <p class="edit-note" id="edit-note" hidden></p>
-          <p class="hint" id="style-lead">The map on the right updates as you change these.</p>
-          <label class="f">Layer name<input type="text" id="s-label" maxlength="60" /></label>
-          <label class="f" id="w-kind">Draw the rows as
-            <select id="s-kind"><option value="markers">Points / markers</option><option value="choropleth">Choropleth (colour by value)</option></select>
-          </label>
+          <p class="hint" id="style-lead">The map below updates as you change these.</p>
+          <!-- two questions, not one: the SHAPE a row is drawn as, and the RULE
+               that colours it. The pair maps onto the server's kind vocabulary. -->
+          <div class="style-grid">
+            <label class="f">Layer name<input type="text" id="s-label" maxlength="60" /></label>
+            <label class="f" id="w-shape">Draw each row as<select id="s-shape"></select></label>
+            <label class="f" id="w-colour">Colour them<select id="s-colour"></select></label>
+            <!-- follow-ups: only the ones the chosen answers need are shown -->
+            <label class="f" id="w-onecolour" hidden>Which colour<select id="s-onecolour"></select></label>
+            <label class="f" id="w-catcol" hidden><span>Using the categories in</span>
+              <select id="s-catcol"></select>
+            </label>
+            <label class="f" id="w-value" hidden><span id="w-value-lbl">Shade areas by</span>
+              <select id="s-value"></select>
+            </label>
+            <label class="f" id="w-palette" hidden>Colour ramp<select id="s-palette"></select></label>
+            <label class="f">When someone clicks a feature, the popup is titled by
+              <select id="s-poptitle"></select>
+            </label>
+            <label class="f" id="w-image"><span>Show photos in the popup from <span class="hint">(optional)</span></span><select id="s-image"></select></label>
+          </div>
           <!-- steering, not blocking: shown when shading is the wrong encoding -->
-          <p class="kind-steer" id="kind-steer" hidden>Counts compare better as sized circles — shading suits rates and averages.</p>
-
-          <!-- colour: only the control that applies to the chosen kind is shown -->
-          <label class="f" id="w-catcol" hidden><span>Give each <b>value</b> its own colour, from</span>
-            <select id="s-catcol"></select>
-          </label>
-          <label class="f" id="w-value" hidden><span id="w-value-lbl">Shade areas by</span>
-            <select id="s-value"></select>
-          </label>
-          <label class="f" id="w-palette" hidden>Colour ramp<select id="s-palette"></select></label>
-          <label class="f" id="w-marker" hidden><span id="w-marker-lbl">Pin colour</span><select id="s-marker"></select></label>
-          <label class="f" id="w-linecolor" hidden>Line colour<select id="s-linecolor"></select></label>
-          <label class="f" id="w-fillcolor" hidden>Fill colour<select id="s-fillcolor"></select></label>
-
-          <label class="f">When someone clicks a feature, the popup is titled by
-            <select id="s-poptitle"></select>
-          </label>
-          <label class="f" id="w-image"><span>Show photos in the popup from <span class="hint">(optional)</span></span><select id="s-image"></select></label>
+          <p class="kind-steer" id="kind-steer" hidden>That column looks like a count — counts compare better as bubbles (circle size shows the number). Light-to-dark shading suits rates and averages.</p>
 
           <details class="style-more">
             <summary>Finer control</summary>
@@ -208,7 +207,7 @@
         <p class="hint" id="commit-auth" hidden></p>
       </div>
 
-      <iframe id="preview-frame" title="Layer preview"></iframe>
+      <iframe id="db-preview-frame" title="Layer preview"></iframe>
     </section>`;
 
   /* mount(root, opts) -> { start(canonical), step(), destroy() }
@@ -1070,7 +1069,7 @@
   /* ================= step 4 · preview & add ================= */
 
   function refreshPreview(draftId) {
-    var f = $("#preview-frame");
+    var f = $("#db-preview-frame");
     if (f.dataset.draft !== draftId) {
       f.dataset.draft = draftId;
       f.src = "./?embed=1&dataset=" + encodeURIComponent(draftId);
@@ -1080,8 +1079,11 @@
     }
   }
 
-  var CATEGORY_CHOICE = { value: "category", label: "Coloured by category" };
-  var BUBBLE_CHOICE = { value: "bubble", label: "Bubbles — circle size shows a number" };
+  // "how it looks" asks two questions — the shape a row is drawn as, and the
+  // rule that colours it — and derives the server's kind from the pair. Pairs
+  // with no kind behind them are never offered, so apply can't 400.
+  var SHAPE_LABEL = { pin: "Pin", bubble: "Bubble — a sized circle", border: "Border — the area's boundary shape", line: "Line" };
+  var COLOUR_LABEL = { one: "One colour", category: "By category", value: "Light to dark by a number" };
 
   // The geometry class the PLACEMENT produced, not what the upload carried:
   // a lat/lng CSV is points however tabular the file looked, an admin-name
@@ -1125,37 +1127,108 @@
     return seen > 0;
   }
 
-  function kindChoices() {
+  function asChoices(values, labels) {
+    return values.map(function (v) { return { value: v, label: labels[v] }; });
+  }
+
+  // the pair → kind mapping. null = no kind exists for the pair, so the
+  // option-building below must never offer it.
+  function kindFromShapeColour(shape, colour) {
+    if (colour === "category") return "category";
+    if (colour === "value") return shape === "border" ? "choropleth" : null;
+    return { pin: "markers", bubble: "bubble", border: "polygon", line: "line" }[shape] || null;
+  }
+
+  // spec.kind → the pair the two selects show. Category is the one kind whose
+  // shape depends on the placement: an admin-name join collapses point kinds
+  // (markers / category / bubble) to centroids on the server, so category
+  // reads as Pin there; uploaded polygon shapes keep their areas.
+  function shapeColourFromKind(kind) {
+    if (kind === "category") {
+      var cls = placedClass();
+      var shape = cls === "line" ? "line" : (cls === "polygon" && S.spatial) ? "border" : "pin";
+      return { shape: shape, colour: "category" };
+    }
+    if (kind === "choropleth") return { shape: "border", colour: "value" };
+    if (kind === "bubble") return { shape: "bubble", colour: "one" };
+    if (kind === "polygon") return { shape: "border", colour: "one" };
+    if (kind === "line") return { shape: "line", colour: "one" };
+    return { shape: "pin", colour: "one" };
+  }
+
+  function shapeChoices() {
     var cls = placedClass();
     var out;
-    if (cls === "line") out = [{ value: "line", label: "Lines" }, CATEGORY_CHOICE];
-    else if (cls === "polygon") out = [
-      { value: "polygon", label: "Areas (single colour)" },
-      { value: "choropleth", label: "Choropleth (colour by value)" },
-      CATEGORY_CHOICE,
-    ];
-    else out = [{ value: "markers", label: "Points / markers" }, CATEGORY_CHOICE];
-    // sized circles need a number to size by; lines have nowhere to put one
-    if (cls !== "line" && numericColumns().length) out.push(BUBBLE_CHOICE);
-    return out;
+    if (cls === "line") out = ["line"];
+    else if (cls === "polygon") {
+      // an admin-name join can hand back centroids, so pins are honest there;
+      // an uploaded polygon file is always drawn as areas by the server
+      out = S.spatial ? ["border"] : ["border", "pin"];
+      // sized circles need a number to size by (shapes collapse to centroids)
+      if (numericColumns().length) out.push("bubble");
+    } else {
+      out = ["pin"];
+      if (numericColumns().length) out.push("bubble");
+    }
+    return asChoices(out, SHAPE_LABEL);
+  }
+
+  function colourChoices(shape) {
+    var out = ["one"];
+    // category on an admin join renders centroid pins (see the server's
+    // transform), so it's offered under Pin there — Border never lies about
+    // the shape it will draw
+    if (shape === "pin" || shape === "line" || (shape === "border" && S.spatial)) out.push("category");
+    if (shape === "border") out.push("value");
+    return asChoices(out, COLOUR_LABEL);
+  }
+
+  // placement can change between visits to this step (a name-join hands back
+  // areas, coordinates hand back points), so the shape list follows the placed
+  // class — keeping the current shape when it's still offered
+  function syncShapeChoices() {
+    var shapes = shapeChoices();
+    var sel = $("#s-shape");
+    var have = Array.prototype.map.call(sel.options, function (o) { return o.value; }).join("|");
+    if (have === shapes.map(function (s) { return s.value; }).join("|")) return;
+    var keep = sel.value;
+    fillSelect("#s-shape", shapes, shapes.some(function (s) { return s.value === keep; }) ? keep : shapes[0].value);
+  }
+
+  // a shape change can orphan the colour rule (Border + light-to-dark, then
+  // Pin): rebuild the rule list for the new shape and fall back to one colour,
+  // so the pair on screen always maps to a kind the server accepts
+  function syncColourChoices() {
+    var rules = colourChoices($("#s-shape").value);
+    var sel = $("#s-colour");
+    var have = Array.prototype.map.call(sel.options, function (o) { return o.value; }).join("|");
+    if (have === rules.map(function (r) { return r.value; }).join("|")) return;
+    var keep = sel.value;
+    fillSelect("#s-colour", rules, rules.some(function (r) { return r.value === keep; }) ? keep : "one");
   }
 
   function enterStyle(result) {
     var spec = result.spec || {};
     if (!S.styleReady) {
       $("#s-label").value = spec.label || "";
-      fillSelect("#s-kind", kindChoices(), spec.kind || "markers");
       // the inferred kind may not be offered for this geometry (e.g. choropleth
-      // on points) — the select fell back to its first option; rebuild the
-      // preview so the map matches what the control now says
-      if ($("#s-kind").value !== (spec.kind || "markers")) scheduleApply(applyStyle, 60);
+      // on points) — fall back to the first shape with one colour and rebuild
+      // the preview so the map matches what the controls now say
+      var pair = shapeColourFromKind(spec.kind || "markers");
+      var shapes = shapeChoices();
+      if (!shapes.some(function (s) { return s.value === pair.shape; })) pair = { shape: shapes[0].value, colour: "one" };
+      fillSelect("#s-shape", shapes, pair.shape);
+      var rules = colourChoices(pair.shape);
+      if (!rules.some(function (r) { return r.value === pair.colour; })) pair.colour = "one";
+      fillSelect("#s-colour", rules, pair.colour);
       fillSelect("#s-value", S.names, spec.valueColumn || role(result, "value"), true);
       fillSelect("#s-catcol", S.names, spec.categoryColumn || "", true);
       fillSelect("#s-image", S.names, spec.imageColumn || "", true);
       fillSelect("#s-palette", S.options.palettes || [], spec.palette || "greens");
-      fillSelect("#s-marker", S.options.markerColors || [], spec.markerColor || "rust");
-      fillSelect("#s-linecolor", S.options.markerColors || [], spec.lineColor || "slate");
-      fillSelect("#s-fillcolor", S.options.markerColors || [], spec.fillColor || "moss");
+      // colour is one question now, so one picker serves pins, bubbles, borders
+      // and lines alike — seeded from whichever slot the saved spec filled
+      fillSelect("#s-onecolour", S.options.markerColors || [],
+        (pair.shape === "border" ? spec.fillColor : pair.shape === "line" ? spec.lineColor : spec.markerColor) || spec.markerColor || "rust");
       if (spec.lineWidth) $("#s-linewidth").value = String(spec.lineWidth);
       $("#s-linedash").checked = !!spec.lineDash;
       if (spec.fillOpacity) $("#s-fillopacity").value = String(spec.fillOpacity);
@@ -1164,6 +1237,11 @@
       S.styleReady = true;
     }
     syncStyleVisibility();
+    // however we got here — a fresh entry whose inferred kind this geometry
+    // can't draw, or a return trip after the placement changed — the lists were
+    // just rebuilt, so when the derived kind disagrees with the spec the
+    // preview was built from, re-apply until the map matches the controls
+    if (kindFromShapeColour($("#s-shape").value, $("#s-colour").value) !== (spec.kind || "markers")) scheduleApply(applyStyle, 60);
     renderReport(result);
     if (result.draftDataset) refreshPreview(result.draftDataset);
     var rep = result.matchReport || {};
@@ -1175,57 +1253,60 @@
   }
 
   function syncStyleVisibility() {
-    var kind = $("#s-kind").value;
-    var cls = S.spatial ? geomClass() : "";
-    $("#w-value").hidden = !(kind === "choropleth" || kind === "bubble");
+    syncShapeChoices();
+    syncColourChoices();
+    var shape = $("#s-shape").value, colour = $("#s-colour").value;
+    var kind = kindFromShapeColour(shape, colour) || "markers";
+    // each answer reveals only the follow-up it needs
+    $("#w-onecolour").hidden = colour !== "one";
+    $("#w-catcol").hidden = colour !== "category";
+    $("#w-value").hidden = !(colour === "value" || shape === "bubble");
     // the same value select serves both encodings — say which job it's doing
     var vl = $("#w-value-lbl");
-    if (vl) vl.textContent = kind === "bubble" ? "Size circles by" : "Shade areas by";
-    $("#w-catcol").hidden = kind !== "category";
-    $("#w-palette").hidden = kind !== "choropleth";
-    $("#w-marker").hidden = !(kind === "markers" || kind === "bubble");
-    var ml = $("#w-marker-lbl");
-    if (ml) ml.textContent = kind === "bubble" ? "Circle colour" : "Pin colour";
-    $("#w-linecolor").hidden = kind !== "line";
-    $("#w-linewidth").hidden = !(kind === "line" || (kind === "category" && cls === "line"));
+    if (vl) vl.textContent = shape === "bubble" ? "Size circles by" : "Shade areas by";
+    $("#w-palette").hidden = colour !== "value";
+    $("#w-linewidth").hidden = shape !== "line";
     $("#w-linedash").hidden = kind !== "line";
-    $("#w-fillcolor").hidden = kind !== "polygon";
-    $("#w-fillopacity").hidden = !(kind === "polygon" || (kind === "category" && cls === "polygon"));
-    // "colour by value" belongs to the category kind; markers/areas get one colour
+    // choropleth's opacity is fixed by the server, so only the other area kinds ask
+    $("#w-fillopacity").hidden = !(shape === "border" && kind !== "choropleth");
     var img = $("#s-image");
     if ($("#w-image")) $("#w-image").hidden = !img || img.options.length <= 1;
     // steering, not blocking: shading an absolute count misleads (big areas
     // dominate the eye whatever their rate) — nudge towards sized circles
     var steer = $("#kind-steer");
-    if (steer) steer.hidden = !(kind === "choropleth" && looksLikeCount($("#s-value").value));
-    // say in words what this kind will do, so the controls aren't the only cue
+    if (steer) steer.hidden = !(colour === "value" && looksLikeCount($("#s-value").value));
+    // say in words what this pair will do, so the controls aren't the only cue
     var lead = $("#style-lead");
     if (lead) {
       var what = kind === "category" ? "Each value gets its own colour, an icon and a legend entry."
         : kind === "choropleth" ? "Areas are shaded darker as the value rises, with a legend."
         : kind === "bubble" ? "Each row is a circle sized by its number — bigger circle, bigger value."
         : kind === "line" ? "Each row is drawn as a line."
-        : kind === "polygon" ? "Each row is drawn as a filled area."
+        : kind === "polygon" ? "Each row is drawn as a bordered area."
         : "Each row is a pin on the map.";
-      lead.textContent = what + " The map on the right updates as you change these.";
+      lead.textContent = what + " The map below updates as you change these.";
     }
   }
 
   function applyStyle() {
     if (!S.result) return Promise.resolve();
+    var shape = $("#s-shape").value, colour = $("#s-colour").value;
+    var one = $("#s-onecolour").value || "rust";
     var spec = Object.assign({}, S.result.spec, {
       label: $("#s-label").value.trim() || "My data",
-      kind: $("#s-kind").value,
+      kind: kindFromShapeColour(shape, colour) || "markers",
       group: $("#s-group").value,
       valueColumn: $("#s-value").value || undefined,
       categoryColumn: $("#s-catcol").value || undefined,
       imageColumn: $("#s-image").value || undefined,
       palette: $("#s-palette").value,
-      markerColor: $("#s-marker").value,
-      lineColor: $("#s-linecolor").value || undefined,
+      // the one picker feeds whichever slot the shape reads; markerColor always
+      // travels so a one-colour stanza never arrives without a paint
+      markerColor: one,
+      lineColor: shape === "line" ? one : undefined,
+      fillColor: shape === "border" ? one : undefined,
       lineWidth: Number($("#s-linewidth").value) || undefined,
       lineDash: $("#s-linedash").checked || undefined,
-      fillColor: $("#s-fillcolor").value || undefined,
       fillOpacity: Number($("#s-fillopacity").value) || undefined,
       popupTitleColumn: $("#s-poptitle").value || undefined,
       outsideAction: outsideChoice(),
@@ -1242,8 +1323,8 @@
     });
   }
 
-  ["#s-label", "#s-kind", "#s-value", "#s-catcol", "#s-image", "#s-palette", "#s-marker", "#s-group", "#s-poptitle",
-   "#s-linecolor", "#s-linewidth", "#s-linedash", "#s-fillcolor", "#s-fillopacity"].forEach(function (sel) {
+  ["#s-label", "#s-shape", "#s-colour", "#s-onecolour", "#s-value", "#s-catcol", "#s-image", "#s-palette", "#s-group", "#s-poptitle",
+   "#s-linewidth", "#s-linedash", "#s-fillopacity"].forEach(function (sel) {
     $(sel).addEventListener("change", function () {
       syncStyleVisibility();
       scheduleApply(applyStyle);

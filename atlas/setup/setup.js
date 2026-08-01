@@ -21,6 +21,7 @@
     geo: { iso3: "", level: 1, features: [], selected: {} },
     catalog: { tier: "", layers: [], chosen: {} },
     build: null,           // {slug, jobId, editToken, viewKey, status}
+    addedLayers: [],       // filenames committed onto the atlas in this session
     session: null,
     draftId: null,
     editSlug: null,        // editing an existing atlas (rebuild / details)
@@ -64,6 +65,7 @@
       chip.classList.toggle("done", i < step);
     }
     window.scrollTo({ top: 0 });
+    if (step === 3) syncPublishShortcut(); // an already-built atlas can be published from here
     if (step >= 1 && step <= 3) saveLocal(); // keep a browser-local backup of in-progress work
   }
 
@@ -90,10 +92,20 @@
     else show(1);   // stale cached page without the fork markup — degrade to step 1
     window.scrollTo({ top: 0 });
   }
+  /* A new atlas inherits nothing from the last one. Without this the wizard still
+     holds the previous instance, and every control keyed on "an atlas exists" —
+     the rebuild branch of #next-3, the publish button beside it — would act on
+     the wrong atlas. */
+  function resetBuildState() {
+    S.build = null;
+    S.addedLayers = [];
+    S._published = false;
+  }
   function startWizard() {
     S.mode = "wizard";
     dismissLocalResume();   // committing to a new atlas retires the old draft's offer
     S.dataFirst = null; S.userFiles = []; S._lostFiles = []; S._dfDraft = null;
+    resetBuildState();
     renderMyAtlases(); // dashboard steps aside while building
     show(1);           // show() hides the fork + data-first, restores the stepper
   }
@@ -135,6 +147,7 @@
     dismissLocalResume();   // committing to a new atlas retires the old draft's offer
     S.dataFirst = { canonical: null, file: null, filename: "", iso3: "", inf: null, locators: null };
     S.userFiles = []; S._lostFiles = []; S._dfDraft = null;
+    resetBuildState();
     S._dfGeoApplied = false;
     $("#my-atlases").hidden = true;
     $(".stepper").hidden = true;
@@ -980,16 +993,39 @@
     }
     var list = userFiles();
     var lost = S._lostFiles || [];
+    var added = S.addedLayers || [];
+    var MORE = '<button type="button" class="od-act" id="od-more">＋ Add another file</button>';
+    function wireMore() {
+      var more = $("#od-more");
+      if (more) more.onclick = function (e) { e.stopPropagation(); $("#od-file").click(); };
+    }
+    // layers already committed onto the built atlas — named, so the step shows
+    // what the atlas holds and not just what is still queued
+    var onMap = added.length ? '<div class="od-files">' + added.map(function (n) {
+      return '<div class="od-file"><span class="odf-name">' + esc(n) + '</span><span class="odf-rows">on the map</span></div>';
+    }).join("") + "</div>" : "";
     if (list.length) {
       box.classList.add("attached");
       box.innerHTML = '<span class="od-ico" aria-hidden="true">📄</span><div class="od-body"><b>Your data · ' +
-        list.length + (list.length === 1 ? " file" : " files") + "</b>" +
+        list.length + (list.length === 1 ? " file" : " files") +
+        (added.length ? " queued, " + added.length + " on the map" : "") + "</b>" + onMap +
         '<span class="hint">Each file below becomes its own map layer. We read the fields and work out where the rows go — open <b>Review</b> on any file to change that. You\'ll style them on the real map after the build.</span>' +
         (lost.length ? '<span class="hint" style="color:var(--color-rust-deep)">' + esc(lost.join(", ")) +
           " couldn't ride along with the saved draft — attach again if you still want it.</span>" : "") +
-        '<button type="button" class="od-act" id="od-more">＋ Add another file</button></div>';
-      var more = $("#od-more");
-      if (more) more.onclick = function (e) { e.stopPropagation(); $("#od-file").click(); };
+        MORE + "</div>";
+      wireMore();
+      return;
+    }
+    if (added.length) {
+      // nothing queued, but this atlas already carries the user's own layers
+      box.classList.add("attached");
+      box.innerHTML = '<span class="od-ico" aria-hidden="true">📄</span><div class="od-body"><b>Your data · ' +
+        added.length + (added.length === 1 ? " layer" : " layers") + " on the map</b>" + onMap +
+        '<span class="hint">Attach another file and it becomes one more layer — <b>Update my atlas</b> rebuilds with it, and you style it the same way.' +
+        (S.build && S.build.slug ? ' Restyle or remove layers any time in the <a href="../layers.html?dataset=' +
+          encodeURIComponent(S.build.slug) + '">data bench</a>.' : "") + "</span>" +
+        MORE + "</div>";
+      wireMore();
       return;
     }
     box.classList.add("clickable");
@@ -1122,6 +1158,38 @@
     if (!S.editMode && S.build && S.build.slug && S.build.editToken) { rebuildCurrent(); return; }
     createInstance();
   };
+
+  /* Once layers have landed, this step holds both onward moves — one more file,
+     or go live — so publishing needs its own control here. #next-3 stays a
+     build/rebuild: someone who only wants to publish should never have to sit
+     through a rebuild to get there, and a button that says "build" must not
+     quietly mean something else. Gated on the same fact #next-4 carries: the
+     atlas is built, nothing is waiting to be added, and it isn't live yet. */
+  function syncPublishShortcut() {
+    var next = $("#next-3");
+    if (!next || !next.parentNode) return;
+    var btn = $("#publish-3");
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn";
+      btn.id = "publish-3";
+      btn.textContent = "Publish my atlas →";
+      btn.onclick = function () { startPublish(); };
+      next.parentNode.insertBefore(btn, next.nextSibling);
+    }
+    // a queued file hides it again: publishing an atlas without the data someone
+    // just attached would be the broken promise the build step already guards
+    var ready = !!(S.build && S.build.slug) && !S.editMode && !S._published &&
+      !$("#next-4").disabled && !userFiles().length;
+    btn.hidden = !ready;
+    // with publishing on the table, rebuilding is the quieter of the two
+    next.classList.toggle("secondary", ready);
+    // after the first build this button rebuilds THIS atlas — "build" again reads
+    // like a second atlas. Disabled means checkFilesReady() is still reading a
+    // file and owns the label until it finishes.
+    if (!next.disabled) next.textContent = (S.build && S.build.slug) ? "Update my atlas →" : "Build my atlas →";
+  }
 
   function rebuildCurrent() {
     show(4);
@@ -1406,6 +1474,7 @@
         var queue = files.filter(function (f) { return f.bench; }), added = [], failed = [];
         (function next(i) {
           if (i >= queue.length) {
+            S.addedLayers = (S.addedLayers || []).concat(added);
             userFiles().length = 0;
             cacheDataFirstDraft();
             wrap.hidden = true;
@@ -1420,6 +1489,25 @@
               msg(4, failed.join("<br>") + '<br>Add it from the <a href="../layers.html?dataset=' +
                 encodeURIComponent(S.build.slug) + '">data bench</a>.');
             }
+            // a layer that didn't make it is news to read here, beside the retry
+            // link — and with nothing added there's nothing to report anywhere
+            if (failed.length || !added.length) return;
+            // everything landed. The next move is another file or going live, and
+            // both live on the layers step, so that's where the user belongs —
+            // sitting on a finished preview leaves them guessing.
+            renderOwnDataCard();   // now lists what's on the atlas, not what's queued
+            renderFileSetups();    // the committed files left userFiles(): clear their panels
+            show(3);
+            msg(3, "<b>" + esc(added.join(", ")) + "</b> " + (added.length === 1 ? "is" : "are") +
+              " on your atlas. Attach another file above for one more layer, or " +
+              "<b>Publish my atlas</b> when you're done.", "ok");
+            // show() lands at the top of the step, which on this one is the layer
+            // catalogue — the news and both next moves live below it, so bring
+            // that part into view instead of leaving it under the fold
+            // instantly: the catalogue above is thousands of pixels tall, and
+            // animating past all of it reads as the page running away
+            var note = $("#own-data-note");
+            if (note && !note.hidden) note.scrollIntoView({ block: "start" });
             return;
           }
           queue[i].bench.commit()
@@ -1432,14 +1520,17 @@
   }
 
   $("#back-4").onclick = function () { show(3); };
-  $("#next-4").onclick = function () {
+  // going live is the same act wherever it's triggered from — the preview step or
+  // the layers step — so both doors open onto this one
+  function startPublish() {
     if (!S.session) {
       signIn("Publishing needs a verified email, so your atlas stays manageable — and so we can reach you about it.")
         .then(function (ok) { if (ok) publish(); });
       return;
     }
     publish();
-  };
+  }
+  $("#next-4").onclick = function () { startPublish(); };
 
   /* ================= step 5: publish & share ================= */
 
@@ -1693,7 +1784,9 @@
     var wrap = $("#file-setups");
     if (!wrap) return;
     var files = userFiles();
-    if (S.editMode || !files.length) { wrap.hidden = true; wrap.innerHTML = ""; return; }
+    // no panels to draw still settles the step's buttons: the last file being
+    // removed — or committed — leaves them mid-read otherwise
+    if (S.editMode || !files.length) { wrap.hidden = true; wrap.innerHTML = ""; checkFilesReady(); return; }
     wrap.hidden = false;
     files.forEach(function (f, i) {
       if (!f.panel) {
@@ -1761,7 +1854,8 @@
     var btn = $("#next-3");
     if (!btn || S.editMode) return;
     btn.disabled = pending > 0;
-    btn.textContent = pending > 0 ? "Reading your data…" : "Build my atlas →";
+    if (pending > 0) btn.textContent = "Reading your data…";
+    syncPublishShortcut();   // owns the settled label, and the publish button beside it
     if (!pending && attention) msg(3, attention + " file" + (attention > 1 ? "s have" : " has") + " rows that need a look — open Review, or build and fix them later.", "ok");
   }
 
@@ -2036,6 +2130,7 @@
       S.catalog = { tier: "", layers: [], chosen: {} };
       (inst.layers || []).forEach(function (id) { S.catalog.chosen[id] = true; });
       S.userFiles = []; S._lostFiles = []; S._dfDraft = null; S.dataFirst = null;
+      resetBuildState();   // this session's earlier build is not the atlas being edited
       S._dfGeoApplied = false;
 
       initCountries().then(function () { $("#f-country").value = inst.region.iso3; });
