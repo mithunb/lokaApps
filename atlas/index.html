@@ -369,6 +369,13 @@
     footer.site { border-top:1px solid var(--color-divider); background:var(--color-bg-alt); }
     .foot-inner { width:var(--container); margin:0 auto; padding:1.5rem 0; color:var(--color-text-secondary); font-size:.875rem; }
 
+    /* ?embed=1 — the atlas inside someone else's frame (the wizard's preview).
+       Its own identity and map stay; loka.place's furniture goes. */
+    .atlas-embed header.site,
+    .atlas-embed .atlas-cta,
+    .atlas-embed footer.site { display:none; }
+    .atlas-embed main { padding-top:1.25rem; }
+
     /* Coarse pointer (touch): comfortable 44px targets regardless of screen size */
     @media (pointer:coarse){
       .ctl-toggle, .ctl-sub-toggle { min-height:44px; }

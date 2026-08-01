@@ -19,6 +19,10 @@
   // With ?dataset=<id> it is the viewer for that instance.
   var DATASET = QS.get("dataset") || "";
   var KEY = QS.get("key") || "";
+  // ?embed=1 strips the page furniture — site nav, the build-your-own CTA and
+  // the footer — leaving the atlas's own identity and the map. It's what the
+  // wizard's preview pane wants: a look at the atlas, not at loka.place.
+  if (QS.get("embed") === "1") document.documentElement.classList.add("atlas-embed");
   // Private datasets live outside the web root and are served by the API behind
   // a view key; public datasets are plain static files.
   var BASE = KEY ? "./api/datasets/" + DATASET + "/" : "./datasets/" + DATASET + "/";

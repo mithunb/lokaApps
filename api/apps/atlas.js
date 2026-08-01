@@ -324,6 +324,28 @@ async function parentUnitsOf(iso3, level, units) {
   return [...parents.values()];
 }
 
+// The full chain of containers above the inferred units, one entry per level
+// (level 1 .. level-1). parentUnitsOf only reaches one level up, which leaves
+// the wizard's breadcrumb missing rungs — an ADM3 region would offer no way
+// back to its state. Each entry is clickable in the trail.
+async function ancestorChainOf(iso3, level, units) {
+  const chain = [];
+  for (let L = 1; L < level; L++) {
+    let doc; try { doc = await loadAdmin(iso3, L); } catch { continue; }
+    const seen = new Map();
+    for (const u of units) {
+      const c = u.geometry ? centroidOf(u.geometry)
+        : (u.bbox ? [(u.bbox[0] + u.bbox[2]) / 2, (u.bbox[1] + u.bbox[3]) / 2] : null);
+      if (!c) continue;
+      const hit = (doc.features || []).find((f) =>
+        f.bbox && c[0] >= f.bbox[0] && c[0] <= f.bbox[2] && c[1] >= f.bbox[1] && c[1] <= f.bbox[3] && pointInGeom(c[0], c[1], f.geometry));
+      if (hit && !seen.has(hit.properties.id)) seen.set(hit.properties.id, { id: hit.properties.id, name: hit.properties.name, bbox: hit.bbox });
+    }
+    if (seen.size) chain.push({ level: L, units: [...seen.values()] });
+  }
+  return chain;
+}
+
 // Resolve a SAVED region (iso3 + level + shapeIDs) back into full units and
 // their parents — what the edit flow needs to show an existing atlas's region
 // preselected on the geography step, without shipping a whole admin level to
@@ -344,8 +366,9 @@ router.post('/geo/resolve', async (req, res) => {
       .map((f) => ({ id: f.properties.id, name: f.properties.name, bbox: f.bbox, geometry: f.geometry }));
     if (!units.length) return res.status(404).json({ error: 'no matching boundary units' });
     const parents = await parentUnitsOf(iso3, level, units);
+    const ancestors = await ancestorChainOf(iso3, level, units);
     const out = units.length <= 60 ? units : units.map(({ geometry, ...u }) => u);
-    res.json({ iso3, level, units: out, bbox: unionBboxOf(units), parents });
+    res.json({ iso3, level, units: out, bbox: unionBboxOf(units), parents, ancestors });
   } catch (e) {
     console.warn('[atlas] geo/resolve failed:', e.message);
     res.status(502).json({ error: 'boundary source unavailable: ' + e.message });
@@ -379,12 +402,13 @@ router.post('/geo/infer', async (req, res) => {
     let r = null, mode = null;
     if (points.length) { r = await inferRegionFromPoints(iso3, points, avail); mode = 'points'; }
     else { r = await inferRegionFromNames(iso3, names, avail); mode = 'names'; }
-    if (!r || !r.units.length) return res.json({ iso3, mode, level: null, units: [], bbox: null, coverage: 0, parents: [] });
+    if (!r || !r.units.length) return res.json({ iso3, mode, level: null, units: [], bbox: null, coverage: 0, parents: [], ancestors: [] });
     const parents = await parentUnitsOf(iso3, r.level, r.units);
+    const ancestors = await ancestorChainOf(iso3, r.level, r.units);
     // geometry rides along for the confirmation map, but a huge covering set
     // (data spread across dozens of units) would bloat the response — drop it then
     const units = r.units.length <= 60 ? r.units : r.units.map(({ geometry, ...u }) => u);
-    res.json({ iso3, mode, level: r.level, units, bbox: r.bbox, coverage: Number(r.coverage.toFixed(3)), parents });
+    res.json({ iso3, mode, level: r.level, units, bbox: r.bbox, coverage: Number(r.coverage.toFixed(3)), parents, ancestors });
   } catch (e) {
     console.warn('[atlas] geo/infer failed:', e.message);
     res.status(502).json({ error: 'inference failed: ' + e.message });

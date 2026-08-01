@@ -1073,10 +1073,10 @@
     var f = $("#preview-frame");
     if (f.dataset.draft !== draftId) {
       f.dataset.draft = draftId;
-      f.src = "./?dataset=" + encodeURIComponent(draftId);
+      f.src = "./?embed=1&dataset=" + encodeURIComponent(draftId);
     } else {
       try { f.contentWindow.location.reload(); }
-      catch (e) { f.src = "./?dataset=" + encodeURIComponent(draftId); }
+      catch (e) { f.src = "./?embed=1&dataset=" + encodeURIComponent(draftId); }
     }
   }
 

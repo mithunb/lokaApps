@@ -304,13 +304,27 @@
     S.geo.iso3 = r.iso3; S.geo.viewLevel = r.level; S.geo.level = r.level; S.geo.selected = {};
     (r.units || []).forEach(function (u) { S.geo.selected[u.id] = { name: u.name, bbox: u.bbox }; });
     S.geo.features = (r.units || []).map(function (u) { return { properties: { id: u.id, name: u.name }, geometry: u.geometry, bbox: u.bbox }; });
-    var parents = r.parents || [];
-    S.geo.crumbs = (r.level > 1 && parents.length) ? [{
-      id: parents.map(function (p) { return p.id; }).join(","),
-      name: parents.map(function (p) { return p.name; }).join(" + "),
-      level: r.level - 1,
-      bbox: r.bbox,
-    }] : [];
+    // One rung per level above the region, so the trail climbs all the way back
+    // (sub-district → district → state → country). The server sends the whole
+    // chain; older responses carry only the immediate parents, so fall back.
+    function rung(level, list, bbox) {
+      return {
+        id: list.map(function (p) { return p.id; }).join(","),
+        name: list.map(function (p) { return p.name; }).join(" + "),
+        level: level,
+        bbox: bbox,
+      };
+    }
+    var chain = r.ancestors || [];
+    if (r.level > 1 && chain.length) {
+      S.geo.crumbs = chain
+        .filter(function (a) { return a.level < r.level && (a.units || []).length; })
+        .sort(function (a, b) { return a.level - b.level; })
+        .map(function (a) { return rung(a.level, a.units, unionBbox(a.units)); });
+    } else {
+      var parents = r.parents || [];
+      S.geo.crumbs = (r.level > 1 && parents.length) ? [rung(r.level - 1, parents, r.bbox)] : [];
+    }
   }
 
   function dfUseRegion() {
@@ -687,18 +701,25 @@
     if (!S.geo.iso3) return;
     function add(el) { bar.appendChild(el); }
     function sep() { var s = document.createElement("span"); s.className = "sep"; s.textContent = "›"; add(s); }
-    var root = document.createElement(S.geo.crumbs.length ? "button" : "span");
-    root.className = S.geo.crumbs.length ? "" : "cur";
+    // a rung is live if it would actually move you: to a different level, or
+    // out of a selection you've made at this one
+    var picked = Object.keys(S.geo.selected).length > 0;
+    var upFromRoot = S.geo.crumbs.length > 0 || picked;
+    var root = document.createElement(upFromRoot ? "button" : "span");
+    root.className = upFromRoot ? "" : "cur";
     root.textContent = countryName();
-    if (S.geo.crumbs.length) root.onclick = function () { clearSelection(); S.geo.crumbs = []; S.geo.viewLevel = 1; loadUnits(); };
+    if (upFromRoot) root.onclick = function () { clearSelection(); S.geo.crumbs = []; S.geo.viewLevel = 1; loadUnits(); };
     add(root);
     S.geo.crumbs.forEach(function (c, i) {
       sep();
       var last = i === S.geo.crumbs.length - 1;
-      var el = document.createElement(last ? "span" : "button");
-      el.className = last ? "cur" : "";
+      // the last rung is where we already are — live only to step back out of
+      // a selection ("all of Karnataka" rather than the one district picked)
+      var live = !last || picked;
+      var el = document.createElement(live ? "button" : "span");
+      el.className = live ? "" : "cur";
       el.textContent = c.name;
-      if (!last) el.onclick = function () {
+      if (live) el.onclick = function () {
         clearSelection();
         S.geo.crumbs = S.geo.crumbs.slice(0, i + 1);
         S.geo.viewLevel = c.level + 1;
@@ -1272,7 +1293,7 @@
   // `v` busts any cached manifest/geojson from an earlier load of this slug —
   // the preview must always show the layers that exist right now.
   function previewUrl() {
-    var u = "../?dataset=" + encodeURIComponent(S.build.slug);
+    var u = "../?embed=1&dataset=" + encodeURIComponent(S.build.slug);
     if (S.build.viewKey) u += "&key=" + encodeURIComponent(S.build.viewKey);
     return u + "&v=" + Date.now();
   }
