@@ -12,7 +12,7 @@
 (function () {
   "use strict";
 
-  var STEP1_HTML = `    <section class="panel step" id="step-1">
+  var STEP1_HTML = `    <section class="panel step" id="db-step-1">
       <p id="dataset-known" hidden>Adding data to <b id="dataset-name"></b>. <a href="#" id="dataset-change">Choose a different atlas</a></p>
       <label class="f" id="dataset-ask" style="max-width:24rem">Which atlas?
         <input type="text" id="f-dataset" placeholder="dataset id, e.g. deoria-bioregion" />
@@ -60,7 +60,7 @@
       </div>
     </section>`;
 
-  var STEPS234_HTML = `    <section class="panel step" id="step-2" hidden>
+  var STEPS234_HTML = `    <section class="panel step" id="db-step-2" hidden>
       <h2 id="check-title">Check your table</h2>
       <p class="hint" style="max-width:46rem">Here's every field we found, with its detected type and the role it'll play on
         the map. Untick anything you don't want, or hit <b>✎</b> to rename or re-type a field. Switch to
@@ -94,7 +94,7 @@
     </section>
 
     <!-- ============ STEP 3 · PLACE ON MAP ============ -->
-    <section class="panel step" id="step-3" hidden>
+    <section class="panel step" id="db-step-3" hidden>
       <h2>Where are these located?</h2>
       <div class="infer-note" id="infer-note" hidden></div>
 
@@ -150,7 +150,7 @@
     </section>
 
     <!-- ============ STEP 4 · PREVIEW & ADD ============ -->
-    <section class="bench step" id="step-4" hidden>
+    <section class="bench step" id="db-step-4" hidden>
       <div class="bench-left">
         <div class="card">
           <h2>How it looks</h2>
@@ -233,6 +233,24 @@
     // "checkPlace" stops after placement; "all" runs through style and commit
     var STAGES = opts.stages === "checkPlace" ? "checkPlace" : "all";
 
+    // Embedded, the host page has its own Back/forward buttons a few pixels
+    // away. Two wizards showing step navigation at once reads as four rival
+    // choices, so ours is scoped to the panel in words: nothing in here claims
+    // to advance the host's flow, and the terminal action just closes up.
+    if (MODE === "embedded") {
+      var scoped = [
+        ["#back-1", null],                              // the host's ✕ removes the file
+        ["#to-place", "Next — check the locations"],
+        ["#back-2", "← Back to the fields"],
+        ["#to-style", "Done — this looks right"],
+      ];
+      scoped.forEach(function (pair) {
+        var b = root.querySelector(pair[0]);
+        if (!b) return;
+        if (pair[1] === null) b.hidden = true; else b.textContent = pair[1];
+      });
+    }
+
 
     // the host page knows its own depth to the API mount
     var API = opts.api || "./api/";
@@ -272,7 +290,7 @@
   function goStep(n) {
     S.step = n;
     [1, 2, 3, 4].forEach(function (i) {
-      var panel = $("#step-" + i);
+      var panel = $("#db-step-" + i);
       if (panel) panel.hidden = i !== n;
     });
     HOST.onStep(n, S.spatial);           // the host owns its stepper chrome

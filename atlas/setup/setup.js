@@ -92,6 +92,7 @@
   }
   function startWizard() {
     S.mode = "wizard";
+    dismissLocalResume();   // committing to a new atlas retires the old draft's offer
     S.dataFirst = null; S.userFiles = []; S._lostFiles = []; S._dfDraft = null;
     renderMyAtlases(); // dashboard steps aside while building
     show(1);           // show() hides the fork + data-first, restores the stepper
@@ -131,6 +132,7 @@
 
   function startDataFirst() {
     S.mode = "wizard";
+    dismissLocalResume();   // committing to a new atlas retires the old draft's offer
     S.dataFirst = { canonical: null, file: null, filename: "", iso3: "", inf: null, locators: null };
     S.userFiles = []; S._lostFiles = []; S._dfDraft = null;
     S._dfGeoApplied = false;
@@ -327,6 +329,25 @@
     show(1);
   }
 
+  // A region the user never picked needs saying so, or the step looks like it
+  // answered itself. Names the places, the evidence, and that it's changeable.
+  function sayRegionCameFromData() {
+    var box = $("#geo-from-data");
+    if (!box || S.editMode) return;
+    var inf = S.dataFirst && S.dataFirst.inf;
+    if (!inf) return;                       // region came from the picker — nothing to explain
+    var names = Object.keys(S.geo.selected).map(function (id) { return S.geo.selected[id].name; }).filter(Boolean);
+    if (!names.length) return;
+    var shown = names.slice(0, 3).join(", ") + (names.length > 3 ? " and " + (names.length - 3) + " more" : "");
+    var plural = LEVEL_NOUN[inf.level] || "areas";
+    var noun = names.length === 1 ? plural.replace(/s$/, "") : plural;
+    var cov = Math.round((inf.coverage || 0) * 100);
+    box.innerHTML = "Chosen from your data: <b>" + esc(shown) + "</b> (" + esc(noun) + ")" +
+      (cov ? " — " + cov + "% of your rows fall inside" : "") +
+      ". Change the country or pick different places below if that's not the region you want.";
+    box.hidden = false;
+  }
+
   // First entry to the geography step when the region came from somewhere other
   // than the drill picker (data-first inference, or editing an existing atlas):
   // reflect it in the country select, level hint, list and map.
@@ -335,6 +356,7 @@
     var haveUnits = Object.keys(S.geo.selected || {}).length > 0;
     if (!haveUnits) return;   // nothing preselected — the drill picker owns this step
     S._dfGeoApplied = true;
+    sayRegionCameFromData();
     var iso3 = S.geo.iso3;
     initCountries().then(function () { $("#f-country").value = iso3; });
     api("geo/levels?iso3=" + iso3).then(function (r2) {
@@ -359,6 +381,20 @@
     } catch (e) { /* private mode / quota — ignore */ }
   }
   function clearLocal() { try { localStorage.removeItem(LS_KEY); } catch (e) {} }
+  // take the offer off the page (and out of storage) — used when the draft is
+  // declined, superseded by a new atlas, or outlived by a deleted one
+  function dismissLocalResume() {
+    var box = $("#resume-local");
+    if (box) { box.hidden = true; box.innerHTML = ""; }
+    clearLocal();
+  }
+  // the saved draft's title, or "" — lets callers tell which atlas it belongs to
+  function localDraftTitle() {
+    try {
+      var s = JSON.parse(localStorage.getItem(LS_KEY) || "null");
+      return (s && s.state && s.state.fields && s.state.fields.title) || "";
+    } catch (e) { return ""; }
+  }
   function offerLocalResume() {
     var raw;
     try { raw = localStorage.getItem(LS_KEY); } catch (e) { return; }
@@ -371,7 +407,7 @@
     box.innerHTML = '<div class="msg ok">Pick up where you left off with <b>' + esc(title) + '</b>? ' +
       '<a href="#" id="lr-yes">Resume</a> · <a href="#" id="lr-no">Start fresh</a></div>';
     $("#lr-yes").onclick = function (ev) { ev.preventDefault(); box.hidden = true; applyDraft({ id: S.draftId, state: saved.state }); };
-    $("#lr-no").onclick = function (ev) { ev.preventDefault(); box.hidden = true; clearLocal(); };
+    $("#lr-no").onclick = function (ev) { ev.preventDefault(); dismissLocalResume(); };
   }
 
   /* ================= step 1: org & branding ================= */
@@ -1059,7 +1095,7 @@
   $("#next-3").onclick = function () {
     msg(3, "");
     var chosen = Object.keys(S.catalog.chosen);
-    if (!chosen.length) return msg(3, "Pick at least one layer.");
+    if (!chosen.length) return msg(3, "Pick at least one data layer.");
     // navigating back to tweak region/layers must update THIS atlas, not mint a
     // twin — once an instance exists in this session, further builds are rebuilds
     if (!S.editMode && S.build && S.build.slug && S.build.editToken) { rebuildCurrent(); return; }
@@ -2175,7 +2211,11 @@
   function deleteAtlas(slug, title) {
     if (!confirm("Delete “" + (title || slug) + "”? This removes the atlas and its data, and can't be undone.")) return;
     api("instances/" + slug, { method: "DELETE" })
-      .then(function () { refreshMe(); loadDirectory(); })   // the public gallery must drop it too
+      .then(function () {
+        // an offer to resume the atlas we just deleted is worse than no offer
+        if (localDraftTitle() && slugify(localDraftTitle()) === slug) dismissLocalResume();
+        refreshMe(); loadDirectory();                        // the public gallery must drop it too
+      })
       .catch(function (e) { alert(errMsg(e)); });
   }
 

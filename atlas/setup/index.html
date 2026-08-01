@@ -315,7 +315,7 @@
 
     <section id="my-atlases" hidden>
       <h2>Your atlases</h2>
-      <p class="hint">Atlases you've created. Edit the details, change the layers, or open them.</p>
+      <p class="hint">Atlases you've created. Edit the details, change the data layers, or open them.</p>
       <div id="my-atlases-list"></div>
       <div style="margin-top:1.1rem">
         <button class="btn" id="start-new" type="button">Build a new atlas →</button>
@@ -325,7 +325,7 @@
     <nav class="stepper" aria-label="Steps">
       <span class="stp" data-step="1"><em>1</em> Org &amp; branding</span>
       <span class="stp" data-step="2"><em>2</em> Geography</span>
-      <span class="stp" data-step="3"><em>3</em> Layers</span>
+      <span class="stp" data-step="3"><em>3</em> Data Layers</span>
       <span class="stp" data-step="4"><em>4</em> Build &amp; preview</span>
       <span class="stp" data-step="5"><em>5</em> Publish &amp; share</span>
     </nav>
@@ -338,7 +338,7 @@
         <button type="button" class="path-card" id="path-place">
           <span class="pc-ico" aria-hidden="true">🗺️</span>
           <b>Start from a place</b>
-          <span class="hint">Pick your region on a map, choose the layers, then build.</span>
+          <span class="hint">Pick your region on a map, choose the data layers, then build.</span>
         </button>
         <button type="button" class="path-card" id="path-data">
           <span class="pc-ico" aria-hidden="true">📄</span>
@@ -428,6 +428,7 @@
     <!-- Step 2 -->
     <section class="panel" id="step-2" hidden>
       <h2>Where is your region?</h2>
+      <div id="geo-from-data" class="msg ok" hidden></div>
       <div id="geo-current" class="msg" hidden></div>
       <div class="grid2">
         <label class="f">Country
@@ -449,7 +450,7 @@
       </div>
       <div class="btnrow">
         <button class="btn secondary" id="back-2">← Back</button>
-        <button class="btn" id="next-2">Choose layers →</button>
+        <button class="btn" id="next-2">Choose data layers →</button>
         <button class="btn secondary" id="save-exit-2" hidden>Save &amp; exit wizard</button>
         <button class="btn ghost" id="save-draft-2">Save draft</button>
       </div>
