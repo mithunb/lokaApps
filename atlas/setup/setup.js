@@ -58,15 +58,49 @@
     var pc = $("#path-choice"); if (pc) pc.hidden = true;
     var dfp = $("#data-first"); if (dfp) dfp.hidden = true;
     var stp = document.querySelector(".stepper"); if (stp) stp.hidden = false;
-    for (var i = 1; i <= 5; i++) {
-      $("#step-" + i).hidden = i !== step;
-      var chip = document.querySelector('.stp[data-step="' + i + '"]');
-      chip.classList.toggle("active", i === step);
-      chip.classList.toggle("done", i < step);
-    }
+    for (var i = 1; i <= 5; i++) $("#step-" + i).hidden = i !== step;
+    syncStepper();
+    syncChrome(true);
+    if (step === 1) syncNext1Label();
     window.scrollTo({ top: 0 });
     if (step === 3) syncPublishShortcut(); // an already-built atlas can be published from here
     if (step >= 1 && step <= 3) saveLocal(); // keep a browser-local backup of in-progress work
+  }
+
+  // the chips carry the truth of the journey: where you are (aria-current),
+  // where you've been, and which steps aren't real destinations yet — 4 needs
+  // a built atlas and 5 a published one, so before that they're honestly
+  // disabled instead of silently swallowing clicks
+  function syncStepper() {
+    for (var i = 1; i <= 5; i++) {
+      var chip = document.querySelector('.stp[data-step="' + i + '"]');
+      if (!chip) continue;
+      chip.classList.toggle("active", i === S.step);
+      chip.classList.toggle("done", i < S.step);
+      if (i === S.step) chip.setAttribute("aria-current", "step");
+      else chip.removeAttribute("aria-current");
+      chip.disabled = i !== S.step && ((i === 4 && !S.build) || (i === 5 && !S._published));
+    }
+  }
+
+  // Past the fork, the hero (eyebrow + h1 + lead) repeats what the compact
+  // stepper and each step's own h2 already say, and the public directory is
+  // another page's concern while an atlas is being built — on a phone that
+  // boilerplate is a whole viewport between the user and their work.
+  function syncChrome(inStep) {
+    document.body.classList.toggle("in-wizard", !!inStep);
+    var dir = document.querySelector(".directory");
+    if (dir) dir.hidden = S.mode === "wizard";
+  }
+
+  // step 1's forward button: an inferred region turns "choose" into "confirm" —
+  // inviting a choice that's already made reads as the wizard not listening
+  function syncNext1Label() {
+    if (S.editMode) return;   // the edit chrome owns this label
+    var btn = $("#next-1");
+    if (!btn) return;
+    var haveRegion = S.geo.iso3 && Object.keys(S.geo.selected || {}).length;
+    btn.textContent = haveRegion ? "Confirm your region →" : "Choose your region →";
   }
 
   // Landing view for returning creators: just their atlases — the wizard stays
@@ -78,6 +112,7 @@
     $("#data-first").hidden = true;
     for (var i = 1; i <= 5; i++) $("#step-" + i).hidden = true;
     renderMyAtlases();
+    syncChrome(false);
     window.scrollTo({ top: 0 });
   }
   // Every new atlas starts at the fork: begin from a place, or from a data file.
@@ -90,6 +125,7 @@
     var pc = $("#path-choice");
     if (pc) pc.hidden = false;
     else show(1);   // stale cached page without the fork markup — degrade to step 1
+    syncChrome(false);   // the fork keeps the hero: it's where the promise is made
     window.scrollTo({ top: 0 });
   }
   /* A new atlas inherits nothing from the last one. Without this the wizard still
@@ -145,7 +181,7 @@
   function startDataFirst() {
     S.mode = "wizard";
     dismissLocalResume();   // committing to a new atlas retires the old draft's offer
-    S.dataFirst = { canonical: null, file: null, filename: "", iso3: "", inf: null, locators: null };
+    S.dataFirst = { files: [], canonical: null, file: null, filename: "", iso3: "", inf: null, locators: null };
     S.userFiles = []; S._lostFiles = []; S._dfDraft = null;
     resetBuildState();
     S._dfGeoApplied = false;
@@ -157,9 +193,13 @@
     $("#df-country-wrap").hidden = true;   // country is detected from the data; shown only to override
     dfmsg("");
     $("#data-first").hidden = false;
+    syncChrome(true);
     populateDfCountries();
     window.scrollTo({ top: 0 });
   }
+
+  // the data-first uploads, oldest first — the first one names the atlas
+  function dfFiles() { return (S.dataFirst.files = S.dataFirst.files || []); }
   $("#df-back").onclick = function () { showFork(); };
 
   var dfCountriesReady = null;
@@ -186,8 +226,9 @@
     drop.ondragleave = function () { drop.style.borderColor = "var(--color-border)"; };
     drop.ondrop = function (e) { e.preventDefault(); drop.style.borderColor = "var(--color-border)"; if (e.dataTransfer.files && e.dataTransfer.files[0]) handleDfFile(e.dataTransfer.files[0]); };
     file.onchange = function () { if (this.files[0]) handleDfFile(this.files[0]); };
-    $("#df-country").addEventListener("change", function () { S.dataFirst.iso3 = this.value; if (S.dataFirst.canonical) runDfInfer(); });
-    $("#df-redo").onclick = function () { $("#df-result").hidden = true; S.dataFirst.canonical = null; dfmsg("Drop another file to try again.", "ok"); };
+    $("#df-country").addEventListener("change", function () { S.dataFirst.iso3 = this.value; if (dfFiles().length) runDfInfer(); });
+    // adds, never wipes — what's attached stays visible with its own remove ✕
+    $("#df-redo").onclick = function () { file.click(); };
     $("#df-use").onclick = dfUseRegion;
   })();
 
@@ -201,18 +242,72 @@
 
   function handleDfFile(file) {
     dfmsg("Reading " + (file.name || "file") + "…", "ok");
-    $("#df-result").hidden = true;
     LokaIngest.fromFile(file, function (err, out) {
       if (err) { dfmsg(errMsg(err), "err"); return; }
       resolveCanonical(out, function (e, canonical) {
         if (e) { dfmsg(errMsg(e), "err"); return; }
-        S.dataFirst.canonical = canonical;
-        S.dataFirst.file = file;
-        S.dataFirst.filename = file.name || "";
+        var list = dfFiles();
+        var dup = -1;
+        list.forEach(function (f, i) { if (f.filename === (file.name || "data")) dup = i; });
+        var entry = { filename: file.name || "data", canonical: canonical };
+        if (dup >= 0) list[dup] = entry; else list.push(entry);   // re-drop replaces
+        S.dataFirst.canonical = list[0].canonical;   // the first file seeds the title
+        S.dataFirst.filename = list[0].filename;
         dfmsg("");
         runDfInfer();   // country comes from the data; the select appears only if we can't tell
       });
     });
+  }
+
+  // one row per attached file, each with its own remove — the old "try
+  // another" cleared the parse silently, which read as the file vanishing
+  function renderDfFiles() {
+    var box = $("#df-files");
+    if (!box) return;
+    box.innerHTML = "";
+    dfFiles().forEach(function (f, i) {
+      var row = document.createElement("div");
+      row.className = "od-file";
+      var nm = document.createElement("span");
+      nm.className = "odf-name"; nm.textContent = f.filename;
+      var rows = document.createElement("span");
+      rows.className = "odf-rows";
+      rows.textContent = f.canonical.rows.length + (f.canonical.rows.length === 1 ? " row" : " rows");
+      var x = document.createElement("button");
+      x.type = "button"; x.className = "odf-x"; x.textContent = "✕";
+      x.title = "Remove " + f.filename;
+      x.setAttribute("aria-label", "Remove " + f.filename);
+      x.onclick = function () { removeDfFile(i); };
+      row.appendChild(nm); row.appendChild(rows); row.appendChild(x);
+      box.appendChild(row);
+    });
+  }
+  function removeDfFile(i) {
+    dfFiles().splice(i, 1);
+    var list = dfFiles();
+    S.dataFirst.canonical = list.length ? list[0].canonical : null;
+    S.dataFirst.filename = list.length ? list[0].filename : "";
+    if (!list.length) {
+      S.dataFirst.inf = null;
+      $("#df-result").hidden = true;
+      dfmsg("File removed — drop another to start again.", "ok");
+      return;
+    }
+    runDfInfer();   // the region must reflect the files that remain
+  }
+
+  // locations pooled across every attached file: coordinates beat names, since
+  // point-in-polygon is evidence and name-matching is inference
+  function dfLocators() {
+    var points = [], names = [], nameCol = "";
+    dfFiles().forEach(function (f) {
+      var loc = deriveLocators(f.canonical);
+      if (loc.points) points = points.concat(loc.points);
+      else if (loc.names) { names = names.concat(loc.names); nameCol = nameCol || loc.nameCol; }
+    });
+    if (points.length) return { points: points.slice(0, 500) };
+    if (names.length) return { names: names.slice(0, 500), nameCol: nameCol };
+    return {};
   }
 
   function dfCentroid(geom) {
@@ -247,9 +342,8 @@
   }
 
   function runDfInfer() {
-    var canon = S.dataFirst.canonical;
-    if (!canon) return;
-    var loc = deriveLocators(canon);
+    if (!dfFiles().length) return;
+    var loc = dfLocators();
     if (!loc.points && !loc.names) { dfmsg("Couldn't find locations in this file — it needs coordinates or a place-name column.", "err"); return; }
     S.dataFirst.locators = loc;
     dfmsg("Finding your region…", "ok");
@@ -282,8 +376,9 @@
 
   function renderDfResult(r, loc) {
     $("#df-result").hidden = false;
+    renderDfFiles();
     var noun = LEVEL_NOUN[r.level] || "areas";
-    var names = r.units.map(function (u) { return u.name; });
+    var names = r.units.map(function (u) { return displayPlaceName(u.name); });
     var head = names.length === 1
       ? "<b>" + esc(names[0]) + "</b> (" + noun.replace(/s$/, "") + ")"
       : "<b>" + names.length + "</b> " + noun + " (" + esc(names.slice(0, 3).join(", ")) + (names.length > 3 ? " +" + (names.length - 3) : "") + ")";
@@ -345,8 +440,8 @@
     applyRegionUnits(r);
     var eff = effectiveRegion(), state = eff ? regionSizeState(eff) : "free";
     if (state === "blocked") { dfmsg("That data covers too large an area for one atlas — trim the file, or pick a smaller region via “Start from a place”.", "err"); return; }
-    // this upload becomes the atlas's first data layer after the build
-    addUserFile(S.dataFirst.filename || "data", S.dataFirst.canonical);
+    // these uploads become the atlas's first data layers after the build
+    dfFiles().forEach(function (f) { addUserFile(f.filename || "data", f.canonical); });
     S._dfGeoApplied = false;      // the geography step shows this selection on first entry
     var t = $("#f-title");
     if (!t.value.trim() && S.dataFirst.filename) {
@@ -363,7 +458,7 @@
     if (!box || S.editMode) return;
     var inf = S.dataFirst && S.dataFirst.inf;
     if (!inf) return;                       // region came from the picker — nothing to explain
-    var names = Object.keys(S.geo.selected).map(function (id) { return S.geo.selected[id].name; }).filter(Boolean);
+    var names = Object.keys(S.geo.selected).map(function (id) { return displayPlaceName(S.geo.selected[id].name); }).filter(Boolean);
     if (!names.length) return;
     var shown = names.slice(0, 3).join(", ") + (names.length > 3 ? " and " + (names.length - 3) + " more" : "");
     var plural = LEVEL_NOUN[inf.level] || "areas";
@@ -445,27 +540,11 @@
       .replace(/^-+|-+$/g, "").slice(0, 40);
   }
 
-  // The web address is derived from the title, not asked for — we just show
-  // where the atlas will live. The server owns uniqueness (it suffixes a taken
-  // address), so this is information, never a blocker.
-  var slugTimer;
-  function checkSlug() {
-    var hint = $("#slug-hint");
-    if (!hint || S.editMode) return;           // editing: the address is fixed
-    var slug = slugify($("#f-title").value.trim());
-    if (!slug) { hint.textContent = ""; hint.className = "hint"; return; }
-    clearTimeout(slugTimer);
-    slugTimer = setTimeout(function () {
-      api("slug-check?slug=" + encodeURIComponent(slug)).then(function (r) {
-        hint.className = "hint";
-        hint.textContent = r.available
-          ? "Your atlas will live at …/atlas/a/" + slug
-          : "…/atlas/a/" + slug + " is taken — yours will get a number on the end";
-      }).catch(function () {});
-    }, 300);
-  }
+  // The web address is derived from the title and never asked for — the server
+  // owns uniqueness (it suffixes a taken address), so nothing about it needs
+  // saying while the user is still naming the thing.
 
-  $("#f-title").addEventListener("input", function () { clearFieldError("f-title"); checkSlug(); });
+  $("#f-title").addEventListener("input", function () { clearFieldError("f-title"); });
   $("#f-org").addEventListener("input", function () { clearFieldError("f-org"); });
   $("#f-orgurl").addEventListener("input", function () { clearFieldError("f-orgurl"); });
 
@@ -527,11 +606,28 @@
       return;
     }
     S.visibility = v;
-    $("#vis-public").classList.toggle("on", v === "public");
-    $("#vis-private").classList.toggle("on", v === "private");
+    var pub = $("#vis-public"), priv = $("#vis-private");
+    pub.classList.toggle("on", v === "public");
+    priv.classList.toggle("on", v === "private");
+    // real radio semantics: aria-checked mirrors the choice, and a roving
+    // tabindex keeps the group one tab stop, like native radios
+    pub.setAttribute("aria-checked", v === "public" ? "true" : "false");
+    priv.setAttribute("aria-checked", v === "private" ? "true" : "false");
+    pub.tabIndex = v === "public" ? 0 : -1;
+    priv.tabIndex = v === "private" ? 0 : -1;
   }
   $("#vis-public").onclick = function () { setVisibility("public"); };
   $("#vis-private").onclick = function () { setVisibility("private"); };
+  // arrow keys move the choice, as they do in a native radio group (a move to
+  // "private" still runs the sign-in gate, same as a click)
+  document.querySelector(".vis-toggle").addEventListener("keydown", function (e) {
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].indexOf(e.key) < 0) return;
+    e.preventDefault();
+    var next = S.visibility === "public" ? "private" : "public";
+    setVisibility(next);
+    var el = $("#vis-" + next);
+    if (el) el.focus();
+  });
 
   $("#next-1").onclick = function () {
     msg(1, "");
@@ -554,6 +650,19 @@
   api("config").then(function (c) { LIMITS = c; }).catch(function () {});
 
   var LEVEL_NOUN = { 1: "states / provinces", 2: "districts", 3: "sub-districts", 4: "localities" };
+
+  // boundary sources ship the odd ALL-CAPS name (YELAHANKA among Title Case
+  // siblings) — title-case those for display, leaving short all-caps tokens
+  // (acronyms like NCT) and every mixed-case name untouched. Display only:
+  // stored names and ids never change.
+  function displayPlaceName(s) {
+    s = String(s == null ? "" : s);
+    if (!/[A-Z]/.test(s) || /[a-z]/.test(s)) return s;   // not an all-caps name
+    return s.replace(/[A-Z]+/g, function (w) {
+      if (w.length <= 3) return w;
+      return w.charAt(0) + w.slice(1).toLowerCase();
+    });
+  }
 
   var wizCountriesReady = null;
   function initCountries() {
@@ -731,7 +840,7 @@
       var live = !last || picked;
       var el = document.createElement(live ? "button" : "span");
       el.className = live ? "" : "cur";
-      el.textContent = c.name;
+      el.textContent = displayPlaceName(c.name);
       if (live) el.onclick = function () {
         clearSelection();
         S.geo.crumbs = S.geo.crumbs.slice(0, i + 1);
@@ -758,6 +867,13 @@
     return [w, s, e, n];
   }
 
+  // the keep toggle tells its state twice: aria-pressed for AT, label for eyes
+  function syncKeepBtn(btn, name, on) {
+    btn.textContent = on ? "✓ In the atlas" : "Keep";
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    btn.setAttribute("aria-label", on ? "Remove " + name + " from the atlas" : "Keep " + name + " in the atlas");
+  }
+
   function renderGeoList() {
     var box = $("#geo-list");
     box.innerHTML = "";
@@ -768,31 +884,40 @@
       .sort(function (a, b) { return a.properties.name.localeCompare(b.properties.name); })
       .forEach(function (f) {
         var id = f.properties.id;
-        var row = document.createElement("button");
-        row.type = "button";
+        var shown = displayPlaceName(f.properties.name);
+        // two controls per row: the name navigates (or toggles, at the deepest
+        // level), the trailing Keep composes a subset — the map's tap, but
+        // reachable by keyboard at every level
+        var row = document.createElement("div");
         row.className = "geo-item" + (S.geo.selected[id] ? " on" : "");
         row.dataset.id = id;
+        var nmBtn = document.createElement("button");
+        nmBtn.type = "button";
+        nmBtn.className = "geo-nm";
         var nm = document.createElement("span");
         nm.className = "nm";
-        nm.textContent = f.properties.name;
-        row.appendChild(nm);
-        var chip = document.createElement("span");
-        chip.className = "in";
-        chip.textContent = "in the atlas";
-        chip.hidden = !S.geo.selected[id];
-        row.appendChild(chip);
+        nm.textContent = shown;
+        nmBtn.appendChild(nm);
         if (canDrill) {
           var chev = document.createElement("span");
           chev.className = "chev";
           chev.setAttribute("aria-hidden", "true");
           chev.textContent = "›";
-          row.appendChild(chev);
-          row.title = "Open " + f.properties.name + " — see its " + childNoun;
-          row.onclick = function () { drillInto(f); };
+          nmBtn.appendChild(chev);
+          nmBtn.title = "Open " + shown + " — see its " + childNoun;
+          nmBtn.onclick = function () { drillInto(f); };
         } else {
-          row.title = "Keep or remove " + f.properties.name;
-          row.onclick = function () { toggleUnit(id); };
+          nmBtn.title = "Keep or remove " + shown;
+          nmBtn.onclick = function () { toggleUnit(id); };
         }
+        row.appendChild(nmBtn);
+        var keep = document.createElement("button");
+        keep.type = "button";
+        keep.className = "geo-keep";
+        keep.dataset.name = shown;
+        syncKeepBtn(keep, shown, !!S.geo.selected[id]);
+        keep.onclick = function () { toggleUnit(id); };
+        row.appendChild(keep);
         // hovering a name lights up its shape, so names and shapes stay connected
         row.onmouseenter = function () {
           if (!geoMapReady) return;
@@ -822,8 +947,8 @@
     var row = document.querySelector('.geo-item[data-id="' + CSS.escape(id) + '"]');
     if (row) {
       row.classList.toggle("on", !!S.geo.selected[id]);
-      var chip = row.querySelector(".in");
-      if (chip) chip.hidden = !S.geo.selected[id];
+      var kb = row.querySelector(".geo-keep");
+      if (kb) syncKeepBtn(kb, kb.dataset.name || id, !!S.geo.selected[id]);
     }
     if (geoMapReady) geoMap.setFeatureState({ source: "units", id: id }, { sel: !!S.geo.selected[id] });
     syncMapPaint();
@@ -878,13 +1003,15 @@
     var canDrill = S.geo.viewLevel < maxLevel();
     var line;
     if (eff.mode === "subset") {
-      var names = eff.units.slice(0, 4).map(function (u) { return esc(u.name); }).join(", ") +
+      var names = eff.units.slice(0, 4).map(function (u) { return esc(displayPlaceName(u.name)); }).join(", ") +
         (eff.units.length > 4 ? " +" + (eff.units.length - 4) : "");
       line = "Your atlas: <b>" + names + "</b> — " + eff.units.length + " of " + S.geo.features.length + " " + noun +
-        (crumb ? " in " + esc(crumb.name) : "") + ". Tap the map to add or remove areas. ";
+        // name both routes: the map is faster with a mouse, the Keep toggles are
+        // the only ones a keyboard can reach
+        (crumb ? " in " + esc(displayPlaceName(crumb.name)) : "") + ". Tap the map, or use a row's Keep toggle, to add or remove areas. ";
     } else {
-      var scopeName = crumb ? crumb.name : countryName();
-      line = "Your atlas: <b>all of " + esc(scopeName) + "</b> — everything on the map. Tap areas to keep just some" +
+      var scopeName = crumb ? displayPlaceName(crumb.name) : countryName();
+      line = "Your atlas: <b>all of " + esc(scopeName) + "</b> — everything on the map. Tap areas, or use a row's Keep toggle, to keep just some" +
         (canDrill ? ", or open a place in the list to go deeper. " : ". ");
     }
     var state = regionSizeState(eff);
@@ -1009,7 +1136,7 @@
       box.innerHTML = '<span class="od-ico" aria-hidden="true">📄</span><div class="od-body"><b>Your data · ' +
         list.length + (list.length === 1 ? " file" : " files") +
         (added.length ? " queued, " + added.length + " on the map" : "") + "</b>" + onMap +
-        '<span class="hint">Each file below becomes its own map layer. We read the fields and work out where the rows go — open <b>Review</b> on any file to change that. You\'ll style them on the real map after the build.</span>' +
+        '<span class="hint">Each file below becomes its own map layer. We\'ve already read the fields and worked out where the rows go — <b>Review</b> is optional, for when you want to change that. You\'ll style them on the real map after the build.</span>' +
         (lost.length ? '<span class="hint" style="color:var(--color-rust-deep)">' + esc(lost.join(", ")) +
           " couldn't ride along with the saved draft — attach again if you still want it.</span>" : "") +
         MORE + "</div>";
@@ -1174,8 +1301,12 @@
       btn.type = "button";
       btn.className = "btn";
       btn.id = "publish-3";
-      btn.textContent = "Publish my atlas →";
-      btn.onclick = function () { startPublish(); };
+      // via the preview, not around it: publishing straight from here skipped
+      // the one screen where you see the finished atlas, and it read as the
+      // step being cut out of the wizard. Step 4 already holds the publish
+      // button, so this is a way TO it, not a second way past it.
+      btn.textContent = "Preview & publish →";
+      btn.onclick = function () { show(4); };
       next.parentNode.insertBefore(btn, next.nextSibling);
     }
     // a queued file hides it again: publishing an atlas without the data someone
@@ -1195,12 +1326,15 @@
     show(4);
     var ds = $("#data-summary"); if (ds) { ds.hidden = true; ds.innerHTML = ""; }
     $("#build-title").textContent = "Rebuilding your atlas…";
-    $("#prog-fill").style.width = "3%";
+    setBuildSub(BUILD_SUB_LIVE);
+    buildRecordLive();
+    setProg(3);
     $("#prog-msg").textContent = "Applying your changes…";
     $("#preview-wrap").hidden = true;
     $("#next-4").hidden = false;
     $("#next-4").disabled = true;
     $("#back-4").hidden = true;
+    $("#add-more-4").hidden = true;
     msg(4, "");
     var eff = effectiveRegion();
     var body = { layers: Object.keys(S.catalog.chosen) };
@@ -1215,6 +1349,50 @@
   }
 
   /* ================= step 4: create + poll + preview ================= */
+
+  // width changes force layout on every poll — scaleX stays on the compositor
+  function setProg(pct) {
+    var f = $("#prog-fill");
+    if (f) f.style.transform = "scaleX(" + Math.max(0, Math.min(100, pct)) / 100 + ")";
+  }
+
+  var BUILD_SUB_LIVE = "This usually takes one to a few minutes — layers are assembled from open data on the fly.";
+  function setBuildSub(text) {
+    var el = $("#build-sub");
+    if (el) el.textContent = text;
+  }
+
+  /* Once a build finishes, the bar and log stop being news — they fold into a
+     collapsed "Build record". A fresh build lifts them back out to the top of
+     the panel. Nodes move rather than re-render, so ids and the log's scroll
+     wiring survive the trip. */
+  function buildRecordDone() {
+    var prog = document.querySelector(".prog");
+    if (!prog) return;
+    var rec = $("#build-record");
+    if (!rec) {
+      rec = document.createElement("details");
+      rec.id = "build-record";
+      var sum = document.createElement("summary");
+      sum.textContent = "Build record";
+      rec.appendChild(sum);
+      prog.appendChild(rec);
+    }
+    rec.appendChild($("#prog-bar"));
+    var log = $("#prog-log");
+    if (log) rec.appendChild(log);
+    rec.open = false;
+    rec.hidden = false;
+  }
+  function buildRecordLive() {
+    var prog = document.querySelector(".prog");
+    var rec = $("#build-record");
+    if (!prog || !rec) return;   // nothing was folded away — already live
+    prog.insertBefore($("#prog-bar"), prog.firstChild);
+    var log = $("#prog-log"), msgEl = $("#prog-msg");
+    if (log && msgEl) prog.insertBefore(log, msgEl.nextSibling);
+    rec.hidden = true;
+  }
 
   function payload() {
     var eff = effectiveRegion() || { level: S.geo.viewLevel, units: [] };
@@ -1239,11 +1417,14 @@
     S._pendingViewKey = viewKey;
     show(4);
     $("#build-title").textContent = "Saving your changes…";
-    $("#prog-fill").style.width = "3%";
+    setBuildSub(BUILD_SUB_LIVE);
+    buildRecordLive();
+    setProg(3);
     $("#prog-msg").textContent = "Rebuilding the atlas with your changes…";
     $("#preview-wrap").hidden = true;
     $("#next-4").hidden = true;
     $("#back-4").hidden = true;
+    $("#add-more-4").hidden = true;
     msg(4, "");
     var body = { layers: Object.keys(S.catalog.chosen) };
     if (!S.regionKept) {
@@ -1252,6 +1433,7 @@
     }
     api("instances/" + S.editSlug + "/rebuild", { method: "POST", body: body }).then(function (r) {
       S.build = { slug: r.slug, jobId: r.jobId };
+      syncStepper();
       pollJob(r.jobId);
     }).catch(function (e) {
       // rebuild refused (e.g. now needs approval) — the metadata edit already saved
@@ -1265,23 +1447,27 @@
     show(4);
     var ds = $("#data-summary"); if (ds) { ds.hidden = true; ds.innerHTML = ""; }
     $("#build-title").textContent = "Building your atlas…";
-    $("#prog-fill").style.width = "3%";
+    setBuildSub(BUILD_SUB_LIVE);
+    buildRecordLive();
+    setProg(3);
     $("#prog-msg").textContent = "Creating your atlas…";
     $("#preview-wrap").hidden = true;
     // publish is the destination of this step — visible from the start, inactive until built
     $("#next-4").hidden = false;
     $("#next-4").disabled = true;
     $("#back-4").hidden = true;
+    $("#add-more-4").hidden = true;
     msg(4, "");
 
     api("instances", { method: "POST", body: payload() }).then(function (r) {
       S.build = r;
+      syncStepper();   // step 4 is a real destination now
       if (r.status === "pending-approval") {
         $("#build-title").textContent = "Waiting for a quick approval";
         $("#prog-msg").textContent = "Your atlas needs a bit more computing than the free tier covers (a large region or heavy data layers), " +
           "so the LOKA team gets a quick look first — it's free and usually same-day. " +
           "We'll email you at " + ((S.session && S.session.email) || "your address") + " when it's approved. You can safely leave this page.";
-        $("#prog-fill").style.width = "6%";
+        setProg(6);
         pollInstanceUntilBuilding();
       } else {
         pollJob(r.jobId);
@@ -1321,7 +1507,7 @@
     var layerEl = $("#prog-layer");
     var t = setInterval(function () {
       api("jobs/" + jobId).then(function (j) {
-        $("#prog-fill").style.width = Math.max(4, j.pct) + "%";
+        setProg(Math.max(4, j.pct));
         if (j.queuedBehind) {
           layerEl.hidden = true;
           $("#prog-msg").textContent = "Waiting in line — " + j.queuedBehind +
@@ -1373,7 +1559,7 @@
   var CHECK_SVG = '<svg class="done-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
 
   function onBuilt() {
-    $("#prog-fill").style.width = "100%";
+    setProg(100);
     $("#prog-bar").classList.remove("working");
     $("#prog-layer").hidden = true;
 
@@ -1387,6 +1573,9 @@
     }
 
     $("#build-title").innerHTML = CHECK_SVG + "Your atlas is ready";
+    // the "takes a few minutes" promise is spent — the bar and log fold into a record
+    setBuildSub("Built from open data just now — the record below has the blow-by-blow.");
+    buildRecordDone();
     $("#next-4").hidden = false;
     $("#back-4").hidden = false;
 
@@ -1410,12 +1599,24 @@
           '<a href="../layers.html?dataset=' + encodeURIComponent(S.build.slug) + '">data bench</a>.', "ok");
       }
     }
+    syncAddMore();
   }
 
   /* ---- step 4: style each attached file over the built map, then add it ----
      The wizard's own module panels move here from step 3 (moving a node keeps
      its state and listeners), so the session the user already reviewed is the
      one being styled — no re-upload, no re-ingest. ---- */
+  // "blr_full" is a filename, not a legend title — underscores to spaces,
+  // title case, with short all-caps tokens (GPS, LGD) riding through as-is
+  function prettyLayerName(filename) {
+    var base = String(filename || "").replace(/\.[a-z0-9]+$/i, "")
+      .replace(/[_\-]+/g, " ").replace(/\s+/g, " ").trim();
+    return base.replace(/\S+/g, function (w) {
+      if (/^[A-Z0-9]+$/.test(w) && w.length <= 4) return w;
+      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    }).slice(0, 60);
+  }
+
   function styleAttachedFiles() {
     var wrap = $("#style-setups");
     if (!wrap) return;
@@ -1451,6 +1652,17 @@
       f.bench.enterStyle().then(function (sum) {
         verdict.textContent = "ready to add · " + sum.features + " features";
         verdict.className = "fs-verdict ok";
+        // the server seeds the layer name from the raw filename and it ships
+        // as the public legend title. Prettify only that untouched default —
+        // a name the user typed is theirs, and stays theirs.
+        var lab = card.querySelector("#s-label");
+        var raw = String(f.filename || "").replace(/\.[a-z]+$/i, "");
+        if (lab && (lab.value === raw || lab.value === "My data" || lab.value === "")) {
+          lab.value = prettyLayerName(f.filename);
+          var ev = document.createEvent("Event");   // the bench re-applies on input
+          ev.initEvent("input", true, false);
+          lab.dispatchEvent(ev);
+        }
       }).catch(function (e) {
         verdict.textContent = errMsg(e);
         verdict.className = "fs-verdict warn";
@@ -1481,9 +1693,10 @@
             wrap.innerHTML = "";
             loadPreview();                 // the layers are on disk now
             $("#next-4").disabled = false;
+            // the confirmation names what landed — "your data" could be anything
             $("#prog-msg").textContent = added.length
-              ? (added.length === 1 ? "Your data is on the map. Publish when you're ready."
-                                    : "Your " + added.length + " layers are on the map. Publish when you're ready.")
+              ? added.join(", ") + (added.length === 1 ? " is" : " are") +
+                " on your atlas — add another file, or publish when you're ready."
               : "Built. Explore the preview below, then publish.";
             if (failed.length) {
               msg(4, failed.join("<br>") + '<br>Add it from the <a href="../layers.html?dataset=' +
@@ -1492,22 +1705,14 @@
             // a layer that didn't make it is news to read here, beside the retry
             // link — and with nothing added there's nothing to report anywhere
             if (failed.length || !added.length) return;
-            // everything landed. The next move is another file or going live, and
-            // both live on the layers step, so that's where the user belongs —
-            // sitting on a finished preview leaves them guessing.
-            renderOwnDataCard();   // now lists what's on the atlas, not what's queued
-            renderFileSetups();    // the committed files left userFiles(): clear their panels
-            show(3);
-            msg(3, "<b>" + esc(added.join(", ")) + "</b> " + (added.length === 1 ? "is" : "are") +
-              " on your atlas. Attach another file above for one more layer, or " +
-              "<b>Publish my atlas</b> when you're done.", "ok");
-            // show() lands at the top of the step, which on this one is the layer
-            // catalogue — the news and both next moves live below it, so bring
-            // that part into view instead of leaving it under the fold
-            // instantly: the catalogue above is thousands of pixels tall, and
-            // animating past all of it reads as the page running away
-            var note = $("#own-data-note");
-            if (note && !note.hidden) note.scrollIntoView({ block: "start" });
+            // everything landed. Stay here, on the finished preview — walking
+            // the stepper back to 3 right after a success read as lost
+            // progress. Both onward moves sit side by side below: one more
+            // file, or go live. Step 3 still refreshes quietly, so anyone who
+            // navigates back sees what the atlas holds, not a stale queue.
+            renderOwnDataCard();
+            renderFileSetups();
+            syncAddMore();
             return;
           }
           queue[i].bench.commit()
@@ -1520,6 +1725,19 @@
   }
 
   $("#back-4").onclick = function () { show(3); };
+  /* "＋ Add another file" sits beside publish once the atlas is built with
+     nothing queued. Attaching still happens through the layers step — that's
+     where a file's check-and-place panels live — but only when asked for,
+     never as an automatic march backwards. */
+  function syncAddMore() {
+    var btn = $("#add-more-4");
+    if (!btn) return;
+    btn.hidden = !(S.build && S.build.slug) || S.editMode || userFiles().length > 0 || $("#next-4").disabled;
+  }
+  $("#add-more-4").onclick = function () {
+    show(3);
+    $("#od-file").click();   // straight into the picker — the step is just the venue
+  };
   // going live is the same act wherever it's triggered from — the preview step or
   // the layers step — so both doors open onto this one
   function startPublish() {
@@ -1545,6 +1763,9 @@
       .then(function () {
         clearLocal(); // published — the browser-local backup is no longer needed
         S._published = true;   // step 5 becomes a stepper destination
+        // step 3's offer to "preview & publish" is history now, and its button
+        // is already hidden — a message promising it would be a lie
+        msg(3, ""); msg(4, "");
         show(5);
         renderPublished();
         loadDirectory();
@@ -1580,11 +1801,16 @@
       : "Manage, edit or delete it anytime from <b>Your atlases</b> in this wizard.");
     body.appendChild(manage);
 
+    // someone who just added their data doesn't need telling to add their data
     var next = document.createElement("p");
     next.className = "hint";
-    next.innerHTML = "Your atlas ships with its default open-data layers — now make it yours: " +
-      '<a href="../layers.html?dataset=' + encodeURIComponent(S.build.slug) + '"><b>add your own data</b></a> ' +
-      "(CSV, Excel, JSON, GeoJSON, KML or GPX). Experimental — under active development.";
+    next.innerHTML = (S.addedLayers || []).length
+      ? "Your data (<b>" + esc(S.addedLayers.join(", ")) + "</b>) is on the map alongside the open-data layers. " +
+        'Add more files, restyle or remove layers any time in the <a href="../layers.html?dataset=' +
+        encodeURIComponent(S.build.slug) + '"><b>data bench</b></a>.'
+      : "Your atlas ships with its default open-data layers — now make it yours: " +
+        '<a href="../layers.html?dataset=' + encodeURIComponent(S.build.slug) + '"><b>add your own data</b></a> ' +
+        "(CSV, Excel, JSON, GeoJSON, KML or GPX). Experimental — under active development.";
     body.appendChild(next);
 
     body.appendChild(window.AtlasShare.panel({
@@ -1777,7 +2003,12 @@
     var how = sum.spatial ? "shapes carry their own location"
       : sum.strategy === "coordinates" ? "placed by coordinates"
       : "matched to " + (sum.joinLabel || "boundaries");
-    return { cls: "ok", text: "ready · " + sum.features + " on the map · " + how + " · " + sum.fields + " fields" };
+    return { cls: "ok", text: "checked ✓ · " + sum.features + " on the map · " + how + " · " + sum.fields + " fields" };
+  }
+
+  // the check already ran — a clean file's Review is an offer, not a chore
+  function reviewLabel(f) {
+    return (f.summary && !f.summary.needsAttention) ? "Review (optional)" : "Review";
   }
 
   function renderFileSetups() {
@@ -1804,7 +2035,7 @@
         f.panel.querySelector(".fs-toggle").onclick = function () {
           var body = f.panel.querySelector(".fs-body");
           body.hidden = !body.hidden;
-          this.textContent = body.hidden ? "Review" : "Hide";
+          this.textContent = body.hidden ? reviewLabel(f) : "Hide";
         };
       }
       f.panel.querySelector(".fs-name").textContent = f.filename;
@@ -1812,6 +2043,8 @@
       var vEl = f.panel.querySelector(".fs-verdict");
       vEl.textContent = v.text;
       vEl.className = "fs-verdict " + v.cls;
+      var tEl = f.panel.querySelector(".fs-toggle");
+      if (f.panel.querySelector(".fs-body").hidden) tEl.textContent = reviewLabel(f);
       // mount the wizard's check+place for this file, once
       if (!f.bench) {
         var body = f.panel.querySelector(".fs-body");
@@ -1829,7 +2062,7 @@
             if (explicit) {
               var b = f.panel.querySelector(".fs-body");
               b.hidden = true;
-              f.panel.querySelector(".fs-toggle").textContent = "Review";
+              f.panel.querySelector(".fs-toggle").textContent = reviewLabel(f);
             }
           },
         });
@@ -2212,7 +2445,9 @@
       }
       show(4);
       $("#build-title").innerHTML = CHECK_SVG + "Your atlas is ready";
-      $("#prog-fill").style.width = "100%";
+      setBuildSub("Built earlier — everything is in place.");
+      buildRecordDone();
+      setProg(100);
       $("#prog-bar").classList.remove("working");
       $("#prog-layer").hidden = true;
       $("#prog-msg").textContent = "Your data is set up. Publish when you're ready.";
@@ -2220,6 +2455,7 @@
       $("#next-4").hidden = false;
       $("#next-4").disabled = false;
       $("#back-4").hidden = true;   // the wizard's earlier steps aren't loaded in this session
+      $("#add-more-4").hidden = true;   // no catalogue in memory to attach through
     }).catch(function () { showHome(); });
   }
 

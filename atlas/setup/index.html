@@ -31,7 +31,7 @@
       font-family:'DM Sans',system-ui,-apple-system,sans-serif; font-size:1rem; line-height:1.55;
       -webkit-font-smoothing:antialiased; }
     h1,h2,h3 { font-family:'Figtree',sans-serif; letter-spacing:-.01em; margin:0 0 .5rem; text-wrap:balance; }
-    h1 { font-size:clamp(1.6rem,4vw,2.3rem); font-weight:700; line-height:1.12; }
+    h1 { font-size:clamp(1.6rem,4vw,2.4rem); font-weight:700; line-height:1.12; }
     h2 { font-size:1.15rem; font-weight:600; }
     p { color:var(--color-text-secondary); margin:0 0 1rem; }
     a { color:var(--color-moss); text-decoration:none; }
@@ -42,18 +42,27 @@
     .brand { font-family:'Figtree',sans-serif; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--color-text-primary); font-size:.875rem; }
     .brand:hover { color:var(--color-text-primary); text-decoration:none; }
     .nav .links { display:flex; gap:1.25rem; align-items:center; }
-    .nav .links a, .nav .links button { color:var(--color-text-secondary); font-size:.9rem; background:none; border:none; font-family:inherit; cursor:pointer; padding:0; }
+    /* padding grows the tap target to 44px; the negative margin hands the space back */
+    .nav .links a, .nav .links button { color:var(--color-text-secondary); font-size:.875rem; background:none; border:none; font-family:inherit; cursor:pointer; padding:.75rem .35rem; margin:-.75rem -.35rem; }
     main { width:var(--container); margin:0 auto; padding:2.25rem 0 3.5rem; }
     .eyebrow { display:inline-block; font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:600;
       letter-spacing:.14em; text-transform:uppercase; color:var(--color-moss); margin:0 0 .8rem;
       padding:.25rem .6rem; background:var(--color-moss-tint); border-radius:4px; }
-    .lead { max-width:44rem; }
+    .lead { max-width:70ch; }
+    /* past the fork the hero repeats what the stepper and each step's own h2
+       already say — collapse it so every step starts at its work, not at
+       boilerplate (a whole first viewport of it, on a phone) */
+    body.in-wizard main > .eyebrow, body.in-wizard main > h1, body.in-wizard main > .lead { display:none; }
+    body.in-wizard .stepper { margin:.4rem 0 1rem; }
 
     /* stepper — every chip is a real navigation target */
     .stepper { display:flex; gap:.25rem; margin:1.75rem 0 1.5rem; flex-wrap:wrap; }
-    .stp { display:flex; align-items:center; gap:.45rem; padding:.45rem .8rem; border-radius:4px;
-      font-size:.85rem; color:var(--color-text-muted); border:1px solid transparent; cursor:pointer; }
-    .stp:hover { border-color:var(--color-border); color:var(--color-text-secondary); }
+    .stp { display:flex; align-items:center; gap:.45rem; padding:.45rem .8rem; min-height:2.75rem; border-radius:4px;
+      font:inherit; font-size:.875rem; color:var(--color-text-secondary); background:none; border:1px solid transparent; cursor:pointer; }
+    .stp:hover { border-color:var(--color-border); color:var(--color-text-primary); }
+    /* a step that isn't a destination yet: quieter but still 4.5:1, no hover invitation */
+    .stp:disabled { color:var(--color-text-muted); cursor:not-allowed; }
+    .stp:disabled:hover { border-color:transparent; color:var(--color-text-muted); }
     .stp em { font-style:normal; font-family:'Figtree',sans-serif; font-weight:700; }
     .stp.active { background:var(--color-surface); border-color:var(--color-border); color:var(--color-text-primary); }
     .stp.done { color:var(--color-moss); }
@@ -70,37 +79,40 @@
 
     /* your-data card on the Layers step */
     .own-data { display:flex; gap:.7rem; align-items:flex-start; margin-top:1rem; padding:.85rem 1rem;
-      border:1px dashed var(--color-border); border-radius:8px; background:var(--color-moss-tint); }
+      border:1px dashed var(--color-border); border-radius:var(--radius-lg); background:var(--color-moss-tint); }
     .own-data.clickable { cursor:pointer; }
     .own-data.clickable:hover { border-color:var(--color-moss); }
     .own-data.attached { border-style:solid; }
     .own-data .od-ico { font-size:1.15rem; line-height:1.3; color:var(--color-moss); flex:0 0 auto; }
     .own-data .od-body { display:flex; flex-direction:column; gap:.15rem; }
     .own-data b { font-family:'Figtree',sans-serif; }
-    .own-data .od-act { background:none; border:none; padding:0; font:inherit; font-size:.8rem;
-      color:var(--color-moss); text-decoration:underline; cursor:pointer; align-self:flex-start; }
-    .own-data .od-btn { align-self:flex-start; margin-top:.55rem; text-decoration:none; font-size:.85rem;
+    .own-data .od-act { background:none; border:none; padding:0; font:inherit; font-size:.875rem;
+      color:var(--color-moss); text-decoration:underline; cursor:pointer; align-self:flex-start;
+      min-height:2.75rem; display:inline-flex; align-items:center; }
+    .own-data .od-btn { align-self:flex-start; margin-top:.55rem; text-decoration:none; font-size:.875rem;
       padding:.45rem .9rem; }
     .own-data .od-btn:hover { text-decoration:none; }
     .od-files { display:flex; flex-direction:column; gap:.3rem; margin:.15rem 0 .1rem; }
-    .od-file { display:flex; align-items:baseline; gap:.4rem; font-size:.85rem; }
+    .od-file { display:flex; align-items:center; gap:.4rem; font-size:.875rem; }
     .od-file .odf-name { font-weight:600; color:var(--color-text-primary); }
-    .od-file .odf-rows { color:var(--color-text-muted); font-size:.8rem; }
-    .od-file .odf-x { margin-left:auto; background:none; border:none; cursor:pointer; padding:0 .2rem;
-      color:var(--color-text-muted); font-size:.95rem; line-height:1; }
-    .od-file .odf-x:hover { color:var(--color-rust-deep); }
+    .od-file .odf-rows { color:var(--color-text-muted); font-size:.78rem; }
+    /* the ✕ glyph stays small; its hit area is a full 44px square */
+    .odf-x { margin-left:auto; background:none; border:none; cursor:pointer; padding:0; flex:0 0 auto;
+      color:var(--color-text-muted); font-size:.95rem; line-height:1;
+      min-width:2.75rem; min-height:2.75rem; display:inline-flex; align-items:center; justify-content:center; }
+    .odf-x:hover { color:var(--color-rust-deep); }
 
     /* per-file setup panels: a one-line verdict, expanding into the data
        wizard's own steps (mounted inline — never a second wizard) */
     #file-setups, #style-setups { display:flex; flex-direction:column; gap:.6rem; margin-top:1rem; }
     .fs-panel { border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface); }
     .fs-head { display:flex; align-items:center; gap:.6rem; padding:.7rem .9rem; flex-wrap:wrap; }
-    .fs-name { font-family:'Figtree',sans-serif; font-weight:600; font-size:.92rem; }
-    .fs-verdict { flex:1 1 auto; font-size:.82rem; color:var(--color-text-muted); }
+    .fs-name { font-family:'Figtree',sans-serif; font-weight:600; font-size:.95rem; }
+    .fs-verdict { flex:1 1 auto; font-size:.78rem; color:var(--color-text-muted); }
     .fs-verdict.ok { color:var(--color-moss); }
     .fs-verdict.warn { color:var(--color-rust-deep); }
-    .fs-toggle { font:inherit; font-size:.82rem; padding:.3rem .7rem; border:1px solid var(--color-border);
-      border-radius:5px; background:#FFFFFF; color:var(--color-moss); cursor:pointer; flex:0 0 auto; }
+    .fs-toggle { font:inherit; font-size:.875rem; padding:.3rem .7rem; min-height:2.75rem; border:1px solid var(--color-border);
+      border-radius:var(--radius-md); background:#FFFFFF; color:var(--color-moss); cursor:pointer; flex:0 0 auto; }
     .fs-toggle:hover { border-color:var(--color-moss); }
     .fs-body { padding:0 .9rem .9rem; border-top:1px solid var(--color-divider); }
     /* the module renders its own panels inside; they're sections, not pages here */
@@ -110,19 +122,19 @@
     .ds-card { margin:1.2rem 0 0; padding:.9rem 1rem; border:1px solid var(--color-border);
       border-radius:var(--radius-md); background:var(--color-surface); }
     .ds-card h3 { margin:0 0 .5rem; font-family:'Figtree',sans-serif; font-size:.95rem; }
-    .ds-layer { padding:.5rem 0; border-top:1px solid var(--color-divider); font-size:.87rem; }
+    .ds-layer { padding:.5rem 0; border-top:1px solid var(--color-divider); font-size:.875rem; }
     .ds-layer:first-of-type { border-top:none; }
     .ds-layer b { font-family:'Figtree',sans-serif; }
     .ds-facts { margin:.25rem 0 0; padding-left:1.1rem; color:var(--color-text-secondary); }
     .ds-facts li { margin:.1rem 0; }
     .ds-swatches { display:flex; flex-wrap:wrap; gap:.3rem .5rem; margin-top:.35rem; }
     .ds-chip { display:inline-flex; align-items:center; gap:.3rem; font-size:.78rem; color:var(--color-text-secondary); }
-    .ds-dot { width:.7rem; height:.7rem; border-radius:50%; border:1px solid rgba(0,0,0,.15); flex:0 0 auto; }
+    .ds-dot { width:.7rem; height:.7rem; border-radius:50%; border:1px solid var(--color-border); flex:0 0 auto; }
 
     /* publish hero: the atlas link, unmissable */
     .pub-hero { display:flex; align-items:center; gap:.9rem; flex-wrap:wrap; margin:.2rem 0 1.2rem;
       padding:.9rem 1rem; background:var(--color-moss-tint); border-radius:var(--radius-md); }
-    .pub-hero .pub-url { font-size:.9rem; color:var(--color-text-secondary); word-break:break-all; }
+    .pub-hero .pub-url { font-size:.875rem; color:var(--color-text-secondary); word-break:break-all; }
 
     /* panels */
     .panel { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:1.5rem; }
@@ -130,38 +142,43 @@
     [hidden] { display:none !important; }
     .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
     @media (max-width:720px){ .grid2 { grid-template-columns:1fr; } }
-    label.f { display:flex; flex-direction:column; gap:.3rem; font-size:.85rem; font-weight:600; color:var(--color-text-secondary); }
+    label.f, div.f { display:flex; flex-direction:column; gap:.3rem; font-size:.875rem; font-weight:600; color:var(--color-text-secondary); }
     label.f span.opt { font-weight:400; color:var(--color-text-muted); }
-    label.f span.req { font-weight:400; font-size:.75rem; color:var(--color-text-muted); }
+    label.f span.req { font-weight:400; font-size:.78rem; color:var(--color-text-muted); }
     /* a field that failed validation names its own problem, next to the input */
     label.f.bad input, label.f.bad textarea, label.f.bad select { border-color:var(--color-rust); }
     label.f .fielderr { font-size:.78rem; color:var(--color-rust-deep); }
     input[type=text], input[type=email], input[type=url], textarea, select {
       font:inherit; font-size:.95rem; padding:.55rem .65rem; border:1px solid var(--color-border);
       border-radius:4px; background:#FFFFFF; color:var(--color-text-primary); width:100%; }
-    /* placeholders must read as suggestions, never as entered text */
-    input::placeholder, textarea::placeholder { color:var(--color-text-muted); opacity:.5; }
+    /* placeholders must read as suggestions, never as entered text — solid
+       muted ink keeps that distinction against near-black entries while
+       clearing 4.5:1, where the old half-opacity washed it to 2.1:1 */
+    input::placeholder, textarea::placeholder { color:var(--color-text-muted); opacity:1; }
     textarea { resize:vertical; }
-    .hint { font-size:.8rem; font-weight:400; color:var(--color-text-muted); }
+    .hint { font-size:.78rem; font-weight:400; color:var(--color-text-muted); }
     .hint.ok { color:var(--color-moss); }
     .hint.bad { color:var(--color-rust-deep); }
+    #tier-note { max-width:70ch; }
     .btnrow { display:flex; gap:.6rem; margin-top:1.4rem; flex-wrap:wrap; align-items:center; }
-    .btn { display:inline-flex; align-items:center; gap:.4rem; padding:.6rem 1.2rem; border-radius:var(--radius-md); border:none;
+    .btn { display:inline-flex; align-items:center; gap:.4rem; padding:.6rem 1.2rem; min-height:2.75rem; border-radius:var(--radius-md); border:none;
       background:var(--color-moss); color:#fff; font:inherit; font-weight:600; font-size:.95rem; cursor:pointer; }
     .btn:hover { background:var(--color-canopy); }
     .btn:active { transform:translateY(1px); }
     .btn.secondary { background:transparent; color:var(--color-moss); border:1px solid var(--color-moss); }
     .btn.secondary:hover { background:var(--color-moss-tint); }
     .btn.ghost { background:none; border:none; color:var(--color-text-secondary); text-decoration:underline; padding:.6rem .4rem; }
-    .btn:disabled { opacity:.5; cursor:not-allowed; }
+    /* disabled by recession, not by fading — the label stays readable (4.5:1+) */
+    .btn:disabled, .btn:disabled:hover { background:var(--color-bg-alt); color:var(--color-text-muted);
+      border-color:var(--color-border); cursor:not-allowed; transform:none; }
     .vis-toggle { display:flex; gap:.5rem; }
-    .vis-toggle button { flex:1; font:inherit; font-size:.9rem; padding:.55rem; border:1px solid var(--color-border); background:#FFFFFF; border-radius:4px; cursor:pointer; color:var(--color-text-secondary); }
+    .vis-toggle button { flex:1; font:inherit; font-size:.95rem; padding:.55rem; min-height:2.75rem; border:1px solid var(--color-border); background:#FFFFFF; border-radius:4px; cursor:pointer; color:var(--color-text-secondary); }
     .vis-toggle button:hover { border-color:var(--color-moss); color:var(--color-text-primary); }
     .vis-toggle button.on { border-color:var(--color-moss); background:var(--color-moss-tint); color:var(--color-text-primary); font-weight:600; }
 
     /* geography picker */
-    .geo-crumbs { display:flex; align-items:center; gap:.25rem; flex-wrap:wrap; margin-top:1rem; font-size:.88rem; min-height:1.6rem; }
-    .geo-crumbs button { font:inherit; font-size:.88rem; border:none; background:none; color:var(--color-moss);
+    .geo-crumbs { display:flex; align-items:center; gap:.25rem; flex-wrap:wrap; margin-top:1rem; font-size:.875rem; min-height:1.6rem; }
+    .geo-crumbs button { font:inherit; font-size:.875rem; border:none; background:none; color:var(--color-moss);
       cursor:pointer; padding:.15rem .3rem; border-radius:4px; }
     .geo-crumbs button:hover { background:var(--color-moss-tint); text-decoration:underline; }
     .geo-crumbs .cur { font-weight:600; color:var(--color-text-primary); padding:.15rem .3rem; }
@@ -169,24 +186,36 @@
     .geo-wrap { display:grid; grid-template-columns:minmax(15rem,1.1fr) 1.6fr; gap:1rem; margin-top:.5rem; }
     @media (max-width:820px){ .geo-wrap { grid-template-columns:1fr; } }
     .geo-list { border:1px solid var(--color-border); border-radius:4px; background:#FFFFFF; max-height:22rem; overflow-y:auto; padding:.4rem; }
-    /* one control per row: the whole row is a button — it opens the place
-       (drillable levels) or keeps/removes it (deepest level) */
-    .geo-item { display:flex; align-items:center; gap:.55rem; width:100%; text-align:left; font:inherit; font-size:.9rem;
-      color:var(--color-text-primary); border:none; background:none; padding:.42rem .55rem; border-radius:4px; cursor:pointer; }
+    /* two controls per row: the name opens the place (or keeps it, at the
+       deepest level), the trailing toggle composes the subset — so a keyboard
+       can do everything a map tap can */
+    .geo-item { display:flex; align-items:stretch; width:100%; min-height:2.75rem; border-radius:4px; }
     .geo-item:hover { background:var(--color-moss-tint); }
+    .geo-item .geo-nm { flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:.55rem; text-align:left;
+      font:inherit; font-size:.875rem; color:var(--color-text-primary); border:none; background:none;
+      padding:.3rem .55rem; border-radius:4px; cursor:pointer; }
     .geo-item .nm { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .geo-item .chev { flex:0 0 auto; font-family:'Figtree',sans-serif; font-weight:700; color:var(--color-moss); }
-    .geo-item .in { flex:0 0 auto; font-family:'Figtree',sans-serif; font-size:.66rem; font-weight:600; letter-spacing:.05em;
-      text-transform:uppercase; color:var(--color-canopy); background:var(--color-moss-tint); border-radius:4px; padding:.14rem .4rem; }
+    .geo-keep { flex:0 0 auto; font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:600; letter-spacing:.05em;
+      text-transform:uppercase; color:var(--color-moss); background:none; border:none; border-radius:4px;
+      padding:0 .55rem; min-width:2.75rem; cursor:pointer; white-space:nowrap; }
+    .geo-keep:hover { background:var(--color-moss-tint); color:var(--color-canopy); }
+    .geo-keep[aria-pressed="true"] { color:var(--color-canopy); }
     .geo-item.on { background:var(--color-moss-tint); }
     #geo-map { height:22rem; border:1px solid var(--color-border); border-radius:4px; background:#EAE9E3; }
-    .geo-meta { grid-column:1 / -1; font-size:.85rem; color:var(--color-text-secondary); }
+    .geo-meta { grid-column:1 / -1; font-size:.875rem; color:var(--color-text-secondary); }
     .geo-meta b { color:var(--color-text-primary); }
     /* persistent legend: list navigates, map composes */
-    .geo-legend { display:flex; flex-wrap:wrap; gap:.4rem 1.1rem; margin:.1rem 0 .5rem; font-size:.82rem; color:var(--color-text-secondary); }
+    .geo-legend { display:flex; flex-wrap:wrap; gap:.4rem 1.1rem; margin:.1rem 0 .5rem; font-size:.875rem; color:var(--color-text-secondary); }
     .geo-legend span { display:inline-flex; align-items:center; gap:.4rem; }
-    .geo-legend .tap { width:15px; height:15px; background:var(--color-moss); opacity:.55; border-radius:3px; flex:0 0 auto; }
+    .geo-legend .tap { width:15px; height:15px; background:var(--color-moss); opacity:.55; border-radius:4px; flex:0 0 auto; }
     .geo-legend .drill { font-family:'Figtree',sans-serif; font-weight:700; color:var(--color-moss); font-size:1rem; }
+    /* narrow screens: one instruction per line, not a shattered mosaic */
+    @media (max-width:640px){
+      .geo-legend { flex-direction:column; align-items:flex-start; gap:.5rem; }
+      .geo-legend span { align-items:flex-start; }
+      .geo-legend .tap, .geo-legend .drill { margin-top:.15rem; }
+    }
 
     /* layers — collapsed groups so the long catalogue reads as five headings */
     details.cat-group { margin-top:.7rem; border:1px solid var(--color-border); border-radius:6px; background:#FFFFFF; }
@@ -199,15 +228,15 @@
     @media (prefers-reduced-motion:reduce){ .cat-group .g-chev { transition:none; } }
     .cat-group h3 { font-size:.78rem; letter-spacing:.06em; text-transform:uppercase; color:var(--color-text-secondary); margin:0; }
     .cat-count { margin-left:auto; font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:600; color:var(--color-text-muted); white-space:nowrap; }
-    .cat-sub { font-family:'Figtree',sans-serif; font-size:.74rem; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+    .cat-sub { font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
       color:var(--color-text-muted); margin:.85rem 0 .1rem; padding-left:.95rem; }
     .cat-row { display:flex; gap:.7rem; align-items:flex-start; padding:.6rem .95rem; }
     .cat-row + .cat-row, .cat-sub + .cat-row { border-top:1px solid var(--color-divider); }
     .cat-row input { margin-top:.25rem; accent-color:var(--color-moss); width:16px; height:16px; flex:0 0 auto; }
     .cat-row b { font-weight:600; }
-    .cat-row .info { display:block; font-size:.85rem; color:var(--color-text-secondary); }
-    .cat-row .attr { display:block; font-size:.75rem; color:var(--color-text-muted); margin-top:.15rem; }
-    .badge { display:inline-block; font-size:.68rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+    .cat-row .info { display:block; font-size:.875rem; color:var(--color-text-secondary); }
+    .cat-row .attr { display:block; font-size:.78rem; color:var(--color-text-muted); margin-top:.15rem; }
+    .badge { display:inline-block; font-size:.72rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
       border-radius:4px; padding:.12rem .4rem; margin-left:.45rem; vertical-align:1px; }
     .badge.free { background:var(--color-moss-tint); color:var(--color-canopy); }
     .badge.approval { background:var(--color-rust-tint); color:var(--color-rust-deep); }
@@ -218,17 +247,24 @@
     .done-check { width:22px; height:22px; vertical-align:-3px; margin-right:.35rem; color:var(--color-moss); }
     .done-check path { stroke-dasharray:30; stroke-dashoffset:30; animation:ds-draw .5s cubic-bezier(.25,1,.5,1) forwards; }
     @keyframes ds-draw { to { stroke-dashoffset:0; } }
-    .prog-bar { height:10px; border-radius:999px; background:var(--color-bg-alt); overflow:hidden; }
-    .prog-bar i { display:block; height:100%; width:0; background:var(--color-moss); border-radius:999px; transition:width .5s ease-out; }
-    /* a moving sheen while a build is active, so a slow download never looks frozen */
-    .prog-bar.working i { background-image:linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent);
+    .prog-bar { position:relative; height:10px; border-radius:999px; background:var(--color-bg-alt); overflow:hidden; }
+    /* the fill scales instead of resizing, so progress never touches layout */
+    .prog-bar i { display:block; height:100%; width:100%; transform:scaleX(0); transform-origin:left;
+      background:var(--color-moss); border-radius:999px; transition:transform .5s ease-out; }
+    /* a moving sheen while a build is active, so a slow download never looks
+       frozen — it rides the track, not the scaled fill, to keep its width honest */
+    .prog-bar.working::after { content:""; position:absolute; inset:0;
+      background-image:linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent);
       background-size:2rem 100%; background-repeat:no-repeat; animation:prog-sheen 1.2s linear infinite; }
     @keyframes prog-sheen { from { background-position:-2rem 0; } to { background-position:calc(100% + 2rem) 0; } }
+    /* once the build is done the bar and log fold into a quiet record */
+    #build-record summary { cursor:pointer; font-size:.875rem; color:var(--color-text-secondary); padding:.6rem 0; }
+    #build-record .prog-bar { margin-top:.2rem; }
     .prog-layer { margin:.6rem 0 0; font-family:'Figtree',sans-serif; font-weight:600; font-size:.95rem; color:var(--color-text-primary); }
     .prog-layer .count { color:var(--color-text-muted); font-weight:500; }
-    .prog-msg { margin:.3rem 0 0; font-size:.85rem; color:var(--color-text-secondary); }
-    @media (prefers-reduced-motion:reduce){ .prog-bar.working i { animation:none; } }
-    .prog-log { margin:.75rem 0 0; font:11px/1.5 ui-monospace,Menlo,monospace; color:var(--color-text-muted);
+    .prog-msg { margin:.3rem 0 0; font-size:.875rem; color:var(--color-text-secondary); }
+    @media (prefers-reduced-motion:reduce){ .prog-bar.working::after { animation:none; } }
+    .prog-log { margin:.75rem 0 0; font:.75rem/1.5 ui-monospace,Menlo,monospace; color:var(--color-text-muted);
       background:#FFFFFF; border:1px solid var(--color-border); border-radius:4px; padding:.5rem .65rem; max-height:9rem; overflow-y:auto; white-space:pre-wrap; }
     #preview-frame { width:100%; height:560px; border:1px solid var(--color-border); border-radius:6px; margin-top:1rem; background:#EAE9E3; }
 
@@ -237,6 +273,8 @@
       width:calc(100vw - 2.5rem); background:var(--color-surface); color:var(--color-text-primary); font-family:inherit; }
     dialog.auth::backdrop { background:rgba(42,36,26,.35); }
     dialog.auth h3 { margin-top:0; }
+    /* the one big input: code digits read at headline size, on the scale */
+    #auth-code { letter-spacing:.35em; font-size:1.15rem; font-variant-numeric:tabular-nums; max-width:11rem; }
 
     /* directory */
     .directory { margin-top:3rem; }
@@ -245,7 +283,7 @@
       padding:1rem 1.1rem; color:var(--color-text-primary); }
     .dir-card:hover { border-color:var(--color-moss); text-decoration:none; color:var(--color-text-primary); }
     .dir-card b { font-family:'Figtree',sans-serif; display:block; }
-    .dir-card span { font-size:.85rem; color:var(--color-text-secondary); }
+    .dir-card span { font-size:.875rem; color:var(--color-text-secondary); }
 
     #my-atlases { margin:1rem 0 0; }
     .mine { display:flex; flex-direction:column; gap:.6rem; margin-top:1rem; }
@@ -253,13 +291,14 @@
       border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:.85rem 1rem; }
     .mine-main { flex:1 1 12rem; min-width:0; }
     .mine-main b { font-family:'Figtree',sans-serif; display:block; }
-    .mine-main span { font-size:.83rem; color:var(--color-text-secondary); }
-    .mine-badge { font-family:'Figtree',sans-serif; font-size:.66rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+    .mine-main span { font-size:.875rem; color:var(--color-text-secondary); }
+    .mine-badge { font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
       padding:.12rem .45rem; border-radius:4px; background:var(--color-moss-tint); color:var(--color-canopy); }
     .mine-badge.draft { background:var(--color-rust-tint); color:var(--color-rust-deep); }
     .mine-actions { display:flex; gap:.4rem; flex-wrap:wrap; }
-    .mine-actions button, .mine-actions a { font:inherit; font-size:.83rem; font-weight:600; font-family:'Figtree',sans-serif;
-      padding:.35rem .6rem; border-radius:4px; border:1px solid var(--color-border); background:var(--color-surface);
+    .mine-actions button, .mine-actions a { font:inherit; font-size:.875rem; font-weight:600; font-family:'Figtree',sans-serif;
+      padding:.35rem .6rem; min-height:2.75rem; display:inline-flex; align-items:center; border-radius:4px;
+      border:1px solid var(--color-border); background:var(--color-surface);
       color:var(--color-text-primary); cursor:pointer; text-decoration:none; }
     .mine-actions button:hover, .mine-actions a:hover { border-color:var(--color-moss); color:var(--color-canopy); }
     .mine-actions .danger:hover { border-color:var(--color-rust); color:var(--color-rust-deep); }
@@ -271,22 +310,24 @@
     /* collaborators panel (edit mode, owner only) */
     #collab-panel { margin-top:1.4rem; padding-top:1.1rem; border-top:1px solid var(--color-divider); }
     .collab-head { font-size:.78rem; letter-spacing:.06em; text-transform:uppercase; color:var(--color-text-secondary); margin:0 0 .3rem; }
-    .collab-row { display:flex; align-items:center; gap:.6rem; padding:.5rem 0; border-top:1px solid var(--color-divider); font-size:.9rem; }
+    .collab-row { display:flex; align-items:center; gap:.6rem; padding:.5rem 0; border-top:1px solid var(--color-divider); font-size:.875rem; }
     .collab-row:first-child { border-top:none; }
     .collab-row .em { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
-    .collab-row button { font:inherit; font-size:.8rem; font-weight:600; font-family:'Figtree',sans-serif;
+    .collab-row button { font:inherit; font-size:.875rem; font-weight:600; font-family:'Figtree',sans-serif;
       padding:.25rem .55rem; border-radius:4px; border:1px solid var(--color-border); background:var(--color-surface);
       color:var(--color-text-primary); cursor:pointer; }
     .collab-row button:hover { border-color:var(--color-rust); color:var(--color-rust-deep); }
     .collab-invite { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.7rem; }
     .collab-invite input { flex:1 1 14rem; min-width:0; }
 
-    .msg { padding:.7rem .9rem; border-radius:4px; font-size:.9rem; margin-top:1rem; }
+    .msg { padding:.7rem .9rem; border-radius:4px; font-size:.875rem; margin-top:1rem; }
     .msg.err { background:var(--color-rust-tint); color:var(--color-rust-deep); }
     .msg.ok { background:var(--color-moss-tint); color:var(--color-canopy); }
 
     footer.site { margin-top:3.5rem; border-top:1px solid var(--color-divider); background:var(--color-bg-alt); }
     .foot-inner { width:var(--container); margin:0 auto; padding:1.5rem 0; color:var(--color-text-secondary); font-size:.875rem; }
+    /* same tap-target trick as the nav: 44px to touch, unchanged to the eye */
+    .foot-inner a { display:inline-block; padding:.75rem .2rem; margin:-.75rem -.2rem; }
     @media (prefers-reduced-motion: reduce){ *,*::before,*::after { transition:none !important; animation:none !important; } }
   </style>
 </head>
@@ -307,8 +348,8 @@
     <span class="eyebrow">loka atlas · setup wizard</span>
     <h1>Set up your atlas</h1>
     <p class="lead">Five quick steps: who you are, where your region is, what goes on the map —
-      then we build it from open data and hand you the link. Free to start — you sign in
-      with your email when you publish.</p>
+      then we build it from open data and hand you the link. Free to build — sign in
+      with your email so your atlas stays yours.</p>
 
     <div id="resume-local" hidden></div>
     <div id="resume-drafts"></div>
@@ -322,18 +363,20 @@
       </div>
     </section>
 
+    <!-- real buttons: tabbable, Enter/Space to navigate; 4 and 5 stay disabled
+         until a build / a publish makes them true destinations -->
     <nav class="stepper" aria-label="Steps">
-      <span class="stp" data-step="1"><em>1</em> Org &amp; branding</span>
-      <span class="stp" data-step="2"><em>2</em> Geography</span>
-      <span class="stp" data-step="3"><em>3</em> Data Layers</span>
-      <span class="stp" data-step="4"><em>4</em> Build &amp; preview</span>
-      <span class="stp" data-step="5"><em>5</em> Publish &amp; share</span>
+      <button type="button" class="stp" data-step="1"><em>1</em> Org &amp; branding</button>
+      <button type="button" class="stp" data-step="2"><em>2</em> Geography</button>
+      <button type="button" class="stp" data-step="3"><em>3</em> Data Layers</button>
+      <button type="button" class="stp" data-step="4" disabled><em>4</em> Build &amp; preview</button>
+      <button type="button" class="stp" data-step="5" disabled><em>5</em> Publish &amp; share</button>
     </nav>
 
     <!-- The fork: every new atlas starts by choosing an entry path -->
     <section class="panel" id="path-choice" hidden>
       <h2>How do you want to start?</h2>
-      <p class="hint" style="max-width:44rem">Both paths end in the same atlas — pick whichever is closer to what you have in hand.</p>
+      <p class="hint" style="max-width:70ch">Both paths end in the same atlas — pick whichever is closer to what you have in hand.</p>
       <div class="path-cards">
         <button type="button" class="path-card" id="path-place">
           <span class="pc-ico" aria-hidden="true">🗺️</span>
@@ -352,24 +395,26 @@
     <section class="panel" id="data-first" hidden>
       <button class="linklike" id="df-back" type="button" style="background:none;border:none;color:var(--color-text-secondary);cursor:pointer;padding:0;font:inherit;margin-bottom:.6rem">← Back</button>
       <h2>Start from your data</h2>
-      <p class="hint" style="max-width:46rem">Drop a file with locations — a CSV or Excel sheet with latitude/longitude or place names, or a GeoJSON / KML / GPX. We read where your rows are and suggest the smallest region that covers them. You confirm, then we build the atlas around it and add your data as the first layer.</p>
+      <p class="hint" style="max-width:70ch">Drop a file with locations — a CSV or Excel sheet with latitude/longitude or place names, or a GeoJSON / KML / GPX. We read where your rows are and suggest the smallest region that covers them. You confirm, then we build the atlas around it and add your data as the first layer.</p>
       <!-- shown only when detection needs help (name-only tables, unmatched coords) or as an override -->
       <label class="f" id="df-country-wrap" style="max-width:24rem" hidden><span id="df-country-label">Country</span>
         <select id="df-country"><option value="">Choose a country…</option></select>
       </label>
       <div id="df-drop" tabindex="0" role="button" aria-label="Upload a data file"
            style="margin:.4rem 0 .8rem;padding:1.6rem 1rem;border:2px dashed var(--color-border);border-radius:var(--radius-md);background:var(--color-surface);text-align:center;cursor:pointer;max-width:44rem">
-        <div style="font-size:1.6rem;line-height:1">🗺️</div>
+        <div style="font-size:1.5rem;line-height:1">🗺️</div>
         <b style="display:block;margin:.4rem 0 .2rem;font-family:'Figtree',sans-serif">Drop a CSV, Excel, GeoJSON, KML or GPX here</b>
         <span class="hint">or click to choose — up to 5,000 rows / points</span>
         <input type="file" id="df-file" hidden accept=".csv,.tsv,.txt,.json,.geojson,.kml,.gpx,.xlsx,.xls" />
       </div>
       <div id="df-status" style="max-width:44rem"></div>
       <div id="df-result" hidden style="max-width:44rem">
+        <!-- what's attached, each removable — more files can join before the region is confirmed -->
+        <div class="od-files" id="df-files" style="margin:0 0 .4rem"></div>
         <div id="df-map" style="height:280px;border:1px solid var(--color-border);border-radius:var(--radius-md);overflow:hidden;margin:.2rem 0 .6rem"></div>
         <p id="df-line" class="stat" style="margin:.2rem 0 .8rem"></p>
         <div class="btnrow" style="display:flex;gap:.6rem;flex-wrap:wrap">
-          <button class="btn secondary" id="df-redo" type="button">Try another file</button>
+          <button class="btn secondary" id="df-redo" type="button">＋ Add another file</button>
           <button class="btn" id="df-use" type="button">Use this region →</button>
         </div>
       </div>
@@ -382,7 +427,6 @@
       <div class="grid2">
         <label class="f"><span>Atlas title <span class="req" aria-hidden="true">required</span></span>
           <input type="text" id="f-title" maxlength="80" placeholder="Kilifi Coastal Atlas" required />
-          <span class="hint" id="slug-hint"></span>
         </label>
         <label class="f"><span>Organisation / project name <span class="req" aria-hidden="true">required</span></span>
           <input type="text" id="f-org" maxlength="60" placeholder="Your organisation" required />
@@ -397,12 +441,14 @@
           <input type="file" id="f-logo" accept="image/png" />
           <span class="hint" id="logo-hint"></span>
         </label>
-        <label class="f" style="grid-column:1/-1">Who can see it?
-          <div class="vis-toggle" role="radiogroup">
-            <button type="button" id="vis-public" class="on">Public — listed &amp; shareable</button>
-            <button type="button" id="vis-private">Private — link + view key only <span class="hint">(sign-in required)</span></button>
+        <div class="f" style="grid-column:1/-1"><span id="vis-label">Who can see it?</span>
+          <!-- ARIA radios rather than native inputs: choosing "private" is gated
+               behind sign-in, so the checked state must stay ours to grant -->
+          <div class="vis-toggle" role="radiogroup" aria-labelledby="vis-label">
+            <button type="button" id="vis-public" class="on" role="radio" aria-checked="true">Public — listed &amp; shareable</button>
+            <button type="button" id="vis-private" role="radio" aria-checked="false" tabindex="-1">Private — link + view key only</button>
           </div>
-        </label>
+        </div>
       </div>
       <!-- owner-only, edit mode: invite other orgs to co-edit and add data -->
       <div id="collab-panel" hidden>
@@ -439,9 +485,11 @@
         </div>
       </div>
       <nav class="geo-crumbs" id="geo-crumbs" aria-label="Region drill-down"></nav>
-      <div class="geo-legend" aria-hidden="true">
-        <span><i class="drill">›</i> Click a place in the <b>list</b> to open it</span>
-        <span><i class="tap"></i> Tap the <b>map</b> to keep just some areas — otherwise everything shown is included</span>
+      <!-- not decoration: this carries the how-to-select instruction, so it must
+           reach assistive tech too -->
+      <div class="geo-legend">
+        <span><i class="drill" aria-hidden="true">›</i> Click a place in the <b>list</b> to open it — its <b>Keep</b> toggle holds it in the atlas</span>
+        <span><i class="tap" aria-hidden="true"></i> Tap the <b>map</b> to keep just some areas — otherwise everything shown is included</span>
       </div>
       <div class="geo-wrap">
         <div class="geo-list" id="geo-list"><span class="hint" style="padding:.5rem">Choose a country to load its boundaries.</span></div>
@@ -479,12 +527,14 @@
 
     <!-- Step 4 -->
     <section class="panel" id="step-4" hidden>
-      <h2 id="build-title">Building your atlas…</h2>
+      <h2 id="build-title" aria-live="polite">Building your atlas…</h2>
       <p class="hint" id="build-sub">This usually takes one to a few minutes — layers are assembled from open data on the fly.</p>
       <div class="prog">
         <div class="prog-bar" id="prog-bar"><i id="prog-fill"></i></div>
         <p class="prog-layer" id="prog-layer" hidden></p>
-        <p class="prog-msg" id="prog-msg">Queued…</p>
+        <!-- polite live region: a multi-minute build has to narrate itself to
+             screen readers, not just to the progress bar -->
+        <p class="prog-msg" id="prog-msg" aria-live="polite">Queued…</p>
         <div class="prog-log" id="prog-log" hidden></div>
       </div>
       <!-- how the uploaded data ended up on the map (rendered by renderDataSummary) -->
@@ -497,6 +547,7 @@
       </div>
       <div class="btnrow">
         <button class="btn secondary" id="back-4" hidden>← Adjust &amp; rebuild</button>
+        <button class="btn secondary" id="add-more-4" hidden>＋ Add another file</button>
         <button class="btn" id="next-4" hidden>Looks good — publish →</button>
       </div>
       <div id="msg-4"></div>
@@ -532,8 +583,7 @@
       <p>We emailed a 6-digit code to <b id="auth-sent-to"></b> (check spam too). Type it here:</p>
       <label class="f">Sign-in code
         <input type="text" id="auth-code" inputmode="numeric" autocomplete="one-time-code"
-               pattern="[0-9]*" maxlength="6" placeholder="123456"
-               style="letter-spacing:.35em; font-size:1.25rem; font-variant-numeric:tabular-nums; max-width:11rem" />
+               pattern="[0-9]*" maxlength="6" placeholder="123456" />
       </label>
       <div class="btnrow">
         <button class="btn" id="auth-verify">Sign in</button>

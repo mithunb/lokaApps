@@ -62,7 +62,7 @@
 
   var STEPS234_HTML = `    <section class="panel step" id="db-step-2" hidden>
       <h2 id="check-title">Check your table</h2>
-      <p class="hint" style="max-width:46rem">Here's every field we found, with its detected type and the role it'll play on
+      <p class="hint db-prose">Here's every field we found, with its detected type and the role it'll play on
         the map. Untick anything you don't want, or hit <b>✎</b> to rename or re-type a field. Switch to
         <b>Preview rows</b> to see a sample of the data and fix values by hand.</p>
       <div id="sheet-pick" hidden>
@@ -160,8 +160,10 @@
                that colours it. The pair maps onto the server's kind vocabulary. -->
           <div class="style-grid">
             <label class="f">Layer name<input type="text" id="s-label" maxlength="60" /></label>
-            <label class="f" id="w-shape">Draw each row as<select id="s-shape"></select></label>
-            <label class="f" id="w-colour">Colour them<select id="s-colour"></select></label>
+            <!-- the .f-fixed span carries the answer when its select holds a
+                 single option: one option is a statement, not a question -->
+            <label class="f" id="w-shape">Draw each row as<select id="s-shape"></select><span class="f-fixed"></span></label>
+            <label class="f" id="w-colour">Colour them<select id="s-colour"></select><span class="f-fixed"></span></label>
             <!-- follow-ups: only the ones the chosen answers need are shown -->
             <label class="f" id="w-onecolour" hidden>Which colour<select id="s-onecolour"></select></label>
             <label class="f" id="w-catcol" hidden><span>Using the categories in</span>
@@ -1207,10 +1209,48 @@
     fillSelect("#s-colour", rules, rules.some(function (r) { return r.value === keep; }) ? keep : "one");
   }
 
+  // A select holding one option asks a question with a single answer. Say the
+  // answer in words instead and keep the select in the DOM — hidden, still the
+  // thing applyStyle reads — so the control comes back the moment the data
+  // offers a second option.
+  function lockWhenSingle(wrapSel, selSel) {
+    var wrap = $(wrapSel), sel = $(selSel);
+    if (!wrap || !sel) return;
+    var single = sel.options.length === 1;
+    wrap.classList.toggle("one-option", single);
+    var said = wrap.querySelector(".f-fixed");
+    if (said) said.textContent = single ? sel.options[0].textContent : "";
+  }
+
+  /* The layer name ships as the legend title on a public atlas, and the default
+     the server hands back is the upload's filename with the extension dropped
+     — "blr_full", which nobody chose. Tidy that into words. The default only:
+     a name someone typed, or the name an existing layer was saved under, is
+     never rewritten. */
+  var SMALL_WORD = /^(a|an|and|as|at|by|for|from|in|of|on|or|per|the|to|v|vs|with)$/;
+  function prettyName(raw) {
+    var words = String(raw || "").replace(/[_\-.]+/g, " ").replace(/\s+/g, " ").trim();
+    if (!words) return "";
+    return words.split(" ").map(function (w, i) {
+      if (/[A-Z]/.test(w)) return w;                       // GPS, pH, geoJSON keep their own case
+      if (i && SMALL_WORD.test(w)) return w;
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    }).join(" ");
+  }
+  function defaultLabel(spec) {
+    var label = (spec && spec.label) || "";
+    var src = (S.canonical && S.canonical.meta && S.canonical.meta.sourceName) || "";
+    var stem = src.replace(/\.[a-z0-9]+$/i, "");
+    if (!label) return prettyName(stem);
+    // the untouched default is exactly the filename stem; anything else is a
+    // name a person settled on, so it travels as typed
+    return (stem && label === stem) ? prettyName(stem) : label;
+  }
+
   function enterStyle(result) {
     var spec = result.spec || {};
     if (!S.styleReady) {
-      $("#s-label").value = spec.label || "";
+      $("#s-label").value = defaultLabel(spec);
       // the inferred kind may not be offered for this geometry (e.g. choropleth
       // on points) — fall back to the first shape with one colour and rebuild
       // the preview so the map matches what the controls now say
@@ -1240,8 +1280,11 @@
     // however we got here — a fresh entry whose inferred kind this geometry
     // can't draw, or a return trip after the placement changed — the lists were
     // just rebuilt, so when the derived kind disagrees with the spec the
-    // preview was built from, re-apply until the map matches the controls
-    if (kindFromShapeColour($("#s-shape").value, $("#s-colour").value) !== (spec.kind || "markers")) scheduleApply(applyStyle, 60);
+    // preview was built from, re-apply until the map matches the controls. A
+    // tidied default name rides along the same way, so the atlas gets the name
+    // the field is showing.
+    if (kindFromShapeColour($("#s-shape").value, $("#s-colour").value) !== (spec.kind || "markers") ||
+        $("#s-label").value !== (spec.label || "")) scheduleApply(applyStyle, 60);
     renderReport(result);
     if (result.draftDataset) refreshPreview(result.draftDataset);
     var rep = result.matchReport || {};
@@ -1255,6 +1298,10 @@
   function syncStyleVisibility() {
     syncShapeChoices();
     syncColourChoices();
+    // both lists narrow with the data — a coordinate-placed table with no
+    // numbers can only be drawn as pins, and a bubble can only be one colour
+    lockWhenSingle("#w-shape", "#s-shape");
+    lockWhenSingle("#w-colour", "#s-colour");
     var shape = $("#s-shape").value, colour = $("#s-colour").value;
     var kind = kindFromShapeColour(shape, colour) || "markers";
     // each answer reveals only the follow-up it needs

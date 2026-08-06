@@ -4,6 +4,19 @@
    Page chrome (nav, panel, buttons, form fields) stays with each host — both
    define those already. */
 
+    /* sienna is in the earth palette but neither host defines its tint, and the
+       module needs a fourth wash for the date column and the tag role. Declared
+       at zero specificity so a host :root can still take it over. */
+    :where(:root) { --color-sienna-tint:rgba(153,88,47,.12); }
+
+    /* readable measure: explanatory prose stops at 70-odd characters. Uncapped,
+       these sentences run the whole page — the enrichment hint measured 197
+       characters a line at 1440px — and the eye loses the return sweep. DM
+       Sans sets a wide zero, so 46ch of it measures ~70 characters of prose. */
+    .db-prose, .enrich-head .hint, .ck-notice, .ck-derive > .hint, #style-lead,
+    .loc-first, .infer-note, .kind-steer, .edit-note, #geom-summary, #card-fixes > .hint {
+      max-width:46ch; text-wrap:pretty; }
+
     .step-nav { display:flex; gap:.6rem; flex-wrap:wrap; margin-top:1rem; align-items:center; }
 
     /* drop zone */
@@ -43,14 +56,18 @@
     .ck-notices { display:flex; flex-direction:column; gap:.4rem; margin-bottom:.7rem; }
     .ck-notice { background:var(--color-ochre-tint); color:var(--color-text-secondary); border-radius:4px; padding:.5rem .75rem; font-size:.85rem; }
     .ck-notice.ck-err { background:var(--color-rust-tint); color:var(--color-rust-deep); }
+    /* the design system keeps pills for the toggle track, so chips and the two
+       segmented controls below sit at the 4px container radius instead */
     .ck-chips { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.7rem; }
-    .ck-chip { font-size:.78rem; padding:.25rem .6rem; border-radius:999px; background:var(--color-rust-tint); color:var(--color-rust-deep); border:none; }
+    .ck-chip { font-size:.78rem; padding:.25rem .6rem; border-radius:var(--radius-md); background:var(--color-rust-tint); color:var(--color-rust-deep); border:none; }
     .ck-chip.ck-act { cursor:pointer; font:inherit; font-size:.78rem; border:1px solid var(--color-rust); }
 
-    /* view toggle: Fields (cards) vs Preview rows (table) */
-    .ck-viewtabs { display:inline-flex; gap:.25rem; padding:.2rem; margin:0 0 .8rem; background:var(--color-bg-alt); border-radius:999px; }
-    .ck-viewtab { font:inherit; font-size:.82rem; padding:.32rem .85rem; border:none; border-radius:999px; background:transparent; color:var(--color-text-secondary); cursor:pointer; }
-    .ck-viewtab.on { background:var(--color-surface); color:var(--color-text-primary); font-weight:600; box-shadow:var(--shadow-sm); }
+    /* view toggle: Fields (cards) vs Preview rows (table). Selected is a moss
+       wash and weight — green means you can act on it — not a raised pill. */
+    .ck-viewtabs { display:inline-flex; gap:.25rem; padding:.2rem; margin:0 0 .8rem; background:var(--color-bg-alt);
+      border:1px solid var(--color-border); border-radius:var(--radius-md); }
+    .ck-viewtab { font:inherit; font-size:.82rem; padding:.32rem .85rem; border:none; border-radius:var(--radius-md); background:transparent; color:var(--color-text-secondary); cursor:pointer; }
+    .ck-viewtab.on { background:var(--color-moss-tint); color:var(--color-canopy); font-weight:600; }
 
     /* field cards — the primary overview */
     .ck-fields { display:grid; grid-template-columns:repeat(auto-fill, minmax(15rem, 1fr)); gap:.7rem; }
@@ -58,17 +75,20 @@
     .ck-field.off { background:transparent; border-style:dashed; }
     .ck-field.off .ck-fname, .ck-field.off .ck-samples { opacity:.5; }
     .ck-field-top { display:flex; align-items:center; gap:.45rem; }
-    .ck-inc { flex:0 0 auto; width:1rem; height:1rem; accent-color:var(--color-moss); cursor:pointer; margin:0; }
+    .ck-inc { flex:0 0 auto; cursor:pointer; }   /* its box is drawn in the touch-target block below */
     .ck-fname { flex:1 1 auto; font-family:'Figtree',sans-serif; font-weight:600; font-size:.9rem; color:var(--color-text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .ck-gen { flex:0 0 auto; font-size:.62rem; letter-spacing:.06em; text-transform:uppercase; padding:.1rem .35rem; border-radius:3px; background:var(--color-moss-tint); color:var(--color-canopy); }
+    /* 11px is the floor for anything meant to be read — this badge was 9.9px */
+    .ck-gen { flex:0 0 auto; font-size:.7rem; letter-spacing:.06em; text-transform:uppercase; padding:.1rem .35rem; border-radius:3px; background:var(--color-moss-tint); color:var(--color-canopy); }
     .ck-edit-btn { flex:0 0 auto; font:inherit; font-size:.8rem; line-height:1; padding:.25rem .4rem; border:1px solid transparent; border-radius:5px; background:none; color:var(--color-text-muted); cursor:pointer; }
     .ck-edit-btn:hover, .ck-edit-btn.on { border-color:var(--color-border); color:var(--color-canopy); background:var(--color-bg-alt); }
     .ck-meta { display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; }
     .ck-type-badge { font-size:.72rem; color:var(--color-text-muted); }
-    .ck-role { font-size:.72rem; padding:.12rem .5rem; border-radius:999px; font-weight:600; }
+    .ck-role { font-size:.72rem; padding:.12rem .5rem; border-radius:var(--radius-md); font-weight:600; }
     .ck-role-location { background:var(--color-moss-tint); color:var(--color-canopy); }
     .ck-role-colour   { background:var(--color-rust-tint); color:var(--color-rust-deep); }
-    .ck-role-tags     { background:var(--color-purple-tint); color:#5b4168; }
+    /* sienna, not the purple this used to carry: the palette is moss, rust,
+       sienna and ochre, and a violet badge outsaturates every one of them */
+    .ck-role-tags     { background:var(--color-sienna-tint); color:#6B4020; }
     .ck-role-value    { background:var(--color-ochre-tint); color:#6d5013; }
     .ck-role-text     { background:var(--color-bg-alt); color:var(--color-text-secondary); }
     .ck-role-off      { background:transparent; color:var(--color-text-muted); border:1px dashed var(--color-border); }
@@ -90,7 +110,7 @@
     .ck-cell { cursor:text; }
     .ck-cell:focus { outline:2px solid var(--color-moss); outline-offset:-2px; background:#fff; overflow:visible; text-overflow:clip; border-radius:3px; }
     td.ck-number { background:var(--color-moss-tint); text-align:right; font-variant-numeric:tabular-nums; }
-    td.ck-date { background:var(--color-purple-tint); }
+    td.ck-date { background:var(--color-sienna-tint); }
     td.ck-boolean { background:var(--color-ochre-tint); }
     td.ck-off { background:var(--color-rust-tint); color:var(--color-rust-deep); }
     td.ck-empty { color:var(--color-text-muted); }
@@ -112,10 +132,12 @@
     .ps-text { flex:1 1 auto; font-size:.92rem; color:var(--color-text-primary); }
     .ps-text b { font-weight:600; }
     .ps-text .warn { color:var(--color-rust-deep); }
-    .ps-change { flex:0 0 auto; font-size:.8rem; padding:.32rem .7rem; }
+    /* both hosts define .btn after this file, so a size set here never lands —
+       the button keeps the host's own metrics, which clear the touch floor */
+    .ps-change { flex:0 0 auto; }
     .place-details { max-width:44rem; margin:0 0 .8rem; padding:.85rem .9rem; border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-bg-alt); }
-    .pd-seg { display:inline-flex; gap:.25rem; padding:.2rem; margin-bottom:.8rem; background:var(--color-surface); border:1px solid var(--color-border); border-radius:999px; }
-    .pd-opt { font:inherit; font-size:.82rem; padding:.34rem .9rem; border:none; border-radius:999px; background:transparent; color:var(--color-text-secondary); cursor:pointer; }
+    .pd-seg { display:inline-flex; gap:.25rem; padding:.2rem; margin-bottom:.8rem; background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md); }
+    .pd-opt { font:inherit; font-size:.82rem; padding:.34rem .9rem; border:none; border-radius:var(--radius-md); background:transparent; color:var(--color-text-secondary); cursor:pointer; }
     .pd-opt.on { background:var(--color-moss); color:#fff; font-weight:600; }
     .pd-fields { display:grid; grid-template-columns:1fr 1fr; gap:.35rem .8rem; }
     .pd-fields label.f { grid-column:1 / -1; margin-bottom:.4rem; }
@@ -161,6 +183,12 @@
     .style-more { margin-top:.6rem; }
     .style-more > summary { cursor:pointer; font-size:.85rem; color:var(--color-text-secondary); }
     #style-lead { margin:0 0 .8rem; }
+    /* one option is an answer, not a question: the field states it in words and
+       the select stays in the DOM (still what applyStyle reads) but out of the
+       way, so a dropdown never offers a choice the data can't give */
+    .f-fixed { display:none; font-weight:400; font-size:.92rem; color:var(--color-text-primary); min-height:2.75rem; }
+    label.f.one-option > select { display:none; }
+    label.f.one-option > .f-fixed { display:flex; align-items:center; }
     /* editing an existing layer: state it, since saving replaces rather than adds */
     .edit-note { font-size:.88rem; padding:.6rem .8rem; border-radius:4px; margin:0 0 .8rem;
       background:var(--color-ochre-tint); color:var(--color-text-primary); }
@@ -170,3 +198,34 @@
     /* a closed <details> stops hiding a child that sets its own display (our
        .grid2), so make the collapse explicit */
     details:not([open]) > *:not(summary) { display:none !important; }
+
+    /* ---- touch targets ----
+       44px is the floor for anything you tap. Controls with room around them
+       take it as real height (the hosts' .btn lands 3–4px short, and this file
+       is the only place both hosts share). Controls in tight clusters — the two
+       segmented tracks, the field cards — keep the size they are drawn at and
+       claim the area with a centred pseudo-element, so the grid stays dense. */
+    .step .btn, .step .sheet-list button, .step .ck-mini, .step .ck-mini2 { min-height:44px; }
+    .step label.f > select, .step label.f > input[type=text], .step label.f > input[type=email],
+    .step .ck-edit-row input, .step .ck-edit-row select, .step .ck-derive-row input, .step .fix-row select { min-height:44px; }
+    .step label.f#w-linedash, .radio-row label { min-height:44px; }
+    .ck-derive-cols label { display:inline-flex; align-items:center; gap:.35rem; min-height:44px; }
+    details.paste > summary, .ck-derive > summary, .style-more > summary, details.frag > summary { padding:.65rem 0; min-height:44px; }
+
+    .ck-viewtab, .pd-opt, .ck-edit-btn, .ck-chip.ck-act { position:relative; }
+    .ck-viewtab::after, .pd-opt::after, .ck-edit-btn::after, .ck-chip.ck-act::after {
+      content:""; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+      width:100%; min-width:44px; height:44px; }
+
+    /* the include tick is 16px of paint in a 44px target: appearance:none lets
+       the box be drawn by a pseudo-element, so the element itself can be 44px
+       and pulled back to 16px of layout with negative margins */
+    .ck-inc { appearance:none; -webkit-appearance:none; position:relative;
+      width:44px; height:44px; margin:-14px; padding:0; border:0; background:none; }
+    .ck-inc::before { content:""; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+      width:1rem; height:1rem; border:1px solid var(--color-text-muted); border-radius:3px; background:var(--color-surface); }
+    .ck-inc:checked::before { background:var(--color-moss); border-color:var(--color-moss); }
+    .ck-inc:checked::after { content:"✓"; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+      color:#fff; font-size:.72rem; line-height:1; }
+    .ck-inc:focus-visible { outline:none; }
+    .ck-inc:focus-visible::before { outline:2px solid var(--color-moss); outline-offset:2px; }

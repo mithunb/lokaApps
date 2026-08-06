@@ -22,7 +22,18 @@
   // ?embed=1 strips the page furniture — site nav, the build-your-own CTA and
   // the footer — leaving the atlas's own identity and the map. It's what the
   // wizard's preview pane wants: a look at the atlas, not at loka.place.
-  if (QS.get("embed") === "1") document.documentElement.classList.add("atlas-embed");
+  var EMBED = QS.get("embed") === "1";
+  if (EMBED) {
+    document.documentElement.classList.add("atlas-embed");
+    // The owner's own tooling has no business inside someone else's frame:
+    // Share offers a link to an atlas that may not be published yet, Manage
+    // opens the wizard inside the wizard, and Add data walks the frame off to
+    // the data bench in the middle of a flow. Take the row out of the document
+    // rather than hide it — a display:none button is still a button waiting for
+    // the next line of code to unhide it, and CSS can't stop `hidden = false`.
+    var ownerActions = document.querySelector(".hero-actions");
+    if (ownerActions && ownerActions.parentNode) ownerActions.parentNode.removeChild(ownerActions);
+  }
   // Private datasets live outside the web root and are served by the API behind
   // a view key; public datasets are plain static files.
   var BASE = KEY ? "./api/datasets/" + DATASET + "/" : "./datasets/" + DATASET + "/";
@@ -101,6 +112,9 @@
 
   // Signed-in state in the nav — on the home gallery and on every atlas.
   function initAuthNav() {
+    // embedded: the whole nav is hidden, so there's no state to show and no
+    // reason to ask the API who's signed in from inside somebody's iframe.
+    if (EMBED) return;
     var user = $("#nav-user"), signin = $("#nav-signin"), signout = $("#nav-signout");
     if (!user || !signin || !signout) return;
     fetch("./api/auth/me", { credentials: "same-origin" })
@@ -358,6 +372,9 @@
   // canEdit:true when the caller's session owns this instance (same-origin
   // cookie); everyone else gets public fields and no button.
   function checkOwner() {
+    // embedded: the action row is gone and ownership is nobody's business inside
+    // the frame, so don't even ask the API who the caller is.
+    if (EMBED) return;
     var btn = $("#manage-btn");
     if (!btn || !DATASET) return;
     fetch("./api/instances/" + encodeURIComponent(DATASET), { credentials: "same-origin" })
@@ -377,6 +394,7 @@
   }
 
   function wireShare(manifest) {
+    if (EMBED) return;   // no Share inside a frame — see the embed block up top
     var btn = $("#share-btn");
     if (!btn || !window.AtlasShare) return;
     btn.hidden = false;
