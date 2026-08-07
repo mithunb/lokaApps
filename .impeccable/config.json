@@ -1,0 +1,20 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-font-size",
+        "value": "8px",
+        "createdAt": "2026-08-07T14:59:48.496Z",
+        "reason": "a monogram letter inside a 15px legend swatch / 20px map pin — the shape sets the size, and no ramp step fits"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "9px",
+        "createdAt": "2026-08-07T14:59:48.531Z",
+        "reason": "a monogram letter inside a 15px legend swatch / 20px map pin — the shape sets the size, and no ramp step fits"
+      }
+    ]
+  }
+}
