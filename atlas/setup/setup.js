@@ -1632,9 +1632,13 @@
       var card = document.createElement("div");
       card.className = "fs-panel";
       card.innerHTML = '<div class="fs-head"><span class="fs-name">' + esc(f.filename) +
-        '</span><span class="fs-verdict">styling…</span></div><div class="fs-body"></div>';
+        '</span><span class="fs-verdict">styling…</span></div>' +
+        '<ol class="fs-stages"></ol><div class="fs-body"></div>';
       wrap.appendChild(card);
       var body = card.querySelector(".fs-body");
+      // the file's stage rail continues here: same arc, now on its last leg
+      f.stageRail = card.querySelector(".fs-stages");
+      paintStages(f, 4, f.lastSpatial);
       var verdict = card.querySelector(".fs-verdict");
 
       if (!f.bench) {   // resumed draft: no live session, so fall back to the bench
@@ -2023,6 +2027,40 @@
     return (f.summary && !f.summary.needsAttention) ? "Review (optional)" : "Review";
   }
 
+  // the stages the mounted data wizard walks for one file. It reports its step
+  // through onStep; naming them here means the host owns the progress model and
+  // the module never has to show a stepper of its own.
+  var FILE_STAGES = [
+    { n: 2, label: "Check the fields" },
+    { n: 3, label: "Place on the map" },
+    { n: 4, label: "Style on the map" },
+  ];
+  function closeFilePanel(f) {
+    if (!f || !f.panel) return;
+    var body = f.panel.querySelector(".fs-body");
+    if (body) body.hidden = true;
+    var t = f.panel.querySelector(".fs-toggle");
+    if (t) t.textContent = reviewLabel(f);
+    var rail = f.panel.querySelector(".fs-stages");
+    if (rail) rail.hidden = true;
+  }
+  function paintStages(f, step, spatial) {
+    if (!f) return;
+    var rail = f.stageRail || (f.panel && f.panel.querySelector(".fs-stages"));
+    if (!rail) return;
+    f.lastStep = step; f.lastSpatial = spatial;
+    // shapes carry their own location, so placement drops out of the sequence
+    var stages = FILE_STAGES.filter(function (st) { return !(spatial && st.n === 3); });
+    rail.innerHTML = "";
+    stages.forEach(function (st) {
+      var li = document.createElement("li");
+      li.className = "fs-stage" + (st.n === step ? " now" : (st.n < step ? " done" : ""));
+      li.textContent = st.label;
+      if (st.n === step) li.setAttribute("aria-current", "step");
+      rail.appendChild(li);
+    });
+  }
+
   function renderFileSetups() {
     var wrap = $("#file-setups");
     if (!wrap) return;
@@ -2039,6 +2077,9 @@
           '<span class="fs-name"></span><span class="fs-verdict"></span>' +
           '<button type="button" class="fs-toggle">Review</button>' +
           '<button type="button" class="odf-x" title="Remove this file" aria-label="Remove this file">✕</button></div>' +
+          // the file's own stages, named by this wizard rather than by the one
+          // mounted inside it — two progress models is what disoriented people
+          '<ol class="fs-stages" hidden></ol>' +
           '<div class="fs-body" hidden></div>';
         wrap.appendChild(f.panel);
         f.panel.querySelector(".odf-x").onclick = function () {
@@ -2046,10 +2087,17 @@
         };
         f.panel.querySelector(".fs-toggle").onclick = function () {
           var body = f.panel.querySelector(".fs-body");
-          body.hidden = !body.hidden;
-          this.textContent = body.hidden ? reviewLabel(f) : "Hide";
+          var opening = body.hidden;
+          // one file at a time: three files open at once is three wizards on
+          // one page, which is the other half of the disorientation
+          if (opening) userFiles().forEach(function (o) { if (o !== f) closeFilePanel(o); });
+          body.hidden = !opening;
+          this.textContent = opening ? "Hide" : reviewLabel(f);
+          var rail = f.panel.querySelector(".fs-stages");
+          if (rail) rail.hidden = !opening;
         };
       }
+      f.stageRail = f.panel.querySelector(".fs-stages");
       f.panel.querySelector(".fs-name").textContent = f.filename;
       var v = fileVerdict(f.summary);
       var vEl = f.panel.querySelector(".fs-verdict");
@@ -2065,6 +2113,9 @@
           stages: "checkPlace",
           api: "../api/",
           region: regionForIngest(),
+          // the module has always reported its step; nobody was listening, which
+          // is why its progress and the wizard's were two separate stories
+          onStep: function (n, spatial) { paintStages(f, n, spatial); },
           onReady: function (sum, explicit) {
             f.summary = sum;
             f.ready = true;

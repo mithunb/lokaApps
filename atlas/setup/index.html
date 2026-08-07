@@ -22,6 +22,9 @@
       --color-moss-tint:rgba(74,90,51,.10); --color-rust-tint:rgba(174,80,40,.10);
       /* the data wizard's typed-table colours (see databench.css) */
       --color-ochre-tint:rgba(184,134,47,.14);
+      /* type roles, by the job they do. --t-ui is the workhorse: labels,
+         buttons, nav, stepper. --t-meta is anything that annotates. */
+      --t-section:1.15rem; --t-body:1rem; --t-ui:.875rem; --t-meta:.78rem;
       --shadow-sm:0 1px 2px rgba(42,36,26,.06);
       --radius-md:.25rem; --radius-lg:.375rem;
       --container:min(64rem,100% - 2.5rem);
@@ -104,7 +107,12 @@
 
     /* per-file setup panels: a one-line verdict, expanding into the data
        wizard's own steps (mounted inline — never a second wizard) */
-    #file-setups, #style-setups { display:flex; flex-direction:column; gap:.6rem; margin-top:1rem; }
+    #file-setups, #style-setups { display:flex; flex-direction:column; gap:.6rem; margin-top:.6rem; }
+    /* the catalogue and your own data are two different decisions, so they get
+       the group interval; a file's panel belongs to the card above it, so it
+       stays close. Same tight/generous contrast as the form on step 1. */
+    #own-data-note { margin-top:2rem; }
+    #cat-list { margin-top:1.25rem; }
     .fs-panel { border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface); }
     .fs-head { display:flex; align-items:center; gap:.6rem; padding:.7rem .9rem; flex-wrap:wrap; }
     .fs-name { font-family:'Figtree',sans-serif; font-weight:600; font-size:.95rem; }
@@ -114,6 +122,23 @@
     .fs-toggle { font:inherit; font-size:.875rem; padding:.3rem .7rem; min-height:2.75rem; border:1px solid var(--color-border);
       border-radius:var(--radius-md); background:#FFFFFF; color:var(--color-moss); cursor:pointer; flex:0 0 auto; }
     .fs-toggle:hover { border-color:var(--color-moss); }
+    /* step 4 reads as three moments — what happened, what you can change, what
+       it looks like — so they get the group interval rather than incidental
+       margins, and the preview heading gets more space above than below it */
+    #style-setups:not(:empty) { margin-top:2rem; }
+    #preview-wrap { margin-top:2rem; }
+    #preview-wrap > h2 { margin:0 0 .75rem; }
+
+    /* the file's stages, named by the host. Quiet by design: it reports where
+       you are inside one file, and must never compete with the wizard's own
+       stepper above it — one progress model, two levels of grain. */
+    .fs-stages { display:flex; flex-wrap:wrap; gap:.15rem .5rem; list-style:none; margin:0;
+      padding:.55rem .9rem 0; font-size:var(--t-meta); color:var(--color-text-muted); }
+    .fs-stage { display:flex; align-items:center; gap:.35rem; }
+    .fs-stage + .fs-stage::before { content:"→"; color:var(--color-border); margin-right:.15rem; }
+    .fs-stage.now { color:var(--color-canopy); font-weight:600; }
+    .fs-stage.done { color:var(--color-moss); }
+    .fs-stage.done::after { content:"✓"; }
     .fs-body { padding:0 .9rem .9rem; border-top:1px solid var(--color-divider); }
     /* the module renders its own panels inside; they're sections, not pages here */
     .fs-body .panel, .fs-body .bench { border:none; background:none; padding:0; }
@@ -124,20 +149,36 @@
     .pub-hero .pub-url { font-size:.875rem; color:var(--color-text-secondary); word-break:break-all; }
 
     /* panels */
-    .panel { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:1.5rem; }
+    .panel { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:1.75rem 1.75rem 1.5rem; }
+    .panel > h2 { font-size:var(--t-section); margin:0 0 1.25rem; }
     /* the hidden attribute must always win, whatever display a class sets */
     [hidden] { display:none !important; }
     .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
     @media (max-width:720px){ .grid2 { grid-template-columns:1fr; } }
-    label.f, div.f { display:flex; flex-direction:column; gap:.3rem; font-size:.875rem; font-weight:600; color:var(--color-text-secondary); }
-    label.f span.opt { font-weight:400; color:var(--color-text-muted); }
-    label.f span.req { font-weight:400; font-size:.78rem; color:var(--color-text-muted); }
+    label.f, div.f { display:flex; flex-direction:column; gap:.35rem; font-size:var(--t-ui); font-weight:600; color:var(--color-text-secondary); }
+    label.f span.opt, label.f span.req { font-weight:400; font-size:var(--t-meta); color:var(--color-text-muted); }
+    /* groups carry the form's rhythm: close within, open between. A single
+       repeated gap gave six fields the same weight, which is what made this
+       screen read as crowded rather than merely full. */
+    .fgroup { display:grid; grid-template-columns:1fr 1fr; gap:.9rem 1.25rem; max-width:48rem; }
+    /* a form-only step has no reason to be as wide as a map-bearing one: the
+       card ends where the fields do, instead of trailing a dead column */
+    #step-1 { max-width:52rem; }
+    .fgroup + .fgroup { margin-top:2rem; }
+    .fgroup > .wide { grid-column:1/-1; }
+    .fgroup > .wide textarea { max-width:39rem; }   /* prose keeps a measure; a title does not need one */
+    @media (max-width:720px){ .fgroup { grid-template-columns:1fr; } }
+    /* the file input is the one control the browser draws for us — give it the
+       same box as its neighbours so it stops looking like a visitor */
+    input[type=file] { font-size:var(--t-ui); padding:.5rem .7rem; border:1px dashed var(--color-border);
+      border-radius:4px; background:var(--color-bg); width:100%; }
     /* a field that failed validation names its own problem, next to the input */
     label.f.bad input, label.f.bad textarea, label.f.bad select { border-color:var(--color-rust); }
     label.f .fielderr { font-size:.78rem; color:var(--color-rust-deep); }
     input[type=text], input[type=email], input[type=url], textarea, select {
-      font:inherit; font-size:.95rem; padding:.55rem .65rem; border:1px solid var(--color-border);
-      border-radius:4px; background:#FFFFFF; color:var(--color-text-primary); width:100%; }
+      font:inherit; font-size:var(--t-body); font-weight:400; padding:.6rem .7rem;
+      border:1px solid var(--color-border); border-radius:4px; background:#FFFFFF;
+      color:var(--color-text-primary); width:100%; }
     /* placeholders must read as suggestions, never as entered text — solid
        muted ink keeps that distinction against near-black entries while
        clearing 4.5:1, where the old half-opacity washed it to 2.1:1 */
@@ -415,16 +456,21 @@
     <section class="panel" id="step-1">
       <div id="edit-banner" class="msg ok" hidden></div>
       <h2>Your organisation &amp; atlas</h2>
-      <div class="grid2">
+      <!-- three groups, not six equal fields: what it's called, whose it is,
+           who can see it. The spacing between them carries the grouping, so no
+           extra containers are needed to say it. -->
+      <div class="fgroup">
         <label class="f"><span>Atlas title <span class="req" aria-hidden="true">required</span></span>
           <input type="text" id="f-title" maxlength="80" placeholder="Kilifi Coastal Atlas" required />
         </label>
         <label class="f"><span>Organisation / project name <span class="req" aria-hidden="true">required</span></span>
           <input type="text" id="f-org" maxlength="60" placeholder="Your organisation" required />
         </label>
-        <label class="f" style="grid-column:1/-1"><span>Description <span class="opt">(optional, shown under the title)</span></span>
+        <label class="f wide"><span>Description <span class="opt">(optional, shown under the title)</span></span>
           <textarea id="f-about" rows="2" maxlength="500" placeholder="What this atlas is for — e.g. Wells, springs and water points across Kilifi, mapped with community surveyors."></textarea>
         </label>
+      </div>
+      <div class="fgroup">
         <label class="f"><span>Organisation website <span class="opt">(optional, https)</span></span>
           <input type="url" id="f-orgurl" maxlength="200" placeholder="https://example.org" />
         </label>
@@ -432,7 +478,9 @@
           <input type="file" id="f-logo" accept="image/png" />
           <span class="hint" id="logo-hint"></span>
         </label>
-        <div class="f" style="grid-column:1/-1"><span id="vis-label">Who can see it?</span>
+      </div>
+      <div class="fgroup">
+        <div class="f wide"><span id="vis-label">Who can see it?</span>
           <!-- ARIA radios rather than native inputs: choosing "private" is gated
                behind sign-in, so the checked state must stay ours to grant -->
           <div class="vis-toggle" role="radiogroup" aria-labelledby="vis-label">
@@ -467,13 +515,11 @@
       <h2>Where is your region?</h2>
       <div id="geo-from-data" class="msg ok" hidden></div>
       <div id="geo-current" class="msg" hidden></div>
-      <div class="grid2">
+      <div class="fgroup">
         <label class="f">Country
           <select id="f-country"><option value="">Choose a country…</option></select>
-        </label>
-        <div class="f" style="justify-content:flex-end">
           <span class="hint" id="level-hint"></span>
-        </div>
+        </label>
       </div>
       <nav class="geo-crumbs" id="geo-crumbs" aria-label="Region drill-down"></nav>
       <!-- not decoration: this carries the how-to-select instruction, so it must
@@ -531,7 +577,7 @@
       <!-- per-file styling, over the freshly built map, before the layer lands -->
       <div id="style-setups"></div>
       <div id="preview-wrap" hidden>
-        <h2 style="margin-top:1.5rem">Preview</h2>
+        <h2>Preview</h2>
         <iframe id="preview-frame" title="Atlas preview"></iframe>
       </div>
       <div class="btnrow">
