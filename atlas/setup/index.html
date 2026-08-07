@@ -144,9 +144,18 @@
     .fs-body .panel, .fs-body .bench { border:none; background:none; padding:0; }
 
     /* publish hero: the atlas link, unmissable */
-    .pub-hero { display:flex; align-items:center; gap:.9rem; flex-wrap:wrap; margin:.2rem 0 1.2rem;
-      padding:.9rem 1rem; background:var(--color-moss-tint); border-radius:var(--radius-md); }
-    .pub-hero .pub-url { font-size:.875rem; color:var(--color-text-secondary); word-break:break-all; }
+    /* the link is the deliverable: it leads, and the group interval after it
+       keeps the share panel from crowding the moment it arrives */
+    .pub-hero { display:flex; align-items:center; gap:.9rem; flex-wrap:wrap; margin:.2rem 0 2rem;
+      padding:1.1rem 1.2rem; background:var(--color-moss-tint); border-radius:var(--radius-md); }
+    .pub-hero .pub-url { font-size:var(--t-ui); color:var(--color-text-secondary); word-break:break-all; }
+    /* the share panel is shared with the viewer — space around it, never inside */
+    #pub-body .shr { margin-top:0; }
+    /* housekeeping, as one block and one tail: tight between its lines, the
+       group interval above it, and a real measure so it reads as a note */
+    .pub-notes { margin-top:2rem; padding-top:1.25rem; border-top:1px solid var(--color-divider); }
+    .pub-notes .hint { max-width:66ch; margin:0 0 .5rem; }
+    .pub-notes .hint:last-child { margin-bottom:0; }
 
     /* panels */
     .panel { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:1.75rem 1.75rem 1.5rem; }

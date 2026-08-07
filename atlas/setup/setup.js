@@ -1805,17 +1805,33 @@
     // the link is the deliverable — it leads, everything else follows
     var hero = document.createElement("div");
     hero.className = "pub-hero";
+    // the address itself lives in the share panel's copy field a few pixels
+    // below, selectable — printing it here too just says the same thing twice
     hero.innerHTML = '<a class="btn" target="_blank" rel="noopener" href="' + esc(prettyUrl()) + '">Open your atlas →</a>' +
-      '<span class="pub-url">' + esc(prettyUrl()) + "</span>";
+      '<span class="pub-url">' + esc(isPrivate ? "Only people with the link and view key can open it."
+        : "Anyone with the link can open it. It’s listed in the public directory.") + "</span>";
     body.appendChild(hero);
 
-    // publishing bound the atlas to the signed-in account — that's the whole story
+    // sharing is what someone came here to do, so it follows the link directly.
+    // The housekeeping below is true and worth saying, but it is a tail, not a
+    // thing to read before you can send the atlas to anyone.
+    body.appendChild(window.AtlasShare.panel({
+      url: prettyUrl(),
+      title: $("#f-title").value.trim(),
+      slug: S.build.slug,
+      private: isPrivate,
+    }));
+
+    // one block, not two stacked paragraphs of identical weight: who owns it,
+    // and where the data lives from here
+    var notes = document.createElement("div");
+    notes.className = "pub-notes";
     var manage = document.createElement("p");
     manage.className = "hint";
     manage.innerHTML = (S.session && S.session.email
       ? "It’s linked to <b>" + esc(S.session.email) + "</b> — manage, edit or delete it anytime from <b>Your atlases</b> in this wizard."
       : "Manage, edit or delete it anytime from <b>Your atlases</b> in this wizard.");
-    body.appendChild(manage);
+    notes.appendChild(manage);
 
     // someone who just added their data doesn't need telling to add their data
     var next = document.createElement("p");
@@ -1826,15 +1842,9 @@
         encodeURIComponent(S.build.slug) + '"><b>data bench</b></a>.'
       : "Your atlas ships with its default open-data layers — now make it yours: " +
         '<a href="../layers.html?dataset=' + encodeURIComponent(S.build.slug) + '"><b>add your own data</b></a> ' +
-        "(CSV, Excel, JSON, GeoJSON, KML or GPX). Experimental — under active development.";
-    body.appendChild(next);
-
-    body.appendChild(window.AtlasShare.panel({
-      url: prettyUrl(),
-      title: $("#f-title").value.trim(),
-      slug: S.build.slug,
-      private: isPrivate,
-    }));
+        "(CSV, Excel, JSON, GeoJSON, KML or GPX).";
+    notes.appendChild(next);
+    body.appendChild(notes);
   }
 
   /* ================= auth (magic links) ================= */
