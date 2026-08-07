@@ -1329,7 +1329,6 @@
 
   function rebuildCurrent() {
     show(4);
-    var ds = $("#data-summary"); if (ds) { ds.hidden = true; ds.innerHTML = ""; }
     $("#build-title").textContent = "Rebuilding your atlas…";
     setBuildSub(BUILD_SUB_LIVE);
     buildRecordLive();
@@ -1450,7 +1449,6 @@
 
   function createInstance() {
     show(4);
-    var ds = $("#data-summary"); if (ds) { ds.hidden = true; ds.innerHTML = ""; }
     $("#build-title").textContent = "Building your atlas…";
     setBuildSub(BUILD_SUB_LIVE);
     buildRecordLive();
@@ -2428,7 +2426,7 @@
       var se = $("#save-exit-" + n); if (se) { se.hidden = false; se.onclick = saveAndExit; }
     });
     $("#next-1").textContent = "Continue to region →";
-    $("#next-2").textContent = "Continue to layers →";
+    $("#next-2").textContent = "Continue to data layers →";
     $("#next-3").hidden = true; // Save & exit is the terminal action when editing
   }
   function exitEditChrome() {
@@ -2437,7 +2435,7 @@
       var se = $("#save-exit-" + n); if (se) se.hidden = true;
     });
     $("#next-1").textContent = "Choose your region →";
-    $("#next-2").textContent = "Choose layers →";
+    $("#next-2").textContent = "Choose data layers →";
     $("#next-3").hidden = false;
   }
 

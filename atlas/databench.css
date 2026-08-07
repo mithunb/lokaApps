@@ -163,11 +163,6 @@
     details.frag summary { cursor:pointer; font-size:.82rem; color:var(--color-text-muted); }
     details.frag pre { font:11px/1.5 ui-monospace,Menlo,monospace; background:#FFFFFF; border:1px solid var(--color-border);
       border-radius:4px; padding:.6rem; overflow:auto; max-height:14rem; }
-    .chat-log { display:flex; flex-direction:column; gap:.4rem; margin-bottom:.6rem; max-height:12rem; overflow-y:auto; }
-    .chat-log .me { align-self:flex-end; background:var(--color-moss); color:#fff; border-radius:8px 8px 2px 8px; padding:.4rem .7rem; font-size:.85rem; max-width:85%; }
-    .chat-log .ai { align-self:flex-start; background:#FFFFFF; border:1px solid var(--color-border); border-radius:8px 8px 8px 2px; padding:.4rem .7rem; font-size:.85rem; max-width:85%; }
-    .chat-row { display:flex; gap:.5rem; }
-    .chat-row input { flex:1; }
     footer.site { margin-top:3rem; border-top:1px solid var(--color-divider); background:var(--color-bg-alt); }
 
     /* the location answer, stated before anything about styling */

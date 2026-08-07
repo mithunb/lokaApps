@@ -21,7 +21,7 @@
       --color-divider:rgba(42,36,26,.09); --color-border:rgba(42,36,26,.14);
       --color-moss-tint:rgba(74,90,51,.10); --color-rust-tint:rgba(174,80,40,.10);
       /* the data wizard's typed-table colours (see databench.css) */
-      --color-ochre-tint:rgba(184,134,47,.14); --color-purple-tint:rgba(106,77,117,.12);
+      --color-ochre-tint:rgba(184,134,47,.14);
       --shadow-sm:0 1px 2px rgba(42,36,26,.06);
       --radius-md:.25rem; --radius-lg:.375rem;
       --container:min(64rem,100% - 2.5rem);
@@ -117,19 +117,6 @@
     .fs-body { padding:0 .9rem .9rem; border-top:1px solid var(--color-divider); }
     /* the module renders its own panels inside; they're sections, not pages here */
     .fs-body .panel, .fs-body .bench { border:none; background:none; padding:0; }
-
-    /* how your data was visualised, after the build */
-    .ds-card { margin:1.2rem 0 0; padding:.9rem 1rem; border:1px solid var(--color-border);
-      border-radius:var(--radius-md); background:var(--color-surface); }
-    .ds-card h3 { margin:0 0 .5rem; font-family:'Figtree',sans-serif; font-size:.95rem; }
-    .ds-layer { padding:.5rem 0; border-top:1px solid var(--color-divider); font-size:.875rem; }
-    .ds-layer:first-of-type { border-top:none; }
-    .ds-layer b { font-family:'Figtree',sans-serif; }
-    .ds-facts { margin:.25rem 0 0; padding-left:1.1rem; color:var(--color-text-secondary); }
-    .ds-facts li { margin:.1rem 0; }
-    .ds-swatches { display:flex; flex-wrap:wrap; gap:.3rem .5rem; margin-top:.35rem; }
-    .ds-chip { display:inline-flex; align-items:center; gap:.3rem; font-size:.78rem; color:var(--color-text-secondary); }
-    .ds-dot { width:.7rem; height:.7rem; border-radius:50%; border:1px solid var(--color-border); flex:0 0 auto; }
 
     /* publish hero: the atlas link, unmissable */
     .pub-hero { display:flex; align-items:center; gap:.9rem; flex-wrap:wrap; margin:.2rem 0 1.2rem;
@@ -541,8 +528,6 @@
         <p class="prog-msg" id="prog-msg" aria-live="polite">Queued…</p>
         <div class="prog-log" id="prog-log" hidden></div>
       </div>
-      <!-- how the uploaded data ended up on the map (rendered by renderDataSummary) -->
-      <div id="data-summary" hidden></div>
       <!-- per-file styling, over the freshly built map, before the layer lands -->
       <div id="style-setups"></div>
       <div id="preview-wrap" hidden>
