@@ -495,6 +495,11 @@
   var LS_KEY = "loka-atlas-wizard";
   function saveLocal() {
     try {
+      // an atlas that already exists is not a draft. Without this, wandering
+      // back to an earlier step after building re-saves it, and the next visit
+      // offers to "resume" something already live — accepting that mints a
+      // public twin.
+      if (S._published || (S.build && S.build.slug) || S.editMode) return;
       var st = draftState();
       var meaningful = (st.fields && st.fields.title) ||
         (st.geo && ((st.geo.selected && st.geo.selected.length) || (st.geo.crumbs && st.geo.crumbs.length)));
@@ -1643,10 +1648,19 @@
         return;
       }
 
-      // the panel the user already reviewed, moved into this step
+      // the panel the user already reviewed, moved into this step. It was
+      // folded shut when Review finished on step 3 — unfold it, or the styling
+      // this step exists for arrives invisible behind a head with no toggle.
       if (f.panel) {
         var moved = f.panel.querySelector(".fs-body");
-        if (moved) body.appendChild(moved);
+        if (moved) {
+          moved.hidden = false;
+          // ...but not its own commit row: this step already carries one Add
+          // button for every attached file, and two controls meaning the same
+          // thing is what made this step unreadable before.
+          moved.querySelectorAll(".step-nav").forEach(function (n) { n.hidden = true; });
+          body.appendChild(moved);
+        }
       }
       f.bench.bindDataset(S.build.slug);
       f.bench.enterStyle().then(function (sum) {

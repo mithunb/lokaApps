@@ -207,14 +207,18 @@
     .geo-meta b { color:var(--color-text-primary); }
     /* persistent legend: list navigates, map composes */
     .geo-legend { display:flex; flex-wrap:wrap; gap:.4rem 1.1rem; margin:.1rem 0 .5rem; font-size:.875rem; color:var(--color-text-secondary); }
-    .geo-legend span { display:inline-flex; align-items:center; gap:.4rem; }
-    .geo-legend .tap { width:15px; height:15px; background:var(--color-moss); opacity:.55; border-radius:4px; flex:0 0 auto; }
-    .geo-legend .drill { font-family:'Figtree',sans-serif; font-weight:700; color:var(--color-moss); font-size:1rem; }
-    /* narrow screens: one instruction per line, not a shattered mosaic */
+    /* each instruction is ordinary prose with its marker hung off the left. It
+       must NOT be a flex container: every text node either side of the bold
+       words would become its own flex item and wrap on its own, which is how
+       the sentence shattered into fragments on a phone. */
+    .geo-legend span { display:block; position:relative; padding-left:1.4rem; max-width:60ch; }
+    .geo-legend .tap { position:absolute; left:0; top:.3em; width:15px; height:15px;
+      background:var(--color-moss); opacity:.55; border-radius:4px; }
+    .geo-legend .drill { position:absolute; left:.2rem; top:0; font-family:'Figtree',sans-serif;
+      font-weight:700; color:var(--color-moss); font-size:1rem; }
+    /* narrow screens: one instruction per line */
     @media (max-width:640px){
       .geo-legend { flex-direction:column; align-items:flex-start; gap:.5rem; }
-      .geo-legend span { align-items:flex-start; }
-      .geo-legend .tap, .geo-legend .drill { margin-top:.15rem; }
     }
 
     /* layers — collapsed groups so the long catalogue reads as five headings */
