@@ -24,7 +24,7 @@
       --color-ochre-tint:rgba(184,134,47,.14);
       /* type roles, by the job they do. --t-ui is the workhorse: labels,
          buttons, nav, stepper. --t-meta is anything that annotates. */
-      --t-section:1.15rem; --t-body:1rem; --t-ui:.875rem; --t-meta:.78rem;
+      --t-section:1.15rem; --t-body:1rem; --t-control:.95rem; --t-ui:.875rem; --t-meta:.78rem;
       --shadow-sm:0 1px 2px rgba(42,36,26,.06);
       --radius-md:.25rem; --radius-lg:.375rem;
       --container:min(64rem,100% - 2.5rem);
@@ -42,11 +42,11 @@
     :focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:4px; }
     header.site { border-bottom:1px solid var(--color-divider); background:var(--color-bg); }
     .nav { width:var(--container); margin:0 auto; padding:1rem 0; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
-    .brand { font-family:'Figtree',sans-serif; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--color-text-primary); font-size:.875rem; }
+    .brand { font-family:'Figtree',sans-serif; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--color-text-primary); font-size:var(--t-ui); }
     .brand:hover { color:var(--color-text-primary); text-decoration:none; }
     .nav .links { display:flex; gap:1.25rem; align-items:center; }
     /* padding grows the tap target to 44px; the negative margin hands the space back */
-    .nav .links a, .nav .links button { color:var(--color-text-secondary); font-size:.875rem; background:none; border:none; font-family:inherit; cursor:pointer; padding:.75rem .35rem; margin:-.75rem -.35rem; }
+    .nav .links a, .nav .links button { color:var(--color-text-secondary); font-size:var(--t-ui); background:none; border:none; font-family:inherit; cursor:pointer; padding:.75rem .35rem; margin:-.75rem -.35rem; }
     main { width:var(--container); margin:0 auto; padding:2.25rem 0 3.5rem; }
     .eyebrow { display:inline-block; font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:600;
       letter-spacing:.14em; text-transform:uppercase; color:var(--color-moss); margin:0 0 .8rem;
@@ -61,7 +61,7 @@
     /* stepper — every chip is a real navigation target */
     .stepper { display:flex; gap:.25rem; margin:1.75rem 0 1.5rem; flex-wrap:wrap; }
     .stp { display:flex; align-items:center; gap:.45rem; padding:.45rem .8rem; min-height:2.75rem; border-radius:4px;
-      font:inherit; font-size:.875rem; color:var(--color-text-secondary); background:none; border:1px solid transparent; cursor:pointer; }
+      font:inherit; font-size:var(--t-ui); color:var(--color-text-secondary); background:none; border:1px solid transparent; cursor:pointer; }
     .stp:hover { border-color:var(--color-border); color:var(--color-text-primary); }
     /* a step that isn't a destination yet: quieter but still 4.5:1, no hover invitation */
     .stp:disabled { color:var(--color-text-muted); cursor:not-allowed; }
@@ -89,19 +89,19 @@
     .own-data .od-ico { font-size:1.15rem; line-height:1.3; color:var(--color-moss); flex:0 0 auto; }
     .own-data .od-body { display:flex; flex-direction:column; gap:.15rem; }
     .own-data b { font-family:'Figtree',sans-serif; }
-    .own-data .od-act { background:none; border:none; padding:0; font:inherit; font-size:.875rem;
+    .own-data .od-act { background:none; border:none; padding:0; font:inherit; font-size:var(--t-ui);
       color:var(--color-moss); text-decoration:underline; cursor:pointer; align-self:flex-start;
       min-height:2.75rem; display:inline-flex; align-items:center; }
-    .own-data .od-btn { align-self:flex-start; margin-top:.55rem; text-decoration:none; font-size:.875rem;
+    .own-data .od-btn { align-self:flex-start; margin-top:.55rem; text-decoration:none; font-size:var(--t-ui);
       padding:.45rem .9rem; }
     .own-data .od-btn:hover { text-decoration:none; }
     .od-files { display:flex; flex-direction:column; gap:.3rem; margin:.15rem 0 .1rem; }
-    .od-file { display:flex; align-items:center; gap:.4rem; font-size:.875rem; }
+    .od-file { display:flex; align-items:center; gap:.4rem; font-size:var(--t-ui); }
     .od-file .odf-name { font-weight:600; color:var(--color-text-primary); }
-    .od-file .odf-rows { color:var(--color-text-muted); font-size:.78rem; }
+    .od-file .odf-rows { color:var(--color-text-muted); font-size:var(--t-meta); }
     /* the ✕ glyph stays small; its hit area is a full 44px square */
     .odf-x { margin-left:auto; background:none; border:none; cursor:pointer; padding:0; flex:0 0 auto;
-      color:var(--color-text-muted); font-size:.95rem; line-height:1;
+      color:var(--color-text-muted); font-size:var(--t-control); line-height:1;
       min-width:2.75rem; min-height:2.75rem; display:inline-flex; align-items:center; justify-content:center; }
     .odf-x:hover { color:var(--color-rust-deep); }
 
@@ -115,11 +115,11 @@
     #cat-list { margin-top:1.25rem; }
     .fs-panel { border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface); }
     .fs-head { display:flex; align-items:center; gap:.6rem; padding:.7rem .9rem; flex-wrap:wrap; }
-    .fs-name { font-family:'Figtree',sans-serif; font-weight:600; font-size:.95rem; }
-    .fs-verdict { flex:1 1 auto; font-size:.78rem; color:var(--color-text-muted); }
+    .fs-name { font-family:'Figtree',sans-serif; font-weight:600; font-size:var(--t-control); }
+    .fs-verdict { flex:1 1 auto; font-size:var(--t-meta); color:var(--color-text-muted); }
     .fs-verdict.ok { color:var(--color-moss); }
     .fs-verdict.warn { color:var(--color-rust-deep); }
-    .fs-toggle { font:inherit; font-size:.875rem; padding:.3rem .7rem; min-height:2.75rem; border:1px solid var(--color-border);
+    .fs-toggle { font:inherit; font-size:var(--t-ui); padding:.3rem .7rem; min-height:2.75rem; border:1px solid var(--color-border);
       border-radius:var(--radius-md); background:#FFFFFF; color:var(--color-moss); cursor:pointer; flex:0 0 auto; }
     .fs-toggle:hover { border-color:var(--color-moss); }
     /* step 4 reads as three moments — what happened, what you can change, what
@@ -183,7 +183,7 @@
       border-radius:4px; background:var(--color-bg); width:100%; }
     /* a field that failed validation names its own problem, next to the input */
     label.f.bad input, label.f.bad textarea, label.f.bad select { border-color:var(--color-rust); }
-    label.f .fielderr { font-size:.78rem; color:var(--color-rust-deep); }
+    label.f .fielderr { font-size:var(--t-meta); color:var(--color-rust-deep); }
     input[type=text], input[type=email], input[type=url], textarea, select {
       font:inherit; font-size:var(--t-body); font-weight:400; padding:.6rem .7rem;
       border:1px solid var(--color-border); border-radius:4px; background:#FFFFFF;
@@ -193,13 +193,13 @@
        clearing 4.5:1, where the old half-opacity washed it to 2.1:1 */
     input::placeholder, textarea::placeholder { color:var(--color-text-muted); opacity:1; }
     textarea { resize:vertical; }
-    .hint { font-size:.78rem; font-weight:400; color:var(--color-text-muted); }
+    .hint { font-size:var(--t-meta); font-weight:400; color:var(--color-text-muted); }
     .hint.ok { color:var(--color-moss); }
     .hint.bad { color:var(--color-rust-deep); }
     #tier-note { max-width:70ch; }
     .btnrow { display:flex; gap:.6rem; margin-top:1.4rem; flex-wrap:wrap; align-items:center; }
     .btn { display:inline-flex; align-items:center; gap:.4rem; padding:.6rem 1.2rem; min-height:2.75rem; border-radius:var(--radius-md); border:none;
-      background:var(--color-moss); color:#fff; font:inherit; font-weight:600; font-size:.95rem; cursor:pointer; }
+      background:var(--color-moss); color:#fff; font:inherit; font-weight:600; font-size:var(--t-control); cursor:pointer; }
     .btn:hover { background:var(--color-canopy); }
     .btn:active { transform:translateY(1px); }
     .btn.secondary { background:transparent; color:var(--color-moss); border:1px solid var(--color-moss); }
@@ -209,13 +209,13 @@
     .btn:disabled, .btn:disabled:hover { background:var(--color-bg-alt); color:var(--color-text-muted);
       border-color:var(--color-border); cursor:not-allowed; transform:none; }
     .vis-toggle { display:flex; gap:.5rem; }
-    .vis-toggle button { flex:1; font:inherit; font-size:.95rem; padding:.55rem; min-height:2.75rem; border:1px solid var(--color-border); background:#FFFFFF; border-radius:4px; cursor:pointer; color:var(--color-text-secondary); }
+    .vis-toggle button { flex:1; font:inherit; font-size:var(--t-control); padding:.55rem; min-height:2.75rem; border:1px solid var(--color-border); background:#FFFFFF; border-radius:4px; cursor:pointer; color:var(--color-text-secondary); }
     .vis-toggle button:hover { border-color:var(--color-moss); color:var(--color-text-primary); }
     .vis-toggle button.on { border-color:var(--color-moss); background:var(--color-moss-tint); color:var(--color-text-primary); font-weight:600; }
 
     /* geography picker */
-    .geo-crumbs { display:flex; align-items:center; gap:.25rem; flex-wrap:wrap; margin-top:1rem; font-size:.875rem; min-height:1.6rem; }
-    .geo-crumbs button { font:inherit; font-size:.875rem; border:none; background:none; color:var(--color-moss);
+    .geo-crumbs { display:flex; align-items:center; gap:.25rem; flex-wrap:wrap; margin-top:1rem; font-size:var(--t-ui); min-height:1.6rem; }
+    .geo-crumbs button { font:inherit; font-size:var(--t-ui); border:none; background:none; color:var(--color-moss);
       cursor:pointer; padding:.15rem .3rem; border-radius:4px; }
     .geo-crumbs button:hover { background:var(--color-moss-tint); text-decoration:underline; }
     .geo-crumbs .cur { font-weight:600; color:var(--color-text-primary); padding:.15rem .3rem; }
@@ -229,7 +229,7 @@
     .geo-item { display:flex; align-items:stretch; width:100%; min-height:2.75rem; border-radius:4px; }
     .geo-item:hover { background:var(--color-moss-tint); }
     .geo-item .geo-nm { flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:.55rem; text-align:left;
-      font:inherit; font-size:.875rem; color:var(--color-text-primary); border:none; background:none;
+      font:inherit; font-size:var(--t-ui); color:var(--color-text-primary); border:none; background:none;
       padding:.3rem .55rem; border-radius:4px; cursor:pointer; }
     .geo-item .nm { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .geo-item .chev { flex:0 0 auto; font-family:'Figtree',sans-serif; font-weight:700; color:var(--color-moss); }
@@ -240,10 +240,10 @@
     .geo-keep[aria-pressed="true"] { color:var(--color-canopy); }
     .geo-item.on { background:var(--color-moss-tint); }
     #geo-map { height:22rem; border:1px solid var(--color-border); border-radius:4px; background:#EAE9E3; }
-    .geo-meta { grid-column:1 / -1; font-size:.875rem; color:var(--color-text-secondary); }
+    .geo-meta { grid-column:1 / -1; font-size:var(--t-ui); color:var(--color-text-secondary); }
     .geo-meta b { color:var(--color-text-primary); }
     /* persistent legend: list navigates, map composes */
-    .geo-legend { display:flex; flex-wrap:wrap; gap:.4rem 1.1rem; margin:.1rem 0 .5rem; font-size:.875rem; color:var(--color-text-secondary); }
+    .geo-legend { display:flex; flex-wrap:wrap; gap:.4rem 1.1rem; margin:.1rem 0 .5rem; font-size:var(--t-ui); color:var(--color-text-secondary); }
     /* each instruction is ordinary prose with its marker hung off the left. It
        must NOT be a flex container: every text node either side of the bold
        words would become its own flex item and wrap on its own, which is how
@@ -267,7 +267,7 @@
     .cat-group .g-chev { font-family:'Figtree',sans-serif; font-weight:700; color:var(--color-moss); transition:transform .15s ease-out; }
     .cat-group[open] .g-chev { transform:rotate(90deg); }
     @media (prefers-reduced-motion:reduce){ .cat-group .g-chev { transition:none; } }
-    .cat-group h3 { font-size:.78rem; letter-spacing:.06em; text-transform:uppercase; color:var(--color-text-secondary); margin:0; }
+    .cat-group h3 { font-size:var(--t-meta); letter-spacing:.06em; text-transform:uppercase; color:var(--color-text-secondary); margin:0; }
     .cat-count { margin-left:auto; font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:600; color:var(--color-text-muted); white-space:nowrap; }
     .cat-sub { font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
       color:var(--color-text-muted); margin:.85rem 0 .1rem; padding-left:.95rem; }
@@ -275,8 +275,8 @@
     .cat-row + .cat-row, .cat-sub + .cat-row { border-top:1px solid var(--color-divider); }
     .cat-row input { margin-top:.25rem; accent-color:var(--color-moss); width:16px; height:16px; flex:0 0 auto; }
     .cat-row b { font-weight:600; }
-    .cat-row .info { display:block; font-size:.875rem; color:var(--color-text-secondary); }
-    .cat-row .attr { display:block; font-size:.78rem; color:var(--color-text-muted); margin-top:.15rem; }
+    .cat-row .info { display:block; font-size:var(--t-ui); color:var(--color-text-secondary); }
+    .cat-row .attr { display:block; font-size:var(--t-meta); color:var(--color-text-muted); margin-top:.15rem; }
     .badge { display:inline-block; font-size:.72rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
       border-radius:4px; padding:.12rem .4rem; margin-left:.45rem; vertical-align:1px; }
     .badge.free { background:var(--color-moss-tint); color:var(--color-canopy); }
@@ -299,11 +299,11 @@
       background-size:2rem 100%; background-repeat:no-repeat; animation:prog-sheen 1.2s linear infinite; }
     @keyframes prog-sheen { from { background-position:-2rem 0; } to { background-position:calc(100% + 2rem) 0; } }
     /* once the build is done the bar and log fold into a quiet record */
-    #build-record summary { cursor:pointer; font-size:.875rem; color:var(--color-text-secondary); padding:.6rem 0; }
+    #build-record summary { cursor:pointer; font-size:var(--t-ui); color:var(--color-text-secondary); padding:.6rem 0; }
     #build-record .prog-bar { margin-top:.2rem; }
-    .prog-layer { margin:.6rem 0 0; font-family:'Figtree',sans-serif; font-weight:600; font-size:.95rem; color:var(--color-text-primary); }
+    .prog-layer { margin:.6rem 0 0; font-family:'Figtree',sans-serif; font-weight:600; font-size:var(--t-control); color:var(--color-text-primary); }
     .prog-layer .count { color:var(--color-text-muted); font-weight:500; }
-    .prog-msg { margin:.3rem 0 0; font-size:.875rem; color:var(--color-text-secondary); }
+    .prog-msg { margin:.3rem 0 0; font-size:var(--t-ui); color:var(--color-text-secondary); }
     @media (prefers-reduced-motion:reduce){ .prog-bar.working::after { animation:none; } }
     .prog-log { margin:.75rem 0 0; font:.75rem/1.5 ui-monospace,Menlo,monospace; color:var(--color-text-muted);
       background:#FFFFFF; border:1px solid var(--color-border); border-radius:4px; padding:.5rem .65rem; max-height:9rem; overflow-y:auto; white-space:pre-wrap; }
@@ -324,7 +324,7 @@
       padding:1rem 1.1rem; color:var(--color-text-primary); }
     .dir-card:hover { border-color:var(--color-moss); text-decoration:none; color:var(--color-text-primary); }
     .dir-card b { font-family:'Figtree',sans-serif; display:block; }
-    .dir-card span { font-size:.875rem; color:var(--color-text-secondary); }
+    .dir-card span { font-size:var(--t-ui); color:var(--color-text-secondary); }
 
     #my-atlases { margin:1rem 0 0; }
     .mine { display:flex; flex-direction:column; gap:.6rem; margin-top:1rem; }
@@ -332,12 +332,12 @@
       border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:.85rem 1rem; }
     .mine-main { flex:1 1 12rem; min-width:0; }
     .mine-main b { font-family:'Figtree',sans-serif; display:block; }
-    .mine-main span { font-size:.875rem; color:var(--color-text-secondary); }
+    .mine-main span { font-size:var(--t-ui); color:var(--color-text-secondary); }
     .mine-badge { font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
       padding:.12rem .45rem; border-radius:4px; background:var(--color-moss-tint); color:var(--color-canopy); }
     .mine-badge.draft { background:var(--color-rust-tint); color:var(--color-rust-deep); }
     .mine-actions { display:flex; gap:.4rem; flex-wrap:wrap; }
-    .mine-actions button, .mine-actions a { font:inherit; font-size:.875rem; font-weight:600; font-family:'Figtree',sans-serif;
+    .mine-actions button, .mine-actions a { font:inherit; font-size:var(--t-ui); font-weight:600; font-family:'Figtree',sans-serif;
       padding:.35rem .6rem; min-height:2.75rem; display:inline-flex; align-items:center; border-radius:4px;
       border:1px solid var(--color-border); background:var(--color-surface);
       color:var(--color-text-primary); cursor:pointer; text-decoration:none; }
@@ -350,23 +350,23 @@
 
     /* collaborators panel (edit mode, owner only) */
     #collab-panel { margin-top:1.4rem; padding-top:1.1rem; border-top:1px solid var(--color-divider); }
-    .collab-head { font-size:.78rem; letter-spacing:.06em; text-transform:uppercase; color:var(--color-text-secondary); margin:0 0 .3rem; }
-    .collab-row { display:flex; align-items:center; gap:.6rem; padding:.5rem 0; border-top:1px solid var(--color-divider); font-size:.875rem; }
+    .collab-head { font-size:var(--t-meta); letter-spacing:.06em; text-transform:uppercase; color:var(--color-text-secondary); margin:0 0 .3rem; }
+    .collab-row { display:flex; align-items:center; gap:.6rem; padding:.5rem 0; border-top:1px solid var(--color-divider); font-size:var(--t-ui); }
     .collab-row:first-child { border-top:none; }
     .collab-row .em { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
-    .collab-row button { font:inherit; font-size:.875rem; font-weight:600; font-family:'Figtree',sans-serif;
+    .collab-row button { font:inherit; font-size:var(--t-ui); font-weight:600; font-family:'Figtree',sans-serif;
       padding:.25rem .55rem; border-radius:4px; border:1px solid var(--color-border); background:var(--color-surface);
       color:var(--color-text-primary); cursor:pointer; }
     .collab-row button:hover { border-color:var(--color-rust); color:var(--color-rust-deep); }
     .collab-invite { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.7rem; }
     .collab-invite input { flex:1 1 14rem; min-width:0; }
 
-    .msg { padding:.7rem .9rem; border-radius:4px; font-size:.875rem; margin-top:1rem; }
+    .msg { padding:.7rem .9rem; border-radius:4px; font-size:var(--t-ui); margin-top:1rem; }
     .msg.err { background:var(--color-rust-tint); color:var(--color-rust-deep); }
     .msg.ok { background:var(--color-moss-tint); color:var(--color-canopy); }
 
     footer.site { margin-top:3.5rem; border-top:1px solid var(--color-divider); background:var(--color-bg-alt); }
-    .foot-inner { width:var(--container); margin:0 auto; padding:1.5rem 0; color:var(--color-text-secondary); font-size:.875rem; }
+    .foot-inner { width:var(--container); margin:0 auto; padding:1.5rem 0; color:var(--color-text-secondary); font-size:var(--t-ui); }
     /* same tap-target trick as the nav: 44px to touch, unchanged to the eye */
     .foot-inner a { display:inline-block; padding:.75rem .2rem; margin:-.75rem -.2rem; }
     @media (prefers-reduced-motion: reduce){ *,*::before,*::after { transition:none !important; animation:none !important; } }

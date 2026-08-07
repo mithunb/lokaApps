@@ -35,11 +35,33 @@ typography:
     fontSize: "1rem"
     fontWeight: 400
     lineHeight: 1.55
+  control:
+    fontFamily: "DM Sans, system-ui, sans-serif"
+    fontSize: "0.95rem"
+    fontWeight: 600
+    lineHeight: 1.4
+    role: "Buttons, and the name of a thing you can act on — a file, a layer being built."
+  ui:
+    fontFamily: "DM Sans, system-ui, sans-serif"
+    fontSize: "0.875rem"
+    fontWeight: 600
+    lineHeight: 1.55
+    role: "The workhorse: form labels, nav, stepper chips. Weight drops to 400 where it is reading text rather than a prompt."
+  meta:
+    fontFamily: "DM Sans, system-ui, sans-serif"
+    fontSize: "0.78rem"
+    fontWeight: 400
+    lineHeight: 1.55
+    role: "Anything that annotates something else — hints, counts, required/optional markers, stage rails."
   label:
     fontFamily: "Figtree, sans-serif"
     fontSize: "0.72rem"
     fontWeight: 600
     letterSpacing: "0.14em"
+  icon:
+    fontSize: "1.5rem"
+    lineHeight: 1
+    role: "Sizes an emoji glyph standing in as an icon. Not a text role — it is on this ramp because font-size is how a glyph is sized, not because anything reads at 1.5rem."
   mono:
     fontFamily: "ui-monospace, Menlo, monospace"
     fontSize: "0.75rem"
