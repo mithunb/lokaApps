@@ -1,0 +1,829 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Editor shell — prototype — LOKA Atlas</title>
+  <meta name="robots" content="noindex" />
+  <!-- PROTOTYPE. Not linked from anywhere, not wired to the API. It exists to be
+       clicked and critiqued before Phase 1 wires any of it to real atlases.
+       Layer rows, the status and the save results are stubs; the map is real.
+
+       DIRECTION (extension of an established surface, not a new world)
+       THESIS: an atlas has one home. Everything you do to it — add data, style
+         it, decide who sees it — happens on the atlas itself, in a layers
+         panel, forever. It refuses the wizard's "construction then handover".
+       OWN-WORLD: inherited wholesale from the viewer — paper ground, hairline
+         ink borders, moss as the only interactive colour, Figtree stamps on
+         DM Sans. No new tokens; the type ramp is the one in DESIGN.md.
+       STORY: this is my map, it is live or it is not, and I can change it.
+       FIRST VIEWPORT: map edge to edge; layers panel docked left over it;
+         status and Share top-right. Selecting a layer opens styling on the
+         right — desktop; on a phone the panel is a bottom sheet and styling
+         takes it over at a taller detent.
+       FORM: canvas + layers panel, the model six of seven surveyed tools use. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Figtree:wght@500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <style>
+    :root {
+      --color-bg:#F9F9F7; --color-bg-alt:#F0EFEA; --color-surface:#FFFFFF;
+      --color-moss:#4A5A33; --color-canopy:#384526;
+      --color-rust:#AE5028; --color-rust-deep:#7C3616;
+      --color-sienna:#99582F; --color-ochre:#B8862F;
+      --color-text-primary:#2A241A; --color-text-secondary:#564E3C; --color-text-muted:#6B6350;
+      --color-divider:rgba(42,36,26,.09); --color-border:rgba(42,36,26,.14);
+      --color-moss-tint:rgba(74,90,51,.10); --color-rust-tint:rgba(174,80,40,.10);
+      --color-ochre-tint:rgba(184,134,47,.14);
+      /* the ramp from DESIGN.md — no new steps invented here */
+      --t-section:1.15rem; --t-body:1rem; --t-control:.95rem; --t-ui:.875rem;
+      --t-meta:.78rem; --t-label:.72rem;
+      --shadow-md:0 1px 4px rgba(42,36,26,.10);
+      --shadow-lg:0 2px 12px rgba(42,36,26,.12);
+      --radius-md:.25rem; --radius-lg:.375rem;
+      --sheet-peek:4.5rem;
+    }
+    * { box-sizing:border-box; }
+    html, body { height:100%; }
+    body { margin:0; background:var(--color-bg); color:var(--color-text-primary);
+      font-family:'DM Sans',system-ui,-apple-system,sans-serif; font-size:var(--t-body); line-height:1.55;
+      -webkit-font-smoothing:antialiased; display:flex; flex-direction:column; }
+    h1,h2,h3 { font-family:'Figtree',sans-serif; letter-spacing:-.01em; margin:0; text-wrap:balance; }
+    button { font:inherit; }
+    [hidden] { display:none !important; }
+    :focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:4px; }
+
+    /* the paper the map is drawn on. Declared once; the MapLibre style reads it back. */
+    :root { --color-map-ground:#EAE9E3; }
+
+    /* ---------- top bar: identity, status, share ---------- */
+    .ed-bar { display:flex; align-items:center; gap:1rem; flex-wrap:wrap;
+      padding:.75rem clamp(.9rem,3vw,1.5rem); border-bottom:1px solid var(--color-divider);
+      background:var(--color-bg); }
+    .ed-id { min-width:0; flex:1 1 14rem; }
+    .ed-id h1 { font-size:var(--t-section); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ed-id .by { font-size:var(--t-meta); color:var(--color-text-muted); }
+    .pane-count { font-size:var(--t-meta); color:var(--color-text-muted); flex:0 0 auto; }
+    /* the description is context, not chrome: it shows when set and never wraps the bar */
+    .ed-desc { font-size:var(--t-meta); color:var(--color-text-secondary); margin-top:.15rem;
+      max-width:58ch; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .set-err { font-size:var(--t-meta); color:var(--color-rust-deep); align-self:center; }
+    .ed-acts { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+
+    /* status is never something you infer: a dot, a word, and its one action */
+    .ed-status { display:inline-flex; align-items:center; gap:.45rem; font-size:var(--t-ui);
+      padding:.35rem .7rem; border-radius:999px; border:1px solid var(--color-border);
+      background:var(--color-surface); min-height:2rem; }
+    .ed-status .dot { width:.5rem; height:.5rem; border-radius:50%; background:var(--color-text-muted); flex:0 0 auto; }
+    .ed-status.live { border-color:rgba(74,90,51,.35); background:var(--color-moss-tint); color:var(--color-canopy); }
+    .ed-status.live .dot { background:var(--color-moss); }
+    .ed-status .what { font-weight:600; }
+    .ed-status .who { color:var(--color-text-muted); font-weight:400; }
+    .ed-status.live .who { color:var(--color-canopy); }
+
+    .btn { display:inline-flex; align-items:center; justify-content:center; gap:.4rem;
+      padding:.5rem 1rem; min-height:2.75rem; border-radius:var(--radius-md); border:1px solid transparent;
+      background:var(--color-moss); color:#fff; font-weight:600; font-size:var(--t-ui); cursor:pointer; }
+    .btn:hover { background:var(--color-canopy); }
+    .btn.secondary { background:var(--color-surface); color:var(--color-moss); border-color:var(--color-border); }
+    .btn.secondary:hover { background:var(--color-moss-tint); border-color:var(--color-moss); }
+    .btn.quiet { background:none; border-color:transparent; color:var(--color-text-secondary); }
+    .btn.quiet:hover { background:var(--color-bg-alt); color:var(--color-text-primary); }
+    .btn.small { min-height:2.75rem; padding:.35rem .7rem; font-size:var(--t-meta); }
+    /* a button that cannot act must not look like one that can */
+    .btn:disabled, .btn:disabled:hover { background:var(--color-bg-alt); color:var(--color-text-muted);
+      border-color:var(--color-border); cursor:not-allowed; }
+    /* removing someone's data is not the same shape of act as keeping it */
+    .btn.danger { background:var(--color-surface); color:var(--color-rust-deep); border-color:var(--color-rust); }
+    .btn.danger:hover { background:var(--color-rust-tint); }
+    .lyr-main:disabled { cursor:default; }
+
+    /* ---------- stage: map + docked panels ---------- */
+    .ed-stage { position:relative; flex:1 1 auto; min-height:0; background:var(--color-map-ground); }
+    #ed-map { position:absolute; inset:0; }
+
+    .pane { position:absolute; z-index:5; display:flex; flex-direction:column;
+      background:var(--color-surface);
+      border:1px solid var(--color-border); border-radius:var(--radius-md); box-shadow:var(--shadow-md);
+      overflow:hidden; }
+    .pane-head { display:flex; align-items:center; gap:.5rem; padding:.6rem .85rem;
+      border-bottom:1px solid var(--color-divider); flex:0 0 auto; }
+    .pane-head h2 { flex:1 1 auto; font-size:var(--t-label); letter-spacing:.14em;
+      text-transform:uppercase; color:var(--color-text-secondary); font-weight:600; }
+    .pane-body { overflow:auto; padding:.5rem .85rem .85rem; }
+
+    /* the desktop dock is a desktop rule. Declared unscoped it wins on ID
+       specificity over every mobile .pane rule below, which is how the bottom
+       sheet came out 328px wide and 96% of the viewport tall. */
+    @media (min-width:821px) {
+      #pane-layers { top:1rem; left:1rem; width:20.5rem; max-width:calc(100% - 2rem); max-height:calc(100% - 2rem); }
+      #pane-style  { top:1rem; right:1rem; width:22rem; max-width:calc(100% - 2rem); max-height:calc(100% - 2rem); }
+    }
+
+    /* the base is one thing, not a list of things you happened to keep */
+    .base-row { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; padding:.2rem 0 .5rem; }
+    /* the region is standing information and the way to change it, in one row */
+    .region-line { display:grid; grid-template-columns:1fr auto; gap:0 .6rem; align-items:baseline;
+      width:100%; min-height:2.75rem; padding:.4rem .5rem .45rem; margin:0 -.5rem .3rem;
+      background:none; border:none; border-radius:var(--radius-md); text-align:left; cursor:pointer;
+      color:inherit; font:inherit; }
+    .region-line:hover { background:var(--color-bg-alt); }
+    .region-k { grid-column:1; font-size:var(--t-meta); color:var(--color-text-muted); }
+    .region-v { grid-column:1; font-family:'Figtree',sans-serif; font-size:var(--t-ui); font-weight:600; }
+    .region-go { grid-column:2; grid-row:1/3; align-self:center; font-size:var(--t-meta);
+      font-weight:600; color:var(--color-canopy); }
+    .seg { display:inline-flex; gap:.2rem; padding:.15rem; background:var(--color-bg-alt);
+      border:1px solid var(--color-border); border-radius:var(--radius-md); }
+    .seg-opt { font:inherit; font-size:var(--t-meta); padding:.4rem .7rem; min-height:2.5rem;
+      border:none; border-radius:4px; background:none; color:var(--color-text-secondary); cursor:pointer; }
+    .seg-opt.on { background:var(--color-moss-tint); color:var(--color-canopy); font-weight:600; }
+    .linkish { background:none; border:none; padding:0; font:inherit; font-size:var(--t-meta);
+      color:var(--color-moss); text-decoration:underline; cursor:pointer; }
+
+    /* ---------- layer rows ---------- */
+    .lyr-group { margin:.5rem 0 .2rem; font-size:var(--t-label); letter-spacing:.12em;
+      text-transform:uppercase; color:var(--color-text-muted); font-weight:600; }
+    .lyr { display:flex; align-items:center; gap:.5rem; padding:.3rem 0; border-top:1px solid var(--color-divider); }
+    .lyr:first-of-type { border-top:none; }
+    .lyr-vis { flex:0 0 auto; width:2.75rem; height:2.75rem; margin-left:-.5rem; display:inline-flex;
+      align-items:center; justify-content:center; background:none; border:none; cursor:pointer; color:var(--color-text-muted); }
+    .lyr-vis[aria-pressed="true"] { color:var(--color-moss); }
+    .lyr-vis svg { width:17px; height:17px; }
+    .lyr-main { flex:1 1 auto; min-width:0; text-align:left; background:none; border:none;
+      padding:.25rem 0; cursor:pointer; color:inherit; }
+    .lyr-name { display:block; font-size:var(--t-ui); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .lyr-sub { display:block; font-size:var(--t-meta); color:var(--color-text-muted);
+      overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+    .lyr.sel { background:var(--color-moss-tint); border-radius:var(--radius-md); }
+    .lyr-menu { flex:0 0 auto; width:2.75rem; height:2.75rem; margin-right:-.35rem; background:none; border:none;
+      cursor:pointer; color:var(--color-text-muted); font-size:var(--t-control); line-height:1; }
+    .lyr-menu:hover { color:var(--color-text-primary); }
+    /* a layer this editor did not make says so, and offers nothing it cannot do */
+    .lyr.readonly .lyr-main { cursor:default; }
+    .lyr-lock { font-size:var(--t-meta); color:var(--color-text-muted); padding-right:.4rem; }
+    /* a layer can sit outside the region it lives on — say so where it is listed.
+       The note states the fact; the action beside it is a real, focusable button,
+       and it is moss, because moss is what interaction looks like here. */
+    .outside-note { display:block; font-size:var(--t-meta); color:var(--color-rust-deep); font-weight:600; }
+    .lyr-zoom { flex:0 0 auto; width:2.75rem; height:2.75rem; background:none; border:none;
+      cursor:pointer; color:var(--color-moss); font-size:var(--t-control); line-height:1; }
+    .lyr-zoom:hover { color:var(--color-canopy); }
+
+    .lyr-actions { display:flex; gap:.35rem; padding:.1rem 0 .5rem 2.25rem; }
+
+    .add-row { margin-top:.7rem; padding-top:.7rem; border-top:1px solid var(--color-divider); }
+    .add-row .btn { width:100%; }
+
+    /* ---------- style pane ---------- */
+    .fld { display:flex; flex-wrap:wrap; align-items:baseline; gap:.15rem .4rem; margin-bottom:.9rem;
+      font-size:var(--t-ui); font-weight:600; color:var(--color-text-secondary); }
+    /* the field's name and its qualifier read as one line; the control follows */
+    .fld > input, .fld > select, .fld > textarea { flex:1 0 100%; margin-top:.2rem; }
+    .fld input, .fld select, .fld textarea { font:inherit; font-size:var(--t-body); font-weight:400;
+      padding:.6rem .7rem; border:1px solid var(--color-border); border-radius:4px; background:#fff;
+      color:var(--color-text-primary); width:100%; min-height:2.75rem; }
+    .fld textarea { resize:vertical; line-height:1.45; }
+    .fld .note { font-size:var(--t-meta); font-weight:400; color:var(--color-text-muted); }
+    .save-row { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;
+      padding-top:.75rem; border-top:1px solid var(--color-divider); }
+    .save-note { font-size:var(--t-meta); color:var(--color-text-muted); }
+    .save-note.dirty { color:var(--color-rust-deep); }
+
+    /* ---------- add-data sheet ---------- */
+    .scrim { position:fixed; inset:0; z-index:20; background:rgba(42,36,26,.35); display:flex;
+      align-items:center; justify-content:center; padding:1rem; }
+    .sheet { width:min(34rem,100%); max-height:min(90vh,40rem); overflow:auto; background:var(--color-surface);
+      border:1px solid var(--color-border); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); padding:1.25rem; }
+    .sheet h2 { font-size:var(--t-section); margin-bottom:.4rem; padding-right:2.5rem; }
+    /* a zero-height sticky row keeps the dismiss reachable however far you scroll */
+    .sheet-xrow { position:sticky; top:0; z-index:2; height:0; display:flex; justify-content:flex-end; }
+    .sheet-x { width:2.75rem; height:2.75rem; margin:-.35rem -.35rem 0 0; display:flex;
+      align-items:center; justify-content:center; background:var(--color-surface); border:none;
+      border-radius:var(--radius-md); font-size:var(--t-ui); line-height:1;
+      color:var(--color-text-muted); cursor:pointer; }
+    .sheet-x:hover { background:var(--color-bg-alt); color:var(--color-text-primary); }
+    .sheet p { color:var(--color-text-secondary); font-size:var(--t-ui); margin:0 0 1rem; max-width:60ch; }
+    .drop { border:2px dashed var(--color-border); border-radius:var(--radius-lg); background:var(--color-bg);
+      padding:2rem 1.25rem; text-align:center; color:var(--color-text-secondary); cursor:pointer; }
+    .drop { width:100%; font:inherit; display:block; }
+    .drop b { display:block; font-family:'Figtree',sans-serif; color:var(--color-text-primary); margin-bottom:.2rem; }
+    .drop span { display:block; font-size:var(--t-meta); }
+    .drop:hover { border-color:var(--color-moss); background:var(--color-moss-tint); }
+    .stagerail { display:flex; flex-wrap:wrap; gap:.15rem .5rem; list-style:none; margin:1rem 0 0; padding:0;
+      font-size:var(--t-meta); color:var(--color-text-muted); }
+    .stagerail li { display:flex; align-items:center; gap:.35rem; }
+    .stagerail li + li::before { content:"→"; color:var(--color-border); margin-right:.15rem; }
+    .stagerail .now { color:var(--color-canopy); font-weight:600; }
+
+    /* the empty state is the first thing a new atlas owner meets */
+    .empty { text-align:left; padding:.35rem 0 .6rem; }
+    .empty p { font-size:var(--t-meta); color:var(--color-text-muted); margin:.15rem 0 0; max-width:34ch; }
+
+    .set-h { font-family:'Figtree',sans-serif; font-size:var(--t-ui); margin:1.5rem 0 .35rem;
+      padding-top:1rem; border-top:1px solid var(--color-divider); }
+    .sheet > .set-h:first-of-type { border-top:none; padding-top:0; margin-top:1rem; }
+    .set-p { font-size:var(--t-meta); color:var(--color-text-muted); margin:0 0 .7rem; max-width:56ch; }
+    .chips { display:flex; flex-wrap:wrap; gap:.4rem; }
+    .chip { display:inline-flex; align-items:center; gap:.3rem; font-size:var(--t-ui);
+      padding:.3rem .35rem .3rem .65rem; border-radius:var(--radius-md);
+      background:var(--color-moss-tint); color:var(--color-canopy); }
+    /* the glyph stays small; the hit area is a full 44px square */
+    .chip .x { width:2.75rem; height:2.75rem; display:inline-flex; align-items:center; justify-content:center;
+      background:none; border:none; cursor:pointer; color:inherit; border-radius:4px; margin:-.4rem -.35rem -.4rem 0; }
+    .inv-row { display:flex; align-items:center; gap:.6rem; padding:.4rem 0; border-top:1px solid var(--color-divider); }
+    .inv-row:first-child { border-top:none; }
+    .inv-who { flex:1 1 auto; min-width:0; font-size:var(--t-ui); overflow:hidden; text-overflow:ellipsis; }
+    .inv-role { font-size:var(--t-meta); color:var(--color-text-muted); }
+    .inv-add { display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.6rem; }
+    .inv-add input { flex:1 1 12rem; font:inherit; font-size:var(--t-body); font-weight:400; padding:.6rem .7rem;
+      border:1px solid var(--color-border); border-radius:4px; min-height:2.75rem; }
+    .inv-add select { font:inherit; font-size:var(--t-ui); padding:.5rem; border:1px solid var(--color-border);
+      border-radius:4px; min-height:2.75rem; background:#fff; }
+
+    .toast { position:fixed; left:50%; bottom:1.25rem; transform:translateX(-50%); z-index:30;
+      background:var(--color-text-primary); color:#fff; font-size:var(--t-ui);
+      padding:.6rem 1rem; border-radius:var(--radius-md); box-shadow:var(--shadow-lg); }
+
+    /* ---------- responsive: the panel becomes a sheet, not a squeezed panel ---------- */
+    @media (max-width:820px) {
+      /* the header was taking a third of a phone screen. On your own atlas the
+         title and status are what you need; the byline is something you know,
+         and the secondary actions do not need their words to be found. */
+      .ed-bar { gap:.5rem .6rem; padding:.6rem .9rem; }
+      .ed-id { flex:1 1 auto; }
+      .ed-id h1 { font-size:var(--t-body); }
+      .ed-id .by, .ed-desc { display:none; }
+      .ed-acts { flex:0 0 auto; gap:.35rem; }
+      .ed-status { padding:.3rem .55rem; font-size:var(--t-meta); }
+      .ed-status .who { display:none; }              /* the action already says it */
+      #status-act { padding:.4rem .7rem; font-size:var(--t-meta); }
+      #share-btn, #settings-btn { padding:.4rem .6rem; font-size:var(--t-meta); }
+      /* keep the map's own controls clear of the resting sheet */
+      .maplibregl-ctrl-bottom-right { bottom:calc(var(--sheet-peek) + .5rem); }
+      .pane { position:fixed; left:0; right:0; bottom:0; top:auto; width:auto; max-width:none;
+        border-radius:var(--radius-lg) var(--radius-lg) 0 0; border-bottom:none;
+        max-height:min(78vh, 34rem); box-shadow:var(--shadow-lg);
+        padding-bottom:env(safe-area-inset-bottom); }
+      #pane-layers { transform:translateY(calc(100% - var(--sheet-peek))); transition:transform .22s cubic-bezier(.2,.8,.2,1); }
+      #pane-layers.open { transform:translateY(0); }
+      /* styling takes the sheet over entirely rather than stacking two sheets */
+      #pane-style { z-index:6; max-height:min(86vh, 38rem); }
+      .pane-head { cursor:pointer; padding:.8rem .9rem; }
+      .pane-head::before { content:""; position:absolute; top:.4rem; left:50%; transform:translateX(-50%);
+        width:2.25rem; height:.25rem; border-radius:999px; background:var(--color-border); }
+      .pane-head { position:relative; padding-top:1.1rem; }
+      .lyr-actions { padding-left:2.25rem; }
+    }
+    @media (prefers-reduced-motion: reduce) { #pane-layers { transition:none; } }
+  </style>
+</head>
+<body>
+  <header class="ed-bar">
+    <div class="ed-id">
+      <h1 id="ed-title">Bengaluru Finds</h1>
+      <span class="by">by Socratus · you are the owner</span>
+      <p class="ed-desc" id="ed-desc" hidden></p>
+    </div>
+    <div class="ed-acts">
+      <span class="ed-status" id="status" role="status">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="what" id="status-what">Not live</span>
+        <span class="who" id="status-who">— only you can see it</span>
+      </span>
+      <button class="btn" id="status-act">Make it live</button>
+      <button class="btn secondary" id="share-btn">Share</button>
+      <button class="btn quiet" id="settings-btn">Settings</button>
+    </div>
+  </header>
+
+  <main class="ed-stage">
+    <div id="ed-map"></div>
+
+    <!-- layers: the one home for everything on this atlas -->
+    <section class="pane" id="pane-layers" aria-label="Layers">
+      <div class="pane-head" id="layers-head">
+        <h2>Layers</h2>
+        <span class="pane-count" id="layers-count">3 on the map</span>
+      </div>
+      <div class="pane-body">
+        <div class="lyr-group">Base map</div>
+        <div class="base-row">
+          <div class="seg" role="radiogroup" aria-label="Base map style">
+            <button type="button" class="seg-opt on" role="radio" aria-checked="true">Map</button>
+            <button type="button" class="seg-opt" role="radio" aria-checked="false">Satellite</button>
+          </div>
+        </div>
+        <button class="region-line" id="region-line">
+          <span class="region-k">Boundaries &amp; place names for</span>
+          <span class="region-v" id="region-names"></span>
+          <span class="region-go" aria-hidden="true">Change</span>
+        </button>
+
+        <div class="lyr-group">Your data</div>
+        <div id="user-layers"></div>
+        <div class="empty" id="user-empty" hidden>
+          <b style="font-family:'Figtree',sans-serif;font-size:var(--t-ui)">Nothing of yours yet</b>
+          <p>Add a spreadsheet of places and it becomes a layer you can style.</p>
+        </div>
+
+        <div class="lyr-group">Open data</div>
+        <div id="catalog-layers"></div>
+        <div class="empty" id="catalog-empty" hidden>
+          <p>No extra open-data layers yet. <button class="linkish" id="add-open">Browse the catalogue</button></p>
+        </div>
+
+        <div class="add-row">
+          <button class="btn" id="add-data">＋ Add data</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- styling: a property of the selected layer, applied on save -->
+    <section class="pane" id="pane-style" hidden aria-label="Layer style">
+      <div class="pane-head">
+        <h2 id="style-for">Style</h2>
+        <button class="btn quiet small" id="style-close" aria-label="Close styling">✕</button>
+      </div>
+      <div class="pane-body">
+        <label class="fld">Layer name
+          <input type="text" id="s-name" maxlength="60" />
+        </label>
+        <label class="fld">Draw each row as
+          <select id="s-shape"><option>Pin</option><option>Bubble</option></select>
+        </label>
+        <label class="fld">Colour them
+          <select id="s-colour"><option>One colour</option><option>By category</option></select>
+        </label>
+        <label class="fld">When someone clicks a feature, the popup is titled by
+          <select id="s-title"><option>description</option><option>tag_id</option><option>address</option></select>
+        </label>
+        <div class="save-row">
+          <button class="btn" id="s-save" disabled>Save changes</button>
+          <button class="btn quiet" id="s-revert" disabled>Discard</button>
+          <span class="save-note" id="s-note">Saved</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script>
+  (function () {
+    "use strict";
+    // ---- stub state. Phase 1 replaces this with the real manifest. ----
+    // ?state=empty shows the first run: a fresh atlas with nothing on it yet,
+    // which is otherwise unreachable and was therefore never reviewed.
+    var FIRST_RUN = /(\?|&)state=empty\b/.test(location.search);
+    var LAYERS = {
+      user: [
+        { id:"u1", name:"Bengaluru Tags", sub:"66 places · added by you", on:true, owned:true,
+          total:66, outsideCount:6, outside:true, region:"Bangalore" },
+        { id:"u2", name:"Ward offices",   sub:"198 places · added by Partner Works", on:true, owned:true,
+          total:198, region:"Bangalore" }
+      ],
+      catalog: [
+        { id:"c1", name:"Rivers & water bodies", sub:"India-WRIS, free & open", on:true, owned:false }
+      ]
+    };
+    if (FIRST_RUN) { LAYERS.user = []; LAYERS.catalog = []; }
+    var live = false, selected = null, dirty = false;
+    var $ = function (s) { return document.querySelector(s); };
+    var GROUND = getComputedStyle(document.documentElement)
+      .getPropertyValue("--color-map-ground").trim() || "#EAE9E3";
+
+    var EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
+    var EYE_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 5.1A9.9 9.9 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4"/><path d="M6.2 6.2A17 17 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 4-.85"/></svg>';
+
+    function rowHTML(l) {
+      return '<button class="lyr-vis" aria-pressed="' + l.on + '" aria-label="' +
+          (l.on ? "Hide " : "Show ") + l.name + '">' + (l.on ? EYE : EYE_OFF) + '</button>' +
+        '<button class="lyr-main"' + (l.owned ? "" : " disabled") + '>' +
+          '<span class="lyr-name">' + l.name + '</span>' +
+          '<span class="lyr-sub">' + l.sub + '</span>' +
+          (l.outside ? '<span class="outside-note">' + (l.outsideCount && l.outsideCount < l.total
+              ? l.outsideCount + " outside this region"
+              : "all outside this region") + "</span>" : "") + '</button>' +
+        (l.outside ? '<button class="lyr-zoom" aria-label="Zoom to the rows of ' + l.name +
+          ' outside this region">⤢</button>' : "") +
+        (l.owned ? '<button class="lyr-menu" aria-label="More actions for ' + l.name + '">⋯</button>'
+                 : '<span class="lyr-lock">open data</span>');
+    }
+
+    function render() {
+      // the row being rebuilt may hold focus; note what it was so we can put it back
+      var active = document.activeElement;
+      var restore = active && active.closest && active.closest(".lyr")
+        ? { layer: active.closest(".lyr").dataset.id,
+            role: active.className.split(" ")[0] } : null;
+      ["user", "catalog"].forEach(function (kind) {
+        var host = $(kind === "user" ? "#user-layers" : "#catalog-layers");
+        host.innerHTML = "";
+        LAYERS[kind].forEach(function (l) {
+          var row = document.createElement("div");
+          row.className = "lyr" + (l.owned ? "" : " readonly") + (selected === l.id ? " sel" : "");
+          row.dataset.id = l.id;
+          row.innerHTML = rowHTML(l);
+          row.querySelector(".lyr-vis").onclick = function () { l.on = !l.on; render(); };
+          var main = row.querySelector(".lyr-main");
+          if (l.owned) main.onclick = function () { openStyle(l); };
+          var zoom = row.querySelector(".lyr-zoom");
+          if (zoom) zoom.onclick = function () {
+            toast("Zooming to the " + (l.outsideCount || "") + " rows outside the region");
+          };
+          host.appendChild(row);
+        });
+      });
+      $("#user-empty").hidden = LAYERS.user.length > 0;
+      $("#catalog-empty").hidden = LAYERS.catalog.length > 0;
+      if (restore) {
+        var back = root.querySelector('.lyr[data-id="' + restore.layer + '"] .' + restore.role);
+        if (back) back.focus();
+      }
+      var on = LAYERS.user.concat(LAYERS.catalog).filter(function (l) { return l.on; }).length;
+      $("#layers-count").textContent = on ? on + " on the map" : "base map only";
+    }
+
+    function openStyle(l) {
+      selected = l.id;
+      $("#style-for").textContent = "Style · " + l.name;
+      $("#s-name").value = l.name;
+      $("#pane-style").hidden = false;
+      setDirty(false);
+      render();
+      if (window.matchMedia("(max-width:820px)").matches) $("#pane-layers").classList.remove("open");
+    }
+    function closeStyle() { selected = null; $("#pane-style").hidden = true; render(); }
+
+    // apply-on-save: the map is the real map, so nothing changes until you say so
+    function setDirty(v) {
+      dirty = v;
+      $("#s-save").disabled = !v;
+      $("#s-revert").disabled = !v;
+      var n = $("#s-note");
+      n.textContent = v ? "Unsaved changes — the map still shows the saved version" : "Saved";
+      n.className = "save-note" + (v ? " dirty" : "");
+    }
+    ["#s-name", "#s-shape", "#s-colour", "#s-title"].forEach(function (sel) {
+      $(sel).addEventListener("input", function () { setDirty(true); });
+    });
+    $("#s-save").onclick = function () {
+      var l = LAYERS.user.filter(function (x) { return x.id === selected; })[0];
+      if (l) l.name = $("#s-name").value.trim() || l.name;
+      setDirty(false); render(); $("#style-for").textContent = "Style · " + (l ? l.name : "");
+      toast("Layer saved — the map is updated");
+    };
+    $("#s-revert").onclick = function () {
+      var l = LAYERS.user.filter(function (x) { return x.id === selected; })[0];
+      if (l) $("#s-name").value = l.name;
+      setDirty(false);
+    };
+    $("#style-close").onclick = closeStyle;
+
+    // status: one badge, one action, both always visible
+    function paintStatus() {
+      var s = $("#status");
+      s.classList.toggle("live", live);
+      $("#status-what").textContent = live ? "Live" : "Not live";
+      $("#status-who").textContent = live ? "— anyone with the link, listed publicly" : "— only you can see it";
+      $("#status-act").textContent = live ? "Unlist" : "Make it live";
+    }
+    $("#status-act").onclick = function () {
+      live = !live; paintStatus();
+      toast(live ? "Your atlas is live" : "Unlisted — only you can see it now");
+    };
+
+    // one place that knows how a dialog behaves, so all three behave alike
+    var dialogStack = [];
+    function openDialog(html, wire, guard) {
+      var scrim = document.createElement("div");
+      scrim.className = "scrim";
+      scrim.innerHTML = html;
+      var opener = document.activeElement;
+      scrim.addEventListener("click", function (e) {
+        if (e.target === scrim || e.target.hasAttribute("data-close")) closeDialog(scrim);
+      });
+      // Tab must not reach the page behind a modal
+      scrim.addEventListener("keydown", function (e) {
+        if (e.key !== "Tab") return;
+        var f = focusablesIn(scrim);
+        if (!f.length) return;
+        var first = f[0], last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      });
+      var sheet = scrim.querySelector(".sheet");
+      if (sheet && !sheet.querySelector(".sheet-x")) {
+        var xrow = document.createElement("div");
+        xrow.className = "sheet-xrow";
+        xrow.innerHTML = '<button type="button" class="sheet-x" data-close aria-label="Close">✕</button>';
+        sheet.insertBefore(xrow, sheet.firstChild);
+      }
+      document.body.appendChild(scrim);
+      dialogStack.push({ scrim: scrim, opener: opener });
+      document.querySelectorAll("header.ed-bar, main.ed-stage").forEach(function (n) { n.inert = true; });
+      if (wire) wire(scrim);
+      if (guard) scrim.__guard = guard;
+      var f = focusablesIn(scrim).filter(function (n) { return !n.classList.contains("sheet-x"); });
+      (f[0] || scrim.querySelector(".sheet-x") || scrim.querySelector(".sheet")).focus();
+      return scrim;
+    }
+    function focusablesIn(root) {
+      return Array.prototype.filter.call(
+        root.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'),
+        function (el) { return !el.disabled && el.offsetParent !== null; });
+    }
+    function closeDialog(which) {
+      var top = dialogStack[dialogStack.length - 1];
+      if (!top) return;
+      var entry = which ? dialogStack.filter(function (d) { return d.scrim === which; })[0] : top;
+      if (!entry) return;
+      // a guard may hold the dialog open once, to say what closing would cost
+      if (entry.scrim.__guard && entry.scrim.__guard() === false) return;
+      dialogStack = dialogStack.filter(function (d) { return d !== entry; });
+      entry.scrim.remove();
+      if (!dialogStack.length) {
+        document.querySelectorAll("header.ed-bar, main.ed-stage").forEach(function (n) { n.inert = false; });
+      }
+      if (entry.opener && entry.opener.isConnected) entry.opener.focus();
+    }
+
+    var toastTimer, toastNode;
+    function toast(msg) {
+      if (!toastNode) {
+        toastNode = document.createElement("div");
+        toastNode.className = "toast";
+        toastNode.setAttribute("role", "status");
+        document.body.appendChild(toastNode);
+      }
+      toastNode.textContent = msg;
+      toastNode.hidden = false;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () { toastNode.hidden = true; }, 2600);
+    }
+
+    // add data: a focused sheet, and the import's two stages named by this page
+    $("#add-data").onclick = function () {
+      openDialog(
+        '<div class="sheet" role="dialog" aria-modal="true" aria-label="Add data">' +
+          '<h2>Add data</h2>' +
+          '<p>A spreadsheet of places — CSV, Excel, GeoJSON, KML or GPX. We read the fields and work out where the rows go.</p>' +
+          '<button type="button" class="drop" id="drop-btn">' +
+            '<b>Drop a file here</b><span>or click to choose — up to 5,000 rows</span></button>' +
+          '<input type="file" id="drop-file" hidden accept=".csv,.tsv,.json,.geojson,.kml,.gpx,.xlsx,.xls" />' +
+          '<ol class="stagerail"><li class="now">Check the fields</li><li>Place on the map</li></ol>' +
+          // the catalogue was reachable only from its own empty state, which made
+          // "add data any time" false for half the data this product curates
+          '<p class="set-p" style="margin-top:1.1rem;padding-top:1rem;border-top:1px solid var(--color-divider)">' +
+            'Or add more of the open data we curate for your region.</p>' +
+          '<button class="btn secondary" id="drop-cat">Browse the open-data catalogue</button>' +
+          '<div class="save-row" style="margin-top:1rem"><button class="btn quiet" data-close>Cancel</button></div>' +
+        '</div>',
+        function (scrim) {
+          scrim.querySelector("#drop-btn").onclick = function () { scrim.querySelector("#drop-file").click(); };
+          scrim.querySelector("#drop-cat").onclick = function () { toast("Open-data catalogue (stub)"); };
+        });
+    };
+
+    document.addEventListener("click", function (e) {
+      if (e.target && e.target.classList && e.target.classList.contains("seg-opt")) {
+        e.target.parentNode.querySelectorAll(".seg-opt").forEach(function (b) {
+          var on = b === e.target;
+          b.classList.toggle("on", on); b.setAttribute("aria-checked", on);
+        });
+      }
+      if (e.target && e.target.id === "add-open") toast("Open-data catalogue (stub)");
+    });
+    $("#share-btn").onclick = function () { toast("Share — link, QR and embed (stub)"); };
+
+    // ---- settings: identity, region, who can see it ----
+    var REGION = ["Bangalore", "Bangalore Rural"];
+    var META = { title:"Bengaluru Finds", desc:"Places worth knowing about, collected by Socratus.", site:"" };
+    var INVITES = [
+      { who:"asha@jagriti.org",  role:"editor" },
+      { who:"ravi@socratus.org", role:"viewer" }
+    ];
+    function settingsHTML() {
+      return '<div class="sheet" role="dialog" aria-modal="true" aria-label="Atlas settings">' +
+        '<h2>Settings</h2>' +
+
+        '<h3 class="set-h">Region</h3>' +
+        '<p class="set-p">Where this atlas covers. Change it whenever — we will tell you if any of your data ends up outside it.</p>' +
+        '<div class="chips" id="set-chips"></div>' +
+        '<label class="fld" style="margin-top:.6rem">Add a place' +
+          '<input type="text" id="set-place" placeholder="Type a district, block or state…" autocomplete="off" /></label>' +
+
+        '<h3 class="set-h">Identity</h3>' +
+        '<label class="fld">Atlas title' +
+          '<input type="text" id="set-title" maxlength="80" value="' + esc(META.title) + '" /></label>' +
+        '<label class="fld">What this atlas is for <span class="note">shown under the title</span>' +
+          '<textarea id="set-desc" rows="2" maxlength="240">' + esc(META.desc) + '</textarea></label>' +
+        '<label class="fld">Organisation website <span class="note">optional</span>' +
+          '<input type="text" id="set-site" placeholder="https://example.org" value="' + esc(META.site) + '" /></label>' +
+        '<label class="fld">Logo <span class="note">optional, PNG up to 200 KB</span>' +
+          '<input type="file" accept="image/png" /></label>' +
+
+        '<h3 class="set-h">Who can see it</h3>' +
+        '<p class="set-p">A private atlas is for your organisation. Invite the people who need it, by name, and take access away when they no longer do.</p>' +
+        '<div class="inv" id="inv-list"></div>' +
+        '<div class="inv-add">' +
+          '<input type="text" id="inv-email" aria-label="Email address to invite" ' +
+            'placeholder="name@organisation.org" autocomplete="off" />' +
+          '<select id="inv-role" aria-label="What they can do">' +
+            '<option value="viewer">can view</option><option value="editor">can edit</option></select>' +
+          '<button class="btn secondary small" id="inv-go">Invite</button>' +
+        '</div>' +
+
+        '<div class="save-row" style="margin-top:1.25rem">' +
+          '<button class="btn" id="set-save">Save changes</button>' +
+          '<span class="set-err" id="set-err" role="alert"></span></div>' +
+      '</div>';
+    }
+    function esc(v) {
+      return String(v == null ? "" : v)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+    }
+    function paintInvites(root) {
+      var host = root.querySelector("#inv-list");
+      host.innerHTML = "";
+      INVITES.forEach(function (i) {
+        var row = document.createElement("div");
+        row.className = "inv-row";
+        row.innerHTML = '<span class="inv-who">' + i.who + '</span>' +
+          '<span class="inv-role">' + (i.role === "editor" ? "can edit" : "can view") + '</span>' +
+          '<button class="btn quiet small" aria-label="Remove ' + i.who + '">Remove</button>';
+        row.querySelector("button").onclick = function () {
+          INVITES = INVITES.filter(function (x) { return x !== i; }); paintInvites(root);
+        };
+        host.appendChild(row);
+      });
+      if (!INVITES.length) host.innerHTML = '<p class="set-p">Nobody invited yet.</p>';
+    }
+    function paintSetChips(root) {
+      paintRegionLine();
+      var host = root.querySelector("#set-chips");
+      host.innerHTML = "";
+      REGION.forEach(function (name) {
+        var c = document.createElement("span");
+        c.className = "chip";
+        c.innerHTML = "<span>" + name + '</span><button class="x" aria-label="Remove ' + name + '">✕</button>';
+        c.querySelector(".x").onclick = function () { tryRegionChange(root, name); };
+        host.appendChild(c);
+      });
+    }
+    // the mirror of the spill case: the region moving away from data it holds
+    function tryRegionChange(root, removing) {
+      // any removal that would strand data earns the guard. Testing REGION.length
+      // first meant the promise in Settings ("we will tell you") was only kept
+      // for the very last chip.
+      var stranded = LAYERS.user.filter(function (l) { return l.region === removing; });
+      if (!stranded.length) {
+        REGION = REGION.filter(function (n) { return n !== removing; });
+        paintSetChips(root); return;
+      }
+      var l = stranded[0];
+      var names = stranded.map(function (x) { return "<b>" + x.name + "</b>"; });
+      var who = names.length > 1
+        ? names.slice(0, -1).join(", ") + " and " + names[names.length - 1] + " sit"
+        : names[0] + " sits";
+      openDialog('<div class="sheet" role="dialog" aria-modal="true" aria-label="Region change">' +
+        '<h2>Your data would be outside the region</h2>' +
+        '<p>' + who + ' in <b>' + removing +
+          '</b>, which the region would no longer cover.</p>' +
+        '<div class="save-row" style="flex-direction:column;align-items:stretch;gap:.5rem">' +
+          '<button class="btn secondary" data-keep>Change anyway — keep ' +
+            (stranded.length > 1 ? "them" : "it") + ', marked outside the region</button>' +
+          '<button class="btn danger" data-drop>Change anyway — remove ' +
+            (stranded.length > 1 ? "those " + stranded.length + " layers" : "that layer") + '</button>' +
+          '<button class="btn quiet" data-close>Cancel</button>' +
+        '</div></div>',
+        function (g) {
+          g.addEventListener("click", function (e) {
+            if (e.target.hasAttribute("data-keep")) {
+              REGION = REGION.filter(function (n) { return n !== removing; });
+              stranded.forEach(function (x) { x.outside = true; x.outsideCount = x.total; });
+              closeDialog(g);
+              if (root.isConnected) paintSetChips(root);
+              paintRegionLine();
+              render(); toast(stranded.length > 1
+                ? "Region changed — " + stranded.length + " layers are now outside it"
+                : "Region changed — " + l.name + " is now outside it");
+            } else if (e.target.hasAttribute("data-drop")) {
+              REGION = REGION.filter(function (n) { return n !== removing; });
+              LAYERS.user = LAYERS.user.filter(function (x) { return stranded.indexOf(x) < 0; });
+              closeDialog(g);
+              if (root.isConnected) paintSetChips(root);
+              paintRegionLine();
+              render(); toast(stranded.length > 1
+                ? "Region changed — " + stranded.length + " layers removed"
+                : "Region changed — " + l.name + " removed");
+            }
+          });
+        });
+    }
+    function paintRegionLine() {
+      var v = $("#region-names"), line = $("#region-line");
+      v.textContent = REGION.length ? REGION.join(", ") : "nowhere yet";
+      line.setAttribute("aria-label", "Boundaries and place names are drawn for " +
+        (REGION.length ? REGION.join(", ") : "no region yet") + ". Change the region.");
+    }
+    function paintIdentity() {
+      $("#ed-title").textContent = META.title;
+      document.title = META.title + " — LOKA Atlas";
+      var d = $("#ed-desc");
+      d.textContent = META.desc;
+      d.hidden = !META.desc;
+    }
+
+    // the region line is a route into Settings, landing on the section it names
+    $("#region-line").onclick = function () { openSettings("region"); };
+    $("#settings-btn").onclick = function () { openSettings(); };
+
+    function openSettings(land) {
+      var sheet = openDialog(settingsHTML(), function (scrim) {
+        paintSetChips(scrim); paintInvites(scrim);
+        scrim.querySelector("#set-save").onclick = function () {
+          var t = scrim.querySelector("#set-title"), err = scrim.querySelector("#set-err");
+          if (!t.value.trim()) {
+            err.textContent = "An atlas cannot be untitled.";
+            t.focus(); return;
+          }
+          META.title = t.value.trim();
+          META.desc = scrim.querySelector("#set-desc").value.trim();
+          META.site = scrim.querySelector("#set-site").value.trim();
+          paintIdentity();
+          err.textContent = "";
+          scrim.__warned = true;              // nothing left to lose
+          closeDialog(scrim);
+          toast("Settings saved");
+        };
+        scrim.querySelector("#inv-go").onclick = function () {
+          var em = scrim.querySelector("#inv-email");
+          if (!em.value.trim()) return;
+          INVITES.push({ who: em.value.trim(), role: scrim.querySelector("#inv-role").value });
+          em.value = ""; paintInvites(scrim);
+        };
+        ["#set-title", "#set-desc", "#set-site"].forEach(function (sel) {
+          scrim.querySelector(sel).addEventListener("input", function () {
+            scrim.__warned = false;
+            scrim.querySelector("#set-err").textContent = "";
+          });
+        });
+      }, function () {
+        var scrim = dialogStack[dialogStack.length - 1].scrim;
+        if (!identityDirty(scrim) || scrim.__warned) return true;
+        scrim.__warned = true;
+        scrim.querySelector("#set-err").textContent =
+          "Unsaved changes. Save them, or close again to discard.";
+        scrim.querySelector("#set-save").focus();
+        return false;
+      });
+      if (land === "region") {
+        var place = sheet.querySelector("#set-place");
+        place.scrollIntoView({ block: "start" });
+        place.focus();
+      }
+      return sheet;
+    }
+    function identityDirty(scrim) {
+      var t = scrim.querySelector("#set-title"), d = scrim.querySelector("#set-desc"),
+          w = scrim.querySelector("#set-site");
+      if (!t) return false;
+      return t.value.trim() !== META.title || d.value.trim() !== META.desc ||
+             w.value.trim() !== META.site;
+    }
+
+    // mobile: the layers pane is a bottom sheet you pull up
+    $("#layers-head").onclick = function () {
+      if (window.matchMedia("(max-width:820px)").matches) $("#pane-layers").classList.toggle("open");
+    };
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape") return;
+      if (dialogStack.length) closeDialog();      // the top one, not the first in the DOM
+      else if (selected) closeStyle();
+    });
+
+    // the real basemap, so layout judgements are honest
+    var map = new maplibregl.Map({
+      container: "ed-map",
+      style: { version: 8, sources: {
+        base: { type: "raster", tileSize: 256, maxzoom: 19,
+          tiles: ["https://a.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png",
+                  "https://b.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png",
+                  "https://c.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png"],
+          attribution: "© OpenStreetMap contributors © CARTO" } },
+        layers: [{ id: "bg", type: "background", paint: { "background-color": GROUND } },
+                 { id: "base", type: "raster", source: "base" }] },
+      bounds: [[77.45, 12.82], [77.78, 13.16]], fitBoundsOptions: { padding: 40 }
+    });
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
+    window.__edmap = map;
+
+    paintIdentity();
+    paintRegionLine();
+    paintStatus();
+    render();
+  })();
+  </script>
+</body>
+</html>
