@@ -17,7 +17,6 @@ const RESERVED = new Set([
 ]);
 
 let db = { instances: {}, accounts: {}, drafts: {} };
-load();
 
 function load() {
   try {
@@ -29,6 +28,12 @@ function load() {
       drafts: obj.drafts || {},
     };
     console.log(`[atlas] registry: ${Object.keys(db.instances).length} instances, ${Object.keys(db.accounts).length} accounts`);
+    // only ever after a successful read: a failed one leaves db empty, and
+    // pruning against an empty instance map would erase every account's list
+    const dropped = pruneOrphanedLinks();
+    for (const [email, slugs] of Object.entries(dropped)) {
+      console.log(`[atlas] registry: dropped stale atlas links for ${email}: ${slugs.join(', ')}`);
+    }
   } catch {
     // first run
   }
@@ -50,6 +55,12 @@ export function persist() {
     }
   });
 }
+
+// Loaded here, not beside the declaration of db: load() prunes stale account
+// links, pruning persists, and persist() reads state declared below it — from
+// above, that is a temporal-dead-zone ReferenceError that load()'s own catch
+// would swallow in silence.
+load();
 
 /* ---------- tokens ---------- */
 
@@ -113,7 +124,39 @@ export function updateInstance(slug, patch) {
 }
 export function deleteInstance(slug) {
   delete db.instances[slug];
+  // An atlas is listed under its owner AND under every collaborator it was
+  // linked to, so deleting the instance alone left the slug in several
+  // people's "Your atlases" — an entry they can see and never open.
+  dropLinksTo(slug);
   persist();
+}
+// Every account reference to one slug, gone. Returns the emails it touched.
+function dropLinksTo(slug) {
+  const touched = [];
+  for (const acc of Object.values(db.accounts)) {
+    if (!Array.isArray(acc.instances) || !acc.instances.includes(slug)) continue;
+    acc.instances = acc.instances.filter((s) => s !== slug);
+    touched.push(acc.email);
+  }
+  return touched;
+}
+
+// Self-healing for references that predate the fix above, and for any future
+// path that removes an instance without coming through deleteInstance. An
+// account pointing at an instance that does not exist is always stale: nothing
+// creates the link before the instance, and drafts live in their own map.
+export function pruneOrphanedLinks() {
+  const live = new Set(Object.keys(db.instances));
+  const dropped = {};
+  for (const acc of Object.values(db.accounts)) {
+    if (!Array.isArray(acc.instances)) continue;
+    const gone = acc.instances.filter((s) => !live.has(s));
+    if (!gone.length) continue;
+    acc.instances = acc.instances.filter((s) => live.has(s));
+    dropped[acc.email] = gone;
+  }
+  if (Object.keys(dropped).length) persist();
+  return dropped;
 }
 export function instanceCount() {
   return Object.keys(db.instances).length;
