@@ -8,6 +8,10 @@ atlas/datasets/*
 !atlas/datasets/deoria-bioregion
 atlas/datasets/deoria-bioregion/manifest.local.json
 atlas/datasets/deoria-bioregion/user-*.geojson
+# the search index and its embedding binaries are derived from the layers and
+# rebuilt on demand — the one tracked dataset must not start carrying them
+atlas/datasets/deoria-bioregion/search.local.json
+atlas/datasets/deoria-bioregion/search-*.vec
 api/data/
 api/atlas-builders/.venv/
 __pycache__/

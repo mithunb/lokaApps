@@ -1972,18 +1972,37 @@ router.post('/layers/refine', async (req, res) => {
 });
 
 /* ---------- search: a lexical vocabulary per contributed layer, built on -------
-   ---------- demand (and refreshed at commit), plus optional semantic ----------
-   ---------- expansion of the query when embeddings are available --------------
-   The index used to be written ONLY after a commit, and only if embedding
-   succeeded — so every layer committed before the feature shipped (and every
-   atlas on an instance without an embedding key) had no index at all. It is now
-   built lazily on the first search too, lexically, with vectors added
-   afterwards only if the model answers. */
+   ---------- demand (and refreshed at commit), plus row-level embeddings -------
+   ---------- for semantic retrieval when the model is available ----------------
+   Two artefacts per layer, derived from the same geojson and invalidated by
+   the same sig:
+     search.local.json    lexical vocabulary (terms, no vectors) — always
+                          built, synchronously, so keyword search needs no key
+     search-<layerId>.vec one embedding per FEATURE, int8-quantised — written
+                          in the background whenever the model answers
+   Terms used to carry their own vectors and a query was expanded to nearby
+   terms before the substring scan. That was query expansion, not retrieval: a
+   feature could only match if its text literally contained an expanded term,
+   so "quiet places to sit and read" could never reach a row described as
+   "sofa made out of recycled materials". Rows are now scored directly against
+   the query embedding, and the lexical pass survives unchanged underneath. */
 const SEARCH_MAX_TERMS = 300;
-const SEARCH_MIN_COSINE = 0.62;
+/* Floor for a semantic row hit. The old TERM floor was 0.62, tuned for
+   short-text vs short-text. A row vector averages a whole feature —
+   description, address, category, whatever enrichment added — so the query's
+   subject is diluted and true matches land visibly lower than term-vs-term
+   ones do; on this model a short query against a long blob typically sits
+   0.1–0.15 below the equivalent symmetric pair. 0.62 − ~0.12 → 0.50: low
+   enough to catch paraphrases, high enough that a vague query doesn't light
+   half the map. Chosen by reasoning, not measurement (no key on this machine)
+   — revisit once a keyed instance has real traffic to log. */
+const ROW_MIN_COSINE = 0.50;
 // gemini-embedding-001 defaults to 3072 dims; 768 (a supported MRL size) keeps
-// the side-file small. Query + vocab share this, so cosine stays comparable.
+// the side-file small. Query + rows share this, so cosine stays comparable.
 const EMBED_DIM = 768;
+// embedContent accepts a batch; ~100 keeps one request comfortably inside the
+// API's payload limits even with 4,000-char row blobs.
+const EMBED_BATCH = 100;
 
 async function embedTexts(texts) {
   if (!ai || !texts.length) return null;
@@ -2132,6 +2151,102 @@ function layerSearchRows(dir, stanza, sig) {
   return rows;
 }
 
+/* ---- row vectors: an int8 side-file per layer, next to its geojson ---- */
+
+/* 768 float32 per row is ~34MB of JSON at the 5,000-row ingest cap, so the
+   vectors skip search.local.json entirely and live in search-<layerId>.vec:
+     line 1              JSON header + "\n": { v, sig, model, dim, count }
+     count × 4 bytes     float32 LE per-row scale (scale = maxAbs(row) / 127)
+     count × dim bytes   int8 components, row-major, in feature order
+   Quantising each row against ITS OWN max keeps the whole int8 range in use
+   whatever the vector's magnitude — that per-row scale is what holds the
+   cosine error near 1e-3 instead of letting quiet vectors collapse to zeros.
+   Cosine itself is invariant under a positive per-row scale, so scoring reads
+   the int8 rows directly; the stored scale is what makes the floats
+   reconstructible (q[i] × scale) for anything that isn't scale-invariant. */
+function quantiseVec(v) {
+  let max = 0;
+  for (let i = 0; i < v.length; i++) { const a = Math.abs(v[i]); if (a > max) max = a; }
+  const q = new Int8Array(v.length);
+  if (!max) return { q, scale: 0 };
+  const scale = max / 127;
+  for (let i = 0; i < v.length; i++) q[i] = Math.max(-127, Math.min(127, Math.round(v[i] / scale)));
+  return { q, scale };
+}
+function rowVecFile(dir, layerId) {
+  // the layer id lands in a filename — ids are wizard-minted slugs, but a
+  // hand-edited manifest must not be able to point this outside the dataset dir
+  return /^[a-z0-9][a-z0-9-]{0,80}$/.test(String(layerId)) ? path.join(dir, 'search-' + layerId + '.vec') : null;
+}
+function writeRowVectors(dir, layerId, sig, vecs) {
+  const file = rowVecFile(dir, layerId);
+  if (!file) return;
+  const count = vecs.length;
+  const scales = Buffer.alloc(count * 4);
+  const body = Buffer.alloc(count * EMBED_DIM);
+  for (let i = 0; i < count; i++) {
+    const v = vecs[i];
+    // a row with no searchable text has no vector: zero components, scale 0 —
+    // cosine treats it as 0, so it can never become a semantic hit
+    if (!Array.isArray(v) || v.length !== EMBED_DIM) continue;
+    const { q, scale } = quantiseVec(v);
+    scales.writeFloatLE(scale, i * 4);
+    body.set(q, i * EMBED_DIM);   // Int8Array → Buffer keeps two's complement
+  }
+  const header = Buffer.from(JSON.stringify({ v: 1, sig, model: getEmbedModel(), dim: EMBED_DIM, count }) + '\n');
+  const tmp = file + '.tmp';
+  fs.writeFileSync(tmp, Buffer.concat([header, scales, body]));
+  fs.renameSync(tmp, file);
+}
+const rowVecCache = new Map();   // dir|layerId|sig -> { dim, count, scales, q }
+function readRowVectors(dir, layerId, sig) {
+  const file = rowVecFile(dir, layerId);
+  if (!file) return null;
+  const key = dir + '|' + layerId + '|' + sig;
+  const hit = rowVecCache.get(key);
+  if (hit) return hit;
+  let buf = null;
+  try { buf = fs.readFileSync(file); } catch { return null; }
+  const nl = buf.indexOf(10);
+  if (nl < 0) return null;
+  let h = null;
+  try { h = JSON.parse(buf.subarray(0, nl).toString('utf8')); } catch { return null; }
+  // stale or foreign vectors are worse than none: the query embedding they
+  // would be compared against comes from today's model, dim and geojson
+  if (!h || h.v !== 1 || h.sig !== sig || h.model !== getEmbedModel() || h.dim !== EMBED_DIM) return null;
+  const count = h.count | 0;
+  const scalesEnd = nl + 1 + count * 4;
+  if (count < 0 || buf.length !== scalesEnd + count * EMBED_DIM) return null;
+  // scales are copied out (a Float32Array view needs 4-byte alignment the
+  // header line doesn't guarantee); the int8 body is a zero-copy view
+  const scales = new Float32Array(count);
+  for (let i = 0; i < count; i++) scales[i] = buf.readFloatLE(nl + 1 + i * 4);
+  const out = { dim: EMBED_DIM, count, scales, q: new Int8Array(buf.buffer, buf.byteOffset + scalesEnd, count * EMBED_DIM) };
+  // only successful reads are cached, so a background write shows up on the
+  // very next search; 4 layers ≈ 15MB worst case at the ingest cap
+  if (rowVecCache.size >= 4) rowVecCache.delete(rowVecCache.keys().next().value);
+  rowVecCache.set(key, out);
+  return out;
+}
+// Embed every row of a layer and write the side-file. All-or-nothing: a
+// partial file would silently mis-align feature indices, so any failed batch
+// abandons the whole layer (a later search queues it again).
+async function embedRowsForLayer(dir, layerId, sig, texts) {
+  if (!ai) return false;
+  const vecs = new Array(texts.length).fill(null);
+  const idxs = [];
+  for (let i = 0; i < texts.length; i++) if (texts[i]) idxs.push(i);
+  for (let at = 0; at < idxs.length; at += EMBED_BATCH) {
+    const slice = idxs.slice(at, at + EMBED_BATCH);
+    const got = await embedTexts(slice.map((i) => texts[i]));
+    if (!got || got.length !== slice.length) return false;   // no key / model error → stay lexical
+    slice.forEach((rowI, j) => { vecs[rowI] = got[j]; });
+  }
+  // written even when every row was empty, so the layer stops re-queueing
+  writeRowVectors(dir, layerId, sig, vecs);
+  return true;
+}
+
 // Build (or refresh) the lexical index for every contributed layer that needs
 // it. Synchronous and embedding-free, so a search request can always call it.
 function ensureSearchIndex(dataset) {
@@ -2151,13 +2266,9 @@ function ensureSearchIndex(dataset) {
     if (!features.length) continue;
     const terms = layerVocabTerms(L, features);
     if (!terms.length) continue;
-    // Keep any vectors we already have for terms that survived the rebuild —
-    // re-embedding is the expensive part and may not be possible at all here.
-    const had = new Map(((cur && cur.terms) || []).filter((t) => Array.isArray(t.v)).map((t) => [t.t, t.v]));
-    const entry = {
-      v: 2, sig, model: cur && cur.model, dim: cur && cur.dim,
-      terms: terms.map((t) => (had.has(t) ? { t, v: had.get(t) } : { t })),
-    };
+    // Terms are written bare: their vectors moved to the row side-file, so a
+    // rebuild is also the moment an old vector-carrying entry slims down.
+    const entry = { v: 2, sig, terms: terms.map((t) => ({ t })) };
     out.idx[L.id] = entry;
     out.built.push(L.id);
     try { imports.writeSearchIndex(dataset, L.id, entry); } catch (e) { console.warn('[atlas] search index write failed:', e.message); }
@@ -2165,45 +2276,41 @@ function ensureSearchIndex(dataset) {
   return out;
 }
 
-// Vectors, when the model is around: fire-and-forget, one pass per dataset at a
-// time, so the search that triggered the build still answers immediately.
+// Row vectors, when the model is around: fire-and-forget, one pass per dataset
+// at a time, so the search that triggered the build still answers immediately.
+// A 5,000-row layer is ~50 sequential embed calls — a big atlas cannot
+// stampede the API, it just takes a few searches' worth of background time.
 const embedInFlight = new Set();
-function queueVocabEmbeddings(dataset, built) {
-  if (!ai || embedInFlight.has(dataset)) return;
+function queueRowEmbeddings(dataset, layerIds) {
+  if (!ai || !layerIds.length || embedInFlight.has(dataset)) return;
   embedInFlight.add(dataset);
   (async () => {
     try {
-      const idx = imports.readSearchIndex(dataset) || {};
-      for (const layerId of built) {
-        const entry = idx[layerId];
-        const terms = ((entry && entry.terms) || []).map((t) => t.t);
-        if (!terms.length || (entry.terms[0] && Array.isArray(entry.terms[0].v))) continue;
-        const vecs = await embedTexts(terms);
-        if (!vecs || vecs.length !== terms.length) continue;   // no key / model error → stay lexical
-        imports.writeSearchIndex(dataset, layerId, {
-          ...entry, model: getEmbedModel(), dim: vecs[0].length,
-          terms: terms.map((t, i) => ({ t, v: vecs[i] })),
-        });
+      const m = imports.readManifest(dataset);
+      if (!m) return;
+      for (const L of searchLayers(m)) {
+        if (layerIds.indexOf(L.id) < 0) continue;
+        const sig = layerSig(m.dir, L);
+        if (readRowVectors(m.dir, L.id, sig)) continue;   // another request already filled it
+        const rows = layerSearchRows(m.dir, L, sig);
+        if (!rows.length) continue;
+        await embedRowsForLayer(m.dir, L.id, sig, rows.map((r) => r.text));
       }
-    } catch (e) { console.warn('[atlas] vocab embedding failed:', e.message); }
+    } catch (e) { console.warn('[atlas] row embedding failed:', e.message); }
     finally { embedInFlight.delete(dataset); }
   })();
 }
 
-// After a commit: store the layer's vocabulary immediately (lexical, always) and
-// add vectors if the embedding model answers. No embeddings → search still works.
+// After a commit: store the layer's vocabulary immediately (lexical, always)
+// and embed its rows if the model answers. No embeddings → search still works.
+// (Named for the vocabulary it has always written; row vectors ride along now.)
 async function embedAndStoreVocab(dataset, layerId, stanza, features) {
-  const terms = layerVocabTerms(stanza, features);
-  if (!terms.length) return;
   const dir = imports.datasetDir(dataset);
   const sig = dir ? layerSig(dir, stanza) : '';
-  imports.writeSearchIndex(dataset, layerId, { v: 2, sig, terms: terms.map((t) => ({ t })) });
-  const vecs = await embedTexts(terms);
-  if (!vecs || vecs.length !== terms.length) return;
-  imports.writeSearchIndex(dataset, layerId, {
-    v: 2, sig, model: getEmbedModel(), dim: vecs[0].length,
-    terms: terms.map((t, i) => ({ t, v: vecs[i] })),
-  });
+  const terms = layerVocabTerms(stanza, features);
+  if (terms.length) imports.writeSearchIndex(dataset, layerId, { v: 2, sig, terms: terms.map((t) => ({ t })) });
+  if (!dir || !ai) return;
+  await embedRowsForLayer(dir, layerId, sig, features.map((f) => featureSearchText((f && f.properties) || {})));
 }
 
 // Fingerprint the data the user UPLOADED, not the features we derived from it:
@@ -2230,85 +2337,100 @@ function findLayerByContent(datasetId, contentHash, label, exceptId) {
   return null;
 }
 
-/* The viewer's search box asks for query expansion: terms from the atlas's own
-   vocabulary that its (client-side) marker matching should also light up. Two
-   passes, the first of which needs no AI:
-     1. lexical  — vocabulary terms that share text with the query
-     2. semantic — nearest vocabulary terms by embedding, when vectors exist
-   `hits` is diagnostic: which layer/features the server itself would match, so a
-   silent search box can be debugged with curl. The viewer lights markers from
-   its own copy of the data — this endpoint never has to be reachable for plain
-   keyword search to work. */
+/* The viewer's search box asks two things of the server, and a feature is a
+   hit if EITHER answers — the union, so semantic can only ever add:
+     1. lexical  — the query (and vocabulary terms sharing text with it) as
+                   substrings, exactly what the viewer matches client-side.
+                   `tags` carries the expansion back for that; no AI involved.
+     2. semantic — every row scored against the query embedding, where this
+                   layer's vectors exist. No wording in common required.
+   `hits` is diagnostic: which layer/features the server itself would match
+   (with a cosine `score` wherever vectors answered), so a silent search box
+   can be debugged with curl. The viewer lights markers from its own copy of
+   the data — this endpoint never has to be reachable for plain keyword search
+   to work. `total` counts the features the searched layers hold, the honest
+   denominator for a "N of M places" line. */
 const SEARCH_MAX_TAGS = 24;
 router.post('/layers/search', async (req, res) => {
   const b = req.body || {};
   const dataset = String(b.dataset || '');
   const q = String(b.q || '').trim().slice(0, 200).toLowerCase();
-  const empty = { tags: [], hits: [] };
+  const empty = { tags: [], hits: [], matched: 0, semantic: false, layers: 0, total: 0 };
   if (!dataset || q.length < 2 || !imports.datasetDir(dataset)) return res.json(empty);
 
   let built = { dir: null, layers: [], idx: {}, built: [] };
   try { built = ensureSearchIndex(dataset); }
   catch (e) { console.warn('[atlas] search index build failed:', e.message); }
-  if (built.built.length) queueVocabEmbeddings(dataset, built.built);
   if (!built.layers.length) return res.json(empty);
+
+  // fresh row vectors per layer; anything missing or stale is queued for the
+  // background pass (a no-op without a key)
+  const rowVecs = {}, needVecs = [];
+  for (const L of built.layers) {
+    const sig = layerSig(built.dir, L);
+    const rv = readRowVectors(built.dir, L.id, sig);
+    // sig (size+mtime) tracks the geojson; the count check guards the residual
+    // case of a same-second same-size rewrite that mtime rounding can hide
+    if (rv && rv.count === layerSearchRows(built.dir, L, sig).length) rowVecs[L.id] = rv;
+    else needVecs.push(L.id);
+  }
+  queueRowEmbeddings(dataset, needVecs);
 
   // whole query first, then its individual words — so "shadow puppet" can still
   // reach a "shadow-theatre" tag that no single feature spells out verbatim
   const words = q.split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !SEARCH_STOP.has(w) && w !== q);
   const seen = new Set(), tags = [], byWord = [];
-  const vecTerms = [];
   for (const L of built.layers) {
     for (const t of ((built.idx[L.id] || {}).terms || [])) {
       const term = String(t && t.t || '');
-      if (!term) continue;
-      if (Array.isArray(t.v)) vecTerms.push(t);
-      if (seen.has(term)) continue;
+      if (!term || seen.has(term)) continue;
       if (term.indexOf(q) >= 0 || q.indexOf(term) >= 0) { seen.add(term); tags.push(term); }
       else if (words.some((w) => term.indexOf(w) >= 0)) { seen.add(term); byWord.push(term); }
     }
   }
   tags.push(...byWord.slice(0, SEARCH_MAX_TAGS));
 
-  let semantic = false;
-  if (vecTerms.length && ai && geminiAllowed(clientIp(req))) {
-    try {
-      const qv = await embedTexts([q]);          // embedTexts swallows its own errors
-      if (qv && qv[0]) {
-        const scored = [];
-        const done = new Set();
-        for (const t of vecTerms) {
-          if (done.has(t.t)) continue;
-          done.add(t.t);
-          scored.push({ term: t.t, score: cosine(qv[0], t.v) });
-        }
-        scored.sort((x, y) => y.score - x.score);
-        for (const s of scored.filter((s) => s.score >= SEARCH_MIN_COSINE).slice(0, 8)) {
-          if (seen.has(s.term)) continue;
-          seen.add(s.term); tags.push(s.term); semantic = true;
-        }
-      }
-    } catch (e) { console.warn('[atlas] semantic search failed:', e.message); }
+  // one query embedding serves every layer. `semantic` reports whether row
+  // scoring RAN, not whether it hit — the useful fact when a curl of a thin
+  // result has to distinguish "no vectors yet" from "floor filtered it all".
+  let qv = null;
+  if (Object.keys(rowVecs).length && ai && geminiAllowed(clientIp(req))) {
+    const got = await embedTexts([q]);           // embedTexts swallows its own errors
+    if (got && got[0]) qv = got[0];
   }
+  const semantic = !!qv;
 
   const needles = [q].concat(tags);
   const hits = [];
-  let matched = 0;
+  let matched = 0, total = 0;
   try {
     for (const L of built.layers) {
       const rows = layerSearchRows(built.dir, L, layerSig(built.dir, L));
-      const fs_ = [];
+      total += rows.length;
+      const rv = qv ? rowVecs[L.id] : null;
+      const found = [];
       for (const r of rows) {
-        if (!needles.some((n) => n && r.text.indexOf(n) >= 0)) continue;
-        fs_.push({ i: r.i, title: r.title });
+        const lex = needles.some((n) => n && r.text.indexOf(n) >= 0);
+        // cosine is scale-invariant, so the int8 row is scored as stored
+        const score = rv ? cosine(qv, rv.q.subarray(r.i * rv.dim, (r.i + 1) * rv.dim)) : null;
+        if (!lex && !(score != null && score >= ROW_MIN_COSINE)) continue;
+        found.push({ i: r.i, title: r.title, lex, score });
       }
-      if (!fs_.length) continue;
-      matched += fs_.length;
-      hits.push({ layer: L.id, label: L.label || L.id, count: fs_.length, features: fs_.slice(0, 50) });
+      if (!found.length) continue;
+      matched += found.length;
+      // literal matches outrank paraphrases (they are what the user typed);
+      // within each band the cosine orders, and unscored rows keep data order
+      found.sort((a, b) => (b.lex - a.lex) || ((b.score || 0) - (a.score || 0)) || (a.i - b.i));
+      hits.push({
+        layer: L.id, label: L.label || L.id, count: found.length,
+        features: found.slice(0, 50).map((f) => (f.score == null
+          ? { i: f.i, title: f.title }
+          : { i: f.i, title: f.title, score: Math.round(f.score * 1000) / 1000 })),
+      });
     }
   } catch (e) { console.warn('[atlas] search scan failed:', e.message); }
 
-  res.json({ tags: tags.slice(0, SEARCH_MAX_TAGS), hits, matched, semantic, layers: built.layers.length });
+  res.json({ tags: tags.slice(0, SEARCH_MAX_TAGS), hits, matched, semantic, layers: built.layers.length, total });
 });
 
 router.post('/layers/commit', (req, res) => {
