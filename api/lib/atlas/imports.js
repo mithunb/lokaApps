@@ -239,6 +239,30 @@ export function commitLayer(datasetId, stanza, sourceFile, geojson) {
   return { layerId: stanza.id };
 }
 
+// Everything a layer owns goes when the layer does: its geometry, its search
+// vocabulary and its embedding binary. Leaving the last two behind was
+// survivable while they were a few KB of JSON; a .vec file is megabytes, and a
+// stale index answers searches for places that are no longer on the map.
+export function dropSearchIndex(datasetId, layerId) {
+  const dir = datasetDir(datasetId);
+  if (!dir) return;
+  const idx = readSearchIndex(datasetId);
+  if (idx && Object.prototype.hasOwnProperty.call(idx, layerId)) {
+    delete idx[layerId];
+    const p = path.join(dir, 'search.local.json');
+    const tmp = p + '.tmp';
+    try {
+      fs.writeFileSync(tmp, JSON.stringify(idx));
+      fs.renameSync(tmp, p);
+    } catch {}
+  }
+  // same name the search section builds; guarded so a layer id can never
+  // reach outside the dataset directory
+  if (/^[a-z0-9][a-z0-9-]{0,80}$/.test(String(layerId))) {
+    try { fs.rmSync(path.join(dir, 'search-' + layerId + '.vec'), { force: true }); } catch {}
+  }
+}
+
 export function removeLayer(datasetId, layerId) {
   const m = readManifest(datasetId);
   if (!m || !m.local) return false;
@@ -248,6 +272,7 @@ export function removeLayer(datasetId, layerId) {
   if (gone && gone.source && /^user-[a-z0-9-]+\.geojson$/.test(gone.source)) {
     try { fs.rmSync(path.join(m.dir, gone.source), { force: true }); } catch {}
   }
+  dropSearchIndex(datasetId, layerId);
   m.local.layers = keep;
   const localFile = path.join(m.dir, 'manifest.local.json');
   fs.writeFileSync(localFile, JSON.stringify(m.local, null, 1));
