@@ -22,9 +22,13 @@
   // ?embed=1 strips the page furniture — site nav, the build-your-own CTA and
   // the footer — leaving the atlas's own identity and the map. It's what the
   // wizard's preview pane wants: a look at the atlas, not at loka.place.
-  var EMBED = QS.get("embed") === "1";
+  // ?embed=map goes further: nothing but the stage, filling the frame. The
+  // editor wraps the atlas in its own bar, so the hero would say the title
+  // twice and the credits would push the map off the bottom.
+  var EMBED = QS.get("embed") === "1" || QS.get("embed") === "map";
   if (EMBED) {
     document.documentElement.classList.add("atlas-embed");
+    if (QS.get("embed") === "map") document.documentElement.classList.add("atlas-embed-map");
     // The owner's own tooling has no business inside someone else's frame:
     // Share offers a link to an atlas that may not be published yet, Manage
     // opens the wizard inside the wizard, and Add data walks the frame off to

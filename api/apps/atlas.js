@@ -733,6 +733,24 @@ router.post('/instances/:slug/publish', (req, res) => {
   res.json({ ok: true });
 });
 
+// The way back. Publishing was one-way, which made "live" a decision you could
+// only ever take once — and the editor states it as a thing you hold, so it has
+// to be a thing you can put down. Unpublishing returns the atlas to `built`:
+// the data stays exactly where it is, it simply stops being listed and stops
+// answering to people who were not invited.
+router.post('/instances/:slug/unpublish', (req, res) => {
+  const inst = reg.getInstance(String(req.params.slug));
+  if (!inst) return res.status(404).json({ error: 'not found' });
+  // deliberately owner-only: a collaborator can edit an atlas but should not be
+  // able to take it off the air for everyone else
+  if (callerRole(req, inst) !== 'owner') {
+    return res.status(403).json({ error: 'only the owner can take this atlas off the air' });
+  }
+  if (inst.status !== 'published') return res.json({ ok: true, already: true, status: inst.status });
+  reg.updateInstance(inst.slug, { status: 'built', publishedAt: null });
+  res.json({ ok: true, status: 'built' });
+});
+
 // Email the edit token to its owner — proves possession of the token first,
 // so this can't be used to phish tokens for someone else's atlas.
 router.post('/instances/:slug/email-token', async (req, res) => {

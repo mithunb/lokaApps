@@ -1,0 +1,787 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Your atlas — LOKA Atlas</title>
+  <meta name="robots" content="noindex" />
+  <!-- The atlas's own home. Reached at /apps/atlas/edit/?dataset=<slug> by the
+       owner or an invited editor; everyone else is turned away by the API.
+
+       This is the reviewed editor shell wired to real atlases. What it shows is
+       real: identity, whether the atlas is live, the layers actually on it, the
+       region, and who has been invited. The map is the REAL viewer in a frame
+       (?embed=1 already strips its page furniture) rather than a second
+       implementation of layer rendering that would drift from the first.
+
+       DIRECTION (unchanged from the prototype)
+       THESIS: an atlas has one home. Everything you do to it happens here.
+       OWN-WORLD: the viewer's — paper ground, hairline ink borders, moss as the
+         only interactive colour, Figtree stamps on DM Sans, the DESIGN.md ramp. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Figtree:wght@500;600;700&display=swap" />
+  <style>
+    :root {
+      --color-bg:#F9F9F7; --color-bg-alt:#F0EFEA; --color-surface:#FFFFFF;
+      --color-moss:#4A5A33; --color-canopy:#384526;
+      --color-rust:#AE5028; --color-rust-deep:#7C3616;
+      --color-ochre:#B8862F;
+      --color-text-primary:#2A241A; --color-text-secondary:#564E3C; --color-text-muted:#6B6350;
+      --color-divider:rgba(42,36,26,.09); --color-border:rgba(42,36,26,.14);
+      --color-moss-tint:rgba(74,90,51,.10); --color-rust-tint:rgba(174,80,40,.10);
+      --color-ochre-tint:rgba(184,134,47,.14);
+      --color-map-ground:#EAE9E3;
+      --t-section:1.15rem; --t-body:1rem; --t-control:.95rem; --t-ui:.875rem;
+      --t-meta:.78rem; --t-label:.72rem;
+      --shadow-md:0 1px 4px rgba(42,36,26,.10);
+      --shadow-lg:0 2px 12px rgba(42,36,26,.12);
+      --radius-md:.25rem; --radius-lg:.375rem;
+      --sheet-peek:4.5rem;
+    }
+    * { box-sizing:border-box; }
+    html, body { height:100%; }
+    body { margin:0; background:var(--color-bg); color:var(--color-text-primary);
+      font-family:'DM Sans',system-ui,-apple-system,sans-serif; font-size:var(--t-body); line-height:1.55;
+      -webkit-font-smoothing:antialiased; display:flex; flex-direction:column; }
+    h1,h2,h3 { font-family:'Figtree',sans-serif; letter-spacing:-.01em; margin:0; text-wrap:balance; }
+    button { font:inherit; }
+    [hidden] { display:none !important; }
+    :focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:4px; }
+    :root { --color-cat-other:#7a756c; }
+
+    /* ---------- top bar ---------- */
+    .ed-bar { display:flex; align-items:center; gap:1rem; flex-wrap:wrap;
+      padding:.75rem clamp(.9rem,3vw,1.5rem); border-bottom:1px solid var(--color-divider);
+      background:var(--color-bg); flex:0 0 auto; }
+    .ed-id { min-width:0; flex:1 1 14rem; }
+    .ed-id h1 { font-size:var(--t-section); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ed-id .by { font-size:var(--t-meta); color:var(--color-text-muted); }
+    .ed-desc { font-size:var(--t-meta); color:var(--color-text-secondary); margin:.15rem 0 0;
+      max-width:58ch; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .ed-acts { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+
+    .ed-status { display:inline-flex; align-items:center; gap:.45rem; font-size:var(--t-ui);
+      padding:.35rem .7rem; border-radius:999px; border:1px solid var(--color-border);
+      background:var(--color-surface); min-height:2rem; }
+    .ed-status .dot { width:.5rem; height:.5rem; border-radius:50%; background:var(--color-text-muted); flex:0 0 auto; }
+    .ed-status.live { border-color:rgba(74,90,51,.35); background:var(--color-moss-tint); color:var(--color-canopy); }
+    .ed-status.live .dot { background:var(--color-moss); }
+
+    .btn { min-height:2.75rem; padding:.55rem 1rem; border:1px solid transparent;
+      border-radius:var(--radius-md); background:var(--color-moss); color:#fff;
+      font-weight:600; font-size:var(--t-control); cursor:pointer; }
+    .btn:hover { background:var(--color-canopy); }
+    .btn.secondary { background:var(--color-surface); color:var(--color-text-primary); border-color:var(--color-border); }
+    .btn.secondary:hover { background:var(--color-bg-alt); }
+    .btn.quiet { background:none; color:var(--color-text-secondary); }
+    .btn.quiet:hover { background:var(--color-bg-alt); }
+    .btn.small { min-height:2.75rem; padding:.4rem .7rem; font-size:var(--t-ui); }
+    .btn.danger { background:var(--color-surface); color:var(--color-rust-deep); border-color:var(--color-rust); }
+    .btn.danger:hover { background:var(--color-rust-tint); }
+    .btn:disabled, .btn:disabled:hover { background:var(--color-bg-alt); color:var(--color-text-muted);
+      border-color:var(--color-border); cursor:not-allowed; }
+
+    /* ---------- stage: the real viewer, framed, with the panel over it ---------- */
+    .ed-stage { position:relative; flex:1 1 auto; min-height:0; background:var(--color-map-ground); }
+    #ed-frame { position:absolute; inset:0; width:100%; height:100%; border:0; }
+    .frame-veil { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+      background:var(--color-map-ground); color:var(--color-text-muted); font-size:var(--t-ui); z-index:2; }
+
+    .pane { position:absolute; z-index:5; display:flex; flex-direction:column;
+      background:var(--color-surface);
+      border:1px solid var(--color-border); border-radius:var(--radius-md); box-shadow:var(--shadow-md);
+      overflow:hidden; }
+    .pane-head { display:flex; align-items:center; gap:.5rem; padding:.6rem .85rem;
+      border-bottom:1px solid var(--color-divider); flex:0 0 auto; }
+    .pane-head h2 { flex:1 1 auto; font-size:var(--t-label); letter-spacing:.14em;
+      text-transform:uppercase; color:var(--color-text-secondary); font-weight:600; }
+    .pane-count { font-size:var(--t-meta); color:var(--color-text-muted); flex:0 0 auto; }
+    .pane-body { padding:.5rem .85rem .85rem; overflow:auto; flex:1 1 auto; }
+
+    @media (min-width:821px) {
+      /* right, not left: the atlas in the frame keeps its own layers panel on
+         the left, and that is the view a reader gets — the author should be
+         looking at it, not covering it up with authoring tools */
+      #pane-layers { top:1rem; right:1rem; width:20.5rem; max-width:calc(100% - 2rem); max-height:calc(100% - 2rem); }
+    }
+
+    .lyr-group { font-size:var(--t-label); letter-spacing:.12em; text-transform:uppercase;
+      color:var(--color-text-muted); font-weight:600; margin:.9rem 0 .2rem; }
+    .lyr-group:first-child { margin-top:.2rem; }
+    .lyr { display:flex; align-items:center; gap:.15rem; border-bottom:1px solid var(--color-divider); }
+    .lyr:last-of-type { border-bottom:none; }
+    .lyr-main { flex:1 1 auto; min-width:0; text-align:left; background:none; border:none;
+      padding:.5rem 0; cursor:default; color:inherit; }
+    .lyr-name { display:block; font-size:var(--t-ui); font-weight:600; white-space:nowrap;
+      overflow:hidden; text-overflow:ellipsis; }
+    .lyr-sub { display:block; font-size:var(--t-meta); color:var(--color-text-muted);
+      overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+    .lyr-lock { flex:0 0 auto; font-size:var(--t-label); color:var(--color-text-muted);
+      text-transform:uppercase; letter-spacing:.06em; }
+
+    .base-row { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; padding:.2rem 0 .5rem; }
+    .region-line { display:grid; grid-template-columns:1fr auto; gap:0 .6rem; align-items:baseline;
+      width:100%; min-height:2.75rem; padding:.4rem .5rem .45rem; margin:0 -.5rem .3rem;
+      background:none; border:none; border-radius:var(--radius-md); text-align:left; cursor:pointer;
+      color:inherit; font:inherit; }
+    .region-line:hover { background:var(--color-bg-alt); }
+    .region-k { grid-column:1; font-size:var(--t-meta); color:var(--color-text-muted); }
+    .region-v { grid-column:1; font-family:'Figtree',sans-serif; font-size:var(--t-ui); font-weight:600; }
+    .region-go { grid-column:2; grid-row:1/3; align-self:center; font-size:var(--t-meta);
+      font-weight:600; color:var(--color-canopy); }
+
+    .region-warn { margin:-.15rem 0 .5rem; font-size:var(--t-meta); color:var(--color-rust-deep);
+      font-weight:600; }
+    .empty { text-align:left; padding:.35rem 0 .6rem; }
+    .empty b { font-family:'Figtree',sans-serif; font-size:var(--t-ui); }
+    .empty p { font-size:var(--t-meta); color:var(--color-text-muted); margin:.15rem 0 0; max-width:34ch; }
+    .add-row { border-top:1px solid var(--color-divider); margin-top:.7rem; padding-top:.8rem; }
+    .add-row .btn { width:100%; }
+    .linkish { background:none; border:none; padding:0; font:inherit; font-size:inherit;
+      color:var(--color-canopy); text-decoration:underline; cursor:pointer; }
+
+    /* ---------- dialogs ---------- */
+    .scrim { position:fixed; inset:0; z-index:40; background:rgba(42,36,26,.34);
+      display:flex; align-items:center; justify-content:center; padding:1rem; }
+    .sheet { position:relative; width:min(34rem,100%); max-height:min(90vh,40rem); overflow:auto;
+      background:var(--color-surface); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg);
+      padding:1.25rem 1.35rem; }
+    .sheet h2 { font-size:var(--t-section); margin-bottom:.4rem; padding-right:2.5rem; }
+    .sheet-xrow { position:sticky; top:0; z-index:2; height:0; display:flex; justify-content:flex-end; }
+    .sheet-x { width:2.75rem; height:2.75rem; margin:-.35rem -.35rem 0 0; display:flex;
+      align-items:center; justify-content:center; background:var(--color-surface); border:none;
+      border-radius:var(--radius-md); font-size:var(--t-ui); line-height:1;
+      color:var(--color-text-muted); cursor:pointer; }
+    .sheet-x:hover { background:var(--color-bg-alt); color:var(--color-text-primary); }
+    .sheet p { color:var(--color-text-secondary); font-size:var(--t-ui); margin:0 0 1rem; max-width:60ch; }
+    .set-h { font-size:var(--t-ui); margin:1.3rem 0 .2rem; padding-top:1rem;
+      border-top:1px solid var(--color-divider); }
+    .sheet > .set-h:first-of-type { border-top:none; padding-top:0; margin-top:1rem; }
+    .set-p { font-size:var(--t-meta); color:var(--color-text-muted); margin:0 0 .6rem; max-width:60ch; }
+
+    .fld { display:flex; flex-wrap:wrap; align-items:baseline; gap:.15rem .4rem; margin-bottom:.9rem;
+      font-size:var(--t-ui); font-weight:600; color:var(--color-text-secondary); }
+    .fld > input, .fld > select, .fld > textarea { flex:1 0 100%; margin-top:.2rem; }
+    .fld input, .fld select, .fld textarea { font:inherit; font-size:var(--t-body); font-weight:400;
+      padding:.6rem .7rem; border:1px solid var(--color-border); border-radius:4px; background:#fff;
+      color:var(--color-text-primary); width:100%; min-height:2.75rem; }
+    .fld textarea { resize:vertical; line-height:1.45; }
+    .fld .note { font-size:var(--t-meta); font-weight:400; color:var(--color-text-muted); }
+    .save-row { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;
+      padding-top:.75rem; border-top:1px solid var(--color-divider); }
+    .set-err { font-size:var(--t-meta); color:var(--color-rust-deep); align-self:center; }
+    .set-ok { font-size:var(--t-meta); color:var(--color-canopy); align-self:center; }
+
+    .inv { display:flex; flex-direction:column; gap:.1rem; }
+    .inv-row { display:flex; align-items:center; gap:.5rem; min-height:2.75rem;
+      border-bottom:1px solid var(--color-divider); }
+    .inv-row:last-child { border-bottom:none; }
+    .inv-who { flex:1 1 auto; min-width:0; font-size:var(--t-ui); overflow:hidden;
+      text-overflow:ellipsis; white-space:nowrap; }
+    .inv-role { flex:0 0 auto; font-size:var(--t-meta); color:var(--color-text-muted); }
+    .inv-x { flex:0 0 auto; width:2.75rem; height:2.75rem; background:none; border:none;
+      color:var(--color-text-muted); cursor:pointer; border-radius:var(--radius-md); }
+    .inv-x:hover { background:var(--color-rust-tint); color:var(--color-rust-deep); }
+    .inv-add { display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.6rem; }
+    .inv-add input { flex:1 1 12rem; min-height:2.75rem; padding:.5rem .6rem; font:inherit;
+      font-size:var(--t-ui); border:1px solid var(--color-border); border-radius:4px; }
+
+    .toast { position:fixed; left:50%; bottom:1.2rem; transform:translateX(-50%); z-index:60;
+      background:var(--color-text-primary); color:#fff; font-size:var(--t-ui);
+      padding:.6rem 1rem; border-radius:var(--radius-md); box-shadow:var(--shadow-lg); max-width:90vw; }
+
+    .gate { max-width:34rem; margin:12vh auto; padding:0 1rem; text-align:center; }
+    .gate h1 { font-size:var(--t-section); margin-bottom:.4rem; }
+    .gate p { color:var(--color-text-secondary); font-size:var(--t-ui); }
+
+    /* ---------- phone: the panel becomes a bottom sheet ---------- */
+    @media (max-width:820px) {
+      .ed-bar { gap:.5rem .6rem; padding:.6rem .9rem; }
+      .ed-id { flex:1 1 auto; }
+      .ed-id h1 { font-size:var(--t-body); }
+      .ed-id .by, .ed-desc { display:none; }
+      .ed-acts { flex:0 0 auto; gap:.35rem; }
+      .ed-status { padding:.3rem .55rem; font-size:var(--t-meta); }
+      .ed-status .who { display:none; }
+      #status-act, #share-btn, #settings-btn { padding:.4rem .6rem; font-size:var(--t-meta); }
+      .pane { position:fixed; left:0; right:0; bottom:0; top:auto; width:auto; max-width:none;
+        border-radius:var(--radius-lg) var(--radius-lg) 0 0; border-bottom:none;
+        max-height:min(78vh,34rem); box-shadow:var(--shadow-lg);
+        padding-bottom:env(safe-area-inset-bottom); }
+      #pane-layers { transform:translateY(calc(100% - var(--sheet-peek))); transition:transform .22s cubic-bezier(.2,.8,.2,1); }
+      #pane-layers.open { transform:translateY(0); }
+      .pane-head { cursor:pointer; padding:.8rem .9rem 0; position:relative; padding-top:1.1rem; }
+      .pane-head::before { content:""; position:absolute; top:.4rem; left:50%; transform:translateX(-50%);
+        width:2.25rem; height:.25rem; border-radius:999px; background:var(--color-border); }
+    }
+    @media (prefers-reduced-motion:reduce) { #pane-layers { transition:none; } }
+  </style>
+</head>
+<body>
+  <div id="gate" class="gate" hidden>
+    <h1 id="gate-t">Loading…</h1>
+    <p id="gate-p"></p>
+    <p><a id="gate-a" class="btn secondary" style="display:none;text-decoration:none" href="../setup/">Your atlases</a></p>
+  </div>
+
+  <header class="ed-bar" id="bar" hidden>
+    <div class="ed-id">
+      <h1 id="ed-title">…</h1>
+      <span class="by" id="ed-by"></span>
+      <p class="ed-desc" id="ed-desc" hidden></p>
+    </div>
+    <div class="ed-acts">
+      <span class="ed-status" id="status" role="status">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="what" id="status-what">…</span>
+        <span class="who" id="status-who"></span>
+      </span>
+      <button class="btn" id="status-act" hidden>Make it live</button>
+      <button class="btn secondary" id="share-btn">Share</button>
+      <button class="btn quiet" id="settings-btn">Settings</button>
+    </div>
+  </header>
+
+  <main class="ed-stage" id="stage" hidden>
+    <div class="frame-veil" id="veil">Drawing your atlas…</div>
+    <iframe id="ed-frame" title="Your atlas" hidden></iframe>
+
+    <section class="pane" id="pane-layers" aria-label="Layers">
+      <div class="pane-head" id="layers-head">
+        <h2>Layers</h2>
+        <span class="pane-count" id="layers-count"></span>
+      </div>
+      <div class="pane-body">
+        <div class="lyr-group">Base map</div>
+        <button class="region-line" id="region-line">
+          <span class="region-k" id="region-k">Boundaries &amp; place names for</span>
+          <span class="region-v" id="region-names"></span>
+          <span class="region-go" aria-hidden="true">Change</span>
+        </button>
+        <p class="region-warn" id="region-warn" hidden></p>
+
+        <div class="lyr-group">Your data</div>
+        <div id="user-layers"></div>
+        <div class="empty" id="user-empty" hidden>
+          <b>Nothing of yours yet</b>
+          <p>Add a spreadsheet of places and it becomes a layer you can style.</p>
+        </div>
+
+        <div class="lyr-group">Open data</div>
+        <div id="catalog-layers"></div>
+        <div class="empty" id="catalog-empty" hidden>
+          <p>No extra open-data layers yet.</p>
+        </div>
+
+        <div class="add-row">
+          <button class="btn" id="add-data">＋ Add data</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+  (function () {
+    "use strict";
+    var $ = function (s) { return document.querySelector(s); };
+    var API = "../api/";
+    var QS = new URLSearchParams(location.search);
+    var SLUG = (QS.get("dataset") || QS.get("atlas") || "").trim();
+
+    var INST = null, MANIFEST = null, LOCAL = null, ME = null;
+
+    function api(path, opts) {
+      opts = opts || {};
+      opts.headers = Object.assign({ "Content-Type": "application/json" }, opts.headers || {});
+      if (opts.body && typeof opts.body !== "string") opts.body = JSON.stringify(opts.body);
+      return fetch(API + path, opts).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          if (!r.ok) { j._status = r.status; throw j; }
+          return j;
+        });
+      });
+    }
+    function errMsg(e) { return (e && (e.error || e.message)) || "something went wrong"; }
+    function esc(v) {
+      return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    /* ---- one toast element, reused: a shared timer with several nodes orphans
+            whichever one the timer did not belong to ---- */
+    var toastTimer, toastNode;
+    function toast(text) {
+      if (!toastNode) {
+        toastNode = document.createElement("div");
+        toastNode.className = "toast";
+        toastNode.setAttribute("role", "status");
+        document.body.appendChild(toastNode);
+      }
+      toastNode.textContent = text;
+      toastNode.hidden = false;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () { toastNode.hidden = true; }, 2600);
+    }
+
+    /* ---- dialogs: focus enters, Tab is trapped, the page behind is inert ---- */
+    var dialogStack = [];
+    function focusablesIn(root) {
+      return [].slice.call(root.querySelectorAll(
+        'button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'))
+        .filter(function (n) { return !n.disabled && n.offsetParent !== null; });
+    }
+    function openDialog(html, wire, guard) {
+      var scrim = document.createElement("div");
+      scrim.className = "scrim";
+      scrim.innerHTML = html;
+      var opener = document.activeElement;
+      scrim.addEventListener("click", function (e) {
+        if (e.target === scrim || e.target.hasAttribute("data-close")) closeDialog(scrim);
+      });
+      scrim.addEventListener("keydown", function (e) {
+        if (e.key !== "Tab") return;
+        var f = focusablesIn(scrim);
+        if (!f.length) return;
+        var first = f[0], last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      });
+      var sheet = scrim.querySelector(".sheet");
+      if (sheet && !sheet.querySelector(".sheet-x")) {
+        var xrow = document.createElement("div");
+        xrow.className = "sheet-xrow";
+        xrow.innerHTML = '<button type="button" class="sheet-x" data-close aria-label="Close">✕</button>';
+        sheet.insertBefore(xrow, sheet.firstChild);
+      }
+      document.body.appendChild(scrim);
+      dialogStack.push({ scrim: scrim, opener: opener });
+      document.querySelectorAll("header.ed-bar, main.ed-stage").forEach(function (n) { n.inert = true; });
+      if (wire) wire(scrim);
+      if (guard) scrim.__guard = guard;
+      var f = focusablesIn(scrim).filter(function (n) { return !n.classList.contains("sheet-x"); });
+      (f[0] || scrim.querySelector(".sheet-x") || scrim.querySelector(".sheet")).focus();
+      return scrim;
+    }
+    function closeDialog(which) {
+      var top = dialogStack[dialogStack.length - 1];
+      if (!top) return;
+      var entry = which ? dialogStack.filter(function (d) { return d.scrim === which; })[0] : top;
+      if (!entry) return;
+      if (entry.scrim.__guard && entry.scrim.__guard() === false) return;
+      dialogStack = dialogStack.filter(function (d) { return d !== entry; });
+      entry.scrim.remove();
+      if (!dialogStack.length) {
+        document.querySelectorAll("header.ed-bar, main.ed-stage").forEach(function (n) { n.inert = false; });
+      }
+      if (entry.opener && entry.opener.isConnected) entry.opener.focus();
+    }
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && dialogStack.length) closeDialog();
+    });
+
+    /* ================= loading the real atlas ================= */
+
+    function gate(title, body, showLink) {
+      $("#gate").hidden = false;
+      $("#gate-t").textContent = title;
+      $("#gate-p").textContent = body || "";
+      $("#gate-a").style.display = showLink ? "" : "none";
+    }
+
+    function datasetUrl(p) {
+      // a private atlas is served from a different root; the viewer knows how to
+      // find it, so the frame is the one thing that must not guess
+      return "../datasets/" + encodeURIComponent(SLUG) + "/" + p;
+    }
+
+    function load() {
+      if (!SLUG) { gate("Which atlas?", "This page needs an atlas in its address.", true); return; }
+      api("auth/me").catch(function () { return null; }).then(function (me) {
+        ME = me;
+        return api("instances/" + encodeURIComponent(SLUG));
+      }).then(function (inst) {
+        if (!inst.canEdit) {
+          gate("You cannot edit this atlas",
+            "It exists, but this account is not its owner and has not been invited to it.", true);
+          return null;
+        }
+        INST = inst;
+        return loadManifests();
+      }).then(function (ok) {
+        if (ok === null) return;
+        paintAll();
+        $("#bar").hidden = false;
+        $("#stage").hidden = false;
+        showFrame();
+      }).catch(function (e) {
+        if (e && e._status === 404) {
+          gate("No such atlas", "Nothing is published at “" + SLUG + "”, or it is not yours to open.", true);
+        } else if (e && (e._status === 401 || e.needsAuth)) {
+          gate("Sign in first", "Editing an atlas needs the email it belongs to.", true);
+        } else {
+          gate("Could not open this atlas", errMsg(e), true);
+        }
+      });
+    }
+
+    // The manifests are static files beside the data, not an API call — the same
+    // two the viewer reads, so the panel and the map can never disagree.
+    function loadManifests() {
+      return fetch(datasetUrl("manifest.json")).then(function (r) {
+        if (!r.ok) throw { error: "the atlas data could not be read", _status: r.status };
+        return r.json();
+      }).then(function (m) {
+        MANIFEST = m;
+        return fetch(datasetUrl("manifest.local.json"))
+          .then(function (r) { return r.ok ? r.json() : { layers: [] }; })
+          .catch(function () { return { layers: [] }; });
+      }).then(function (l) {
+        LOCAL = l && Array.isArray(l.layers) ? l : { layers: [] };
+        return true;
+      });
+    }
+
+    function showFrame() {
+      var f = $("#ed-frame");
+      f.addEventListener("load", function () { $("#veil").hidden = true; f.hidden = false; });
+      f.src = "../?dataset=" + encodeURIComponent(SLUG) + "&embed=map";
+    }
+
+    /* ================= painting what is actually there ================= */
+
+    function paintAll() {
+      paintIdentity(); paintStatus(); paintRegion(); paintLayers();
+    }
+
+    function paintIdentity() {
+      $("#ed-title").textContent = INST.title || SLUG;
+      document.title = (INST.title || SLUG) + " — LOKA Atlas";
+      var org = (INST.branding && INST.branding.orgName) || INST.org || "";
+      var role = INST.role === "owner" ? "you are the owner" : "you can edit this";
+      $("#ed-by").textContent = (org ? "by " + org + " · " : "") + role;
+      var d = $("#ed-desc");
+      d.textContent = INST.subtitle || "";
+      d.hidden = !INST.subtitle;
+    }
+
+    // Two axes, said as one sentence. `published` is what makes an atlas
+    // listed and openable by anyone with the link; `private` moves it out of
+    // the web root entirely.
+    function paintStatus() {
+      var live = INST.status === "published";
+      var priv = INST.visibility === "private";
+      var el = $("#status");
+      el.classList.toggle("live", live);
+      $("#status-what").textContent = live ? "Live" : "Not live";
+      $("#status-who").textContent = live
+        ? (priv ? "— only invited people" : "— anyone with the link")
+        : "— only you can see it";
+      var act = $("#status-act");
+      // only the owner decides whether an atlas is on the air
+      act.hidden = INST.role !== "owner" || INST.status === "building";
+      act.textContent = live ? "Take it off" : "Make it live";
+      act.className = live ? "btn secondary" : "btn";
+    }
+
+    // The row claimed boundaries and place names were drawn whatever the atlas
+    // actually held — and an atlas built before those layers existed, or one
+    // whose base manifest is empty, has neither. Say what is really there.
+    function baseLayerNames() {
+      var have = [];
+      (MANIFEST.layers || []).forEach(function (L) {
+        var id = String(L.id || "").toLowerCase();
+        if (/^(admin|boundary|boundaries)$/.test(id)) have.push("Boundaries");
+        else if (/^(labels|placenames|place-names)$/.test(id)) have.push("place names");
+      });
+      return have;
+    }
+    function paintRegion() {
+      var label = INST.regionLabel || (INST.region && INST.region.label) || "";
+      var have = baseLayerNames();
+      var lead = have.length
+        ? have.join(" & ") + " for"
+        : "This atlas covers";
+      $("#region-k").textContent = lead;
+      $("#region-names").textContent = label || "no region recorded";
+      $("#region-line").setAttribute("aria-label",
+        (have.length ? "Boundaries and place names are drawn for " : "This atlas covers ") +
+        (label || "no region yet") + ". Change the region.");
+      // an atlas with no base layers at all should say so rather than leave the
+      // reader to notice an empty map
+      var warn = $("#region-warn");
+      warn.hidden = have.length > 0;
+      warn.textContent = have.length ? "" : "No boundary or place-name layers were built for it.";
+    }
+
+    // A contributed layer is one the import pipeline wrote: it lives in
+    // manifest.local.json, or its source is a user-*.geojson. Everything in the
+    // base manifest is the catalogue's.
+    function isUserLayer(L, fromLocal) {
+      return fromLocal || L.userLayer === true || /^user-[a-z0-9-]+\.geojson$/.test(String(L.source || ""));
+    }
+    function layerSub(L) {
+      var bits = [];
+      if (L.legend && L.legend.length) bits.push(L.legend.length + (L.legend.length === 1 ? " class" : " classes"));
+      if (L.type) bits.push(L.type === "marker" ? "points" : L.type);
+      if (L.attribution) bits.push(String(L.attribution).slice(0, 60));
+      return bits.join(" · ");
+    }
+
+    function paintLayers() {
+      var base = (MANIFEST.layers || []).map(function (L) { return { L: L, local: false }; });
+      var local = (LOCAL.layers || []).map(function (L) { return { L: L, local: true }; });
+      var all = base.concat(local);
+
+      var mine = all.filter(function (e) { return isUserLayer(e.L, e.local); });
+      // "boundaries and place names" are the base map, spoken for by the region
+      // row above — listing them again as layers was the thing to remove
+      var theirs = all.filter(function (e) {
+        return !isUserLayer(e.L, e.local) && !/^(admin|labels|boundary|boundaries)$/i.test(String(e.L.id || ""));
+      });
+
+      fill("#user-layers", mine, true);
+      fill("#catalog-layers", theirs, false);
+      $("#user-empty").hidden = mine.length > 0;
+      $("#catalog-empty").hidden = theirs.length > 0;
+
+      var n = mine.length + theirs.length;
+      $("#layers-count").textContent = n ? n + " on the map" : "base map only";
+    }
+    function fill(sel, entries, owned) {
+      var host = $(sel);
+      host.innerHTML = "";
+      entries.forEach(function (e) {
+        var row = document.createElement("div");
+        row.className = "lyr";
+        row.innerHTML =
+          '<span class="lyr-main">' +
+            '<span class="lyr-name">' + esc(e.L.label || e.L.id) + "</span>" +
+            '<span class="lyr-sub">' + esc(layerSub(e.L)) + "</span></span>" +
+          (owned ? "" : '<span class="lyr-lock">open data</span>');
+        host.appendChild(row);
+      });
+    }
+
+    /* ================= the things you can actually do ================= */
+
+    $("#status-act").onclick = function () {
+      var btn = this, live = INST.status === "published";
+      btn.disabled = true;
+      api("instances/" + encodeURIComponent(SLUG) + "/" + (live ? "unpublish" : "publish"), { method: "POST" })
+        .then(function () {
+          INST.status = live ? "built" : "published";
+          paintStatus();
+          toast(live ? "Taken off the air — only you can see it now" : "Live — anyone with the link can open it");
+        })
+        .catch(function (e) {
+          toast(errMsg(e));
+          if (e && (e._status === 401 || e.needsAuth)) {
+            gate("Sign in first", "Publishing an atlas needs the email it belongs to.", true);
+          }
+        })
+        .then(function () { btn.disabled = false; });
+    };
+
+    $("#share-btn").onclick = function () {
+      var url = location.origin + location.pathname.replace(/edit\/$/, "") + "?dataset=" + encodeURIComponent(SLUG);
+      openDialog(
+        '<div class="sheet" role="dialog" aria-modal="true" aria-label="Share this atlas">' +
+          "<h2>Share</h2>" +
+          "<p>" + (INST.status === "published"
+            ? "Anyone with this link can open your atlas."
+            : "This atlas is not live yet — the link works only for you until you make it live.") + "</p>" +
+          '<label class="fld">Link<input type="text" id="share-url" readonly value="' + esc(url) + '" /></label>' +
+          '<div class="save-row"><button class="btn" id="share-copy">Copy the link</button>' +
+            '<span class="set-ok" id="share-said"></span></div>' +
+        "</div>",
+        function (scrim) {
+          scrim.querySelector("#share-url").onfocus = function () { this.select(); };
+          scrim.querySelector("#share-copy").onclick = function () {
+            var input = scrim.querySelector("#share-url");
+            input.select();
+            var said = scrim.querySelector("#share-said");
+            // navigator.clipboard needs a secure context and can be refused;
+            // the selected field is the fallback that always works
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(input.value)
+                .then(function () { said.textContent = "Copied."; })
+                .catch(function () { said.textContent = "Press ⌘C to copy."; });
+            } else { said.textContent = "Press ⌘C to copy."; }
+          };
+        });
+    };
+
+    $("#add-data").onclick = function () {
+      // the redesigned import is still a prototype; the working flow is the one
+      // the wizard already has, so that is where this goes until it is replaced
+      location.href = "../layers.html?dataset=" + encodeURIComponent(SLUG);
+    };
+    $("#region-line").onclick = function () { openSettings("region"); };
+    $("#settings-btn").onclick = function () { openSettings(); };
+
+    function settingsHTML() {
+      var b = INST.branding || {};
+      var owner = INST.role === "owner";
+      return '<div class="sheet" role="dialog" aria-modal="true" aria-label="Atlas settings">' +
+        "<h2>Settings</h2>" +
+
+        '<h3 class="set-h">Region</h3>' +
+        '<p class="set-p">This atlas covers <b>' + esc(INST.regionLabel || "no recorded region") + "</b>. " +
+          "Changing it rebuilds the base map, which takes a few minutes — that lives in the wizard for now.</p>" +
+        '<a class="btn secondary small" style="text-decoration:none" id="set-region" ' +
+          'href="../setup/?edit=' + encodeURIComponent(SLUG) + '">Change the region</a>' +
+
+        '<h3 class="set-h">Identity</h3>' +
+        '<label class="fld">Atlas title' +
+          '<input type="text" id="set-title" maxlength="80" value="' + esc(INST.title || "") + '" /></label>' +
+        '<label class="fld">What this atlas is for <span class="note">shown under the title</span>' +
+          '<textarea id="set-desc" rows="3" maxlength="160">' + esc(INST.subtitle || "") + "</textarea></label>" +
+        '<label class="fld">Organisation website <span class="note">optional, https</span>' +
+          '<input type="text" id="set-site" placeholder="https://example.org" value="' + esc(b.orgUrl || "") + '" /></label>' +
+
+        (owner ? '<h3 class="set-h">Who can edit it</h3>' +
+        '<p class="set-p">Invite the people who need to work on this atlas. They can add and style ' +
+          "data; only you can delete it or take it off the air.</p>" +
+        '<div class="inv" id="inv-list"></div>' +
+        '<div class="inv-add">' +
+          '<input type="email" id="inv-email" aria-label="Email address to invite" ' +
+            'placeholder="name@organisation.org" autocomplete="off" />' +
+          '<button class="btn secondary small" id="inv-go">Invite</button>' +
+        "</div>" : "") +
+
+        '<div class="save-row" style="margin-top:1.25rem">' +
+          '<button class="btn" id="set-save">Save changes</button>' +
+          '<span class="set-err" id="set-err" role="alert"></span></div>' +
+      "</div>";
+    }
+
+    function identityDirty(scrim) {
+      var t = scrim.querySelector("#set-title");
+      if (!t) return false;
+      var b = INST.branding || {};
+      return t.value.trim() !== (INST.title || "") ||
+        scrim.querySelector("#set-desc").value.trim() !== (INST.subtitle || "") ||
+        scrim.querySelector("#set-site").value.trim() !== (b.orgUrl || "");
+    }
+
+    function openSettings(land) {
+      var sheet = openDialog(settingsHTML(), function (scrim) {
+        paintInvites(scrim);
+        ["#set-title", "#set-desc", "#set-site"].forEach(function (sel) {
+          scrim.querySelector(sel).addEventListener("input", function () {
+            scrim.__warned = false;
+            scrim.querySelector("#set-err").textContent = "";
+          });
+        });
+        var go = scrim.querySelector("#inv-go");
+        if (go) go.onclick = function () { invite(scrim); };
+        scrim.querySelector("#set-save").onclick = function () { saveIdentity(scrim, this); };
+      }, function () {
+        var scrim = dialogStack[dialogStack.length - 1].scrim;
+        if (!identityDirty(scrim) || scrim.__warned) return true;
+        scrim.__warned = true;
+        scrim.querySelector("#set-err").textContent = "Unsaved changes. Save them, or close again to discard.";
+        scrim.querySelector("#set-save").focus();
+        return false;
+      });
+      if (land === "region") {
+        var r = sheet.querySelector("#set-region");
+        if (r) { r.scrollIntoView({ block: "start" }); r.focus(); }
+      }
+      return sheet;
+    }
+
+    function saveIdentity(scrim, btn) {
+      var t = scrim.querySelector("#set-title"), err = scrim.querySelector("#set-err");
+      if (!t.value.trim()) { err.textContent = "An atlas cannot be untitled."; t.focus(); return; }
+      var site = scrim.querySelector("#set-site").value.trim();
+      if (site && !/^https:\/\/[^\s]+$/.test(site)) {
+        err.textContent = "A website has to start with https://";
+        scrim.querySelector("#set-site").focus();
+        return;
+      }
+      btn.disabled = true; err.textContent = "";
+      api("instances/" + encodeURIComponent(SLUG) + "/details", {
+        method: "POST",
+        body: {
+          title: t.value.trim(),
+          subtitle: scrim.querySelector("#set-desc").value.trim(),
+          branding: { orgUrl: site },
+        },
+      }).then(function () {
+        INST.title = t.value.trim();
+        INST.subtitle = scrim.querySelector("#set-desc").value.trim();
+        INST.branding = Object.assign({}, INST.branding, { orgUrl: site });
+        scrim.__warned = true;              // nothing left to lose
+        paintIdentity();
+        closeDialog(scrim);
+        toast("Settings saved");
+        reloadFrame();                      // the viewer draws the title too
+      }).catch(function (e) {
+        err.textContent = errMsg(e);
+      }).then(function () { btn.disabled = false; });
+    }
+
+    function paintInvites(scrim) {
+      var host = scrim.querySelector("#inv-list");
+      if (!host) return;
+      var list = INST.collaborators || [];
+      host.innerHTML = "";
+      if (!list.length) {
+        host.innerHTML = '<p class="set-p" style="margin:0">Nobody yet.</p>';
+        return;
+      }
+      list.forEach(function (c) {
+        var row = document.createElement("div");
+        row.className = "inv-row";
+        row.innerHTML = '<span class="inv-who">' + esc(c.email) + "</span>" +
+          '<span class="inv-role">' + (c.acceptedAt ? "editing" : "invited") + "</span>" +
+          '<button class="inv-x" aria-label="Remove ' + esc(c.email) + '">✕</button>';
+        row.querySelector(".inv-x").onclick = function () {
+          this.disabled = true;
+          api("instances/" + encodeURIComponent(SLUG) + "/collaborators", {
+            method: "DELETE", body: { email: c.email },
+          }).then(function (r) {
+            INST.collaborators = r.collaborators || [];
+            paintInvites(scrim);
+            toast("Removed " + c.email);
+          }).catch(function (e) { toast(errMsg(e)); this.disabled = false; }.bind(this));
+        };
+        host.appendChild(row);
+      });
+    }
+
+    function invite(scrim) {
+      var em = scrim.querySelector("#inv-email"), go = scrim.querySelector("#inv-go");
+      var v = em.value.trim();
+      if (!v) { em.focus(); return; }
+      go.disabled = true;
+      api("instances/" + encodeURIComponent(SLUG) + "/collaborators", { method: "POST", body: { email: v } })
+        .then(function (r) {
+          INST.collaborators = r.collaborators || [];
+          em.value = "";
+          paintInvites(scrim);
+          // the invitation is an email; saying "invited" when it did not send
+          // would be the atlas lying about something the person cannot see
+          toast(r.sent === false ? "Added, but the email could not be sent" : "Invited " + v);
+        })
+        .catch(function (e) { scrim.querySelector("#set-err").textContent = errMsg(e); })
+        .then(function () { go.disabled = false; });
+    }
+
+    function reloadFrame() {
+      var f = $("#ed-frame");
+      if (f.src) f.src = f.src;      // the manifest it read has just changed
+    }
+
+    // mobile: the layers pane is a bottom sheet you pull up
+    $("#layers-head").onclick = function () {
+      if (window.matchMedia("(max-width:820px)").matches) $("#pane-layers").classList.toggle("open");
+    };
+
+    load();
+  })();
+  </script>
+</body>
+</html>
