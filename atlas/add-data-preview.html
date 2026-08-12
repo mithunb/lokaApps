@@ -1,0 +1,1392 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Add data — prototype — LOKA Atlas</title>
+  <meta name="robots" content="noindex" />
+  <!-- PROTOTYPE. Reachable from editor-preview.html's "+ Add data"; wired to no API.
+       Two things here are REAL and meant to be tested against a real file:
+         · Check the fields — the CSV is parsed and profiled in the browser. Types,
+           multi-value delimiters, image URLs, coordinates and tag-sets are all
+           detected by the same rules api/lib/tabular.js uses on the server.
+         · Place on the map — real MapLibre, real points, real filtering.
+       Three things are STUBS, each labelled as one on the page itself:
+         · grouping a tag column by meaning (needs the model)
+         · meaning-matching search (needs row embeddings on the server)
+         · turning addresses into coordinates (needs the geocoder)
+
+       DIRECTION
+       THESIS: adding data is two questions, not a wizard. "Is this what you
+         meant?" and "where does it go?" Everything after that is looking at it.
+       WHAT'S NEW HERE: the atlas proposes ways to SEE the data rather than
+         asking which column to colour by. Candidate splits are scored on
+         whether they would actually read on a map, and the good ones are
+         marked Recommended. The reasons are in plain words; no statistics
+         vocabulary reaches the surface.
+       OWN-WORLD: inherited from the viewer and the editor shell — paper ground,
+         hairline ink borders, moss as the only interactive colour, Figtree on
+         DM Sans, the DESIGN.md ramp. No new tokens.
+       MARKERS: a place belonging to several groups shows several colours, as
+         slices. A second grouping can take the pin's shape. Both are capped by
+         what stays legible at 24px: four slices, four shapes. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Figtree:wght@500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <style>
+    :root {
+      --color-bg:#F9F9F7; --color-bg-alt:#F0EFEA; --color-surface:#FFFFFF;
+      --color-moss:#4A5A33; --color-canopy:#384526;
+      --color-rust:#AE5028; --color-rust-deep:#7C3616;
+      --color-ochre:#B8862F;
+      --color-text-primary:#2A241A; --color-text-secondary:#564E3C; --color-text-muted:#6B6350;
+      --color-divider:rgba(42,36,26,.09); --color-border:rgba(42,36,26,.14);
+      --color-moss-tint:rgba(74,90,51,.10); --color-rust-tint:rgba(174,80,40,.10);
+      --color-ochre-tint:rgba(184,134,47,.14);
+      --color-map-ground:#EAE9E3;
+      /* the categorical "other" slot, as shipped in api/lib/fragment.js */
+      --color-cat-other:#7a756c;
+      /* the ramp from DESIGN.md — no new steps invented here */
+      --t-display:1.6rem; --t-section:1.15rem; --t-body:1rem; --t-control:.95rem;
+      --t-ui:.875rem; --t-meta:.78rem; --t-label:.72rem;
+      --shadow-md:0 1px 4px rgba(42,36,26,.10);
+      --shadow-lg:0 2px 12px rgba(42,36,26,.12);
+      --radius-md:.25rem; --radius-lg:.375rem;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--color-bg); color:var(--color-text-primary);
+      font-family:'DM Sans',system-ui,-apple-system,sans-serif; font-size:var(--t-body); line-height:1.55;
+      -webkit-font-smoothing:antialiased; }
+    h1,h2,h3 { font-family:'Figtree',sans-serif; letter-spacing:-.01em; margin:0; text-wrap:balance; }
+    button { font:inherit; }
+    [hidden] { display:none !important; }
+    :focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:4px; }
+
+    /* ---------- page frame ---------- */
+    .wrap { max-width:70rem; margin:0 auto; padding:clamp(1.1rem,4vw,2.4rem) clamp(.9rem,4vw,2rem) 4rem; }
+    .lede { font-size:var(--t-meta); color:var(--color-text-muted); max-width:52ch; margin:.35rem 0 0; }
+    h1 { font-size:var(--t-display); }
+    .proto { display:inline-block; margin-left:.5rem; padding:.1rem .4rem; border-radius:4px;
+      background:var(--color-ochre-tint); color:var(--color-rust-deep); font-family:'DM Sans',sans-serif;
+      font-size:var(--t-label); font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+      vertical-align:middle; }
+
+    .stepper { display:flex; flex-wrap:wrap; gap:.15rem; margin:1.2rem 0 1rem; }
+    .stp { display:flex; align-items:baseline; gap:.4rem; min-height:2.75rem; padding:.5rem .7rem;
+      background:none; border:1px solid transparent; border-radius:var(--radius-md);
+      color:var(--color-text-muted); font-size:var(--t-ui); cursor:pointer; }
+    .stp b { font-family:'Figtree',sans-serif; }
+    .stp[aria-current="step"] { background:var(--color-surface); border-color:var(--color-border);
+      color:var(--color-text-primary); font-weight:600; }
+    .stp:disabled { cursor:not-allowed; opacity:.55; }
+
+    .panel { background:var(--color-surface); border:1px solid var(--color-border);
+      border-radius:var(--radius-lg); padding:clamp(1rem,3vw,1.6rem); }
+    .panel > h2 { font-size:var(--t-section); margin-bottom:.5rem; }
+    .hint { font-size:var(--t-meta); color:var(--color-text-muted); max-width:52ch; }
+    .btnrow { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; margin-top:1.3rem; }
+
+    .btn { min-height:2.75rem; padding:.6rem 1.1rem; border:1px solid transparent;
+      border-radius:var(--radius-md); background:var(--color-moss); color:#fff;
+      font-weight:600; font-size:var(--t-control); cursor:pointer; }
+    .btn:hover { background:var(--color-canopy); }
+    .btn.secondary { background:var(--color-surface); color:var(--color-text-primary);
+      border-color:var(--color-border); }
+    .btn.secondary:hover { background:var(--color-bg-alt); }
+    .btn.quiet { background:none; color:var(--color-text-secondary); }
+    .btn.quiet:hover { background:var(--color-bg-alt); }
+    .btn.small { min-height:2.75rem; padding:.4rem .7rem; font-size:var(--t-ui); }
+    .btn:disabled, .btn:disabled:hover { background:var(--color-bg-alt); color:var(--color-text-muted);
+      border-color:var(--color-border); cursor:not-allowed; }
+
+    /* a stub is never dressed as working software */
+    .stub { display:inline-flex; align-items:center; gap:.3rem; padding:.1rem .4rem; border-radius:4px;
+      background:var(--color-bg-alt); color:var(--color-text-muted);
+      font-size:var(--t-label); font-weight:600; letter-spacing:.03em; text-transform:uppercase; }
+    .stubbed { border:1px dashed var(--color-border); border-radius:var(--radius-md);
+      padding:.7rem .85rem; background:var(--color-bg); }
+    .stubbed .hint { margin:.25rem 0 0; }
+
+    /* ---------- 1 · the file ---------- */
+    .drop { display:block; width:100%; padding:2rem 1rem; text-align:center; cursor:pointer;
+      background:var(--color-bg); border:1.5px dashed var(--color-border);
+      border-radius:var(--radius-lg); color:inherit; font:inherit; }
+    .drop:hover, .drop.over { border-color:var(--color-moss); background:var(--color-moss-tint); }
+    .drop b { display:block; font-family:'Figtree',sans-serif; font-size:var(--t-control); }
+    .drop span { display:block; font-size:var(--t-meta); color:var(--color-text-muted); margin-top:.2rem; }
+    .or { display:flex; align-items:center; gap:.7rem; margin:1rem 0; font-size:var(--t-meta);
+      color:var(--color-text-muted); }
+    .or::before, .or::after { content:""; flex:1 1 auto; height:1px; background:var(--color-divider); }
+
+    /* ---------- 2 · check the fields ---------- */
+    .recognised { display:flex; gap:.6rem; align-items:flex-start; margin:0 0 1.1rem;
+      padding:.75rem .9rem; border-radius:var(--radius-md);
+      background:var(--color-moss-tint); border:1px solid rgba(74,90,51,.22); }
+    .recognised b { font-family:'Figtree',sans-serif; font-size:var(--t-ui); }
+    .recognised p { margin:.15rem 0 0; font-size:var(--t-meta); color:var(--color-text-secondary); }
+
+    .fields { border:1px solid var(--color-border); border-radius:var(--radius-md); overflow:hidden; }
+    .fld-row { display:grid; grid-template-columns:auto 1fr 11rem; gap:.5rem .8rem; align-items:center;
+      padding:.6rem .8rem; border-bottom:1px solid var(--color-divider); }
+    .fld-row:last-child { border-bottom:none; }
+    .fld-row.off { background:var(--color-bg); }
+    .fld-row.off .fld-name, .fld-row.off .fld-what { opacity:.5; }
+    .fld-row input[type="checkbox"] { width:1.1rem; height:1.1rem; accent-color:var(--color-moss); }
+    .fld-name { font-family:'Figtree',sans-serif; font-size:var(--t-ui); font-weight:600;
+      overflow-wrap:anywhere; }
+    .fld-what { grid-column:2; font-size:var(--t-meta); color:var(--color-text-muted);
+      overflow:hidden; text-overflow:ellipsis; }
+    .fld-what code { font-family:ui-monospace,Menlo,monospace; font-size:.95em; }
+    .fld-role { grid-column:3; grid-row:1/3; }
+    .fld-role select { width:100%; min-height:2.75rem; padding:.35rem .5rem; font:inherit;
+      font-size:var(--t-ui); border:1px solid var(--color-border); border-radius:4px;
+      background:var(--color-surface); color:inherit; }
+    .tick { display:flex; align-items:center; justify-content:center; grid-row:1/3;
+      width:2.75rem; height:2.75rem; margin:-.4rem 0 -.4rem -.6rem; }
+
+    /* ---------- 3 · place & see ---------- */
+    .placed { display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; margin-bottom:1rem;
+      padding:.7rem .85rem; border-radius:var(--radius-md); background:var(--color-bg-alt); }
+    .placed .p-txt { flex:1 1 16rem; font-size:var(--t-ui); }
+    .placed .p-txt b { font-family:'Figtree',sans-serif; }
+    .how { display:flex; gap:.4rem; flex-wrap:wrap; margin:.7rem 0 0; }
+    .how-opt { min-height:2.75rem; padding:.45rem .8rem; font-size:var(--t-ui);
+      background:var(--color-surface); border:1px solid var(--color-border);
+      border-radius:var(--radius-md); cursor:pointer; color:inherit; }
+    .how-opt[aria-pressed="true"] { background:var(--color-moss-tint); border-color:var(--color-moss);
+      font-weight:600; }
+    .how-opt:disabled { opacity:.6; cursor:not-allowed; }
+    .coordpick { display:flex; gap:.8rem; flex-wrap:wrap; margin-top:.7rem; }
+    .coordpick label { display:flex; flex-direction:column; gap:.2rem; font-size:var(--t-meta);
+      font-weight:600; color:var(--color-text-secondary); }
+    .coordpick select { min-height:2.75rem; min-width:9rem; padding:.35rem .5rem; font:inherit;
+      font-size:var(--t-ui); border:1px solid var(--color-border); border-radius:4px;
+      background:var(--color-surface); color:inherit; }
+
+    /* map beside the controls on desktop, stacked on a phone */
+    .stage { display:grid; grid-template-columns:1fr 21rem; gap:1rem; align-items:start; }
+    @media (max-width:900px) { .stage { grid-template-columns:1fr; } }
+    .mapbox { position:relative; height:min(70vh,34rem); border:1px solid var(--color-border);
+      border-radius:var(--radius-md); overflow:hidden; background:var(--color-map-ground); }
+    /* AFTER the base rule, not before it: same specificity, so source order is
+       what decides — a media block above the rule it means to override loses. */
+    @media (max-width:900px) {
+      /* stacked, the map has the full width, so it needs less height to read,
+         and the legend it drives should not be two screens down */
+      .mapbox { height:min(52vh,26rem); }
+    }
+    #ad-map { position:absolute; inset:0; }
+    .side { display:flex; flex-direction:column; gap:1rem; min-width:0; }
+
+    .card { border:1px solid var(--color-border); border-radius:var(--radius-md);
+      background:var(--color-surface); padding:.8rem .85rem; }
+    .card > h3 { font-size:var(--t-ui); margin-bottom:.15rem; }
+    .card .hint { max-width:none; }
+
+    /* search: the positives are what changes, so they are what is emphasised */
+    .searchrow { display:flex; gap:.4rem; margin-top:.6rem; }
+    .searchrow input { flex:1 1 auto; min-width:0; min-height:2.75rem; padding:.5rem .6rem;
+      font:inherit; font-size:var(--t-ui); border:1px solid var(--color-border);
+      border-radius:4px; background:var(--color-surface); color:inherit; }
+    .found { margin:.5rem 0 0; font-size:var(--t-meta); }
+    .found b { font-family:'Figtree',sans-serif; color:var(--color-canopy); }
+    .found .none { color:var(--color-rust-deep); font-weight:600; }
+
+    /* ways to see it */
+    .views { display:flex; flex-direction:column; gap:.4rem; margin-top:.6rem; }
+    .view { display:grid; grid-template-columns:auto 1fr; gap:.15rem .55rem; align-items:baseline;
+      width:100%; padding:.55rem .6rem; text-align:left; cursor:pointer; color:inherit;
+      background:var(--color-surface); border:1px solid var(--color-border);
+      border-radius:var(--radius-md); font:inherit; }
+    .view:hover { background:var(--color-bg-alt); }
+    .view[aria-pressed="true"] { border-color:var(--color-moss); background:var(--color-moss-tint); }
+    /* the chosen-ness is drawn, not an input: aria-pressed on the button is the
+       state, and a real radio inside a button is invalid markup */
+    .view .dot { grid-row:1/3; width:1.1rem; height:1.1rem; border-radius:50%;
+      border:1.5px solid var(--color-border); background:var(--color-surface); }
+    .view[aria-pressed="true"] .dot { border-color:var(--color-moss); border-width:5px; }
+    .v-name { font-family:'Figtree',sans-serif; font-size:var(--t-ui); font-weight:600; }
+    .v-why { grid-column:2; font-size:var(--t-meta); color:var(--color-text-muted); }
+    .rec { display:inline-block; margin-left:.35rem; padding:0 .3rem; border-radius:4px;
+      background:var(--color-moss); color:#fff; font-size:var(--t-label); font-weight:600;
+      letter-spacing:.03em; text-transform:uppercase; vertical-align:.05em; }
+    .view.weak .v-name { font-weight:500; color:var(--color-text-secondary); }
+
+    /* legend, which is also the filter */
+    .leg-head { display:flex; align-items:baseline; gap:.5rem; flex-wrap:wrap; }
+    .leg-head h3 { flex:1 1 auto; }
+    .leg-acts { display:flex; gap:.1rem; }
+    .leg-acts button { min-height:2.75rem; padding:.2rem .45rem; background:none; border:none;
+      color:var(--color-canopy); font-size:var(--t-meta); font-weight:600; cursor:pointer;
+      border-radius:4px; }
+    .leg-acts button:hover { background:var(--color-bg-alt); }
+    .leg { display:flex; flex-direction:column; gap:.05rem; margin-top:.3rem; }
+    .leg-row { display:flex; align-items:center; gap:.5rem; min-height:2.75rem; padding:.15rem .3rem;
+      border-radius:var(--radius-md); cursor:pointer; font-size:var(--t-ui); }
+    .leg-row:hover { background:var(--color-bg-alt); }
+    .leg-row input { width:1.1rem; height:1.1rem; accent-color:var(--color-moss); flex:0 0 auto; }
+    .leg-row .l-name { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis;
+      white-space:nowrap; }
+    .leg-row .l-n { flex:0 0 auto; font-size:var(--t-meta); color:var(--color-text-muted);
+      font-variant-numeric:tabular-nums; }
+    .leg-row.out .l-name, .leg-row.out .l-n { opacity:.45; }
+    .swatch { flex:0 0 auto; width:16px; height:16px; background:var(--sw,var(--color-cat-other));
+      box-shadow:0 0 0 1.5px #fff, 0 1px 2px rgba(42,36,26,.3); }
+    .swatch.circle { border-radius:50%; }
+    .swatch.square { border-radius:2px; }   /* see --shape-corner note */
+    .swatch.triangle { clip-path:polygon(50% 0,100% 100%,0 100%); box-shadow:none;
+      filter:drop-shadow(0 0 1px #fff) drop-shadow(0 1px 1px rgba(42,36,26,.35)); }
+    .swatch.diamond { clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%); box-shadow:none;
+      filter:drop-shadow(0 0 1px #fff) drop-shadow(0 1px 1px rgba(42,36,26,.35)); }
+
+    /* ---------- markers ---------- */
+    /* One pin, up to four colours. A place in several groups is drawn as slices
+       rather than made to pick one, which is the information the old
+       "first value wins" rule threw away. */
+    .ad-pin { width:22px; height:22px; cursor:pointer;
+      background:var(--fill,var(--color-cat-other));
+      box-shadow:0 0 0 2px #fff, 0 1px 3px rgba(42,36,26,.35);
+      transition:opacity .16s ease, transform .16s cubic-bezier(.25,1,.5,1); }
+    .ad-pin.circle { border-radius:50%; }
+    .ad-pin.square { border-radius:2px; }
+    /* clip-path eats the ring, so shaped pins draw their outline as a shadow */
+    .ad-pin.triangle, .ad-pin.diamond { box-shadow:none;
+      filter:drop-shadow(0 0 1.2px #fff) drop-shadow(0 0 1.2px #fff) drop-shadow(0 1px 1.5px rgba(42,36,26,.4)); }
+    .ad-pin.triangle { clip-path:polygon(50% 0,100% 100%,0 100%); width:24px; height:24px; }
+    .ad-pin.diamond { clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%); width:24px; height:24px; }
+    .ad-pin.multi { width:24px; height:24px; }
+    @media (hover:hover) { .ad-pin:hover { transform:scale(1.16); } }
+    /* search dims the rest rather than removing it, so a hit keeps its context */
+    .ad-pin.dim { opacity:.22; }
+    .ad-pin.lit { transform:scale(1.2); box-shadow:0 0 0 2px #fff, 0 0 0 5px rgba(74,90,51,.35), 0 1px 4px rgba(42,36,26,.4); }
+    .ad-pin.lit.triangle, .ad-pin.lit.diamond { filter:drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 4px rgba(74,90,51,.9)); }
+
+    .maplibregl-popup-content { font-family:'DM Sans',sans-serif; font-size:var(--t-ui);
+      padding:.7rem .8rem; border-radius:var(--radius-md); max-width:17rem; }
+    .pop-t { font-family:'Figtree',sans-serif; font-size:var(--t-control); font-weight:600;
+      margin:0 0 .3rem; }
+    .pop-img { width:100%; height:auto; border-radius:4px; margin:0 0 .4rem; display:block; }
+    .pop-f { margin:.25rem 0 0; font-size:var(--t-meta); color:var(--color-text-secondary); }
+    .pop-f b { color:var(--color-text-muted); font-weight:600; font-family:'DM Sans',sans-serif; }
+    .pop-tags { display:flex; flex-wrap:wrap; gap:.2rem; margin-top:.3rem; }
+    .pop-tags span { padding:.05rem .3rem; border-radius:4px; background:var(--color-bg-alt);
+      font-size:var(--t-label); }
+
+    .msg { margin-top:.9rem; padding:.6rem .8rem; border-radius:var(--radius-md); font-size:var(--t-ui); }
+    .msg.err { background:var(--color-rust-tint); color:var(--color-rust-deep); }
+    .log { font-family:ui-monospace,Menlo,monospace; font-size:var(--t-meta); white-space:pre-line;
+      color:var(--color-text-muted); background:var(--color-bg-alt); border-radius:var(--radius-md);
+      padding:.6rem .7rem; margin-top:.6rem; max-height:9rem; overflow:auto; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Add data<span class="proto">prototype</span></h1>
+    <p class="lede">Drop a spreadsheet of places in and it becomes a layer on your atlas. Checking
+      the fields and placing them on the map are real here; three later steps are marked as stubs.</p>
+
+    <nav class="stepper" aria-label="Steps">
+      <button class="stp" data-s="1"><b>1</b> The file</button>
+      <button class="stp" data-s="2" disabled><b>2</b> Check the fields</button>
+      <button class="stp" data-s="3" disabled><b>3</b> Place &amp; see it</button>
+    </nav>
+
+    <!-- 1 ------------------------------------------------------------------ -->
+    <section class="panel" id="s1">
+      <h2>Which file?</h2>
+      <p class="hint">A CSV of places. Anything with coordinates works; LOKA exports are recognised
+        on sight.</p>
+      <div style="margin-top:1rem">
+        <button class="drop" id="drop" type="button">
+          <b>Choose a CSV, or drop one here</b>
+          <span>Nothing leaves your browser in this prototype.</span>
+        </button>
+        <input type="file" id="file" accept=".csv,text/csv" hidden />
+      </div>
+      <p class="or">or</p>
+      <button class="btn secondary" id="sample">Use the Bengaluru sample (66 places)</button>
+      <div id="msg-1"></div>
+    </section>
+
+    <!-- 2 ------------------------------------------------------------------ -->
+    <section class="panel" id="s2" hidden>
+      <h2>Is this what you meant?</h2>
+      <p class="hint" id="check-sub"></p>
+
+      <div class="recognised" id="recognised" hidden>
+        <span aria-hidden="true">✓</span>
+        <div>
+          <b>This is LOKA data</b>
+          <p id="rec-what"></p>
+        </div>
+      </div>
+
+      <div class="fields" id="fields" style="margin-top:1.1rem"></div>
+
+      <div class="stubbed" style="margin-top:1.1rem" id="enrich-stub" hidden>
+        <b style="font-family:'Figtree',sans-serif;font-size:var(--t-ui)">Group <span id="stub-tagfield"></span> by meaning</b>
+        <span class="stub">stub</span>
+        <p class="hint" id="stub-tagwhy"></p>
+        <button class="btn secondary small" style="margin-top:.5rem" id="enrich-go">✨ Group them</button>
+        <div id="msg-enrich"></div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn quiet" data-go="1">← Another file</button>
+        <button class="btn" id="to-3">Place these on the map →</button>
+      </div>
+      <div id="msg-2"></div>
+    </section>
+
+    <!-- 3 ------------------------------------------------------------------ -->
+    <section class="panel" id="s3" hidden>
+      <h2>On the map</h2>
+
+      <div class="placed" id="placed">
+        <span class="p-txt" id="placed-txt"></span>
+        <button class="btn secondary small" id="placed-change">Change</button>
+      </div>
+      <div id="placed-detail" hidden>
+        <div class="how" role="group" aria-label="How to place these rows">
+          <button class="how-opt" id="how-coords" aria-pressed="true">By latitude &amp; longitude</button>
+          <button class="how-opt" id="how-names" aria-pressed="false">By place name</button>
+          <button class="how-opt" id="how-addr" aria-pressed="false" disabled>
+            By address <span class="stub" style="margin-left:.3rem">needs the geocoder</span>
+          </button>
+        </div>
+        <div class="coordpick" id="coordpick">
+          <label>Latitude<select id="s-lat"></select></label>
+          <label>Longitude<select id="s-lng"></select></label>
+        </div>
+        <p class="hint" id="how-why" style="margin-top:.5rem"></p>
+      </div>
+
+      <div class="stage" style="margin-top:1rem">
+        <div class="mapbox"><div id="ad-map"></div></div>
+
+        <div class="side">
+          <div class="card">
+            <h3>Ways to see this data</h3>
+            <p class="hint">Each one splits your places into groups. We kept the ones that would
+              actually read on a map.</p>
+            <div class="views" id="views"></div>
+          </div>
+
+          <div class="card" id="shape-card" hidden>
+            <h3>Mark a second grouping by shape</h3>
+            <p class="hint">Colour can only carry one grouping. A second can take the pin's shape,
+              if it has four groups or fewer.</p>
+            <div class="views" id="shapes" style="margin-top:.5rem"></div>
+          </div>
+
+          <div class="card" id="legend-card" hidden>
+            <div class="leg-head">
+              <h3 id="leg-title">Colour</h3>
+              <span class="leg-acts">
+                <button id="leg-all">All</button>
+                <button id="leg-none">None</button>
+              </span>
+            </div>
+            <p class="hint" id="leg-note"></p>
+            <div class="leg" id="leg"></div>
+          </div>
+
+          <div class="card" id="shape-legend-card" hidden>
+            <div class="leg-head"><h3 id="shleg-title">Shape</h3></div>
+            <div class="leg" id="shleg"></div>
+          </div>
+
+          <div class="card">
+            <h3>Search your data</h3>
+            <p class="hint">Matching places light up; the rest stay put, dimmed.</p>
+            <div class="searchrow">
+              <input type="search" id="q" placeholder="e.g. recycled, temple, trees" aria-label="Search your data" />
+              <button class="btn secondary small" id="q-clear">Clear</button>
+            </div>
+            <p class="found" id="found" aria-live="polite"></p>
+            <div class="stubbed" style="margin-top:.6rem">
+              <b style="font-family:'Figtree',sans-serif;font-size:var(--t-meta)">Matching by meaning</b>
+              <span class="stub">stub</span>
+              <p class="hint">Words are matched here and now. Searching by meaning — “quiet places to
+                sit and read” finding a bench in a garden — needs one number-set per place computed on
+                the server, so it arrives with the API.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn quiet" data-go="2">← Back to the fields</button>
+        <button class="btn" id="add-it">Add this layer</button>
+        <span class="stub">the add itself is a stub</span>
+      </div>
+      <div id="msg-3"></div>
+    </section>
+  </div>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script>
+  (function () {
+    "use strict";
+    var $ = function (s) { return document.querySelector(s); };
+    var $$ = function (s) { return [].slice.call(document.querySelectorAll(s)); };
+
+    /* Paul Tol's muted set, the same one api/lib/fragment.js uses, so the mock
+       and the real thing colour a category identically. Safe for the common
+       colour-vision deficiencies. */
+    var COLORS = ['#332288','#999933','#44AA99','#AA4499','#117733','#882255','#88CCEE','#DDCC77'];
+    var OTHER = getComputedStyle(document.documentElement)
+      .getPropertyValue('--color-cat-other').trim() || '#7a756c';
+    var SHAPES = ['circle','square','triangle','diamond'];   // all that stay legible at 24px
+    var MAX_SLICES = 4;
+
+    var S = {                       // everything the page knows
+      rows: [], cols: [], prof: {}, roles: {}, keep: {}, loka: false,
+      lat: '', lng: '', feats: [], views: [], colourView: null, shapeView: null,
+      on: {}, markers: [], query: ''
+    };
+
+    /* ============================ 1 · the file ============================ */
+
+    // RFC4180 enough: quoted fields, embedded commas, doubled quotes, CRLF.
+    function parseCSV(text) {
+      var rows = [], row = [], cell = '', q = false, i = 0;
+      text = text.replace(/^﻿/, '');
+      for (; i < text.length; i++) {
+        var c = text[i];
+        if (q) {
+          if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; }
+          else cell += c;
+        } else if (c === '"') q = true;
+        else if (c === ',') { row.push(cell); cell = ''; }
+        else if (c === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+        else if (c !== '\r') cell += c;
+      }
+      if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+      return rows.filter(function (r) { return r.some(function (v) { return String(v).trim(); }); });
+    }
+
+    function loadText(text, name) {
+      var grid = parseCSV(text);
+      if (grid.length < 2) return fail('That file has no rows under its header.');
+      var head = grid[0].map(function (h, i) { return String(h).trim() || ('column ' + (i + 1)); });
+      S.cols = head;
+      S.rows = grid.slice(1).map(function (r) {
+        var o = {};
+        head.forEach(function (h, i) { o[h] = r[i] == null ? '' : String(r[i]).trim(); });
+        return o;
+      });
+      S.file = name || 'your file';
+      profileAll();
+      assignRoles();
+      paintCheck();
+      step(2);
+    }
+    function fail(m) { $('#msg-1').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; }
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    /* ======================== profiling the columns ======================= */
+    /* The same rules api/lib/tabular.js applies server-side, ported so the
+       prototype can be judged on real files without an API. */
+
+    var BOOL_RE = /^(true|false|yes|no)$/i;
+    var DATE_RE = /^\d{4}-\d{2}-\d{2}([T ].*)?$/;
+    var IMG_RE = /^https?:\/\/\S+\.(jpe?g|png|webp|gif|avif)(\?\S*)?$/i;
+    var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    function detectDelimiter(vals) {
+      if (!vals.length) return null;
+      for (var i = 0; i < 2; i++) {
+        var d = [';', ','][i];
+        if (vals.filter(function (v) { return v.indexOf(d) >= 0; }).length < vals.length * 0.4) continue;
+        if (isSet(vals, d)) return d;
+      }
+      return null;
+    }
+    /* An address splits on commas too, and the server's rule reads it as a set
+       of values. What tells them apart is POSITION: a set has none, so its
+       first and last tokens are equally varied ("Culture; Heritage" either way
+       round). An address is positional — its last part is the city and postcode,
+       which repeat across almost every row, while its first part is a street
+       number that repeats never. Measured on the LOKA sample: categories 15%
+       unique at both ends, labels 94% / 97%, address 82% / 3%. */
+    function isSet(vals, d) {
+      var firsts = {}, lasts = {}, nf = 0;
+      vals.forEach(function (v) {
+        var t = splitTokens(v, d);
+        if (t.length < 2) return;
+        nf++;
+        firsts[t[0].toLowerCase()] = 1;
+        lasts[t[t.length - 1].toLowerCase()] = 1;
+      });
+      if (nf < 4) return true;                    // too few to judge; trust the split
+      var fu = Object.keys(firsts).length / nf, lu = Object.keys(lasts).length / nf;
+      return lu >= fu * 0.5;
+    }
+    function splitTokens(v, delim) {
+      if (!delim) { v = String(v).trim(); return v ? [v] : []; }
+      return String(v).split(delim).map(function (t) { return t.trim(); })
+        .filter(function (t) { return t; });
+    }
+
+    function profileAll() {
+      S.prof = {};
+      var n = S.rows.length;
+      S.cols.forEach(function (name) {
+        var vals = S.rows.map(function (r) { return r[name]; })
+          .filter(function (v) { return v !== '' && v != null; }).map(String);
+        var p = { name: name, filled: vals.length, total: n };
+        var nums = vals.map(Number).filter(function (x) { return isFinite(x); });
+        var allNum = vals.length > 0 && nums.length === vals.length;
+        var allBool = vals.length > 0 && vals.every(function (v) { return BOOL_RE.test(v); });
+        var allDate = vals.length > 0 && vals.every(function (v) { return DATE_RE.test(v); });
+        p.type = allBool ? 'boolean' : allDate ? 'date' : allNum ? 'number' : 'string';
+        var lower = vals.map(function (v) { return v.toLowerCase(); });
+        p.distinct = uniq(lower).length;
+        p.samples = uniq(vals).slice(0, 4);
+        p.avgLen = vals.length ? vals.reduce(function (a, s) { return a + s.length; }, 0) / vals.length : 0;
+
+        if (p.type === 'number') {
+          p.min = Math.min.apply(null, nums); p.max = Math.max.apply(null, nums);
+          p.looksLat = p.min >= -90 && p.max <= 90 && /lat/i.test(name);
+          p.looksLng = p.min >= -180 && p.max <= 180 && /(lon|lng)/i.test(name);
+          if (!p.looksLat && p.min >= -90 && p.max <= 90 && p.distinct > 3 &&
+              !/lon|lng|id|year|count|pop/i.test(name)) p.maybeLat = true;
+          if (!p.looksLng && p.min >= -180 && p.max <= 180 && p.distinct > 3 &&
+              !/lat|id|year|count|pop/i.test(name)) p.maybeLng = true;
+          p.idLike = /(^|[^a-z])id([^a-z]|$)/i.test(name) && p.distinct === vals.length;
+        } else if (p.type === 'string') {
+          p.image = vals.length > 0 &&
+            vals.filter(function (s) { return IMG_RE.test(s); }).length / vals.length >= 0.6;
+          p.uuid = vals.length > 0 &&
+            vals.filter(function (s) { return UUID_RE.test(s); }).length / vals.length >= 0.8;
+          p.delim = p.image || p.uuid ? null : detectDelimiter(vals);
+          var toks = {};
+          vals.forEach(function (v) {
+            splitTokens(v, p.delim).forEach(function (t) { toks[t.toLowerCase()] = 1; });
+          });
+          p.tokens = Object.keys(toks).length;
+          var primaries = uniq(vals.map(function (v) {
+            var t = splitTokens(v, p.delim); return (t[0] || '').toLowerCase();
+          }));
+          p.primaryCard = p.delim ? primaries.length : p.distinct;
+          var enough = vals.length >= Math.max(4, n * 0.5);
+          // a low-cardinality string classes a map better than any number, but
+          // only when values actually repeat — otherwise it is a name or an id
+          p.categorical = !p.image && !p.uuid && enough && p.tokens >= 2 &&
+            p.tokens <= (p.delim ? 12 : 8) && p.primaryCard < vals.length &&
+            (!!p.delim || p.avgLen <= 40);
+          // a delimited column with many tokens is a TAG SET: rich in a popup,
+          // useless as a colour until something groups it
+          p.tagList = !!p.delim && !p.categorical && p.tokens > 12 && p.avgLen <= 300;
+          p.nameLike = !p.image && !p.uuid && !p.delim && p.avgLen >= 3 && p.avgLen <= 40 &&
+            p.distinct > Math.min(3, n - 1);
+          p.longText = p.avgLen > 40;
+        }
+        S.prof[name] = p;
+      });
+    }
+    function uniq(a) {
+      var seen = {}, out = [];
+      a.forEach(function (v) { if (!seen[v]) { seen[v] = 1; out.push(v); } });
+      return out;
+    }
+
+    /* ===================== the LOKA schema, known by name ================= */
+    /* LOKA exports always look the same, so there is nothing to infer: the
+       roles, the coordinates, the popup and the searchable text are all known
+       the moment the header matches. The one oddity is that LOKA has no title
+       column — `description` is the name of the place. */
+    var LOKA_ROLES = {
+      tag_id: 'id', latitude: 'latitude', longitude: 'longitude',
+      description: 'title', categories: 'category', labels: 'tags',
+      address: 'text', creator: 'category', created_at: 'date', image_urls: 'image'
+    };
+    function detectLoka() {
+      var have = {};
+      S.cols.forEach(function (c) { have[c.toLowerCase()] = c; });
+      var core = ['tag_id', 'latitude', 'longitude', 'description'];
+      if (!core.every(function (k) { return have[k]; })) return false;
+      var extras = ['categories', 'labels', 'address', 'creator', 'created_at', 'image_urls']
+        .filter(function (k) { return have[k]; });
+      if (extras.length < 2) return false;
+      S.lokaExtras = extras;
+      return true;
+    }
+
+    /* Roles: what each column is FOR. LOKA sets them from the schema; anything
+       else gets them from the profile. */
+    var ROLE_LABELS = {
+      title: 'Name of the place', latitude: 'Latitude', longitude: 'Longitude',
+      category: 'Group it belongs to', tags: 'Tags', number: 'A number',
+      text: 'Description / notes', image: 'Photo', date: 'A date', id: 'Identifier',
+      ignore: "Don't use"
+    };
+    function assignRoles() {
+      S.roles = {}; S.keep = {};
+      S.loka = detectLoka();
+      var lower = {};
+      S.cols.forEach(function (c) { lower[c] = c.toLowerCase(); });
+
+      if (S.loka) {
+        S.cols.forEach(function (c) {
+          S.roles[c] = LOKA_ROLES[lower[c]] || guessRole(c);
+          S.keep[c] = S.roles[c] !== 'id';
+        });
+      } else {
+        var titleTaken = false;
+        S.cols.forEach(function (c) {
+          var r = guessRole(c);
+          if (r === 'title') { if (titleTaken) r = 'text'; else titleTaken = true; }
+          S.roles[c] = r;
+          S.keep[c] = r !== 'id';
+        });
+        // nothing name-like: the shortest text column stands in as the title
+        if (!titleTaken) {
+          var best = null;
+          S.cols.forEach(function (c) {
+            var p = S.prof[c];
+            if (p.type !== 'string' || p.image || p.uuid || p.delim) return;
+            if (!best || p.avgLen < S.prof[best].avgLen) best = c;
+          });
+          if (best) S.roles[best] = 'title';
+        }
+      }
+      S.lat = pickRole('latitude'); S.lng = pickRole('longitude');
+    }
+    function guessRole(c) {
+      var p = S.prof[c];
+      if (p.type === 'number') {
+        if (p.looksLat || p.maybeLat && !pickRole('latitude')) return 'latitude';
+        if (p.looksLng || p.maybeLng && !pickRole('longitude')) return 'longitude';
+        return p.idLike ? 'id' : 'number';
+      }
+      if (p.type === 'date') return 'date';
+      if (p.type === 'boolean') return 'category';
+      if (p.uuid) return 'id';
+      if (p.image) return 'image';
+      if (p.tagList) return 'tags';
+      if (p.categorical) return 'category';
+      if (p.nameLike) return 'title';
+      return 'text';
+    }
+    function pickRole(r) {
+      for (var i = 0; i < S.cols.length; i++) if (S.roles[S.cols[i]] === r) return S.cols[i];
+      return '';
+    }
+    function colsWithRole(r) {
+      return S.cols.filter(function (c) { return S.roles[c] === r; });
+    }
+
+    /* ======================= 2 · check the fields ======================== */
+
+    function paintCheck() {
+      $('#check-sub').textContent = S.rows.length + ' rows and ' + S.cols.length +
+        ' fields read from ' + S.file + '. Untick anything the atlas should not carry.';
+
+      var rec = $('#recognised');
+      rec.hidden = !S.loka;
+      if (S.loka) {
+        $('#rec-what').textContent = 'Coordinates, the description as the name, ' +
+          S.lokaExtras.join(', ').replace(/_/g, ' ') +
+          ' — all known from the schema, so nothing here had to be guessed.';
+      }
+
+      var host = $('#fields');
+      host.innerHTML = '';
+      S.cols.forEach(function (c) {
+        var p = S.prof[c], row = document.createElement('div');
+        row.className = 'fld-row' + (S.keep[c] ? '' : ' off');
+        row.dataset.col = c;
+        var opts = Object.keys(ROLE_LABELS).map(function (r) {
+          return '<option value="' + r + '"' + (S.roles[c] === r ? ' selected' : '') + '>' +
+            esc(ROLE_LABELS[r]) + '</option>';
+        }).join('');
+        row.innerHTML =
+          '<span class="tick"><input type="checkbox" id="k-' + cssId(c) + '"' +
+            (S.keep[c] ? ' checked' : '') + ' aria-label="Include ' + esc(c) + '" /></span>' +
+          '<label class="fld-name" for="k-' + cssId(c) + '">' + esc(c) + '</label>' +
+          '<span class="fld-what">' + esc(describe(p)) + '</span>' +
+          '<span class="fld-role"><select aria-label="What ' + esc(c) + ' is for">' + opts + '</select></span>';
+        row.querySelector('input').onchange = function () {
+          S.keep[c] = this.checked;
+          row.classList.toggle('off', !this.checked);
+        };
+        row.querySelector('select').onchange = function () {
+          S.roles[c] = this.value;
+          S.lat = pickRole('latitude'); S.lng = pickRole('longitude');
+        };
+        host.appendChild(row);
+      });
+
+      // a tag column is the one thing profiling can spot but not use
+      var tagCol = colsWithRole('tags')[0];
+      var stub = $('#enrich-stub');
+      stub.hidden = !tagCol;
+      if (tagCol) {
+        $('#stub-tagfield').textContent = tagCol;
+        $('#stub-tagwhy').textContent = S.prof[tagCol].tokens + ' different tags across ' +
+          S.rows.length + ' places, so almost every place would get its own colour. Grouping them ' +
+          'into a handful of themes needs a model reading them together, which is server work.';
+      }
+    }
+    function cssId(s) { return String(s).replace(/[^a-z0-9]+/gi, '-'); }
+    function describe(p) {
+      var bits = [];
+      if (p.type === 'number') {
+        bits.push('numbers from ' + fmt(p.min) + ' to ' + fmt(p.max));
+      } else if (p.type === 'date') { bits.push('dates'); }
+      else if (p.image) { bits.push('image links'); }
+      else if (p.uuid) { bits.push('identifiers'); }
+      else if (p.delim) {
+        bits.push(p.tokens + ' values, several per row, split on “' + p.delim + '”');
+      } else if (p.longText) { bits.push('text, about ' + Math.round(p.avgLen) + ' characters'); }
+      else { bits.push(p.distinct + (p.distinct === 1 ? ' value' : ' different values')); }
+      if (p.filled < p.total) bits.push((p.total - p.filled) + ' blank');
+      var eg = p.samples[0] ? ' · e.g. ' + p.samples[0].slice(0, 42) : '';
+      return bits.join(' · ') + eg;
+    }
+    function fmt(n) {
+      if (!isFinite(n)) return '?';
+      return Math.abs(n) >= 1000 ? Math.round(n).toLocaleString()
+        : Math.round(n * 100) / 100 + '';
+    }
+
+    /* ===================== 3 · placement and features ==================== */
+
+    function buildFeatures() {
+      S.feats = [];
+      if (!S.lat || !S.lng) return;
+      S.rows.forEach(function (r, i) {
+        var la = Number(r[S.lat]), lo = Number(r[S.lng]);
+        if (!isFinite(la) || !isFinite(lo) || (la === 0 && lo === 0)) return;
+        if (la < -90 || la > 90 || lo < -180 || lo > 180) return;
+        S.feats.push({ i: i, row: r, lat: la, lng: lo });
+      });
+    }
+
+    function paintPlaced() {
+      var n = S.feats.length, miss = S.rows.length - n;
+      $('#placed-txt').innerHTML = n
+        ? '<b>' + n + ' of ' + S.rows.length + ' placed</b> by their latitude and longitude' +
+          (miss ? ' · ' + miss + ' had no usable coordinates' : '')
+        : '<b>Nothing could be placed</b> — pick the coordinate columns';
+      $('#how-why').textContent = S.loka
+        ? 'LOKA data always carries coordinates, so there is nothing to look up.'
+        : 'Two number columns in the right ranges were read as coordinates.';
+      fillSel('#s-lat', S.lat); fillSel('#s-lng', S.lng);
+    }
+    function fillSel(sel, cur) {
+      var el = $(sel);
+      el.innerHTML = S.cols.filter(function (c) { return S.prof[c].type === 'number'; })
+        .map(function (c) {
+          return '<option value="' + esc(c) + '"' + (c === cur ? ' selected' : '') + '>' + esc(c) + '</option>';
+        }).join('');
+    }
+
+    /* ========================= ways to see it =========================== */
+    /* A "view" splits the rows into named groups. Each candidate is scored on
+       three things, none of which is ever named on the page:
+         balance   — is one group swallowing everything?
+         coverage  — do most rows land in a group at all?
+         map signal— do a place's neighbours tend to share its group? On a map
+                     this is the one that matters: a split whose groups are
+                     scattered identically just colours the page into noise.  */
+
+    function valuesOf(col, row) {
+      var p = S.prof[col], v = row[col];
+      if (v === '' || v == null) return [];
+      return splitTokens(v, p.delim).map(function (t) { return t.slice(0, 40); });
+    }
+
+    // views that exist in the design but not in this prototype, listed where
+    // they will appear so the shape of the panel is honest
+    function pendingViews() {
+      var out = [];
+      colsWithRole('tags').forEach(function (c) {
+        if (!S.keep[c]) return;
+        out.push({ pending: true, name: 'By groups of ' + prettyCol(c),
+          why: S.prof[c].tokens + ' tags is too many to colour by. Grouped into a handful of ' +
+            'themes it becomes the richest way to see this data — that grouping needs the model.' });
+      });
+      S.cols.forEach(function (c) {
+        if (!S.keep[c] || S.roles[c] !== 'title' || !S.prof[c].longText) return;
+        out.push({ pending: true, name: 'By what the ' + prettyCol(c) + ' says',
+          why: 'Reading all ' + S.rows.length + ' of them together and naming the themes that ' +
+            'come up. Also the model.' });
+      });
+      return out;
+    }
+
+    function generateViews() {
+      var out = [];
+      S.cols.forEach(function (c) {
+        if (!S.keep[c]) return;
+        var role = S.roles[c], p = S.prof[c];
+        if (role === 'category' || (role === 'tags' && p.tokens <= 12)) {
+          out.push(viewFromColumn(c));
+        } else if (role === 'number' && p.distinct > 5) {
+          out.push(viewFromBands(c));
+        }
+        // 'date' is deliberately never a view: a time control is its own design
+        // problem, so dates stay in the popup until that is done properly.
+      });
+      // tag columns become views only once something groups them — the stub
+      out = out.filter(Boolean);
+      out.forEach(score);
+      out.sort(function (a, b) { return b.rank - a.rank; });
+      S.views = out;
+      S.pending = pendingViews();
+    }
+
+    function viewFromColumn(c) {
+      var counts = {}, groups = [];
+      S.feats.forEach(function (f) {
+        var vs = valuesOf(c, f.row);
+        f['g_' + c] = vs;
+        vs.forEach(function (v) { counts[v] = (counts[v] || 0) + 1; });
+      });
+      groups = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; });
+      return {
+        key: c, col: c, name: 'By ' + prettyCol(c), counts: counts, groups: groups,
+        multi: !!S.prof[c].delim,
+        of: function (f) { return f['g_' + c] || []; }
+      };
+    }
+
+    // Five groups of roughly equal size. Quantiles rather than equal-width
+    // ranges: real-world numbers cluster, and equal widths leave four bands
+    // empty and one holding everything.
+    function viewFromBands(c) {
+      var nums = S.feats.map(function (f) { return Number(f.row[c]); })
+        .filter(function (x) { return isFinite(x); }).sort(function (a, b) { return a - b; });
+      if (nums.length < 10) return null;
+      var cuts = [0.2, 0.4, 0.6, 0.8].map(function (q) { return nums[Math.floor(q * nums.length)]; });
+      cuts = uniq(cuts);
+      if (!cuts.length) return null;
+      var labels = [], lo = nums[0];
+      cuts.forEach(function (cut) { labels.push(fmt(lo) + '–' + fmt(cut)); lo = cut; });
+      labels.push(fmt(lo) + '–' + fmt(nums[nums.length - 1]));
+      function band(x) {
+        for (var i = 0; i < cuts.length; i++) if (x < cuts[i]) return labels[i];
+        return labels[labels.length - 1];
+      }
+      var counts = {};
+      S.feats.forEach(function (f) {
+        var x = Number(f.row[c]);
+        var g = isFinite(x) ? band(x) : null;
+        f['g_' + c] = g ? [g] : [];
+        if (g) counts[g] = (counts[g] || 0) + 1;
+      });
+      return {
+        key: c, col: c, name: prettyCol(c) + ', in five groups', counts: counts,
+        groups: labels.filter(function (l) { return counts[l]; }), multi: false, banded: true,
+        of: function (f) { return f['g_' + c] || []; }
+      };
+    }
+    function prettyCol(c) {
+      return String(c).replace(/_/g, ' ').replace(/\burls?\b/i, '').trim().toLowerCase();
+    }
+
+    function score(v) {
+      var n = S.feats.length;
+      var covered = S.feats.filter(function (f) { return v.of(f).length; }).length;
+      v.coverage = n ? covered / n : 0;
+      var tot = 0, biggest = 0;
+      v.groups.forEach(function (g) { tot += v.counts[g]; if (v.counts[g] > biggest) biggest = v.counts[g]; });
+      v.biggest = tot ? biggest / tot : 1;
+      // normalised entropy: 1 = perfectly even, 0 = one group holds everything
+      var H = 0;
+      v.groups.forEach(function (g) { var p = v.counts[g] / tot; if (p > 0) H -= p * Math.log(p); });
+      v.balance = v.groups.length > 1 ? H / Math.log(v.groups.length) : 0;
+      v.lift = mapSignal(v);
+
+      v.ok = v.groups.length >= 2 && v.groups.length <= 12 && v.coverage >= 0.6 &&
+        v.biggest <= 0.65 && v.lift >= 1.2;
+      v.rank = (v.ok ? 100 : 0) + v.lift * 10 + v.balance * 5 - Math.abs(v.groups.length - 6) * 0.4;
+      v.why = reason(v);
+    }
+
+    // Share of places whose nearest neighbour shares a group, against what the
+    // group sizes alone would give. Above 1 means the split shows up in space.
+    function mapSignal(v) {
+      var pts = S.feats.filter(function (f) { return v.of(f).length; });
+      if (pts.length < 6) return 0;
+      var same = 0;
+      pts.forEach(function (a) {
+        var best = Infinity, bn = null;
+        pts.forEach(function (b) {
+          if (b === a) return;
+          var d = (a.lat - b.lat) * (a.lat - b.lat) + (a.lng - b.lng) * (a.lng - b.lng);
+          if (d < best) { best = d; bn = b; }
+        });
+        if (bn && shares(v.of(a), v.of(bn))) same++;
+      });
+      var obs = same / pts.length, tot = 0, chance = 0;
+      v.groups.forEach(function (g) { tot += v.counts[g]; });
+      v.groups.forEach(function (g) { var p = v.counts[g] / tot; chance += p * p; });
+      // multi-value rows can share on any of several values, so chance is higher
+      if (v.multi) chance = Math.min(0.95, chance * 1.8);
+      return chance ? obs / chance : 0;
+    }
+    function shares(a, b) {
+      for (var i = 0; i < a.length; i++) if (b.indexOf(a[i]) >= 0) return true;
+      return false;
+    }
+
+    // The scoring, said in words a reader can act on. No statistic is named.
+    function reason(v) {
+      var n = v.groups.length;
+      if (n < 2) return 'Every place has the same value, so there is nothing to compare.';
+      if (n > 12) return n + ' groups is more colours than a map can tell apart.';
+      if (v.biggest > 0.65) {
+        return 'One group holds ' + Math.round(v.biggest * 100) + '% of your places, so the map ' +
+          'would be almost all one colour.';
+      }
+      if (v.coverage < 0.6) {
+        return 'Only ' + Math.round(v.coverage * 100) + '% of your places have a value here, so most ' +
+          'of the map would be blank.';
+      }
+      if (v.lift < 1.2) {
+        return n + ' groups, spread evenly across the map — it would look scattered rather than ' +
+          'showing a pattern.';
+      }
+      var strength = v.lift >= 2 ? 'strongly' : 'noticeably';
+      return n + ' groups, and places in the same group sit near each other ' + strength +
+        ' more often than chance' + (v.multi ? '. Places in several groups show several colours.' : '.');
+    }
+
+    function paintViews() {
+      var host = $('#views');
+      host.innerHTML = '';
+      if (!S.views.length) {
+        host.innerHTML = '<p class="hint">No field here splits your places into groups a map could ' +
+          'show. Every place is drawn the same.</p>';
+        $('#legend-card').hidden = true; $('#shape-card').hidden = true;
+        return;
+      }
+      var best = S.views.filter(function (v) { return v.ok; })[0];
+      S.views.forEach(function (v) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'view' + (v.ok ? '' : ' weak');
+        b.setAttribute('aria-pressed', S.colourView === v ? 'true' : 'false');
+        b.innerHTML =
+          '<span class="dot" aria-hidden="true"></span>' +
+          '<span class="v-name">' + esc(v.name) +
+            (v === best ? '<span class="rec">recommended</span>' : '') + '</span>' +
+          '<span class="v-why">' + esc(v.why) + '</span>';
+        b.onclick = function () { setColourView(v); };
+        host.appendChild(b);
+      });
+      (S.pending || []).forEach(function (v) {
+        var d = document.createElement('div');
+        d.className = 'view weak';
+        d.style.cursor = 'default';
+        d.innerHTML = '<span class="dot" style="visibility:hidden" aria-hidden="true"></span>' +
+          '<span class="v-name">' + esc(v.name) + '<span class="stub" style="margin-left:.35rem">stub</span></span>' +
+          '<span class="v-why">' + esc(v.why) + '</span>';
+        host.appendChild(d);
+      });
+      paintShapeChoices();
+    }
+
+    function paintShapeChoices() {
+      // shape carries a SECOND grouping. Four silhouettes is all that stays
+      // legible at 24px, so a bigger grouping shows its three largest and
+      // leaves the rest a circle rather than being refused outright.
+      var eligible = S.views.filter(function (v) { return v !== S.colourView; });
+      var card = $('#shape-card');
+      card.hidden = !eligible.length;
+      if (!eligible.length) { S.shapeView = null; return; }
+      var host = $('#shapes');
+      host.innerHTML = '';
+      [null].concat(eligible).forEach(function (v) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'view' + (v && v.ok ? '' : ' weak');
+        b.setAttribute('aria-pressed', S.shapeView === v ? 'true' : 'false');
+        b.innerHTML = '<span class="dot" aria-hidden="true"></span>' +
+          '<span class="v-name">' + (v ? esc(v.name) : 'All the same shape') + '</span>' +
+          (v ? '<span class="v-why">' + esc(shapeNote(v)) +
+               (v.ok ? '' : ' · ' + esc(v.why)) + '</span>' : '');
+        b.onclick = function () { S.shapeView = v; paintShapeChoices(); paintShapeLegend(); draw(); };
+        host.appendChild(b);
+      });
+    }
+
+    function shapeNote(v) {
+      if (v.groups.length <= SHAPES.length) {
+        return SHAPES.slice(0, v.groups.length).join(', ');
+      }
+      return 'the ' + (SHAPES.length - 1) + ' biggest get a shape of their own; the other ' +
+        (v.groups.length - (SHAPES.length - 1)) + ' stay circles';
+    }
+    // shapes are handed out to the biggest groups; circle is both the default
+    // and the overflow, so an unshaped place never looks like a missing value
+    function shapeIndexOf(v, g) {
+      var i = v.groups.indexOf(g);
+      if (i < 0) return 0;
+      return i < SHAPES.length - 1 ? i + 1 : 0;
+    }
+
+    function setColourView(v) {
+      S.colourView = v;
+      S.on = {};
+      v.groups.forEach(function (g) { S.on[g] = true; });
+      if (S.shapeView === v) S.shapeView = null;
+      paintViews(); paintLegend(); paintShapeLegend(); draw();
+    }
+
+    function colourOf(g) {
+      if (!S.colourView) return OTHER;
+      var i = S.colourView.groups.indexOf(g);
+      return i < 0 ? OTHER : COLORS[i % COLORS.length];
+    }
+    function shapeOf(f) {
+      if (!S.shapeView) return 'circle';
+      var vs = S.shapeView.of(f);
+      if (!vs.length) return 'circle';
+      // several values but only one silhouette: take the rarest, which is the
+      // most distinctive thing true about the place
+      var pick = vs.slice().sort(function (a, b) {
+        return (S.shapeView.counts[a] || 0) - (S.shapeView.counts[b] || 0);
+      })[0];
+      return SHAPES[shapeIndexOf(S.shapeView, pick)];
+    }
+
+    /* ==================== the legend, which is the filter ================= */
+
+    function paintLegend() {
+      var card = $('#legend-card'), v = S.colourView;
+      card.hidden = !v;
+      if (!v) return;
+      $('#leg-title').textContent = 'Colour · ' + v.name.replace(/^By /, '');
+      $('#leg-note').textContent = v.multi
+        ? 'Places can be in more than one. Tick several and a place in two of them shows both colours.'
+        : 'Untick a group to take it off the map.';
+      var host = $('#leg');
+      host.innerHTML = '';
+      v.groups.forEach(function (g) {
+        var row = document.createElement('label');
+        row.className = 'leg-row' + (S.on[g] ? '' : ' out');
+        row.innerHTML =
+          '<input type="checkbox"' + (S.on[g] ? ' checked' : '') + ' />' +
+          '<span class="swatch circle" style="--sw:' + colourOf(g) + '"></span>' +
+          '<span class="l-name">' + esc(g) + '</span>' +
+          '<span class="l-n">' + v.counts[g] + '</span>';
+        row.querySelector('input').onchange = function () {
+          S.on[g] = this.checked;
+          row.classList.toggle('out', !this.checked);
+          draw();
+        };
+        host.appendChild(row);
+      });
+    }
+    function paintShapeLegend() {
+      var card = $('#shape-legend-card'), v = S.shapeView;
+      card.hidden = !v;
+      if (!v) return;
+      $('#shleg-title').textContent = 'Shape · ' + v.name.replace(/^By /, '');
+      var host = $('#shleg');
+      host.innerHTML = '';
+      var named = v.groups.slice(0, SHAPES.length - 1), rest = v.groups.slice(SHAPES.length - 1);
+      function shRow(shape, name, n) {
+        var row = document.createElement('div');
+        row.className = 'leg-row';
+        row.style.cursor = 'default';
+        row.innerHTML = '<span class="swatch ' + shape + '" style="--sw:var(--color-text-muted)"></span>' +
+          '<span class="l-name">' + esc(name) + '</span>' +
+          '<span class="l-n">' + n + '</span>';
+        host.appendChild(row);
+      }
+      named.forEach(function (g) { shRow(SHAPES[shapeIndexOf(v, g)], g, v.counts[g]); });
+      // the leftovers share the circle, so they are one row that says so rather
+      // than several rows all showing the same shape
+      if (rest.length) {
+        var n = 0;
+        rest.forEach(function (g) { n += v.counts[g]; });
+        shRow('circle', rest.length === 1 ? rest[0] : 'the other ' + rest.length, n);
+      }
+    }
+    $('#leg-all').onclick = function () {
+      if (!S.colourView) return;
+      S.colourView.groups.forEach(function (g) { S.on[g] = true; });
+      paintLegend(); draw();
+    };
+    $('#leg-none').onclick = function () {
+      S.on = {}; paintLegend(); draw();
+    };
+
+    /* ============================ the map =============================== */
+
+    var map = null;
+    function ensureMap() {
+      if (map) return map;
+      map = new maplibregl.Map({
+        container: 'ad-map',
+        style: { version: 8, sources: {
+          base: { type: 'raster', tileSize: 256, maxzoom: 19,
+            tiles: ['https://a.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png',
+                    'https://b.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png',
+                    'https://c.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png'],
+            attribution: '© OpenStreetMap contributors © CARTO' } },
+          layers: [{ id: 'bg', type: 'background',
+                     paint: { 'background-color': getComputedStyle(document.documentElement)
+                       .getPropertyValue('--color-map-ground').trim() || '#EAE9E3' } },
+                   { id: 'base', type: 'raster', source: 'base' }] },
+        center: [77.6, 12.97], zoom: 10
+      });
+      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+      window.__admap = map;
+      return map;
+    }
+
+    // A pin's fill is a conic-gradient of every group it belongs to that is
+    // currently ticked — hard stops, so the slices are exact.
+    function fillFor(groups) {
+      if (!groups.length) return OTHER;
+      if (groups.length === 1) return colourOf(groups[0]);
+      var shown = groups.slice(0, MAX_SLICES);
+      var extra = groups.length > MAX_SLICES;
+      var stops = [], step = 360 / (extra ? MAX_SLICES : shown.length), at = 0;
+      shown.forEach(function (g, i) {
+        var col = extra && i === MAX_SLICES - 1 ? OTHER : colourOf(g);
+        stops.push(col + ' ' + at + 'deg ' + (at + step) + 'deg');
+        at += step;
+      });
+      return 'conic-gradient(' + stops.join(',') + ')';
+    }
+
+    function draw() {
+      ensureMap();
+      S.markers.forEach(function (m) { m.mk.remove(); });
+      S.markers = [];
+      var shown = 0, pts = [];
+      S.feats.forEach(function (f) {
+        var groups = S.colourView ? S.colourView.of(f) : [];
+        var lit = groups.filter(function (g) { return S.on[g]; });
+        // no colour view at all: everything is drawn, in one neutral colour
+        if (S.colourView && !lit.length) return;
+        shown++;
+        var pin = document.createElement('div');
+        var shape = shapeOf(f);
+        var multi = lit.length > 1;
+        pin.className = 'ad-pin ' + shape + (multi ? ' multi' : '');
+        pin.style.setProperty('--fill', S.colourView ? fillFor(lit) : COLORS[0]);
+        pin.setAttribute('role', 'button');
+        pin.setAttribute('tabindex', '0');
+        pin.setAttribute('aria-label', titleOf(f.row) +
+          (lit.length ? ' — ' + lit.join(', ') : ''));
+        var mk = new maplibregl.Marker({ element: pin, anchor: 'center' })
+          .setLngLat([f.lng, f.lat])
+          .setPopup(new maplibregl.Popup({ offset: 16, maxWidth: '17rem' }).setHTML(popupHTML(f.row)))
+          .addTo(map);
+        S.markers.push({ mk: mk, f: f, pin: pin });
+        pts.push([f.lng, f.lat]);
+      });
+      if (pts.length && !S._fitted) { fit(pts); S._fitted = true; }
+      applyQuery();
+      return shown;
+    }
+    function fit(pts) {
+      var b = pts.reduce(function (acc, p) {
+        return [Math.min(acc[0], p[0]), Math.min(acc[1], p[1]),
+                Math.max(acc[2], p[0]), Math.max(acc[3], p[1])];
+      }, [180, 90, -180, -90]);
+      map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 48, maxZoom: 15, duration: 0 });
+    }
+
+    function titleOf(row) {
+      var t = colsWithRole('title')[0];
+      var v = t ? String(row[t] || '').trim() : '';
+      return v ? v.slice(0, 90) : 'Untitled place';
+    }
+    function popupHTML(row) {
+      var img = colsWithRole('image')[0];
+      var out = '<p class="pop-t">' + esc(titleOf(row)) + '</p>';
+      if (img && /^https?:/i.test(String(row[img] || ''))) {
+        out += '<img class="pop-img" src="' + esc(String(row[img]).split(/[;,]/)[0].trim()) +
+          '" alt="" loading="lazy" />';
+      }
+      S.cols.forEach(function (c) {
+        if (!S.keep[c]) return;
+        var role = S.roles[c];
+        if (role === 'title' || role === 'image' || role === 'id' ||
+            role === 'latitude' || role === 'longitude') return;
+        var v = String(row[c] || '').trim();
+        if (!v) return;
+        if (role === 'tags' || (role === 'category' && S.prof[c].delim)) {
+          out += '<p class="pop-f"><b>' + esc(prettyCol(c)) + '</b></p><span class="pop-tags">' +
+            splitTokens(v, S.prof[c].delim).slice(0, 12)
+              .map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</span>';
+        } else {
+          // dates live here and nowhere else — see the note on views
+          out += '<p class="pop-f"><b>' + esc(prettyCol(c)) + '</b> ' + esc(v.slice(0, 160)) + '</p>';
+        }
+      });
+      return out;
+    }
+
+    /* ===================== search: light up the positives ================= */
+
+    function rowText(row) {
+      var parts = [];
+      S.cols.forEach(function (c) {
+        if (!S.keep[c]) return;
+        var role = S.roles[c];
+        if (role === 'id' || role === 'image' || role === 'latitude' ||
+            role === 'longitude' || role === 'date') return;
+        var v = String(row[c] || '').trim();
+        if (v) parts.push(v);
+      });
+      return parts.join(' · ').toLowerCase();
+    }
+    function applyQuery() {
+      var q = S.query.trim().toLowerCase();
+      var found = $('#found');
+      if (!q) {
+        S.markers.forEach(function (m) { m.pin.classList.remove('dim', 'lit'); });
+        found.textContent = '';
+        return;
+      }
+      var words = q.split(/[^a-z0-9]+/).filter(function (w) { return w.length >= 3; });
+      var hits = 0;
+      S.markers.forEach(function (m) {
+        if (m.f._text == null) m.f._text = rowText(m.f.row);
+        var t = m.f._text;
+        var hit = t.indexOf(q) >= 0 || (words.length > 0 && words.every(function (w) {
+          return t.indexOf(w) >= 0;
+        }));
+        m.pin.classList.toggle('lit', hit);
+        m.pin.classList.toggle('dim', !hit);
+        if (hit) hits++;
+      });
+      var total = S.markers.length;
+      found.innerHTML = hits
+        ? '<b>' + hits + ' of ' + total + ' places</b> · ' + Math.round(hits / total * 100) + '% of what is on the map'
+        : '<span class="none">Nothing matched “' + esc(S.query.trim()) + '”</span>';
+    }
+    $('#q').addEventListener('input', function () { S.query = this.value; applyQuery(); });
+    $('#q-clear').onclick = function () { $('#q').value = ''; S.query = ''; applyQuery(); $('#q').focus(); };
+
+    /* ============================== steps =============================== */
+
+    function step(n) {
+      [1, 2, 3].forEach(function (i) { $('#s' + i).hidden = i !== n; });
+      $$('.stp').forEach(function (b) {
+        var i = Number(b.dataset.s);
+        if (i === n) b.setAttribute('aria-current', 'step');
+        else b.removeAttribute('aria-current');
+        if (i <= n) b.disabled = false;
+      });
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      if (n === 3) setTimeout(function () { ensureMap().resize(); }, 0);
+    }
+    $$('.stp').forEach(function (b) {
+      b.onclick = function () { if (!b.disabled) step(Number(b.dataset.s)); };
+    });
+    $$('[data-go]').forEach(function (b) {
+      b.onclick = function () { step(Number(b.dataset.go)); };
+    });
+
+    $('#to-3').onclick = function () {
+      if (!S.lat || !S.lng) {
+        $('#msg-2').innerHTML = '<div class="msg err">Tell us which fields hold latitude and ' +
+          'longitude, then we can put these on the map.</div>';
+        return;
+      }
+      $('#msg-2').innerHTML = '';
+      buildFeatures();
+      if (!S.feats.length) {
+        $('#msg-2').innerHTML = '<div class="msg err">None of the rows had usable coordinates in ' +
+          esc(S.lat) + ' and ' + esc(S.lng) + '.</div>';
+        return;
+      }
+      S._fitted = false;
+      generateViews();
+      S.colourView = S.views.filter(function (v) { return v.ok; })[0] || S.views[0] || null;
+      S.on = {};
+      if (S.colourView) S.colourView.groups.forEach(function (g) { S.on[g] = true; });
+      S.shapeView = null;
+      step(3);
+      paintPlaced(); paintViews(); paintLegend(); paintShapeLegend(); draw();
+    };
+
+    $('#placed-change').onclick = function () {
+      var d = $('#placed-detail');
+      d.hidden = !d.hidden;
+      this.textContent = d.hidden ? 'Change' : 'Done';
+      if (!d.hidden) $('#s-lat').focus();
+    };
+    ['#s-lat', '#s-lng'].forEach(function (sel) {
+      $(sel).onchange = function () {
+        S.roles[S.lat] = 'number'; S.roles[S.lng] = 'number';
+        S.lat = $('#s-lat').value; S.lng = $('#s-lng').value;
+        S.roles[S.lat] = 'latitude'; S.roles[S.lng] = 'longitude';
+        buildFeatures(); generateViews();
+        S.colourView = S.views.filter(function (v) { return v.ok; })[0] || S.views[0] || null;
+        S.on = {};
+        if (S.colourView) S.colourView.groups.forEach(function (g) { S.on[g] = true; });
+        S._fitted = false;
+        paintPlaced(); paintViews(); paintLegend(); paintShapeLegend(); draw();
+      };
+    });
+    $('#how-names').onclick = function () {
+      $('#msg-3').innerHTML = '<div class="msg err">Matching place names to boundaries is real in ' +
+        'the live wizard, not in this prototype — it needs the boundary data from the server.</div>';
+    };
+
+    /* ---- the stubs say what they are and do nothing else ---- */
+    $('#enrich-go').onclick = function () {
+      $('#msg-enrich').innerHTML = '<div class="msg err">Stub. In the real thing this reads every ' +
+        'tag across all your rows at once, proposes a handful of themes, and adds them as one new ' +
+        'field you can edit — then it shows up as another way to see the data.</div>';
+    };
+    $('#add-it').onclick = function () {
+      $('#msg-3').innerHTML = '<div class="msg err">Stub. Adding the layer for real writes the ' +
+        'geometry, the styling and the search index on the server.</div>';
+    };
+
+    /* ---- file input ---- */
+    $('#drop').onclick = function () { $('#file').click(); };
+    $('#file').onchange = function () {
+      var f = this.files && this.files[0];
+      if (f) read(f);
+    };
+    ['dragover', 'dragenter'].forEach(function (e) {
+      $('#drop').addEventListener(e, function (ev) { ev.preventDefault(); this.classList.add('over'); });
+    });
+    ['dragleave', 'drop'].forEach(function (e) {
+      $('#drop').addEventListener(e, function (ev) { ev.preventDefault(); this.classList.remove('over'); });
+    });
+    $('#drop').addEventListener('drop', function (ev) {
+      var f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+      if (f) read(f);
+    });
+    function read(f) {
+      if (!/\.csv$/i.test(f.name)) return fail('This prototype reads CSV files only.');
+      var fr = new FileReader();
+      fr.onload = function () { loadText(String(fr.result), f.name); };
+      fr.onerror = function () { fail('That file could not be read.'); };
+      fr.readAsText(f);
+    }
+    $('#sample').onclick = function () {
+      var btn = this;
+      btn.disabled = true; btn.textContent = 'Loading…';
+      fetch('./datasets/blr-finds-test/blr_full.csv')
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+        .then(function (t) { loadText(t, 'bengaluru_tags.csv'); })
+        .catch(function () { fail('The sample could not be loaded from this server.'); })
+        .then(function () { btn.disabled = false; btn.textContent = 'Use the Bengaluru sample (66 places)'; });
+    };
+
+    step(1);
+  })();
+  </script>
+</body>
+</html>

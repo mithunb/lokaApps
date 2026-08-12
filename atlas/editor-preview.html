@@ -572,6 +572,8 @@
             '<b>Drop a file here</b><span>or click to choose — up to 5,000 rows</span></button>' +
           '<input type="file" id="drop-file" hidden accept=".csv,.tsv,.json,.geojson,.kml,.gpx,.xlsx,.xls" />' +
           '<ol class="stagerail"><li class="now">Check the fields</li><li>Place on the map</li></ol>' +
+          '<p class="set-p" style="margin-top:.8rem">Both of those steps are built and working in ' +
+            '<a href="./add-data-preview.html">the add-data prototype</a>, against a real file.</p>' +
           // the catalogue was reachable only from its own empty state, which made
           // "add data any time" false for half the data this product curates
           '<p class="set-p" style="margin-top:1.1rem;padding-top:1rem;border-top:1px solid var(--color-divider)">' +
@@ -580,7 +582,10 @@
           '<div class="save-row" style="margin-top:1rem"><button class="btn quiet" data-close>Cancel</button></div>' +
         '</div>',
         function (scrim) {
-          scrim.querySelector("#drop-btn").onclick = function () { scrim.querySelector("#drop-file").click(); };
+          // the file picker leads somewhere now rather than swallowing the file
+          scrim.querySelector("#drop-btn").onclick = function () {
+            location.href = "./add-data-preview.html";
+          };
           scrim.querySelector("#drop-cat").onclick = function () { toast("Open-data catalogue (stub)"); };
         });
     };

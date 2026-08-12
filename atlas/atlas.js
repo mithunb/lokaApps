@@ -766,7 +766,7 @@
       wrap.appendChild(node);
       var mk = new maplibregl.Marker({ element: wrap, anchor: "bottom" }).setLngLat(f.geometry.coordinates).addTo(map);
       // keep the feature alongside its marker so search can gate it by content
-      var entry = { mk: mk, f: f };
+      var entry = { mk: mk, f: f, color: cfg.color || "" };
       // clicks route through the spiderfy gate: a lone pin pops up as before,
       // a stacked pin fans its stack out first
       wrap.addEventListener("click", function (e) { e.stopPropagation(); spiderClick(L, entry); });
@@ -794,15 +794,24 @@
     if (!L._zoomWired) { map.on("zoom", function () { applyMarkerVisibility(L); }); L._zoomWired = true; }
   }
 
+  // Writes display for one layer's pins. `e._stacked` is set by restack() for
+  // pins standing behind a count badge; everything else here is as it was.
+  function paintMarkerDisplay(L) {
+    var shown = L._visible !== false;
+    var clustered = L.cluster && L._clusterMarker && map.getZoom() < L.cluster.belowZoom;
+    (markersByLayer[L.id] || []).forEach(function (e) {
+      e.mk.getElement().style.display =
+        (shown && !clustered && !e.hidden && !e._stacked) ? "" : "none";
+    });
+    if (L._clusterMarker) L._clusterMarker.getElement().style.display = (shown && clustered) ? "" : "none";
+  }
   function applyMarkerVisibility(L) {
     // whatever is changing here (layer toggle, cluster zoom, search) can change
     // who is stacked with whom — fold any open fan rather than chase it
     if (SPIDER.items) spiderCollapse();
     hideHint();   // a pin can vanish from under the pointer; no mouseleave follows
-    var shown = L._visible !== false;
-    var clustered = L.cluster && L._clusterMarker && map.getZoom() < L.cluster.belowZoom;
-    (markersByLayer[L.id] || []).forEach(function (e) { e.mk.getElement().style.display = (shown && !clustered && !e.hidden) ? "" : "none"; });
-    if (L._clusterMarker) L._clusterMarker.getElement().style.display = (shown && clustered) ? "" : "none";
+    paintMarkerDisplay(L);
+    scheduleRestack();
   }
 
   function fitPoints(pts) {
@@ -851,19 +860,134 @@
   }
 
   // only markers the user can currently see may stack: layer on, not folded
-  // into a cluster badge, not hidden by search — applyMarkerVisibility has
-  // already folded all three into the element's display (e.hidden re-checked
-  // for safety: it flips before the display does).
-  function visibleMarkerEntries() {
+  // into a cluster badge, not hidden by search. `_stacked` is excluded by the
+  // caller, since restack() itself has to look at pins it has just folded.
+  function markerEntries(includeStacked) {
     var out = [];
     (MANIFEST.layers || []).forEach(function (L) {
+      if (L._visible === false) return;
+      if (L.cluster && L._clusterMarker && map.getZoom() < L.cluster.belowZoom) return;
       (markersByLayer[L.id] || []).forEach(function (e) {
         if (e.hidden) return;
-        if (e.mk.getElement().style.display === "none") return;
+        if (!includeStacked && e._stacked) return;
         out.push({ L: L, e: e });
       });
     });
     return out;
+  }
+  function visibleMarkerEntries() { return markerEntries(false); }
+
+  /* ==================================================================
+     STACKS — pins landing on the same spot used to be drawn as a pile:
+     you could not tell four from one until you clicked. A stack is now
+     drawn ONCE, as a badge carrying how many places are under it, and
+     clicking the badge fans them out through the spiderfy below.
+
+     Screen-space, so it is recomputed after every pan and zoom, and
+     bucketed into a grid rather than compared pairwise — an atlas with
+     a few thousand pins must not go quadratic on every map move.
+  ================================================================== */
+  var STACKS = [], restackTimer = null, stacksWired = false;
+
+  function scheduleRestack() {
+    if (restackTimer) clearTimeout(restackTimer);
+    restackTimer = setTimeout(function () { restackTimer = null; restack(); }, 60);
+  }
+  function clearStacks() {
+    STACKS.forEach(function (st) {
+      st.mk.remove();
+      st.items.forEach(function (it) { it.e._stacked = false; });
+    });
+    STACKS = [];
+  }
+
+  function restack() {
+    if (!map) return;
+    if (SPIDER.items) return;          // a fan is open — leave the map as it is
+    wireStacks();
+    clearStacks();
+
+    // The grid only narrows the search. Membership is decided by real distance,
+    // the same SPIDER_PX the fan uses — bucketing alone would merge two pins a
+    // cell apart while splitting two that straddle a boundary.
+    var pts = markerEntries(true).map(function (it) {
+      var p = map.project(it.e.mk.getLngLat());
+      return { it: it, x: p.x, y: p.y, taken: false };
+    });
+    var grid = {};
+    pts.forEach(function (q, i) {
+      var k = Math.floor(q.x / SPIDER_PX) + "|" + Math.floor(q.y / SPIDER_PX);
+      (grid[k] || (grid[k] = [])).push(i);
+    });
+    var r2 = SPIDER_PX * SPIDER_PX;
+    pts.forEach(function (q) {
+      if (q.taken) return;
+      var gx = Math.floor(q.x / SPIDER_PX), gy = Math.floor(q.y / SPIDER_PX);
+      var near = [];
+      for (var dx = -1; dx <= 1; dx++) {
+        for (var dy = -1; dy <= 1; dy++) {
+          var cellIdx = grid[(gx + dx) + "|" + (gy + dy)];
+          if (!cellIdx) continue;
+          for (var n = 0; n < cellIdx.length; n++) {
+            var o = pts[cellIdx[n]];
+            if (o.taken) continue;
+            var ex = o.x - q.x, ey = o.y - q.y;
+            if (ex * ex + ey * ey <= r2) near.push(o);
+          }
+        }
+      }
+      if (near.length < 2) return;
+      var sx = 0, sy = 0, items = [];
+      near.forEach(function (o) { o.taken = true; sx += o.x; sy += o.y; items.push(o.it); o.it.e._stacked = true; });
+      addStackBadge(items, map.unproject([sx / near.length, sy / near.length]));
+    });
+
+    (MANIFEST.layers || []).forEach(paintMarkerDisplay);
+  }
+
+  // one colour if the stack agrees, ink if it does not — a badge should not
+  // invent a category the places under it do not share
+  function stackColor(items) {
+    var c = items[0].e.color || "";
+    for (var i = 1; i < items.length; i++) if ((items[i].e.color || "") !== c) return "";
+    return c;
+  }
+
+  function addStackBadge(items, lngLat) {
+    var wrap = el("div", "atlas-stack");
+    var col = stackColor(items);
+    if (col) wrap.style.setProperty("--stack", col);
+    wrap.innerHTML =
+      '<span class="st-pile"><span class="st-leaf"></span><span class="st-leaf"></span>' +
+        '<span class="st-disc"></span></span>' +
+      '<span class="st-n">' + items.length + "</span>";
+    wrap.setAttribute("role", "button");
+    wrap.setAttribute("tabindex", "0");
+    wrap.setAttribute("aria-label", items.length + " places here — open them");
+    var st = { mk: null, items: items };
+    function open() {
+      // the members are hidden behind this badge; show them, drop the badge,
+      // then hand the stack to the fan
+      st.items.forEach(function (it) { it.e._stacked = false; });
+      STACKS = STACKS.filter(function (x) { return x !== st; });
+      st.mk.remove();
+      (MANIFEST.layers || []).forEach(paintMarkerDisplay);
+      spiderfy(st.items, lngLat);
+    }
+    wrap.addEventListener("click", function (e) { e.stopPropagation(); open(); });
+    wrap.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); open(); }
+    });
+    wireMarkerHint(wrap, function () { return items.length + " places here"; });
+    st.mk = new maplibregl.Marker({ element: wrap, anchor: "center" }).setLngLat(lngLat).addTo(map);
+    STACKS.push(st);
+  }
+
+  function wireStacks() {
+    if (stacksWired) return;
+    stacksWired = true;
+    map.on("moveend", scheduleRestack);
+    map.on("zoomend", scheduleRestack);
   }
 
   function stackFor(entry) {
@@ -925,6 +1049,7 @@
     if (SPIDER.svg) { SPIDER.svg.remove(); SPIDER.svg = null; }
     // a popup opened from a fanned pin points at a spot that no longer exists
     if (SPIDER.pop) { SPIDER.pop.remove(); SPIDER.pop = null; }
+    scheduleRestack();       // the stack the fan came from earns its badge back
   }
 
   // thin leader lines from the shared point to each displaced pin — an SVG
