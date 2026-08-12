@@ -202,6 +202,196 @@ router.get('/geo/admin', async (req, res) => {
   }
 });
 
+/* ---- free-text place search (backs the box that replaces the drill-down) ---- */
+
+// Mid-file import, same pattern as the matching.js import further down —
+// imports hoist, and this keeps the search block self-contained.
+import { aliasSpellings } from '../lib/atlas/place-aliases.js';
+
+// iso3 -> display name for result labels ("…, India"). The setup wizard already
+// ships this list; reading it here (like CATALOG_FILE above) keeps one source
+// of truth instead of a second hand-kept country table.
+const COUNTRY_NAMES = (() => {
+  try {
+    const list = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'atlas', 'setup', 'countries.json'), 'utf8'));
+    return Object.fromEntries(list.map((c) => [c.iso3, c.name]));
+  } catch (e) {
+    console.warn('[atlas] countries.json missing:', e.message);
+    return {};
+  }
+})();
+
+// Display-only words for the label. geoBoundaries has no per-country level
+// vocabulary; these fit the countries we serve today (India first) and read
+// better than "ADM3". A wrong word is cosmetic — id/level stay authoritative.
+const LEVEL_WORDS = { 1: 'state', 2: 'district', 3: 'subdistrict', 4: 'locality' };
+
+// dice() below this reads as noise in a live search box. matching.js keeps
+// CANDIDATE_FLOOR at 0.5, but those candidates feed a human-vetted fix-list;
+// here every row shown must be a plausible "did you mean".
+const SEARCH_FUZZY_FLOOR = 0.6;
+const SEARCH_LEVEL_RETRY_MS = 5 * 60 * 1000;
+
+// Slim per-level name index: {id, name, n: norm(name), bbox} only. WHY: loadAdmin
+// re-parses its cache file on every call — fine for one-shot picker fetches, but
+// IND ADM3+ADM4 alone are ~70 MB of JSON and search fires per keystroke. Dropping
+// geometry shrinks all of India to ~2 MB (measured), cheap enough to keep for the
+// process lifetime — safe, because cache files are written exactly once.
+const searchIndex = new Map();       // `${iso3}-ADM${level}` -> { entries: [...] }
+const searchIndexFailAt = new Map(); // same key -> Date.now() of last failure
+
+async function searchLevelIndex(iso3, level) {
+  const key = `${iso3}-ADM${level}`;
+  const hit = searchIndex.get(key);
+  if (hit) return hit;
+  // Negative-cache failures: without this, a level geoBoundaries doesn't have
+  // (or an offline source) would trigger a fresh network attempt per keystroke.
+  const failedAt = searchIndexFailAt.get(key);
+  if (failedAt && Date.now() - failedAt < SEARCH_LEVEL_RETRY_MS) return null;
+  try {
+    const doc = await loadAdmin(iso3, level);
+    const entries = (doc.features || [])
+      .filter((f) => f.properties && f.properties.id && f.properties.name)
+      .map((f) => ({ id: f.properties.id, name: f.properties.name, n: norm(f.properties.name), bbox: f.bbox }));
+    const idx = { entries };
+    searchIndex.set(key, idx);
+    searchIndexFailAt.delete(key);
+    return idx;
+  } catch {
+    searchIndexFailAt.set(key, Date.now());
+    return null;
+  }
+}
+
+// Ancestor chain for one matched unit, memoised per unit — ancestorChainOf
+// re-loads every level above the unit on each call, so a top-8 of ADM4 units
+// would cost dozens of multi-MB parses per keystroke without the memo; with it
+// each unit pays once per process, and live typing keeps resurfacing the same
+// top units. The index carries no geometry, so the unit's centroid falls back
+// to its bbox midpoint (the fallback ancestorChainOf already defines) tested
+// against real ancestor polygons; a midpoint that lands in a neighbour can
+// mislabel the trail, but that is display-only and rare at these levels.
+const ancestorMemo = new Map(); // `${iso3}|${unitId}` -> [{level, id, name}]
+async function searchAncestorsOf(iso3, level, unit) {
+  const key = `${iso3}|${unit.id}`;
+  let chain = ancestorMemo.get(key);
+  if (!chain) {
+    const raw = level > 1
+      ? await ancestorChainOf(iso3, level, [{ id: unit.id, name: unit.name, bbox: unit.bbox }]) : [];
+    chain = raw
+      .map((e) => ({ level: e.level, id: e.units[0] && e.units[0].id, name: e.units[0] && e.units[0].name }))
+      .filter((e) => e.id);
+    ancestorMemo.set(key, chain);
+  }
+  return chain;
+}
+
+// GET /geo/search?iso3=IND&q=bengaluru&limit=8
+// Ranked matches across every admin level — the endpoint behind the text box
+// that replaces the country→state→district drill-down. Response:
+//   { matches: [{ id, name, level, label, parents, bbox, alias? }] }
+// - label:   "district · Karnātaka, India" — level word, then containers inner→outer
+// - parents: [{ level, id, name }] outermost first (level 1 … level-1)
+// - alias:   { typed, inData }, present when an exact/prefix match went through
+//            a renaming, so the UI can say "Bengaluru (listed as Bangalore in
+//            the boundary data)" — never set on merely-fuzzy matches
+router.get('/geo/search', async (req, res) => {
+  const iso3 = String(req.query.iso3 || '').toUpperCase();
+  const q = String(req.query.q || '').trim();
+  const limit = Math.min(25, Math.max(1, Number(req.query.limit) || 8));
+  if (!/^[A-Z]{3}$/.test(iso3)) return res.status(400).json({ error: 'iso3 required' });
+  if (!q) return res.status(400).json({ error: 'q required' });
+  const spellings = aliasSpellings(q); // [norm(q), …renaming spellings], self first
+  const qn = spellings[0];
+  if (qn.length < 2) return res.json({ matches: [] }); // one letter matches half the country — wait for more input
+
+  try {
+    // Which levels exist here: trust the /geo/levels probe when it has run,
+    // otherwise try 1..MAX_LEVEL and let the negative cache absorb levels that
+    // turn out not to exist. (Never write the probe file from here —
+    // /geo/levels owns it, and two writers is how caches rot.)
+    let avail = null;
+    try { avail = JSON.parse(fs.readFileSync(path.join(GEOCACHE_DIR, `${iso3}-levels.json`), 'utf8')).levels; } catch {}
+    const levels = (avail || Array.from({ length: MAX_LEVEL }, (_, i) => i + 1))
+      .filter((l) => l >= 1 && l <= MAX_LEVEL)
+      .sort((a, b) => a - b);
+
+    const found = [];
+    let exact = 0;
+    for (const L of levels) {
+      // Early stop: once shallower levels supply `limit` exact matches, deeper
+      // levels cannot change the answer — the sort below orders equal-tier
+      // matches by level, so a deeper unit can never displace those exacts from
+      // the top slice. Lossless, and it is what keeps a query like "karnataka"
+      // from paying for ADM3/ADM4 (35 MB parses, or a network fetch) it cannot
+      // benefit from.
+      if (exact >= limit) break;
+      const idx = await searchLevelIndex(iso3, L);
+      if (!idx) continue;
+      for (const e of idx.entries) {
+        // exact → prefix → fuzzy, each tried against every equivalent spelling,
+        // so "bengaluru" reaches data that says "Bangalore" and vice versa
+        let tier = 0, score = 0, via = qn;
+        if (spellings.includes(e.n)) {
+          tier = 3; score = 1; via = e.n;
+        } else {
+          const pre = spellings.find((s) => e.n.startsWith(s)); // self-first order: a direct prefix outranks an alias prefix for attribution
+          if (pre) {
+            tier = 2; score = pre.length / e.n.length; via = pre; // fuller coverage (shorter names) first
+          } else {
+            let best = 0, bestVia = qn;
+            for (const s of spellings) {
+              const d = dice(s, e.n);
+              if (d > best) { best = d; bestVia = s; } // strict >: ties credit the typed spelling, not an alias
+            }
+            if (best >= SEARCH_FUZZY_FLOOR) { tier = 1; score = best; via = bestVia; }
+          }
+        }
+        if (!tier) continue;
+        if (tier === 3) exact++;
+        found.push({ tier, score, level: L, via, unit: e });
+      }
+    }
+
+    // Rank: exact, then prefix, then fuzzy; equal scores resolve to the higher
+    // (shallower) level, then the shorter name — someone typing "bengaluru"
+    // wants the district before a taluk or village of the same name. Scores are
+    // bucketed to hundredths so float dust cannot shuffle the level order.
+    found.sort((a, b) =>
+      (b.tier - a.tier) ||
+      (Math.round(b.score * 100) - Math.round(a.score * 100)) ||
+      (a.level - b.level) ||
+      (a.unit.name.length - b.unit.name.length) ||
+      a.unit.name.localeCompare(b.unit.name));
+
+    const country = COUNTRY_NAMES[iso3] || iso3;
+    const matches = [];
+    for (const m of found.slice(0, limit)) {
+      const parents = await searchAncestorsOf(iso3, m.level, m.unit);
+      const crumbs = [...parents.map((p) => p.name).reverse(), country];
+      const row = {
+        id: m.unit.id,
+        name: m.unit.name,
+        level: m.level,
+        label: `${LEVEL_WORDS[m.level] || 'ADM' + m.level} · ${crumbs.join(', ')}`,
+        parents,
+        bbox: m.unit.bbox,
+      };
+      // The match went through a renaming — hand the UI both spellings so the
+      // person who typed "Bengaluru" understands why the map says "Bangalore".
+      // Exact/prefix tiers only: a FUZZY hit that happened to score via an alias
+      // spelling (kolkata ~ Cuttack via "calcutta") is a different place, and
+      // claiming "listed as Cuttack in the boundary data" would be a lie.
+      if (m.via !== qn && m.tier >= 2) row.alias = { typed: q, inData: m.unit.name };
+      matches.push(row);
+    }
+    res.json({ matches });
+  } catch (e) {
+    console.warn('[atlas] geo/search failed:', e.message);
+    res.status(502).json({ error: 'search failed: ' + e.message });
+  }
+});
+
 /* ============ data-first: infer the region from the uploaded data ============ */
 
 const INFER_MIN_COVERAGE = 0.9;
