@@ -235,23 +235,17 @@
     .atlas-cluster .cl-count { display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:20px;
       padding:0 4px; background:var(--color-rust); color:#fff; border-radius:3px; font-size:12px; font-weight:700; }
     .atlas-cluster .cl-label { font-size:12px; font-weight:600; color:var(--color-rust-deep); white-space:nowrap; }
-    /* ---- stack badge: several places on one spot, drawn once ---- */
-    /* The leaves behind the disc say "more than one here" before the number is
-       read at all — the count is the fact, the pile is the glance. */
-    .atlas-stack { display:flex; flex-direction:column; align-items:center; cursor:pointer; }
-    .st-pile { position:relative; width:26px; height:24px;
-      transition:transform .15s cubic-bezier(.25,1,.5,1); }
-    .st-leaf, .st-disc { position:absolute; top:2px; left:3px; width:20px; height:20px;
-      border-radius:50%; background:var(--stack,#564E3C); }
-    .st-leaf { opacity:.45; }
-    .st-leaf:nth-child(1) { transform:translate(-4px,-2px) scale(.9); }
-    .st-leaf:nth-child(2) { transform:translate(4px,-2px) scale(.9); }
-    .st-disc { box-shadow:0 0 0 2px #fff, 0 1px 4px rgba(42,36,26,.4); }
-    .st-n { margin-top:3px; font-family:'Figtree',sans-serif; font-size:var(--t-label); font-weight:700;
-      color:#14261a; text-shadow:0 0 2px #fff,0 0 3px #fff,0 0 4px #fff,0 1px 1px #fff;
-      white-space:nowrap; pointer-events:none; }
-    @media (hover:hover) { .atlas-stack:hover .st-pile { transform:translateY(-2px) scale(1.12); } }
-    @media (prefers-reduced-motion:reduce) { .st-pile { transition:none; } }
+    /* ---- cluster fan veil ---- */
+    /* Cluster discs are GL layers now (see CLUSTERS in atlas.js) — no DOM to
+       style. While a fan is open, a translucent paper wash sits between the
+       tiles and the fanned pins so the fan is unmistakably the subject, and
+       pins outside the fan step back with it. The wash never takes the
+       pointer: the click that folds the fan must reach the map beneath. */
+    .atlas-dim { position:absolute; inset:0; pointer-events:none;
+      background:rgba(255,255,255,.55); opacity:0; transition:opacity .2s ease; }
+    .atlas-fanned .atlas-dim { opacity:1; }
+    .atlas-marker { transition:opacity .18s ease; }
+    .atlas-fanned .atlas-marker:not(.fanned), .atlas-fanned .atlas-cluster { opacity:.25; }
 
     .atlas-mlabel { margin-top:2px; font-family:'Figtree',sans-serif; font-size:var(--t-label); font-weight:600; color:#14261a;
       text-shadow:0 0 2px #fff,0 0 3px #fff,0 0 4px #fff,0 1px 1px #fff; white-space:nowrap; pointer-events:none; }
@@ -600,7 +594,7 @@
        deploy that changes atlas.js reaches nobody until the token moves. Bump
        it (all pages share one) whenever a local .js or .css changes. Vendored
        libraries are left alone — their filenames change when they do. -->
-  <script src="./share.js?v=20260813-1"></script>
-  <script src="./atlas.js?v=20260813-1"></script>
+  <script src="./share.js?v=20260813-2"></script>
+  <script src="./atlas.js?v=20260813-2"></script>
 </body>
 </html>

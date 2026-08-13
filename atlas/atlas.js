@@ -784,8 +784,8 @@
       var mk = new maplibregl.Marker({ element: wrap, anchor: "bottom" }).setLngLat(f.geometry.coordinates).addTo(map);
       // keep the feature alongside its marker so search can gate it by content
       var entry = { mk: mk, f: f, color: cfg.color || "" };
-      // clicks route through the spiderfy gate: a lone pin pops up as before,
-      // a stacked pin fans its stack out first
+      // clicks route through the spiderfy gate: a fanned pin opens its own
+      // popup, any other visible pin is a loner by construction and pops up
       wrap.addEventListener("click", function (e) { e.stopPropagation(); spiderClick(L, entry); });
       // hovering names the pin without a click (see HOVER TOOLTIP)
       wireMarkerHint(node, function () { return popupTitleText(L, f.properties); });
@@ -811,24 +811,25 @@
     if (!L._zoomWired) { map.on("zoom", function () { applyMarkerVisibility(L); }); L._zoomWired = true; }
   }
 
-  // Writes display for one layer's pins. `e._stacked` is set by restack() for
-  // pins standing behind a count badge; everything else here is as it was.
+  // Writes display for one layer's pins. `e._clustered` is the cluster
+  // engine's verdict (folded into a disc, or outside the viewport);
+  // `e._fanned` overrides it while that pin is spread out of a fan.
   function paintMarkerDisplay(L) {
     var shown = L._visible !== false;
-    var clustered = L.cluster && L._clusterMarker && map.getZoom() < L.cluster.belowZoom;
+    var folded = L.cluster && L._clusterMarker && map.getZoom() < L.cluster.belowZoom;
     (markersByLayer[L.id] || []).forEach(function (e) {
       e.mk.getElement().style.display =
-        (shown && !clustered && !e.hidden && !e._stacked) ? "" : "none";
+        (shown && !folded && !e.hidden && (!e._clustered || e._fanned)) ? "" : "none";
     });
-    if (L._clusterMarker) L._clusterMarker.getElement().style.display = (shown && clustered) ? "" : "none";
+    if (L._clusterMarker) L._clusterMarker.getElement().style.display = (shown && folded) ? "" : "none";
   }
   function applyMarkerVisibility(L) {
-    // whatever is changing here (layer toggle, cluster zoom, search) can change
-    // who is stacked with whom — fold any open fan rather than chase it
+    // whatever is changing here (layer toggle, badge fold, search) can change
+    // who is folded with whom — collapse any open fan rather than chase it
     if (SPIDER.items) spiderCollapse();
     hideHint();   // a pin can vanish from under the pointer; no mouseleave follows
     paintMarkerDisplay(L);
-    scheduleRestack();
+    scheduleClusterRefresh();
   }
 
   function fitPoints(pts) {
@@ -838,18 +839,18 @@
   }
 
   /* ==================================================================
-     SPIDERFY — markers sitting on (nearly) the same point fan out on
-     click so each one can be reached. The wrap element stays MapLibre's
-     (true lngLat — it pans for free); the inner .atlas-mnode takes a
-     pure-CSS pixel displacement, so the fan holds its shape through a
-     pan and the two transforms never fight. Pixel offsets only mean
-     something at one zoom, so starting a zoom folds the fan instead of
-     chasing it. Stacks are found lazily, on click — nothing is
-     maintained while the user just browses.
+     SPIDERFY — members of a cluster that cannot be told apart by
+     zooming fan out on click so each one can be reached. The wrap
+     element stays MapLibre's (true lngLat — it pans for free); the
+     inner .atlas-mnode takes a pure-CSS pixel displacement, so the fan
+     holds its shape through a pan and the two transforms never fight.
+     Pixel offsets only mean something at one zoom, so starting a zoom
+     folds the fan instead of chasing it. Fans are fed by the CLUSTERS
+     engine below — nothing is maintained while the user just browses.
   ================================================================== */
-  var SPIDER = { items: null, anchor: null, svg: null, pop: null };
-  var SPIDER_PX = 12;   // markers closer than this on screen count as one stack
+  var SPIDER = { items: null, anchor: null, svg: null, pop: null, cid: null };
   var FAN_GAP = 28;     // displaced pins keep at least a marker-width apart
+  var FAN_MAX = 100;    // a fan past this stops being reachable and starts being decoration
 
   // fan feet in px around (0,0): a ring while neighbours fit, an archimedean
   // spiral past 8 (a ring wide enough for many pins drifts too far out)
@@ -876,166 +877,345 @@
     return feet;
   }
 
-  // only markers the user can currently see may stack: layer on, not folded
-  // into a cluster badge, not hidden by search. `_stacked` is excluded by the
-  // caller, since restack() itself has to look at pins it has just folded.
-  function markerEntries(includeStacked) {
+  /* ==================================================================
+     CLUSTERS — where pins would collide they are drawn once, as a
+     counted disc. The old approach did this by hand in screen space (a
+     grid walk over every visible marker after every pan); honest, but
+     it was ours to pay for on the main thread, and it knew nothing of
+     zoom levels beyond "this one". MapLibre's GeoJSON source has
+     supercluster built in: hand it the points and it keeps the whole
+     zoom hierarchy in its worker — spatial index, per-tile queries,
+     viewport culling, and it hands back `point_count`, expansion zooms
+     and member lists. We keep exactly one piece of bookkeeping: which
+     pins are currently swallowed by a disc, so their DOM markers can
+     step aside.
+
+     The split of labour is deliberate. Clusters are GL layers (a
+     circle and its count) because that is where scale lives: thousands
+     of points cost the style nothing, and only what intersects the
+     viewport is ever computed or drawn. The pins themselves STAY DOM
+     markers — the per-category colour and icon, the hover lift and the
+     fan's CSS displacement are all DOM-native, and an atlas rarely
+     shows more than a few hundred UNclustered pins at once, which is
+     exactly the population DOM markers are good for. All marker layers
+     share ONE clustered source: two layers listing the same place must
+     fold into one disc that says 2, not two discs that each say 1 —
+     the arithmetic (discs + lone pins = every visible marker) is what
+     keeps the map honest.
+
+     The radius is the pin's own diameter: a disc forms only where pins
+     would genuinely overlap, never where they are merely neighbourly.
+     Bespoke atlases whose pin spacing was chosen by a person keep
+     looking exactly as designed; dense contributed layers collapse
+     into legible counts.
+  ================================================================== */
+  var CLUSTER_SRC = "atlas-cluster-src";
+  var CLUSTER_BOUNDS_SRC = "atlas-cluster-bounds-src";
+  var CLUSTER_LAYER = "atlas-cluster-disc";
+  var CLUSTER_RADIUS = 20;   // = pin diameter: fold only what truly collides
+  var CLUSTER = { ready: false, off: false, hovering: false, hoverId: null,
+                  byKey: {}, boundsCache: {}, refreshTimer: null, syncTimer: null };
+
+  // Marker entries the reader can currently see, layer by layer: layer on,
+  // not folded behind its own zoom badge, not hidden by search. This is the
+  // clustering population — nothing else may fold into a disc.
+  function clusterEntries() {
     var out = [];
     (MANIFEST.layers || []).forEach(function (L) {
       if (L._visible === false) return;
       if (L.cluster && L._clusterMarker && map.getZoom() < L.cluster.belowZoom) return;
-      (markersByLayer[L.id] || []).forEach(function (e) {
+      (markersByLayer[L.id] || []).forEach(function (e, i) {
         if (e.hidden) return;
-        if (!includeStacked && e._stacked) return;
-        out.push({ L: L, e: e });
+        out.push({ L: L, e: e, key: L.id + "|" + i });
       });
     });
     return out;
   }
-  function visibleMarkerEntries() { return markerEntries(false); }
 
-  /* ==================================================================
-     STACKS — pins landing on the same spot used to be drawn as a pile:
-     you could not tell four from one until you clicked. A stack is now
-     drawn ONCE, as a badge carrying how many places are under it, and
-     clicking the badge fans them out through the spiderfy below.
-
-     Screen-space, so it is recomputed after every pan and zoom, and
-     bucketed into a grid rather than compared pairwise — an atlas with
-     a few thousand pins must not go quadratic on every map move.
-  ================================================================== */
-  var STACKS = [], restackTimer = null, stacksWired = false;
-
-  function scheduleRestack() {
-    if (restackTimer) clearTimeout(restackTimer);
-    restackTimer = setTimeout(function () { restackTimer = null; restack(); }, 60);
-  }
-  function clearStacks() {
-    STACKS.forEach(function (st) {
-      st.mk.remove();
-      st.items.forEach(function (it) { it.e._stacked = false; });
+  // The engine is optional equipment: without glyphs in the style there is
+  // no way to draw a legible count, and a disc that hides pins while saying
+  // nothing would be worse than the pile it replaces. In that case pins
+  // simply never fold.
+  function ensureClusterEngine() {
+    if (CLUSTER.ready) return true;
+    if (CLUSTER.off || !map) return false;
+    var style = map.getStyle();
+    if (!style || !style.glyphs) { CLUSTER.off = true; return false; }
+    map.addSource(CLUSTER_SRC, {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [] },
+      cluster: true,
+      clusterRadius: CLUSTER_RADIUS,
+      // Clustering runs through the deepest reachable tile, so a group that
+      // cannot separate is still a cluster AT max zoom — the click handler
+      // reads "expansion zoom past the map's ceiling" as "these can never
+      // part" and fans them out instead of pretending a zoom would help.
+      clusterMaxZoom: Math.floor(map.getMaxZoom())
     });
-    STACKS = [];
-  }
-
-  function restack() {
-    if (!map) return;
-    if (SPIDER.items) return;          // a fan is open — leave the map as it is
-    wireStacks();
-    clearStacks();
-
-    // The grid only narrows the search. Membership is decided by real distance,
-    // the same SPIDER_PX the fan uses — bucketing alone would merge two pins a
-    // cell apart while splitting two that straddle a boundary.
-    var pts = markerEntries(true).map(function (it) {
-      var p = map.project(it.e.mk.getLngLat());
-      return { it: it, x: p.x, y: p.y, taken: false };
+    map.addSource(CLUSTER_BOUNDS_SRC, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    // hover footprint first, so the discs and their counts draw above it
+    map.addLayer({
+      id: "atlas-cluster-bounds-fill", type: "fill", source: CLUSTER_BOUNDS_SRC,
+      paint: { "fill-color": "#4A5A33", "fill-opacity": 0.08 }
     });
-    var grid = {};
-    pts.forEach(function (q, i) {
-      var k = Math.floor(q.x / SPIDER_PX) + "|" + Math.floor(q.y / SPIDER_PX);
-      (grid[k] || (grid[k] = [])).push(i);
+    map.addLayer({
+      id: "atlas-cluster-bounds-line", type: "line", source: CLUSTER_BOUNDS_SRC,
+      paint: { "line-color": "#4A5A33", "line-width": 1.2, "line-dasharray": [2, 2], "line-opacity": 0.5 }
     });
-    var r2 = SPIDER_PX * SPIDER_PX;
-    pts.forEach(function (q) {
-      if (q.taken) return;
-      var gx = Math.floor(q.x / SPIDER_PX), gy = Math.floor(q.y / SPIDER_PX);
-      var near = [];
-      for (var dx = -1; dx <= 1; dx++) {
-        for (var dy = -1; dy <= 1; dy++) {
-          var cellIdx = grid[(gx + dx) + "|" + (gy + dy)];
-          if (!cellIdx) continue;
-          for (var n = 0; n < cellIdx.length; n++) {
-            var o = pts[cellIdx[n]];
-            if (o.taken) continue;
-            var ex = o.x - q.x, ey = o.y - q.y;
-            if (ex * ex + ey * ey <= r2) near.push(o);
-          }
-        }
+    // Size brackets: small (<10), medium (10–50), large (50+). One moss hue
+    // deepening with count — a scale, not a category, because count is a
+    // quantity. White bold count clears 4.8:1 on the palest fill, and the
+    // white ring lifts the disc off any basemap the way the pins' own white
+    // fill does.
+    map.addLayer({
+      id: CLUSTER_LAYER, type: "circle", source: CLUSTER_SRC,
+      filter: ["has", "point_count"],
+      paint: {
+        "circle-color": ["step", ["get", "point_count"], "#66784A", 10, "#4A5A33", 50, "#2E3A20"],
+        "circle-radius": ["step", ["get", "point_count"], 13, 10, 17, 50, 22],
+        "circle-stroke-color": "#FFFFFF",
+        "circle-stroke-width": 2
       }
-      if (near.length < 2) return;
-      var sx = 0, sy = 0, items = [];
-      near.forEach(function (o) { o.taken = true; sx += o.x; sy += o.y; items.push(o.it); o.it.e._stacked = true; });
-      addStackBadge(items, map.unproject([sx / near.length, sy / near.length]));
     });
-
-    (MANIFEST.layers || []).forEach(paintMarkerDisplay);
+    map.addLayer({
+      id: "atlas-cluster-count", type: "symbol", source: CLUSTER_SRC,
+      filter: ["has", "point_count"],
+      layout: {
+        "text-field": ["get", "point_count_abbreviated"],
+        "text-font": ["Open Sans Bold"],
+        "text-size": ["step", ["get", "point_count"], 12, 10, 13, 50, 14],
+        // the count IS the feature — it must never lose a placement contest
+        "text-allow-overlap": true,
+        "text-ignore-placement": true
+      },
+      paint: { "text-color": "#FFFFFF" }
+    });
+    wireClusterEvents();
+    CLUSTER.ready = true;
+    return true;
   }
 
-  // one colour if the stack agrees, ink if it does not — a badge should not
-  // invent a category the places under it do not share
-  function stackColor(items) {
-    var c = items[0].e.color || "";
-    for (var i = 1; i < items.length; i++) if ((items[i].e.color || "") !== c) return "";
-    return c;
+  function clusterAt(pt) {
+    if (!CLUSTER.ready || !map.getLayer(CLUSTER_LAYER)) return null;
+    var hits = map.queryRenderedFeatures(pt, { layers: [CLUSTER_LAYER] });
+    return hits.length ? hits[0] : null;
   }
 
-  function addStackBadge(items, lngLat) {
-    var wrap = el("div", "atlas-stack");
-    var col = stackColor(items);
-    if (col) wrap.style.setProperty("--stack", col);
-    wrap.innerHTML =
-      '<span class="st-pile"><span class="st-leaf"></span><span class="st-leaf"></span>' +
-        '<span class="st-disc"></span></span>' +
-      '<span class="st-n">' + items.length + "</span>";
-    wrap.setAttribute("role", "button");
-    wrap.setAttribute("tabindex", "0");
-    wrap.setAttribute("aria-label", items.length + " places here — open them");
-    var st = { mk: null, items: items };
-    function open() {
-      // the members are hidden behind this badge; show them, drop the badge,
-      // then hand the stack to the fan
-      st.items.forEach(function (it) { it.e._stacked = false; });
-      STACKS = STACKS.filter(function (x) { return x !== st; });
-      st.mk.remove();
-      (MANIFEST.layers || []).forEach(paintMarkerDisplay);
-      spiderfy(st.items, lngLat);
+  function wireClusterEvents() {
+    map.on("click", CLUSTER_LAYER, function (e) {
+      var f = e.features && e.features[0];
+      if (f) clusterClick(f);
+    });
+    map.on("mousemove", CLUSTER_LAYER, function (e) {
+      var f = e.features && e.features[0];
+      if (!f) return;
+      CLUSTER.hovering = true;
+      map.getCanvas().style.cursor = "pointer";
+      if (SPIDER.items) return;               // the fan owns the stage
+      var cid = f.properties.cluster_id;
+      var p = map.project(f.geometry.coordinates.slice());
+      var r = f.properties.point_count >= 50 ? 22 : f.properties.point_count >= 10 ? 17 : 13;
+      showHint(f.properties.point_count + " places here", { x: p.x, y: p.y - r }, "cl|" + cid);
+      showClusterBounds(cid, f.properties.point_count);
+    });
+    map.on("mouseleave", CLUSTER_LAYER, function () {
+      CLUSTER.hovering = false;
+      map.getCanvas().style.cursor = "";
+      if (typeof HINT.key === "string" && HINT.key.indexOf("cl|") === 0) hideHintSoon();
+      hideClusterBounds();
+    });
+    // pans are the tile machinery's problem; we only re-read the answer
+    map.on("moveend", scheduleClusterSync);
+    map.on("zoomend", scheduleClusterSync);
+    // a hover footprint outlives its disc the moment the zoom changes (the
+    // tree reshapes and no mouseleave ever fires under a moving map)
+    map.on("zoomstart", hideClusterBounds);
+    map.on("data", function (e) {
+      if (e.sourceId === CLUSTER_SRC && e.isSourceLoaded) scheduleClusterSync();
+    });
+    wireHintGlobals();
+  }
+
+  // Clicking a disc asks supercluster where the group splits. If that zoom
+  // is reachable, fly there — framed on the members' own bounds, not just
+  // the centroid, so the reader lands on the group. If it is NOT reachable
+  // (coincident members, or the map already at its ceiling), zooming is a
+  // lie we refuse to tell: fan the members out instead.
+  function clusterClick(f) {
+    var cid = f.properties.cluster_id;
+    var n = f.properties.point_count;
+    var at = f.geometry.coordinates.slice();
+    if (SPIDER.items) {
+      var same = SPIDER.cid === cid;
+      spiderCollapse();
+      if (same) return;      // clicking the fan's own centre folds it, full stop
     }
-    wrap.addEventListener("click", function (e) { e.stopPropagation(); open(); });
-    wrap.addEventListener("keydown", function (e) {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); open(); }
-    });
-    wireMarkerHint(wrap, function () { return items.length + " places here"; });
-    st.mk = new maplibregl.Marker({ element: wrap, anchor: "center" }).setLngLat(lngLat).addTo(map);
-    STACKS.push(st);
+    var src = map.getSource(CLUSTER_SRC);
+    if (!src) return;
+    var maxZ = map.getMaxZoom();
+    Promise.all([
+      src.getClusterExpansionZoom(cid),
+      src.getClusterLeaves(cid, Math.min(n, FAN_MAX), 0)
+    ]).then(function (res) {
+      var z = res[0], leaves = res[1];
+      if (z > maxZ || map.getZoom() >= maxZ - 0.05) { spiderfyLeaves(cid, at, leaves); return; }
+      var b = leavesBounds(leaves);
+      if (b) map.fitBounds(b, { padding: 80, maxZoom: Math.min(z + 0.25, maxZ), duration: 500 });
+      else map.easeTo({ center: at, zoom: Math.min(z + 0.25, maxZ), duration: 500 });
+    }).catch(function () {});   // a stale cluster id (source just rebuilt) is a no-op, not a crash
   }
 
-  function wireStacks() {
-    if (stacksWired) return;
-    stacksWired = true;
-    map.on("moveend", scheduleRestack);
-    map.on("zoomend", scheduleRestack);
+  function leavesBounds(leaves) {
+    if (!leaves || !leaves.length) return null;
+    var c0 = leaves[0].geometry.coordinates;
+    var b = new maplibregl.LngLatBounds(c0, c0);
+    leaves.forEach(function (l) { b.extend(l.geometry.coordinates); });
+    return b;
   }
 
-  function stackFor(entry) {
-    var p0 = map.project(entry.mk.getLngLat());
-    return visibleMarkerEntries().filter(function (it) {
-      var p = map.project(it.e.mk.getLngLat());
-      var dx = p.x - p0.x, dy = p.y - p0.y;
-      return dx * dx + dy * dy <= SPIDER_PX * SPIDER_PX;
+  // A fan is DOM pins again: look each leaf up by the key it carried into
+  // the source, reveal those markers, and hand them to the spiderfy that
+  // has always owned the geometry.
+  function spiderfyLeaves(cid, anchor, leaves) {
+    var items = [];
+    leaves.forEach(function (l) {
+      var it = CLUSTER.byKey[l.properties && l.properties.__k];
+      if (it) { it.e._fanned = true; items.push(it); }
     });
+    if (!items.length) return;
+    hideClusterBounds();
+    (MANIFEST.layers || []).forEach(paintMarkerDisplay);
+    SPIDER.cid = cid;
+    spiderfy(items, anchor);
+  }
+
+  // The footprint under a hovered disc: the members' geographic bounding
+  // box, drawn faint — "this disc stands for roughly here". Members come
+  // back async; by then the pointer may be on a different disc, so answers
+  // carry the id they were asked about. Boxes are cached per cluster id,
+  // and the cache lives exactly as long as one build of the source (the
+  // ids are only stable within it).
+  function showClusterBounds(cid, n) {
+    if (CLUSTER.hoverId === cid) return;
+    CLUSTER.hoverId = cid;
+    var cached = CLUSTER.boundsCache[cid];
+    if (cached) { setClusterBounds(cached); return; }
+    var src = map.getSource(CLUSTER_SRC);
+    if (!src) return;
+    src.getClusterLeaves(cid, n || 1000, 0).then(function (leaves) {
+      var b = leavesBounds(leaves);
+      if (!b) return;
+      var ring = [[b.getWest(), b.getSouth()], [b.getEast(), b.getSouth()],
+                  [b.getEast(), b.getNorth()], [b.getWest(), b.getNorth()],
+                  [b.getWest(), b.getSouth()]];
+      CLUSTER.boundsCache[cid] = ring;
+      if (CLUSTER.hoverId === cid && !SPIDER.items) setClusterBounds(ring);
+    }).catch(function () {});
+  }
+  function setClusterBounds(ring) {
+    var src = map.getSource(CLUSTER_BOUNDS_SRC);
+    if (src) src.setData({ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [ring] } });
+  }
+  function hideClusterBounds() {
+    CLUSTER.hoverId = null;
+    var src = map.getSource(CLUSTER_BOUNDS_SRC);
+    if (src) src.setData({ type: "FeatureCollection", features: [] });
+  }
+
+  function scheduleClusterRefresh() {
+    if (CLUSTER.refreshTimer) clearTimeout(CLUSTER.refreshTimer);
+    CLUSTER.refreshTimer = setTimeout(function () { CLUSTER.refreshTimer = null; refreshClusterIndex(); }, 60);
+  }
+
+  // Rebuild the clustered source from whatever is currently visible. Runs
+  // on layer toggles, search and badge folds — never on mere pans. Entries
+  // new to the source stay visible until the first sync says otherwise
+  // (optimistic, like the restack this replaces): a moment of overlap reads
+  // better than pins blinking off and back on.
+  function refreshClusterIndex() {
+    if (!map || !ensureClusterEngine()) return;
+    if (SPIDER.items) { scheduleClusterRefresh(); return; }   // never re-index under an open fan
+    var feats = [], byKey = {};
+    clusterEntries().forEach(function (it) {
+      byKey[it.key] = it;
+      if (!CLUSTER.byKey[it.key]) it.e._clustered = false;
+      feats.push({ type: "Feature", geometry: it.e.f.geometry, properties: { __k: it.key } });
+    });
+    // entries that just LEFT the source must not stay hidden by a stale flag
+    for (var k in CLUSTER.byKey) { if (!byKey[k]) CLUSTER.byKey[k].e._clustered = false; }
+    CLUSTER.byKey = byKey;
+    CLUSTER.boundsCache = {};
+    hideClusterBounds();
+    var src = map.getSource(CLUSTER_SRC);
+    if (src) src.setData({ type: "FeatureCollection", features: feats });
+    scheduleClusterSync();
+  }
+
+  function scheduleClusterSync() {
+    if (CLUSTER.syncTimer) clearTimeout(CLUSTER.syncTimer);
+    CLUSTER.syncTimer = setTimeout(function () { CLUSTER.syncTimer = null; syncLeafVisibility(); }, 90);
+  }
+
+  // Ask the source which of its points are, right now, standing alone in
+  // the viewport's tiles: those get their DOM pin; everything else is
+  // inside some disc — or outside the view, which for a DOM node amounts
+  // to the same thing (no element to lay out). This is the whole viewport-
+  // rendering story for pins, and it is a read, not a computation: the
+  // spatial work already happened in the source's worker.
+  function syncLeafVisibility() {
+    if (!map || !CLUSTER.ready || SPIDER.items) return;
+    var loose = {};
+    try {
+      map.querySourceFeatures(CLUSTER_SRC, { filter: ["!", ["has", "point_count"]] }).forEach(function (f) {
+        if (f.properties && f.properties.__k) loose[f.properties.__k] = 1;
+      });
+    } catch (err) { return; }
+    var touched = {};
+    for (var k in CLUSTER.byKey) {
+      var it = CLUSTER.byKey[k];
+      it.e._clustered = !loose[k];
+      touched[it.L.id] = it.L;
+    }
+    for (var id in touched) paintMarkerDisplay(touched[id]);
   }
 
   // every marker click lands here: a fanned pin opens its own popup (fan
-  // stays); a stacked pin fans its stack out; a lone pin behaves as ever
+  // stays); any other visible pin is a loner by construction — the engine
+  // has already folded everything that overlaps — so it pops up directly
   function spiderClick(L, entry) {
     if (SPIDER.items) {
       for (var i = 0; i < SPIDER.items.length; i++) {
         var it = SPIDER.items[i];
         if (it.e === entry) {
-          SPIDER.pop = openPopup(it.L, it.e.f, it.e.mk.getLngLat(), it.off);
+          if (SPIDER.pop) SPIDER.pop.remove();   // one member speaks at a time
+          SPIDER.pop = openPopup(it.L, it.e.f, it.e.mk.getLngLat(), it.off, fanAnchor(it.foot));
           return;
         }
       }
       spiderCollapse(); // a marker outside the open fan: fold it first
     }
-    var stack = stackFor(entry);
-    if (stack.length < 2) { openPopup(L, entry.f, entry.mk.getLngLat()); return; }
-    spiderfy(stack, entry.mk.getLngLat());
+    openPopup(L, entry.f, entry.mk.getLngLat());
+  }
+
+  // A fanned pin's popup must not squat on its siblings: anchor it on the
+  // side that faces the fan's centre, so the body opens outward, away from
+  // the ring. Eight sectors, eight anchors. (Screen y grows downward, so a
+  // positive angle means the foot points below the centre.)
+  function fanAnchor(foot) {
+    var a = Math.atan2(foot[1], foot[0]) * 180 / Math.PI;
+    if (a >= -22.5 && a < 22.5) return "left";
+    if (a >= 22.5 && a < 67.5) return "top-left";
+    if (a >= 67.5 && a < 112.5) return "top";
+    if (a >= 112.5 && a < 157.5) return "top-right";
+    if (a >= -67.5 && a < -22.5) return "bottom-left";
+    if (a >= -112.5 && a < -67.5) return "bottom";
+    if (a >= -157.5 && a < -112.5) return "bottom-right";
+    return "right";
   }
 
   function spiderfy(stack, anchor) {
     wireSpider();
+    hideHint();
     var a = map.project(anchor);
     var feet = fanFeet(stack.length);
     SPIDER.anchor = anchor;
@@ -1050,23 +1230,45 @@
       w.classList.add("fanned");
       return { L: it.L, e: it.e, off: off, foot: feet[i] };
     });
+    // the fan is the one thing happening: veil everything that is not it
+    dimEl();
+    map.getContainer().classList.add("atlas-fanned");
     drawLegs();
+  }
+
+  // A translucent paper wash between the tiles and the fan. It lives in the
+  // canvas container right after the canvas, so GL layers (including the
+  // cluster discs) sit under it while the legs and the fanned pins — later
+  // siblings — paint above. pointer-events stays none in CSS: the click
+  // that should fold the fan must reach the map beneath.
+  var DIM = { el: null };
+  function dimEl() {
+    if (!DIM.el) {
+      DIM.el = el("div", "atlas-dim");
+      map.getCanvasContainer().insertBefore(DIM.el, map.getCanvas().nextSibling);
+    }
+    return DIM.el;
   }
 
   function spiderCollapse() {
     if (!SPIDER.items) return;
     SPIDER.items.forEach(function (it) {
       var w = it.e.mk.getElement();
+      it.e._fanned = false;
       w.classList.remove("fanned");
       w.style.removeProperty("--fan-x");
       w.style.removeProperty("--fan-y");
     });
     SPIDER.items = null;
     SPIDER.anchor = null;
+    SPIDER.cid = null;
+    map.getContainer().classList.remove("atlas-fanned");
     if (SPIDER.svg) { SPIDER.svg.remove(); SPIDER.svg = null; }
     // a popup opened from a fanned pin points at a spot that no longer exists
     if (SPIDER.pop) { SPIDER.pop.remove(); SPIDER.pop = null; }
-    scheduleRestack();       // the stack the fan came from earns its badge back
+    // the members go back behind their disc, and the engine re-reads reality
+    (MANIFEST.layers || []).forEach(paintMarkerDisplay);
+    scheduleClusterSync();
   }
 
   // thin leader lines from the shared point to each displaced pin — an SVG
@@ -1078,7 +1280,9 @@
     if (!SPIDER.svg) {
       SPIDER.svg = document.createElementNS(SVG_NS, "svg");
       SPIDER.svg.setAttribute("class", "spider-legs");
-      map.getCanvasContainer().insertBefore(SPIDER.svg, map.getCanvas().nextSibling);
+      // after the veil when there is one: legs above the wash, below the pins
+      var after = (DIM.el && DIM.el.parentNode) ? DIM.el : map.getCanvas();
+      map.getCanvasContainer().insertBefore(SPIDER.svg, after.nextSibling);
     }
     var box = map.getContainer().getBoundingClientRect();
     SPIDER.svg.setAttribute("width", box.width);
@@ -1100,7 +1304,10 @@
   function wireSpider() {
     if (spiderWired) return;
     spiderWired = true;
-    map.on("click", spiderCollapse);      // a background click folds the fan
+    // a background click folds the fan — but a click on a cluster disc is
+    // the disc's own business (its handler may be folding this fan to open
+    // another); folding here too would undo what it just did
+    map.on("click", function (e) { if (!clusterAt(e.point)) spiderCollapse(); });
     map.on("zoomstart", spiderCollapse);  // px offsets belong to one zoom level
     map.on("move", drawLegs);             // markers pan natively; legs follow here
     document.addEventListener("keydown", function (e) { if (e.key === "Escape") spiderCollapse(); });
@@ -1815,6 +2022,9 @@
     }
 
     map.on("mousemove", function (e) {
+      // over a cluster disc the disc's own handler owns the cursor and the
+      // hint; whatever polygon lies beneath must neither light up nor speak
+      if (CLUSTER.hovering) { clearHover(); hideTip(); return; }
       var top = pick(e.point);
       map.getCanvas().style.cursor = top ? "pointer" : "";
       if (!top || top.f.id == null) { clearHover(); hideTip(); return; }
@@ -1834,6 +2044,7 @@
     map.on("mouseout", function () { clearHover(); hideTip(); });
 
     map.on("click", function (e) {
+      if (clusterAt(e.point)) return;             // the disc owns this click
       var top = pick(e.point);
       if (!top) { clearSel(); return; }           // click on empty map clears the selection
       clearSel();
@@ -1847,14 +2058,25 @@
     wireCircleHints();   // hover tooltips for circle/bubble layers (style-drawn, not DOM)
   }
 
-  function openPopup(L, feature, lngLat, offsetPx) {
+  function openPopup(L, feature, lngLat, offsetPx, anchor) {
     hideHint();   // the popup says everything the tooltip did, and more
     var html = popupHTML(L, feature.properties);
     if (!html) return;
     var opts = { closeButton: true, maxWidth: "320px", className: "atlas-popup" };
     // a spiderfied marker keeps its true lngLat plus a px displacement — the
-    // popup takes the same displacement so it points at the pin the user sees
-    if (offsetPx) opts.offset = offsetPx;
+    // popup takes the same displacement so it points at the pin the user
+    // sees, and (fanned pins only) an anchor chosen to open away from the
+    // rest of the fan, nudged so it clears the pin's own body
+    if (offsetPx) {
+      var off = [offsetPx[0], offsetPx[1]];
+      if (anchor) {
+        if (anchor.indexOf("bottom") === 0) off[1] -= 26;        // above the pin's head
+        else if (anchor.indexOf("top") === 0) off[1] += 6;       // below its foot
+        else off[1] -= 12;                                       // beside its waist
+        opts.anchor = anchor;
+      }
+      opts.offset = off;
+    }
     return new maplibregl.Popup(opts).setLngLat(lngLat).setHTML(html).addTo(map);
   }
 
