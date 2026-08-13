@@ -190,6 +190,11 @@ async function runJob(job) {
   try { fs.rmSync(jobspecFile, { force: true }); } catch {}
 
   if (ok) {
+    // A rebuild replaces the whole directory, and the builder only ever produces
+    // the atlas's OWN layers — so everything a person contributed lived only in
+    // the directory about to be removed. Carry it into the fresh build first,
+    // and the rename brings it back with the atlas rather than deleting it.
+    carryContributed(targetDir, buildDir, job);
     // atomic move into place; replace an existing dataset only on rebuilds
     fs.rmSync(targetDir, { recursive: true, force: true });
     fs.renameSync(buildDir, targetDir);
@@ -236,6 +241,35 @@ function pushLog(job, line) {
   job.log = job.log || [];
   job.log.push(line.slice(0, 300));
   if (job.log.length > LOG_TAIL) job.log.splice(0, job.log.length - LOG_TAIL);
+}
+
+/* What a rebuild must not destroy. The contributed layers and everything
+   derived from them: the overlay manifest that declares them, their geometry,
+   the enrichment category sets, and the search index and its embedding
+   binaries. manifest.local.json names its geojson by filename, so they have to
+   travel together or the overlay points at nothing. */
+const CONTRIBUTED = [
+  /^manifest\.local\.json$/,
+  /^user-[a-z0-9-]+\.geojson$/,
+  /^categories\.local\.json$/,
+  /^search\.local\.json$/,
+  /^search-[a-z0-9-]+\.vec$/,
+  /^branding-logo\.png$/,        // re-emitted from the spec, but harmless to keep
+];
+function carryContributed(fromDir, toDir, job) {
+  let names;
+  try { names = fs.readdirSync(fromDir); } catch { return; }   // first build: nothing to carry
+  const carried = [];
+  for (const name of names) {
+    if (!CONTRIBUTED.some((re) => re.test(name))) continue;
+    const src = path.join(fromDir, name), dst = path.join(toDir, name);
+    // the builder does not write these, so it cannot have produced a newer one;
+    // if it somehow did, the built file wins and we leave it alone
+    if (fs.existsSync(dst)) continue;
+    try { fs.copyFileSync(src, dst); carried.push(name); }
+    catch (e) { pushLog(job, 'could not carry ' + name + ': ' + e.message); }
+  }
+  if (carried.length) pushLog(job, 'kept ' + carried.length + ' contributed file(s) across the rebuild');
 }
 
 function dirSize(dir) {

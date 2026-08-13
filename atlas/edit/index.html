@@ -171,6 +171,28 @@
     .save-row { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;
       padding-top:.75rem; border-top:1px solid var(--color-divider); }
     .set-err { font-size:var(--t-meta); color:var(--color-rust-deep); align-self:center; }
+    .set-ok2 { font-size:var(--t-meta); color:var(--color-canopy); align-self:center; }
+
+    /* the same place box the setup flow uses, so changing a region here and
+       choosing one there are recognisably one control */
+    .combo { position:relative; }
+    .sugg { position:absolute; z-index:20; left:0; right:0; top:calc(100% + .2rem); margin:0; padding:.2rem;
+      list-style:none; background:var(--color-surface); border:1px solid var(--color-border);
+      border-radius:var(--radius-md); box-shadow:var(--shadow-lg); max-height:15rem; overflow:auto; }
+    .sugg button { display:block; width:100%; text-align:left; background:none; border:none;
+      padding:.5rem .6rem; border-radius:var(--radius-md); cursor:pointer; color:inherit; min-height:2.75rem; }
+    .sugg button:hover, .sugg button[aria-selected="true"] { background:var(--color-moss-tint); }
+    .sugg button[aria-selected="true"] { outline:2px solid var(--color-moss); outline-offset:-2px; }
+    .sugg .nm { display:block; font-family:'Figtree',sans-serif; font-size:var(--t-ui); font-weight:600; }
+    .sugg .wh { display:block; font-size:var(--t-meta); color:var(--color-text-muted); }
+    .chips { display:flex; flex-wrap:wrap; gap:.4rem; }
+    .chip { display:inline-flex; align-items:center; gap:.15rem; padding:.3rem .3rem .3rem .6rem;
+      background:var(--color-bg-alt); border-radius:999px; font-size:var(--t-ui); }
+    .chip-alt { opacity:.62; }
+    .chip .x { width:2.75rem; height:2.75rem; display:inline-flex; align-items:center; justify-content:center;
+      background:none; border:none; cursor:pointer; color:inherit; border-radius:4px;
+      margin:-.4rem -.35rem -.4rem 0; }
+    .chip .x:hover { background:var(--color-rust-tint); color:var(--color-rust-deep); }
     .set-ok { font-size:var(--t-meta); color:var(--color-canopy); align-self:center; }
 
     .inv { display:flex; flex-direction:column; gap:.1rem; }
@@ -290,6 +312,7 @@
     var SLUG = (QS.get("dataset") || QS.get("atlas") || "").trim();
 
     var INST = null, MANIFEST = null, LOCAL = null, ME = null;
+    var LAYERS_MINE = [];      // the contributed layers, for the rebuild warning
 
     function api(path, opts) {
       opts = opts || {};
@@ -544,6 +567,7 @@
         return !isUserLayer(e.L, e.local) && !/^(admin|labels|boundary|boundaries)$/i.test(String(e.L.id || ""));
       });
 
+      LAYERS_MINE = mine;
       fill("#user-layers", mine, true);
       fill("#catalog-layers", theirs, false);
       $("#user-empty").hidden = mine.length > 0;
@@ -629,10 +653,18 @@
         "<h2>Settings</h2>" +
 
         '<h3 class="set-h">Region</h3>' +
-        '<p class="set-p">This atlas covers <b>' + esc(INST.regionLabel || "no recorded region") + "</b>. " +
-          "Changing it rebuilds the base map, which takes a few minutes — that lives in the wizard for now.</p>" +
-        '<a class="btn secondary small" style="text-decoration:none" id="set-region" ' +
-          'href="../setup/?edit=' + encodeURIComponent(SLUG) + '">Change the region</a>' +
+        '<p class="set-p">Where this atlas covers. Changing it rebuilds the base map, which takes a ' +
+          'few minutes — the atlas stays up and your own data layers are kept.</p>' +
+        '<div class="chips" id="set-chips"></div>' +
+        '<label class="fld combo" style="margin-top:.6rem">Add a place' +
+          '<input type="text" id="set-place" placeholder="Type a district, block or state…" ' +
+            'autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" ' +
+            'aria-controls="set-sugg" />' +
+          '<ul class="sugg" id="set-sugg" role="listbox" aria-label="Matching places" hidden></ul>' +
+        "</label>" +
+        '<div class="save-row" style="border:none;padding-top:.2rem">' +
+          '<button class="btn secondary small" id="region-save" disabled>Rebuild with this region</button>' +
+          '<span class="set-err" id="region-msg" role="alert"></span></div>' +
 
         '<h3 class="set-h">Identity</h3>' +
         '<label class="fld">Atlas title' +
@@ -667,8 +699,199 @@
         scrim.querySelector("#set-site").value.trim() !== (b.orgUrl || "");
     }
 
+    /* ================= region: search, chips, rebuild ================= */
+    /* The region is the one setting that cannot just be saved — it rebuilds the
+       base map from open data. The build swaps the dataset atomically and now
+       carries contributed layers across, so the atlas stays up and your own data
+       survives; what a person still needs to be told is that rows can end up
+       outside a region that shrank. */
+    var REG = { chosen: null, level: 2, dirty: false };
+
+    function regionInit(scrim) {
+      // start from what the atlas actually has, so "no change" is the default
+      var r = INST.region || {};
+      REG.level = Number(r.level) || 2;
+      REG.chosen = (r.shapeIDs || []).map(function (id, i) {
+        var names = r.shapeNames || [];
+        return { id: id, name: names[i] || id, label: names[i] || id, level: REG.level };
+      });
+      REG.dirty = false;
+      paintRegionChips(scrim);
+      wireRegionSearch(scrim);
+    }
+
+    function paintRegionChips(scrim) {
+      var host = scrim.querySelector("#set-chips");
+      if (!host) return;
+      host.innerHTML = "";
+      if (!REG.chosen.length) {
+        host.innerHTML = '<span class="set-p" style="margin:0">No places yet.</span>';
+      }
+      REG.chosen.forEach(function (c) {
+        var renamed = c.label !== c.name;
+        var el = document.createElement("span");
+        el.className = "chip";
+        if (renamed) el.title = 'The boundary data calls this "' + c.name + '"';
+        el.innerHTML = "<span>" + esc(c.label) +
+            (renamed ? ' <span class="chip-alt">(' + esc(c.name) + ")</span>" : "") + "</span>" +
+          '<button class="x" aria-label="Remove ' + esc(c.label) + '">✕</button>';
+        el.querySelector(".x").onclick = function () {
+          REG.chosen = REG.chosen.filter(function (x) { return x.id !== c.id; });
+          REG.dirty = true;
+          paintRegionChips(scrim);
+        };
+        host.appendChild(el);
+      });
+      var save = scrim.querySelector("#region-save");
+      if (save) save.disabled = !REG.dirty || !REG.chosen.length;
+      var m = scrim.querySelector("#region-msg");
+      if (m && !REG.chosen.length) m.textContent = "An atlas needs at least one place.";
+      else if (m && m.textContent === "An atlas needs at least one place.") m.textContent = "";
+    }
+
+    function wireRegionSearch(scrim) {
+      var box = scrim.querySelector("#set-place"), sugg = scrim.querySelector("#set-sugg");
+      if (!box) return;
+      var shown = [], cursor = -1, seq = 0, timer;
+      var iso3 = (INST.region && INST.region.iso3) || "IND";
+
+      function close() {
+        sugg.hidden = true; box.setAttribute("aria-expanded", "false"); cursor = -1;
+        box.removeAttribute("aria-activedescendant");
+      }
+      function paint() {
+        sugg.innerHTML = "";
+        if (!shown.length) { close(); return; }
+        shown.forEach(function (p, i) {
+          var li = document.createElement("li");
+          li.setAttribute("role", "presentation");
+          var b = document.createElement("button");
+          b.type = "button"; b.setAttribute("role", "option"); b.id = "set-opt-" + i;
+          b.setAttribute("aria-selected", i === cursor ? "true" : "false");
+          var lead = properName((p.alias && p.alias.typed) || p.name);
+          var note = p.alias && p.alias.inData && p.alias.inData !== lead
+            ? ' · listed as "' + p.alias.inData + '" in the boundary data' : "";
+          b.innerHTML = '<span class="nm">' + esc(lead) + "</span>" +
+            '<span class="wh">' + esc(p.label || "") + esc(note) + "</span>";
+          b.onclick = function () { pick(p, lead); };
+          li.appendChild(b); sugg.appendChild(li);
+        });
+        sugg.hidden = false; box.setAttribute("aria-expanded", "true");
+        if (cursor >= 0) box.setAttribute("aria-activedescendant", "set-opt-" + cursor);
+        else box.removeAttribute("aria-activedescendant");
+      }
+      function pick(p, label) {
+        // one build, one admin level — the API resolves shapeIDs against a
+        // single level, so mixing them would silently drop units
+        if (REG.chosen.length && (p.level || 2) !== REG.level) {
+          scrim.querySelector("#region-msg").textContent =
+            "An atlas is built at one level of detail. Remove the places you have first to switch level.";
+          box.value = ""; shown = []; close();
+          return;
+        }
+        REG.level = p.level || 2;
+        if (!REG.chosen.some(function (c) { return c.id === p.id; })) {
+          REG.chosen.push({ id: p.id, name: p.name, label: label || p.name, level: REG.level });
+          REG.dirty = true;
+        }
+        scrim.querySelector("#region-msg").textContent = "";
+        box.value = ""; shown = []; close();
+        paintRegionChips(scrim);
+        box.focus();
+      }
+      function search(q) {
+        q = q.trim();
+        if (q.length < 2) { shown = []; close(); return; }
+        var mine = ++seq;
+        api("geo/search?iso3=" + encodeURIComponent(iso3) + "&q=" + encodeURIComponent(q) + "&limit=8")
+          .then(function (r) {
+            if (mine !== seq) return;
+            shown = (r.matches || []).filter(function (m) {
+              return !REG.chosen.some(function (c) { return c.id === m.id; });
+            });
+            cursor = -1; paint();
+          })
+          .catch(function () { if (mine === seq) { shown = []; close(); } });
+      }
+      box.addEventListener("input", function () {
+        clearTimeout(timer);
+        var v = this.value;
+        timer = setTimeout(function () { search(v); }, 220);
+      });
+      box.addEventListener("keydown", function (e) {
+        if (sugg.hidden) {
+          if (e.key === "ArrowDown" && box.value.trim().length >= 2) { e.preventDefault(); search(box.value); }
+          return;
+        }
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          cursor += e.key === "ArrowDown" ? 1 : -1;
+          if (cursor < 0) cursor = shown.length - 1;
+          if (cursor >= shown.length) cursor = 0;
+          paint();
+        } else if (e.key === "Enter") {
+          if (cursor >= 0 && shown[cursor]) {
+            e.preventDefault();
+            pick(shown[cursor], properName((shown[cursor].alias && shown[cursor].alias.typed) || shown[cursor].name));
+          }
+        } else if (e.key === "Escape") { e.stopPropagation(); close(); }
+      });
+    }
+    function properName(v) {
+      return String(v || "").split(/\s+/).map(function (w) {
+        return w ? w.charAt(0).toUpperCase() + w.slice(1) : w;
+      }).join(" ");
+    }
+
+    function rebuildRegion(scrim, btn) {
+      var m = scrim.querySelector("#region-msg");
+      var mine = LAYERS_MINE.length;
+      var warn = mine
+        ? "Rebuilding the base map for " + REG.chosen.map(function (c) { return c.label; }).join(", ") +
+          ". Your " + mine + (mine === 1 ? " data layer is" : " data layers are") + " kept, but rows " +
+          "outside the new region will sit off the map. Go ahead?"
+        : "Rebuilding the base map for " + REG.chosen.map(function (c) { return c.label; }).join(", ") + ". Go ahead?";
+      if (!window.confirm(warn)) return;
+
+      btn.disabled = true; m.className = "set-err"; m.textContent = "";
+      api("instances/" + encodeURIComponent(SLUG) + "/rebuild", {
+        method: "POST",
+        body: { region: { iso3: (INST.region && INST.region.iso3) || "IND", level: REG.level,
+                          shapeIDs: REG.chosen.map(function (c) { return c.id; }) } },
+      }).then(function (r) {
+        closeDialog(scrim);
+        toast("Rebuilding — this takes a few minutes. The atlas stays up meanwhile.");
+        if (r.jobId) watchRebuild(r.jobId);
+      }).catch(function (e) {
+        btn.disabled = false;
+        m.textContent = errMsg(e);
+      });
+    }
+
+    // the atlas is live throughout, so this only has to say when it is done
+    function watchRebuild(jobId) {
+      var tick = function () {
+        api("jobs/" + encodeURIComponent(jobId)).then(function (j) {
+          if (j.status === "done") {
+            toast("Region rebuilt — reloading the map");
+            setTimeout(function () { location.reload(); }, 900);
+            return;
+          }
+          if (j.status === "failed") {
+            toast("The rebuild failed — your atlas is unchanged. " + (j.message || ""));
+            return;
+          }
+          setTimeout(tick, 2500);
+        }).catch(function () { /* stop watching; the atlas is untouched either way */ });
+      };
+      setTimeout(tick, 2500);
+    }
+
     function openSettings(land) {
       var sheet = openDialog(settingsHTML(), function (scrim) {
+        regionInit(scrim);
+        var rs = scrim.querySelector("#region-save");
+        if (rs) rs.onclick = function () { rebuildRegion(scrim, this); };
         paintInvites(scrim);
         ["#set-title", "#set-desc", "#set-site"].forEach(function (sel) {
           scrim.querySelector(sel).addEventListener("input", function () {
@@ -688,8 +911,8 @@
         return false;
       });
       if (land === "region") {
-        var r = sheet.querySelector("#set-region");
-        if (r) { r.scrollIntoView({ block: "start" }); r.focus(); }
+        var pl = sheet.querySelector("#set-place");
+        if (pl) { pl.scrollIntoView({ block: "start" }); pl.focus(); }
       }
       return sheet;
     }
