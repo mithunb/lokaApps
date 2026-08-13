@@ -177,6 +177,9 @@
       window.__bench = window.LokaDataBench.mount($("#bench"), {
         mode: "standalone",
         api: API,
+        // this page sits one directory below the viewer, so the preview frame
+        // must be told where the viewer is rather than assuming "./"
+        viewer: "../",
         // Committing used to leave you on this page with the job done and
         // nowhere to go. The atlas is where the layer landed, so that is where
         // this returns — and the editor re-reads the manifest on load, so the

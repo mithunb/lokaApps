@@ -257,6 +257,9 @@
 
     // the host page knows its own depth to the API mount
     var API = opts.api || "./api/";
+    // ...and to the viewer, which the preview frame loads. Defaults to "./" for
+    // a host sitting beside it; a host one directory deeper must say so.
+    var VIEWER = opts.viewer || "./";
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
@@ -589,7 +592,9 @@
       box.innerHTML = "📍 <b>Location: the shapes in your file.</b> They carry their own coordinates.";
     } else if (lat && lng) {
       box.className = "loc-first ok";
-      box.innerHTML = "📍 <b>Location: " + esc(lat.name) + " + " + esc(lng.name) + ".</b> Your rows will be placed at those coordinates.";
+      box.innerHTML = "📍 <b>Location: " + esc(lat.name) + " + " + esc(lng.name) + ".</b> " +
+        "Your rows will be placed at those coordinates. " +
+        '<button type="button" class="linkish" id="loc-change">Place them another way</button>';
     } else if (place) {
       box.className = "loc-first ok";
       box.innerHTML = "📍 <b>Location: the place names in " + esc(place.name) + ".</b> We'll match them to boundaries — you confirm on the next step.";
@@ -597,6 +602,13 @@
       box.className = "loc-first warn";
       box.innerHTML = "📍 <b>No location found yet.</b> A map needs either latitude and longitude columns, or a column of place names. Check the fields below — you can rename or re-type one if we read it wrongly.";
     }
+    // the way back into the placement step, for the person who wants it after
+    // coordinates carried them past it
+    var change = $("#loc-change");
+    if (change) change.onclick = function () {
+      S.placeSkipped = false;
+      if (S.result) { $("#place-details").hidden = false; goStep(3); }
+    };
   }
 
   /* ---- data enrichment: one new categorical field from a text column ----
@@ -852,7 +864,29 @@
     $("#ps-change").textContent = detected ? "Change" : "Done";
     syncPlaceVisibility();
     renderReport(result);
+
+    // Nothing to decide: coordinates place every row, exactly as a shape file
+    // does, and shapes have always gone straight through. The step is kept for
+    // the cases that ARE a question — matching names to boundaries, or rows
+    // that failed to place — and the check step carries a Change back into it.
+    if (detected && result.strategy === "coordinates" && !needsAnEye(result)) {
+      S.placeSkipped = true;
+      if (STAGES === "checkPlace") { readyCheck(); return; }
+      runApply(function () {
+        return api("layers/apply", { method: "POST", body: applyBody(true, S.result.spec) })
+          .then(function (r) { S.result = r; enterStyle(r); })
+          .catch(function () { S.placeSkipped = false; goStep(3); });
+      });
+      return;
+    }
+    S.placeSkipped = false;
     goStep(3);
+  }
+
+  // rows the placement could not settle are the whole reason the step exists
+  function needsAnEye(result) {
+    var rep = result.matchReport || {};
+    return ((rep.unmatched || []).length > 0) || ((rep.ambiguous || []).length > 0);
   }
 
   function syncPlaceVisibility() {
@@ -1072,15 +1106,36 @@
 
   /* ================= step 4 · preview & add ================= */
 
+  /* The preview blanked because this had two ways to navigate one frame: set
+     src the first time, reload() after. Entering the style step can schedule a
+     re-apply 60ms later, whose result refreshes the preview again — so a
+     reload() landed on a frame still doing its FIRST navigation, aborted it,
+     and left the canvas empty after a flash of the map.
+
+     One navigation style now, and only one at a time: a refresh asked for
+     while another is in flight is remembered and run when that one lands. The
+     version counter makes each src a real navigation even when the draft id
+     has not changed, so reload() is never needed. */
+  var previewSeq = 0, previewBusy = false, previewPending = null, previewGuard = null;
   function refreshPreview(draftId) {
     var f = $("#db-preview-frame");
-    if (f.dataset.draft !== draftId) {
-      f.dataset.draft = draftId;
-      f.src = "./?embed=1&dataset=" + encodeURIComponent(draftId);
-    } else {
-      try { f.contentWindow.location.reload(); }
-      catch (e) { f.src = "./?embed=1&dataset=" + encodeURIComponent(draftId); }
-    }
+    if (!f) return;
+    if (previewBusy) { previewPending = draftId; return; }
+    previewBusy = true;
+    previewPending = null;
+    var done = function () {
+      if (!previewBusy) return;
+      previewBusy = false;
+      clearTimeout(previewGuard);
+      if (previewPending) { var d = previewPending; previewPending = null; refreshPreview(d); }
+    };
+    f.onload = done;
+    // a frame that never fires load (a dead draft, an offline basemap) must not
+    // wedge every later refresh behind it
+    clearTimeout(previewGuard);
+    previewGuard = setTimeout(done, 8000);
+    f.dataset.draft = draftId;
+    f.src = VIEWER + "?embed=map&dataset=" + encodeURIComponent(draftId) + "&v=" + (++previewSeq);
   }
 
   // "how it looks" asks two questions — the shape a row is drawn as, and the
