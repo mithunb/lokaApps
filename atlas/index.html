@@ -407,6 +407,13 @@
     .atlas-embed-map main { padding:0; }
     .atlas-embed-map .atlas-stage { width:100%; height:100dvh; margin:0;
       border-radius:0; border:none; box-shadow:none; }
+    /* ?panel=0 — a host page (the editor) has taken the panel's jobs over the
+       frame messages in atlas.js, so showing the panel too would say everything
+       twice. Hidden, not removed from the document: buildControls() still wires
+       the search and basemap machinery the host drives, and on a phone this
+       also dissolves the bottom sheet, handing the sheet's slice of the stage
+       back to the map. */
+    .atlas-nopanel .atlas-panel { display:none; }
 
     /* Coarse pointer (touch): comfortable 44px targets regardless of screen size */
     @media (pointer:coarse){
@@ -589,7 +596,11 @@
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="./vendor/pmtiles.js"></script>
   <script src="./vendor/qrcode.js"></script>
-  <script src="./share.js"></script>
-  <script src="./atlas.js"></script>
+  <!-- ?v= on our own scripts: Apache serves these with a long cache, so a
+       deploy that changes atlas.js reaches nobody until the token moves. Bump
+       it (all pages share one) whenever a local .js or .css changes. Vendored
+       libraries are left alone — their filenames change when they do. -->
+  <script src="./share.js?v=20260813-1"></script>
+  <script src="./atlas.js?v=20260813-1"></script>
 </body>
 </html>

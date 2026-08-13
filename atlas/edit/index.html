@@ -100,10 +100,7 @@
     .pane-body { padding:.5rem .85rem .85rem; overflow:auto; flex:1 1 auto; }
 
     @media (min-width:821px) {
-      /* right, not left: the atlas in the frame keeps its own layers panel on
-         the left, and that is the view a reader gets — the author should be
-         looking at it, not covering it up with authoring tools */
-      #pane-layers { top:1rem; right:1rem; width:20.5rem; max-width:calc(100% - 2rem); max-height:calc(100% - 2rem); }
+      #pane-layers { top:1rem; left:1rem; width:20.5rem; max-width:calc(100% - 2rem); max-height:calc(100% - 2rem); }
     }
 
     .lyr-group { font-size:var(--t-label); letter-spacing:.12em; text-transform:uppercase;
@@ -121,6 +118,44 @@
       text-transform:uppercase; letter-spacing:.06em; }
 
     .base-row { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; padding:.2rem 0 .5rem; }
+    /* the reviewed prototype's segmented control, verbatim: two mutually
+       exclusive ways to draw the same ground, not two independent switches */
+    .seg { display:inline-flex; gap:.2rem; padding:.15rem; background:var(--color-bg-alt);
+      border:1px solid var(--color-border); border-radius:var(--radius-md); }
+    .seg-opt { font:inherit; font-size:var(--t-meta); padding:.4rem .7rem; min-height:2.5rem;
+      border:none; border-radius:4px; background:none; color:var(--color-text-secondary); cursor:pointer; }
+    .seg-opt.on { background:var(--color-moss-tint); color:var(--color-canopy); font-weight:600; }
+
+    /* a layer's legend, under the layer it belongs to — the author's only way
+       to see whether their category colours actually read as categories */
+    .lyr-leg { display:flex; flex-direction:column; gap:.2rem; padding:.15rem 0 .35rem; }
+    .leg-item { display:flex; align-items:center; gap:.45rem; font-size:var(--t-meta); color:var(--color-text-secondary); }
+    .leg-swatch { flex:0 0 auto; width:12px; height:12px; background:var(--c,var(--color-cat-other)); border-radius:2px; }
+    .leg-swatch.dot { width:11px; height:11px; border-radius:50%; margin:0 1px; }
+    .leg-swatch.line { height:4px; border-radius:2px; align-self:center; }
+    .leg-swatch.dashed { height:4px; border-radius:0; align-self:center;
+      background:repeating-linear-gradient(90deg, var(--c,var(--color-cat-other)) 0 3px, transparent 3px 5px); }
+    .leg-swatch.triangle { border-radius:0; clip-path:polygon(50% 0, 0 100%, 100% 100%); }
+    .leg-swatch.diamond { width:10px; height:10px; border-radius:0; transform:rotate(45deg); margin:0 1px; }
+
+    /* ---------- search, floating top-centre over the map ----------
+       The owner's direction: search belongs on the map, not in a panel. It is
+       centred while the stage is wide enough, and slides just clear of the
+       panel rather than on top of it when the stage narrows. Hidden until the
+       frame reports there is text to search (see the ready message). */
+    .ed-search { position:absolute; z-index:6; top:1rem; left:50%; transform:translateX(-50%);
+      width:min(20rem, calc(100% - 1.5rem)); display:flex; flex-direction:column; gap:.3rem; }
+    .ed-search input { width:100%; font:inherit; font-size:var(--t-ui); min-height:2.75rem;
+      padding:.5rem .7rem; border:1px solid var(--color-border); border-radius:4px;
+      background:var(--color-surface); color:var(--color-text-primary); box-shadow:var(--shadow-md); }
+    .ed-search input:focus { outline:2px solid var(--color-moss); outline-offset:-1px; border-color:var(--color-moss); }
+    .ed-search-count { align-self:center; font-size:var(--t-meta); color:var(--color-text-secondary);
+      background:var(--color-surface); border:1px solid var(--color-divider); border-radius:999px;
+      padding:.15rem .6rem; box-shadow:var(--shadow-md); }
+    @media (min-width:821px) {
+      .ed-search { left:max(calc(50% - 10rem), 22.5rem); transform:none; width:20rem; }
+    }
+
     .region-line { display:grid; grid-template-columns:1fr auto; gap:0 .6rem; align-items:baseline;
       width:100%; min-height:2.75rem; padding:.4rem .5rem .45rem; margin:0 -.5rem .3rem;
       background:none; border:none; border-radius:var(--radius-md); text-align:left; cursor:pointer;
@@ -269,6 +304,13 @@
     <div class="frame-veil" id="veil">Drawing your atlas…</div>
     <iframe id="ed-frame" title="Your atlas" hidden></iframe>
 
+    <!-- search floats over the map, top-centre, where the owner asked for it;
+         the frame does the actual filtering (see the search message) -->
+    <div class="ed-search" id="ed-search" hidden>
+      <input type="search" id="ed-search-input" placeholder="Search the map…" aria-label="Search the map" autocomplete="off" />
+      <span class="ed-search-count" id="ed-search-count" role="status" hidden></span>
+    </div>
+
     <section class="pane" id="pane-layers" aria-label="Layers">
       <div class="pane-head" id="layers-head">
         <h2>Layers</h2>
@@ -276,6 +318,9 @@
       </div>
       <div class="pane-body">
         <div class="lyr-group">Base map</div>
+        <div class="base-row" id="base-row" hidden>
+          <div class="seg" role="radiogroup" aria-label="Base map style" id="basemap-seg"></div>
+        </div>
         <button class="region-line" id="region-line">
           <span class="region-k" id="region-k">Boundaries &amp; place names for</span>
           <span class="region-v" id="region-names"></span>
@@ -314,6 +359,7 @@
     var INST = null, MANIFEST = null, LOCAL = null, ME = null;
     var LAYERS_MINE = [];      // the contributed layers, for the rebuild warning
     var MINE = [];             // what GET /layers/list says is on this atlas
+    var BASEMAP = null;        // the author's basemap choice, re-asserted on every frame load
 
     function api(path, opts) {
       opts = opts || {};
@@ -491,13 +537,91 @@
     function showFrame() {
       var f = $("#ed-frame");
       f.addEventListener("load", function () { $("#veil").hidden = true; f.hidden = false; });
-      f.src = "../?dataset=" + encodeURIComponent(SLUG) + "&embed=map";
+      // panel=0: the viewer keeps its map and hands its panel's jobs — basemap,
+      // search, legend — to this page, so the reader sees ONE panel, not two
+      f.src = "../?dataset=" + encodeURIComponent(SLUG) + "&embed=map&panel=0";
+    }
+
+    /* ---- talking to the frame. postMessage, not f.contentWindow.someFn():
+            the frame reloads whenever settings change it (reloadFrame), and a
+            function reference captured before the reload would belong to a dead
+            document — a message always lands in whichever document is in the
+            frame now. The frame answers with "ready" (it boots asynchronously;
+            until then there is nothing to drive) and pushes "count" whenever a
+            search changes what is shown. ---- */
+    function tellFrame(msg) {
+      var w = $("#ed-frame").contentWindow;
+      if (w) { try { w.postMessage(msg, location.origin); } catch (e) {} }
+    }
+    window.addEventListener("message", function (e) {
+      if (e.origin !== location.origin) return;   // the frame is same-origin; nothing else is expected
+      var m = e.data || {};
+      if (m.atlas === "ready") {
+        // a search box with nothing to search would be a promise the atlas
+        // cannot keep — the frame knows, because it has read the data
+        $("#ed-search").hidden = !m.searchable;
+        // a reloaded frame boots at its manifest defaults; put the author's
+        // standing choices back so a settings save doesn't visibly undo them
+        if (BASEMAP) tellFrame({ atlas: "set-basemap", id: BASEMAP });
+        var q = $("#ed-search-input").value.trim();
+        if (q) tellFrame({ atlas: "search", q: q });
+      } else if (m.atlas === "count") {
+        paintSearchCount(m.shown, m.total);
+      }
+    });
+
+    $("#ed-search-input").addEventListener("input", function () {
+      tellFrame({ atlas: "search", q: this.value });
+    });
+    // the ✕ some browsers draw in type=search fires "search", not "input"
+    $("#ed-search-input").addEventListener("search", function () {
+      tellFrame({ atlas: "search", q: this.value });
+    });
+    function paintSearchCount(shown, total) {
+      var c = $("#ed-search-count");
+      if (shown == null) { c.hidden = true; c.textContent = ""; return; }
+      c.hidden = false;
+      // the same words the viewer's own box used, so the meaning travels
+      c.textContent = shown ? shown + " of " + total + " shown" : "nothing matched — try another word";
     }
 
     /* ================= painting what is actually there ================= */
 
     function paintAll() {
-      paintIdentity(); paintStatus(); paintRegion(); paintLayers();
+      paintIdentity(); paintStatus(); paintBasemaps(); paintRegion(); paintLayers();
+    }
+
+    // The frame's own Map/Satellite switch is hidden with the rest of its
+    // panel, so the choice lives here, beside the region it re-draws. Built
+    // from this page's copy of the manifest — the same file the viewer read,
+    // so the two can only disagree if the atlas itself changed under us (and
+    // a frame reload fixes both at once).
+    function paintBasemaps() {
+      var host = $("#basemap-seg"), row = $("#base-row");
+      var maps = (MANIFEST && MANIFEST.basemaps) || [];
+      // one basemap is not a choice; showing a one-button switch would be noise
+      if (maps.length < 2) { row.hidden = true; return; }
+      if (!BASEMAP) BASEMAP = (maps.filter(function (b) { return b.default; })[0] || maps[0]).id;
+      host.innerHTML = "";
+      maps.forEach(function (b) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "seg-opt" + (b.id === BASEMAP ? " on" : "");
+        btn.setAttribute("role", "radio");
+        btn.setAttribute("aria-checked", String(b.id === BASEMAP));
+        btn.textContent = b.label || b.id;
+        btn.onclick = function () {
+          BASEMAP = b.id;
+          tellFrame({ atlas: "set-basemap", id: b.id });
+          host.querySelectorAll(".seg-opt").forEach(function (x) {
+            var on = x === btn;
+            x.classList.toggle("on", on);
+            x.setAttribute("aria-checked", String(on));
+          });
+        };
+        host.appendChild(btn);
+      });
+      row.hidden = false;
     }
 
     function paintIdentity() {
@@ -602,6 +726,21 @@
       var n = mine.length + theirs.length;
       $("#layers-count").textContent = n ? n + " on the map" : "base map only";
     }
+    // The legend used to live in the frame's panel; with that panel gone it
+    // belongs here, under the layer whose classes it names — this is how an
+    // author sees whether their category colours actually read. Drawn from the
+    // layer stanza's own legend array; a layer without one simply has no rows.
+    var LEG_SHAPES = { box: 1, dot: 1, line: 1, dashed: 1, triangle: 1, diamond: 1 };
+    function legendHTML(L) {
+      var rows = Array.isArray(L.legend) ? L.legend : [];
+      if (!rows.length) return "";
+      return '<span class="lyr-leg">' + rows.map(function (it) {
+        var shape = LEG_SHAPES[it.shape] ? it.shape : "box";
+        return '<span class="leg-item">' +
+          '<span class="leg-swatch ' + shape + '" style="--c:' + esc(it.color || "") + '"></span>' +
+          "<span>" + esc(it.label) + "</span></span>";
+      }).join("") + "</span>";
+    }
     function fill(sel, entries, owned) {
       var host = $(sel);
       host.innerHTML = "";
@@ -611,7 +750,8 @@
         row.innerHTML =
           '<span class="lyr-main">' +
             '<span class="lyr-name">' + esc(e.L.label || e.L.id) + "</span>" +
-            '<span class="lyr-sub">' + esc(layerSub(e.L)) + "</span></span>" +
+            '<span class="lyr-sub">' + esc(layerSub(e.L)) + "</span>" +
+            legendHTML(e.L) + "</span>" +
           (owned ? "" : '<span class="lyr-lock">open data</span>');
         host.appendChild(row);
       });

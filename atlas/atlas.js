@@ -38,6 +38,15 @@
     var ownerActions = document.querySelector(".hero-actions");
     if (ownerActions && ownerActions.parentNode) ownerActions.parentNode.removeChild(ownerActions);
   }
+  // ?panel=0 — the map stays, the control panel goes. The editor frames this
+  // page (embed=map) and grew an authoring panel of its own, so a reader there
+  // saw two panels, each titled "Layers" and meaning different things. The
+  // host that asks for panel=0 takes the panel's jobs over — basemap, search,
+  // legend — through the REMOTE CONTROL messages below. Hidden by CSS rather
+  // than unbuilt: one buildControls() serves every mode, and the search and
+  // basemap machinery it wires is exactly what the host drives.
+  var PANEL_OFF = QS.get("panel") === "0";
+  if (PANEL_OFF) document.documentElement.classList.add("atlas-nopanel");
   // Private datasets live outside the web root and are served by the API behind
   // a view key; public datasets are plain static files.
   var BASE = KEY ? "./api/datasets/" + DATASET + "/" : "./datasets/" + DATASET + "/";
@@ -285,6 +294,10 @@
         buildLayers().then(function () {
           wirePopups();
           syncSearchBox();   // the data is in: keep the search box only if it has text to search
+          // only now can a host's messages do real work (markers exist, layers
+          // are addressable) — so only now does the frame declare itself, and
+          // says whether a search box would have anything to act on
+          tellHost({ atlas: "ready", searchable: searchableLayers().length > 0 });
           if (!focusFit()) fitToData(false);
           renderMapAttrib(); // re-run once layer sources (e.g. labels) are added
           // If the container had no real size when we fit (hidden iframe or a
@@ -1334,6 +1347,9 @@
     return Object.keys(v);
   }
   function updateSearchCount(shown, total) {
+    // a panel-less host is showing this count in its own search box; push it
+    // there too (tellHost is a no-op everywhere else — see REMOTE CONTROL)
+    tellHost({ atlas: "count", shown: shown == null ? null : shown, total: total || 0 });
     var c = $("#atlas-search-count"); if (!c) return;
     if (shown == null) { c.hidden = true; c.textContent = ""; }
     else { c.hidden = false; c.textContent = shown ? (shown + " of " + total + " shown") : "nothing matched — try another word"; }
@@ -1435,6 +1451,37 @@
       (L._ids || []).forEach(function (lid) {
         if (map.getLayer(lid)) map.setLayoutProperty(lid, "visibility", idVisible(L, lid, show) ? "visible" : "none");
       });
+    });
+  }
+
+  /* ==================================================================
+     REMOTE CONTROL — with ?panel=0 a same-origin host page (the atlas
+     editor) owns the panel's jobs, and this page does them on request.
+     postMessage, not the host reaching into this window, although both
+     work same-origin: the editor reloads this frame whenever settings
+     change, and any function reference it had captured would die with
+     the old document — a message is addressed to whichever document is
+     in the frame right now. It also keeps timing honest in the other
+     direction: the map boots asynchronously, so the frame says "ready"
+     only once the controls actually work, and pushes search counts as
+     they land (the semantic pass arrives ~250ms after the keystroke —
+     no return value could have carried it).
+  ================================================================== */
+  function tellHost(msg) {
+    // standalone, or the panel is intact: nobody took the jobs, say nothing
+    if (!PANEL_OFF || window.parent === window) return;
+    try { window.parent.postMessage(msg, location.origin); } catch (e) {}
+  }
+  if (PANEL_OFF) {
+    window.addEventListener("message", function (e) {
+      if (e.origin !== location.origin) return;   // same-origin hosts only
+      var m = e.data || {};
+      if (m.atlas === "set-basemap" && map && MANIFEST) {
+        // only ids the manifest declares — a stray message must not blank the map
+        if (MANIFEST.basemaps.some(function (b) { return b.id === m.id; })) switchBasemap(m.id);
+      } else if (m.atlas === "search") {
+        runSearch(String(m.q == null ? "" : m.q));
+      }
     });
   }
 
