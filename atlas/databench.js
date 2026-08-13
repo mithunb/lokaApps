@@ -1,10 +1,12 @@
 /* LOKA Atlas — the data-to-layer wizard, as a mountable module.
    Check & fix → Place on map → Preview & add. Two hosts mount the same code:
 
-     layers.html         mode "standalone" — also renders the upload step, the
-                         dataset picker, sign-in and the manage list
-     setup/ (wizard)     mode "embedded"   — the atlas, the identity and the
-                         file are already known, so it starts at Check & fix
+     add-data/           mode "standalone" — also renders the upload step, the
+                         dataset picker and the manage list. The atlas is
+                         resolved by its host before this mounts, so a person
+                         who cannot edit it never reaches the upload at all.
+     setup/ (wizard)     mode "embedded"   — kept for the day setup wants to
+                         take a file up front; nothing mounts it that way today
 
    Everything the wizard touches is looked up under its mount root, so a host
    page can put it anywhere without id collisions. Parsing stays in ingest.js,

@@ -4,130 +4,32 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Add your data — LOKA Atlas</title>
-  <meta name="description" content="Upload a spreadsheet and turn it into a map layer on your LOKA Atlas — checked in a typed table, joined to boundaries or plotted from coordinates, previewed on the real map before it's added." />
   <meta name="robots" content="noindex" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Figtree:wght@500;600;700&display=swap" />
-  <link rel="stylesheet" href="./databench.css" />
-  <style>
-    :root {
-      --color-bg:#FFFAEB; --color-bg-alt:#F1E7CC; --color-surface:#FAF2DC;
-      --color-moss:#4A5A33; --color-canopy:#384526;
-      --color-rust:#AE5028; --color-rust-deep:#7C3616;
-      --color-sienna:#99582F; --color-ochre:#B8862F;
-      --color-text-primary:#2A241A; --color-text-secondary:#564E3C; --color-text-muted:#6B6350;
-      --color-divider:rgba(42,36,26,.10); --color-border:rgba(42,36,26,.16);
-      --color-moss-tint:rgba(74,90,51,.13); --color-rust-tint:rgba(174,80,40,.13);
-      --color-ochre-tint:rgba(184,134,47,.14);
-      --shadow-sm:0 1px 2px rgba(42,36,26,.06);
-      /* type roles, by the job they do — the ramp documented in DESIGN.md */
-      --t-section:1.15rem; --t-body:1rem; --t-control:.95rem; --t-ui:.875rem;
-      --t-meta:.78rem; --t-label:.72rem;
-      --radius-md:.25rem; --radius-lg:.375rem;
-      --container:min(78rem,100% - 2.5rem);
-    }
-    * { box-sizing:border-box; }
-    body { margin:0; background:var(--color-bg); color:var(--color-text-primary);
-      font-family:'DM Sans',system-ui,-apple-system,sans-serif; font-size:1rem; line-height:1.55; -webkit-font-smoothing:antialiased; }
-    h1,h2,h3 { font-family:'Figtree',sans-serif; letter-spacing:-.01em; margin:0 0 .5rem; text-wrap:balance; }
-    h1 { font-size:clamp(1.6rem,4vw,2.4rem); font-weight:700; }
-    h2 { font-size:var(--t-section); font-weight:600; }
-    p { color:var(--color-text-secondary); margin:0 0 1rem; }
-    a { color:var(--color-moss); text-decoration:none; }
-    a:hover { color:var(--color-canopy); text-decoration:underline; }
-    :focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:4px; }
-    header.site { border-bottom:1px solid var(--color-divider); }
-    .nav { width:var(--container); margin:0 auto; padding:1rem 0; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
-    .brand { font-family:'Figtree',sans-serif; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--color-text-primary); font-size:.875rem; }
-    .nav .links a { color:var(--color-text-secondary); font-size:.9rem; margin-left:1.25rem; }
-    #nav-user { color:var(--color-text-primary); font-size:.9rem; font-weight:600; }
-    main { width:var(--container); margin:0 auto; padding:2rem 0 3rem; }
-    .eyebrow { display:inline-block; font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:600;
-      letter-spacing:.14em; text-transform:uppercase; color:var(--color-moss); margin:0 0 .8rem;
-      padding:.25rem .6rem; background:var(--color-moss-tint); border-radius:4px; }
-    .beta { display:inline-block; font-family:'Figtree',sans-serif; font-size:var(--t-label); font-weight:700;
-      letter-spacing:.1em; text-transform:uppercase; color:var(--color-rust-deep); background:var(--color-rust-tint);
-      border-radius:4px; padding:.22rem .55rem; vertical-align:.45em; margin-left:.5rem; }
-
-    .panel { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:1.35rem; }
-    label.f { display:flex; flex-direction:column; gap:.3rem; font-size:.85rem; font-weight:600; color:var(--color-text-secondary); margin-bottom:.8rem; }
-    input[type=text], input[type=email], select, textarea { font:inherit; font-size:.92rem; padding:.5rem .6rem; border:1px solid var(--color-border); border-radius:4px; background:#FFFFFF; color:var(--color-text-primary); width:100%; }
-    .btn { display:inline-flex; align-items:center; gap:.4rem; padding:.55rem 1.1rem; border-radius:var(--radius-md); border:none;
-      background:var(--color-moss); color:#fff; font:inherit; font-weight:600; font-size:.92rem; cursor:pointer; }
-    .btn:hover { background:var(--color-canopy); }
-    .btn:active { transform:translateY(1px); }
-    .btn.secondary { background:transparent; color:var(--color-moss); border:1px solid var(--color-moss); }
-    .btn.secondary:hover { background:var(--color-moss-tint); }
-    .btn:disabled { opacity:.5; cursor:not-allowed; }
-    .hint { font-size:.8rem; font-weight:400; color:var(--color-text-muted); }
-    .msg { padding:.6rem .8rem; border-radius:4px; font-size:.88rem; margin:.8rem 0 0; }
-    .msg.err { background:var(--color-rust-tint); color:var(--color-rust-deep); }
-    .msg.ok { background:var(--color-moss-tint); color:var(--color-canopy); }
-    [hidden] { display:none !important; }
-
-    /* stepper */
-    .steps { display:flex; gap:.4rem; flex-wrap:wrap; list-style:none; padding:0; margin:0 0 1.2rem; counter-reset:step; }
-    .steps li { counter-increment:step; display:flex; align-items:center; gap:.45rem; font-family:'Figtree',sans-serif;
-      font-size:var(--t-ui); font-weight:600; color:var(--color-text-muted); padding:.4rem .8rem .4rem .5rem;
-      border:1px solid var(--color-divider); border-radius:999px; background:var(--color-surface); }
-    .steps li::before { content:counter(step); display:inline-flex; align-items:center; justify-content:center;
-      width:1.35rem; height:1.35rem; border-radius:50%; background:var(--color-divider); color:var(--color-text-secondary);
-      font-size:.75rem; }
-    .steps li.now { color:var(--color-canopy); border-color:var(--color-moss); }
-    .steps li.now::before { background:var(--color-moss); color:#fff; }
-    .steps li.done { color:var(--color-text-secondary); }
-    .steps li.done::before { content:"✓"; background:var(--color-moss-tint); color:var(--color-canopy); }
-
-    .foot-inner { width:var(--container); margin:0 auto; padding:1.5rem 0; color:var(--color-text-secondary); font-size:.875rem; }
-    @media (prefers-reduced-motion: reduce){ *,*::before,*::after { transition:none !important; animation:none !important; } }
-  </style>
+  <!-- Retired. Adding data now happens at /apps/atlas/add-data/, inside the
+       atlas you are adding to. This file stays only to carry old links and
+       bookmarks across — it forwards with the dataset intact, and sends anyone
+       who arrives without one to their atlases. -->
+  <script>
+    (function () {
+      var qs = new URLSearchParams(location.search);
+      var slug = (qs.get("dataset") || "").trim();
+      var to = slug ? "./add-data/?dataset=" + encodeURIComponent(slug) : "./setup/";
+      // replace, not assign: Back should return where the person came from,
+      // not bounce them through this page again
+      location.replace(to);
+    })();
+  </script>
 </head>
 <body>
-  <header class="site">
-    <nav class="nav" aria-label="Primary">
-      <a href="../" class="brand">LOKA / apps</a>
-      <div class="links">
-        <span id="nav-user" hidden></span>
-        <a href="./setup/">setup wizard</a>
-        <a href="./" id="nav-atlas">open the atlas</a>
-      </div>
-    </nav>
-  </header>
-
-  <main>
-    <span class="eyebrow">loka atlas · your data</span>
-    <h1>Add your data to the map<span class="beta">Experimental</span></h1>
-    <p style="max-width:46rem">Every atlas starts with its default open-data layers — this is where you make it yours.
-      Drop in your data — survey results by village, a facility list, field GPS points — and walk it onto the map in
-      four steps: <b>check</b> the table we read, <b>place</b> the rows, <b>preview</b> the styled layer on the real
-      map, then add it. Nothing touches your atlas until the last step.</p>
-
-    <ol class="steps" id="stepper">
-      <li data-step="1" class="now">Upload</li>
-      <li data-step="2">Check &amp; fix</li>
-      <li data-step="3">Place on map</li>
-      <li data-step="4">Preview &amp; add</li>
-    </ol>
-
-    <!-- ============ STEP 1 · UPLOAD ============ -->
-    <div id="bench-mount"></div>
-  </main>
-
-  <footer class="site">
-    <div class="foot-inner">
-      Public Tech by Socratus. Check out
-      <a href="https://discoverloka.org" target="_blank" rel="noopener">LOKA</a>,
-      <a href="https://voicereport.in" target="_blank" rel="noopener">VoiceReports</a> and
-      <a href="https://wystem.ai" target="_blank" rel="noopener">Wystem</a>.
-    </div>
-  </footer>
-
-  <script src="./vendor/papaparse.min.js"></script>
-  <script src="./vendor/simplify.js"></script>
-  <script src="./ingest.js"></script>
-  <script src="./checktable.js"></script>
-  <script src="./databench.js"></script>
-  <script src="./layers.js"></script>
+  <p style="font-family:system-ui,sans-serif;padding:2rem">
+    Adding data has moved. <a id="to" href="./setup/">Continue</a>.
+  </p>
+  <script>
+    (function () {
+      var qs = new URLSearchParams(location.search);
+      var slug = (qs.get("dataset") || "").trim();
+      if (slug) document.getElementById("to").href = "./add-data/?dataset=" + encodeURIComponent(slug);
+    })();
+  </script>
 </body>
 </html>

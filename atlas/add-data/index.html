@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Add data — LOKA Atlas</title>
+  <meta name="robots" content="noindex" />
+  <!-- Adding data to an atlas you already have open. Replaces layers.html,
+       which was a page from the old world: its own cream palette, its own nav
+       pointing at a "setup wizard" that no longer means what it did, and its
+       own sign-in even though you had to be signed in to get there.
+
+       The work itself is unchanged — this mounts the same LokaDataBench module
+       layers.html did, against the same API. What changed is the frame around
+       it: the atlas you are adding to is named at the top, you leave by going
+       back to it, and committing a layer returns you there rather than leaving
+       you on a page with nowhere to go.
+
+       databench.css deliberately styles only the module's own markup and takes
+       page chrome — panel, buttons, form fields, tokens — from its host, so the
+       bench renders in this page's world rather than the one it came from. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Figtree:wght@500;600;700&display=swap" />
+  <link rel="stylesheet" href="../databench.css" />
+  <style>
+    :root {
+      --color-bg:#F9F9F7; --color-bg-alt:#F0EFEA; --color-surface:#FFFFFF;
+      --color-moss:#4A5A33; --color-canopy:#384526;
+      --color-rust:#AE5028; --color-rust-deep:#7C3616;
+      --color-sienna:#99582F; --color-ochre:#B8862F;
+      --color-text-primary:#2A241A; --color-text-secondary:#564E3C; --color-text-muted:#6B6350;
+      --color-divider:rgba(42,36,26,.09); --color-border:rgba(42,36,26,.14);
+      --color-moss-tint:rgba(74,90,51,.10); --color-rust-tint:rgba(174,80,40,.10);
+      --color-ochre-tint:rgba(184,134,47,.14);
+      --t-display:1.6rem; --t-section:1.15rem; --t-body:1rem; --t-control:.95rem;
+      --t-ui:.875rem; --t-meta:.78rem; --t-label:.72rem;
+      --shadow-md:0 1px 4px rgba(42,36,26,.10);
+      --shadow-lg:0 2px 12px rgba(42,36,26,.12);
+      --radius-md:.25rem; --radius-lg:.375rem;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--color-bg); color:var(--color-text-primary);
+      font-family:'DM Sans',system-ui,-apple-system,sans-serif; font-size:var(--t-body); line-height:1.55;
+      -webkit-font-smoothing:antialiased; }
+    h1,h2,h3 { font-family:'Figtree',sans-serif; letter-spacing:-.01em; margin:0; text-wrap:balance; }
+    button { font:inherit; }
+    [hidden] { display:none !important; }
+    :focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:4px; }
+    a { color:var(--color-canopy); }
+
+    /* the bar names the atlas being changed, and is the way back to it */
+    .bar { display:flex; align-items:center; gap:1rem; flex-wrap:wrap;
+      padding:.75rem clamp(.9rem,3vw,1.5rem); border-bottom:1px solid var(--color-divider); }
+    .bar .id { min-width:0; flex:1 1 14rem; }
+    .bar h1 { font-size:var(--t-section); font-weight:600; white-space:nowrap;
+      overflow:hidden; text-overflow:ellipsis; }
+    .bar .to { font-size:var(--t-meta); color:var(--color-text-muted); }
+
+    .wrap { max-width:56rem; margin:0 auto; padding:clamp(1.1rem,4vw,2rem) clamp(.9rem,4vw,2rem) 4rem; }
+    .lede { font-size:var(--t-meta); color:var(--color-text-muted); max-width:52ch; margin:.35rem 0 1.2rem; }
+
+    /* chrome the bench's markup expects from its host */
+    .panel { background:var(--color-surface); border:1px solid var(--color-border);
+      border-radius:var(--radius-lg); padding:clamp(1rem,3vw,1.6rem); }
+    .panel > h2 { font-size:var(--t-section); margin-bottom:.5rem; }
+    .hint { font-size:var(--t-meta); color:var(--color-text-muted); }
+    .btn { min-height:2.75rem; padding:.6rem 1.1rem; border:1px solid transparent;
+      border-radius:var(--radius-md); background:var(--color-moss); color:#fff;
+      font-weight:600; font-size:var(--t-control); cursor:pointer; text-decoration:none;
+      display:inline-flex; align-items:center; justify-content:center; }
+    .btn:hover { background:var(--color-canopy); }
+    .btn.secondary { background:var(--color-surface); color:var(--color-text-primary); border-color:var(--color-border); }
+    .btn.secondary:hover { background:var(--color-bg-alt); }
+    .btn.quiet { background:none; color:var(--color-text-secondary); }
+    .btn.quiet:hover { background:var(--color-bg-alt); }
+    .btn:disabled, .btn:disabled:hover { background:var(--color-bg-alt); color:var(--color-text-muted);
+      border-color:var(--color-border); cursor:not-allowed; }
+    label.f, .f { display:flex; flex-wrap:wrap; align-items:baseline; gap:.15rem .4rem;
+      font-size:var(--t-ui); font-weight:600; color:var(--color-text-secondary); margin-bottom:.9rem; }
+    label.f > input, label.f > select, label.f > textarea,
+    .f > input, .f > select, .f > textarea { flex:1 0 100%; margin-top:.2rem; }
+    input, select, textarea { font:inherit; font-size:var(--t-body); font-weight:400;
+      padding:.6rem .7rem; border:1px solid var(--color-border); border-radius:4px;
+      background:var(--color-surface); color:var(--color-text-primary); width:100%; min-height:2.75rem; }
+    .msg { margin-top:.9rem; padding:.6rem .8rem; border-radius:var(--radius-md); font-size:var(--t-ui); }
+    .msg.err { background:var(--color-rust-tint); color:var(--color-rust-deep); }
+    .msg.ok { background:var(--color-moss-tint); color:var(--color-canopy); }
+
+    .gate { max-width:34rem; margin:10vh auto; padding:0 1rem; text-align:center; }
+    .gate h2 { font-size:var(--t-section); margin-bottom:.4rem; }
+    .gate p { color:var(--color-text-secondary); font-size:var(--t-ui); }
+  </style>
+</head>
+<body>
+  <div id="gate" class="gate" hidden>
+    <h2 id="gate-t">Loading…</h2>
+    <p id="gate-p"></p>
+    <p><a class="btn secondary" id="gate-a" href="../setup/" style="display:none">Your atlases</a></p>
+  </div>
+
+  <header class="bar" id="bar" hidden>
+    <div class="id">
+      <h1 id="atlas-title">…</h1>
+      <span class="to" id="atlas-sub"></span>
+    </div>
+    <a class="btn quiet" id="back-to-atlas" href="#">← Back to the atlas</a>
+  </header>
+
+  <div class="wrap" id="wrap" hidden>
+    <p class="lede">Drop in a spreadsheet of places and walk it onto the map. Nothing changes on your
+      atlas until the last step.</p>
+    <div id="bench"></div>
+  </div>
+
+  <script src="../vendor/papaparse.min.js"></script>
+  <script src="../vendor/simplify.js"></script>
+  <script src="../ingest.js"></script>
+  <script src="../checktable.js"></script>
+  <script src="../databench.js"></script>
+  <script>
+  (function () {
+    "use strict";
+    var $ = function (s) { return document.querySelector(s); };
+    var API = "../api/";
+    var SLUG = (new URLSearchParams(location.search).get("dataset") || "").trim();
+
+    function gate(t, p, link) {
+      $("#gate").hidden = false;
+      $("#gate-t").textContent = t;
+      $("#gate-p").textContent = p || "";
+      $("#gate-a").style.display = link ? "" : "none";
+    }
+
+    if (!SLUG) {
+      gate("Which atlas?", "This page needs an atlas in its address.", true);
+      return;
+    }
+
+    var backHref = "../edit/?dataset=" + encodeURIComponent(SLUG);
+    $("#back-to-atlas").href = backHref;
+
+    // The atlas is fetched before the bench mounts, so the page can never
+    // offer to add data to something the person cannot edit — the old page
+    // let you upload first and refused at the very end.
+    fetch(API + "instances/" + encodeURIComponent(SLUG), { credentials: "same-origin" })
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          if (!r.ok) { j._status = r.status; throw j; }
+          return j;
+        });
+      })
+      .then(function (inst) {
+        if (!inst.canEdit) {
+          gate("You cannot add data to this atlas",
+            "It exists, but this account is not its owner and has not been invited to it.", true);
+          return;
+        }
+        $("#atlas-title").textContent = "Add data to " + (inst.title || SLUG);
+        $("#atlas-sub").textContent = inst.regionLabel ? "covering " + inst.regionLabel : "";
+        document.title = "Add data to " + (inst.title || SLUG) + " — LOKA Atlas";
+        $("#bar").hidden = false;
+        $("#wrap").hidden = false;
+        start();
+      })
+      .catch(function (e) {
+        if (e && (e._status === 401 || e.needsAuth)) {
+          gate("Sign in first", "Adding data to an atlas needs the email it belongs to.", true);
+        } else if (e && e._status === 404) {
+          gate("No such atlas", "Nothing is here at “" + SLUG + "”, or it is not yours to open.", true);
+        } else {
+          gate("Could not open this atlas", (e && e.error) || "something went wrong", true);
+        }
+      });
+
+    function start() {
+      window.__bench = window.LokaDataBench.mount($("#bench"), {
+        mode: "standalone",
+        api: API,
+        // Committing used to leave you on this page with the job done and
+        // nowhere to go. The atlas is where the layer landed, so that is where
+        // this returns — and the editor re-reads the manifest on load, so the
+        // new layer is simply there.
+        onCommitted: function () {
+          location.href = backHref + "&added=1";
+        },
+      });
+    }
+  })();
+  </script>
+</body>
+</html>

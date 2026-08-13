@@ -385,11 +385,11 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (inst) {
         if (inst && inst.canEdit) {
-          btn.href = "./setup/?edit=" + encodeURIComponent(DATASET);
+          btn.href = "./edit/?dataset=" + encodeURIComponent(DATASET);
           btn.hidden = false;
           var add = $("#add-data-btn");
           if (add) {
-            add.href = "./layers.html?dataset=" + encodeURIComponent(DATASET);
+            add.href = "./add-data/?dataset=" + encodeURIComponent(DATASET);
             add.hidden = false;
           }
         }

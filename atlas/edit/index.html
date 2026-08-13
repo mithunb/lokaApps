@@ -414,6 +414,10 @@
         $("#bar").hidden = false;
         $("#stage").hidden = false;
         showFrame();
+        if (/(^|[?&])added=1/.test(location.search)) {
+          toast("Layer added — it is on the map now");
+          history.replaceState(null, "", location.pathname + "?dataset=" + encodeURIComponent(SLUG));
+        }
       }).catch(function (e) {
         if (e && e._status === 404) {
           gate("No such atlas", "Nothing is published at “" + SLUG + "”, or it is not yours to open.", true);
@@ -613,9 +617,7 @@
     };
 
     $("#add-data").onclick = function () {
-      // the redesigned import is still a prototype; the working flow is the one
-      // the wizard already has, so that is where this goes until it is replaced
-      location.href = "../layers.html?dataset=" + encodeURIComponent(SLUG);
+      location.href = "../add-data/?dataset=" + encodeURIComponent(SLUG);
     };
     $("#region-line").onclick = function () { openSettings("region"); };
     $("#settings-btn").onclick = function () { openSettings(); };
