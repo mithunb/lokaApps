@@ -67,59 +67,13 @@
     });
   };
 
-  // Lucide icons (MIT) — a modern, consistent set, inlined so the app stays self-contained.
-  function svgIcon(inner) {
-    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
-  }
-  var ICONS = {
-    chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
-    info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
-    factory: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M17 18h1M12 18h1M7 18h1"/></svg>',
-    flask: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></svg>',
-    // theme icons for on-the-fly category → icon mapping (Lucide, MIT)
-    leaf: svgIcon('<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/>'),
-    trees: svgIcon('<path d="M10 10v.2A3 3 0 0 1 8.9 16H5a3 3 0 0 1-1-5.8V10a3 3 0 0 1 6 0Z"/><path d="M7 16v6"/><path d="M13 19v3"/><path d="M12 19h8.3a1 1 0 0 0 .7-1.7L18 14h.3a1 1 0 0 0 .7-1.7L16 9h.2a1 1 0 0 0 .8-1.7L13 3l-1.4 1.5"/>'),
-    droplet: svgIcon('<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5C11.5 5.5 10 7.9 8 9.5 6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>'),
-    utensils: svgIcon('<path d="M3 2v7c0 1.1.9 2 2 2a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>'),
-    landmark: svgIcon('<line x1="3" x2="21" y1="22" y2="22"/><line x1="6" x2="6" y1="18" y2="11"/><line x1="10" x2="10" y1="18" y2="11"/><line x1="14" x2="14" y1="18" y2="11"/><line x1="18" x2="18" y1="18" y2="11"/><polygon points="12 2 20 7 4 7"/>'),
-    palette: svgIcon('<circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C22 6.012 17.461 2 12 2z"/>'),
-    cap: svgIcon('<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>'),
-    store: svgIcon('<path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M2 7h20"/><path d="M18 12a2 2 0 0 1-4 0 2 2 0 0 1-4 0 2 2 0 0 1-4 0"/>'),
-    health: svgIcon('<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/>'),
-    home: svgIcon('<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>'),
-    alert: svgIcon('<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>'),
-    users: svgIcon('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'),
-    pin: svgIcon('<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>')
-  };
-  // Category → icon by keyword; arbitrary/emergent categories fall back to a
-  // lettered monogram badge. Keeps colour + icon reinforcing each other.
-  var KEYWORD_ICONS = {
-    nature: "leaf", eco: "leaf", green: "leaf", park: "leaf", garden: "leaf", tree: "leaf", plant: "leaf",
-    forest: "trees", wood: "trees",
-    water: "droplet", river: "droplet", lake: "droplet", wetland: "droplet", pond: "droplet", stream: "droplet", drink: "droplet",
-    food: "utensils", restaurant: "utensils", cafe: "utensils", eat: "utensils", cuisine: "utensils", meal: "utensils",
-    heritage: "landmark", historic: "landmark", monument: "landmark", temple: "landmark", shrine: "landmark", idol: "landmark",
-    culture: "palette", art: "palette", craft: "palette", music: "palette", creative: "palette", decor: "palette",
-    learn: "cap", education: "cap", school: "cap", college: "cap", library: "cap", study: "cap",
-    market: "store", shop: "store", store: "store", vendor: "store", retail: "store", commerce: "store",
-    health: "health", clinic: "health", hospital: "health", medical: "health", care: "health",
-    infra: "home", building: "home", housing: "home", home: "home", construction: "home",
-    hazard: "alert", danger: "alert", risk: "alert", waste: "alert", pollution: "alert", safety: "alert", civic: "alert",
-    social: "users", community: "users", people: "users", activit: "users", gathering: "users"
-  };
-  function iconFor(value) {
-    var v = String(value == null ? "" : value).toLowerCase();
-    for (var k in KEYWORD_ICONS) { if (v.indexOf(k) >= 0) return { icon: KEYWORD_ICONS[k] }; }
-    var words = v.replace(/[^a-z0-9 ]+/g, " ").trim().split(/\s+/).filter(Boolean);
-    var initials = words.slice(0, 2).map(function (w) { return w.charAt(0); }).join("").toUpperCase();
-    return { badge: initials || "?" };
-  }
-  // pale fills (the auto palette's cyan and sand) need dark ink, not white
-  function paleHex(h) {
-    if (!/^#[0-9a-fA-F]{6}$/.test(h || "")) return false;
-    var r = parseInt(h.slice(1, 3), 16), g = parseInt(h.slice(3, 5), 16), b = parseInt(h.slice(5, 7), 16);
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 145;
-  }
+  /* Category icons and the value->icon matcher live in iconkit.js, loaded
+     before this file and shared with the editor panel that draws the same
+     legend beside the map — see the note there on why one table beats two.
+     Aliased locally so the rest of this file reads as it always did. */
+  var ICONS = LokaIcons.ICONS;
+  var iconFor = LokaIcons.iconFor;
+  var paleHex = LokaIcons.paleHex;
 
   var map, MANIFEST, activeBasemap, DATA = {}, markersByLayer = {}, cropState = {};
 
@@ -1688,6 +1642,13 @@
         if (MANIFEST.basemaps.some(function (b) { return b.id === m.id; })) switchBasemap(m.id);
       } else if (m.atlas === "search") {
         runSearch(String(m.q == null ? "" : m.q));
+      } else if (m.atlas === "set-layer-visible" && map && MANIFEST) {
+        // The layer tree is the host's now. Same path the panel's own checkbox
+        // took, so a marker layer still folds its fan, refreshes its clusters
+        // and honours per-basemap layers — none of which the host can see.
+        var L = null;
+        MANIFEST.layers.forEach(function (x) { if (x.id === m.id) L = x; });
+        if (L) setLayerVisible(L, !!m.show);
       }
     });
   }

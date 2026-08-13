@@ -106,10 +106,35 @@
     .lyr-group { font-size:var(--t-label); letter-spacing:.12em; text-transform:uppercase;
       color:var(--color-text-muted); font-weight:600; margin:.9rem 0 .2rem; }
     .lyr-group:first-child { margin-top:.2rem; }
-    .lyr { display:flex; align-items:center; gap:.15rem; border-bottom:1px solid var(--color-divider); }
+    /* top-aligned, not centred: a layer with a nine-row legend is tall, and a
+       switch centred on the whole row floats halfway down the legend instead
+       of sitting beside the name it belongs to */
+    .lyr { display:flex; align-items:flex-start; gap:.15rem; border-bottom:1px solid var(--color-divider); }
     .lyr:last-of-type { border-bottom:none; }
     .lyr-main { flex:1 1 auto; min-width:0; text-align:left; background:none; border:none;
       padding:.5rem 0; cursor:default; color:inherit; }
+
+    /* Layer on/off. Most optional layers ship default:false (see recipes.py) —
+       an atlas opens clean and you switch on what you want — so without this
+       switch a layer the author chose in setup has no way of appearing at all.
+       Same control the reader gets in the viewer's own panel, and like theirs
+       it changes the view, not the atlas. */
+    .lyr-toggle { flex:0 0 auto; display:flex; align-items:center; padding:.55rem .5rem .55rem 0;
+      cursor:pointer; min-height:2.75rem; }
+    .lyr-toggle input { position:absolute; opacity:0; width:0; height:0; }
+    .lyr-switch { flex:0 0 auto; width:32px; height:18px; border-radius:999px; background:#CBC9C1;
+      position:relative; transition:background .2s cubic-bezier(.25,1,.5,1); }
+    .lyr-switch::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px;
+      border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.25);
+      transition:transform .2s cubic-bezier(.25,1,.5,1); }
+    .lyr-toggle input:checked + .lyr-switch { background:var(--color-moss); }
+    .lyr-toggle input:checked + .lyr-switch::after { transform:translateX(14px); }
+    .lyr-toggle input:focus-visible + .lyr-switch { outline:2px solid var(--color-moss); outline-offset:2px; }
+    .lyr.off .lyr-name, .lyr.off .lyr-sub { color:var(--color-text-muted); }
+    .lyr.off .lyr-leg { opacity:.45; }
+    @media (prefers-reduced-motion:reduce) {
+      .lyr-switch, .lyr-switch::after { transition:none; }
+    }
     .lyr-name { display:block; font-size:var(--t-ui); font-weight:600; white-space:nowrap;
       overflow:hidden; text-overflow:ellipsis; }
     .lyr-sub { display:block; font-size:var(--t-meta); color:var(--color-text-muted);
@@ -127,9 +152,19 @@
     .seg-opt.on { background:var(--color-moss-tint); color:var(--color-canopy); font-weight:600; }
 
     /* a layer's legend, under the layer it belongs to — the author's only way
-       to see whether their category colours actually read as categories */
+       to see whether their category colours actually read as categories.
+       The marks themselves come from iconkit.js, the same table the map draws
+       from: this panel used to render its own coloured dots while the map drew
+       icons, and a key that disagrees with the map is worse than no key. */
     .lyr-leg { display:flex; flex-direction:column; gap:.2rem; padding:.15rem 0 .35rem; }
     .leg-item { display:flex; align-items:center; gap:.45rem; font-size:var(--t-meta); color:var(--color-text-secondary); }
+    .leg-icon { flex:0 0 auto; width:13px; height:13px; color:var(--c,var(--color-cat-other));
+      display:inline-flex; align-items:center; justify-content:center; }
+    .leg-icon svg { width:13px; height:13px; }
+    .leg-badge { flex:0 0 auto; width:13px; height:13px; border-radius:50%;
+      background:var(--c,var(--color-cat-other)); color:#fff; font-size:7px; font-weight:700;
+      display:inline-flex; align-items:center; justify-content:center; letter-spacing:.02em; }
+    .leg-badge.pale { color:var(--color-text-primary); }
     .leg-swatch { flex:0 0 auto; width:12px; height:12px; background:var(--c,var(--color-cat-other)); border-radius:2px; }
     .leg-swatch.dot { width:11px; height:11px; border-radius:50%; margin:0 1px; }
     .leg-swatch.line { height:4px; border-radius:2px; align-self:center; }
@@ -348,6 +383,9 @@
     </section>
   </main>
 
+  <!-- the map's own icon table, so this panel's legend cannot drift from it.
+       ?v= — bump on every deploy that touches a local .js/.css; see index.html -->
+  <script src="../iconkit.js?v=20260813-3"></script>
   <script>
   (function () {
     "use strict";
@@ -563,6 +601,9 @@
         // a reloaded frame boots at its manifest defaults; put the author's
         // standing choices back so a settings save doesn't visibly undo them
         if (BASEMAP) tellFrame({ atlas: "set-basemap", id: BASEMAP });
+        Object.keys(VIS).forEach(function (id) {
+          tellFrame({ atlas: "set-layer-visible", id: id, show: VIS[id] });
+        });
         var q = $("#ed-search-input").value.trim();
         if (q) tellFrame({ atlas: "search", q: q });
       } else if (m.atlas === "count") {
@@ -735,26 +776,62 @@
       var rows = Array.isArray(L.legend) ? L.legend : [];
       if (!rows.length) return "";
       return '<span class="lyr-leg">' + rows.map(function (it) {
-        var shape = LEG_SHAPES[it.shape] ? it.shape : "box";
-        return '<span class="leg-item">' +
-          '<span class="leg-swatch ' + shape + '" style="--c:' + esc(it.color || "") + '"></span>' +
+        var row = it;
+        if (it.shape && !LEG_SHAPES[it.shape]) row = Object.assign({}, it, { shape: "box" });
+        return '<span class="leg-item">' + LokaIcons.swatchHTML(row, esc) +
           "<span>" + esc(it.label) + "</span></span>";
       }).join("") + "</span>";
     }
+
+    /* Whether a layer starts on. Mirrors the viewer's own on(L) — a layer is
+       shown unless its stanza says default:false — so the switch agrees with
+       the map on first paint without having to ask the frame. VIS holds only
+       what the author has since changed. */
+    var VIS = {};
+    function layerOn(L) { return VIS[L.id] != null ? VIS[L.id] : L.default !== false; }
+
     function fill(sel, entries, owned) {
       var host = $(sel);
       host.innerHTML = "";
       entries.forEach(function (e) {
+        var L = e.L, shown = layerOn(L);
         var row = document.createElement("div");
-        row.className = "lyr";
-        row.innerHTML =
-          '<span class="lyr-main">' +
-            '<span class="lyr-name">' + esc(e.L.label || e.L.id) + "</span>" +
-            '<span class="lyr-sub">' + esc(layerSub(e.L)) + "</span>" +
-            legendHTML(e.L) + "</span>" +
-          (owned ? "" : '<span class="lyr-lock">open data</span>');
+        row.className = "lyr" + (shown ? "" : " off");
+
+        var toggle = document.createElement("label");
+        toggle.className = "lyr-toggle";
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = shown;
+        cb.setAttribute("aria-label", "Show " + (L.label || L.id) + " on the map");
+        var sw = document.createElement("span");
+        sw.className = "lyr-switch";
+        toggle.appendChild(cb); toggle.appendChild(sw);
+        cb.onchange = function () { setLayerShown(L, cb.checked, row); };
+        row.appendChild(toggle);
+
+        var main = document.createElement("span");
+        main.className = "lyr-main";
+        main.innerHTML =
+          '<span class="lyr-name">' + esc(L.label || L.id) + "</span>" +
+          '<span class="lyr-sub">' + esc(layerSub(L)) + "</span>" +
+          legendHTML(L);
+        row.appendChild(main);
+
+        if (!owned) {
+          var lock = document.createElement("span");
+          lock.className = "lyr-lock";
+          lock.textContent = "open data";
+          row.appendChild(lock);
+        }
         host.appendChild(row);
       });
+    }
+
+    function setLayerShown(L, show, row) {
+      VIS[L.id] = show;
+      if (row) row.classList.toggle("off", !show);
+      tellFrame({ atlas: "set-layer-visible", id: L.id, show: show });
     }
 
     /* ================= the things you can actually do ================= */
