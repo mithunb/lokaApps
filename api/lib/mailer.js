@@ -1,10 +1,15 @@
 // Minimal mail sender, in preference order:
-//   1. SendGrid Web API when SG_KEY is set — the same service and env-var names
-//      the LOKA dashboard (loka-server) uses, so the server can reuse the exact
-//      values from loka-server/.env (SG_KEY, SG_HOST, FROM_EMAIL),
-//   2. SMTP via nodemailer when SMTP_HOST is configured,
-//   3. the local sendmail binary (postfix/exim) when present,
-//   4. log fallback — the full message (with any links) lands in `pm2 logs`.
+//   1. SMTP via nodemailer when SMTP_HOST is configured — this is Resend, which
+//      the project moved to in August 2026. Its SMTP interface needs no special
+//      casing here: host, port, user and pass live in api/.env, which pm2 loads
+//      with --env-file.
+//   2. the local sendmail binary (postfix/exim) when present,
+//   3. log fallback — the full message (with any links) lands in `pm2 logs`.
+//
+// SendGrid used to be first and is gone. It was tried ahead of SMTP whenever
+// SG_KEY was set, so a lapsed SendGrid account meant every send burned a failed
+// request and a warning line before falling through — and the code claimed a
+// preference the infrastructure no longer had.
 import fs from 'node:fs';
 
 let transportPromise = null;
@@ -14,27 +19,6 @@ const SENDMAIL_PATHS = ['/usr/sbin/sendmail', '/usr/lib/sendmail'];
 function fromAddress() {
   return process.env.MAIL_FROM || process.env.FROM_EMAIL || process.env.SMTP_USER ||
     'LOKA Atlas <atlas@loka.place>';
-}
-
-async function sendViaSendGrid({ to, subject, text }) {
-  const host = (process.env.SG_HOST || 'https://api.sendgrid.com').replace(/\/$/, '');
-  const res = await fetch(host + '/v3/mail/send', {
-    method: 'POST',
-    headers: {
-      Authorization: 'Bearer ' + process.env.SG_KEY,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      personalizations: [{ to: [{ email: to }] }],
-      from: { email: fromAddress().replace(/^.*<|>.*$/g, '') },
-      subject,
-      content: [{ type: 'text/plain', value: text }],
-    }),
-  });
-  if (res.status >= 300) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`sendgrid ${res.status}: ${body.slice(0, 200)}`);
-  }
 }
 
 async function getFallbackTransport() {
@@ -53,7 +37,9 @@ async function getFallbackTransport() {
         }
         const bin = SENDMAIL_PATHS.find((p) => fs.existsSync(p));
         if (bin) {
-          console.log(`[mail] no SendGrid/SMTP configured — using ${bin}`);
+          // worth shouting about: local sendmail from this host is very likely
+          // to be filtered, so a sign-in code sent this way may never arrive
+          console.warn(`[mail] SMTP_HOST is not set — falling back to ${bin}; delivery is unreliable`);
           return { kind: 'sendmail', t: nm.default.createTransport({ sendmail: true, path: bin, newline: 'unix' }) };
         }
         return null;
@@ -75,14 +61,6 @@ export async function sendMail({ to, subject, text }) {
   if (process.env.MAIL_TRANSPORT === 'log') {
     logFallback(to, subject, text);
     return { sent: false, via: 'log' };
-  }
-  if (process.env.SG_KEY) {
-    try {
-      await sendViaSendGrid({ to, subject, text });
-      return { sent: true, via: 'sendgrid' };
-    } catch (e) {
-      console.warn('[mail] sendgrid failed, trying fallback:', e.message);
-    }
   }
   const transport = await getFallbackTransport();
   if (!transport) {

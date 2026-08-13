@@ -313,6 +313,7 @@
 
     var INST = null, MANIFEST = null, LOCAL = null, ME = null;
     var LAYERS_MINE = [];      // the contributed layers, for the rebuild warning
+    var MINE = [];             // what GET /layers/list says is on this atlas
 
     function api(path, opts) {
       opts = opts || {};
@@ -452,8 +453,16 @@
       });
     }
 
-    // The manifests are static files beside the data, not an API call — the same
-    // two the viewer reads, so the panel and the map can never disagree.
+    /* The base manifest is a static file beside the data, which is right for the
+       region row and the base layers — that is what the viewer draws.
+       The CONTRIBUTED layers are not read from a file. They were, and the panel
+       could then disagree with every other surface: the add-data page asks the
+       API and would list a layer this panel swore did not exist. A static file
+       is also cacheable in a way the API call is not, so a browser holding the
+       copy from before a layer was added showed an empty atlas indefinitely.
+       GET /layers/list is the authority on WHICH layers exist; the overlay file
+       is consulted only to describe them, and a stale one costs a sub-line
+       rather than the layer itself. */
     function loadManifests() {
       return fetch(datasetUrl("manifest.json")).then(function (r) {
         if (!r.ok) throw { error: "the atlas data could not be read", _status: r.status };
@@ -465,7 +474,17 @@
           .catch(function () { return { layers: [] }; });
       }).then(function (l) {
         LOCAL = l && Array.isArray(l.layers) ? l : { layers: [] };
-        return true;
+        // the authority on what is actually on this atlas
+        return api("layers/list?dataset=" + encodeURIComponent(SLUG))
+          .then(function (r) { MINE = (r && r.layers) || []; })
+          .catch(function () {
+            // the API refused or is unreachable — fall back to the overlay file
+            // rather than claiming the atlas is empty
+            MINE = (LOCAL.layers || []).map(function (L) {
+              return { id: L.id, label: L.label || L.id, addedBy: L.addedBy || null };
+            });
+          })
+          .then(function () { return true; });
       });
     }
 
@@ -557,13 +576,20 @@
 
     function paintLayers() {
       var base = (MANIFEST.layers || []).map(function (L) { return { L: L, local: false }; });
-      var local = (LOCAL.layers || []).map(function (L) { return { L: L, local: true }; });
-      var all = base.concat(local);
 
-      var mine = all.filter(function (e) { return isUserLayer(e.L, e.local); });
+      // MINE decides existence; the overlay file only describes. A layer the
+      // API knows about is listed even when the file is stale or unreadable —
+      // it just carries less detail on its second line.
+      var byId = {};
+      (LOCAL.layers || []).forEach(function (L) { byId[L.id] = L; });
+      var mine = MINE.map(function (m) {
+        var L = byId[m.id] || {};
+        return { L: Object.assign({}, L, { id: m.id, label: m.label || L.label || m.id }), local: true };
+      });
+
       // "boundaries and place names" are the base map, spoken for by the region
       // row above — listing them again as layers was the thing to remove
-      var theirs = all.filter(function (e) {
+      var theirs = base.filter(function (e) {
         return !isUserLayer(e.L, e.local) && !/^(admin|labels|boundary|boundaries)$/i.test(String(e.L.id || ""));
       });
 
