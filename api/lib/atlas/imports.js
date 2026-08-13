@@ -231,8 +231,14 @@ export function commitLayer(datasetId, stanza, sourceFile, geojson) {
   } catch {}
 
   fs.writeFileSync(path.join(m.dir, sourceFile), JSON.stringify(geojson));
-  local.layers = (local.layers || []).filter((l) => l.id !== stanza.id);
-  local.layers.push(stanza);
+  // Replace in place. Filtering then pushing sent an edited layer to the end,
+  // which is not just a list reordering: contributed layers draw in this order,
+  // so changing a layer's colour also moved it above everything it used to sit
+  // under. A layer that is being replaced keeps its index; a new one appends.
+  local.layers = local.layers || [];
+  const at = local.layers.findIndex((l) => l.id === stanza.id);
+  if (at >= 0) local.layers[at] = stanza;
+  else local.layers.push(stanza);
   const tmp = localFile + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(local, null, 1));
   fs.renameSync(tmp, localFile);

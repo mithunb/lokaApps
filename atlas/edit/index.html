@@ -173,6 +173,83 @@
     .leg-swatch.triangle { border-radius:0; clip-path:polygon(50% 0, 0 100%, 100% 100%); }
     .leg-swatch.diamond { width:10px; height:10px; border-radius:0; transform:rotate(45deg); margin:0 1px; }
 
+    /* ---------- a layer's own view: master–detail inside this one pane ----------
+       The pane holds two views; one is shown at a time. Each is the pane's flex
+       column while visible, so its body scrolls and the save bar stays pinned
+       inside the pane's max-height. */
+    #view-list, #view-edit { display:flex; flex-direction:column; min-height:0; }
+
+    /* a contributed layer's row opens its own view — the same affordance the
+       region row already taught: the whole row a button, "Change" naming the
+       act. The visibility switch stays its own control beside it. */
+    button.lyr-main { cursor:pointer; }
+    .lyr-open { display:grid; grid-template-columns:1fr auto; gap:0 .6rem; align-items:start;
+      padding:.5rem .45rem; margin-right:-.45rem; border-radius:var(--radius-md); }
+    .lyr-open:hover { background:var(--color-bg-alt); }
+    .lyr-tx { display:block; min-width:0; }
+    .lyr-go { grid-column:2; grid-row:1; align-self:center; font-size:var(--t-meta);
+      font-weight:600; color:var(--color-canopy); }
+    .lyr-open .lyr-leg { grid-column:1 / -1; }
+
+    .ev-back { display:inline-flex; align-items:center; gap:.3rem; min-height:2.75rem; margin:0 0 0 -.4rem;
+      padding:.3rem .4rem; background:none; border:none; border-radius:var(--radius-md); cursor:pointer;
+      font:inherit; font-size:var(--t-meta); font-weight:600; color:var(--color-canopy); align-self:flex-start; }
+    .ev-back:hover { background:var(--color-bg-alt); }
+    .ev-title { font-size:var(--t-section); font-weight:600; margin:.1rem 0 0; }
+    .ev-sub { font-size:var(--t-meta); color:var(--color-text-muted); margin:.1rem 0 .9rem; }
+    .ev-loading { font-size:var(--t-ui); color:var(--color-text-muted); margin:.2rem 0 .8rem; }
+
+    /* the edit view's fields are stacked, not the dialogs' wrapping rows */
+    #view-edit .fld { display:block; margin-bottom:1rem; font-size:var(--t-ui); font-weight:600;
+      color:var(--color-text-secondary); }
+    #view-edit .fld input, #view-edit .fld select { display:block; font:inherit; font-size:var(--t-control);
+      font-weight:400; margin-top:.25rem; padding:.55rem .65rem; border:1px solid var(--color-border);
+      border-radius:4px; background:#fff; color:var(--color-text-primary); width:100%; min-height:2.75rem; }
+    #view-edit .fld .note { display:block; font-size:var(--t-meta); font-weight:400;
+      color:var(--color-text-muted); margin-top:.3rem; }
+    #view-edit .fld .note.warnish { color:var(--color-text-secondary); }
+    .fld-err { display:block; font-size:var(--t-meta); font-weight:600; color:var(--color-rust-deep); margin-top:.3rem; }
+
+    .swatches { display:flex; gap:.35rem; margin-top:.45rem; }
+    .sw { width:2.75rem; height:2.75rem; display:inline-flex; align-items:center; justify-content:center;
+      background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md); cursor:pointer; }
+    .sw i { width:1.35rem; height:1.35rem; border-radius:50%; background:var(--c); display:block; }
+    .sw:hover { background:var(--color-bg-alt); }
+    .sw[aria-pressed="true"] { border-color:var(--color-moss); background:var(--color-moss-tint); }
+
+    /* the map key: live output, not a control — drawn by the same swatch code
+       as the row legends, with per-kind counts only the author sees */
+    .key-head { display:flex; align-items:baseline; gap:.6rem; margin:1.1rem 0 .2rem; }
+    .key-head .lyr-group { margin:0; flex:1 1 auto; }
+    .key-note { font-size:var(--t-meta); color:var(--color-text-muted); }
+    .key-block { padding:.55rem .65rem .6rem; border:1px solid var(--color-divider); border-radius:var(--radius-md);
+      background:var(--color-bg); margin-bottom:1.1rem; }
+    .key { list-style:none; margin:.15rem 0 0; padding:0; display:flex; flex-direction:column; gap:.28rem; }
+    .key li { display:flex; align-items:center; gap:.45rem; font-size:var(--t-meta); color:var(--color-text-secondary); }
+    .k-label { flex:1 1 auto; line-height:1.2; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .k-count { flex:0 0 auto; color:var(--color-text-muted); font-variant-numeric:tabular-nums; }
+    .key .leg-icon, .key .leg-icon svg { width:15px; height:15px; }
+    .key .leg-badge { width:15px; height:15px; font-size:8px; }
+
+    .ev-remove { border-top:1px solid var(--color-divider); margin-top:1.2rem; padding-top:.9rem; }
+    #view-edit .linkish { padding:.4rem 0; min-height:2.75rem; font-size:var(--t-ui);
+      color:var(--color-rust-deep); }
+    #view-edit .linkish:hover { text-decoration-thickness:2px; }
+    .rm-confirm { background:var(--color-rust-tint); border-radius:var(--radius-md); padding:.7rem .8rem; }
+    .rm-confirm p { margin:0 0 .6rem; font-size:var(--t-ui); color:var(--color-text-primary); max-width:38ch; }
+    .rm-confirm .row { display:flex; gap:.5rem; flex-wrap:wrap; }
+
+    /* save/discard: do not exist until something changed, then rise pinned to
+       the pane's foot */
+    .save-bar { flex:0 0 auto; border-top:1px solid var(--color-divider); background:var(--color-surface);
+      padding:.6rem .85rem .75rem; transform:translateY(105%); transition:transform .18s ease-out; }
+    .save-bar.on { transform:none; }
+    .save-note { font-size:var(--t-meta); color:var(--color-text-secondary); margin:0 0 .5rem; }
+    .save-note.warn { color:var(--color-rust-deep); font-weight:600; }
+    .save-bar .save-row { border-top:none; padding-top:0; gap:.5rem; }
+    .save-bar .save-row .btn { flex:1 1 auto; }
+    @media (prefers-reduced-motion:reduce) { .save-bar { transition:none; } }
+
     /* ---------- search, floating top-centre over the map ----------
        The owner's direction: search belongs on the map, not in a panel. It is
        centred while the stage is wide enough, and slides just clear of the
@@ -347,37 +424,105 @@
     </div>
 
     <section class="pane" id="pane-layers" aria-label="Layers">
-      <div class="pane-head" id="layers-head">
-        <h2>Layers</h2>
-        <span class="pane-count" id="layers-count"></span>
+      <!-- ======== list view: the pane as it always was ======== -->
+      <div id="view-list">
+        <div class="pane-head" id="layers-head">
+          <h2>Layers</h2>
+          <span class="pane-count" id="layers-count"></span>
+        </div>
+        <div class="pane-body">
+          <div class="lyr-group">Base map</div>
+          <div class="base-row" id="base-row" hidden>
+            <div class="seg" role="radiogroup" aria-label="Base map style" id="basemap-seg"></div>
+          </div>
+          <button class="region-line" id="region-line">
+            <span class="region-k" id="region-k">Boundaries &amp; place names for</span>
+            <span class="region-v" id="region-names"></span>
+            <span class="region-go" aria-hidden="true">Change</span>
+          </button>
+          <p class="region-warn" id="region-warn" hidden></p>
+
+          <div class="lyr-group">Your data</div>
+          <div id="user-layers"></div>
+          <div class="empty" id="user-empty" hidden>
+            <b>Nothing of yours yet</b>
+            <p>Add a spreadsheet of places and it becomes a layer you can style.</p>
+          </div>
+
+          <div class="lyr-group">Open data</div>
+          <div id="catalog-layers"></div>
+          <div class="empty" id="catalog-empty" hidden>
+            <p>No extra open-data layers yet.</p>
+          </div>
+
+          <div class="add-row">
+            <button class="btn" id="add-data">＋ Add data</button>
+          </div>
+        </div>
       </div>
-      <div class="pane-body">
-        <div class="lyr-group">Base map</div>
-        <div class="base-row" id="base-row" hidden>
-          <div class="seg" role="radiogroup" aria-label="Base map style" id="basemap-seg"></div>
-        </div>
-        <button class="region-line" id="region-line">
-          <span class="region-k" id="region-k">Boundaries &amp; place names for</span>
-          <span class="region-v" id="region-names"></span>
-          <span class="region-go" aria-hidden="true">Change</span>
-        </button>
-        <p class="region-warn" id="region-warn" hidden></p>
 
-        <div class="lyr-group">Your data</div>
-        <div id="user-layers"></div>
-        <div class="empty" id="user-empty" hidden>
-          <b>Nothing of yours yet</b>
-          <p>Add a spreadsheet of places and it becomes a layer you can style.</p>
+      <!-- ======== edit view: one layer — three questions and a key ======== -->
+      <div id="view-edit" hidden>
+        <div class="pane-head" id="edit-head">
+          <h2>Your layer</h2>
+        </div>
+        <div class="pane-body">
+          <button class="ev-back" id="ev-back" type="button">‹ All layers</button>
+          <h3 class="ev-title" id="ev-title" tabindex="-1"></h3>
+          <p class="ev-sub" id="ev-sub"></p>
+
+          <p class="ev-loading" id="ev-loading" hidden>Opening this layer…</p>
+          <p class="fld-err" id="ev-err" role="alert" hidden></p>
+
+          <div id="ev-form" hidden>
+            <label class="fld" for="f-name">Layer name
+              <input type="text" id="f-name" maxlength="60" autocomplete="off" />
+              <span class="fld-err" id="name-err" role="alert" hidden>The layer needs a name.</span>
+            </label>
+
+            <label class="fld" for="f-colour" id="w-colour" hidden>Colour places by
+              <select id="f-colour"></select>
+              <span class="note warnish" id="multi-note" hidden></span>
+            </label>
+
+            <div class="fld" id="one-colour" hidden>
+              <span id="one-colour-lbl">Which colour</span>
+              <div class="swatches" role="group" aria-labelledby="one-colour-lbl" id="swatches"></div>
+            </div>
+
+            <div class="key-head">
+              <div class="lyr-group">Map key</div>
+              <span class="key-note" id="key-note"></span>
+            </div>
+            <div class="key-block">
+              <ul class="key" id="ev-key"></ul>
+            </div>
+
+            <label class="fld" for="f-title" id="w-title" hidden>Call each place by
+              <select id="f-title"></select>
+              <span class="note">The name shown when someone points at or opens a place.</span>
+            </label>
+
+            <div class="ev-remove">
+              <button class="linkish" id="rm-link" type="button">Remove this layer from the atlas…</button>
+              <div class="rm-confirm" id="rm-confirm" hidden>
+                <p id="rm-text"></p>
+                <p class="fld-err" id="rm-err" role="alert" hidden></p>
+                <div class="row">
+                  <button class="btn danger" id="rm-yes" type="button">Remove the layer</button>
+                  <button class="btn secondary" id="rm-no" type="button">Keep it</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div class="lyr-group">Open data</div>
-        <div id="catalog-layers"></div>
-        <div class="empty" id="catalog-empty" hidden>
-          <p>No extra open-data layers yet.</p>
-        </div>
-
-        <div class="add-row">
-          <button class="btn" id="add-data">＋ Add data</button>
+        <div class="save-bar" id="save-bar" hidden>
+          <p class="save-note" id="save-note" role="status">Only you see this until you save.</p>
+          <div class="save-row">
+            <button class="btn" id="save-btn" type="button">Save changes</button>
+            <button class="btn secondary" id="discard-btn" type="button">Discard changes</button>
+          </div>
         </div>
       </div>
     </section>
@@ -485,7 +630,15 @@
       if (entry.opener && entry.opener.isConnected) entry.opener.focus();
     }
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && dialogStack.length) closeDialog();
+      if (e.key !== "Escape") return;
+      if (dialogStack.length) { closeDialog(); return; }
+      // in a layer's own view, Escape means "‹ All layers" — same guard, same
+      // one-liner when there are unsaved changes; an open inline confirm folds
+      // first, like any other transient
+      if (!$("#view-edit").hidden) {
+        if (!$("#rm-confirm").hidden) { hideRemoveConfirm(); return; }
+        evBack();
+      }
     });
 
     /* ================= loading the real atlas ================= */
@@ -575,9 +728,22 @@
     function showFrame() {
       var f = $("#ed-frame");
       f.addEventListener("load", function () { $("#veil").hidden = true; f.hidden = false; });
+      framePoint(SLUG, true);
+    }
+
+    /* Which dataset the frame is showing. While a layer is being edited the
+       frame is pointed at the import session's DRAFT dataset — the same trick
+       the add-data preview uses — and back at the real one on save or discard.
+       The &v= makes every repoint a real navigation even when the draft id is
+       unchanged, so a stale document is never mistaken for the new draft. */
+    var FRAME_DS = null, frameSeq = 0;
+    function framePoint(dataset, force) {
+      if (dataset === FRAME_DS && !force) return;
+      FRAME_DS = dataset;
       // panel=0: the viewer keeps its map and hands its panel's jobs — basemap,
       // search, legend — to this page, so the reader sees ONE panel, not two
-      f.src = "../?dataset=" + encodeURIComponent(SLUG) + "&embed=map&panel=0";
+      $("#ed-frame").src = "../?dataset=" + encodeURIComponent(dataset) +
+        "&embed=map&panel=0&v=" + (++frameSeq);
     }
 
     /* ---- talking to the frame. postMessage, not f.contentWindow.someFn():
@@ -749,7 +915,7 @@
       (LOCAL.layers || []).forEach(function (L) { byId[L.id] = L; });
       var mine = MINE.map(function (m) {
         var L = byId[m.id] || {};
-        return { L: Object.assign({}, L, { id: m.id, label: m.label || L.label || m.id }), local: true };
+        return { L: Object.assign({}, L, { id: m.id, label: m.label || L.label || m.id }), local: true, meta: m };
       });
 
       // "boundaries and place names" are the base map, spoken for by the region
@@ -772,13 +938,18 @@
     // author sees whether their category colours actually read. Drawn from the
     // layer stanza's own legend array; a layer without one simply has no rows.
     var LEG_SHAPES = { box: 1, dot: 1, line: 1, dashed: 1, triangle: 1, diamond: 1 };
+    // one swatch, one code path: the row legends and the edit view's map key
+    // must draw the same mark for the same class or one of them is lying
+    function swatchFor(it) {
+      var row = it;
+      if (it.shape && !LEG_SHAPES[it.shape]) row = Object.assign({}, it, { shape: "box" });
+      return LokaIcons.swatchHTML(row, esc);
+    }
     function legendHTML(L) {
       var rows = Array.isArray(L.legend) ? L.legend : [];
       if (!rows.length) return "";
       return '<span class="lyr-leg">' + rows.map(function (it) {
-        var row = it;
-        if (it.shape && !LEG_SHAPES[it.shape]) row = Object.assign({}, it, { shape: "box" });
-        return '<span class="leg-item">' + LokaIcons.swatchHTML(row, esc) +
+        return '<span class="leg-item">' + swatchFor(it) +
           "<span>" + esc(it.label) + "</span></span>";
       }).join("") + "</span>";
     }
@@ -789,6 +960,19 @@
        what the author has since changed. */
     var VIS = {};
     function layerOn(L) { return VIS[L.id] != null ? VIS[L.id] : L.default !== false; }
+
+    // an owned row's second line: what an author needs at a glance — how many
+    // kinds it colours by and who contributed it ("66 places" needs the data
+    // itself, which the layer's own view reads when opened)
+    function ownedSub(e) {
+      var L = e.L, bits = [];
+      var kinds = (Array.isArray(L.legend) ? L.legend : []).filter(function (r) { return r.categorical; }).length;
+      if (kinds >= 2) bits.push(kinds + " kinds");
+      var by = (e.meta && e.meta.addedBy) || L.addedBy || null;
+      var who = by && (by.org || by.name || by.email);
+      if (who) bits.push("added by " + who);
+      return bits.join(" · ");
+    }
 
     function fill(sel, entries, owned) {
       var host = $(sel);
@@ -810,12 +994,26 @@
         cb.onchange = function () { setLayerShown(L, cb.checked, row); };
         row.appendChild(toggle);
 
-        var main = document.createElement("span");
-        main.className = "lyr-main";
+        // the owner (or the layer's own contributor) can open the layer's view —
+        // the row is the button, "Change" naming the act, like the region row.
+        // The switch above is a separate control, so showing or hiding a layer
+        // never opens its view by accident.
+        var canOpen = owned && e.meta && e.meta.canRemove;
+        var sub = owned ? ownedSub(e) : layerSub(L);
+        var main = document.createElement(canOpen ? "button" : "span");
+        main.className = "lyr-main" + (canOpen ? " lyr-open" : "");
         main.innerHTML =
-          '<span class="lyr-name">' + esc(L.label || L.id) + "</span>" +
-          '<span class="lyr-sub">' + esc(layerSub(L)) + "</span>" +
+          '<span class="lyr-tx"><span class="lyr-name">' + esc(L.label || L.id) + "</span>" +
+          '<span class="lyr-sub">' + esc(sub) + "</span></span>" +
+          (canOpen ? '<span class="lyr-go" aria-hidden="true">Change</span>' : "") +
           legendHTML(L);
+        if (canOpen) {
+          main.type = "button";
+          main.setAttribute("data-lid", L.id);
+          main.setAttribute("aria-label",
+            (L.label || L.id) + (sub ? ", " + sub : "") + ". Change how it looks.");
+          main.onclick = function () { openLayer(e); };
+        }
         row.appendChild(main);
 
         if (!owned) {
@@ -833,6 +1031,574 @@
       if (row) row.classList.toggle("off", !show);
       tellFrame({ atlas: "set-layer-visible", id: L.id, show: show });
     }
+
+    /* ================= one layer's own view =================
+       Tapping a layer row swaps this pane's content for that layer's view: a
+       name, ONE colour question, the live map key, the popup title, and a
+       quiet remove. The backend model is draft-then-commit: opening calls
+       layers/reopen (a fresh import session + draft), every control change is
+       one debounced layers/apply, the frame previews the draft dataset, and
+       Save = layers/commit (replaces the layer in place). Nothing is public
+       until Save — the save bar's one sentence carries exactly that. */
+
+    // the server's named single colours (api/lib/fragment.js MARKER_COLORS) —
+    // brand choices a person picks for a whole layer. The map key itself is
+    // always drawn from the server's legend, so these hexes are only the
+    // swatch chips; if fragment.js ever changes, the key stays truthful.
+    var MARKER_COLORS = { rust: "#A6522F", moss: "#40573D", ochre: "#B0863A", sienna: "#9C5A34", slate: "#5f7f92" };
+    var MARKER_NAMES = { rust: "Rust", moss: "Moss", ochre: "Ochre", sienna: "Sienna", slate: "Slate" };
+    var NOTE_DEFAULT = "Only you see this until you save.";
+    // the server's own title preference (pickTitleColumn), for layers whose
+    // stored title is missing or points at a column the data does not have
+    var NAMEISH = /^(name|title|label|place|description|desc|site|spot)s?$/i;
+
+    var ED = null;   // the open layer's working state; null = list view
+
+    function profileOf(name) {
+      if (!ED || !name) return null;
+      return ED.profiles.filter(function (p) { return p.name === name; })[0] || null;
+    }
+    function colName(x) { return x && profileOf(x) ? x : null; }
+    function snap(c) { return { name: c.name, colourBy: c.colourBy, markerColor: c.markerColor, titleBy: c.titleBy }; }
+
+    function whoLine(ed) {
+      var by = (ed.meta && ed.meta.addedBy) || ed.stanza.addedBy || null;
+      var who = by && (by.org || by.name || by.email);
+      var bits = [];
+      if (ed.features != null) bits.push(ed.features + (ed.features === 1 ? " place" : " places"));
+      if (who) bits.push("added by " + who);
+      return bits.join(" · ");
+    }
+
+    function openLayer(e) {
+      if (ED && ED.busy) return;
+      var L = e.L;
+      ED = {
+        layerId: L.id, stanza: L, meta: e.meta || {},
+        importId: null, spec: null, fragment: null, profiles: [],
+        catCols: [], titleCols: [], colourable: false,
+        features: null, cur: null, base: null,
+        ready: false, busy: false, applySeq: 0, applyTimer: null,
+        restRows: [], restTally: null,
+      };
+      $("#view-list").hidden = true;
+      $("#view-edit").hidden = false;
+      $("#ev-title").textContent = L.label || L.id;
+      $("#ev-sub").textContent = whoLine(ED);
+      $("#ev-loading").hidden = false;
+      $("#ev-err").hidden = true;
+      $("#ev-form").hidden = true;
+      var bar = $("#save-bar");
+      bar.hidden = true; bar.classList.remove("on");
+      hideRemoveConfirm(true);
+      if (window.matchMedia("(max-width:820px)").matches) $("#pane-layers").classList.add("open");
+      $("#ev-title").focus();
+      api("layers/reopen", { method: "POST", body: { dataset: SLUG, layerId: L.id } })
+        .then(function (r) { if (ED && ED.layerId === L.id) hydrate(r, false); })
+        .catch(function (err) {
+          if (!ED || ED.layerId !== L.id) return;
+          toast(errMsg(err));
+          closeEdit(L.id);
+        });
+    }
+
+    /* Older layers can have lost WHICH column their categories came from (the
+       stanza only says the derived "_category"). The map still shows the rule,
+       so recover it: the multi-value colourable column whose kind count
+       reproduces the legend the map is drawing. 8 = the server's top-8 fold. */
+    function inferColourColumn() {
+      var by = ED.stanza.markerBy;
+      if (by && by !== "_category") return colName(by);
+      if (by !== "_category") return null;
+      var legLen = Array.isArray(ED.stanza.legend) ? ED.stanza.legend.length : 0;
+      var mv = ED.catCols.filter(function (p) { return p.multiValue; });
+      var fit = mv.filter(function (p) {
+        return Math.min(p.kinds, 8) + (p.kinds > 8 ? 1 : 0) === legLen;
+      })[0] || mv[0] || null;
+      return fit && fit.name;
+    }
+
+    function guessTitle() {
+      var byName = ED.titleCols.filter(function (n) { return NAMEISH.test(n.trim()); })[0];
+      if (byName) return byName;
+      var nameish = ED.profiles.filter(function (p) {
+        return p.type === "string" && p.looksLikeName && !p.looksLikeImage && p.name.charAt(0) !== "_";
+      })[0];
+      return (nameish && nameish.name) || ED.titleCols[0] || null;
+    }
+
+    // silent=true re-baselines after a save without moving focus or resetting
+    // what the person is looking at (the controls already hold the saved state)
+    function hydrate(r, silent) {
+      ED.importId = r.importId;
+      ED.spec = r.spec || {};
+      ED.profiles = r.profiles || [];
+      ED.fragment = r.fragment || null;
+      if (r.stats && r.stats.features != null) ED.features = r.stats.features;
+      if (silent) {
+        var again = (LOCAL.layers || []).filter(function (l) { return l.id === ED.layerId; })[0];
+        if (again) ED.stanza = again;
+      }
+      var kind = ED.spec.kind;
+      ED.colourable = kind === "markers" || kind === "category";
+      ED.catCols = ED.profiles.filter(function (p) {
+        return p.categorical && p.name.charAt(0) !== "_";
+      });
+      var colourBy = null;
+      if (kind === "category") {
+        colourBy = colName(ED.spec.categoryColumn) || inferColourColumn();
+        if (!colourBy) ED.colourable = false;   // nothing safe to offer
+      } else if (kind === "markers") {
+        colourBy = "one";
+      }
+      ED.titleCols = ED.profiles.filter(function (p) {
+        return p.type === "string" && !p.looksLikeImage && p.name.charAt(0) !== "_";
+      }).map(function (p) { return p.name; });
+      var titleBy = colName(ED.spec.popupTitleColumn) ||
+        colName(ED.stanza.popup && ED.stanza.popup.title) || guessTitle();
+      ED.cur = {
+        name: ED.spec.label || ED.stanza.label || ED.layerId,
+        colourBy: colourBy,
+        markerColor: MARKER_COLORS[ED.spec.markerColor] ? ED.spec.markerColor : "rust",
+        titleBy: titleBy,
+      };
+      ED.base = snap(ED.cur);
+      // at rest the map is the committed layer, so the key mirrors ITS legend;
+      // reopen's rebuilt fragment only takes over once something changes
+      ED.restRows = Array.isArray(ED.stanza.legend) && ED.stanza.legend.length
+        ? ED.stanza.legend
+        : (ED.fragment && ED.fragment.legend) || [];
+      ED.restTally = null;
+      renderControls();
+      renderKey(ED.restRows, null, ED.features);
+      syncMultiNote(null);
+      $("#ev-title").textContent = ED.cur.name;
+      $("#ev-sub").textContent = whoLine(ED);
+      $("#ev-loading").hidden = true;
+      $("#ev-form").hidden = false;
+      ED.ready = true;
+      syncSaveBar();
+      // per-kind counts, tallied from the layer's own rows
+      if (ED.cur.colourBy && ED.cur.colourBy !== "one" && ED.stanza.source) {
+        var lid = ED.layerId;
+        tallyFile(datasetUrl(ED.stanza.source), ED.cur.colourBy).then(function (t) {
+          if (!ED || ED.layerId !== lid || !t || edDirty()) return;
+          ED.restTally = t;
+          renderKey(ED.restRows, t, ED.features);
+          syncMultiNote(t);
+        });
+      }
+    }
+
+    function fillSelect(sel, opts, value) {
+      sel.innerHTML = "";
+      opts.forEach(function (o) {
+        var el = document.createElement("option");
+        el.value = o.value;
+        el.textContent = o.label;
+        sel.appendChild(el);
+      });
+      sel.value = value;
+    }
+
+    function renderControls() {
+      $("#f-name").value = ED.cur.name;
+      $("#name-err").hidden = true;
+      var wc = $("#w-colour");
+      if (ED.colourable) {
+        var opts = ED.catCols.map(function (p) {
+          return { value: p.name, label: p.name + " — " + p.kinds + " kinds" };
+        });
+        if (ED.cur.colourBy && ED.cur.colourBy !== "one" &&
+            !opts.some(function (o) { return o.value === ED.cur.colourBy; })) {
+          opts.unshift({ value: ED.cur.colourBy, label: ED.cur.colourBy });
+        }
+        opts.push({ value: "one", label: "One colour for every place" });
+        fillSelect($("#f-colour"), opts, ED.cur.colourBy || "one");
+        wc.hidden = false;
+      } else {
+        wc.hidden = true;
+      }
+      renderSwatches();
+      syncOneColour();
+      var wt = $("#w-title");
+      if (ED.titleCols.length && ED.cur.titleBy) {
+        var topts = ED.titleCols.map(function (n) { return { value: n, label: n }; });
+        if (!ED.titleCols.some(function (n) { return n === ED.cur.titleBy; })) {
+          topts.unshift({ value: ED.cur.titleBy, label: ED.cur.titleBy });
+        }
+        fillSelect($("#f-title"), topts, ED.cur.titleBy);
+        wt.hidden = false;
+      } else {
+        wt.hidden = true;
+      }
+    }
+
+    function renderSwatches() {
+      var host = $("#swatches");
+      host.innerHTML = "";
+      Object.keys(MARKER_COLORS).forEach(function (k) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "sw";
+        b.setAttribute("aria-pressed", String(ED.cur.markerColor === k));
+        b.setAttribute("aria-label", MARKER_NAMES[k]);
+        b.title = MARKER_NAMES[k];
+        b.innerHTML = '<i style="--c:' + MARKER_COLORS[k] + '"></i>';
+        b.onclick = function () {
+          if (!ED || !ED.ready) return;
+          ED.cur.markerColor = k;
+          host.querySelectorAll(".sw").forEach(function (x) { x.setAttribute("aria-pressed", "false"); });
+          b.setAttribute("aria-pressed", "true");
+          syncSaveBar();
+          scheduleApply();
+        };
+        host.appendChild(b);
+      });
+    }
+
+    function syncOneColour() {
+      $("#one-colour").hidden = !(ED && ED.colourable && ED.cur && ED.cur.colourBy === "one");
+    }
+
+    /* The key is output, not a control: rows come from the server's legend
+       (stanza at rest, the draft's fragment while editing) and are drawn by
+       the same swatch code as the row legends. The counts are the one
+       author-only annotation — the public key has none. */
+    function renderKey(rows, tally, total) {
+      rows = Array.isArray(rows) ? rows : [];
+      var single = rows.length === 1 && !rows[0].categorical;
+      var counted = tally && tally.matched > 0 ? tally : null;
+      var keptSum = 0;
+      if (counted) {
+        rows.forEach(function (it) {
+          if (it.categorical && it.label !== "other" && counted.counts[it.label]) {
+            keptSum += counted.counts[it.label];
+          }
+        });
+      }
+      $("#ev-key").innerHTML = rows.map(function (it) {
+        var n = null;
+        if (single && total != null) n = total;
+        else if (counted && it.categorical) {
+          n = it.label === "other" ? Math.max(0, counted.total - keptSum) : counted.counts[it.label];
+        }
+        return "<li>" + swatchFor(it) + '<span class="k-label">' + esc(it.label) + "</span>" +
+          (n != null ? '<span class="k-count">' + n + "</span>" : "") + "</li>";
+      }).join("");
+      var kinds = rows.filter(function (it) { return it.categorical; }).length;
+      $("#key-note").textContent =
+        (kinds >= 2 ? kinds + " kinds" + (total != null ? " · " : "") : "") +
+        (total != null ? total + (total === 1 ? " place" : " places") : "");
+    }
+
+    /* Count each kind from the layer's own rows. For a multi-value column the
+       server derives the primary tag onto "_category" (fragment.js) — counting
+       THAT property counts exactly what the map colours by; for single-value
+       columns the raw value is the kind (trimmed to the legend's 40 chars). */
+    function tallyFile(url, col) {
+      var p = profileOf(col);
+      var derived = !!(p && p.multiValue);
+      return fetch(url + (url.indexOf("?") < 0 ? "?v=" : "&v=") + Date.now())
+        .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+        .then(function (g) {
+          var feats = (g && g.features) || [];
+          var counts = {}, multi = 0, matched = 0;
+          feats.forEach(function (f) {
+            var pr = f.properties || {};
+            var raw = pr[col];
+            var key = derived ? pr._category
+              : (raw == null ? "" : String(raw).slice(0, 40));
+            if (key != null && key !== "") { counts[key] = (counts[key] || 0) + 1; matched++; }
+            if (derived && raw != null) {
+              var s = String(raw).trim();
+              if (s && s.slice(0, 40) !== pr._category) multi++;
+            }
+          });
+          return { counts: counts, multi: multi, total: feats.length, matched: matched };
+        })
+        .catch(function () { return null; });
+    }
+
+    // said once, only when a multi-value column is chosen, with the count
+    // computed from the data — the first tag decides the colour (fragment.js)
+    function syncMultiNote(tally) {
+      var note = $("#multi-note");
+      var col = ED && ED.cur && ED.cur.colourBy;
+      var p = col && col !== "one" ? profileOf(col) : null;
+      if (!p || !p.multiValue || !tally || !tally.multi) { note.hidden = true; return; }
+      note.hidden = false;
+      note.textContent = (tally.multi === 1
+        ? "1 place carries two or more " + col
+        : tally.multi + " places carry two or more " + col) +
+        " — the first one decides the colour.";
+    }
+
+    function controlsSpec() {
+      var s = Object.assign({}, ED.spec);
+      var name = $("#f-name").value.trim();
+      s.label = (name || s.label || ED.layerId).slice(0, 60);
+      if (ED.cur.titleBy) s.popupTitleColumn = ED.cur.titleBy;
+      if (ED.colourable) {
+        if (ED.cur.colourBy === "one") {
+          s.kind = "markers";
+          s.markerColor = ED.cur.markerColor;
+          delete s.categoryColumn;
+        } else if (ED.cur.colourBy) {
+          s.kind = "category";
+          s.categoryColumn = ED.cur.colourBy;
+        }
+      }
+      return s;
+    }
+
+    function edDirty() {
+      if (!ED || !ED.ready) return false;
+      var c = ED.cur, b = ED.base;
+      return $("#f-name").value.trim() !== b.name.trim() ||
+        c.colourBy !== b.colourBy ||
+        (c.colourBy === "one" && c.markerColor !== b.markerColor) ||
+        c.titleBy !== b.titleBy;
+    }
+
+    function setNote(text, warn) {
+      var n = $("#save-note");
+      n.textContent = text;
+      n.classList.toggle("warn", !!warn);
+    }
+
+    // the save bar does not exist until something changed
+    function syncSaveBar() {
+      if (!ED || !ED.ready) return;
+      var bar = $("#save-bar");
+      if (edDirty()) {
+        if (bar.hidden) {
+          bar.hidden = false;
+          setNote(NOTE_DEFAULT, false);
+          void bar.offsetHeight;   // commit the hidden->shown layout, then slide
+        }
+        bar.classList.add("on");
+      } else {
+        bar.classList.remove("on");
+        bar.hidden = true;
+        setNote(NOTE_DEFAULT, false);
+      }
+      var named = !!$("#f-name").value.trim();
+      $("#name-err").hidden = named;
+      $("#save-btn").disabled = !named || ED.busy;
+      $("#discard-btn").disabled = ED.busy;
+    }
+
+    function scheduleApply() {
+      if (!ED || !ED.ready) return;
+      clearTimeout(ED.applyTimer);
+      ED.applyTimer = setTimeout(function () { applyNow().catch(function () {}); }, 350);
+    }
+
+    // one apply per settled change; stale responses (an older apply landing
+    // after a newer one) are dropped by the sequence check
+    function applyNow() {
+      if (!ED || !ED.importId) return Promise.reject({ error: "this layer is not open" });
+      clearTimeout(ED.applyTimer);
+      var mine = ++ED.applySeq, lid = ED.layerId;
+      return api("layers/apply", { method: "POST", body: { importId: ED.importId, spec: controlsSpec() } })
+        .then(function (r) {
+          if (!ED || ED.layerId !== lid || mine !== ED.applySeq) return r;
+          ED.spec = r.spec || ED.spec;
+          ED.fragment = r.fragment || ED.fragment;
+          if (r.stats && r.stats.features != null) ED.features = r.stats.features;
+          setNote(NOTE_DEFAULT, false);
+          var rows = (ED.fragment && ED.fragment.legend) || [];
+          if (edDirty()) {
+            renderKey(rows, null, ED.features);
+            syncMultiNote(null);
+            if (r.draftDataset) {
+              framePoint(r.draftDataset, true);   // the draft was rewritten in place
+              if (ED.cur.colourBy && ED.cur.colourBy !== "one" && ED.fragment && ED.fragment.source) {
+                tallyFile("../datasets/" + encodeURIComponent(r.draftDataset) + "/" + ED.fragment.source,
+                  ED.cur.colourBy).then(function (t) {
+                    if (!ED || ED.layerId !== lid || mine !== ED.applySeq || !t) return;
+                    renderKey(rows, t, ED.features);
+                    syncMultiNote(t);
+                  });
+              }
+            }
+          } else {
+            // changed and changed back before the debounce settled — show the
+            // saved truth, not a draft that happens to look the same
+            renderKey(ED.restRows, ED.restTally, ED.features);
+            syncMultiNote(ED.restTally);
+            framePoint(SLUG);
+          }
+          return r;
+        }, function (e) {
+          if (ED && ED.layerId === lid && mine === ED.applySeq) setNote(errMsg(e), true);
+          throw e;
+        });
+    }
+
+    function saveChanges() {
+      if (!ED || !ED.ready || ED.busy) return;
+      var name = $("#f-name").value.trim();
+      if (!name) { $("#name-err").hidden = false; $("#f-name").focus(); return; }
+      ED.busy = true;
+      syncSaveBar();
+      var lid = ED.layerId, committed = false;
+      applyNow().then(function () {
+        return api("layers/commit", { method: "POST", body: { importId: ED.importId } });
+      }).then(function () {
+        committed = true;
+        if (!ED || ED.layerId !== lid) return;
+        ED.cur.name = name;
+        ED.base = snap(ED.cur);
+        toast("Saved — the atlas shows the new look.");
+        framePoint(SLUG, true);
+        return loadManifests().then(function () {
+          paintLayers();
+          // commit closed the import session; reopen so editing can continue
+          return api("layers/reopen", { method: "POST", body: { dataset: SLUG, layerId: lid } });
+        }).then(function (r2) {
+          if (!ED || ED.layerId !== lid) return;
+          ED.busy = false;
+          hydrate(r2, true);
+          $("#ev-title").focus();
+        });
+      }).catch(function (e) {
+        if (!ED || ED.layerId !== lid) return;
+        ED.busy = false;
+        if (committed) {
+          // the save itself landed; only the follow-up reopen failed
+          toast("Saved — open the layer again to keep editing.");
+          closeEdit(lid);
+          return;
+        }
+        setNote(errMsg(e), true);
+        syncSaveBar();
+      });
+    }
+
+    function discardChanges() {
+      if (!ED || !ED.ready || ED.busy) return;
+      ED.applySeq++;                    // orphan any in-flight apply
+      clearTimeout(ED.applyTimer);
+      ED.cur = snap(ED.base);
+      renderControls();
+      renderKey(ED.restRows, ED.restTally, ED.features);
+      syncMultiNote(ED.restTally);
+      framePoint(SLUG);                 // the map snaps back to what is saved
+      syncSaveBar();
+      toast("Put back the way it was.");
+      $("#ev-title").focus();
+    }
+
+    /* --- remove: the other thing you do to an existing layer --- */
+    function hideRemoveConfirm(skipFocus) {
+      $("#rm-confirm").hidden = true;
+      $("#rm-err").hidden = true;
+      $("#rm-link").hidden = false;
+      if (!skipFocus) $("#rm-link").focus();
+    }
+    $("#rm-link").onclick = function () {
+      if (!ED || !ED.ready) return;
+      var n = ED.features;
+      $("#rm-text").textContent = "Remove “" + ED.base.name + "”? " +
+        (n != null
+          ? "Its " + n + (n === 1 ? " place comes" : " places come")
+          : "Its places come") +
+        " off the map and the public atlas. Your original file stays with you.";
+      $("#rm-link").hidden = true;
+      $("#rm-confirm").hidden = false;
+      $("#rm-no").focus();
+    };
+    $("#rm-no").onclick = function () { hideRemoveConfirm(); };
+    $("#rm-yes").onclick = function () {
+      if (!ED || !ED.ready || ED.busy) return;
+      ED.busy = true;
+      var lid = ED.layerId, name = ED.base.name, importId = ED.importId;
+      var yes = this;
+      yes.disabled = true;
+      $("#rm-no").disabled = true;
+      api("layers/remove", { method: "POST", body: { dataset: SLUG, layerId: lid } })
+        .then(function () {
+          if (importId) api("layers/discard", { method: "POST", body: { importId: importId } }).catch(function () {});
+          delete VIS[lid];
+          toast("“" + name + "” removed from the atlas.");
+          return loadManifests().then(function () {
+            paintLayers();
+            closeEdit(null);
+            framePoint(SLUG, true);
+            var first = document.querySelector("#user-layers .lyr-open");
+            (first || $("#add-data")).focus();
+          });
+        })
+        .catch(function (e) {
+          if (!ED || ED.layerId !== lid) return;
+          ED.busy = false;
+          yes.disabled = false;
+          $("#rm-no").disabled = false;
+          var el = $("#rm-err");
+          el.textContent = errMsg(e);
+          el.hidden = false;
+        });
+    };
+
+    /* --- leaving the view: one way out, and it names its destination --- */
+    function evBack() {
+      if (!ED || ED.busy) return;
+      if (edDirty()) {
+        syncSaveBar();
+        setNote("Unsaved changes — save them or discard them below.", true);
+        $("#save-btn").focus();
+        return;
+      }
+      if (ED.importId) {
+        api("layers/discard", { method: "POST", body: { importId: ED.importId } }).catch(function () {});
+      }
+      closeEdit(ED.layerId);
+    }
+    function closeEdit(focusLid) {
+      ED = null;
+      $("#view-edit").hidden = true;
+      $("#view-list").hidden = false;
+      framePoint(SLUG);
+      if (focusLid) {
+        var btn = document.querySelector('#user-layers .lyr-open[data-lid="' + focusLid + '"]');
+        if (btn) btn.focus();
+      }
+    }
+    $("#ev-back").onclick = evBack;
+
+    $("#f-name").addEventListener("input", function () {
+      if (!ED || !ED.ready) return;
+      ED.cur.name = this.value;
+      // the name never reloads the map — it appears only in this panel and, for
+      // a one-colour layer, as the key's single row: patch that row in place
+      if (ED.cur.colourBy === "one") {
+        var lab = document.querySelector("#ev-key .k-label");
+        if (lab) lab.textContent = this.value.trim().slice(0, 40) || ED.base.name;
+      }
+      syncSaveBar();
+    });
+    $("#f-colour").addEventListener("change", function () {
+      if (!ED || !ED.ready) return;
+      ED.cur.colourBy = this.value;
+      syncOneColour();
+      syncSaveBar();
+      scheduleApply();
+    });
+    $("#f-title").addEventListener("change", function () {
+      if (!ED || !ED.ready) return;
+      ED.cur.titleBy = this.value;
+      syncSaveBar();
+      scheduleApply();
+    });
+    $("#save-btn").onclick = saveChanges;
+    $("#discard-btn").onclick = discardChanges;
+
+    // closing the tab with unsaved changes gets the browser's own one-liner
+    window.addEventListener("beforeunload", function (e) {
+      if (edDirty()) { e.preventDefault(); e.returnValue = ""; }
+    });
 
     /* ================= the things you can actually do ================= */
 
@@ -1243,10 +2009,13 @@
       if (f.src) f.src = f.src;      // the manifest it read has just changed
     }
 
-    // mobile: the layers pane is a bottom sheet you pull up
-    $("#layers-head").onclick = function () {
+    // mobile: the layers pane is a bottom sheet you pull up — whichever view
+    // is showing, its head is the handle
+    function sheetToggle() {
       if (window.matchMedia("(max-width:820px)").matches) $("#pane-layers").classList.toggle("open");
-    };
+    }
+    $("#layers-head").onclick = sheetToggle;
+    $("#edit-head").onclick = sheetToggle;
 
     load();
   })();

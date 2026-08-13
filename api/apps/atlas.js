@@ -141,66 +141,7 @@ function pointInGeom(x, y, geom) {
 
 // Which ADM depths does geoBoundaries actually have for this country? (cached probe)
 const MAX_LEVEL = 4;
-router.get('/geo/levels', async (req, res) => {
-  const iso3 = String(req.query.iso3 || '').toUpperCase();
-  if (!/^[A-Z]{3}$/.test(iso3)) return res.status(400).json({ error: 'iso3 required' });
-  fs.mkdirSync(GEOCACHE_DIR, { recursive: true });
-  const cacheFile = path.join(GEOCACHE_DIR, `${iso3}-levels.json`);
-  try {
-    return res.json(JSON.parse(fs.readFileSync(cacheFile, 'utf8')));
-  } catch {}
-  const MAX_LEVEL_MB = Number(process.env.ATLAS_MAX_LEVEL_MB) || 80;
-  const levels = [];
-  for (let l = 1; l <= MAX_LEVEL; l++) {
-    try {
-      const r = await fetch(GB_API(iso3, l), { headers: { 'User-Agent': 'LOKA-Atlas (mithun@socratus.org)' } });
-      if (!r.ok) break;
-      const meta = await r.json();
-      const url = meta && (meta.simplifiedGeometryGeoJSON || meta.gjDownloadURL);
-      if (!url) break;
-      // very deep levels of big countries can be enormous — skip what we can't serve
-      if (l >= 3) {
-        try {
-          const h = await fetch(url, { method: 'HEAD', headers: { 'User-Agent': 'LOKA-Atlas (mithun@socratus.org)' } });
-          const size = Number(h.headers.get('content-length') || 0);
-          if (size > MAX_LEVEL_MB * 1024 * 1024) break;
-        } catch {}
-      }
-      levels.push(l);
-    } catch { break; }
-  }
-  const doc = { iso3, levels: levels.length ? levels : [1] };
-  try { fs.writeFileSync(cacheFile, JSON.stringify(doc)); } catch {}
-  res.json(doc);
-});
 
-router.get('/geo/admin', async (req, res) => {
-  const iso3 = String(req.query.iso3 || '').toUpperCase();
-  const level = Number(req.query.level) || 1;
-  if (!/^[A-Z]{3}$/.test(iso3) || level < 1 || level > MAX_LEVEL) {
-    return res.status(400).json({ error: `iso3 and level (1–${MAX_LEVEL}) required` });
-  }
-  try {
-    const doc = await loadAdmin(iso3, level);
-    let features = doc.features;
-    const parents = String(req.query.parents || '').split(',').filter(Boolean);
-    if (parents.length && level > 1) {
-      const up = await loadAdmin(iso3, level - 1);
-      const parentGeoms = up.features
-        .filter((f) => parents.includes(f.properties.id))
-        .map((f) => f.geometry);
-      features = features.filter((f) => {
-        const [w, s, e, n] = f.bbox;
-        const cx = (w + e) / 2, cy = (s + n) / 2;
-        return parentGeoms.some((g) => pointInGeom(cx, cy, g));
-      });
-    }
-    res.json({ type: 'FeatureCollection', license: doc.license, features });
-  } catch (e) {
-    console.warn('[atlas] geo/admin failed:', e.message);
-    res.status(502).json({ error: 'boundary source unavailable: ' + e.message });
-  }
-});
 
 /* ---- free-text place search (backs the box that replaces the drill-down) ---- */
 
@@ -536,74 +477,6 @@ async function ancestorChainOf(iso3, level, units) {
   return chain;
 }
 
-// Resolve a SAVED region (iso3 + level + shapeIDs) back into full units and
-// their parents — what the edit flow needs to show an existing atlas's region
-// preselected on the geography step, without shipping a whole admin level to
-// the browser.
-router.post('/geo/resolve', async (req, res) => {
-  const b = req.body || {};
-  const iso3 = String(b.iso3 || '').toUpperCase();
-  const level = Number(b.level) || 1;
-  const ids = (Array.isArray(b.shapeIDs) ? b.shapeIDs : []).map(String).slice(0, 100);
-  if (!/^[A-Z]{3}$/.test(iso3) || level < 1 || level > MAX_LEVEL || !ids.length) {
-    return res.status(400).json({ error: 'iso3, level and shapeIDs required' });
-  }
-  try {
-    const doc = await loadAdmin(iso3, level);
-    const want = new Set(ids);
-    const units = (doc.features || [])
-      .filter((f) => want.has(f.properties.id))
-      .map((f) => ({ id: f.properties.id, name: f.properties.name, bbox: f.bbox, geometry: f.geometry }));
-    if (!units.length) return res.status(404).json({ error: 'no matching boundary units' });
-    const parents = await parentUnitsOf(iso3, level, units);
-    const ancestors = await ancestorChainOf(iso3, level, units);
-    const out = units.length <= 60 ? units : units.map(({ geometry, ...u }) => u);
-    res.json({ iso3, level, units: out, bbox: unionBboxOf(units), parents, ancestors });
-  } catch (e) {
-    console.warn('[atlas] geo/resolve failed:', e.message);
-    res.status(502).json({ error: 'boundary source unavailable: ' + e.message });
-  }
-});
-
-router.post('/geo/infer', async (req, res) => {
-  const b = req.body || {};
-  let iso3 = String(b.iso3 || '').toUpperCase();
-  const points = Array.isArray(b.points) ? b.points
-    .map((p) => [Number(p && p[0]), Number(p && p[1])])
-    .filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]) && Math.abs(p[1]) <= 90 && Math.abs(p[0]) <= 180)
-    .slice(0, 500) : [];
-  const names = Array.isArray(b.names)
-    ? b.names.map((n) => String(n == null ? '' : n).trim()).filter(Boolean).slice(0, 500) : [];
-  if (!points.length && !names.length) return res.status(400).json({ error: 'points or names required' });
-  try {
-    // no country given: coordinates can resolve it; bare place names can't
-    if (!/^[A-Z]{3}$/.test(iso3)) {
-      if (!points.length) {
-        return res.status(400).json({ error: 'couldn’t tell the country from place names alone — choose it', needsCountry: true });
-      }
-      iso3 = await resolveCountryFromPoints(points);
-      if (!iso3) {
-        return res.status(400).json({ error: 'couldn’t tell the country from this data — choose it', needsCountry: true });
-      }
-    }
-    let avail;
-    try { avail = JSON.parse(fs.readFileSync(path.join(GEOCACHE_DIR, `${iso3}-levels.json`), 'utf8')).levels; }
-    catch { avail = [1, 2, 3, 4]; }
-    let r = null, mode = null;
-    if (points.length) { r = await inferRegionFromPoints(iso3, points, avail); mode = 'points'; }
-    else { r = await inferRegionFromNames(iso3, names, avail); mode = 'names'; }
-    if (!r || !r.units.length) return res.json({ iso3, mode, level: null, units: [], bbox: null, coverage: 0, parents: [], ancestors: [] });
-    const parents = await parentUnitsOf(iso3, r.level, r.units);
-    const ancestors = await ancestorChainOf(iso3, r.level, r.units);
-    // geometry rides along for the confirmation map, but a huge covering set
-    // (data spread across dozens of units) would bloat the response — drop it then
-    const units = r.units.length <= 60 ? r.units : r.units.map(({ geometry, ...u }) => u);
-    res.json({ iso3, mode, level: r.level, units, bbox: r.bbox, coverage: Number(r.coverage.toFixed(3)), parents, ancestors });
-  } catch (e) {
-    console.warn('[atlas] geo/infer failed:', e.message);
-    res.status(502).json({ error: 'inference failed: ' + e.message });
-  }
-});
 
 /* ================= slug ================= */
 
@@ -1316,28 +1189,6 @@ router.post('/auth/logout', (_req, res) => {
 
 /* ================= drafts ================= */
 
-router.post('/drafts', (req, res) => {
-  const session = auth.sessionFromReq(req);
-  if (!session) return res.status(401).json({ error: 'sign in to save drafts', needsAuth: true });
-  const d = req.body && req.body.draft;
-  if (!d || typeof d !== 'object') return res.status(400).json({ error: 'draft object required' });
-  if (JSON.stringify(d).length > 100 * 1024) return res.status(413).json({ error: 'draft too large' });
-  const saved = reg.saveDraft(session.email, { id: d.id, title: cap(d.title, 80), state: d.state });
-  res.json({ ok: true, id: saved.id });
-});
-router.get('/drafts', (req, res) => {
-  const session = auth.sessionFromReq(req);
-  if (!session) return res.status(401).json({ error: 'not signed in' });
-  res.json({ drafts: reg.listDrafts(session.email) });
-});
-router.delete('/drafts/:id', (req, res) => {
-  const session = auth.sessionFromReq(req);
-  if (!session) return res.status(401).json({ error: 'not signed in' });
-  const d = reg.getDraft(String(req.params.id));
-  if (!d || d.owner !== session.email) return res.status(404).json({ error: 'not found' });
-  reg.deleteDraft(d.id);
-  res.json({ ok: true });
-});
 
 /* ================= private dataset serving ================= */
 
@@ -1794,6 +1645,34 @@ function transform(session) {
 
 // withDraft=false recomputes the match report without touching disk — the
 // Check / Place-on-map steps iterate cheaply; entering Preview writes the draft.
+/* A layer coloured by a multi-value column stores markerBy:"_category" — the
+   hidden primary-token column the map actually reads — and nothing anywhere
+   records which real column produced it. So reopening such a layer used to
+   hand back categoryColumn:undefined, and re-saving silently demoted a
+   categorised map to plain markers.
+
+   The answer is in the data. _category IS the primary token, so the column it
+   came from is the one whose value starts with it on essentially every row.
+   Measured on a real 66-place layer: the true column scores 100% and every
+   other column scores 0% — the separation is not close. */
+function recoverCategoryColumn(rows, columns) {
+  const norm = (v) => String(v == null ? '' : v).trim().toLowerCase();
+  let best = null;
+  for (const name of columns) {
+    if (name === '_category') continue;
+    let hit = 0, seen = 0;
+    for (const r of rows) {
+      const cat = norm(r._category);
+      if (!cat) continue;
+      seen++;
+      if (norm(r[name]).indexOf(cat) === 0) hit++;
+    }
+    const rate = seen ? hit / seen : 0;
+    if (rate > 0.8 && (!best || rate > best.rate)) best = { name, rate };
+  }
+  return best ? best.name : undefined;
+}
+
 function applyResult(session, withDraft) {
   const { frag, features, report } = transform(session);
   let draftId = null;
@@ -1810,6 +1689,14 @@ function applyResult(session, withDraft) {
     inference: session.inference || null,
     spec: session.spec,
     strategy: session.strategy,
+    // What each column could be used for, so a client can offer colour rules
+    // by name and class-count instead of making someone guess. Derived, never
+    // stored: the rows are the truth and they are already in hand here.
+    profiles: profileColumns(session.columnsRaw || [], session.rows || []).map((p) => ({
+      name: p.name, type: p.type, kinds: p.kinds || p.distinct, filled: p.filled,
+      categorical: !!p.categorical, multiValue: !!p.multiValue,
+      tagList: !!p.tagList, looksLikeName: !!p.looksLikeName, looksLikeImage: !!p.looksLikeImage,
+    })),
     joinLayer: session.joinLayer || null,
     boundaries: session.boundaryOptions || null,
     columns: session.columns,
@@ -2132,52 +2019,6 @@ router.post('/layers/resolve', (req, res) => {
   }
 });
 
-router.post('/layers/refine', async (req, res) => {
-  const b = req.body || {};
-  const session = imports.getImport(String(b.importId || ''));
-  if (!session) return res.status(404).json({ error: 'import expired or unknown' });
-  if (session.dataset) {
-    if (!requireDatasetEditor(req, res, session.dataset)) return;
-  } else if (!auth.sessionFromReq(req) && !auth.isAdmin(req)) {
-    // pre-build session: no instance to authorise against, so sign-in is the gate
-    return res.status(401).json({ error: 'sign in to set up your data', needsAuth: true });
-  }
-  const message = String(b.message || '').slice(0, 500);
-  if (!message) return res.status(400).json({ error: 'message required' });
-  if (!ai) return res.status(503).json({ error: 'AI refine is unavailable — use the pickers instead' });
-  if (!geminiAllowed(clientIp(req))) return res.status(429).json({ error: 'AI limit reached — try later' });
-
-  const gcls = session.meta && session.meta.geometry && session.meta.geometry.class;
-  const prompt = [
-    'Patch this atlas layer spec according to the user instruction. Keep unrelated fields unchanged.',
-    'Current spec: ' + JSON.stringify(session.spec),
-    'Available numeric columns: ' + JSON.stringify((session.columns || []).filter((c) => c.role === 'value').map((c) => c.name)),
-    'All columns: ' + JSON.stringify(session.columnsRaw),
-    'kind "category" colours features by a low-cardinality column (set categoryColumn);',
-    'imageColumn: a column of https image URLs shown as a photo in the popup.',
-    'Palettes: ' + Object.keys(PALETTES).join(', ') +
-      ' (brteal = brown→teal diverging, tealbr = teal→brown; the rest are single-hue light→dark).',
-    gcls ? 'This layer holds ' + gcls + ' geometry — valid kinds: ' +
-      (gcls === 'line' ? 'line' : gcls === 'polygon' ? 'polygon, choropleth' : 'markers') + '.' : '',
-    'User instruction: ' + message,
-    'reply: one short friendly sentence describing what you changed.',
-  ].filter(Boolean).join('\n');
-
-  try {
-    let out;
-    try {
-      out = await geminiJSON(getFlashLiteModel(), prompt, REFINE_SCHEMA);
-    } catch {
-      out = await geminiJSON(getFlashModel(), prompt, REFINE_SCHEMA);
-    }
-    session.spec = out.layer;
-    const result = applyResult(session, true);
-    result.reply = String(out.reply || 'Updated.').slice(0, 300);
-    res.json(result);
-  } catch (e) {
-    res.status(502).json({ error: 'AI refine failed: ' + e.message });
-  }
-});
 
 /* ---------- search: a lexical vocabulary per contributed layer, built on -------
    ---------- demand (and refreshed at commit), plus row-level embeddings -------
@@ -2696,10 +2537,14 @@ router.post('/layers/commit', (req, res) => {
       frag.stanza.id = session.replacingLayerId;
       frag.sourceFile = 'user-' + session.replacingLayerId + '.geojson';
       frag.stanza.source = frag.sourceFile;   // the stanza must name the file we write
-      if (session.replacingAddedBy) {
-        frag.stanza.addedBy = session.replacingAddedBy;
-        frag.stanza.addedAt = session.replacingAddedAt || Date.now();
-      }
+      // Restyling is not contributing. The credit above is unconditional, so a
+      // layer that carried NO addedBy used to acquire the editor's — and since
+      // canRemove keys off addedBy, that quietly handed out removal rights to
+      // whoever last changed a colour. An edit leaves authorship exactly as it
+      // found it, including absent.
+      frag.stanza.addedBy = session.replacingAddedBy || undefined;
+      frag.stanza.addedAt = session.replacingAddedBy
+        ? (session.replacingAddedAt || Date.now()) : undefined;
     }
     const out = imports.commitLayer(session.dataset, frag.stanza, frag.sourceFile,
       { type: 'FeatureCollection', features });
@@ -2760,7 +2605,9 @@ router.post('/layers/reopen', (req, res) => {
       : layer.type === 'line' ? 'line' : 'markers',
     label: layer.label || layerId,
     group: layer.group || 'userdata',
-    categoryColumn: layer.markerBy && layer.markerBy !== '_category' ? layer.markerBy : undefined,
+    categoryColumn: layer.markerBy === '_category'
+      ? recoverCategoryColumn(rows, columns)
+      : (layer.markerBy || undefined),
     popupTitleColumn: layer.popup && layer.popup.title,
     popupColumns: ((layer.popup && layer.popup.fields) || []).map((f) => f.property),
     imageColumn: (((layer.popup && layer.popup.fields) || []).find((f) => f.type === 'image') || {}).property,

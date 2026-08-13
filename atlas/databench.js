@@ -54,10 +54,11 @@
         </div>
       </div>
 
-      <!-- layers already contributed to this atlas (owner removes any; a
-           collaborator only their own) -->
+      <!-- layers already contributed to this atlas, for context while adding.
+           Changing or removing one happens on the atlas itself. -->
       <div id="added-layers" hidden>
         <h2 style="font-size:1rem; margin:1.4rem 0 .2rem">Layers added to this atlas</h2>
+        <p class="hint" style="margin:0 0 .4rem">To change or remove one, go back to the atlas and open the layer there.</p>
         <div id="added-layers-list"></div>
       </div>
     </section>`;
@@ -156,7 +157,6 @@
       <div class="bench-left">
         <div class="card">
           <h2>How it looks</h2>
-          <p class="edit-note" id="edit-note" hidden></p>
           <p class="hint" id="style-lead">The map below updates as you change these.</p>
           <!-- two questions, not one: the SHAPE a row is drawn as, and the RULE
                that colours it. The pair maps onto the server's kind vocabulary. -->
@@ -379,28 +379,14 @@
       list.innerHTML = "";
       if (!r.layers.length) { wrap.hidden = true; return; }
       wrap.hidden = false;
+      // names only: changing or removing a layer happens on the atlas itself
+      // (the editor's layer view), so there is exactly one place that does it
       r.layers.forEach(function (l) {
         var row = document.createElement("div");
         row.style.cssText = "display:flex; align-items:center; gap:.6rem; padding:.45rem 0; border-top:1px solid var(--color-divider); font-size:.9rem";
         var credit = l.addedBy ? (l.addedBy.org || l.addedBy.name || l.addedBy.email) : "";
         row.innerHTML = '<span style="flex:1 1 auto; min-width:0"><b>' + esc(l.label) + "</b>" +
           (credit ? ' <span class="hint">— added by ' + esc(credit) + "</span>" : "") + "</span>";
-        if (l.canRemove) {
-          var ed = document.createElement("button");
-          ed.className = "btn secondary"; ed.textContent = "Edit";
-          ed.title = "Change how this layer looks — its name, colours and popup";
-          ed.onclick = function () { editLayer(l); };
-          row.appendChild(ed);
-          var rm = document.createElement("button");
-          rm.className = "btn secondary"; rm.textContent = "Remove";
-          rm.onclick = function () {
-            if (!confirm("Remove the layer “" + l.label + "” from this atlas?")) return;
-            api("layers/remove", { method: "POST", body: { dataset: ds, layerId: l.id } })
-              .then(loadAddedLayers)
-              .catch(function (e) { msg("#msg-start", esc(errMsg(e))); });
-          };
-          row.appendChild(rm);
-        }
         list.appendChild(row);
       });
     }).catch(function () { $("#added-layers").hidden = true; /* not signed in / no access */ });
@@ -427,37 +413,6 @@
       known.hidden = true; ask.hidden = false;
       $("#f-dataset").focus();
     };
-  }
-
-  /* ---- editing a layer already on the atlas ----
-     Its shapes and fields are settled; what changes is how it looks. So this
-     skips straight to the styling step with a live preview, and adding replaces
-     the layer in place rather than making a second copy. ---- */
-  function editLayer(l) {
-    msg("#msg-start", "Opening “" + esc(l.label || l.id) + "”…", "ok");
-    api("layers/reopen", { method: "POST", body: { dataset: S.dataset || ($("#f-dataset") && $("#f-dataset").value.trim()), layerId: l.id } })
-      .then(function (r) {
-        msg("#msg-start", "");
-        S.result = r;
-        S.canonical = null;            // nothing to re-check: the data is already on the map
-        S.spatial = true;              // shapes carry their own location
-        S.styleReady = false;
-        S.names = (r.columns || []).map(function (c) { return c.name; });
-        S.editingLayerId = l.id;
-        return api("layers/options?dataset=" + encodeURIComponent(S.dataset)).then(function (o) {
-          S.options = o;
-          enterStyle(r);
-          // its own line, not #style-lead: that one is rewritten on every field change
-          var note = $("#edit-note");
-          if (note) {
-            note.textContent = "Editing “" + (l.label || l.id) + "” — saving replaces it on the atlas, keeping its place in the layer list. The preview already shows the swap.";
-            note.hidden = false;
-          }
-          var c = $("#commit");
-          if (c) c.textContent = "Save changes to the atlas →";
-        });
-      })
-      .catch(function (e) { msg("#msg-start", esc(errMsg(e))); });
   }
 
   /* ---- file intake ---- */
@@ -546,8 +501,6 @@
     S.canonical = canonical;
     S.result = null;
     S.styleReady = false;
-    S.editingLayerId = null;                       // a fresh upload adds, it doesn't replace
-    if ($("#edit-note")) $("#edit-note").hidden = true;
     if ($("#commit")) $("#commit").textContent = "Add to the atlas →";
     $("#sheet-pick").hidden = true;
     var g = canonical.geoms && canonical.meta.geometry;

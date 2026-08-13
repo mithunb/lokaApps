@@ -14,7 +14,7 @@
        characters a line at 1440px — and the eye loses the return sweep. DM
        Sans sets a wide zero, so 46ch of it measures ~70 characters of prose. */
     .db-prose, .enrich-head .hint, .ck-notice, .ck-derive > .hint, #style-lead,
-    .loc-first, .infer-note, .kind-steer, .edit-note, #geom-summary, #card-fixes > .hint {
+    .loc-first, .infer-note, .kind-steer, #geom-summary, #card-fixes > .hint {
       max-width:46ch; text-wrap:pretty; }
 
     /* an inline action inside a sentence: the placement step is skipped when
@@ -190,9 +190,6 @@
     .f-fixed { display:none; font-weight:400; font-size:.92rem; color:var(--color-text-primary); min-height:2.75rem; }
     label.f.one-option > select { display:none; }
     label.f.one-option > .f-fixed { display:flex; align-items:center; }
-    /* editing an existing layer: state it, since saving replaces rather than adds */
-    .edit-note { font-size:.88rem; padding:.6rem .8rem; border-radius:4px; margin:0 0 .8rem;
-      background:var(--color-ochre-tint); color:var(--color-text-primary); }
     /* steering, not blocking: a nudge when the chosen encoding misleads */
     .kind-steer { font-size:.82rem; padding:.45rem .7rem; border-radius:4px; margin:-.2rem 0 .7rem;
       background:var(--color-ochre-tint); color:var(--color-text-primary); }

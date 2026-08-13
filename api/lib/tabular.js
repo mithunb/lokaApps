@@ -45,6 +45,10 @@ export function profileColumns(columns, rows) {
       p.multiValue = delim ? { delimiter: delim } : null;
       const primaries = new Set(strVals.map((s) => primaryToken(s, delim).toLowerCase()).filter(Boolean));
       const primaryCard = delim ? primaries.size : distinct.size;
+      // how many classes this column would actually colour the map with — the
+      // editor names it ("categories — 9 kinds") so the author can choose a
+      // colour rule without opening the spreadsheet to count
+      p.kinds = primaryCard;
       const enough = vals.length >= Math.max(4, rows.length * 0.5);
       // low-cardinality strings colour a map better than any number — but only
       // when values actually repeat (distinct < filled), else it's id-like
