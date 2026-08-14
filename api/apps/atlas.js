@@ -713,6 +713,41 @@ function page(title, body) {
     `<h2>${title}</h2><p>${body}</p></body>`;
 }
 
+/* ================= admin: the operator's read-only overview ================= */
+
+// Every atlas across every account — public, private, unpublished — for the
+// dashboard at /apps/atlas/admin/. Two ways in: the Bearer admin token
+// (auth.isAdmin) or a signed-in session whose email is the operator's
+// (auth.isAdminSession). Deliberately READ-ONLY: it projects safe fields —
+// never tokenHash, viewKeyHash, createdByIp or the build spec, the same
+// discipline as collabList() — and it grants no powers anywhere else: acting
+// on an atlas still goes through the owner/editor checks above.
+router.get('/admin/instances', (req, res) => {
+  if (!auth.isAdmin(req) && !auth.isAdminSession(req)) {
+    // 401 for the signed-out (signing in could fix it), 403 for anyone else
+    const signedIn = !!auth.sessionFromReq(req);
+    return res.status(signedIn ? 403 : 401)
+      .json({ error: 'operator only', needsAuth: !signedIn });
+  }
+  res.setHeader('Cache-Control', 'no-store');
+  const instances = reg.allInstances().map((i) => ({
+    slug: i.slug,
+    title: i.title || '',
+    org: i.org || '',
+    email: i.email || '',
+    ownerAccount: i.ownerAccount || '',
+    regionLabel: i.regionLabel || '',
+    visibility: i.visibility || 'public',
+    status: i.status || '',
+    layerCount: Array.isArray(i.layers) ? i.layers.length : 0,
+    collaboratorCount: Array.isArray(i.collaborators) ? i.collaborators.length : 0,
+    sizeBytes: Number(i.sizeBytes) || 0,
+    createdAt: i.createdAt || null,
+    publishedAt: i.publishedAt || null,
+  }));
+  res.json({ instances });
+});
+
 /* ================= jobs ================= */
 
 setJobDoneHook((job) => {

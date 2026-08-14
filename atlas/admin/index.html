@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Every atlas — LOKA Atlas</title>
+  <meta name="robots" content="noindex" />
+  <!-- The operator's dashboard. Reached at /apps/atlas/admin/; everyone who is
+       not the operator is turned away by the API (401/403) and sees the gate —
+       the table renders only after the listing has actually arrived, so there
+       is never a shell of a table that then refuses.
+
+       One deliberate scope: this page LISTS. Every atlas across every account,
+       public and private, live and not — with links out to the viewer and the
+       editor, where acting on an atlas keeps its existing owner/editor checks.
+       The API side is GET /admin/instances: the Bearer admin token or the
+       operator's own signed-in session (auth.isAdminSession), projecting only
+       safe fields — never tokenHash, viewKeyHash or createdByIp.
+
+       Register: a working table, not a marketing page — the field-notebook
+       world of DESIGN.md (paper ground, hairline ink borders, moss for what
+       you can act on, Figtree stamps on DM Sans), dense enough to stay
+       scannable at sixty rows: sortable column stamps, one filter box, and a
+       ledger line of totals rather than hero-metric cards. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Figtree:wght@500;600;700&display=swap" />
+  <style>
+    :root {
+      --color-bg:#F9F9F7; --color-bg-alt:#F0EFEA; --color-surface:#FFFFFF;
+      --color-moss:#4A5A33; --color-canopy:#384526;
+      --color-rust:#AE5028; --color-rust-deep:#7C3616;
+      --color-sienna:#99582F; --color-ochre:#B8862F;
+      --color-text-primary:#2A241A; --color-text-secondary:#564E3C; --color-text-muted:#6B6350;
+      --color-divider:rgba(42,36,26,.09); --color-border:rgba(42,36,26,.14);
+      --color-moss-tint:rgba(74,90,51,.10); --color-rust-tint:rgba(174,80,40,.10);
+      --color-ochre-tint:rgba(184,134,47,.14);
+      --t-section:1.15rem; --t-body:1rem; --t-control:.95rem;
+      --t-ui:.875rem; --t-meta:.78rem; --t-label:.72rem;
+      --radius-md:.25rem; --radius-lg:.375rem;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--color-bg); color:var(--color-text-primary);
+      font-family:'DM Sans',system-ui,-apple-system,sans-serif; font-size:var(--t-body); line-height:1.55;
+      -webkit-font-smoothing:antialiased; }
+    h1,h2,h3 { font-family:'Figtree',sans-serif; letter-spacing:-.01em; margin:0; text-wrap:balance; }
+    button { font:inherit; }
+    [hidden] { display:none !important; }
+    :focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:4px; }
+    a { color:var(--color-canopy); }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+      overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+
+    /* ---------- top bar (same frame as the editor and add-data) ---------- */
+    .bar { display:flex; align-items:center; gap:1rem; flex-wrap:wrap;
+      padding:.75rem clamp(.9rem,3vw,1.5rem); border-bottom:1px solid var(--color-divider); }
+    .bar .id { min-width:0; flex:1 1 14rem; }
+    .bar h1 { font-size:var(--t-section); font-weight:600; white-space:nowrap;
+      overflow:hidden; text-overflow:ellipsis; }
+    .bar .to { font-size:var(--t-meta); color:var(--color-text-muted); }
+    .btn { min-height:2.75rem; padding:.55rem 1rem; border:1px solid transparent;
+      border-radius:var(--radius-md); background:var(--color-moss); color:#fff;
+      font-weight:600; font-size:var(--t-control); cursor:pointer; text-decoration:none;
+      display:inline-flex; align-items:center; justify-content:center; }
+    .btn:hover { background:var(--color-canopy); }
+    .btn.secondary { background:var(--color-surface); color:var(--color-text-primary); border-color:var(--color-border); }
+    .btn.secondary:hover { background:var(--color-bg-alt); }
+    .btn.quiet { background:none; color:var(--color-text-secondary); }
+    .btn.quiet:hover { background:var(--color-bg-alt); }
+
+    .wrap { max-width:82rem; margin:0 auto; width:100%;
+      padding:1rem clamp(.9rem,3vw,1.5rem) 3rem; }
+
+    /* ---------- totals: a ledger line, not stat cards ---------- */
+    .tots { display:flex; flex-wrap:wrap; gap:.3rem 1.6rem; margin:.25rem 0 1rem;
+      font-size:var(--t-ui); color:var(--color-text-secondary); }
+    .tot b { font-family:'Figtree',sans-serif; font-weight:700; letter-spacing:-.01em;
+      font-size:1.05rem; color:var(--color-text-primary); }
+    .tot.warn b { color:var(--color-sienna); }
+    .tot.bad b { color:var(--color-rust-deep); }
+
+    /* ---------- filter row ---------- */
+    .controls { display:flex; align-items:center; gap:.9rem; flex-wrap:wrap; margin:0 0 .8rem; }
+    #q { font:inherit; font-size:var(--t-control); padding:.5rem .65rem; min-height:2.75rem;
+      border:1px solid var(--color-border); border-radius:4px; background:var(--color-surface);
+      color:var(--color-text-primary); flex:0 1 24rem; width:100%; }
+    #count { font-size:var(--t-meta); color:var(--color-text-muted); }
+
+    /* ---------- the table: white plate, hairline borders, sticky stamps ---------- */
+    .tablewrap { overflow:auto; max-height:max(22rem, calc(100vh - 14rem));
+      background:var(--color-surface); border:1px solid var(--color-border);
+      border-radius:var(--radius-lg); }
+    table { border-collapse:separate; border-spacing:0; width:100%; min-width:74rem;
+      font-size:var(--t-ui); }
+    thead th { position:sticky; top:0; z-index:2; background:var(--color-surface);
+      border-bottom:1px solid var(--color-border); padding:0; text-align:left; }
+    thead th.plain { padding:.6rem .65rem; font-family:'Figtree',sans-serif;
+      font-size:var(--t-label); font-weight:600; letter-spacing:.1em;
+      text-transform:uppercase; color:var(--color-text-secondary); }
+    thead th > button { display:block; width:100%; padding:.6rem .65rem; margin:0;
+      background:none; border:0; cursor:pointer; text-align:left;
+      font-family:'Figtree',sans-serif; font-size:var(--t-label); font-weight:600;
+      letter-spacing:.1em; text-transform:uppercase; color:var(--color-text-secondary);
+      white-space:nowrap; }
+    thead th > button:hover { color:var(--color-text-primary); background:var(--color-bg-alt); }
+    thead th > button::after { content:"\00a0"; display:inline-block; width:.8em;
+      margin-left:.25rem; color:var(--color-moss); }
+    thead th[aria-sort] > button { color:var(--color-text-primary); }
+    thead th[aria-sort="ascending"] > button::after { content:"↑"; }
+    thead th[aria-sort="descending"] > button::after { content:"↓"; }
+    thead th.num, thead th.num > button { text-align:right; }
+
+    tbody td { padding:.55rem .65rem; border-bottom:1px solid var(--color-divider);
+      vertical-align:top; }
+    tbody tr:last-child td { border-bottom:0; }
+    tbody tr:hover td { background:rgba(42,36,26,.03); }
+    td.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .t-title { display:block; font-weight:600; }
+    .t-sub { display:block; font-size:var(--t-meta); color:var(--color-text-muted); }
+    .mono { font-family:ui-monospace,Menlo,monospace; font-size:.75rem; }
+    .muted { color:var(--color-text-muted); }
+    .clip { max-width:13rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    td.acts { white-space:nowrap; }
+    td.acts a { font-weight:600; text-decoration:none; }
+    td.acts a:hover { text-decoration:underline; }
+    td.acts .dim { color:var(--color-text-muted); padding:0 .15rem; }
+
+    /* status and visibility stamps — 4px corners, tinted inks, never pills */
+    .chip { display:inline-flex; align-items:center; gap:.4rem; padding:.16rem .5rem;
+      border:1px solid var(--color-border); border-radius:var(--radius-md);
+      background:var(--color-surface); color:var(--color-text-secondary);
+      font-family:'Figtree',sans-serif; font-size:.68rem; font-weight:600;
+      letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; }
+    .chip .dot { width:.45rem; height:.45rem; border-radius:50%;
+      background:var(--color-text-muted); flex:0 0 auto; }
+    .chip.live { background:var(--color-moss-tint); border-color:rgba(74,90,51,.35); color:var(--color-canopy); }
+    .chip.live .dot { background:var(--color-moss); }
+    .chip.busy { background:var(--color-ochre-tint); border-color:rgba(184,134,47,.45); color:var(--color-sienna); }
+    .chip.busy .dot { background:var(--color-ochre); }
+    .chip.bad { background:var(--color-rust-tint); border-color:rgba(174,80,40,.35); color:var(--color-rust-deep); }
+    .chip.bad .dot { background:var(--color-rust); }
+    .chip.ink { background:var(--color-text-primary); border-color:var(--color-text-primary); color:var(--color-bg); }
+
+    .hint { font-size:var(--t-meta); color:var(--color-text-muted); margin:.8rem 0 0; }
+
+    /* ---------- the gate (same treatment as the editor and add-data) ---------- */
+    .gate { max-width:34rem; margin:10vh auto; padding:0 1rem; text-align:center; }
+    .gate h2 { font-size:var(--t-section); margin-bottom:.4rem; }
+    .gate p { color:var(--color-text-secondary); font-size:var(--t-ui); }
+  </style>
+</head>
+<body>
+  <div id="gate" class="gate" hidden>
+    <h2 id="gate-t">Loading…</h2>
+    <p id="gate-p"></p>
+    <p><a class="btn secondary" id="gate-a" href="../setup/" style="display:none">Your atlases</a></p>
+  </div>
+
+  <header class="bar" id="bar" hidden>
+    <div class="id">
+      <h1>Every atlas</h1>
+      <span class="to" id="whoami"></span>
+    </div>
+    <a class="btn quiet" href="../setup/">Your atlases</a>
+  </header>
+
+  <main class="wrap" id="wrap" hidden>
+    <p class="tots" id="tots" aria-label="Totals across all accounts"></p>
+
+    <div class="controls">
+      <label class="sr-only" for="q">Filter atlases</label>
+      <input id="q" type="search" autocomplete="off" spellcheck="false"
+        placeholder="Filter by title, slug, owner or org…" />
+      <span id="count" aria-live="polite"></span>
+    </div>
+
+    <div class="tablewrap" role="region" aria-label="All atlases" tabindex="0">
+      <table>
+        <caption class="sr-only">Every atlas across all accounts, public and private</caption>
+        <thead>
+          <tr>
+            <th scope="col" data-key="title"><button type="button">Atlas</button></th>
+            <th scope="col" data-key="owner"><button type="button">Owner</button></th>
+            <th scope="col" data-key="status"><button type="button">Status</button></th>
+            <th scope="col" data-key="visibility"><button type="button">Visibility</button></th>
+            <th scope="col" data-key="regionLabel"><button type="button">Region</button></th>
+            <th scope="col" data-key="layerCount" class="num"><button type="button">Layers</button></th>
+            <th scope="col" data-key="collaboratorCount" class="num"><button type="button">Editors</button></th>
+            <th scope="col" data-key="sizeBytes" class="num"><button type="button">Size</button></th>
+            <th scope="col" data-key="createdAt" class="num"><button type="button">Created</button></th>
+            <th scope="col" data-key="publishedAt" class="num"><button type="button">Published</button></th>
+            <th scope="col" class="plain">Links</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p class="hint" id="empty" hidden></p>
+  </main>
+
+  <script>
+  (function () {
+    "use strict";
+    var $ = function (s) { return document.querySelector(s); };
+    var $$ = function (s) { return [].slice.call(document.querySelectorAll(s)); };
+    var API = "../api/";
+
+    function api(path, opts) {
+      opts = opts || {};
+      opts.headers = Object.assign({ "Content-Type": "application/json" }, opts.headers || {});
+      if (opts.body && typeof opts.body !== "string") opts.body = JSON.stringify(opts.body);
+      return fetch(API + path, opts).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          if (!r.ok) { j._status = r.status; throw j; }
+          return j;
+        });
+      });
+    }
+    function errMsg(e) { return (e && (e.error || e.message)) || "something went wrong"; }
+    function esc(v) {
+      return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+    function gate(title, body, showLink) {
+      $("#gate").hidden = false;
+      $("#gate-t").textContent = title;
+      $("#gate-p").textContent = body || "";
+      $("#gate-a").style.display = showLink ? "" : "none";
+    }
+
+    /* ================= state ================= */
+
+    var ALL = [], ME = null;
+    var SORT = { key: "createdAt", dir: -1 };
+    var NUMERIC = { layerCount: 1, collaboratorCount: 1, sizeBytes: 1, createdAt: 1, publishedAt: 1 };
+
+    function ownerOf(i) { return i.ownerAccount || i.email || ""; }
+
+    /* ================= sorting: empties sink, ties fall back to slug ================= */
+
+    function valueOf(i, key) {
+      if (key === "owner") return ownerOf(i).toLowerCase();
+      var v = i[key];
+      if (NUMERIC[key]) return v == null ? null : Number(v);
+      return String(v == null ? "" : v).toLowerCase();
+    }
+    function tie(a, b) { return a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0; }
+    function cmp(a, b) {
+      var va = valueOf(a, SORT.key), vb = valueOf(b, SORT.key);
+      var ea = va == null || va === "", eb = vb == null || vb === "";
+      if (ea || eb) return ea && eb ? tie(a, b) : (ea ? 1 : -1);
+      var r = va < vb ? -1 : va > vb ? 1 : 0;
+      return r ? r * SORT.dir : tie(a, b);
+    }
+    function setSort(key) {
+      if (SORT.key === key) SORT.dir = -SORT.dir;
+      else SORT = { key: key, dir: NUMERIC[key] ? -1 : 1 }; // numbers & dates open big-first
+      paintSortMarks();
+      paint();
+    }
+    function paintSortMarks() {
+      $$("th[data-key]").forEach(function (th) {
+        if (th.dataset.key === SORT.key) {
+          th.setAttribute("aria-sort", SORT.dir === 1 ? "ascending" : "descending");
+        } else {
+          th.removeAttribute("aria-sort");
+        }
+      });
+    }
+
+    /* ================= formatting ================= */
+
+    function fmtBytes(n) {
+      if (!n) return "0 B";
+      if (n < 1024) return n + " B";
+      if (n < 1048576) return Math.round(n / 1024) + " KB";
+      if (n < 1073741824) return (n / 1048576).toFixed(1) + " MB";
+      return (n / 1073741824).toFixed(2) + " GB";
+    }
+    function fmtDate(ms) {
+      if (!ms) return "";
+      return new Date(ms).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    }
+    function dateCell(ms) {
+      if (!ms) return '<span class="muted">—</span>';
+      return '<span title="' + esc(new Date(ms).toLocaleString()) + '">' + esc(fmtDate(ms)) + "</span>";
+    }
+    function numCell(n) {
+      return n ? String(n) : '<span class="muted">0</span>';
+    }
+
+    var STATUS = {
+      published: { cls: "live", label: "Live" },
+      built: { cls: "idle", label: "Built" },
+      building: { cls: "busy", label: "Building" },
+      "pending-approval": { cls: "busy", label: "Pending approval" },
+      failed: { cls: "bad", label: "Failed" },
+      denied: { cls: "bad", label: "Denied" },
+    };
+    function statusChip(s) {
+      var m = STATUS[s] || { cls: "idle", label: s || "unknown" };
+      return '<span class="chip ' + m.cls + '"><span class="dot"></span>' + esc(m.label) + "</span>";
+    }
+    function visCell(v) {
+      return v === "private"
+        ? '<span class="chip ink">Private</span>'
+        : '<span class="muted">public</span>';
+    }
+
+    /* ================= painting ================= */
+
+    function rowHtml(i) {
+      var slug = encodeURIComponent(i.slug);
+      var owner = ownerOf(i);
+      return "<tr>" +
+        '<td><span class="t-title">' + esc(i.title || i.slug) + "</span>" +
+          '<span class="t-sub mono">' + esc(i.slug) + "</span></td>" +
+        "<td>" + (owner ? esc(owner) : '<span class="muted">—</span>') +
+          (i.org ? '<span class="t-sub">' + esc(i.org) + "</span>" : "") + "</td>" +
+        "<td>" + statusChip(i.status) + "</td>" +
+        "<td>" + visCell(i.visibility) + "</td>" +
+        '<td><span class="clip" title="' + esc(i.regionLabel) + '">' +
+          (i.regionLabel ? esc(i.regionLabel) : '<span class="muted">—</span>') + "</span></td>" +
+        '<td class="num">' + numCell(i.layerCount) + "</td>" +
+        '<td class="num">' + numCell(i.collaboratorCount) + "</td>" +
+        '<td class="num">' + (i.sizeBytes ? esc(fmtBytes(i.sizeBytes)) : '<span class="muted">—</span>') + "</td>" +
+        '<td class="num">' + dateCell(i.createdAt) + "</td>" +
+        '<td class="num">' + dateCell(i.publishedAt) + "</td>" +
+        '<td class="acts"><a href="../?dataset=' + slug + '">Open</a>' +
+          '<span class="dim" aria-hidden="true">·</span>' +
+          '<a href="../edit/?dataset=' + slug + '">Edit</a></td>' +
+        "</tr>";
+    }
+
+    function matches(i, q) {
+      if (!q) return true;
+      return ((i.title || "") + " " + i.slug + " " + ownerOf(i) + " " +
+        (i.email || "") + " " + (i.org || "")).toLowerCase().indexOf(q) !== -1;
+    }
+
+    function paint() {
+      var q = $("#q").value.trim().toLowerCase();
+      var rows = ALL.filter(function (i) { return matches(i, q); }).sort(cmp);
+      $("#rows").innerHTML = rows.map(rowHtml).join("");
+      $("#count").textContent = rows.length === ALL.length
+        ? ALL.length + (ALL.length === 1 ? " atlas" : " atlases")
+        : rows.length + " of " + ALL.length + " shown";
+      $("#empty").hidden = rows.length !== 0;
+      if (!rows.length) {
+        $("#empty").textContent = ALL.length === 0
+          ? "No atlases exist yet."
+          : "Nothing matches “" + q + "”.";
+      }
+    }
+
+    function paintTotals() {
+      var live = 0, priv = 0, pending = 0, failed = 0, size = 0;
+      ALL.forEach(function (i) {
+        if (i.status === "published") live++;
+        if (i.visibility === "private") priv++;
+        if (i.status === "pending-approval") pending++;
+        if (i.status === "failed" || i.status === "denied") failed++;
+        size += i.sizeBytes || 0;
+      });
+      var h = seg(ALL.length, ALL.length === 1 ? "atlas" : "atlases") +
+        seg(live, "live") + seg(priv, "private") + seg(fmtBytes(size), "on disk");
+      if (pending) h += seg(pending, "awaiting approval", "warn");
+      if (failed) h += seg(failed, "failed or denied", "bad");
+      $("#tots").innerHTML = h;
+    }
+    function seg(n, label, cls) {
+      return '<span class="tot' + (cls ? " " + cls : "") + '"><b>' + esc(n) + "</b> " + esc(label) + "</span>";
+    }
+
+    /* ================= boot: the API decides who sees this ================= */
+
+    api("auth/me").catch(function () { return null; }).then(function (me) {
+      ME = me;
+      return api("admin/instances");
+    }).then(function (r) {
+      ALL = (r && r.instances) || [];
+      $("#whoami").textContent = "every account, public and private" +
+        (ME && ME.email ? " — signed in as " + ME.email : "");
+      $("#bar").hidden = false;
+      $("#wrap").hidden = false;
+      paintTotals();
+      paintSortMarks();
+      paint();
+      $("#q").addEventListener("input", paint);
+      $$("th[data-key] > button").forEach(function (b) {
+        b.addEventListener("click", function () { setSort(this.parentNode.dataset.key); });
+      });
+    }).catch(function (e) {
+      if (e && (e._status === 401 || e.needsAuth)) {
+        gate("Sign in first",
+          "This dashboard opens only for the operator’s email. Sign in from the atlases page, then come back here.", true);
+      } else if (e && e._status === 403) {
+        gate("You cannot see this page",
+          "It exists, but it is the operator’s dashboard" +
+          (ME && ME.email ? " and " + ME.email + " is not the operator" : "") + ".", true);
+      } else {
+        gate("Could not load the dashboard", errMsg(e), false);
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

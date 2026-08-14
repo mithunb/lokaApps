@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { DATA_DIR } from './registry.js';
+import { DATA_DIR, normEmail } from './registry.js';
 
 const SECRET_FILE = path.join(DATA_DIR, 'secret');
 const SESSION_COOKIE = 'atlas_session';
@@ -184,4 +184,18 @@ export function isAdmin(req) {
   const got = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
   return got.length === want.length &&
     crypto.timingSafeEqual(Buffer.from(got), Buffer.from(want));
+}
+
+// The second, deliberately narrow admin path: a signed-in session whose email
+// is the operator's (ATLAS_ADMIN_EMAIL, defaulting to the same address
+// apps/atlas.js notifies). Sessions are minted from normEmail'd addresses and
+// the comparison re-normalises both sides the same way, so case or stray
+// whitespace can never mint a second identity.
+// Kept separate from isAdmin on purpose: every isAdmin call site grants owner
+// powers (delete, publish, rebuild, edit), and this check must only ever guard
+// READ-ONLY surfaces — today, the admin dashboard's listing.
+export function isAdminSession(req) {
+  const admin = normEmail(process.env.ATLAS_ADMIN_EMAIL || 'mithun@socratus.org');
+  const session = sessionFromReq(req);
+  return !!(session && session.email && normEmail(session.email) === admin);
 }
