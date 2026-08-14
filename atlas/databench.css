@@ -13,7 +13,7 @@
        these sentences run the whole page — the enrichment hint measured 197
        characters a line at 1440px — and the eye loses the return sweep. DM
        Sans sets a wide zero, so 46ch of it measures ~70 characters of prose. */
-    .db-prose, .enrich-head .hint, .ck-notice, .ck-derive > .hint, #style-lead,
+    .db-prose, .enrich-head .hint, .ck-notice, .ck-derive > .hint,
     .loc-first, .infer-note, .kind-steer, #geom-summary, #card-fixes > .hint {
       max-width:46ch; text-wrap:pretty; }
 
@@ -158,18 +158,74 @@
     .radio-row { display:flex; gap:1rem; flex-wrap:wrap; font-size:.88rem; color:var(--color-text-secondary); }
     .radio-row label { display:flex; gap:.35rem; align-items:center; font-weight:400; }
 
-    /* preview bench: "How it looks" runs full width, the map preview beneath
-       it (no side column any more, so nothing to stick to) */
-    .bench { display:flex; flex-direction:column; gap:1rem; }
-    .bench-left { display:flex; flex-direction:column; gap:1rem; min-width:0; }
+    /* preview bench: the questions sit BESIDE the live map on wide screens —
+       the editor's own layout, cause and effect in one glance — and above it
+       on narrow ones */
+    .bench { display:grid; grid-template-columns:1fr; gap:1rem; align-items:start; }
     #db-preview-frame { width:100%; height:clamp(22rem, 60vh, 40rem); border:1px solid var(--color-border); border-radius:var(--radius-lg); background:#F3E9CE; }
+    @media (min-width:900px) {
+      .bench { grid-template-columns:minmax(19rem, 23rem) minmax(0, 1fr); }
+      #db-preview-frame { position:sticky; top:1rem; height:min(44rem, calc(100vh - 2rem)); }
+    }
     .card { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:1.1rem 1.2rem; }
-    .card h2 { display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
-    details.frag { margin-top:.6rem; }
-    details.frag summary { cursor:pointer; font-size:.82rem; color:var(--color-text-muted); }
-    details.frag pre { font:11px/1.5 ui-monospace,Menlo,monospace; background:#FFFFFF; border:1px solid var(--color-border);
-      border-radius:4px; padding:.6rem; overflow:auto; max-height:14rem; }
+    .card h2 { display:flex; align-items:center; justify-content:space-between; gap:.5rem; margin-bottom:.8rem; }
     footer.site { margin-top:3rem; border-top:1px solid var(--color-divider); background:var(--color-bg-alt); }
+
+    /* notes under a question — the edit screen's own quiet line */
+    .step label.f > .note { flex:1 0 100%; font-weight:400; font-size:.78rem;
+      color:var(--color-text-muted); margin-top:.3rem; max-width:46ch; text-wrap:pretty; }
+    .step label.f > .note.warnish { color:var(--color-text-secondary); }
+    /* why a tag column is not offered for colour — its own line, so it stays
+       said even when the colour question itself has nothing to ask */
+    .tag-note { font-size:.78rem; color:var(--color-text-muted); margin:-.4rem 0 .9rem;
+      max-width:46ch; text-wrap:pretty; }
+
+    /* the five named colours, picked by eye rather than by name */
+    .swatches { display:flex; gap:.35rem; margin-top:.45rem; flex-wrap:wrap; flex:1 0 100%; }
+    .sw { width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center;
+      background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md);
+      cursor:pointer; padding:0; }
+    .sw i { width:1.35rem; height:1.35rem; border-radius:50%; background:var(--c); display:block; }
+    .sw:hover { background:var(--color-bg-alt); }
+    .sw[aria-pressed="true"] { border-color:var(--color-moss); background:var(--color-moss-tint); }
+
+    /* the live map key: output, not a control — the edit screen's metrics,
+       drawn by the same swatch code (iconkit) as the atlas itself */
+    .key-head { display:flex; align-items:baseline; gap:.6rem; margin:.2rem 0 .2rem; }
+    .key-stamp { flex:1 1 auto; font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:700;
+      letter-spacing:.12em; text-transform:uppercase; color:var(--color-text-muted); }
+    .key-note { font-size:.78rem; color:var(--color-text-muted); font-variant-numeric:tabular-nums; }
+    .key-block { padding:.55rem .65rem .6rem; border:1px solid var(--color-divider);
+      border-radius:var(--radius-md); background:var(--color-bg); margin-bottom:1rem; }
+    .key { list-style:none; margin:.15rem 0 0; padding:0; display:flex; flex-direction:column; gap:.28rem; }
+    .key li { display:flex; align-items:center; gap:.45rem; font-size:.78rem; color:var(--color-text-secondary); }
+    .k-label { flex:1 1 auto; line-height:1.2; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .k-count { flex:0 0 auto; color:var(--color-text-muted); font-variant-numeric:tabular-nums; }
+    .key .leg-icon { flex:0 0 auto; width:15px; height:15px; color:var(--c,#7a756c);
+      display:inline-flex; align-items:center; justify-content:center; }
+    .key .leg-icon svg { width:15px; height:15px; }
+    .key .leg-badge { flex:0 0 auto; width:15px; height:15px; border-radius:50%; background:var(--c,#7a756c);
+      color:#fff; font-size:8px; font-weight:700; display:inline-flex; align-items:center;
+      justify-content:center; letter-spacing:.02em; }
+    .key .leg-badge.pale { color:var(--color-text-primary); }
+    .key .leg-swatch { flex:0 0 auto; width:12px; height:12px; background:var(--c,#7a756c); border-radius:2px; }
+    .key .leg-swatch.dot { width:11px; height:11px; border-radius:50%; margin:0 1px; }
+    .key .leg-swatch.line { height:4px; border-radius:2px; }
+    .key .leg-swatch.dashed { height:4px; border-radius:0;
+      background:repeating-linear-gradient(90deg, var(--c,#7a756c) 0 3px, transparent 3px 5px); }
+    .k-ramp { display:block; }
+    .k-ramp-bar { display:flex; height:.8rem; border-radius:2px; overflow:hidden; }
+    .k-ramp-bar i { flex:1 1 0; background:var(--c); display:block; }
+    .k-ramp-ends { display:flex; justify-content:space-between; gap:.5rem; margin-top:.25rem;
+      font-size:.78rem; color:var(--color-text-muted); }
+
+    /* the card's foot: one reassurance, then the verbs */
+    .s4-foot { border-top:1px solid var(--color-divider); background:var(--color-bg);
+      margin:1.1rem -1.2rem -1.1rem; padding:.85rem 1.2rem 1rem;
+      border-radius:0 0 var(--radius-lg) var(--radius-lg); }
+    .s4-foot .assure { margin:0 0 .6rem; font-size:.78rem; color:var(--color-text-secondary);
+      max-width:46ch; text-wrap:pretty; }
+    .s4-foot .step-nav { margin-top:0; }
 
     /* the location answer, stated before anything about styling */
     .loc-first { font-size:.9rem; padding:.6rem .8rem; border-radius:4px; margin:0 0 .9rem; }
@@ -177,20 +233,10 @@
     .loc-first.warn { background:var(--color-rust-tint); color:var(--color-rust-deep); }
     .loc-first b { font-weight:600; }
 
-    /* styling step: the questions flow into columns at full width (a single
-       column of page-wide selects reads broken) and wrap on narrow screens */
-    .style-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(16rem, 1fr)); gap:.1rem 1.1rem; align-items:start; }
-    .style-grid label.f { margin:0 0 .8rem; }
-    .style-more { margin-top:.6rem; }
+    /* styling step */
+    .style-more { margin-top:.6rem; margin-bottom:.9rem; }
     .style-more > summary { cursor:pointer; font-size:.85rem; color:var(--color-text-secondary); }
-    #style-lead { margin:0 0 .8rem; }
-    /* one option is an answer, not a question: the field states it in words and
-       the select stays in the DOM (still what applyStyle reads) but out of the
-       way, so a dropdown never offers a choice the data can't give */
-    .f-fixed { display:none; font-weight:400; font-size:.92rem; color:var(--color-text-primary); min-height:2.75rem; }
-    label.f.one-option > select { display:none; }
-    label.f.one-option > .f-fixed { display:flex; align-items:center; }
-    /* steering, not blocking: a nudge when the chosen encoding misleads */
+    /* steering, not blocking: a nudge when the chosen shading misleads */
     .kind-steer { font-size:.82rem; padding:.45rem .7rem; border-radius:4px; margin:-.2rem 0 .7rem;
       background:var(--color-ochre-tint); color:var(--color-text-primary); }
     /* a closed <details> stops hiding a child that sets its own display (our
@@ -208,7 +254,7 @@
     .step .ck-edit-row input, .step .ck-edit-row select, .step .ck-derive-row input, .step .fix-row select { min-height:44px; }
     .step label.f#w-linedash, .radio-row label { min-height:44px; }
     .ck-derive-cols label { display:inline-flex; align-items:center; gap:.35rem; min-height:44px; }
-    details.paste > summary, .ck-derive > summary, .style-more > summary, details.frag > summary { padding:.65rem 0; min-height:44px; }
+    details.paste > summary, .ck-derive > summary, .style-more > summary { padding:.65rem 0; min-height:44px; }
 
     .ck-viewtab, .pd-opt, .ck-edit-btn, .ck-chip.ck-act { position:relative; }
     .ck-viewtab::after, .pd-opt::after, .ck-edit-btn::after, .ck-chip.ck-act::after {

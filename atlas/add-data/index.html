@@ -22,7 +22,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Figtree:wght@500;600;700&display=swap" />
-  <link rel="stylesheet" href="../databench.css?v=20260814-1" />
+  <link rel="stylesheet" href="../databench.css?v=20260814-2" />
   <style>
     :root {
       --color-bg:#F9F9F7; --color-bg-alt:#F0EFEA; --color-surface:#FFFFFF;
@@ -58,7 +58,6 @@
     .bar .to { font-size:var(--t-meta); color:var(--color-text-muted); }
 
     .wrap { max-width:56rem; margin:0 auto; padding:clamp(1.1rem,4vw,2rem) clamp(.9rem,4vw,2rem) 4rem; }
-    .lede { font-size:var(--t-meta); color:var(--color-text-muted); max-width:52ch; margin:.35rem 0 1.2rem; }
 
     /* chrome the bench's markup expects from its host */
     .panel { background:var(--color-surface); border:1px solid var(--color-border);
@@ -108,17 +107,18 @@
   </header>
 
   <div class="wrap" id="wrap" hidden>
-    <p class="lede">Drop in a spreadsheet of places and walk it onto the map. Nothing changes on your
-      atlas until the last step.</p>
+    <!-- No intro sentence: the header names the act, the drop zone says what
+         to drop, and "nothing changes until you add it" is said at the foot of
+         the last step — the one place it is both true and needed. -->
     <div id="bench"></div>
   </div>
 
   <script src="../vendor/papaparse.min.js"></script>
   <script src="../vendor/simplify.js"></script>
   <!-- ?v= — bump on every deploy that touches a local .js/.css; see index.html -->
-  <script src="../ingest.js?v=20260814-1"></script>
-  <script src="../checktable.js?v=20260814-1"></script>
-  <script src="../databench.js?v=20260814-1"></script>
+  <script src="../ingest.js?v=20260814-2"></script>
+  <script src="../checktable.js?v=20260814-2"></script>
+  <script src="../databench.js?v=20260814-2"></script>
   <script>
   (function () {
     "use strict";

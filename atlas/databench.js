@@ -154,63 +154,85 @@
       <div id="msg-place"></div>
     </section>
 
-    <!-- ============ STEP 4 · PREVIEW & ADD ============ -->
+    <!-- ============ STEP 4 · PREVIEW & ADD ============
+         The same questions, in the same order and the same words, as the
+         approved edit screen (edit/index.html #view-edit) — plus the two
+         things that only exist at birth: the shape question (asked only when
+         the data offers a real choice) and the moment of adding. A question
+         with one possible answer is not asked; the map and the key show it. -->
     <section class="bench step" id="db-step-4" hidden>
-      <div class="bench-left">
-        <div class="card">
-          <h2>How it looks</h2>
-          <p class="hint" id="style-lead">The map below updates as you change these.</p>
-          <!-- two questions, not one: the SHAPE a row is drawn as, and the RULE
-               that colours it. The pair maps onto the server's kind vocabulary. -->
-          <div class="style-grid">
-            <label class="f">Layer name<input type="text" id="s-label" maxlength="60" /></label>
-            <!-- the .f-fixed span carries the answer when its select holds a
-                 single option: one option is a statement, not a question -->
-            <label class="f" id="w-shape">Draw each row as<select id="s-shape"></select><span class="f-fixed"></span></label>
-            <label class="f" id="w-colour">Colour them<select id="s-colour"></select><span class="f-fixed"></span></label>
-            <!-- follow-ups: only the ones the chosen answers need are shown -->
-            <label class="f" id="w-onecolour" hidden>Which colour<select id="s-onecolour"></select></label>
-            <label class="f" id="w-catcol" hidden><span>Using the categories in</span>
-              <select id="s-catcol"></select>
+      <div class="card">
+        <h2>How it looks</h2>
+
+        <label class="f">Layer name<input type="text" id="s-label" maxlength="60" /></label>
+
+        <label class="f" id="w-shape" hidden>Show each place as<select id="s-shape"></select></label>
+
+        <!-- one colour question, whose meaning follows the shape (the edit
+             screen's own table): pins ask which column colours them, circles
+             which number sizes them, areas what colours or shades them -->
+        <label class="f" id="w-colour" hidden><span id="lbl-colour">Colour places by</span>
+          <select id="s-colour"></select>
+          <span class="note warnish" id="multi-note" hidden></span>
+        </label>
+        <!-- why a tag column is not offered for colour — said once, plainly,
+             so the person who wanted it isn't left staring at an absence -->
+        <p class="tag-note" id="tag-note" hidden></p>
+
+        <label class="f" id="w-palette" hidden>Colour ramp<select id="s-palette"></select></label>
+
+        <div class="f" id="w-onecolour" hidden><span id="one-colour-lbl">Which colour</span>
+          <div class="swatches" role="group" aria-labelledby="one-colour-lbl" id="swatches"></div>
+        </div>
+
+        <!-- steering, not blocking: shown when shading is the wrong choice -->
+        <p class="kind-steer" id="kind-steer" hidden>That column looks like a count — counts compare better as circles sized by the number (under “Show each place as”). Light-to-dark shading suits rates and averages.</p>
+
+        <!-- the key is output, not a control: the same rows the atlas will
+             show, drawn by the same code, with author-only counts. It replaces
+             the old explainer sentence — it IS the explanation. -->
+        <div class="key-head">
+          <span class="key-stamp">Map key</span>
+          <span class="key-note" id="key-note"></span>
+        </div>
+        <div class="key-block"><ul class="key" id="key-rows"></ul></div>
+        <p class="hint" id="style-state" role="status"></p>
+
+        <label class="f" id="w-poptitle">Call each place by
+          <select id="s-poptitle"></select>
+          <span class="note">The name shown when someone points at or opens a place.</span>
+        </label>
+
+        <label class="f" id="w-image" hidden><span>Show photos from <span class="hint">(optional)</span></span>
+          <select id="s-image"></select>
+          <span class="note">Photos appear when a place is opened.</span>
+        </label>
+
+        <!-- only lines and areas have anything finer to control; for pins the
+             fold would be empty, so it doesn't render at all -->
+        <details class="style-more" id="style-more" hidden>
+          <summary>Finer control</summary>
+          <div class="grid2">
+            <label class="f" id="w-linewidth" hidden>Line width
+              <select id="s-linewidth"><option value="1">Thin</option><option value="2" selected>Regular</option><option value="3.5">Bold</option><option value="5">Heavy</option></select>
             </label>
-            <label class="f" id="w-value" hidden><span id="w-value-lbl">Shade areas by</span>
-              <select id="s-value"></select>
+            <label class="f" id="w-linedash" hidden style="flex-direction:row; align-items:center; gap:.5rem"><input type="checkbox" id="s-linedash" style="width:auto" /> Dashed line</label>
+            <label class="f" id="w-fillopacity" hidden>Fill strength
+              <select id="s-fillopacity"><option value="0.25">Light</option><option value="0.45" selected>Medium</option><option value="0.7">Strong</option></select>
             </label>
-            <label class="f" id="w-palette" hidden>Colour ramp<select id="s-palette"></select></label>
-            <label class="f">When someone clicks a feature, the popup is titled by
-              <select id="s-poptitle"></select>
-            </label>
-            <label class="f" id="w-image"><span>Show photos in the popup from <span class="hint">(optional)</span></span><select id="s-image"></select></label>
           </div>
-          <!-- steering, not blocking: shown when shading is the wrong encoding -->
-          <p class="kind-steer" id="kind-steer" hidden>That column looks like a count — counts compare better as bubbles (circle size shows the number). Light-to-dark shading suits rates and averages.</p>
+        </details>
 
-          <details class="style-more">
-            <summary>Finer control</summary>
-            <div class="grid2">
-              <label class="f" id="w-linewidth" hidden>Line width
-                <select id="s-linewidth"><option value="1">Thin</option><option value="2" selected>Regular</option><option value="3.5">Bold</option><option value="5">Heavy</option></select>
-              </label>
-              <label class="f" id="w-linedash" hidden style="flex-direction:row; align-items:center; gap:.5rem"><input type="checkbox" id="s-linedash" style="width:auto" /> Dashed line</label>
-              <label class="f" id="w-fillopacity" hidden>Fill opacity
-                <select id="s-fillopacity"><option value="0.25">Light</option><option value="0.45" selected>Medium</option><option value="0.7">Strong</option></select>
-              </label>
-              <label class="f">Which panel group it appears under
-                <select id="s-group"><option value="userdata">Your data</option><option value="agri">Crops &amp; value chain</option><option value="base">Base</option><option value="eco">Ecological landscape</option></select>
-              </label>
-            </div>
-            <p class="hint" id="style-state" style="margin:.4rem 0 0"></p>
-            <details class="frag"><summary>Layer definition (JSON)</summary><pre id="frag-json"></pre></details>
-          </details>
+        <div class="s4-foot">
+          <p class="assure">Only you can see this preview. Nothing changes on the atlas until you add it.</p>
+          <div class="step-nav">
+            <button class="btn" id="commit">Add to the atlas</button>
+            <button class="btn secondary" id="back-3">← Back</button>
+            <button class="btn secondary" id="discard">Discard this upload</button>
+          </div>
+          <div id="msg-commit"></div>
+          <p class="hint" id="commit-auth" hidden></p>
         </div>
-
-        <div class="step-nav">
-          <button class="btn" id="commit">Add to the atlas →</button>
-          <button class="btn secondary" id="back-3">← Back</button>
-          <button class="btn secondary" id="discard">Discard</button>
-        </div>
-        <div id="msg-commit"></div>
-        <p class="hint" id="commit-auth" hidden></p>
       </div>
 
       <iframe id="db-preview-frame" title="Layer preview"></iframe>
@@ -289,9 +311,26 @@
   var S = {
     dataset: "", canonical: null, names: [], result: null, options: null,
     step: 1, me: null, styleReady: false, spatial: false,
-    editToken: null,
+    editToken: null, oneColour: "rust",
   };
   var CLASS_LABEL = { point: "points", line: "lines", polygon: "areas (polygons)" };
+
+  /* The map key is drawn by the product's one swatch renderer (iconkit.js —
+     the same table the map and the edit screen draw from, so this key cannot
+     disagree with them). Hosts don't all load it, so the module fetches it
+     itself; until it lands the key shows plain colour marks, redrawn on
+     arrival. The cache tag rides along from the host's own databench tag. */
+  if (!window.LokaIcons && !document.querySelector("script[data-loka-iconkit]")) {
+    (function () {
+      var here = document.querySelector('script[src*="databench.js"]');
+      var m = here && (here.getAttribute("src") || "").match(/[?&](v=[^&]+)/);
+      var el = document.createElement("script");
+      el.src = VIEWER + "iconkit.js" + (m ? "?" + m[1] : "");
+      el.setAttribute("data-loka-iconkit", "1");
+      el.onload = function () { if (S.step === 4) syncKey(); };
+      document.head.appendChild(el);
+    })();
+  }
 
   /* ================= steps ================= */
 
@@ -482,7 +521,7 @@
     S.canonical = canonical;
     S.result = null;
     S.styleReady = false;
-    if ($("#commit")) $("#commit").textContent = "Add to the atlas →";
+    if ($("#commit")) $("#commit").textContent = "Add to the atlas";
     $("#sheet-pick").hidden = true;
     var g = canonical.geoms && canonical.meta.geometry;
     setTrack(!!g);
@@ -904,8 +943,6 @@
       row.querySelector('[data-a="skip"]').onclick = function () { resolveFix([{ row: f.row, skip: true }]); };
       list.appendChild(row);
     });
-
-    $("#frag-json").textContent = JSON.stringify(result.fragment, null, 2);
   }
 
   function buildColumns() {
@@ -915,7 +952,7 @@
       else if (c === $("#s-parent").value) r = "adminParent";
       else if (c === $("#s-lat").value) r = "latitude";
       else if (c === $("#s-lng").value) r = "longitude";
-      else if (c === $("#s-value").value) r = "value";
+      else if (c === valueColumnChosen()) r = "value";
       return { name: c, role: r };
     });
   }
@@ -927,7 +964,7 @@
     return S.names.map(function (c) {
       var r = "text";
       if (c === placeName) r = "placeName";
-      else if (c === $("#s-value").value) r = "value";
+      else if (c === valueColumnChosen()) r = "value";
       return { name: c, role: r };
     });
   }
@@ -1003,7 +1040,12 @@
     var draft = S.step === 4;   // report-only while placing; live draft once previewing
     runApply(function () {
       return api("layers/resolve", { method: "POST", body: { importId: S.result.importId, fixes: fixes, draft: draft } })
-        .then(function (r) { S.result = r; renderReport(r); if (draft && r.draftDataset) refreshPreview(r.draftDataset); })
+        .then(function (r) {
+          S.result = r;
+          renderReport(r);
+          if (draft) syncKey();
+          if (draft && r.draftDataset) refreshPreview(r.draftDataset);
+        })
         .catch(function (e) { msg(S.step === 4 ? "#msg-commit" : "#msg-place", esc(errMsg(e))); });
     });
   }
@@ -1072,11 +1114,12 @@
     f.src = VIEWER + "?embed=map&dataset=" + encodeURIComponent(draftId) + "&v=" + (++previewSeq);
   }
 
-  // "how it looks" asks two questions — the shape a row is drawn as, and the
-  // rule that colours it — and derives the server's kind from the pair. Pairs
-  // with no kind behind them are never offered, so apply can't 400.
-  var SHAPE_LABEL = { pin: "Pin", bubble: "Bubble — a sized circle", border: "Border — the area's boundary shape", line: "Line" };
-  var COLOUR_LABEL = { one: "One colour", category: "By category", value: "Light to dark by a number" };
+  /* "How it looks" asks two questions — the shape a place is drawn as, and
+     what colours (or sizes, or shades) it — and derives the server's kind
+     from the pair. Both questions offer only answers the data can actually
+     give, named in plain words; a question with one possible answer is not
+     asked at all. The colour question is the edit screen's own: columns that
+     can carry colour, each with its count of kinds, plus one flat colour. */
 
   // The geometry class the PLACEMENT produced, not what the upload carried:
   // a lat/lng CSV is points however tabular the file looked, an admin-name
@@ -1087,18 +1130,36 @@
     return strat === "adminJoin" ? "polygon" : "point";
   }
 
-  // Numeric columns a bubble/choropleth could encode — lat/lng aren't values.
+  /* The server profiles every column on each apply (which could carry colour,
+     how many kinds, which are tag sets) — these read that profile instead of
+     re-deriving it, so this screen and the edit screen answer from the same
+     truth. */
+  function resultProfiles() { return (S.result && S.result.profiles) || []; }
+  function profileOf(name) {
+    return resultProfiles().filter(function (p) { return p.name === name; })[0] || null;
+  }
+  function catColumns() {
+    return resultProfiles().filter(function (p) { return p.categorical && p.name.charAt(0) !== "_"; });
+  }
+
+  // Numeric columns a circle/shading could use — lat/lng aren't values.
   function numericColumns() {
     var drop = {};
     ((S.result && S.result.columns) || []).forEach(function (c) {
       if (c.role === "latitude" || c.role === "longitude") drop[c.name] = 1;
     });
+    var LATLNG = /^(lat|latitude|lon|lng|long|longitude)$/i;
+    var profs = resultProfiles();
+    if (profs.length) {
+      return profs.filter(function (p) {
+        return p.type === "number" && p.name.charAt(0) !== "_" && !drop[p.name] && !LATLNG.test(p.name);
+      }).map(function (p) { return p.name; });
+    }
     if (S.canonical) {
       return S.canonical.schema.filter(function (c) {
-        return c.type === "number" && !c.ignored && !drop[c.name];
+        return c.type === "number" && !c.ignored && !drop[c.name] && !LATLNG.test(c.name);
       }).map(function (c) { return c.name; });
     }
-    // editing an existing layer: rows live on the server — trust the saved spec
     var v = S.result && S.result.spec && S.result.spec.valueColumn;
     return v ? [v] : [];
   }
@@ -1120,33 +1181,13 @@
     return seen > 0;
   }
 
-  function asChoices(values, labels) {
-    return values.map(function (v) { return { value: v, label: labels[v] }; });
-  }
-
-  // the pair → kind mapping. null = no kind exists for the pair, so the
-  // option-building below must never offer it.
-  function kindFromShapeColour(shape, colour) {
-    if (colour === "category") return "category";
-    if (colour === "value") return shape === "border" ? "choropleth" : null;
-    return { pin: "markers", bubble: "bubble", border: "polygon", line: "line" }[shape] || null;
-  }
-
-  // spec.kind → the pair the two selects show. Category is the one kind whose
-  // shape depends on the placement: an admin-name join collapses point kinds
-  // (markers / category / bubble) to centroids on the server, so category
-  // reads as Pin there; uploaded polygon shapes keep their areas.
-  function shapeColourFromKind(kind) {
-    if (kind === "category") {
-      var cls = placedClass();
-      var shape = cls === "line" ? "line" : (cls === "polygon" && S.spatial) ? "border" : "pin";
-      return { shape: shape, colour: "category" };
-    }
-    if (kind === "choropleth") return { shape: "border", colour: "value" };
-    if (kind === "bubble") return { shape: "bubble", colour: "one" };
-    if (kind === "polygon") return { shape: "border", colour: "one" };
-    if (kind === "line") return { shape: "line", colour: "one" };
-    return { shape: "pin", colour: "one" };
+  // the shape answers, in the words of what will actually be drawn
+  function shapeLabelFor(v) {
+    var joined = !S.spatial && placedClass() === "polygon";   // a name-matched table
+    if (v === "pin") return joined ? "A pin at the middle of each area" : "A pin";
+    if (v === "bubble") return "A circle sized by a number";
+    if (v === "border") return joined ? "The matched area" : "The area from your file";
+    return "A line";
   }
 
   function shapeChoices() {
@@ -1154,8 +1195,8 @@
     var out;
     if (cls === "line") out = ["line"];
     else if (cls === "polygon") {
-      // an admin-name join can hand back centroids, so pins are honest there;
-      // an uploaded polygon file is always drawn as areas by the server
+      // an admin-name join can hand back centroid pins honestly; an uploaded
+      // polygon file is always drawn as areas by the server
       out = S.spatial ? ["border"] : ["border", "pin"];
       // sized circles need a number to size by (shapes collapse to centroids)
       if (numericColumns().length) out.push("bubble");
@@ -1163,54 +1204,301 @@
       out = ["pin"];
       if (numericColumns().length) out.push("bubble");
     }
-    return asChoices(out, SHAPE_LABEL);
+    return out.map(function (v) { return { value: v, label: shapeLabelFor(v) }; });
   }
 
-  function colourChoices(shape) {
-    var out = ["one"];
-    // category on an admin join renders centroid pins (see the server's
-    // transform), so it's offered under Pin there — Border never lies about
-    // the shape it will draw
-    if (shape === "pin" || shape === "line" || (shape === "border" && S.spatial)) out.push("category");
-    if (shape === "border") out.push("value");
-    return asChoices(out, COLOUR_LABEL);
+  // what the colour question asks depends on the shape — the edit screen's
+  // own table of words (its COLOUR_MODES)
+  function colourLabelFor(shape) {
+    return shape === "bubble" ? "Size circles by"
+      : shape === "border" ? "Colour areas by"
+      : shape === "line" ? "Colour lines by"
+      : "Colour places by";
+  }
+
+  /* The colour answers. Option values carry their meaning ("cat:categories",
+     "num:visitors", "one") so one control holds the whole rule — and a later
+     control that picks MORE than one rule at a time can reuse the same
+     encoding without reshaping what apply reads. */
+  function colourOptions(shape) {
+    var opts = [];
+    // category on an admin join renders centroid pins (the server's
+    // transform), so it's offered under pins there; uploaded shapes keep
+    // their own geometry and can carry category colours directly
+    var canCat = shape === "pin" || shape === "line" || (shape === "border" && S.spatial);
+    if (canCat) catColumns().forEach(function (p) {
+      opts.push({ value: "cat:" + p.name, label: p.name + " — " + p.kinds + " kinds" });
+    });
+    if (shape === "bubble" || shape === "border") numericColumns().forEach(function (n) {
+      opts.push({ value: "num:" + n, label: shape === "border" ? n + " — light to dark" : n });
+    });
+    if (shape !== "bubble") opts.push({
+      value: "one",
+      label: shape === "border" ? "One colour for every area"
+        : shape === "line" ? "One colour for every line"
+        : "One colour for every place",
+    });
+    return opts;
+  }
+
+  function colourParts() {
+    var v = $("#s-colour").value || "one";
+    var i = v.indexOf(":");
+    return { mode: i < 0 ? v : v.slice(0, i), column: i < 0 ? "" : v.slice(i + 1) };
+  }
+  function valueColumnChosen() {
+    var c = colourParts();
+    return c.mode === "num" ? c.column : "";
+  }
+
+  // the pair on screen → the spec the server accepts, always a real kind
+  function derivedSpecBits() {
+    var shape = $("#s-shape").value || "pin";
+    var c = colourParts();
+    if (c.mode === "cat" && c.column) return { kind: "category", categoryColumn: c.column };
+    if (c.mode === "num" && c.column) {
+      return shape === "bubble"
+        ? { kind: "bubble", valueColumn: c.column }
+        : { kind: "choropleth", valueColumn: c.column };
+    }
+    return { kind: { pin: "markers", border: "polygon", line: "line", bubble: "bubble" }[shape] || "markers" };
+  }
+
+  // spec.kind → the pair the two questions show. Category is the one kind
+  // whose shape depends on the placement (an admin-name join collapses point
+  // kinds to centroids, so category reads as a pin there).
+  function seedFromSpec(spec) {
+    var kind = spec.kind || "markers";
+    var cls = placedClass();
+    var shape =
+      kind === "choropleth" || kind === "polygon" ? "border"
+      : kind === "bubble" ? "bubble"
+      : kind === "line" ? "line"
+      : kind === "category" ? (cls === "line" ? "line" : (cls === "polygon" && S.spatial) ? "border" : "pin")
+      : "pin";
+    var colour = "one";
+    if (kind === "category") {
+      var cat = spec.categoryColumn || (catColumns()[0] || {}).name || "";
+      colour = cat ? "cat:" + cat : "one";
+    } else if (kind === "choropleth" || kind === "bubble") {
+      var num = spec.valueColumn || numericColumns()[0] || "";
+      colour = num ? "num:" + num : "one";
+    }
+    return { shape: shape, colour: colour };
   }
 
   // placement can change between visits to this step (a name-join hands back
-  // areas, coordinates hand back points), so the shape list follows the placed
-  // class — keeping the current shape when it's still offered
+  // areas, coordinates hand back points), so both lists follow the placed
+  // class — keeping the current answer when it's still offered
   function syncShapeChoices() {
     var shapes = shapeChoices();
     var sel = $("#s-shape");
-    var have = Array.prototype.map.call(sel.options, function (o) { return o.value; }).join("|");
-    if (have === shapes.map(function (s) { return s.value; }).join("|")) return;
+    var have = Array.prototype.map.call(sel.options, function (o) { return o.value + "·" + o.textContent; }).join("|");
+    if (have === shapes.map(function (s) { return s.value + "·" + s.label; }).join("|")) return;
     var keep = sel.value;
     fillSelect("#s-shape", shapes, shapes.some(function (s) { return s.value === keep; }) ? keep : shapes[0].value);
   }
-
-  // a shape change can orphan the colour rule (Border + light-to-dark, then
-  // Pin): rebuild the rule list for the new shape and fall back to one colour,
-  // so the pair on screen always maps to a kind the server accepts
   function syncColourChoices() {
-    var rules = colourChoices($("#s-shape").value);
+    var rules = colourOptions($("#s-shape").value);
     var sel = $("#s-colour");
-    var have = Array.prototype.map.call(sel.options, function (o) { return o.value; }).join("|");
-    if (have === rules.map(function (r) { return r.value; }).join("|")) return;
-    var keep = sel.value;
-    fillSelect("#s-colour", rules, rules.some(function (r) { return r.value === keep; }) ? keep : "one");
+    var have = Array.prototype.map.call(sel.options, function (o) { return o.value + "·" + o.textContent; }).join("|");
+    if (have !== rules.map(function (r) { return r.value + "·" + r.label; }).join("|")) {
+      var keep = sel.value;
+      var fallback = rules.some(function (r) { return r.value === "one"; }) ? "one" : (rules[0] ? rules[0].value : "");
+      fillSelect("#s-colour", rules, rules.some(function (r) { return r.value === keep; }) ? keep : fallback);
+    }
   }
 
-  // A select holding one option asks a question with a single answer. Say the
-  // answer in words instead and keep the select in the DOM — hidden, still the
-  // thing applyStyle reads — so the control comes back the moment the data
-  // offers a second option.
-  function lockWhenSingle(wrapSel, selSel) {
-    var wrap = $(wrapSel), sel = $(selSel);
-    if (!wrap || !sel) return;
-    var single = sel.options.length === 1;
-    wrap.classList.toggle("one-option", single);
-    var said = wrap.querySelector(".f-fixed");
-    if (said) said.textContent = single ? sel.options[0].textContent : "";
+  /* ---- the five named colours and the ramps, for the swatch chips only.
+     Both mirror api/lib/fragment.js; the key itself is always drawn from the
+     server's legend, so if fragment.js ever changes the key stays truthful.
+     (The edit screen carries the same two tables — a shared home is owed.) */
+  var MARKER_COLORS = { rust: "#A6522F", moss: "#40573D", ochre: "#B0863A", sienna: "#9C5A34", slate: "#5f7f92" };
+  var MARKER_NAMES = { rust: "Rust", moss: "Moss", ochre: "Ochre", sienna: "Sienna", slate: "Slate" };
+  var PALETTE_NAMES = {
+    greens: "Greens", blues: "Blues", rust: "Rust", ylorbr: "Sand to brown",
+    brteal: "Brown to teal", tealbr: "Teal to brown", purples: "Purples",
+  };
+  function paletteOptions() {
+    return ((S.options && S.options.palettes) || []).map(function (k) {
+      return { value: k, label: PALETTE_NAMES[k] || k };
+    });
+  }
+
+  function renderSwatches() {
+    var host = $("#swatches");
+    host.innerHTML = "";
+    Object.keys(MARKER_COLORS).forEach(function (k) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "sw";
+      b.setAttribute("aria-pressed", String(S.oneColour === k));
+      b.setAttribute("aria-label", MARKER_NAMES[k]);
+      b.title = MARKER_NAMES[k];
+      b.innerHTML = '<i style="--c:' + MARKER_COLORS[k] + '"></i>';
+      b.onclick = function () {
+        S.oneColour = k;
+        host.querySelectorAll(".sw").forEach(function (x) { x.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        scheduleApply(applyStyle);
+      };
+      host.appendChild(b);
+    });
+  }
+
+  /* ---- the live map key: output, not a control ----
+     Rows come from the server's legend for the draft; marks are drawn by
+     iconkit (the map's own table); counts are tallied from the draft's own
+     rows exactly as the edit screen tallies them. One approach in two places
+     on purpose: the earlier legend/map mismatch came from a second renderer. */
+  var LEG_SHAPES = { box: 1, dot: 1, line: 1, dashed: 1, triangle: 1, diamond: 1 };
+  function swatchFor(it) {
+    if (!window.LokaIcons) {   // iconkit still loading — plain mark, redrawn on load
+      return '<span class="leg-swatch ' + (LEG_SHAPES[it.shape] ? it.shape : "box") +
+        '" style="--c:' + esc(it.color || "") + '"></span>';
+    }
+    var row = it;
+    if (it.shape && !LEG_SHAPES[it.shape]) row = Object.assign({}, it, { shape: "box" });
+    return LokaIcons.swatchHTML(row, esc);
+  }
+
+  function renderKey(rows, tally, total) {
+    var ul = $("#key-rows"), note = $("#key-note");
+    var shape = $("#s-shape").value;
+    var unit = shape === "border" ? "area" : shape === "line" ? "line" : "place";
+    var totalText = total != null ? total + " " + unit + (total === 1 ? "" : "s") : "";
+    // a shaded scale reads as one graduated bar with its endpoints — the same
+    // shape the viewer's own key uses, so the author sees what a reader will
+    if (rows && !Array.isArray(rows) && rows.ramp) {
+      ul.innerHTML = '<li class="k-ramp"><span class="k-ramp-bar">' +
+        rows.ramp.map(function (c) { return '<i style="--c:' + esc(c) + '"></i>'; }).join("") +
+        '</span><span class="k-ramp-ends"><span>' + esc(rows.min) + "</span>" +
+        (rows.unit ? "<span>" + esc(rows.unit) + "</span>" : "") +
+        "<span>" + esc(rows.max) + "</span></span></li>";
+      note.textContent = totalText;
+      return;
+    }
+    rows = Array.isArray(rows) ? rows : [];
+    var single = rows.length === 1 && !rows[0].categorical;
+    var counted = tally && tally.matched > 0 ? tally : null;
+    var keptSum = 0;
+    if (counted) {
+      rows.forEach(function (it) {
+        if (it.categorical && it.label !== "other" && counted.counts[it.label]) {
+          keptSum += counted.counts[it.label];
+        }
+      });
+    }
+    ul.innerHTML = rows.map(function (it) {
+      var n = null;
+      if (single && total != null) n = total;
+      else if (counted && it.categorical) {
+        n = it.label === "other" ? Math.max(0, counted.total - keptSum) : counted.counts[it.label];
+      }
+      return "<li>" + swatchFor(it) + '<span class="k-label">' + esc(it.label) + "</span>" +
+        (n != null ? '<span class="k-count">' + n + "</span>" : "") + "</li>";
+    }).join("");
+    var kinds = rows.filter(function (it) { return it.categorical; }).length;
+    note.textContent =
+      (kinds >= 2 ? kinds + " kinds" + (totalText ? " · " : "") : "") + totalText;
+  }
+
+  /* Count each kind from the draft's own rows — the edit screen's tally. For
+     a multi-value column the server derives the primary tag onto "_category"
+     (fragment.js); counting THAT counts exactly what the map colours by. */
+  function tallyFile(url, col) {
+    var p = profileOf(col);
+    var derived = !!(p && p.multiValue);
+    return fetch(url + (url.indexOf("?") < 0 ? "?v=" : "&v=") + Date.now())
+      .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+      .then(function (g) {
+        var feats = (g && g.features) || [];
+        var counts = {}, multi = 0, matched = 0;
+        feats.forEach(function (f) {
+          var pr = f.properties || {};
+          var raw = pr[col];
+          var key = derived ? pr._category : (raw == null ? "" : String(raw).slice(0, 40));
+          if (key != null && key !== "") { counts[key] = (counts[key] || 0) + 1; matched++; }
+          if (derived && raw != null) {
+            var s = String(raw).trim();
+            if (s && s.slice(0, 40) !== pr._category) multi++;
+          }
+        });
+        return { counts: counts, multi: multi, total: feats.length, matched: matched };
+      })
+      .catch(function () { return null; });
+  }
+
+  var keySeq = 0;
+  function syncKey() {
+    if (!S.result) return;
+    var frag = S.result.fragment;
+    var rows = (frag && frag.legend) || [];
+    var total = S.result.stats && S.result.stats.features != null ? S.result.stats.features : null;
+    renderKey(rows, null, total);
+    syncMultiNote(null);
+    var c = colourParts();
+    var draft = S.result.draftDataset;
+    if (c.mode !== "cat" || !draft || !frag || !frag.source) return;
+    var mine = ++keySeq;
+    tallyFile(VIEWER + "datasets/" + encodeURIComponent(draft) + "/" + frag.source, c.column)
+      .then(function (t) {
+        if (mine !== keySeq || !t || S.step !== 4) return;
+        renderKey(rows, t, total);
+        syncMultiNote(t);
+      });
+  }
+
+  // said once, only when a multi-value column is chosen, with the count from
+  // the data — the first value decides the colour (the edit screen's words)
+  function syncMultiNote(tally) {
+    var note = $("#multi-note");
+    var c = colourParts();
+    var p = c.mode === "cat" ? profileOf(c.column) : null;
+    if (!p || !p.multiValue || !tally || !tally.multi) { note.hidden = true; return; }
+    note.hidden = false;
+    note.textContent = (tally.multi === 1
+      ? "1 place carries two or more " + c.column
+      : tally.multi + " places carry two or more " + c.column) +
+      " — the first one decides the colour.";
+  }
+
+  /* Why a tag column is not offered for colour. The server flags tag sets
+     (tagList: rich for opening and searching places, useless for colouring);
+     the count of distinct tags is measured from the rows in hand. */
+  function distinctTagCount(col) {
+    if (!S.canonical) return 0;
+    var vals = S.canonical.rows.map(function (r) { return r[col]; })
+      .filter(function (v) { return v !== null && v !== undefined && v !== ""; })
+      .map(String);
+    if (!vals.length) return 0;
+    var delim = null;
+    [";", ","].some(function (d) {   // the server's own delimiter rule
+      var n = vals.filter(function (v) { return v.indexOf(d) >= 0; }).length;
+      if (n >= vals.length * 0.4) { delim = d; return true; }
+      return false;
+    });
+    var seen = {}, count = 0;
+    vals.forEach(function (v) {
+      (delim ? v.split(delim) : [v]).forEach(function (t) {
+        t = t.trim().toLowerCase();
+        if (t && !seen[t]) { seen[t] = 1; count++; }
+      });
+    });
+    return count;
+  }
+  function syncTagNote() {
+    var note = $("#tag-note");
+    var tags = resultProfiles().filter(function (p) { return p.tagList; });
+    if (!tags.length) { note.hidden = true; return; }
+    note.hidden = false;
+    note.textContent = tags.map(function (p) {
+      var n = distinctTagCount(p.name);
+      return (n
+        ? p.name + " has " + n + " different tags — too many to tell apart by colour."
+        : p.name + " has too many different tags to tell apart by colour.") +
+        " They stay searchable, and they show when a place is opened.";
+    }).join(" ");
   }
 
   /* The layer name ships as the legend title on a public atlas, and the default
@@ -1238,6 +1526,28 @@
     return (stem && label === stem) ? prettyName(stem) : label;
   }
 
+  // the columns a popup could be titled by, and the server's own preference
+  // when the spec names none — the edit screen's rule, word for word
+  var NAMEISH = /^(name|title|label|place|description|desc|site|spot)s?$/i;
+  function titleColumns() {
+    return resultProfiles().filter(function (p) {
+      return p.type === "string" && !p.looksLikeImage && p.name.charAt(0) !== "_";
+    }).map(function (p) { return p.name; });
+  }
+  function guessTitle() {
+    var cols = titleColumns();
+    var byName = cols.filter(function (n) { return NAMEISH.test(n.trim()); })[0];
+    if (byName) return byName;
+    var nameish = resultProfiles().filter(function (p) {
+      return p.type === "string" && p.looksLikeName && !p.looksLikeImage && p.name.charAt(0) !== "_";
+    })[0];
+    return (nameish && nameish.name) || cols[0] || null;
+  }
+  function imageColumns() {
+    return resultProfiles().filter(function (p) { return p.looksLikeImage; })
+      .map(function (p) { return p.name; });
+  }
+
   function enterStyle(result) {
     var spec = result.spec || {};
     if (!S.styleReady) {
@@ -1245,43 +1555,54 @@
       // the inferred kind may not be offered for this geometry (e.g. choropleth
       // on points) — fall back to the first shape with one colour and rebuild
       // the preview so the map matches what the controls now say
-      var pair = shapeColourFromKind(spec.kind || "markers");
+      var pair = seedFromSpec(spec);
       var shapes = shapeChoices();
       if (!shapes.some(function (s) { return s.value === pair.shape; })) pair = { shape: shapes[0].value, colour: "one" };
       fillSelect("#s-shape", shapes, pair.shape);
-      var rules = colourChoices(pair.shape);
-      if (!rules.some(function (r) { return r.value === pair.colour; })) pair.colour = "one";
+      var rules = colourOptions(pair.shape);
+      if (!rules.some(function (r) { return r.value === pair.colour; })) {
+        pair.colour = rules.some(function (r) { return r.value === "one"; }) ? "one" : (rules[0] ? rules[0].value : "");
+      }
       fillSelect("#s-colour", rules, pair.colour);
-      fillSelect("#s-value", S.names, spec.valueColumn || role(result, "value"), true);
-      fillSelect("#s-catcol", S.names, spec.categoryColumn || "", true);
-      fillSelect("#s-image", S.names, spec.imageColumn || "", true);
-      fillSelect("#s-palette", S.options.palettes || [], spec.palette || "greens");
-      // colour is one question now, so one picker serves pins, bubbles, borders
-      // and lines alike — seeded from whichever slot the saved spec filled
-      fillSelect("#s-onecolour", S.options.markerColors || [],
-        (pair.shape === "border" ? spec.fillColor : pair.shape === "line" ? spec.lineColor : spec.markerColor) || spec.markerColor || "rust");
+      var imgs = imageColumns();
+      fillSelect("#s-image", imgs, spec.imageColumn && imgs.indexOf(spec.imageColumn) >= 0 ? spec.imageColumn : "", true);
+      var pals = paletteOptions();
+      fillSelect("#s-palette", pals, pals.some(function (p) { return p.value === spec.palette; }) ? spec.palette : "greens");
+      // one row of swatches serves pins, circles, borders and lines alike —
+      // seeded from whichever slot the saved spec filled
+      var flat = (pair.shape === "border" ? spec.fillColor : pair.shape === "line" ? spec.lineColor : spec.markerColor) || spec.markerColor || "rust";
+      S.oneColour = MARKER_COLORS[flat] ? flat : "rust";
+      renderSwatches();
       if (spec.lineWidth) $("#s-linewidth").value = String(spec.lineWidth);
       $("#s-linedash").checked = !!spec.lineDash;
       if (spec.fillOpacity) $("#s-fillopacity").value = String(spec.fillOpacity);
-      $("#s-group").value = ["base", "agri", "eco", "userdata"].indexOf(spec.group) >= 0 ? spec.group : "userdata";
-      fillSelect("#s-poptitle", S.names, spec.popupTitleColumn || role(result, "placeName"), true);
+      var titles = titleColumns();
+      var seedTitle = (spec.popupTitleColumn && titles.indexOf(spec.popupTitleColumn) >= 0 && spec.popupTitleColumn) ||
+        (role(result, "placeName") && titles.indexOf(role(result, "placeName")) >= 0 && role(result, "placeName")) ||
+        guessTitle();
+      if (titles.length) fillSelect("#s-poptitle", titles, seedTitle || titles[0]);
+      $("#w-poptitle").hidden = !titles.length;
       S.styleReady = true;
     }
     syncStyleVisibility();
     // however we got here — a fresh entry whose inferred kind this geometry
     // can't draw, or a return trip after the placement changed — the lists were
-    // just rebuilt, so when the derived kind disagrees with the spec the
+    // just rebuilt, so when what the controls say disagrees with the spec the
     // preview was built from, re-apply until the map matches the controls. A
     // tidied default name rides along the same way, so the atlas gets the name
     // the field is showing.
-    if (kindFromShapeColour($("#s-shape").value, $("#s-colour").value) !== (spec.kind || "markers") ||
+    var d = derivedSpecBits();
+    if (d.kind !== (spec.kind || "markers") ||
+        (d.categoryColumn || "") !== (spec.categoryColumn || "") ||
+        (d.valueColumn || "") !== (spec.valueColumn || "") ||
         $("#s-label").value !== (spec.label || "")) scheduleApply(applyStyle, 60);
     renderReport(result);
     if (result.draftDataset) refreshPreview(result.draftDataset);
+    syncKey();
     var rep = result.matchReport || {};
     var un = (rep.unmatched || []).length;
     $("#style-state").textContent = un
-      ? un + " row" + (un > 1 ? "s" : "") + " had no geometry and " + (un > 1 ? "are" : "is") + " left off the map."
+      ? un + " row" + (un > 1 ? "s" : "") + " couldn't be placed and " + (un > 1 ? "are" : "is") + " left off the map."
       : "";
     goStep(4);
   }
@@ -1289,56 +1610,53 @@
   function syncStyleVisibility() {
     syncShapeChoices();
     syncColourChoices();
-    // both lists narrow with the data — a coordinate-placed table with no
-    // numbers can only be drawn as pins, and a bubble can only be one colour
-    lockWhenSingle("#w-shape", "#s-shape");
-    lockWhenSingle("#w-colour", "#s-colour");
-    var shape = $("#s-shape").value, colour = $("#s-colour").value;
-    var kind = kindFromShapeColour(shape, colour) || "markers";
-    // each answer reveals only the follow-up it needs
-    $("#w-onecolour").hidden = colour !== "one";
-    $("#w-catcol").hidden = colour !== "category";
-    $("#w-value").hidden = !(colour === "value" || shape === "bubble");
-    // the same value select serves both encodings — say which job it's doing
-    var vl = $("#w-value-lbl");
-    if (vl) vl.textContent = shape === "bubble" ? "Size circles by" : "Shade areas by";
-    $("#w-palette").hidden = colour !== "value";
+    // a question with one possible answer is not asked — the map and the key
+    // already show what's drawn
+    $("#w-shape").hidden = $("#s-shape").options.length <= 1;
+    $("#w-colour").hidden = $("#s-colour").options.length <= 1;
+    var shape = $("#s-shape").value;
+    var c = colourParts();
+    var kind = derivedSpecBits().kind;
+    $("#lbl-colour").textContent = colourLabelFor(shape);
+    // each answer reveals only the follow-up it needs. The swatches stand in
+    // for the whole colour question when one colour is the only possibility.
+    $("#w-onecolour").hidden = !(c.mode === "one" || shape === "bubble");
+    if (!$("#w-onecolour").hidden) {
+      $("#one-colour-lbl").textContent =
+        shape === "bubble" ? "Circle colour"
+        : shape === "border" ? "Fill colour"
+        : shape === "line" ? "Line colour"
+        : "Which colour";
+    }
+    $("#w-palette").hidden = kind !== "choropleth";
     $("#w-linewidth").hidden = shape !== "line";
     $("#w-linedash").hidden = kind !== "line";
     // choropleth's opacity is fixed by the server, so only the other area kinds ask
     $("#w-fillopacity").hidden = !(shape === "border" && kind !== "choropleth");
+    // the fold renders only when something is under it (lines and areas)
+    $("#style-more").hidden = $("#w-linewidth").hidden && $("#w-linedash").hidden && $("#w-fillopacity").hidden;
     var img = $("#s-image");
-    if ($("#w-image")) $("#w-image").hidden = !img || img.options.length <= 1;
+    $("#w-image").hidden = !img || img.options.length <= 1;
     // steering, not blocking: shading an absolute count misleads (big areas
     // dominate the eye whatever their rate) — nudge towards sized circles
-    var steer = $("#kind-steer");
-    if (steer) steer.hidden = !(colour === "value" && looksLikeCount($("#s-value").value));
-    // say in words what this pair will do, so the controls aren't the only cue
-    var lead = $("#style-lead");
-    if (lead) {
-      var what = kind === "category" ? "Each value gets its own colour, an icon and a legend entry."
-        : kind === "choropleth" ? "Areas are shaded darker as the value rises, with a legend."
-        : kind === "bubble" ? "Each row is a circle sized by its number — bigger circle, bigger value."
-        : kind === "line" ? "Each row is drawn as a line."
-        : kind === "polygon" ? "Each row is drawn as a bordered area."
-        : "Each row is a pin on the map.";
-      lead.textContent = what + " The map below updates as you change these.";
-    }
+    $("#kind-steer").hidden = !(kind === "choropleth" && looksLikeCount(c.column));
+    syncTagNote();
   }
 
   function applyStyle() {
     if (!S.result) return Promise.resolve();
-    var shape = $("#s-shape").value, colour = $("#s-colour").value;
-    var one = $("#s-onecolour").value || "rust";
+    var shape = $("#s-shape").value || "pin";
+    var d = derivedSpecBits();
+    var one = S.oneColour || "rust";
     var spec = Object.assign({}, S.result.spec, {
       label: $("#s-label").value.trim() || "My data",
-      kind: kindFromShapeColour(shape, colour) || "markers",
-      group: $("#s-group").value,
-      valueColumn: $("#s-value").value || undefined,
-      categoryColumn: $("#s-catcol").value || undefined,
+      kind: d.kind || "markers",
+      group: "userdata",   // contributed layers land under "Your data"
+      valueColumn: d.valueColumn || undefined,
+      categoryColumn: d.categoryColumn || undefined,
       imageColumn: $("#s-image").value || undefined,
-      palette: $("#s-palette").value,
-      // the one picker feeds whichever slot the shape reads; markerColor always
+      palette: $("#s-palette").value || undefined,
+      // the swatches feed whichever slot the shape reads; markerColor always
       // travels so a one-colour stanza never arrives without a paint
       markerColor: one,
       lineColor: shape === "line" ? one : undefined,
@@ -1352,8 +1670,8 @@
     $("#style-state").textContent = "Updating the preview…";
     return api("layers/apply", { method: "POST", body: applyBody(true, spec) }).then(function (r) {
       S.result = r;
-      $("#frag-json").textContent = JSON.stringify(r.fragment, null, 2);
       $("#style-state").textContent = "";
+      syncKey();
       if (r.draftDataset) refreshPreview(r.draftDataset);
     }).catch(function (e) {
       $("#style-state").textContent = "";
@@ -1361,7 +1679,7 @@
     });
   }
 
-  ["#s-label", "#s-shape", "#s-colour", "#s-onecolour", "#s-value", "#s-catcol", "#s-image", "#s-palette", "#s-group", "#s-poptitle",
+  ["#s-label", "#s-shape", "#s-colour", "#s-image", "#s-palette", "#s-poptitle",
    "#s-linewidth", "#s-linedash", "#s-fillopacity"].forEach(function (sel) {
     $(sel).addEventListener("change", function () {
       syncStyleVisibility();
