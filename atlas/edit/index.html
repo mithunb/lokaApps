@@ -210,6 +210,17 @@
     #view-edit .fld .note.warnish { color:var(--color-text-secondary); }
     .fld-err { display:block; font-size:var(--t-meta); font-weight:600; color:var(--color-rust-deep); margin-top:.3rem; }
 
+    .k-ramp { display:block; }
+    .k-ramp-bar { display:flex; height:.8rem; border-radius:2px; overflow:hidden; }
+    .k-ramp-bar i { flex:1 1 0; background:var(--c); display:block; }
+    .k-ramp-ends { display:flex; justify-content:space-between; gap:.5rem;
+      margin-top:.25rem; font-size:var(--t-meta); color:var(--color-text-muted); }
+
+    /* the chosen ramp, shown at its real colours — "greens" means nothing
+       until you see it, and a ramp is the whole answer for a shaded map */
+    .ramp-preview { display:flex; margin-top:.45rem; height:.7rem; width:100%;
+      border-radius:2px; overflow:hidden; }
+    .ramp-preview i { flex:1 1 0; background:var(--c); display:block; }
     .swatches { display:flex; gap:.35rem; margin-top:.45rem; }
     .sw { width:2.75rem; height:2.75rem; display:inline-flex; align-items:center; justify-content:center;
       background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md); cursor:pointer; }
@@ -480,9 +491,14 @@
               <span class="fld-err" id="name-err" role="alert" hidden>The layer needs a name.</span>
             </label>
 
-            <label class="fld" for="f-colour" id="w-colour" hidden>Colour places by
+            <label class="fld" for="f-colour" id="w-colour" hidden><span id="lbl-colour">Colour places by</span>
               <select id="f-colour"></select>
               <span class="note warnish" id="multi-note" hidden></span>
+            </label>
+
+            <label class="fld" for="f-palette" id="w-palette" hidden>Colour ramp
+              <select id="f-palette"></select>
+              <span class="ramp-preview" id="ramp-preview" aria-hidden="true"></span>
             </label>
 
             <div class="fld" id="one-colour" hidden>
@@ -1047,6 +1063,40 @@
     // swatch chips; if fragment.js ever changes, the key stays truthful.
     var MARKER_COLORS = { rust: "#A6522F", moss: "#40573D", ochre: "#B0863A", sienna: "#9C5A34", slate: "#5f7f92" };
     var MARKER_NAMES = { rust: "Rust", moss: "Moss", ochre: "Ochre", sienna: "Sienna", slate: "Slate" };
+    // mirrors PALETTES in api/lib/fragment.js — the server owns which ramp a
+    // spec means; these are only so the choice can be seen before it is made
+    var PALETTES = {
+      greens: ["#e7e3d8", "#cdd3b4", "#a9bd8e", "#7f9c65", "#566f42", "#39502f"],
+      blues: ["#e6ebec", "#c2d2d8", "#93b1bd", "#6690a1", "#446e80", "#2d4f5e"],
+      rust: ["#f0e6dd", "#e0c4ab", "#cb9c77", "#b06f47", "#8f4d2c", "#6e371d"],
+      ylorbr: ["#efe6d9", "#ddc4a0", "#caa06f", "#a8703f", "#824e26", "#5e3618"],
+      brteal: ["#8a5a25", "#bb8f4e", "#e2cfa4", "#9fc7bd", "#4e8f86", "#2c625d"],
+      tealbr: ["#2c625d", "#4e8f86", "#9fc7bd", "#e2cfa4", "#bb8f4e", "#8a5a25"],
+      purples: ["#e9e4ea", "#cfc3d4", "#ac97b6", "#8a6e96", "#6a4d75", "#4c3454"],
+    };
+    var PALETTE_NAMES = {
+      greens: "Greens", blues: "Blues", rust: "Rust", ylorbr: "Sand to brown",
+      brteal: "Brown to teal", tealbr: "Teal to brown", purples: "Purples",
+    };
+
+    /* What "colour" means depends on what the layer draws, so the question
+       changes with it. Points ask which column classes them. Shaded areas ask
+       which number to shade by, and with which ramp. Bubbles ask which number
+       sets the size. A plain line or fill has only a colour to give.
+
+       Before this table only point layers were editable at all: everything
+       else got name and popup title and nothing more, which — once editing had
+       moved out of the wizard — left a choropleth's ramp unreachable from
+       anywhere in the product. Asking a polygon which category column to use
+       would have been the wizard's own mistake in a new place. */
+    var COLOUR_MODES = {
+      category:   { by: "cat", label: "Colour places by" },
+      markers:    { by: "cat", label: "Colour places by" },
+      choropleth: { by: "num", label: "Shade areas by", ramp: true, empty: "This layer has no number to shade by." },
+      bubble:     { by: "num", label: "Size circles by", swatch: "Circle colour", empty: "This layer has no number to size by." },
+      line:       { swatch: "Line colour" },
+      polygon:    { swatch: "Fill colour" },
+    };
     var NOTE_DEFAULT = "Only you see this until you save.";
     // the server's own title preference (pickTitleColumn), for layers whose
     // stored title is missing or points at a column the data does not have
@@ -1059,7 +1109,10 @@
       return ED.profiles.filter(function (p) { return p.name === name; })[0] || null;
     }
     function colName(x) { return x && profileOf(x) ? x : null; }
-    function snap(c) { return { name: c.name, colourBy: c.colourBy, markerColor: c.markerColor, titleBy: c.titleBy }; }
+    function snap(c) {
+      return { name: c.name, colourBy: c.colourBy, valueBy: c.valueBy,
+               palette: c.palette, markerColor: c.markerColor, titleBy: c.titleBy };
+    }
 
     function whoLine(ed) {
       var by = (ed.meta && ed.meta.addedBy) || ed.stanza.addedBy || null;
@@ -1140,34 +1193,54 @@
         if (again) ED.stanza = again;
       }
       var kind = ED.spec.kind;
-      ED.colourable = kind === "markers" || kind === "category";
+      ED.mode = COLOUR_MODES[kind] || null;
       ED.catCols = ED.profiles.filter(function (p) {
         return p.categorical && p.name.charAt(0) !== "_";
       });
-      var colourBy = null;
+      // lat/lng are numbers but shading a map by its own latitude is noise,
+      // and the server keeps them out of the spec anyway
+      ED.numCols = ED.profiles.filter(function (p) {
+        return p.type === "number" && p.name.charAt(0) !== "_" &&
+          !/^(lat|latitude|lon|lng|long|longitude)$/i.test(p.name);
+      });
+      ED.colourable = !!(ED.mode && ED.mode.by);
+      var colourBy = null, valueBy = null;
       if (kind === "category") {
         colourBy = colName(ED.spec.categoryColumn) || inferColourColumn();
         if (!colourBy) ED.colourable = false;   // nothing safe to offer
       } else if (kind === "markers") {
         colourBy = "one";
+      } else if (ED.mode && ED.mode.by === "num") {
+        valueBy = colName(ED.spec.valueColumn) ||
+          (ED.numCols[0] && ED.numCols[0].name) || null;
+        if (!valueBy) ED.colourable = false;
       }
       ED.titleCols = ED.profiles.filter(function (p) {
         return p.type === "string" && !p.looksLikeImage && p.name.charAt(0) !== "_";
       }).map(function (p) { return p.name; });
       var titleBy = colName(ED.spec.popupTitleColumn) ||
         colName(ED.stanza.popup && ED.stanza.popup.title) || guessTitle();
+      // a line's colour lives in lineColor, a polygon's in fillColor; all three
+      // draw from the same five names, so one control serves whichever applies
+      var flat = ED.spec.markerColor;
+      if (kind === "line") flat = ED.spec.lineColor || "slate";
+      else if (kind === "polygon") flat = ED.spec.fillColor || "moss";
       ED.cur = {
         name: ED.spec.label || ED.stanza.label || ED.layerId,
         colourBy: colourBy,
-        markerColor: MARKER_COLORS[ED.spec.markerColor] ? ED.spec.markerColor : "rust",
+        valueBy: valueBy,
+        palette: PALETTES[ED.spec.palette] ? ED.spec.palette : "greens",
+        markerColor: MARKER_COLORS[flat] ? flat : "rust",
         titleBy: titleBy,
       };
       ED.base = snap(ED.cur);
       // at rest the map is the committed layer, so the key mirrors ITS legend;
       // reopen's rebuilt fragment only takes over once something changes
-      ED.restRows = Array.isArray(ED.stanza.legend) && ED.stanza.legend.length
-        ? ED.stanza.legend
-        : (ED.fragment && ED.fragment.legend) || [];
+      // a shaded layer's legend is a ramp object, not a list of rows — keep it
+      // whole rather than letting the array test drop it on the floor
+      var sl = ED.stanza.legend;
+      var haveStanza = Array.isArray(sl) ? sl.length > 0 : !!(sl && sl.ramp);
+      ED.restRows = haveStanza ? sl : ((ED.fragment && ED.fragment.legend) || []);
       ED.restTally = null;
       renderControls();
       renderKey(ED.restRows, null, ED.features);
@@ -1204,8 +1277,9 @@
     function renderControls() {
       $("#f-name").value = ED.cur.name;
       $("#name-err").hidden = true;
-      var wc = $("#w-colour");
-      if (ED.colourable) {
+      var wc = $("#w-colour"), mode = ED.mode || {};
+      if (ED.colourable && mode.by === "cat") {
+        $("#lbl-colour").textContent = mode.label;
         var opts = ED.catCols.map(function (p) {
           return { value: p.name, label: p.name + " — " + p.kinds + " kinds" };
         });
@@ -1216,9 +1290,19 @@
         opts.push({ value: "one", label: "One colour for every place" });
         fillSelect($("#f-colour"), opts, ED.cur.colourBy || "one");
         wc.hidden = false;
+      } else if (ED.colourable && mode.by === "num") {
+        // shaded areas and bubbles are driven by a number, not a class
+        $("#lbl-colour").textContent = mode.label;
+        var nopts = ED.numCols.map(function (p) { return { value: p.name, label: p.name }; });
+        if (ED.cur.valueBy && !nopts.some(function (o) { return o.value === ED.cur.valueBy; })) {
+          nopts.unshift({ value: ED.cur.valueBy, label: ED.cur.valueBy });
+        }
+        fillSelect($("#f-colour"), nopts, ED.cur.valueBy);
+        wc.hidden = false;
       } else {
         wc.hidden = true;
       }
+      renderPalette();
       renderSwatches();
       syncOneColour();
       var wt = $("#w-title");
@@ -1232,6 +1316,23 @@
       } else {
         wt.hidden = true;
       }
+    }
+
+    function renderPalette() {
+      var w = $("#w-palette");
+      if (!ED.colourable || !(ED.mode && ED.mode.ramp)) { w.hidden = true; return; }
+      fillSelect($("#f-palette"), Object.keys(PALETTES).map(function (k) {
+        return { value: k, label: PALETTE_NAMES[k] || k };
+      }), ED.cur.palette);
+      paintRamp();
+      w.hidden = false;
+    }
+
+    function paintRamp() {
+      var ramp = PALETTES[ED.cur.palette] || [];
+      $("#ramp-preview").innerHTML = ramp.map(function (c) {
+        return '<i style="--c:' + esc(c) + '"></i>';
+      }).join("");
     }
 
     function renderSwatches() {
@@ -1257,8 +1358,16 @@
       });
     }
 
+    /* The flat-colour swatches serve three cases: a points layer set to one
+       colour, a bubble layer's circles, and a line or fill that has nothing
+       else to choose. The label says which, because "Which colour" beside a
+       polygon layer tells you nothing. */
     function syncOneColour() {
-      $("#one-colour").hidden = !(ED && ED.colourable && ED.cur && ED.cur.colourBy === "one");
+      if (!ED || !ED.cur) return;
+      var mode = ED.mode || {};
+      var show = (ED.colourable && mode.by === "cat" && ED.cur.colourBy === "one") || !!mode.swatch;
+      $("#one-colour").hidden = !show;
+      if (show) $("#one-colour-lbl").textContent = mode.swatch || "Which colour";
     }
 
     /* The key is output, not a control: rows come from the server's legend
@@ -1266,6 +1375,20 @@
        the same swatch code as the row legends. The counts are the one
        author-only annotation — the public key has none. */
     function renderKey(rows, tally, total) {
+      /* A sequential scale reads as one graduated bar with its endpoints, not
+         as a row per step — the same shape the viewer's own key uses, so the
+         author sees what the reader will. */
+      if (rows && !Array.isArray(rows) && rows.ramp) {
+        $("#ev-key").innerHTML =
+          '<li class="k-ramp"><span class="k-ramp-bar">' +
+          rows.ramp.map(function (c) { return '<i style="--c:' + esc(c) + '"></i>'; }).join("") +
+          '</span><span class="k-ramp-ends"><span>' + esc(rows.min) + "</span>" +
+          (rows.unit ? "<span>" + esc(rows.unit) + "</span>" : "") +
+          "<span>" + esc(rows.max) + "</span></span></li>";
+        $("#key-note").textContent = total != null
+          ? total + (total === 1 ? " area" : " areas") : "";
+        return;
+      }
       rows = Array.isArray(rows) ? rows : [];
       var single = rows.length === 1 && !rows[0].categorical;
       var counted = tally && tally.matched > 0 ? tally : null;
@@ -1339,7 +1462,8 @@
       var name = $("#f-name").value.trim();
       s.label = (name || s.label || ED.layerId).slice(0, 60);
       if (ED.cur.titleBy) s.popupTitleColumn = ED.cur.titleBy;
-      if (ED.colourable) {
+      var mode = ED.mode || {};
+      if (ED.colourable && mode.by === "cat") {
         if (ED.cur.colourBy === "one") {
           s.kind = "markers";
           s.markerColor = ED.cur.markerColor;
@@ -1348,16 +1472,26 @@
           s.kind = "category";
           s.categoryColumn = ED.cur.colourBy;
         }
+      } else if (ED.colourable && mode.by === "num" && ED.cur.valueBy) {
+        s.valueColumn = ED.cur.valueBy;
+        if (mode.ramp) s.palette = ED.cur.palette;
+        else s.markerColor = ED.cur.markerColor;
       }
+      // a flat line or fill names its colour in its own field
+      if (s.kind === "line") s.lineColor = ED.cur.markerColor;
+      else if (s.kind === "polygon") s.fillColor = ED.cur.markerColor;
       return s;
     }
 
     function edDirty() {
       if (!ED || !ED.ready) return false;
-      var c = ED.cur, b = ED.base;
+      var c = ED.cur, b = ED.base, mode = ED.mode || {};
+      var flat = (c.colourBy === "one") || !!mode.swatch;
       return $("#f-name").value.trim() !== b.name.trim() ||
         c.colourBy !== b.colourBy ||
-        (c.colourBy === "one" && c.markerColor !== b.markerColor) ||
+        c.valueBy !== b.valueBy ||
+        (mode.ramp && c.palette !== b.palette) ||
+        (flat && c.markerColor !== b.markerColor) ||
         c.titleBy !== b.titleBy;
     }
 
@@ -1571,18 +1705,29 @@
     $("#f-name").addEventListener("input", function () {
       if (!ED || !ED.ready) return;
       ED.cur.name = this.value;
-      // the name never reloads the map — it appears only in this panel and, for
-      // a one-colour layer, as the key's single row: patch that row in place
-      if (ED.cur.colourBy === "one") {
-        var lab = document.querySelector("#ev-key .k-label");
-        if (lab) lab.textContent = this.value.trim().slice(0, 40) || ED.base.name;
+      // the name never reloads the map — it appears only in this panel and, on
+      // any single-row key (one colour, a line, a fill), as that row's label:
+      // patch it in place. A key with many rows names classes, not the layer.
+      var labels = document.querySelectorAll("#ev-key .k-label");
+      if (labels.length === 1) {
+        labels[0].textContent = this.value.trim().slice(0, 40) || ED.base.name;
       }
       syncSaveBar();
     });
+    // one select, two meanings: a class column for points, a number for
+    // shaded areas and bubbles — the mode decides which field it writes
     $("#f-colour").addEventListener("change", function () {
       if (!ED || !ED.ready) return;
-      ED.cur.colourBy = this.value;
+      if (ED.mode && ED.mode.by === "num") ED.cur.valueBy = this.value;
+      else ED.cur.colourBy = this.value;
       syncOneColour();
+      syncSaveBar();
+      scheduleApply();
+    });
+    $("#f-palette").addEventListener("change", function () {
+      if (!ED || !ED.ready) return;
+      ED.cur.palette = this.value;
+      paintRamp();
       syncSaveBar();
       scheduleApply();
     });

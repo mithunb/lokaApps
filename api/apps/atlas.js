@@ -1655,6 +1655,22 @@ function transform(session) {
    came from is the one whose value starts with it on essentially every row.
    Measured on a real 66-place layer: the true column scores 100% and every
    other column scores 0% — the separation is not close. */
+/* The other way a layer records what classes it: a MapLibre match expression
+   in its paint, with no markerBy beside it. The column is named inside the
+   expression — ["match", ["to-string", ["get", "status"]], ...] — so pull it
+   back out rather than reading the layer as a flat one-colour map and
+   flattening it for real on the next save. */
+function columnFromMatch(expr, columns) {
+  if (!Array.isArray(expr) || expr[0] !== 'match') return undefined;
+  let found;
+  (function walk(node) {
+    if (found || !Array.isArray(node)) return;
+    if (node[0] === 'get' && typeof node[1] === 'string') { found = node[1]; return; }
+    node.forEach(walk);
+  })(expr[1]);
+  return found && columns.includes(found) ? found : undefined;
+}
+
 function recoverCategoryColumn(rows, columns) {
   const norm = (v) => String(v == null ? '' : v).trim().toLowerCase();
   let best = null;
@@ -2596,18 +2612,20 @@ router.post('/layers/reopen', (req, res) => {
 
   // the spec it was built with when we have it; otherwise read it back off the
   // stanza as faithfully as the stanza allows
+  const matchCol = columnFromMatch(layer.paint && layer.paint.color, columns);
+  const catCol = layer.markerBy === '_category'
+    ? recoverCategoryColumn(rows, columns)
+    : (layer.markerBy || matchCol || undefined);
   const spec = layer.spec || {
     kind: layer.type === 'marker' || layer.type === 'circle'
-      ? (layer.markerBy ? 'category'
+      ? (catCol ? 'category'
         : layer.paint && Array.isArray(layer.paint.radius) ? 'bubble'   // data-driven radius = proportional symbols
         : 'markers')
       : layer.type === 'fill' ? (layer.paint && layer.paint.fillColor && Array.isArray(layer.paint.fillColor) ? 'choropleth' : 'polygon')
       : layer.type === 'line' ? 'line' : 'markers',
     label: layer.label || layerId,
     group: layer.group || 'userdata',
-    categoryColumn: layer.markerBy === '_category'
-      ? recoverCategoryColumn(rows, columns)
-      : (layer.markerBy || undefined),
+    categoryColumn: catCol,
     popupTitleColumn: layer.popup && layer.popup.title,
     popupColumns: ((layer.popup && layer.popup.fields) || []).map((f) => f.property),
     imageColumn: (((layer.popup && layer.popup.fields) || []).find((f) => f.type === 'image') || {}).property,
