@@ -42,10 +42,13 @@ BASEMAPS = [
         "attribution": "Imagery © Esri, Maxar, Earthstar Geographics",
     },
     {
+        # @2x with tileSize 256 — a 512px image drawn into a 256pt tile, which is
+        # what a retina screen needs. At 1x the whole map surface was upscaled and
+        # soft, labels worst of all, because text is where blur is visible first.
         "id": "light", "label": "Map", "default": True,
-        "tiles": ["https://a.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png",
-                  "https://b.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png",
-                  "https://c.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png"],
+        "tiles": ["https://a.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}@2x.png",
+                  "https://b.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}@2x.png",
+                  "https://c.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}@2x.png"],
         "tileSize": 256, "maxzoom": 19,
         "attribution": "© OpenStreetMap contributors © CARTO",
     },

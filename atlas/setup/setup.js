@@ -109,6 +109,15 @@
   function showHome() {
     $("#flow").hidden = true;
     $("#home").hidden = false;
+    // arriving from a delete: say so once, then take it out of the address so a
+    // refresh or a shared link does not keep announcing it
+    var gone = new URLSearchParams(location.search).get("deleted");
+    if (gone) {
+      var note = $("#deleted-note");
+      note.textContent = "“" + gone + "” was deleted.";
+      note.hidden = false;
+      history.replaceState(null, "", location.pathname);
+    }
     var list = (S.me && S.me.instances) || [];
     $("#home-sub").textContent = list.length
       ? "Open one to add data, style it, or change who can see it."

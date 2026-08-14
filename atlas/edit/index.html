@@ -250,6 +250,16 @@
     .rm-confirm p { margin:0 0 .6rem; font-size:var(--t-ui); color:var(--color-text-primary); max-width:38ch; }
     .rm-confirm .row { display:flex; gap:.5rem; flex-wrap:wrap; }
 
+    /* the one irreversible act in the product: set apart, at the end, and
+       quiet until you ask for it */
+    .del-zone { margin-top:1.5rem; padding-top:.2rem; border-top:1px solid var(--color-divider); }
+    .del-open { background:none; border:none; padding:.5rem 0; min-height:2.75rem; cursor:pointer;
+      font:inherit; font-size:var(--t-ui); color:var(--color-rust-deep); text-decoration:underline;
+      text-underline-offset:3px; }
+    .del-open:hover { text-decoration-thickness:2px; }
+    #del-confirm .fld { margin:.2rem 0 .7rem; }
+    #del-confirm input { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; }
+
     /* save/discard: do not exist until something changed, then rise pinned to
        the pane's foot */
     .save-bar { flex:0 0 auto; border-top:1px solid var(--color-divider); background:var(--color-surface);
@@ -546,7 +556,7 @@
 
   <!-- the map's own icon table, so this panel's legend cannot drift from it.
        ?v= — bump on every deploy that touches a local .js/.css; see index.html -->
-  <script src="../iconkit.js?v=20260813-3"></script>
+  <script src="../iconkit.js?v=20260814-1"></script>
   <script>
   (function () {
     "use strict";
@@ -1841,6 +1851,30 @@
         '<div class="save-row" style="margin-top:1.25rem">' +
           '<button class="btn" id="set-save">Save changes</button>' +
           '<span class="set-err" id="set-err" role="alert"></span></div>' +
+
+        /* Owner only, and last. Deleting an atlas is a different order of act
+           from deleting a layer: there is no history, no undo and no copy kept,
+           and the published link stops working for everyone who has it. So the
+           confirm is armed by typing the slug rather than by one more click —
+           the point is not friction, it is that you have to look at WHICH atlas
+           you are naming. Collaborators are not offered it at all; the API
+           refuses them, and offering a button that will be refused is a lie. */
+        (owner ? '<div class="del-zone">' +
+          '<h3 class="set-h">Delete this atlas</h3>' +
+          '<button class="linkish del-open" id="del-open">Delete “' + esc(INST.title || SLUG) + '”…</button>' +
+          '<div class="rm-confirm" id="del-confirm" hidden>' +
+            '<p>This removes the atlas, every data layer on it, and its base map. ' +
+              'Anyone with the link will get a “not found” page, and collaborators lose access. ' +
+              'There is no undo and no copy kept.</p>' +
+            '<label class="fld">Type <b>' + esc(SLUG) + '</b> to confirm' +
+              '<input type="text" id="del-slug" autocomplete="off" spellcheck="false" ' +
+                'aria-describedby="del-err" placeholder="' + esc(SLUG) + '" /></label>' +
+            '<div class="row">' +
+              '<button class="btn secondary small" id="del-no">Keep it</button>' +
+              '<button class="btn danger small" id="del-yes" disabled>Delete permanently</button>' +
+            "</div>" +
+            '<span class="set-err" id="del-err" role="alert"></span>' +
+          "</div></div>" : "") +
       "</div>";
     }
 
@@ -2041,6 +2075,61 @@
       setTimeout(tick, 2500);
     }
 
+    /* Delete. The confirm arms only on an exact slug match, so the last thing
+       you do before losing an atlas is read its name and type it. Nothing is
+       optimistic: the sheet stays put until the server says it is gone, and
+       then we leave for the atlas list rather than sitting in an editor whose
+       atlas no longer exists. */
+    function wireDelete(scrim) {
+      var open = scrim.querySelector("#del-open");
+      if (!open) return;                       // collaborators never see this
+      var box = scrim.querySelector("#del-confirm"),
+          slug = scrim.querySelector("#del-slug"),
+          yes = scrim.querySelector("#del-yes"),
+          no = scrim.querySelector("#del-no"),
+          err = scrim.querySelector("#del-err");
+
+      function close() {
+        box.hidden = true; open.hidden = false;
+        slug.value = ""; yes.disabled = true; err.textContent = "";
+        open.focus();
+      }
+      open.onclick = function () {
+        open.hidden = true; box.hidden = false;
+        slug.focus();
+      };
+      no.onclick = close;
+      slug.addEventListener("input", function () {
+        yes.disabled = this.value.trim() !== SLUG;
+        err.textContent = "";
+      });
+      // Enter in the field is the same commitment as the button, but only once
+      // the name matches — otherwise it is a stray keystroke, not a decision
+      slug.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") { e.preventDefault(); if (!yes.disabled) yes.click(); }
+      });
+      yes.onclick = function () {
+        if (slug.value.trim() !== SLUG) return;
+        yes.disabled = true; no.disabled = true;
+        yes.textContent = "Deleting…";
+        err.textContent = "";
+        api("instances/" + encodeURIComponent(SLUG), { method: "DELETE" })
+          .then(function () {
+            // the editor's subject is gone; there is nothing here to return to
+            location.href = "../setup/?deleted=" + encodeURIComponent(INST.title || SLUG);
+          })
+          .catch(function (e) {
+            yes.textContent = "Delete permanently";
+            no.disabled = false;
+            yes.disabled = slug.value.trim() !== SLUG;
+            err.textContent = errMsg(e);
+            if (e && (e._status === 401 || e.needsAuth)) {
+              gate("Sign in first", "Deleting an atlas needs the email it belongs to.", true);
+            }
+          });
+      };
+    }
+
     function openSettings(land) {
       var sheet = openDialog(settingsHTML(), function (scrim) {
         regionInit(scrim);
@@ -2056,6 +2145,7 @@
         var go = scrim.querySelector("#inv-go");
         if (go) go.onclick = function () { invite(scrim); };
         scrim.querySelector("#set-save").onclick = function () { saveIdentity(scrim, this); };
+        wireDelete(scrim);
       }, function () {
         var scrim = dialogStack[dialogStack.length - 1].scrim;
         if (!identityDirty(scrim) || scrim.__warned) return true;

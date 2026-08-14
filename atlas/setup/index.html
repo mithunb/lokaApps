@@ -192,6 +192,9 @@
     <section id="home" hidden>
       <h1>Your atlases</h1>
       <p class="lede" id="home-sub"></p>
+      <!-- the editor sends you here after a delete; without a word the list just
+           silently has one fewer row and you cannot tell it worked -->
+      <div class="msg ok" id="deleted-note" hidden></div>
       <div class="mine" id="mine"></div>
       <div class="btnrow"><button class="btn" id="new-atlas">Build a new atlas</button></div>
     </section>
@@ -290,6 +293,6 @@
   </div>
 
   <!-- ?v= — bump on every deploy that touches a local .js/.css; see index.html -->
-  <script src="./setup.js?v=20260813-3"></script>
+  <script src="./setup.js?v=20260814-1"></script>
 </body>
 </html>

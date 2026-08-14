@@ -15,11 +15,13 @@
   "use strict";
 
   var STEP1_HTML = `    <section class="panel step" id="db-step-1">
-      <p id="dataset-known" hidden>Adding data to <b id="dataset-name"></b>. <a href="#" id="dataset-change">Choose a different atlas</a></p>
-      <label class="f" id="dataset-ask" style="max-width:24rem">Which atlas?
-        <input type="text" id="f-dataset" placeholder="dataset id, e.g. deoria-bioregion" />
-        <span class="hint" id="dataset-hint"></span>
-      </label>
+      <!-- No "which atlas?" here. This markup only renders in standalone mode,
+           and the only standalone host is the add-data page, which is reached
+           from an atlas, is given the slug in its address, and refuses to mount
+           this bench until it has fetched that atlas and confirmed you may edit
+           it. The atlas is named in the page header above. Asking again — worse,
+           asking for a raw dataset id — was a leftover from when this was a page
+           you could land on cold. -->
       <div class="drop" id="drop">
         <svg class="drop-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg>
         <b>Drop a CSV, Excel, JSON, GeoJSON, KML or GPX file here</b>
@@ -306,14 +308,15 @@
   /* ================= step 1 · upload + sign-in ================= */
 
   var qsDataset = MODE === "standalone" ? new URLSearchParams(location.search).get("dataset") : (opts.dataset || "");
-  if (qsDataset && $("#f-dataset")) $("#f-dataset").value = qsDataset;
   S.dataset = opts.dataset || qsDataset || "";
   if (opts.editToken) S.editToken = opts.editToken;
 
+  // The atlas is settled before this bench exists: standalone gets it from the
+  // address (and its host has already checked it), embedded gets it from the
+  // host once the build names it. Nobody types it.
   function datasetReady() {
-    var f = $("#f-dataset");
-    S.dataset = f ? f.value.trim() : (opts.dataset || "");
-    if (!S.dataset) { msg("#msg-start", "Enter the atlas dataset id first (it's in the atlas URL after ?dataset=)."); return false; }
+    S.dataset = S.dataset || opts.dataset || "";
+    if (!S.dataset) { msg("#msg-start", "This atlas isn’t ready yet — go back and finish setting it up."); return false; }
     var navAtlas = document.getElementById("nav-atlas");
     if (navAtlas) navAtlas.href = "./?dataset=" + encodeURIComponent(S.dataset);
     return true;
@@ -372,7 +375,7 @@
 
   function loadAddedLayers() {
     if (!$("#added-layers")) return;          // embedded hosts show their own list
-    var ds = ($("#f-dataset") ? $("#f-dataset").value.trim() : S.dataset);
+    var ds = S.dataset;
     if (!ds) return;
     api("layers/list?dataset=" + encodeURIComponent(ds)).then(function (r) {
       var wrap = $("#added-layers"), list = $("#added-layers-list");
@@ -391,29 +394,7 @@
       });
     }).catch(function () { $("#added-layers").hidden = true; /* not signed in / no access */ });
   }
-  if (MODE === "standalone") {
-    loadAddedLayers();
-    $("#f-dataset").addEventListener("change", function () { showDatasetContext(); loadAddedLayers(); });
-    showDatasetContext();
-  }
-
-  // Known atlas → a statement naming it; unknown → the question.
-  function showDatasetContext() {
-    var known = $("#dataset-known"), ask = $("#dataset-ask");
-    if (!known || !ask) return;
-    var ds = ($("#f-dataset") && $("#f-dataset").value.trim()) || S.dataset;
-    if (!ds) { known.hidden = true; ask.hidden = false; return; }
-    known.hidden = false; ask.hidden = true;
-    $("#dataset-name").textContent = ds;
-    api("instances/" + encodeURIComponent(ds))
-      .then(function (inst) { if (inst && inst.title) $("#dataset-name").textContent = inst.title; })
-      .catch(function () {});
-    $("#dataset-change").onclick = function (e) {
-      e.preventDefault();
-      known.hidden = true; ask.hidden = false;
-      $("#f-dataset").focus();
-    };
-  }
+  if (MODE === "standalone") loadAddedLayers();
 
   /* ---- file intake ---- */
 

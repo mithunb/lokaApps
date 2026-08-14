@@ -92,7 +92,11 @@ def _admin_stanza(source):
                        "haloWidth": 2.2, "transform": "uppercase", "letterSpacing": 0.12, "minzoom": 7,
                        "alwaysShow": True},
         "legend": [{"color": "#B0863A", "label": "Boundary", "shape": "line"}],
-        "popup": {"title": "name", "fields": [{"label": "State", "property": "state"}]},
+        # No popup. The fill is fully transparent, so a popup here turns the whole
+        # region into an invisible click target — and all it could say is the name
+        # already written across the map by label_text and stated in the editor
+        # ("This atlas covers X"). Clicking the ground you are standing on should
+        # not produce a box telling you where you are.
     }
 
 
@@ -651,10 +655,14 @@ def labels_esri(ctx):
         "id": "labels", "group": "base", "type": "raster", "default": True,
         "label": "Place names",
         "info": "Town, village and river names on the basemap.",
+        # @2x tiles with tileSize 256: MapLibre packs a 512px image into a 256pt
+        # tile, which is what makes label text sharp on a retina screen instead
+        # of upscaled and soft. The 1x tiles were the reason place names looked
+        # blurred. Esri's reference layer has no @2x, so it stays as it is.
         "tilesByBasemap": {
-            "light": ["https://a.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png",
-                      "https://b.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png",
-                      "https://c.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png"],
+            "light": ["https://a.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}@2x.png",
+                      "https://b.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}@2x.png",
+                      "https://c.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}@2x.png"],
             "satellite": ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"],
         },
         "tileSize": 256, "attribution": "Labels © Esri, © CARTO",
