@@ -78,15 +78,34 @@
       <div id="geom-summary" class="infer-note" hidden></div>
       <!-- the first question: where are these rows? -->
       <div id="loc-first" class="loc-first" hidden></div>
-      <!-- data enrichment: one NEW categorical field derived from a text column -->
+      <!-- find themes: one NEW "themes" column suggested from the descriptive
+           columns. The suggestion arrives as chips with real counts and lands
+           in the table only when the owner keeps it. No regenerate button on
+           purpose: the same question over the same words gives the same
+           answer, so the honest retry is changing what's read. -->
       <div id="enrich-panel" class="enrich-panel" hidden>
         <div class="enrich-head">
-          <b>Data enrichment</b>
-          <span class="hint">Reads every value of a text field and derives one category scheme from the whole set — a new way to inspect your data. It lands as one new field you review and edit; your original fields are never changed.</span>
+          <b>Find themes</b>
+          <span class="hint">Reads every place's description and tags, then suggests a few themes that run
+            through them — so the map can be coloured by theme. They arrive as one new column for you to
+            keep or discard. What you uploaded is never changed.</span>
         </div>
         <div class="enrich-row">
-          <label class="f" style="margin:0">Derive from<select id="s-desccol"></select></label>
-          <button class="btn secondary" id="enrich-go">✨ Generate</button>
+          <button class="btn secondary" id="enrich-go">Find themes</button>
+        </div>
+        <details class="enrich-read" id="enrich-read">
+          <summary>Choose what's read</summary>
+          <p class="hint" style="margin:.3rem 0 .4rem">Themes come only from what's ticked. Changing this and running again can give a genuinely different answer.</p>
+          <div class="enrich-cols" id="enrich-cols"></div>
+        </details>
+        <div class="theme-offer" id="theme-offer" hidden>
+          <p class="theme-lede" id="theme-lede"></p>
+          <div class="theme-chips" id="theme-chips"></div>
+          <div class="theme-verbs">
+            <button class="btn" id="theme-keep">Keep</button>
+            <button class="btn secondary" id="theme-discard">Discard</button>
+            <span class="hint">Keep adds them as a new column below — your original columns are unchanged.</span>
+          </div>
         </div>
         <div id="msg-enrich"></div>
       </div>
@@ -311,7 +330,7 @@
   var S = {
     dataset: "", canonical: null, names: [], result: null, options: null,
     step: 1, me: null, styleReady: false, spatial: false,
-    editToken: null, oneColour: "rust",
+    editToken: null, oneColour: "rust", pendingThemes: null,
   };
   var CLASS_LABEL = { point: "points", line: "lines", polygon: "areas (polygons)" };
 
@@ -541,7 +560,7 @@
       $("#to-place").textContent = "Looks right — place it on the map";
     }
     LokaCheck.render($("#check-table"), canonical, { onChange: checkChanged });
-    setupEnrich(canonical);
+    setupEnrich();
     checkChanged(canonical);
     msg("#msg-check", "");
     goStep(2);
@@ -584,11 +603,13 @@
     };
   }
 
-  /* ---- data enrichment: one new categorical field from a text column ----
-     Offered when a longish text column is present. Every value of the chosen
-     column is read together and one category scheme is derived from the whole
-     corpus; the result lands as a single NEW column (marked "generated") that
-     the user reviews and edits. Existing fields are never written. */
+  /* ---- find themes: one new "themes" column, kept or discarded ----
+     Offered when descriptive columns exist. Description- and tag-like columns
+     are all read by default; "Choose what's read" lets the owner change the
+     input — the honest retry, because re-asking the same question over the
+     same words cannot give a genuinely different answer. The suggestion
+     arrives as chips with real counts, and lands in the table only on Keep.
+     A refusal ("no clear themes") is a result, not an error. */
   function avgLen(col) {
     var v = S.canonical.rows.map(function (r) { return String(r[col] == null ? "" : r[col]); }).filter(Boolean);
     return v.length ? v.reduce(function (a, s) { return a + s.length; }, 0) / v.length : 0;
@@ -604,58 +625,138 @@
     S.canonical.rows.forEach(function (r) { var s = String(r[col] == null ? "" : r[col]).trim(); if (s) { t++; if (/\s/.test(s)) n++; } });
     return t && n / t >= 0.6;
   }
-  function setupEnrich(canonical) {
+  function looksLikeUrl(col) {
+    var n = 0, t = 0;
+    S.canonical.rows.forEach(function (r) { var s = String(r[col] == null ? "" : r[col]).trim(); if (s) { t++; if (/^https?:\/\//i.test(s)) n++; } });
+    return t > 0 && n / t >= 0.6;
+  }
+  // columns that carry words ABOUT the places are read by default; strings
+  // that merely administer them (addresses, ids, dates) are offered unticked
+  var NOT_ABOUT = /address|creator|created|updated|url|link|photo|image|(^|_)id$|^lat|^lon|^lng/i;
+  function enrichCandidates() {
+    return S.canonical.schema.filter(function (c) {
+      return c.type === "string" && !c.ignored && !c.derived && !looksLikeUrl(c.name);
+    }).map(function (c) {
+      var descriptive = looksDelimited(c.name) || (looksProse(c.name) && avgLen(c.name) >= 20);
+      return { name: c.name, on: descriptive && !NOT_ABOUT.test(c.name) };
+    });
+  }
+  function setupEnrich() {
     var panel = $("#enrich-panel");
-    // candidate description columns = free-text prose (has spaces, avg length ≥ 20), not delimited tag lists
-    var textCols = canonical.schema.filter(function (c) {
-      return c.type === "string" && !c.ignored && !looksDelimited(c.name) && looksProse(c.name) && avgLen(c.name) >= 20;
-    }).sort(function (a, b) { return avgLen(b.name) - avgLen(a.name); });
-    if (!textCols.length) { panel.hidden = true; return; }
+    var cands = enrichCandidates();
+    if (!cands.some(function (c) { return c.on; })) { panel.hidden = true; return; }
     panel.hidden = false;
-    fillSelect("#s-desccol", textCols.map(function (c) { return c.name; }), textCols[0].name);
+    // keep the owner's own ticks across re-renders (e.g. after a Keep)
+    var prev = {};
+    root.querySelectorAll("#enrich-cols input").forEach(function (i) {
+      prev[i.getAttribute("data-col")] = i.checked;
+    });
+    var host = $("#enrich-cols");
+    host.innerHTML = "";
+    cands.forEach(function (c) {
+      var on = c.name in prev ? prev[c.name] : c.on;
+      var lab = document.createElement("label");
+      lab.innerHTML = '<input type="checkbox" data-col="' + esc(c.name) + '"' + (on ? " checked" : "") + "> " + esc(c.name);
+      host.appendChild(lab);
+    });
+    hideOffer();
     msg("#msg-enrich", "");
+  }
+  function chosenCols() {
+    var out = [];
+    root.querySelectorAll("#enrich-cols input:checked").forEach(function (i) { out.push(i.getAttribute("data-col")); });
+    return out;
+  }
+  function hideOffer() {
+    $("#theme-offer").hidden = true;
+    S.pendingThemes = null;
   }
 
   $("#enrich-go").onclick = function () {
     if (!S.canonical) return;
-    var descCol = $("#s-desccol").value;
-    if (!descCol) return;
-    // only the source column travels — enrichment never sees the other fields,
-    // so it cannot touch them
+    var cols = chosenCols();
+    if (!cols.length) { msg("#msg-enrich", "Tick at least one thing to read — under “Choose what's read”."); return; }
+    // only the ticked columns travel — theme-finding never sees the rest
     var rows = S.canonical.rows.map(function (r) {
-      var o = {}; o[descCol] = r[descCol]; return o;
+      var o = {}; cols.forEach(function (c) { o[c] = r[c]; }); return o;
     });
     var btn = $("#enrich-go"), label = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<span class="spin" aria-hidden="true"></span>Generating…';
+    btn.innerHTML = '<span class="spin" aria-hidden="true"></span>Reading…';
     function done() { btn.disabled = false; btn.innerHTML = label; }
-    msg("#msg-enrich", "Reading every value of " + esc(descCol) + "…", "ok");
+    hideOffer();
+    msg("#msg-enrich", "Reading all " + S.canonical.rows.length + " places…", "ok");
     api("layers/enrich", { method: "POST", body: {
-      dataset: S.dataset || undefined, descriptionColumn: descCol, rows: rows,
+      dataset: S.dataset || undefined, fields: cols, rows: rows,
     } }).then(function (r) {
       done();
-      applyEnrichment(r, descCol);
+      themesVerdict(r);
     }).catch(function (e) {
       done();
       msg("#msg-enrich", esc(errMsg(e)));
     });
   };
 
-  function applyEnrichment(r, descCol) {
-    var cats = r.categories || [];
-    if (!r.categorySet || !r.categorySet.length) {
-      msg("#msg-enrich", "Couldn't derive a category scheme from " + esc(descCol) + " — try a more descriptive field.");
+  /* Every answer the server can give, in plain words. Nothing lands in the
+     table until Keep; a refusal names which way it failed. */
+  function themesVerdict(r) {
+    if (r.verdict === "themes") { showOffer(r); return; }
+    if (r.verdict === "no_clear_themes") {
+      msg("#msg-enrich", "No clear themes here" + (r.note ? ": " + esc(r.note).replace(/\.?\s*$/, ".") : ".") +
+        " Nothing was added. These places may just be too varied — or too alike — to split. You can still colour the map by a column you already have.");
       return;
     }
-    // exactly one NEW column — existing fields are never written
+    if (r.verdict === "refused") {
+      msg("#msg-enrich", "The themes that came back didn't hold up — " + esc(r.reason || "they didn't fit these places") +
+        " — so nothing was added. Changing what's read (under “Choose what's read”) can give a different answer.");
+      return;
+    }
+    if (r.verdict === "too_thin") {
+      msg("#msg-enrich", "Too few places have descriptions or tags to find themes in. Add a few more and try again.");
+      return;
+    }
+    msg("#msg-enrich", "Theme-finding isn't available right now, so nothing was added. Try again in a little while.");
+  }
+
+  // the suggestion, before anything lands: each theme as a chip with the real
+  // count of places it covers, plus how many fit nothing
+  function showOffer(r) {
+    S.pendingThemes = r;
+    var total = S.canonical.rows.length;
+    var placed = 0;
+    (r.counts || []).forEach(function (c) { placed += c.count; });
+    $("#theme-lede").innerHTML = r.seeded
+      ? "This atlas already has kept themes, so your places were filed into them — " + placed + " of " + total + " fit:"
+      : "Found " + r.counts.length + " theme" + (r.counts.length === 1 ? "" : "s") + " across " + placed + " of " + total + " places:";
+    var chips = $("#theme-chips");
+    chips.innerHTML = "";
+    (r.counts || []).forEach(function (c) {
+      var el = document.createElement("span");
+      el.className = "theme-chip";
+      if (c.definition) el.title = c.definition;
+      el.innerHTML = esc(c.name) + " <b>" + c.count + "</b>";
+      chips.appendChild(el);
+    });
+    if (r.other) {
+      var o = document.createElement("span");
+      o.className = "theme-chip is-other";
+      o.innerHTML = "didn't fit: <b>" + r.other + "</b> — shown as “other”";
+      chips.appendChild(o);
+    }
+    $("#theme-offer").hidden = false;
+    msg("#msg-enrich", "");
+  }
+
+  $("#theme-keep").onclick = function () {
+    var r = S.pendingThemes;
+    if (!r || !S.canonical) return;
+    // exactly one NEW column — existing columns are never written
     var target = ensureColumn("themes", "string");
     target.derived = true;               // checktable shows its "generated" chip
-    var sourced = 0;
     S.canonical.rows.forEach(function (row, i) {
-      row[target.name] = cats[i] || "";
-      if (String(row[descCol] == null ? "" : row[descCol]).trim()) sourced++;
+      row[target.name] = (r.categories && r.categories[i]) || "";
     });
-    // re-type so the new column reads categorical, keeping per-column flags
+    // re-type so the new column reads as kinds for colouring, keeping flags
     var names = S.canonical.schema.map(function (c) { return c.name; });
     var forced = {}; S.canonical.schema.forEach(function (c) { if (c.forced) forced[c.name] = c.forced; });
     var typed = LokaIngest.retype(names, S.canonical.rows, forced);
@@ -665,13 +766,28 @@
     });
     S.canonical.schema = typed.schema; S.canonical.rows = typed.rows;
     LokaCheck.render($("#check-table"), S.canonical, { onChange: checkChanged });
-    setupEnrich(S.canonical);
-    msg("#msg-enrich", 'Created new field "' + esc(target.name) + '" — ' + r.categorySet.length +
-      " categories derived from " + sourced + " descriptions" +
-      (r.aiUsed ? "" : " (basic keywords — AI was unavailable, edit as needed)") +
-      ". Your original fields are unchanged.", "ok");
+    setupEnrich();
+    // only a Keep persists the themes, so later contributions file into them
+    if (S.dataset) {
+      api("layers/enrich/keep", { method: "POST", body: { dataset: S.dataset, categorySet: r.categorySet } })
+        .catch(function () {});
+    }
+    msg("#msg-enrich", "Kept — “" + esc(target.name) + "” is a new column in the table below. Your original columns are unchanged.", "ok");
     checkChanged();
-  }
+  };
+
+  $("#theme-discard").onclick = function () {
+    var r = S.pendingThemes;
+    if (!r) return;
+    // discard also clears the atlas's remembered themes, so the next run
+    // starts clean instead of inheriting what was just rejected
+    if (S.dataset) {
+      api("layers/enrich/discard", { method: "POST", body: { dataset: S.dataset } }).catch(function () {});
+    }
+    hideOffer();
+    msg("#msg-enrich", "Discarded — nothing was added." +
+      (r.seeded ? " The atlas's remembered themes were cleared, so the next run starts fresh." : ""), "ok");
+  };
 
   // add a column to the canonical (unique name), return its schema entry
   function ensureColumn(base, type) {

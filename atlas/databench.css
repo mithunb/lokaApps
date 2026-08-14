@@ -55,6 +55,22 @@
     .enrich-head b { font-family:'Figtree',sans-serif; }
     .enrich-row { display:flex; gap:.6rem; align-items:flex-end; flex-wrap:wrap; }
     .enrich-row label.f { flex:1 1 16rem; max-width:24rem; }
+    /* the advanced fold: which columns theme-finding reads */
+    .enrich-read { margin:.5rem 0 0; }
+    .enrich-read summary { cursor:pointer; font-size:.85rem; color:var(--color-text-secondary); }
+    .enrich-cols { display:flex; gap:.35rem .9rem; flex-wrap:wrap; }
+    .enrich-cols label { display:inline-flex; align-items:center; gap:.35rem; font-size:.85rem; cursor:pointer; }
+    .enrich-cols input { width:auto; margin:0; }
+    /* the suggestion: theme chips with real counts, then Keep / Discard */
+    .theme-offer { margin-top:.7rem; border-top:1px solid var(--color-divider); padding-top:.7rem; }
+    .theme-lede { margin:0 0 .5rem; font-size:.9rem; }
+    .theme-chips { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.7rem; }
+    .theme-chip { font-size:.82rem; padding:.28rem .65rem; border-radius:var(--radius-md);
+      background:var(--color-surface); border:1px solid var(--color-border); }
+    .theme-chip b { font-weight:600; margin-left:.15rem; }
+    .theme-chip.is-other { background:transparent; border-style:dashed; color:var(--color-text-muted); }
+    .theme-verbs { display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; }
+    .theme-verbs .hint { flex:1 1 14rem; }
     .spin { display:inline-block; width:.85em; height:.85em; margin-right:.35em; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; vertical-align:-.12em; animation:ckspin .6s linear infinite; }
     @keyframes ckspin { to { transform:rotate(360deg); } }
     @media (prefers-reduced-motion: reduce){ .spin { animation-duration:1.6s; } }

@@ -1,40 +1,53 @@
-// Data enrichment: one NEW categorical field derived from a free-text column.
+// Theme-finding: one NEW "themes" column suggested from the owner's own
+// descriptions and tags. Nothing here writes to disk — persistence happens
+// only when the owner KEEPS the suggestion (the /layers/enrich/keep route).
 //
-// The whole corpus is read together — every value of the chosen column — and
-// ONE coherent category scheme is induced from it, then each row is assigned
-// exactly one category from that scheme. The point is to give the user a new
-// way to inspect their data; it never rewrites what they uploaded.
+// The pipeline is AI-only, by decision. A no-AI keyword clusterer used to
+// invent schemes here; on real data it produced the city's own name and a
+// stray verb as "themes", and it could never say "these places don't split" —
+// so it was removed rather than repaired. What survives of the no-AI path is
+// assignBySeed: filing later rows into a set of themes the owner already
+// kept. That job is safe because a human approved the themes; the worst case
+// is one visibly misfiled place, not a junk set wearing the feature's name.
 //
-//   AI path        a taxonomy pass over all values (sampled when very large)
-//                  proposes the set; an assignment pass classifies each row
-//                  into it. The LLM does only that semantic work.
-//   fallback path  extractive keyword clustering over the whole corpus: rank
-//                  salient stems by how many rows mention them, greedily pick
-//                  themes that each cover several still-uncovered rows.
-//
-// Everything checkable is deterministic here — category names are clamped and
-// deduped, assignments are coerced onto the set ("other" when nothing fits) —
-// and the result comes back as an editable NEW column, so the worst case is a
-// dull theme name, which the human review catches.
+// Every invented answer passes a deterministic quality gate before the owner
+// sees it. The gate can refuse, and a refusal is a first-class result — the
+// honest "try again" is changing which columns are read, not re-rolling the
+// same question.
 
-const INDUCE_SAMPLE = 60;        // descriptions shown to the induction call
 const CLASSIFY_BATCH = 40;       // rows per assignment call (prompt-budget bound)
-const MIN_CATS = 3, MAX_CATS = 10;
-const MIN_THEME_ROWS = 2;        // a fallback theme must cover at least this many rows
+const MIN_CATS = 2;              // fewer named themes than this is not a colouring
+const MAX_CATS = 7;              // named themes; + "other" = 8 = the palette
+                                 // (fragment.js MAX_CATEGORIES, tabular.js <= 8)
+const MIN_TEXT_ROWS = 8;         // fewer described places → "too_thin"
+const DIGEST_MAX = 400;          // whole set below this; even-stride sample above
+const CLIP = 280;                // description characters per digest line
 
-const STOP = new Set(('a an the of and or to in on at for with from by is are was were be been being this that ' +
-  'these those it its as into over under near out up down off about made out made-of using used various ' +
-  'other others new old big small very more most some any all each per').split(/\s+/));
+// the quality gate's thresholds
+const FOLD_BELOW = 3;            // B: a theme covering fewer places folds into "other"
+const DOMINANCE = 0.6;           // C: largest theme may cover at most this share
+const LEFTOVER = 0.4;            // D: "other" may cover at most this share
+const NAME_SIM = 0.6;            // A1/A2: name-collision similarity floor
 
 /* ---------------- pure helpers (unit-testable, no LLM) ---------------- */
 
-// stems just enough to match "lights" vs "lighting" vs "lit" loosely
-function stem(w) { return String(w).toLowerCase().replace(/(ing|ed|es|s)$/,'').slice(0, 12); }
+// stems just enough that "tree" meets "trees" and "library" meets "libraries"
+function stem(w) {
+  let s = String(w).toLowerCase();
+  if (/ies$/.test(s)) s = s.slice(0, -3) + 'y';                 // libraries → library
+  else if (/(s|x|z|ch|sh)es$/.test(s)) s = s.slice(0, -2);      // classes → class
+  else if (!/ss$/.test(s)) s = s.replace(/(ing|ed|s)$/, '');    // trees → tree, lighting → light
+  return s.slice(0, 12);
+}
 
-// salient stemmed tokens of one description — what the fallback clusters on
-function rowStems(desc) {
+const STOP = new Set(('a an the of and or to in on at for with from by is are was were be been being this that ' +
+  'these those it its as into over under near out up down off about made using used various ' +
+  'other others new old big small very more most some any all each per').split(/\s+/));
+
+// salient stemmed tokens of one text — what assignBySeed matches on
+function rowStems(text) {
   const out = new Set();
-  String(desc).toLowerCase().split(/[^a-z0-9]+/).forEach((w) => {
+  String(text).toLowerCase().split(/[^a-z0-9]+/).forEach((w) => {
     if (w.length >= 3 && !STOP.has(w)) out.add(stem(w));
   });
   return out;
@@ -46,57 +59,14 @@ export function coerceCategory(value, set) {
   return names.has(v) ? v : 'other';
 }
 
-// no-LLM fallback: corpus-level keyword clustering. Ranks stems by how many
-// rows mention them, then greedily picks themes that each cover several rows
-// no earlier theme covered (a set-cover pass) — so the scheme describes the
-// corpus as a whole, not any single row. Returns the set plus one category
-// per row ("other" when no theme matches, "" when the row has no text).
-export function clusterCorpus(descriptions, { maxCats = MAX_CATS, minRows = MIN_THEME_ROWS } = {}) {
-  const stems = descriptions.map(rowStems);
-  const stemRows = new Map();      // stem -> row indices that mention it
-  const surfaces = new Map();      // stem -> Map(word -> count), for a readable name
-  descriptions.forEach((d, i) => {
-    const counted = new Set();
-    String(d).toLowerCase().split(/[^a-z0-9]+/).forEach((w) => {
-      if (w.length < 3 || STOP.has(w)) return;
-      const s = stem(w);
-      if (!counted.has(s)) { counted.add(s); (stemRows.get(s) || stemRows.set(s, []).get(s)).push(i); }
-      const m = surfaces.get(s) || surfaces.set(s, new Map()).get(s);
-      m.set(w, (m.get(w) || 0) + 1);
-    });
-  });
-  const assigned = descriptions.map(() => '');
-  const categorySet = [];
-  const used = new Set();
-  while (categorySet.length < maxCats) {
-    let best = null, bestCover = 0;
-    for (const [s, idxs] of stemRows) {
-      if (used.has(s)) continue;
-      let cover = 0;
-      for (const i of idxs) if (!assigned[i]) cover++;
-      if (cover > bestCover) { best = s; bestCover = cover; }
-    }
-    if (!best || bestCover < minRows) break;
-    used.add(best);
-    // the commonest surface word gives the theme a human-readable name
-    let name = best, top = 0;
-    for (const [w, n] of surfaces.get(best)) if (n > top) { top = n; name = w; }
-    categorySet.push({ name, definition: 'rows whose text mentions "' + name + '"' });
-    for (const i of stemRows.get(best)) if (!assigned[i]) assigned[i] = name;
-  }
-  for (let i = 0; i < assigned.length; i++) {
-    if (!assigned[i]) assigned[i] = stems[i].size ? 'other' : '';
-  }
-  return { categorySet, categories: assigned };
-}
-
-// fallback assignment into an EXISTING set (the atlas's persisted scheme):
-// best token overlap between the description and the category's name +
-// definition, "other" when nothing overlaps — deterministic, no invention.
-export function assignBySeed(descriptions, seedSet) {
+// Filing rows into an EXISTING, owner-kept theme set: best token overlap
+// between the row's text and the theme's name + definition, "other" when
+// nothing overlaps — deterministic, no invention. Also the stand-in when an
+// AI assignment batch fails, so a kept set never half-applies.
+export function assignBySeed(texts, seedSet) {
   const catStems = seedSet.map((c) => rowStems((c.name || '') + ' ' + (c.definition || '')));
-  return descriptions.map((d) => {
-    const toks = rowStems(d);
+  return texts.map((t) => {
+    const toks = rowStems(t);
     if (!toks.size) return '';
     let best = '', bestScore = 0;
     seedSet.forEach((c, k) => {
@@ -108,89 +78,371 @@ export function assignBySeed(descriptions, seedSet) {
   });
 }
 
-/* ---------------- LLM steps (caller injected for testability) ----------------
-   callJSON(model, prompt, schema) -> parsed object, or null when AI is off. */
+/* ---------------- the place digest ----------------
+   One line per place: description(s) then tags, as the people who added the
+   place wrote them. The model reads WHAT places are; boilerplate that only
+   says how the text was produced (trailing "Photo: …" credits) is stripped,
+   because shared voice reads as a theme signal and is not one. */
 
-const INDUCE_SCHEMA = {
-  type: 'object', required: ['categories'],
-  properties: { categories: { type: 'array', items: {
-    type: 'object', required: ['name'], properties: {
-      name: { type: 'string' }, definition: { type: 'string' } } } } },
-};
-const CLASSIFY_SCHEMA = {
-  type: 'object', required: ['rows'],
-  properties: { rows: { type: 'array', items: {
-    type: 'object', required: ['i', 'category'], properties: {
-      i: { type: 'integer' }, category: { type: 'string' } } } } },
-};
-
-export async function induceCategories({ descriptions, callJSON, model }) {
-  if (!callJSON) return [];
-  const sample = descriptions.filter(Boolean).slice(0, INDUCE_SAMPLE);
-  if (sample.length < MIN_CATS) return [];
-  const prompt = [
-    'You are grouping short descriptions of places into a small set of COARSE categories for a map legend.',
-    `Propose between ${MIN_CATS} and ${MAX_CATS} categories that are mutually distinct and each cover several items.`,
-    'Use ONLY what the descriptions evidence — do not invent themes not present. name: 1-3 words. definition: one short line.',
-    'Descriptions:', JSON.stringify(sample),
-  ].join('\n');
-  try {
-    const out = await callJSON(model, prompt, INDUCE_SCHEMA);
-    const cats = (out && out.categories || [])
-      .map((c) => ({ name: String(c.name || '').trim().slice(0, 40), definition: String(c.definition || '').slice(0, 120) }))
-      .filter((c) => c.name);
-    // dedupe by lowercased name, clamp
-    const seen = new Set(); const uniq = [];
-    for (const c of cats) { const k = c.name.toLowerCase(); if (!seen.has(k)) { seen.add(k); uniq.push(c); } }
-    return uniq.slice(0, MAX_CATS);
-  } catch { return []; }
+// a column is read as tags when its values are short delimited tokens;
+// ';' wins over ',' (commas live inside prose), matching fragment.js
+function tagDelimiter(values) {
+  const filled = values.filter((v) => v.trim());
+  if (!filled.length) return null;
+  const share = (d) => filled.filter((v) => v.includes(d)).length / filled.length;
+  if (share(';') >= 0.4) return ';';
+  if (share(',') >= 0.4) {
+    let len = 0, words = 0, n = 0;
+    filled.forEach((v) => v.split(',').forEach((t) => {
+      t = t.trim();
+      if (t) { len += t.length; words += t.split(/\s+/).length; n++; }
+    }));
+    // tags are short, few-word tokens; prose clauses are neither
+    if (n && len / n <= 24 && words / n <= 3) return ',';
+  }
+  return null;
 }
 
-// AI assignment pass: one category per row from the induced set, coerced onto
-// it ("other" when the model strays or drops a row, "" when the row is blank).
-export async function classifyRows({ descriptions, categorySet, callJSON, model }) {
-  const out = descriptions.map(() => '');
-  for (let start = 0; start < descriptions.length; start += CLASSIFY_BATCH) {
+function stripCredit(text) {
+  const lines = String(text).split(/\r?\n/);
+  while (lines.length && (!lines[lines.length - 1].trim() || /^photo\s*:/i.test(lines[lines.length - 1].trim()))) {
+    lines.pop();
+  }
+  return lines.join(' ');
+}
+
+function clipAtWord(s, n) {
+  if (s.length <= n) return s;
+  const cut = s.slice(0, n);
+  const sp = cut.lastIndexOf(' ');
+  return (sp > n * 0.6 ? cut.slice(0, sp) : cut) + '…';
+}
+
+// rows + chosen columns -> per-row digest text ("description — tags: a, b"),
+// plus how many rows said anything and how often each tag recurs
+export function buildDigest(rows, fields) {
+  const cols = (fields || []).map((f) => String(f));
+  const byCol = cols.map((f) => ({
+    name: f,
+    values: rows.map((r) => String((r && r[f]) != null ? r[f] : '')),
+  }));
+  byCol.forEach((c) => { c.delim = tagDelimiter(c.values); });
+
+  const tagCounts = new Map();
+  const entries = rows.map((_, i) => {
+    const prose = [], tags = [];
+    byCol.forEach((c) => {
+      const v = c.values[i];
+      if (!v.trim()) return;
+      if (c.delim) {
+        v.split(c.delim).forEach((t) => {
+          t = t.trim();
+          if (!t) return;
+          tags.push(t);
+          const k = t.toLowerCase();
+          tagCounts.set(k, (tagCounts.get(k) || 0) + 1);
+        });
+      } else {
+        const clean = stripCredit(v).replace(/\s+/g, ' ').trim();
+        if (clean) prose.push(clean);
+      }
+    });
+    const desc = clipAtWord(prose.join(' · '), CLIP);
+    const text = desc + (tags.length ? (desc ? ' — tags: ' : 'tags: ') + tags.join(', ') : '');
+    return { text };
+  });
+  return { entries, withText: entries.filter((e) => e.text).length, tagCounts };
+}
+
+/* ---------------- the induce prompt and its gate ---------------- */
+
+const INDUCE_SCHEMA = {
+  type: 'OBJECT', required: ['verdict', 'themes'],
+  properties: {
+    verdict: { type: 'STRING', enum: ['themes', 'no_clear_themes'] },
+    note: { type: 'STRING' },
+    themes: { type: 'ARRAY', items: {
+      type: 'OBJECT', required: ['name', 'definition', 'examples'],
+      properties: {
+        name: { type: 'STRING' },
+        definition: { type: 'STRING' },
+        examples: { type: 'ARRAY', items: { type: 'INTEGER' } },
+      } } },
+  },
+};
+
+// every place when small; above DIGEST_MAX an even-stride sample, plus a line
+// of set-wide tag counts so sampling doesn't lose the aggregate signal
+function inducePlaces(digest) {
+  const texted = [];
+  digest.entries.forEach((e) => { if (e.text) texted.push(e.text); });
+  let sample = texted, summary = '';
+  if (texted.length > DIGEST_MAX) {
+    sample = [];
+    const stride = texted.length / DIGEST_MAX;
+    for (let k = 0; k < DIGEST_MAX; k++) sample.push(texted[Math.floor(k * stride)]);
+    const repeated = [...digest.tagCounts.entries()]
+      .filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).slice(0, 40);
+    if (repeated.length) {
+      summary = 'Tags used more than once across all ' + texted.length + ' places: ' +
+        repeated.map(([t, n]) => t + ' (' + n + ')').join(', ') + '\n';
+    }
+  }
+  const lines = sample.map((t, k) => (k + 1) + '. ' + t).join('\n');
+  return { text: summary + lines, listLength: sample.length, total: texted.length };
+}
+
+export async function induceThemes({ digest, title, callJSON, model }) {
+  const places = inducePlaces(digest);
+  const mapPhrase = title ? 'a map called "' + title + '"' : 'a map';
+  const prompt = [
+    'You are helping the owner of ' + mapPhrase + '. They have added ' + places.total +
+      ' places, each with a short description and some tags written by the people who added them.',
+    '',
+    'Your job: find the few real themes that run through these places, so the map can be coloured by theme. A theme names what several places ARE or are ABOUT — like "temples and shrines", "recycled materials", "trees and parks" — in everyday words a stranger reading the map key would understand.',
+    '',
+    'Rules:',
+    '- Propose between ' + MIN_CATS + ' and ' + MAX_CATS + ' themes. Fewer sharp themes beat more weak ones.',
+    '- Every theme must clearly fit at least 3 of the places below.',
+    "- No theme may fit more than about half of them. A word that is true of nearly every place here — the city's own name, anything in the map's title — is not a theme.",
+    '- Name each theme in 1 to 3 everyday words, naming what the places are — not how their text is written. A word is not a theme just because many descriptions happen to use it.',
+    '- No two themes may be spelling variants or near-synonyms of each other. Never use "other" as a theme name; leftover places are handled separately.',
+    '- Use only what the descriptions and tags show. The tags are sharp words from the people who added the places: several different tags pointing the same way is strong evidence for a theme; a single tag on a single place is not.',
+    '- It is fine — often right — for some places to fit no theme at all.',
+    '',
+    'If these places do not split into at least 2 real themes, say so: set verdict to "no_clear_themes" and give one plain sentence saying why (for example: the places are too varied, or all about the same thing). That is a correct and welcome answer, not a failure.',
+    '',
+    'For each theme give: a name, a one-line definition starting "Places that", and the numbers of 3 to 6 places from the list that clearly belong to it.',
+    '',
+    'The places:',
+    places.text,
+  ].join('\n');
+
+  let out = null;
+  try { out = await callJSON(model, prompt, INDUCE_SCHEMA, { think: true }); } catch { return null; }
+  if (!out || (out.verdict !== 'themes' && out.verdict !== 'no_clear_themes')) return null;
+  if (out.verdict === 'no_clear_themes') {
+    return { verdict: 'no_clear_themes', note: String(out.note || '').slice(0, 200), listLength: places.listLength };
+  }
+  const themes = (Array.isArray(out.themes) ? out.themes : [])
+    .map((t) => ({
+      name: String(t && t.name || '').trim().slice(0, 40),
+      definition: String(t && t.definition || '').trim().slice(0, 160),
+      examples: (Array.isArray(t && t.examples) ? t.examples : []).filter((n) => Number.isInteger(n)),
+    }))
+    .filter((t) => t.name);
+  return { verdict: 'themes', themes, listLength: places.listLength };
+}
+
+/* ---------------- the quality gate ----------------
+   Deterministic checks on the model's answer, before the owner sees anything.
+   Gate A (names) runs before assignment so a bad theme never spends a
+   classification call; gates B–E (shape) run on the real assigned counts. */
+
+function editDistance(a, b) {
+  const m = a.length, n = b.length;
+  if (!m) return n; if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[n];
+}
+
+// 1 − edit distance ÷ longer length, lowercased: 1.0 identical, 0 disjoint
+export function similarity(a, b) {
+  a = String(a).toLowerCase(); b = String(b).toLowerCase();
+  const longer = Math.max(a.length, b.length);
+  return longer ? 1 - editDistance(a, b) / longer : 1;
+}
+
+// Gate A. Drops themes whose NAME disqualifies them:
+//   A1 collides with the map's own title (true of every place → splits nothing)
+//   A2 near-duplicates an earlier theme (bengaluru/bangalore)
+//   A3 cites fewer than 3 real, distinct places (the fabrication tell)
+//   A4 reserved or degenerate ("other", empty, a column's own name)
+export function gateNames(themes, { title = '', listLength = 0, reserved = [] } = {}) {
+  const titleWords = String(title).toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4);
+  const reservedSet = new Set((reserved || []).map((r) => String(r).toLowerCase()));
+  const kept = [], dropped = [];
+  for (const t of themes) {
+    const name = String(t.name || '').trim();
+    const low = name.toLowerCase();
+    if (!name || low === 'other' || reservedSet.has(low)) {
+      dropped.push({ name: name || '(unnamed)', why: 'reserved' }); continue;
+    }
+    if (listLength > 0) {
+      const ex = new Set((t.examples || []).filter((n) => Number.isInteger(n) && n >= 1 && n <= listLength));
+      if (ex.size < 3) { dropped.push({ name, why: 'examples' }); continue; }
+    }
+    if (titleWords.some((w) => similarity(low, w) >= NAME_SIM)) {
+      dropped.push({ name, why: 'title' }); continue;
+    }
+    const dup = kept.find((k) => similarity(low, k.name.toLowerCase()) >= NAME_SIM);
+    if (dup) { dropped.push({ name, why: 'duplicate' }); continue; }
+    if (kept.length >= MAX_CATS) { dropped.push({ name, why: 'overflow' }); continue; }
+    kept.push({ name, definition: t.definition || '', examples: t.examples || [] });
+  }
+  return { kept, dropped };
+}
+
+// Gates B–E, on real assigned counts. counts: {name: n}; other: rows with
+// text that fit nothing; withText: rows with any text.
+export function gateShape({ counts, other = 0, withText }) {
+  const folded = [];
+  let leftover = other;
+  const named = [];
+  for (const [name, n] of Object.entries(counts || {})) {
+    if (n < FOLD_BELOW) { folded.push(name); leftover += n; }   // B: clutter pretending to be structure
+    else named.push({ name, count: n });
+  }
+  if (named.length < MIN_CATS) {
+    return { verdict: 'refused', reason: 'too few themes fit enough places', folded };  // E
+  }
+  const largest = Math.max(...named.map((t) => t.count));
+  if (largest > DOMINANCE * withText) {
+    return { verdict: 'refused', reason: 'one theme covered nearly every place', folded };  // C
+  }
+  if (leftover > LEFTOVER * withText || leftover > largest) {
+    return { verdict: 'refused', reason: "most places didn't fit any theme", folded };  // D
+  }
+  named.sort((a, b) => b.count - a.count);
+  return { verdict: 'ok', named, other: leftover, folded };
+}
+
+/* ---------------- assignment ---------------- */
+
+const classifySchema = (names) => ({
+  type: 'OBJECT', required: ['rows'],
+  properties: { rows: { type: 'ARRAY', items: {
+    type: 'OBJECT', required: ['i', 'theme'], properties: {
+      i: { type: 'INTEGER' },
+      // a closed list: off-list answers are impossible at the source, so a
+      // misspelling can never silently become a miscount
+      theme: { type: 'STRING', enum: names.concat(['other']) },
+    } } } },
+});
+
+// one theme per row from the set, or "other"; every place is classified —
+// assignment never samples. A failed batch falls back to assignBySeed so the
+// set never half-applies.
+export async function classifyRows({ digest, categorySet, title, callJSON, model }) {
+  const names = categorySet.map((c) => c.name);
+  const schema = classifySchema(names);
+  const themeLines = categorySet.map((c) => c.name + (c.definition ? ' — ' + c.definition : '')).join('\n');
+  const mapPhrase = title ? 'A map called "' + title + '"' : 'This map';
+  const out = digest.entries.map(() => '');
+  for (let start = 0; start < digest.entries.length; start += CLASSIFY_BATCH) {
     const batch = [];
-    for (let i = start; i < Math.min(descriptions.length, start + CLASSIFY_BATCH); i++) {
-      if (descriptions[i].trim()) batch.push({ i, description: descriptions[i] });
+    for (let i = start; i < Math.min(digest.entries.length, start + CLASSIFY_BATCH); i++) {
+      if (digest.entries[i].text) batch.push(i);
     }
     if (!batch.length) continue;
     const prompt = [
-      'Assign each item to EXACTLY ONE category from this set, or "other" if none fits.',
-      'Categories: ' + JSON.stringify(categorySet.map((c) => ({ name: c.name, definition: c.definition }))),
-      'Items:', JSON.stringify(batch),
+      mapPhrase + ' colours its places by theme. Put each place below into exactly one theme from this list, or "other".',
+      '',
+      'The themes:',
+      themeLines,
+      '',
+      'Rules:',
+      '- Judge each place only by its own description and tags.',
+      '- If it clearly fits one theme, choose that theme. If it fits two, choose the one its own words support more.',
+      '- If it does not clearly fit any theme, answer "other". "other" is a correct answer, not a failure — a place forced into a theme it doesn\'t fit makes the map lie.',
+      '',
+      'The places:',
+      batch.map((i) => i + '. ' + digest.entries[i].text).join('\n'),
     ].join('\n');
     let res = null;
-    try { res = await callJSON(model, prompt, CLASSIFY_SCHEMA); } catch { res = null; }
-    const byIdx = new Map();
-    if (res && Array.isArray(res.rows)) res.rows.forEach((r) => byIdx.set(r.i, r));
-    for (const item of batch) {
-      const r = byIdx.get(item.i);
-      out[item.i] = coerceCategory(r && r.category, categorySet);
+    try { res = await callJSON(model, prompt, schema); } catch { res = null; }
+    if (res && Array.isArray(res.rows)) {
+      const byIdx = new Map();
+      res.rows.forEach((r) => byIdx.set(r.i, r));
+      for (const i of batch) out[i] = coerceCategory(byIdx.get(i) && byIdx.get(i).theme, categorySet);
+    } else {
+      // the call failed — deterministic filing keeps the set whole
+      const seeded = assignBySeed(batch.map((i) => digest.entries[i].text), categorySet);
+      batch.forEach((i, k) => { out[i] = seeded[k]; });
     }
   }
   return out;
 }
 
-// Full pipeline. opts: {rows, descCol, seedSet?, callJSON?, models:{flash,flashLite}}
-// -> { categorySet, categories } — categories index-aligned with rows, one per
-// row. Never touches the input rows.
+/* ---------------- the pipeline ----------------
+   opts: { rows, fields, title, seedSet, callJSON, models: {flash, flashLite} }
+   Resolves to ONE of:
+     { verdict: 'themes', categorySet, categories, counts, other, withText, seeded }
+     { verdict: 'no_clear_themes', note }        the model's own honest no
+     { verdict: 'refused', reason }              the gate's no, in plain words
+     { verdict: 'too_thin', withText }           too few described places
+     { verdict: 'unavailable' }                  no AI — nothing is invented
+   categories is index-aligned with rows ('' for rows with no text); counts is
+   [{name, definition, count}] largest first. Nothing is persisted here. */
 export async function enrichRows(opts) {
-  const { rows, descCol, seedSet, callJSON, models = {} } = opts;
-  const descriptions = rows.map((r) => String((r && r[descCol]) || ''));
-  const seeded = Array.isArray(seedSet) && seedSet.length ? seedSet : null;
+  const { rows, fields, title = '', seedSet, callJSON, models = {} } = opts;
+  const digest = buildDigest(rows, fields);
+  const texts = digest.entries.map((e) => e.text);
 
-  if (callJSON) {
-    const categorySet = seeded || await induceCategories({ descriptions, callJSON, model: models.flash });
-    if (categorySet.length) {
-      const categories = await classifyRows({
-        descriptions, categorySet, callJSON, model: models.flashLite || models.flash,
-      });
-      return { categorySet, categories };
-    }
-    // induction came back empty — same deterministic path as no-AI below
+  // an owner-kept set: file the rows into it — the safe job, works without AI
+  const seeded = Array.isArray(seedSet) && seedSet.length
+    ? seedSet.map((c) => ({ name: String(c.name || ''), definition: String(c.definition || '') })).filter((c) => c.name)
+    : null;
+  if (seeded) {
+    const categories = callJSON
+      ? await classifyRows({ digest, categorySet: seeded, title, callJSON, model: models.flashLite || models.flash })
+      : assignBySeed(texts, seeded);
+    return withCounts({ categorySet: seeded, categories, withText: digest.withText, seeded: true });
   }
-  if (seeded) return { categorySet: seeded, categories: assignBySeed(descriptions, seeded) };
-  return clusterCorpus(descriptions);
+
+  if (digest.withText < MIN_TEXT_ROWS) return { verdict: 'too_thin', withText: digest.withText };
+  if (!callJSON) return { verdict: 'unavailable' };
+
+  const ind = await induceThemes({ digest, title, callJSON, model: models.flash });
+  if (!ind) return { verdict: 'unavailable' };
+  if (ind.verdict === 'no_clear_themes') return { verdict: 'no_clear_themes', note: ind.note };
+
+  const gA = gateNames(ind.themes, { title, listLength: ind.listLength, reserved: fields });
+  if (gA.kept.length < MIN_CATS) {
+    return { verdict: 'refused', reason: 'too few themes fit enough places' };
+  }
+
+  const categories = await classifyRows({
+    digest, categorySet: gA.kept, title, callJSON, model: models.flashLite || models.flash,
+  });
+  const counts = {};
+  let other = 0;
+  categories.forEach((c) => {
+    if (c === 'other') other++;
+    else if (c) counts[c] = (counts[c] || 0) + 1;
+  });
+  const gS = gateShape({ counts, other, withText: digest.withText });
+  if (gS.verdict === 'refused') return { verdict: 'refused', reason: gS.reason };
+
+  // fold gate-B casualties into "other" in the per-row answers too
+  const foldedSet = new Set(gS.folded);
+  const finalCats = categories.map((c) => (foldedSet.has(c) ? 'other' : c));
+  const keptSet = gA.kept.filter((t) => !foldedSet.has(t.name))
+    .map((t) => ({ name: t.name, definition: t.definition }));
+  return withCounts({ categorySet: keptSet, categories: finalCats, withText: digest.withText, seeded: false });
+}
+
+// shared tail: real counts from the assignment, largest theme first
+function withCounts({ categorySet, categories, withText, seeded }) {
+  const tally = {};
+  let other = 0;
+  categories.forEach((c) => {
+    if (c === 'other') other++;
+    else if (c) tally[c] = (tally[c] || 0) + 1;
+  });
+  const counts = categorySet
+    .map((c) => ({ name: c.name, definition: c.definition || '', count: tally[c.name] || 0 }))
+    .sort((a, b) => b.count - a.count);
+  return {
+    verdict: 'themes',
+    categorySet: counts.map((c) => ({ name: c.name, definition: c.definition })),
+    categories, counts, other, withText, seeded,
+  };
 }

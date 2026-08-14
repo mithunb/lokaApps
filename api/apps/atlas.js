@@ -1542,6 +1542,39 @@ async function geminiJSON(model, prompt, schema) {
   return JSON.parse(response.text ?? '');
 }
 
+/* Theme-finding's induce call only: the one call that must REASON over the
+   whole set of places, so thinking is turned on with an explicit budget. The
+   pinned SDK (0.3.1) predates thinking budgets and silently drops the field,
+   so this call speaks to the REST API directly. maxOutputTokens rises in
+   step because on 2.5 models thought tokens count against it — without the
+   headroom the JSON answer would truncate mid-object. */
+const INDUCE_THINK_BUDGET = 2048;
+async function geminiJSONDeep(model, prompt, schema) {
+  const r = await fetch(
+    'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: schema,
+          maxOutputTokens: 8192,
+          thinkingConfig: { thinkingBudget: INDUCE_THINK_BUDGET },
+        },
+      }),
+      signal: AbortSignal.timeout(90000),
+    },
+  );
+  if (!r.ok) throw new Error('gemini ' + r.status);
+  const data = await r.json();
+  const parts = (data && data.candidates && data.candidates[0] &&
+    data.candidates[0].content && data.candidates[0].content.parts) || [];
+  const text = parts.filter((p) => typeof p.text === 'string' && !p.thought).map((p) => p.text).join('');
+  return JSON.parse(text);
+}
+
 /* ---------- transform: rows + spec → features ---------- */
 
 function rolesMap(columns) {
@@ -2740,14 +2773,36 @@ router.get('/layers/imports', (req, res) => {
   res.json({ imports: imports.listImports(dataset) });
 });
 
-// Data enrichment: derive ONE new categorical field from a free-text column.
-// The whole corpus is read together — the LLM induces a small category set
-// across all values and assigns each row one of them; without AI a corpus-
-// level keyword clustering does the same extractively. Existing columns are
-// never written — the result lands as a NEW column the user reviews in the
-// Check step (nothing is committed here). With a dataset the induced set is
-// persisted so later contributions classify into the same scheme; pre-build
-// there is nothing to persist against, so a signed-in session is the gate.
+/* Theme-finding: suggest ONE new "themes" column from the columns the owner
+   chose to read. Nothing is persisted here — the suggestion (or the refusal)
+   goes back for review, and only the /keep route below writes anything. When
+   the atlas already has a KEPT theme set, rows are filed into it instead of
+   inventing a new one, so later contributions colour coherently. Old
+   category files that the retired auto-persisting flow wrote are ignored as
+   seeds: only a set an owner explicitly kept counts. */
+
+// the persisted set, only if a person kept it (the retired flow's files
+// carry no "kept" mark and are treated as absent)
+function keptCatSet(dataset) {
+  const dir = imports.datasetDir(dataset);
+  if (!dir) return [];
+  try {
+    const s = JSON.parse(fs.readFileSync(path.join(dir, 'categories.local.json'), 'utf8'));
+    return (s && s.kept && Array.isArray(s.categories)) ? s.categories : [];
+  } catch { return []; }
+}
+function writeKeptCatSet(dataset, categories, who) {
+  const dir = imports.datasetDir(dataset);
+  if (!dir) return;
+  const p = path.join(dir, 'categories.local.json');
+  const tmp = p + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify({
+    categories,
+    kept: categories.length ? { at: Date.now(), by: (who && who.email) || '' } : undefined,
+  }, null, 1));
+  fs.renameSync(tmp, p);
+}
+
 router.post('/layers/enrich', async (req, res) => {
   const b = req.body || {};
   const dataset = String(b.dataset || '');
@@ -2755,34 +2810,63 @@ router.post('/layers/enrich', async (req, res) => {
     if (!imports.datasetDir(dataset)) return res.status(404).json({ error: 'unknown dataset' });
     if (!requireDatasetEditor(req, res, dataset)) return;
   } else if (!auth.sessionFromReq(req) && !auth.isAdmin(req)) {
-    return res.status(401).json({ error: 'sign in to enrich your data', needsAuth: true });
+    return res.status(401).json({ error: 'sign in to find themes in your data', needsAuth: true });
   }
-  const descCol = String(b.descriptionColumn || '');
+  const fields = (Array.isArray(b.fields) && b.fields.length ? b.fields : [b.descriptionColumn])
+    .map((f) => String(f || '')).filter(Boolean);
   const rows = Array.isArray(b.rows) ? b.rows.slice(0, MAX_ROWS) : null;
-  if (!descCol || !rows || !rows.length) return res.status(400).json({ error: 'descriptionColumn and rows required' });
-  if (!rows.some((r) => r && String(r[descCol] || '').trim())) {
-    return res.status(400).json({ error: 'that column has no text to work from' });
-  }
+  if (!fields.length || !rows || !rows.length) return res.status(400).json({ error: 'nothing to read yet' });
 
-  // AI is optional — without it enrich falls back to corpus keyword clustering
-  // (no invented themes). Rate-limited like the other Gemini features.
+  // the atlas title is evidence for the gate (its words are true of every
+  // place, so they cannot be themes); pre-build sessions may send one
+  const inst = dataset ? reg.getInstance(dataset) : null;
+  const title = (inst && inst.title) || String(b.title || '');
+
+  // AI-only by decision: the keyword fallback that used to invent themes here
+  // shipped junk and could never say "no clear themes", so it was removed.
+  // Without AI nothing is invented — except filing into an owner-KEPT set,
+  // which assignBySeed handles inside enrichRows.
   const callJSON = (ai && geminiAllowed(clientIp(req)))
-    ? (model, prompt, schema) => geminiJSON(model, prompt, schema)
+    ? (model, prompt, schema, o) => (o && o.think ? geminiJSONDeep(model, prompt, schema) : geminiJSON(model, prompt, schema))
     : null;
   try {
     const out = await enrich.enrichRows({
-      rows, descCol,
-      seedSet: dataset ? imports.readCatSet(dataset) : [],
+      rows, fields, title,
+      seedSet: dataset ? keptCatSet(dataset) : [],
       callJSON,
       models: { flash: getFlashModel(), flashLite: getFlashLiteModel() },
     });
-    if (dataset && out.categorySet.length) imports.writeCatSet(dataset, out.categorySet);
-    res.json({
-      categorySet: out.categorySet,
-      categories: out.categories,          // one per row, index-aligned
-      aiUsed: !!callJSON,
-    });
+    res.json(out);
   } catch (e) {
-    res.status(502).json({ error: 'enrichment failed: ' + e.message });
+    res.status(502).json({ error: 'theme-finding failed: ' + e.message });
   }
+});
+
+// The owner KEPT the suggestion: only now does the theme set persist, so a
+// later contribution files into the same set. Pre-build sessions have no
+// dataset directory yet — nothing to persist against, which is fine.
+router.post('/layers/enrich/keep', (req, res) => {
+  const b = req.body || {};
+  const dataset = String(b.dataset || '');
+  if (!dataset) return res.json({ ok: true });
+  if (!imports.datasetDir(dataset)) return res.status(404).json({ error: 'unknown dataset' });
+  if (!requireDatasetEditor(req, res, dataset)) return;
+  const categories = (Array.isArray(b.categorySet) ? b.categorySet : [])
+    .map((c) => ({ name: String(c && c.name || '').trim().slice(0, 40), definition: String(c && c.definition || '').slice(0, 160) }))
+    .filter((c) => c.name).slice(0, 8);
+  if (!categories.length) return res.status(400).json({ error: 'no themes to keep' });
+  writeKeptCatSet(dataset, categories, auth.sessionFromReq(req));
+  res.json({ ok: true });
+});
+
+// The owner DISCARDED the suggestion: clear whatever theme set is remembered
+// for this atlas, so the next run starts clean instead of inheriting it.
+router.post('/layers/enrich/discard', (req, res) => {
+  const b = req.body || {};
+  const dataset = String(b.dataset || '');
+  if (!dataset) return res.json({ ok: true });
+  if (!imports.datasetDir(dataset)) return res.status(404).json({ error: 'unknown dataset' });
+  if (!requireDatasetEditor(req, res, dataset)) return;
+  writeKeptCatSet(dataset, [], null);
+  res.json({ ok: true });
 });
