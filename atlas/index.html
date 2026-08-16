@@ -188,11 +188,13 @@
     .key-chips .crop-chips { margin:0; }
     .crop-chip.keychip::before { content:none; }   /* a key is many colours — no single dot can stand for it */
     .key-note { font-size:.7rem; color:var(--color-text-muted); line-height:1.45; margin:.3rem 0 .05rem; }
-    /* the crown: keys 2–4 are small solid marks at fixed corners of the
+    /* the crown: keys 2–5 are small solid marks at fixed corners of the
        anchor pin — square upper right, triangle upper left, diamond lower
-       right — placed 16.5px off the pin's centre at 45°. The pin sits last
-       in the stack so it paints over the corner each mark tucks under, and
-       the whole place stays ~40px wide at two, three or four keys. */
+       right, flat bar lower left — placed 16.5px off the pin's centre at
+       45°. The pin sits last in the stack so it paints over the corner each
+       mark tucks under, and the whole place stays ~40px wide at two, three,
+       four or five keys: the bar is flat exactly so the second low corner
+       reaches only half as far down as the diamond does. */
     .atlas-crown { position:relative; width:20px; height:20px;
       transition:transform .18s cubic-bezier(.25,1,.5,1), filter .18s ease; }
     .atlas-crown .atlas-pin { position:relative; }
@@ -200,6 +202,7 @@
     .atlas-sat.sat-square   { left:11.7px;  top:-11.7px; }
     .atlas-sat.sat-triangle { left:-11.7px; top:-11.7px; }
     .atlas-sat.sat-diamond  { left:11.7px;  top:11.7px; }
+    .atlas-sat.sat-bar      { left:-11.7px; top:11.7px; }
     /* a crowned place lifts as one thing — the pin's own lift would tear the
        corner marks off it */
     @media (hover:hover){
@@ -318,6 +321,15 @@
       color:var(--color-text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
       opacity:0; visibility:hidden; transition:opacity .12s ease; }
     .atlas-hint.on { opacity:1; visibility:visible; }
+    /* what this place is, key by key: the same rows in the hover bubble and
+       the tap popup, wearing the key panel's own marks (leg-pin / leg-sat) —
+       one renderer, so bubble, popup, panel and map always agree */
+    .atlas-hint .hint-name { font-weight:600; }
+    .key-rows { display:flex; flex-direction:column; gap:.18rem; margin-top:.26rem; }
+    .key-row { display:flex; align-items:center; gap:.42rem; min-width:0; }
+    .key-row .key-word { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .key-row.blank .key-word { color:var(--color-text-muted); }
+    .pop .key-rows { margin:.55rem 0 .15rem; }
 
     /* ---- popups ---- */
     .atlas-popup .maplibregl-popup-content { border-radius:var(--radius-md); padding:0; box-shadow:var(--shadow-md);
@@ -629,8 +641,8 @@
        deploy that changes atlas.js reaches nobody until the token moves. Bump
        it (all pages share one) whenever a local .js or .css changes. Vendored
        libraries are left alone — their filenames change when they do. -->
-  <script src="./iconkit.js?v=20260814-5"></script>
-  <script src="./share.js?v=20260814-5"></script>
-  <script src="./atlas.js?v=20260814-5"></script>
+  <script src="./iconkit.js?v=20260814-6"></script>
+  <script src="./share.js?v=20260814-6"></script>
+  <script src="./atlas.js?v=20260814-6"></script>
 </body>
 </html>

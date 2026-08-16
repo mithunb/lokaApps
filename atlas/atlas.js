@@ -765,8 +765,10 @@
       // clicks route through the spiderfy gate: a fanned pin opens its own
       // popup, any other visible pin is a loner by construction and pops up
       wrap.addEventListener("click", function (e) { e.stopPropagation(); spiderClick(L, entry); });
-      // hovering names the pin without a click (see HOVER TOOLTIP)
-      wireMarkerHint(node, function () { return popupTitleText(L, f.properties); });
+      // hovering names the pin without a click (see HOVER TOOLTIP), and when
+      // keys are on it also says what this place is under each of them
+      wireMarkerHint(node, function () { return popupTitleText(L, f.properties); },
+        function () { return keyRowsEl(L, f.properties); });
       markersByLayer[L.id].push(entry);
       pts.push(f.geometry.coordinates);
     });
@@ -778,19 +780,29 @@
 
   /* ==================================================================
      MORE THAN ONE KEY — a contributed marker layer can be coloured by
-     up to FOUR of its columns at once. The first active key is the
+     up to FIVE of its columns at once. The first active key is the
      anchor: the full 20px pin, exactly the shipped look — its colour,
      its icon. Each further key is a small solid mark at a fixed corner
      of that pin — square upper right (key 2), triangle upper left
-     (key 3), diamond lower right (key 4) — so a place stays ONE thing
-     wearing badges, and its footprint never grows past ~40px however
-     many keys are on (a row of marks grew 22px per key; measured on
-     the Bengaluru layer, a row of two folded more places into discs
-     than the crown does carrying four). The satellite sizes are
-     ink-matched — each carries the colour area of a 12px circle
-     (square 10.6, triangle 16.2, diamond 15.1) — because below ~12px
-     of ink the muted palette stops being nameable and a smaller mark
-     would show a colour the eye cannot read.
+     (key 3), diamond lower right (key 4), flat bar lower left (key 5)
+     — so a place stays ONE thing wearing badges, and its footprint
+     never grows past ~40px however many keys are on (a row of marks
+     grew 22px per key; measured on the Bengaluru layer, a row of two
+     folded more places into discs than the crown does carrying four).
+     The satellite sizes are ink-matched — each carries the colour area
+     of a 12px circle (square 10.6, triangle 16.2, diamond 15.1, bar
+     15.1×7.55) — because below ~12px of ink the muted palette stops
+     being nameable and a smaller mark would show a colour the eye
+     cannot read. The bar takes the fourth corner because that corner
+     is BELOW the pin's shoulders, where a tall mark would hang into
+     the space a label or a neighbouring pin uses: at the same ink the
+     bar reaches 3.8px below its centre against the diamond's 7.55, and
+     it clears the shipped tell-apart bar against every other mark by
+     at least 1.8× (XOR/union distance, circle-vs-square at 20px as
+     the bar the owner already approved: vs square .43, triangle .61,
+     diamond .39, circle .40 — fifthshape.py). The star was measured
+     too and confirmed wider for the same ink (19.2px box, the widest
+     that passes) with its colour in thin points, so it stays rejected.
 
      Colour tells the kinds apart WITHIN a key, off the same eight
      colours the committed layer already uses (see KEY_COLORS above —
@@ -954,11 +966,13 @@
   /* The crown's small marks: one shape per key, at a fixed corner of the
      anchor pin. Solid fill, thin white rim, no icon — colour and shape carry
      everything. Sizes are ink-matched (each holds the colour area of a 12px
-     circle), which makes the triangle and diamond wider than the square:
+     circle), which makes the triangle, diamond and bar wider than the square:
      that is the price of every kind carrying the same amount of colour.
-     Geometry identical to the design mock (many-keys-mock.html). */
-  var SAT_SHAPES = ["square", "triangle", "diamond"];   // keys 2, 3, 4
-  var SAT_WORDS = ["circles", "small squares", "small triangles", "small diamonds"];   // family 0..3
+     Square/triangle/diamond geometry identical to the design mock
+     (many-keys-mock.html); the bar is the measured fifth shape — flat on
+     purpose, because its corner is the low one (see the key block above). */
+  var SAT_SHAPES = ["square", "triangle", "diamond", "bar"];   // keys 2, 3, 4, 5
+  var SAT_WORDS = ["circles", "small squares", "small triangles", "small diamonds", "small bars"];   // family 0..4
   var SVG_NS = "http://www.w3.org/2000/svg";
   function satPathD(shape, cx, cy) {
     if (shape === "square") { var s = 10.6 / 2; return "M" + (cx - s) + " " + (cy - s) + "h" + (2 * s) + "v" + (2 * s) + "h" + (-2 * s) + "z"; }
@@ -966,6 +980,7 @@
       var w = 16.2 / 2, h = 16.2 * 0.866, top = cy - h * 0.6;
       return "M" + cx + " " + top + "L" + (cx + w) + " " + (top + h) + "L" + (cx - w) + " " + (top + h) + "z";
     }
+    if (shape === "bar") { var bw = 15.1 / 2, bh = 7.55 / 2; return "M" + (cx - bw) + " " + (cy - bh) + "h" + (2 * bw) + "v" + (2 * bh) + "h" + (-2 * bw) + "z"; }
     var d = 15.1 / 2;   // diamond
     return "M" + cx + " " + (cy - d) + "L" + (cx + d) + " " + cy + "L" + cx + " " + (cy + d) + "L" + (cx - d) + " " + cy + "z";
   }
@@ -984,7 +999,7 @@
   }
 
   // Redraw one place's marks to match the active keys. One key: the shipped
-  // pin, untouched. Two to four: that pin stays the anchor and each further
+  // pin, untouched. Two to five: that pin stays the anchor and each further
   // key adds its small corner mark — the crown, ~40px however many keys are
   // on. None: a plain pin in the layer's one colour. The marker element and
   // all its wiring stay; only what is drawn inside changes.
@@ -1035,9 +1050,40 @@
     return rows;
   }
 
+  // What this place is, key by key: one row per key that is ON, in crown
+  // order, each row wearing the key panel's own mark — swatch(), the same
+  // renderer the panel uses, drawing the same shapes and colours the map
+  // does. The rows come back as one DOM box: the hover bubble appends it,
+  // the tap popup serialises it. One builder, so the bubble, the popup,
+  // the panel and the map can never tell different stories. A key this
+  // place leaves blank keeps its row — the grey mark the map actually
+  // draws, and "left blank" in words — because dropping the row would
+  // make the place look like it wears fewer marks than it does. Built
+  // only when a pointer enters a pin or a popup opens, never per move.
+  function keyRowsEl(L, props) {
+    var act = activeKeyOptions(L);
+    if (!act.length) return null;
+    var f = { properties: props };
+    var box = el("div", "key-rows");
+    act.forEach(function (opt, fi) {
+      var v = optValueOf(L, opt, f);
+      var slot = v ? opt.kept.indexOf(v) : -1;
+      var row = el("div", "key-row" + (v ? "" : " blank"));
+      // family "round" is the anchor's miniature pin — its icon derived
+      // from the same words the map derives it from
+      row.appendChild(swatch({ family: fi ? SAT_SHAPES[fi - 1] : "round",
+                               color: slot >= 0 ? keyKindColor(L, opt, fi, slot) : KEY_OTHER,
+                               label: v }));
+      row.appendChild(el("span", "key-word", v ? esc(v) : "left blank"));
+      box.appendChild(row);
+    });
+    return box;
+  }
+
   function applyLayerKeys(L) {
     var act = activeKeyOptions(L);
     (markersByLayer[L.id] || []).forEach(function (e) { renderMarks(L, e, act); });
+    hideHint();   // a bubble built from the old keys must not outlive them
     // the committed single key is the layer's shipped look — shipped key too
     L._legend = (act.length === 1 && act[0].committed) ? null : keyLegendRows(L, act);
     renderExtra(L);
@@ -1064,10 +1110,10 @@
       c.onclick = function () {
         var i = st.active.indexOf(opt.col);
         if (i >= 0) st.active.splice(i, 1);
-        else if (st.active.length >= 4) {
-          // the measured cap: one full pin plus three corner marks is as much
-          // as a place can wear before the marks stop reading apart
-          st.note = "Four keys are already on — that is as many small marks as a pin can carry and stay readable. Turn one off to add " + opt.label + ".";
+        else if (st.active.length >= 5) {
+          // the cap: the pin has exactly four corners, so one full pin plus
+          // four corner marks is every place a mark can sit
+          st.note = "Five keys are already on — the pin's four corners are all taken. Turn one off to add " + opt.label + ".";
           renderExtra(L);
           return;
         } else {
@@ -1221,8 +1267,8 @@
   var CLUSTER_LAYER = "atlas-cluster-disc";
   var CLUSTER_RADIUS = 20;   // = pin diameter: fold only what truly collides
   // when any visible layer wears a crown its pins are ~40px wide — and stay
-  // 40px at two, three or four keys, because the corner marks are already
-  // there — so "truly collides" starts further out, by the same amount
+  // 40px at two, three, four or five keys, because the corner marks are
+  // already there — so "truly collides" starts further out, by the same amount
   var CLUSTER_RADIUS_CROWN = 40;
   var CLUSTER = { ready: false, off: false, wired: false, radiusNow: CLUSTER_RADIUS,
                   hovering: false, hoverId: null,
@@ -1686,12 +1732,24 @@
   // `at` is the top-centre of the thing being labelled, in map-container px:
   // the tooltip is centred above it and clamped inside the container on all
   // four sides. `key` identifies the target, so re-entering the same one is a
-  // no-op. Empty text means no tooltip at all (never an empty bubble).
-  function showHint(text, at, key) {
+  // no-op. Empty text and no rows means no tooltip at all (never an empty
+  // bubble). `rows` (optional) is the key-by-key box from keyRowsEl: the
+  // place's name stays the heading and the rows sit underneath, so a keyed
+  // map can be read without walking back to the key panel.
+  function showHint(text, at, key, rows) {
     if (hintTimer) { clearTimeout(hintTimer); hintTimer = null; }
-    if (!HOVER_OK || !text || !at) { hideHint(); return; }
+    if (!HOVER_OK || (!text && !rows) || !at) { hideHint(); return; }
     var t = hintEl();
-    if (key !== HINT.key) { t.textContent = text; HINT.key = key; }
+    if (key !== HINT.key) {
+      if (rows) {
+        t.textContent = "";
+        if (text) t.appendChild(el("div", "hint-name", esc(text)));
+        t.appendChild(rows);
+      } else {
+        t.textContent = text;
+      }
+      HINT.key = key;
+    }
     t.classList.add("on");
     var box = map.getContainer().getBoundingClientRect();
     var w = t.offsetWidth, h = t.offsetHeight;   // measured with the text in place
@@ -1731,15 +1789,17 @@
   // DOM markers: hover is wired on the inner .atlas-mnode, not the wrap — a
   // fanned marker drops pointer events on its wrap, and the node is the part
   // that actually moves, so the rect we measure is the one the user sees.
-  // `titleOf` is read at hover time; nothing is cached per marker.
-  function wireMarkerHint(node, titleOf) {
+  // `titleOf` and `rowsOf` are read at hover time; nothing is cached per
+  // marker, so the rows always reflect the keys that are on right now.
+  function wireMarkerHint(node, titleOf, rowsOf) {
     if (!HOVER_OK) return;
     wireHintGlobals();
     function show() {
       if (HINT.key === node) return;      // already ours — mousemove must not thrash layout
       var text = titleOf();
-      if (!text) return;                  // nothing names this pin: no tooltip, and no measuring
-      showHint(text, nodeTop(node), node);
+      var rows = rowsOf ? rowsOf() : null;   // built on entry, never per move
+      if (!text && !rows) return;         // nothing to say about this pin: no tooltip, and no measuring
+      showHint(text, nodeTop(node), node, rows);
     }
     node.addEventListener("mouseenter", show);
     node.addEventListener("mousemove", show);   // bring it back if a pan cleared it
@@ -2473,12 +2533,19 @@
   }
 
   function popupHTML(L, props) {
-    var spec = L.popup; if (!spec) return "";
+    var spec = L.popup;
+    // the same key-by-key rows the hover bubble shows — a touch screen has
+    // no hover, so the tap popup is where the marks get decoded there. A
+    // keyed layer with no popup stanza still gets a popup of just the rows.
+    var krows = keyRowsEl(L, props);
+    if (!spec && !krows) return "";
+    spec = spec || {};
     var title = popupTitleText(L, props);
     var sub = spec.subtitle || (spec.subtitleProperty ? props[spec.subtitleProperty] : "");
     var h = '<div class="pop">';
     if (title) h += '<div class="pop-title">' + esc(title) + "</div>";
     if (sub) h += '<div class="pop-sub">' + esc(sub) + "</div>";
+    if (krows) h += krows.outerHTML;
     (spec.fields || []).forEach(function (fld) {
       var v = props[fld.property];
       if (v == null || v === "" || v === "[]") return;
