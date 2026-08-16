@@ -182,6 +182,25 @@
     .crop-chip:active { transform:scale(.95); }
     @media (hover:hover){ .crop-chip:hover:not(.on){ border-color:var(--color-moss); color:var(--color-text-primary); } }
 
+    /* ---- colour keys (contributed marker layers can wear more than one) ---- */
+    .key-chips { margin:.45rem 0 .1rem; }
+    .key-chips-lbl { display:block; font-size:.68rem; font-weight:600; letter-spacing:.02em; color:var(--color-text-muted); margin-bottom:.25rem; }
+    .key-chips .crop-chips { margin:0; }
+    .crop-chip.keychip::before { content:none; }   /* a key is many colours — no single dot can stand for it */
+    .key-note { font-size:.7rem; color:var(--color-text-muted); line-height:1.45; margin:.3rem 0 .05rem; }
+    /* the second key's marks are squares; the first stays circles */
+    .atlas-pin.sq { border-radius:5px; }
+    .atlas-marks { display:flex; align-items:center; gap:2px; }
+    /* two-key legend: kinds grouped under a header per shape family, each
+       swatch the pin itself in miniature */
+    .leg-head { font-size:.68rem; font-weight:600; color:var(--color-text-muted); margin:.3rem 0 .05rem; }
+    .leg-pin { flex:0 0 auto; width:16px; height:16px; border-radius:50%; background:#fff; border:1.6px solid var(--c);
+      color:var(--c); display:inline-flex; align-items:center; justify-content:center; box-sizing:border-box; }
+    .leg-pin.sq { border-radius:4px; }
+    .leg-pin svg { width:9px; height:9px; display:block; }
+    .leg-pin.badge { background:var(--c); color:#fff; font-size:7px; font-weight:700; }
+    .leg-pin.badge.pale { color:#2A241A; }
+
     .ctl-opacity { display:flex; align-items:center; gap:.5rem; margin:.45rem 0 .1rem; }
     .ctl-opacity-lbl { font-size:.72rem; color:var(--color-text-muted); }
     .ctl-opacity input { flex:1; accent-color:var(--color-moss); }
@@ -594,8 +613,8 @@
        deploy that changes atlas.js reaches nobody until the token moves. Bump
        it (all pages share one) whenever a local .js or .css changes. Vendored
        libraries are left alone — their filenames change when they do. -->
-  <script src="./iconkit.js?v=20260814-3"></script>
-  <script src="./share.js?v=20260814-3"></script>
-  <script src="./atlas.js?v=20260814-3"></script>
+  <script src="./iconkit.js?v=20260814-4"></script>
+  <script src="./share.js?v=20260814-4"></script>
+  <script src="./atlas.js?v=20260814-4"></script>
 </body>
 </html>

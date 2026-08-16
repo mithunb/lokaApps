@@ -77,6 +77,28 @@
 
   var map, MANIFEST, activeBasemap, DATA = {}, markersByLayer = {}, cropState = {};
 
+  /* ---- more than one key: shared palette + state ----
+     The colours are fragment.js's CATEGORY_COLORS, duplicated because this is
+     a plain browser script with no imports: Paul Tol's muted scheme, same
+     order, same grey for "other". If one list changes, change both.
+     Measured for this feature (CIEDE2000 over Viénot-Brettel dichromacy
+     simulation): min pairwise ΔE00 within the eight = 15.0 normal, 15.8
+     deuteranopia, 14.8 protanopia. Two active keys deliberately REUSE this
+     palette instead of splitting the spectrum between them: a 14-colour
+     palette only reaches a ~15.5 floor by becoming a lightness ladder of
+     blues and greys (dichromats keep a single blue↔yellow hue axis), and
+     warm-vs-cool banding collapses to 1.6 ΔE00 under deuteranopia — two keys'
+     colours become the same colour. So colour says which KIND within a key,
+     the mark's shape (circle / square) says which KEY, and when both keys
+     fit inside eight colours between them the second key takes its colours
+     from the far end of the palette, so no colour sits in two keys at once. */
+  var KEY_COLORS = ["#332288", "#999933", "#44AA99", "#AA4499", "#117733", "#882255", "#88CCEE", "#DDCC77"];
+  var KEY_OTHER = "#7a756c";
+  var KEY_MAX = 8;
+  // the wizard's named single colours (fragment.js MARKER_COLORS), for "one colour"
+  var ONE_COLORS = { rust: "#A6522F", moss: "#40573D", ochre: "#B0863A", sienna: "#9C5A34", slate: "#5f7f92" };
+  var keyState = {};   // layer id -> { active: [column, ...], note: string|null }
+
   // Signed-in state in the nav — on the home gallery and on every atlas.
   function initAuthNav() {
     // embedded: the whole nav is hidden, so there's no state to show and no
@@ -736,8 +758,10 @@
       if (L.label_text) node.appendChild(el("span", "atlas-mlabel", esc(f.properties[L.label_text.property])));
       wrap.appendChild(node);
       var mk = new maplibregl.Marker({ element: wrap, anchor: "bottom" }).setLngLat(f.geometry.coordinates).addTo(map);
-      // keep the feature alongside its marker so search can gate it by content
-      var entry = { mk: mk, f: f, color: cfg.color || "" };
+      // keep the feature alongside its marker so search can gate it by content;
+      // node is kept so a key change can redraw the marks without touching the
+      // marker element MapLibre owns (or any wiring on it)
+      var entry = { mk: mk, f: f, color: cfg.color || "", node: node };
       // clicks route through the spiderfy gate: a fanned pin opens its own
       // popup, any other visible pin is a loner by construction and pops up
       wrap.addEventListener("click", function (e) { e.stopPropagation(); spiderClick(L, entry); });
@@ -749,6 +773,278 @@
     L._pts = pts;
     if (L.cluster && pts.length) setupCluster(L);
     applyMarkerVisibility(L);
+    initLayerKeys(L);
+  }
+
+  /* ==================================================================
+     MORE THAN ONE KEY — a contributed marker layer can be coloured by
+     more than one of its columns at once. Each active key gets a SHAPE
+     family — the first key draws circles, the second squares — and
+     colour tells the kinds apart WITHIN a key, off the same eight
+     colours the committed layer already uses. A place that answers two
+     keys wears two marks side by side inside its one marker element,
+     so the cluster arithmetic keeps counting PLACES (one source
+     feature per place), never marks.
+
+     Why keys share the palette instead of splitting it: see the note
+     on KEY_COLORS above — eight distinct colours is the honest ceiling
+     for pins on this basemap, so shape has to carry which key a mark
+     belongs to. When the two keys need at most eight colours between
+     them, the second key's colours come from the far end of the
+     palette and no colour appears in both keys; past that they repeat,
+     and the chips say so in so many words.
+
+     Which columns may be a key — the shipped profiling caps (a column
+     of single values: at most 8 kinds; a multi-value column like
+     "Culture; Heritage": at most 12 first-tags) PLUS a coverage bar:
+     the top eight kinds must cover at least 60% of the places.
+     Measured on the Bengaluru layer: categories' top-8 covers 63 of 66
+     (a key); labels' top-8 covers 12 of 66 (a caption, never a key).
+  ================================================================== */
+  function prettyCol(name) {
+    return String(name).replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+  }
+
+  // Marker layers contributed through the wizard may offer their qualifying
+  // columns as keys. Curated layers (Deoria's pins) never enter here.
+  function initLayerKeys(L) {
+    if (!L.userLayer || L.type !== "marker" || L._keyOptions) return;
+    var gj = DATA[L.id];
+    if (!gj || !gj.features || !gj.features.length) return;
+    var opts = computeKeyOptions(L, gj.features);
+    if (!opts.length) return;
+    var committedOpt = null;
+    opts.forEach(function (o) { if (o.committed) committedOpt = o; });
+    // a layer whose committed colouring we cannot mirror is left untouched
+    if (L.markerBy && !committedOpt) return;
+    L._keyOptions = opts;
+    keyState[L.id] = { active: committedOpt ? [committedOpt.col] : [], note: null };
+    renderExtra(L);   // the chips exist only once the data has said which columns qualify
+  }
+
+  function computeKeyOptions(L, feats) {
+    var committedCol = null;
+    if (L.markerBy) {
+      committedCol = (L.spec && L.spec.categoryColumn) ? String(L.spec.categoryColumn)
+        : (L.markerBy !== "_category" ? L.markerBy : null);
+      if (!committedCol || !L.markers) return [];
+    }
+    var names = {};
+    feats.slice(0, 5).forEach(function (f) { for (var k in (f.properties || {})) names[k] = 1; });
+    var opts = [];
+    Object.keys(names).forEach(function (col) {
+      if (col.charAt(0) === "_" || skipSearchProp(col)) return;
+      var committed = committedCol === col;
+      var nonEmpty = [];
+      feats.forEach(function (f) {
+        var v = f.properties ? f.properties[col] : undefined;
+        if (v !== undefined && v !== null && v !== "") nonEmpty.push(String(v));
+      });
+      if (!nonEmpty.length) return;
+      // multi-value cells: the same rule the server uses (fragment.js detectDelimiter)
+      var delim = null;
+      [";", ","].forEach(function (d) {
+        if (!delim && nonEmpty.filter(function (v) { return v.indexOf(d) >= 0; }).length >= nonEmpty.length * 0.4) delim = d;
+      });
+      var counts = [], seen = {};
+      nonEmpty.forEach(function (v) {
+        if (delim) { var i = v.indexOf(delim); if (i >= 0) v = v.slice(0, i); }
+        v = v.trim().slice(0, 40);
+        if (!v) return;
+        if (seen[v] == null) { seen[v] = counts.length; counts.push({ kind: v, n: 0 }); }
+        counts[seen[v]].n++;
+      });
+      if (!committed) {
+        if (counts.length < 2) return;
+        if (delim ? counts.length > 12 : counts.length > KEY_MAX) return;   // the shipped caps
+      }
+      counts.sort(function (a, b) { return b.n - a.n; });   // stable: ties keep first-seen order
+      var kept;
+      if (committed) {
+        kept = Object.keys(L.markers);   // the committed kinds, committed order, committed colours
+      } else {
+        kept = counts.slice(0, KEY_MAX).map(function (c) { return c.kind; });
+      }
+      var named = 0;
+      counts.forEach(function (c) { if (kept.indexOf(c.kind) >= 0) named += c.n; });
+      if (!committed && named / feats.length < 0.6) return;   // the named kinds must cover most places
+      opts.push({ col: col, label: prettyCol(col), delim: delim, committed: committed,
+                  kept: kept, hasOther: named < feats.length });
+    });
+    // committed key first; the rest keep the order the data carries them in
+    opts.sort(function (a, b) { return (b.committed ? 1 : 0) - (a.committed ? 1 : 0); });
+    return opts;
+  }
+
+  function activeKeyOptions(L) {
+    var st = keyState[L.id];
+    if (!st || !L._keyOptions) return [];
+    return L._keyOptions.filter(function (o) { return st.active.indexOf(o.col) >= 0; });
+  }
+
+  // Colour slots: the first family counts from the front of the palette (for
+  // the committed key those are its committed colours, untouched), the second
+  // family from the far end — disjoint whenever the two keys fit inside eight
+  // colours between them, and lower-stakes collisions when they don't (the
+  // commonest kind of one key never shares a colour with the commonest of the
+  // other).
+  function keyKindColor(L, opt, familyIndex, slot) {
+    if (opt.committed && familyIndex === 0) {
+      var m = L.markers && L.markers[opt.kept[slot]];
+      if (m && m.color) return m.color;
+    }
+    return familyIndex ? KEY_COLORS[KEY_MAX - 1 - (slot % KEY_MAX)] : KEY_COLORS[slot % KEY_MAX];
+  }
+
+  // A feature's kind under a key: the committed key reads the property the
+  // stanza already derived (markerBy); other keys take the cell's first tag.
+  function optValueOf(L, opt, f) {
+    var p = f.properties || {};
+    if (opt.committed && L.markerBy && p[L.markerBy] != null) return String(p[L.markerBy]);
+    var v = p[opt.col];
+    if (v === undefined || v === null || v === "") return "";
+    v = String(v);
+    if (opt.delim) { var i = v.indexOf(opt.delim); if (i >= 0) v = v.slice(0, i); }
+    return v.trim().slice(0, 40);
+  }
+
+  function oneColorOf(L) {
+    if (L.marker && L.marker.color) return L.marker.color;
+    if (L.spec && ONE_COLORS[L.spec.markerColor]) return ONE_COLORS[L.spec.markerColor];
+    return ONE_COLORS.rust;
+  }
+
+  // One mark, exactly as addMarker draws it: white body, coloured border, and
+  // the kind's icon (or monogram badge) inside. kindValue null = a plain pin.
+  function keyPinEl(color, kindValue, square) {
+    var pin = el("div", "atlas-pin" + (square ? " sq" : ""));
+    pin.style.setProperty("--pin", color);
+    if (kindValue != null) {
+      var ic = iconFor(kindValue);
+      if (ic.icon && ICONS[ic.icon]) pin.innerHTML = ICONS[ic.icon];
+      else {
+        pin.textContent = ic.badge;
+        pin.classList.add("badge");
+        if (paleHex(color)) pin.classList.add("pale");
+      }
+    }
+    return pin;
+  }
+
+  // Redraw one place's marks to match the active keys: one circle for a single
+  // key (the committed look), a circle-and-square pair for two, a plain pin in
+  // the layer's own colour for none. The marker element and all its wiring stay.
+  function renderMarks(L, entry, act) {
+    var node = entry.node;
+    if (!node) return;
+    while (node.firstChild && node.firstChild.className !== "atlas-mlabel") node.removeChild(node.firstChild);
+    entry._paired = act.length > 1;
+    if (!act.length) {
+      node.insertBefore(keyPinEl(oneColorOf(L), null, false), node.firstChild);
+      return;
+    }
+    var host = node;
+    if (act.length > 1) {
+      host = el("div", "atlas-marks");
+      node.insertBefore(host, node.firstChild);
+    }
+    act.forEach(function (opt, fi) {
+      var v = optValueOf(L, opt, entry.f);
+      var slot = v ? opt.kept.indexOf(v) : -1;
+      var pin = keyPinEl(slot >= 0 ? keyKindColor(L, opt, fi, slot) : KEY_OTHER, v, fi > 0);
+      if (host === node) node.insertBefore(pin, node.firstChild);
+      else host.appendChild(pin);
+    });
+  }
+
+  // The key beside the layer, rebuilt with the marks: kinds under a header per
+  // family when two keys are on, the plain shipped shape when one or none.
+  function keyLegendRows(L, act) {
+    if (!act.length) {
+      return [{ color: oneColorOf(L), label: String(L.label || "").slice(0, 40), shape: "dot" }];
+    }
+    var rows = [], paired = act.length > 1;
+    act.forEach(function (opt, fi) {
+      var fam = paired ? (fi ? "sq" : "round") : undefined;
+      if (paired) rows.push({ header: true, label: opt.label + " — " + (fi ? "squares" : "circles") });
+      opt.kept.forEach(function (kind, i) {
+        rows.push({ color: keyKindColor(L, opt, fi, i), label: kind, categorical: true, family: fam });
+      });
+      if (opt.hasOther) rows.push({ color: KEY_OTHER, label: "other", categorical: true, family: fam });
+    });
+    return rows;
+  }
+
+  function applyLayerKeys(L) {
+    var act = activeKeyOptions(L);
+    (markersByLayer[L.id] || []).forEach(function (e) { renderMarks(L, e, act); });
+    // the committed single key is the layer's shipped look — shipped key too
+    L._legend = (act.length === 1 && act[0].committed) ? null : keyLegendRows(L, act);
+    renderExtra(L);
+    applyMarkerVisibility(L);   // discs re-read the new mark widths (fold radius included)
+  }
+
+  // Any visible layer wearing two keys draws double-width markers everywhere.
+  function pairedActive() {
+    var any = false;
+    (MANIFEST.layers || []).forEach(function (L) {
+      if (L._visible !== false && keyState[L.id] && keyState[L.id].active.length > 1) any = true;
+    });
+    return any;
+  }
+
+  function buildKeyChips(L) {
+    var st = keyState[L.id];
+    var wrap = el("div", "key-chips");
+    wrap.appendChild(el("span", "key-chips-lbl", "Colour by"));
+    var row = el("div", "crop-chips");
+    L._keyOptions.forEach(function (opt) {
+      var c = el("button", "crop-chip keychip" + (st.active.indexOf(opt.col) >= 0 ? " on" : ""), esc(opt.label));
+      c.onclick = function () {
+        var i = st.active.indexOf(opt.col);
+        if (i >= 0) st.active.splice(i, 1);
+        else if (st.active.length >= 2) {
+          // the measured limit: circle and square are the two shapes a 20px
+          // pin can still say apart; a third mark per place stops being legible
+          st.note = "Two keys are already on — circles and squares. A third mark on every place would be too small to read, so turn one off to add " + opt.label + ".";
+          renderExtra(L);
+          return;
+        } else {
+          st.active.push(opt.col);
+          // family order follows the offered order, not tap order, so the
+          // committed key keeps its circles and its colours
+          st.active = L._keyOptions.filter(function (o) { return st.active.indexOf(o.col) >= 0; })
+            .map(function (o) { return o.col; });
+        }
+        st.note = null;
+        applyLayerKeys(L);
+      };
+      row.appendChild(c);
+    });
+    var one = el("button", "crop-chip" + (st.active.length ? "" : " on"), "one colour");
+    one.style.setProperty("--c", oneColorOf(L));
+    one.onclick = function () {
+      if (!st.active.length) return;
+      st.active = [];
+      st.note = null;
+      applyLayerKeys(L);
+    };
+    row.appendChild(one);
+    wrap.appendChild(row);
+    var noteText = st.note;
+    if (!noteText) {
+      var act = activeKeyOptions(L);
+      if (act.length === 2) {
+        var need = act[0].kept.length + act[1].kept.length;
+        if (need > KEY_MAX) {
+          noteText = act[0].label + " and " + act[1].label + " together need " + need +
+            " colours, but only eight stay clearly apart — so some colours appear in both. The shapes tell them apart: circles are " +
+            act[0].label + ", squares are " + act[1].label + ".";
+        }
+      }
+    }
+    if (noteText) wrap.appendChild(el("div", "key-note", esc(noteText)));
+    return wrap;
   }
 
   // A single numbered badge stands in for a tight group at overview zoom; the
@@ -807,12 +1103,14 @@
   var FAN_MAX = 100;    // a fan past this stops being reachable and starts being decoration
 
   // fan feet in px around (0,0): a ring while neighbours fit, an archimedean
-  // spiral past 8 (a ring wide enough for many pins drifts too far out)
-  function fanFeet(n) {
+  // spiral past 8 (a ring wide enough for many pins drifts too far out).
+  // gap = how far apart neighbouring feet must stay — a marker-width, which
+  // doubles when the fanned pins carry two marks each.
+  function fanFeet(n, gap) {
     var feet = [], i;
     if (n <= 8) {
       // ring radius grows so neighbouring pins stay a marker-width apart
-      var r = Math.max(34, (FAN_GAP / 2 + 2) / Math.sin(Math.PI / n));
+      var r = Math.max(34, (gap / 2 + 2) / Math.sin(Math.PI / n));
       for (i = 0; i < n; i++) {
         var a = (2 * Math.PI * i) / n - Math.PI / 2;
         feet.push([r * Math.cos(a), r * Math.sin(a)]);
@@ -821,7 +1119,7 @@
     }
     var angle = 0, leg = 30, cx = 0, cy = 0;
     for (i = 0; i < n; i++) {
-      angle += (FAN_GAP + 5) / leg;         // a constant arc between feet
+      angle += (gap + 5) / leg;             // a constant arc between feet
       feet.push([leg * Math.cos(angle), leg * Math.sin(angle)]);
       cx += feet[i][0] / n; cy += feet[i][1] / n;
       leg += 2 * Math.PI * 4.5 / angle;     // creep outward as the spiral winds
@@ -867,7 +1165,11 @@
   var CLUSTER_BOUNDS_SRC = "atlas-cluster-bounds-src";
   var CLUSTER_LAYER = "atlas-cluster-disc";
   var CLUSTER_RADIUS = 20;   // = pin diameter: fold only what truly collides
-  var CLUSTER = { ready: false, off: false, hovering: false, hoverId: null,
+  // when any visible layer wears two keys its pins are two marks wide (~42px),
+  // so "truly collides" starts further out — the radius widens with the pins
+  var CLUSTER_RADIUS_PAIR = 34;
+  var CLUSTER = { ready: false, off: false, wired: false, radiusNow: CLUSTER_RADIUS,
+                  hovering: false, hoverId: null,
                   byKey: {}, boundsCache: {}, refreshTimer: null, syncTimer: null };
 
   // Marker entries the reader can currently see, layer by layer: layer on,
@@ -899,7 +1201,7 @@
       type: "geojson",
       data: { type: "FeatureCollection", features: [] },
       cluster: true,
-      clusterRadius: CLUSTER_RADIUS,
+      clusterRadius: CLUSTER.radiusNow,
       // Clustering runs through the deepest reachable tile, so a group that
       // cannot separate is still a cluster AT max zoom — the click handler
       // reads "expansion zoom past the map's ceiling" as "these can never
@@ -955,7 +1257,13 @@
     return hits.length ? hits[0] : null;
   }
 
+  // The cluster source can be torn down and rebuilt (the fold radius changes
+  // with the pins' width — see clusterTeardown), but these handlers are wired
+  // once for the page: MapLibre delegates them by layer id, so they find the
+  // re-added layers by name, and wiring twice would fire every click twice.
   function wireClusterEvents() {
+    if (CLUSTER.wired) return;
+    CLUSTER.wired = true;
     map.on("click", CLUSTER_LAYER, function (e) {
       var f = e.features && e.features[0];
       if (f) clusterClick(f);
@@ -1081,13 +1389,35 @@
     CLUSTER.refreshTimer = setTimeout(function () { CLUSTER.refreshTimer = null; refreshClusterIndex(); }, 60);
   }
 
+  // Undo ensureClusterEngine so the next refresh can rebuild the source with a
+  // different fold radius. A GeoJSON source's clusterRadius is fixed at
+  // creation, so widening it (two-key pins) means starting the engine over.
+  // Handlers stay wired — see wireClusterEvents.
+  function clusterTeardown() {
+    if (!CLUSTER.ready) return;
+    ["atlas-cluster-count", CLUSTER_LAYER, "atlas-cluster-bounds-line", "atlas-cluster-bounds-fill"].forEach(function (id) {
+      if (map.getLayer(id)) map.removeLayer(id);
+    });
+    if (map.getSource(CLUSTER_SRC)) map.removeSource(CLUSTER_SRC);
+    if (map.getSource(CLUSTER_BOUNDS_SRC)) map.removeSource(CLUSTER_BOUNDS_SRC);
+    CLUSTER.ready = false;
+    CLUSTER.byKey = {};
+    CLUSTER.boundsCache = {};
+    CLUSTER.hoverId = null;
+  }
+
   // Rebuild the clustered source from whatever is currently visible. Runs
   // on layer toggles, search and badge folds — never on mere pans. Entries
   // new to the source stay visible until the first sync says otherwise
   // (optimistic, like the restack this replaces): a moment of overlap reads
   // better than pins blinking off and back on.
   function refreshClusterIndex() {
-    if (!map || !ensureClusterEngine()) return;
+    if (!map) return;
+    // every rebuild reconciles the fold radius with the pins' current width;
+    // single-key atlases never leave CLUSTER_RADIUS, so nothing is torn down
+    var want = pairedActive() ? CLUSTER_RADIUS_PAIR : CLUSTER_RADIUS;
+    if (CLUSTER.radiusNow !== want) { clusterTeardown(); CLUSTER.radiusNow = want; }
+    if (!ensureClusterEngine()) return;
     if (SPIDER.items) { scheduleClusterRefresh(); return; }   // never re-index under an open fan
     var feats = [], byKey = {};
     clusterEntries().forEach(function (it) {
@@ -1171,7 +1501,10 @@
     wireSpider();
     hideHint();
     var a = map.project(anchor);
-    var feet = fanFeet(stack.length);
+    // two-mark pins need roughly twice the elbow room
+    var gap = FAN_GAP;
+    stack.forEach(function (it) { if (it.e._paired) gap = FAN_GAP + 24; });
+    var feet = fanFeet(stack.length, gap);
     SPIDER.anchor = anchor;
     SPIDER.items = stack.map(function (it, i) {
       // offset from the member's own point to its foot; both endpoints shift
@@ -1832,6 +2165,9 @@
       box.appendChild(chips);
     }
 
+    // colour keys for contributed marker layers (see MORE THAN ONE KEY)
+    if (L._keyOptions && keyState[L.id]) box.appendChild(buildKeyChips(L));
+
     // opacity slider
     if (L.opacityControl) {
       var wrap = el("div", "ctl-opacity");
@@ -1884,6 +2220,8 @@
       leg.appendChild(lab);
     } else if (data && data.length) {
       data.forEach(function (it) {
+        // two-key layers group their kinds under a header per shape family
+        if (it.header) { leg.appendChild(el("div", "leg-head", esc(it.label))); return; }
         var r = el("div", "leg-item" + (it.faint ? " faint" : ""));
         r.appendChild(swatch(it));
         r.appendChild(el("span", "leg-label", esc(it.label)));
@@ -1920,6 +2258,20 @@
   }
 
   function swatch(it) {
+    // two-key rows: the swatch is the pin itself in miniature — the kind's
+    // colour and icon inside the shape that says which key (circle / square)
+    if (it.family) {
+      var p = el("span", "leg-pin" + (it.family === "sq" ? " sq" : ""));
+      p.style.setProperty("--c", it.color);
+      var fic = iconFor(it.label);
+      if (fic.icon && ICONS[fic.icon]) p.innerHTML = ICONS[fic.icon];
+      else {
+        p.textContent = fic.badge;
+        p.classList.add("badge");
+        if (paleHex(it.color)) p.classList.add("pale");
+      }
+      return p;
+    }
     var key = it.icon, badge = null;
     // category legend rows carry the value in `label`; derive icon/badge to match the markers
     if (!key && it.categorical) { var ic = iconFor(it.label); if (ic.icon) key = ic.icon; else badge = ic.badge; }
