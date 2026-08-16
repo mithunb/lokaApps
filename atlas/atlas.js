@@ -89,9 +89,9 @@
      blues and greys (dichromats keep a single blue↔yellow hue axis), and
      warm-vs-cool banding collapses to 1.6 ΔE00 under deuteranopia — two keys'
      colours become the same colour. So colour says which KIND within a key,
-     the mark's shape (circle / square) says which KEY, and when both keys
-     fit inside eight colours between them the second key takes its colours
-     from the far end of the palette, so no colour sits in two keys at once. */
+     the mark's SHAPE says which KEY, and colours repeat freely between keys:
+     every key counts from the front of the palette (the committed key keeps
+     its committed colours), and the key panel states that cost in words. */
   var KEY_COLORS = ["#332288", "#999933", "#44AA99", "#AA4499", "#117733", "#882255", "#88CCEE", "#DDCC77"];
   var KEY_OTHER = "#7a756c";
   var KEY_MAX = 8;
@@ -778,28 +778,41 @@
 
   /* ==================================================================
      MORE THAN ONE KEY — a contributed marker layer can be coloured by
-     more than one of its columns at once. Each active key gets a SHAPE
-     family — the first key draws circles, the second squares — and
-     colour tells the kinds apart WITHIN a key, off the same eight
-     colours the committed layer already uses. A place that answers two
-     keys wears two marks side by side inside its one marker element,
-     so the cluster arithmetic keeps counting PLACES (one source
-     feature per place), never marks.
+     up to FOUR of its columns at once. The first active key is the
+     anchor: the full 20px pin, exactly the shipped look — its colour,
+     its icon. Each further key is a small solid mark at a fixed corner
+     of that pin — square upper right (key 2), triangle upper left
+     (key 3), diamond lower right (key 4) — so a place stays ONE thing
+     wearing badges, and its footprint never grows past ~40px however
+     many keys are on (a row of marks grew 22px per key; measured on
+     the Bengaluru layer, a row of two folded more places into discs
+     than the crown does carrying four). The satellite sizes are
+     ink-matched — each carries the colour area of a 12px circle
+     (square 10.6, triangle 16.2, diamond 15.1) — because below ~12px
+     of ink the muted palette stops being nameable and a smaller mark
+     would show a colour the eye cannot read.
 
-     Why keys share the palette instead of splitting it: see the note
-     on KEY_COLORS above — eight distinct colours is the honest ceiling
-     for pins on this basemap, so shape has to carry which key a mark
-     belongs to. When the two keys need at most eight colours between
-     them, the second key's colours come from the far end of the
-     palette and no colour appears in both keys; past that they repeat,
-     and the chips say so in so many words.
+     Colour tells the kinds apart WITHIN a key, off the same eight
+     colours the committed layer already uses (see KEY_COLORS above —
+     eight distinct colours is the honest ceiling on this basemap).
+     Colours repeat freely BETWEEN keys; the SHAPE says which key a
+     mark belongs to, and the key panel states that cost in words. A
+     place that answers several keys still counts ONCE in the cluster
+     arithmetic: all its marks live inside its one marker element.
 
-     Which columns may be a key — the shipped profiling caps (a column
-     of single values: at most 8 kinds; a multi-value column like
-     "Culture; Heritage": at most 12 first-tags) PLUS a coverage bar:
-     the top eight kinds must cover at least 60% of the places.
-     Measured on the Bengaluru layer: categories' top-8 covers 63 of 66
-     (a key); labels' top-8 covers 12 of 66 (a caption, never a key).
+     Which columns may be a key — name-blind, by counting alone: a
+     column qualifies when a small number of kinds covers essentially
+     all the places, whatever the column is called. Single-answer
+     columns: 2–9 kinds; list columns ("Culture; Heritage"): at most
+     12 first-tags; and the top eight kinds must cover at least 60% of
+     the places. Every kept kind must also read as a word — a column
+     of shared links or id-strings is not a set of readable kinds,
+     however few of them there are. The column NAME is never judged
+     (that gate stays for search only): a `batch_id` column holding
+     "first walk" / "second walk" is a key; an `address` column of 54
+     one-off strings is not. Measured on the Bengaluru layer:
+     categories' top-8 covers 63 of 66 (a key); labels' top-8 covers
+     12 of 66 (a caption, never a key).
   ================================================================== */
   function prettyCol(name) {
     return String(name).replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
@@ -833,7 +846,11 @@
     feats.slice(0, 5).forEach(function (f) { for (var k in (f.properties || {})) names[k] = 1; });
     var opts = [];
     Object.keys(names).forEach(function (col) {
-      if (col.charAt(0) === "_" || skipSearchProp(col)) return;
+      // name-blind: only engine-internal columns (leading "_") are barred by
+      // name; everything else is judged on its VALUES below. skipSearchProp
+      // stays out of this path on purpose — it judges names, and a batch_id
+      // column holding "first walk" / "second walk" is a perfectly good key.
+      if (col.charAt(0) === "_") return;
       var committed = committedCol === col;
       var nonEmpty = [];
       feats.forEach(function (f) {
@@ -856,7 +873,9 @@
       });
       if (!committed) {
         if (counts.length < 2) return;
-        if (delim ? counts.length > 12 : counts.length > KEY_MAX) return;   // the shipped caps
+        // the counting caps: fewer than 10 kinds for a one-answer column,
+        // at most 12 first-tags for a list column
+        if (delim ? counts.length > 12 : counts.length > 9) return;
       }
       counts.sort(function (a, b) { return b.n - a.n; });   // stable: ties keep first-seen order
       var kept;
@@ -864,6 +883,9 @@
         kept = Object.keys(L.markers);   // the committed kinds, committed order, committed colours
       } else {
         kept = counts.slice(0, KEY_MAX).map(function (c) { return c.kind; });
+        // every kept kind must read as a word: a column of shared links,
+        // id-strings or timestamps is not a set of readable kinds
+        if (kept.some(function (k) { return skipSearchValue(k); })) return;
       }
       var named = 0;
       counts.forEach(function (c) { if (kept.indexOf(c.kind) >= 0) named += c.n; });
@@ -882,18 +904,16 @@
     return L._keyOptions.filter(function (o) { return st.active.indexOf(o.col) >= 0; });
   }
 
-  // Colour slots: the first family counts from the front of the palette (for
-  // the committed key those are its committed colours, untouched), the second
-  // family from the far end — disjoint whenever the two keys fit inside eight
-  // colours between them, and lower-stakes collisions when they don't (the
-  // commonest kind of one key never shares a colour with the commonest of the
-  // other).
+  // Colour slots: every family counts from the front of the palette — colours
+  // repeat freely between keys and the shape says which key, so the far-end
+  // trick the two-key row used is gone. The committed key, always the anchor
+  // family, keeps its committed colours untouched.
   function keyKindColor(L, opt, familyIndex, slot) {
     if (opt.committed && familyIndex === 0) {
       var m = L.markers && L.markers[opt.kept[slot]];
       if (m && m.color) return m.color;
     }
-    return familyIndex ? KEY_COLORS[KEY_MAX - 1 - (slot % KEY_MAX)] : KEY_COLORS[slot % KEY_MAX];
+    return KEY_COLORS[slot % KEY_MAX];
   }
 
   // A feature's kind under a key: the committed key reads the property the
@@ -916,8 +936,8 @@
 
   // One mark, exactly as addMarker draws it: white body, coloured border, and
   // the kind's icon (or monogram badge) inside. kindValue null = a plain pin.
-  function keyPinEl(color, kindValue, square) {
-    var pin = el("div", "atlas-pin" + (square ? " sq" : ""));
+  function keyPinEl(color, kindValue) {
+    var pin = el("div", "atlas-pin");
     pin.style.setProperty("--pin", color);
     if (kindValue != null) {
       var ic = iconFor(kindValue);
@@ -931,42 +951,82 @@
     return pin;
   }
 
-  // Redraw one place's marks to match the active keys: one circle for a single
-  // key (the committed look), a circle-and-square pair for two, a plain pin in
-  // the layer's own colour for none. The marker element and all its wiring stay.
+  /* The crown's small marks: one shape per key, at a fixed corner of the
+     anchor pin. Solid fill, thin white rim, no icon — colour and shape carry
+     everything. Sizes are ink-matched (each holds the colour area of a 12px
+     circle), which makes the triangle and diamond wider than the square:
+     that is the price of every kind carrying the same amount of colour.
+     Geometry identical to the design mock (many-keys-mock.html). */
+  var SAT_SHAPES = ["square", "triangle", "diamond"];   // keys 2, 3, 4
+  var SAT_WORDS = ["circles", "small squares", "small triangles", "small diamonds"];   // family 0..3
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  function satPathD(shape, cx, cy) {
+    if (shape === "square") { var s = 10.6 / 2; return "M" + (cx - s) + " " + (cy - s) + "h" + (2 * s) + "v" + (2 * s) + "h" + (-2 * s) + "z"; }
+    if (shape === "triangle") {
+      var w = 16.2 / 2, h = 16.2 * 0.866, top = cy - h * 0.6;
+      return "M" + cx + " " + top + "L" + (cx + w) + " " + (top + h) + "L" + (cx - w) + " " + (top + h) + "z";
+    }
+    var d = 15.1 / 2;   // diamond
+    return "M" + cx + " " + (cy - d) + "L" + (cx + d) + " " + cy + "L" + cx + " " + (cy + d) + "L" + (cx - d) + " " + cy + "z";
+  }
+  function satEl(shape, color) {
+    var s = document.createElementNS(SVG_NS, "svg");
+    s.setAttribute("class", "atlas-sat sat-" + shape);
+    s.setAttribute("viewBox", "0 0 20 20");
+    s.setAttribute("aria-hidden", "true");
+    var p = document.createElementNS(SVG_NS, "path");
+    p.setAttribute("d", satPathD(shape, 10, 10));
+    p.setAttribute("fill", color);
+    p.setAttribute("stroke", "#fff");
+    p.setAttribute("stroke-width", "1.4");
+    s.appendChild(p);
+    return s;
+  }
+
+  // Redraw one place's marks to match the active keys. One key: the shipped
+  // pin, untouched. Two to four: that pin stays the anchor and each further
+  // key adds its small corner mark — the crown, ~40px however many keys are
+  // on. None: a plain pin in the layer's one colour. The marker element and
+  // all its wiring stay; only what is drawn inside changes.
   function renderMarks(L, entry, act) {
     var node = entry.node;
     if (!node) return;
     while (node.firstChild && node.firstChild.className !== "atlas-mlabel") node.removeChild(node.firstChild);
-    entry._paired = act.length > 1;
+    entry._crowned = act.length > 1;
     if (!act.length) {
-      node.insertBefore(keyPinEl(oneColorOf(L), null, false), node.firstChild);
+      node.insertBefore(keyPinEl(oneColorOf(L), null), node.firstChild);
       return;
     }
-    var host = node;
-    if (act.length > 1) {
-      host = el("div", "atlas-marks");
-      node.insertBefore(host, node.firstChild);
+    var v0 = optValueOf(L, act[0], entry.f);
+    var s0 = v0 ? act[0].kept.indexOf(v0) : -1;
+    var anchor = keyPinEl(s0 >= 0 ? keyKindColor(L, act[0], 0, s0) : KEY_OTHER, v0);
+    if (act.length === 1) {
+      node.insertBefore(anchor, node.firstChild);
+      return;
     }
-    act.forEach(function (opt, fi) {
+    // satellites first, the pin last: the pin paints over the corner each
+    // small mark tucks under, exactly as the mock draws it
+    var crown = el("div", "atlas-crown");
+    act.slice(1).forEach(function (opt, i) {
       var v = optValueOf(L, opt, entry.f);
       var slot = v ? opt.kept.indexOf(v) : -1;
-      var pin = keyPinEl(slot >= 0 ? keyKindColor(L, opt, fi, slot) : KEY_OTHER, v, fi > 0);
-      if (host === node) node.insertBefore(pin, node.firstChild);
-      else host.appendChild(pin);
+      crown.appendChild(satEl(SAT_SHAPES[i], slot >= 0 ? keyKindColor(L, opt, i + 1, slot) : KEY_OTHER));
     });
+    crown.appendChild(anchor);
+    node.insertBefore(crown, node.firstChild);
   }
 
-  // The key beside the layer, rebuilt with the marks: kinds under a header per
-  // family when two keys are on, the plain shipped shape when one or none.
+  // The key beside the layer, rebuilt with the marks: kinds under a header
+  // per family when several keys are on ("themes — small squares"), the
+  // plain shipped shape when one or none.
   function keyLegendRows(L, act) {
     if (!act.length) {
       return [{ color: oneColorOf(L), label: String(L.label || "").slice(0, 40), shape: "dot" }];
     }
-    var rows = [], paired = act.length > 1;
+    var rows = [], crowned = act.length > 1;
     act.forEach(function (opt, fi) {
-      var fam = paired ? (fi ? "sq" : "round") : undefined;
-      if (paired) rows.push({ header: true, label: opt.label + " — " + (fi ? "squares" : "circles") });
+      var fam = crowned ? (fi ? SAT_SHAPES[fi - 1] : "round") : undefined;
+      if (crowned) rows.push({ header: true, label: opt.label + " — " + SAT_WORDS[fi] });
       opt.kept.forEach(function (kind, i) {
         rows.push({ color: keyKindColor(L, opt, fi, i), label: kind, categorical: true, family: fam });
       });
@@ -984,8 +1044,9 @@
     applyMarkerVisibility(L);   // discs re-read the new mark widths (fold radius included)
   }
 
-  // Any visible layer wearing two keys draws double-width markers everywhere.
-  function pairedActive() {
+  // Any visible layer wearing a crown (two or more keys) folds pins at the
+  // crown's true footprint everywhere.
+  function crownActive() {
     var any = false;
     (MANIFEST.layers || []).forEach(function (L) {
       if (L._visible !== false && keyState[L.id] && keyState[L.id].active.length > 1) any = true;
@@ -1003,16 +1064,17 @@
       c.onclick = function () {
         var i = st.active.indexOf(opt.col);
         if (i >= 0) st.active.splice(i, 1);
-        else if (st.active.length >= 2) {
-          // the measured limit: circle and square are the two shapes a 20px
-          // pin can still say apart; a third mark per place stops being legible
-          st.note = "Two keys are already on — circles and squares. A third mark on every place would be too small to read, so turn one off to add " + opt.label + ".";
+        else if (st.active.length >= 4) {
+          // the measured cap: one full pin plus three corner marks is as much
+          // as a place can wear before the marks stop reading apart
+          st.note = "Four keys are already on — that is as many small marks as a pin can carry and stay readable. Turn one off to add " + opt.label + ".";
           renderExtra(L);
           return;
         } else {
           st.active.push(opt.col);
           // family order follows the offered order, not tap order, so the
-          // committed key keeps its circles and its colours
+          // committed key keeps its circles and its colours, and each key
+          // keeps its one corner
           st.active = L._keyOptions.filter(function (o) { return st.active.indexOf(o.col) >= 0; })
             .map(function (o) { return o.col; });
         }
@@ -1032,16 +1094,9 @@
     row.appendChild(one);
     wrap.appendChild(row);
     var noteText = st.note;
-    if (!noteText) {
-      var act = activeKeyOptions(L);
-      if (act.length === 2) {
-        var need = act[0].kept.length + act[1].kept.length;
-        if (need > KEY_MAX) {
-          noteText = act[0].label + " and " + act[1].label + " together need " + need +
-            " colours, but only eight stay clearly apart — so some colours appear in both. The shapes tell them apart: circles are " +
-            act[0].label + ", squares are " + act[1].label + ".";
-        }
-      }
+    if (!noteText && activeKeyOptions(L).length > 1) {
+      // the accepted cost, stated once
+      noteText = "Colours can repeat between keys — the shape says which key a mark belongs to.";
     }
     if (noteText) wrap.appendChild(el("div", "key-note", esc(noteText)));
     return wrap;
@@ -1104,8 +1159,8 @@
 
   // fan feet in px around (0,0): a ring while neighbours fit, an archimedean
   // spiral past 8 (a ring wide enough for many pins drifts too far out).
-  // gap = how far apart neighbouring feet must stay — a marker-width, which
-  // doubles when the fanned pins carry two marks each.
+  // gap = how far apart neighbouring feet must stay — a marker-width, wider
+  // when the fanned pins wear crowns.
   function fanFeet(n, gap) {
     var feet = [], i;
     if (n <= 8) {
@@ -1165,9 +1220,10 @@
   var CLUSTER_BOUNDS_SRC = "atlas-cluster-bounds-src";
   var CLUSTER_LAYER = "atlas-cluster-disc";
   var CLUSTER_RADIUS = 20;   // = pin diameter: fold only what truly collides
-  // when any visible layer wears two keys its pins are two marks wide (~42px),
-  // so "truly collides" starts further out — the radius widens with the pins
-  var CLUSTER_RADIUS_PAIR = 34;
+  // when any visible layer wears a crown its pins are ~40px wide — and stay
+  // 40px at two, three or four keys, because the corner marks are already
+  // there — so "truly collides" starts further out, by the same amount
+  var CLUSTER_RADIUS_CROWN = 40;
   var CLUSTER = { ready: false, off: false, wired: false, radiusNow: CLUSTER_RADIUS,
                   hovering: false, hoverId: null,
                   byKey: {}, boundsCache: {}, refreshTimer: null, syncTimer: null };
@@ -1415,7 +1471,7 @@
     if (!map) return;
     // every rebuild reconciles the fold radius with the pins' current width;
     // single-key atlases never leave CLUSTER_RADIUS, so nothing is torn down
-    var want = pairedActive() ? CLUSTER_RADIUS_PAIR : CLUSTER_RADIUS;
+    var want = crownActive() ? CLUSTER_RADIUS_CROWN : CLUSTER_RADIUS;
     if (CLUSTER.radiusNow !== want) { clusterTeardown(); CLUSTER.radiusNow = want; }
     if (!ensureClusterEngine()) return;
     if (SPIDER.items) { scheduleClusterRefresh(); return; }   // never re-index under an open fan
@@ -1501,9 +1557,10 @@
     wireSpider();
     hideHint();
     var a = map.project(anchor);
-    // two-mark pins need roughly twice the elbow room
+    // crowned pins need elbow room for their corner marks (~44px), still
+    // less than the retired two-mark row asked for
     var gap = FAN_GAP;
-    stack.forEach(function (it) { if (it.e._paired) gap = FAN_GAP + 24; });
+    stack.forEach(function (it) { if (it.e._crowned) gap = FAN_GAP + 16; });
     var feet = fanFeet(stack.length, gap);
     SPIDER.anchor = anchor;
     SPIDER.items = stack.map(function (it, i) {
@@ -2220,7 +2277,7 @@
       leg.appendChild(lab);
     } else if (data && data.length) {
       data.forEach(function (it) {
-        // two-key layers group their kinds under a header per shape family
+        // crowned layers group their kinds under a header per shape family
         if (it.header) { leg.appendChild(el("div", "leg-head", esc(it.label))); return; }
         var r = el("div", "leg-item" + (it.faint ? " faint" : ""));
         r.appendChild(swatch(it));
@@ -2258,10 +2315,17 @@
   }
 
   function swatch(it) {
-    // two-key rows: the swatch is the pin itself in miniature — the kind's
-    // colour and icon inside the shape that says which key (circle / square)
+    // crowned rows: the swatch is the mark itself — satellite families the
+    // solid shape at true size, the anchor family the pin in miniature (the
+    // kind's colour and icon inside a circle)
+    if (it.family && it.family !== "round") {
+      var sv = satEl(it.family, it.color);
+      sv.setAttribute("class", "leg-sat");
+      sv.setAttribute("viewBox", "1 1 18 18");
+      return sv;
+    }
     if (it.family) {
-      var p = el("span", "leg-pin" + (it.family === "sq" ? " sq" : ""));
+      var p = el("span", "leg-pin");
       p.style.setProperty("--c", it.color);
       var fic = iconFor(it.label);
       if (fic.icon && ICONS[fic.icon]) p.innerHTML = ICONS[fic.icon];

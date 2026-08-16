@@ -188,18 +188,34 @@
     .key-chips .crop-chips { margin:0; }
     .crop-chip.keychip::before { content:none; }   /* a key is many colours — no single dot can stand for it */
     .key-note { font-size:.7rem; color:var(--color-text-muted); line-height:1.45; margin:.3rem 0 .05rem; }
-    /* the second key's marks are squares; the first stays circles */
-    .atlas-pin.sq { border-radius:5px; }
-    .atlas-marks { display:flex; align-items:center; gap:2px; }
-    /* two-key legend: kinds grouped under a header per shape family, each
-       swatch the pin itself in miniature */
+    /* the crown: keys 2–4 are small solid marks at fixed corners of the
+       anchor pin — square upper right, triangle upper left, diamond lower
+       right — placed 16.5px off the pin's centre at 45°. The pin sits last
+       in the stack so it paints over the corner each mark tucks under, and
+       the whole place stays ~40px wide at two, three or four keys. */
+    .atlas-crown { position:relative; width:20px; height:20px;
+      transition:transform .18s cubic-bezier(.25,1,.5,1), filter .18s ease; }
+    .atlas-crown .atlas-pin { position:relative; }
+    .atlas-sat { position:absolute; width:20px; height:20px; }
+    .atlas-sat.sat-square   { left:11.7px;  top:-11.7px; }
+    .atlas-sat.sat-triangle { left:-11.7px; top:-11.7px; }
+    .atlas-sat.sat-diamond  { left:11.7px;  top:11.7px; }
+    /* a crowned place lifts as one thing — the pin's own lift would tear the
+       corner marks off it */
+    @media (hover:hover){
+      .atlas-marker:hover .atlas-crown { transform:translateY(-2px) scale(1.14); }
+      .atlas-marker:hover .atlas-crown .atlas-pin { transform:none; box-shadow:0 3px 8px rgba(42,36,26,.4); }
+    }
+    /* crowned legend: kinds grouped under a header per shape family — the
+       anchor family the pin in miniature, the others their solid shape at
+       true size */
     .leg-head { font-size:.68rem; font-weight:600; color:var(--color-text-muted); margin:.3rem 0 .05rem; }
     .leg-pin { flex:0 0 auto; width:16px; height:16px; border-radius:50%; background:#fff; border:1.6px solid var(--c);
       color:var(--c); display:inline-flex; align-items:center; justify-content:center; box-sizing:border-box; }
-    .leg-pin.sq { border-radius:4px; }
     .leg-pin svg { width:9px; height:9px; display:block; }
     .leg-pin.badge { background:var(--c); color:#fff; font-size:7px; font-weight:700; }
     .leg-pin.badge.pale { color:#2A241A; }
+    .leg-sat { flex:0 0 auto; width:18px; height:18px; display:block; }
 
     .ctl-opacity { display:flex; align-items:center; gap:.5rem; margin:.45rem 0 .1rem; }
     .ctl-opacity-lbl { font-size:.72rem; color:var(--color-text-muted); }
@@ -613,8 +629,8 @@
        deploy that changes atlas.js reaches nobody until the token moves. Bump
        it (all pages share one) whenever a local .js or .css changes. Vendored
        libraries are left alone — their filenames change when they do. -->
-  <script src="./iconkit.js?v=20260814-4"></script>
-  <script src="./share.js?v=20260814-4"></script>
-  <script src="./atlas.js?v=20260814-4"></script>
+  <script src="./iconkit.js?v=20260814-5"></script>
+  <script src="./share.js?v=20260814-5"></script>
+  <script src="./atlas.js?v=20260814-5"></script>
 </body>
 </html>
