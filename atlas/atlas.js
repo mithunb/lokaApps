@@ -72,8 +72,6 @@
      legend beside the map — see the note there on why one table beats two.
      Aliased locally so the rest of this file reads as it always did. */
   var ICONS = LokaIcons.ICONS;
-  var iconFor = LokaIcons.iconFor;
-  var paleHex = LokaIcons.paleHex;
 
   var map, MANIFEST, activeBasemap, DATA = {}, markersByLayer = {}, cropState = {};
 
@@ -736,24 +734,19 @@
     gj.features.forEach(function (f) {
       var cfg = (L.markers && L.markers[f.properties[L.markerBy]]) || L.markerDefault || L.marker || {};
       var wrap = el("div", "atlas-marker");
-      var paleFill = paleHex(cfg.color);
       // pin + label live in an inner node: MapLibre owns the wrap's transform
       // (true position), the node alone takes the spiderfy displacement — see
       // the SPIDERFY section below.
       var node = el("div", "atlas-mnode");
       var pin = el("div", "atlas-pin" + (cfg.ring ? " ring" : ""));
       pin.style.setProperty("--pin", cfg.color || "#f97316");
+      // Explicit icons and glyphs are an atlas's own bespoke styling (deoria's
+      // factory and flask) and stay exactly as declared. The DERIVED icon —
+      // guessed from a kind's words on contributed layers — is retired: those
+      // pins carry nothing inside, and the keys a layer can wear are drawn
+      // beside the pin instead (see KEYS WEAR ROWS below).
       if (cfg.icon && ICONS[cfg.icon]) pin.innerHTML = ICONS[cfg.icon];
       else if (cfg.glyph) pin.textContent = cfg.glyph;
-      else if (L.categoryIcons) {
-        // category layers: derive an icon (or monogram badge) from the value
-        var ic = iconFor(f.properties[L.markerBy]);
-        if (ic.icon && ICONS[ic.icon]) pin.innerHTML = ICONS[ic.icon];
-        else {
-          pin.textContent = ic.badge; pin.classList.add("badge");
-          if (paleFill) pin.classList.add("pale");   // dark ink on the pale palette slots
-        }
-      }
       node.appendChild(pin);
       if (L.label_text) node.appendChild(el("span", "atlas-mlabel", esc(f.properties[L.label_text.property])));
       wrap.appendChild(node);
@@ -779,38 +772,42 @@
   }
 
   /* ==================================================================
-     MORE THAN ONE KEY — a contributed marker layer can be coloured by
-     up to FIVE of its columns at once. The first active key is the
-     anchor: the full 20px pin, exactly the shipped look — its colour,
-     its icon. Each further key is a small solid mark at a fixed corner
-     of that pin — square upper right (key 2), triangle upper left
-     (key 3), diamond lower right (key 4), flat bar lower left (key 5)
-     — so a place stays ONE thing wearing badges, and its footprint
-     never grows past ~40px however many keys are on (a row of marks
-     grew 22px per key; measured on the Bengaluru layer, a row of two
-     folded more places into discs than the crown does carrying four).
-     The satellite sizes are ink-matched — each carries the colour area
-     of a 12px circle (square 10.6, triangle 16.2, diamond 15.1, bar
-     15.1×7.55) — because below ~12px of ink the muted palette stops
-     being nameable and a smaller mark would show a colour the eye
-     cannot read. The bar takes the fourth corner because that corner
-     is BELOW the pin's shoulders, where a tall mark would hang into
-     the space a label or a neighbouring pin uses: at the same ink the
-     bar reaches 3.8px below its centre against the diamond's 7.55, and
-     it clears the shipped tell-apart bar against every other mark by
-     at least 1.8× (XOR/union distance, circle-vs-square at 20px as
-     the bar the owner already approved: vs square .43, triangle .61,
-     diamond .39, circle .40 — fifthshape.py). The star was measured
-     too and confirmed wider for the same ink (19.2px box, the widest
-     that passes) with its colour in thin points, so it stays rejected.
+     KEYS WEAR ROWS — a contributed marker layer can be coloured by
+     several of its columns at once. The pin itself never says any of
+     it: it is always the plain neutral 20px circle — white body, thin
+     border in the layer's one colour — meaning only "a place is here",
+     and the map opens with no key switched on. Each switched-on key
+     draws ONE ROW of small marks beside the pin, in that key's own
+     shape — the first key circles, the second squares, then triangles,
+     diamonds, bars — and within a row there is one mark for EVERY
+     answer the place holds: a place that is Culture and Nature wears
+     two circles, side by side. The corner-mark design this replaces
+     showed only the first answer per key, which silently dropped a
+     category on 49 of the 66 Bengaluru places; the rows show all of
+     it, and at two keys they hold that design's density (grown
+     neighbourhood at z16: 14 readable against its 13 — measured in
+     the approved mock, atlas/rows-mock.html).
+
+     Rows sit to the RIGHT of the pin, stacked in key order and
+     centred on the pin's middle; a pin near the map's right edge
+     flips its block to the left (updateRowFlips). A place missing an
+     answer under a key simply lacks that row — the shapes mean a
+     missing row misleads nobody, and the hover bubble still says
+     "left blank" in words. Mark sizes are ink-matched — each carries
+     the colour area of a 12px dot (circle 12, square 10.6, triangle
+     16.2, diamond 15.1, bar 15.1×7.55) — because below that much ink
+     the muted palette stops being nameable. Marks sit 2px apart, rows
+     2px apart, each mark rimmed 1.4px white.
 
      Colour tells the kinds apart WITHIN a key, off the same eight
      colours the committed layer already uses (see KEY_COLORS above —
      eight distinct colours is the honest ceiling on this basemap).
      Colours repeat freely BETWEEN keys; the SHAPE says which key a
-     mark belongs to, and the key panel states that cost in words. A
+     row belongs to, and the key panel states that cost in words. A
      place that answers several keys still counts ONCE in the cluster
-     arithmetic: all its marks live inside its one marker element.
+     arithmetic: all its rows live inside its one marker element, and
+     the fold distance follows the marker's true footprint — see
+     keyedFoldRadius.
 
      Which columns may be a key — name-blind, by counting alone: a
      column qualifies when a small number of kinds covers essentially
@@ -843,7 +840,13 @@
     // a layer whose committed colouring we cannot mirror is left untouched
     if (L.markerBy && !committedOpt) return;
     L._keyOptions = opts;
-    keyState[L.id] = { active: committedOpt ? [committedOpt.col] : [], note: null };
+    // the map opens with nothing switched on: every pin the plain neutral
+    // circle, the panel saying only the layer's name — the reader turns
+    // keys on, and the committed colouring is simply the first key offered
+    keyState[L.id] = { active: [], note: null };
+    (markersByLayer[L.id] || []).forEach(function (e) { renderMarks(L, e, []); });
+    L._legend = keyLegendRows(L, []);
+    wireRowFlips();
     renderExtra(L);   // the chips exist only once the data has said which columns qualify
   }
 
@@ -928,16 +931,27 @@
     return KEY_COLORS[slot % KEY_MAX];
   }
 
-  // A feature's kind under a key: the committed key reads the property the
-  // stanza already derived (markerBy); other keys take the cell's first tag.
-  function optValueOf(L, opt, f) {
+  // EVERY answer a place holds under a key, in the order the cell lists
+  // them: a list cell ("Culture; Nature") is split on the delimiter the
+  // counting detected; a single-answer cell is one answer. Duplicates are
+  // dropped (the same answer twice is one answer), and each answer gets
+  // the same trim the counting gave it, so kept kinds match exactly. The
+  // committed key reads its raw column too — the derived first-answer
+  // property (markerBy) is only a fallback for data that lost the column.
+  function optValuesOf(L, opt, f) {
     var p = f.properties || {};
-    if (opt.committed && L.markerBy && p[L.markerBy] != null) return String(p[L.markerBy]);
     var v = p[opt.col];
-    if (v === undefined || v === null || v === "") return "";
-    v = String(v);
-    if (opt.delim) { var i = v.indexOf(opt.delim); if (i >= 0) v = v.slice(0, i); }
-    return v.trim().slice(0, 40);
+    if ((v === undefined || v === null || v === "") && opt.committed && L.markerBy) v = p[L.markerBy];
+    if (v === undefined || v === null || v === "") return [];
+    var parts = opt.delim ? String(v).split(opt.delim) : [String(v)];
+    var out = [], seen = {};
+    parts.forEach(function (s) {
+      s = s.trim().slice(0, 40);
+      if (!s || seen[s]) return;
+      seen[s] = 1;
+      out.push(s);
+    });
+    return out;
   }
 
   function oneColorOf(L) {
@@ -946,135 +960,197 @@
     return ONE_COLORS.rust;
   }
 
-  // One mark, exactly as addMarker draws it: white body, coloured border, and
-  // the kind's icon (or monogram badge) inside. kindValue null = a plain pin.
-  function keyPinEl(color, kindValue) {
+  // The neutral pin: white body, thin border in the layer's one colour,
+  // nothing inside. This is every keyed pin, keys on or off — the rows
+  // beside it carry the answers.
+  function keyPinEl(color) {
     var pin = el("div", "atlas-pin");
     pin.style.setProperty("--pin", color);
-    if (kindValue != null) {
-      var ic = iconFor(kindValue);
-      if (ic.icon && ICONS[ic.icon]) pin.innerHTML = ICONS[ic.icon];
-      else {
-        pin.textContent = ic.badge;
-        pin.classList.add("badge");
-        if (paleHex(color)) pin.classList.add("pale");
-      }
-    }
     return pin;
   }
 
-  /* The crown's small marks: one shape per key, at a fixed corner of the
-     anchor pin. Solid fill, thin white rim, no icon — colour and shape carry
-     everything. Sizes are ink-matched (each holds the colour area of a 12px
-     circle), which makes the triangle, diamond and bar wider than the square:
-     that is the price of every kind carrying the same amount of colour.
-     Square/triangle/diamond geometry identical to the design mock
-     (many-keys-mock.html); the bar is the measured fifth shape — flat on
-     purpose, because its corner is the low one (see the key block above). */
-  var SAT_SHAPES = ["square", "triangle", "diamond", "bar"];   // keys 2, 3, 4, 5
-  var SAT_WORDS = ["circles", "small squares", "small triangles", "small diamonds", "small bars"];   // family 0..4
+  /* The row marks: one shape per key — circles, squares, triangles,
+     diamonds, bars, in the order the keys are offered. Solid fill, thin
+     white rim, no icon — colour and shape carry everything. Sizes are
+     ink-matched (each holds the colour area of a 12px dot), which makes
+     the triangle, diamond and bar wider than the square: that is the
+     price of every kind carrying the same amount of colour. Geometry as
+     the approved mock (rows-mock.html); marks 2px apart within a row,
+     rows 2px apart in the stack, block centred on the pin's middle. */
+  var ROW_SHAPES = ["circle", "square", "triangle", "diamond", "bar"];   // keys 1..5
+  var ROW_WORDS = ["circles", "squares", "triangles", "diamonds", "bars"];
+  var ROW_W = { circle: 12, square: 10.6, triangle: 16.2, diamond: 15.1, bar: 15.1 };
+  var ROW_H = { circle: 12, square: 10.6, triangle: 14.03, diamond: 15.1, bar: 7.55 };
+  var MARK_GAP = 2;      // white between neighbouring marks in a row
+  var ROW_GAP = 2;       // white between rows in the stack (kept in CSS too)
+  var ROW_PINGAP = 3;    // between the pin's edge and the block
+  var PIN_W = 20;        // the neutral pin's outer size
+    // The cap on keys worn at once is five — one per shape the rows can draw
+    // (ROW_SHAPES). What five costs in HEIGHT is measured, not guessed, on the
+    // live map (Bengaluru, dense neighbourhood, z16 and z17): folding keeps
+    // pins about 48px apart (the mean footprint). Three rows stack 40.6px —
+    // inside that distance, so a three-row place can never sit on a neighbour
+    // (0 collisions measured). Four reach 57.7px and graze the rare vertical
+    // neighbour (1 pair per scene, 3–4px — under half a mark). Five reach
+    // 67.3px, where that graze deepens to about 13px and can hide a whole mark
+    // on the pair below. The owner set the cap at five knowing that cost: the
+    // fifth key is worth more than the rare hidden mark, and a reader who hits
+    // it can turn a key off.
+    var KEY_STACK_CAP = 5;
+    var KEY_STACK_NOTE = "Five keys are already on — a sixth row would stack taller than the space the map keeps between places. Turn one off to add {name}.";
   var SVG_NS = "http://www.w3.org/2000/svg";
-  function satPathD(shape, cx, cy) {
+  function markPathD(shape, cx, cy) {
     if (shape === "square") { var s = 10.6 / 2; return "M" + (cx - s) + " " + (cy - s) + "h" + (2 * s) + "v" + (2 * s) + "h" + (-2 * s) + "z"; }
     if (shape === "triangle") {
-      var w = 16.2 / 2, h = 16.2 * 0.866, top = cy - h * 0.6;
+      var w = 16.2 / 2, h = ROW_H.triangle, top = cy - h / 2;
       return "M" + cx + " " + top + "L" + (cx + w) + " " + (top + h) + "L" + (cx - w) + " " + (top + h) + "z";
     }
     if (shape === "bar") { var bw = 15.1 / 2, bh = 7.55 / 2; return "M" + (cx - bw) + " " + (cy - bh) + "h" + (2 * bw) + "v" + (2 * bh) + "h" + (-2 * bw) + "z"; }
     var d = 15.1 / 2;   // diamond
     return "M" + cx + " " + (cy - d) + "L" + (cx + d) + " " + cy + "L" + cx + " " + (cy + d) + "L" + (cx - d) + " " + cy + "z";
   }
-  function satEl(shape, color) {
+  function markNode(shape, cx, cy, color) {
+    var m;
+    if (shape === "circle") {
+      m = document.createElementNS(SVG_NS, "circle");
+      m.setAttribute("cx", cx); m.setAttribute("cy", cy); m.setAttribute("r", 6);
+    } else {
+      m = document.createElementNS(SVG_NS, "path");
+      m.setAttribute("d", markPathD(shape, cx, cy));
+    }
+    m.setAttribute("fill", color);
+    m.setAttribute("stroke", "#fff");
+    m.setAttribute("stroke-width", "1.4");
+    return m;
+  }
+  // one mark on its own, for the key panel and the hover bubble
+  function markEl(shape, color) {
     var s = document.createElementNS(SVG_NS, "svg");
-    s.setAttribute("class", "atlas-sat sat-" + shape);
     s.setAttribute("viewBox", "0 0 20 20");
     s.setAttribute("aria-hidden", "true");
-    var p = document.createElementNS(SVG_NS, "path");
-    p.setAttribute("d", satPathD(shape, 10, 10));
-    p.setAttribute("fill", color);
-    p.setAttribute("stroke", "#fff");
-    p.setAttribute("stroke-width", "1.4");
-    s.appendChild(p);
+    s.appendChild(markNode(shape, 10, 10, color));
+    return s;
+  }
+  function rowWidth(shape, n) { return n * ROW_W[shape] + (n - 1) * MARK_GAP; }
+  // one row of marks as one svg, sized to its true box; the white rims may
+  // paint a hair outside it (overflow stays visible), exactly as the mock
+  function rowSvg(shape, colors) {
+    var w = rowWidth(shape, colors.length), h = ROW_H[shape];
+    var s = document.createElementNS(SVG_NS, "svg");
+    s.setAttribute("class", "atlas-keyrow");
+    s.setAttribute("width", w); s.setAttribute("height", h);
+    s.setAttribute("viewBox", "0 0 " + w + " " + h);
+    s.setAttribute("aria-hidden", "true");
+    colors.forEach(function (c, i) {
+      s.appendChild(markNode(shape, ROW_W[shape] / 2 + i * (ROW_W[shape] + MARK_GAP), h / 2, c));
+    });
     return s;
   }
 
-  // Redraw one place's marks to match the active keys. One key: the shipped
-  // pin, untouched. Two to five: that pin stays the anchor and each further
-  // key adds its small corner mark — the crown, ~40px however many keys are
-  // on. None: a plain pin in the layer's one colour. The marker element and
-  // all its wiring stay; only what is drawn inside changes.
+  // Redraw one place to match the active keys. None on: the plain neutral
+  // pin alone. Keys on: the same neutral pin plus one row per key the place
+  // answers — every answer its own mark, kept kinds in their colours, any
+  // other answer grey. The marker element and all its wiring stay; only
+  // what is drawn inside changes. entry._rowsW records how far the block
+  // reaches past the pin — folding and the fan spacing read it.
   function renderMarks(L, entry, act) {
     var node = entry.node;
     if (!node) return;
     while (node.firstChild && node.firstChild.className !== "atlas-mlabel") node.removeChild(node.firstChild);
-    entry._crowned = act.length > 1;
-    if (!act.length) {
-      node.insertBefore(keyPinEl(oneColorOf(L), null), node.firstChild);
-      return;
-    }
-    var v0 = optValueOf(L, act[0], entry.f);
-    var s0 = v0 ? act[0].kept.indexOf(v0) : -1;
-    var anchor = keyPinEl(s0 >= 0 ? keyKindColor(L, act[0], 0, s0) : KEY_OTHER, v0);
-    if (act.length === 1) {
-      node.insertBefore(anchor, node.firstChild);
-      return;
-    }
-    // satellites first, the pin last: the pin paints over the corner each
-    // small mark tucks under, exactly as the mock draws it
-    var crown = el("div", "atlas-crown");
-    act.slice(1).forEach(function (opt, i) {
-      var v = optValueOf(L, opt, entry.f);
-      var slot = v ? opt.kept.indexOf(v) : -1;
-      crown.appendChild(satEl(SAT_SHAPES[i], slot >= 0 ? keyKindColor(L, opt, i + 1, slot) : KEY_OTHER));
+    entry._rowsW = 0;
+    entry._rowsEl = null;
+    var rows = [];
+    act.forEach(function (opt, fi) {
+      var vals = optValuesOf(L, opt, entry.f);
+      if (!vals.length) return;   // no answer under this key: no row
+      rows.push({ shape: ROW_SHAPES[fi], colors: vals.map(function (v) {
+        var slot = opt.kept.indexOf(v);
+        return slot >= 0 ? keyKindColor(L, opt, fi, slot) : KEY_OTHER;
+      }) });
     });
-    crown.appendChild(anchor);
-    node.insertBefore(crown, node.firstChild);
+    if (!rows.length) {
+      node.insertBefore(keyPinEl(oneColorOf(L)), node.firstChild);
+      return;
+    }
+    var holder = el("div", "atlas-rowed");
+    holder.appendChild(keyPinEl(oneColorOf(L)));
+    var block = el("div", "atlas-keyrows");
+    var w = 0;
+    rows.forEach(function (r) {
+      block.appendChild(rowSvg(r.shape, r.colors));
+      w = Math.max(w, rowWidth(r.shape, r.colors.length));
+    });
+    holder.appendChild(block);
+    entry._rowsW = ROW_PINGAP + w;
+    entry._rowsEl = block;
+    node.insertBefore(holder, node.firstChild);
   }
 
-  // The key beside the layer, rebuilt with the marks: kinds under a header
-  // per family when several keys are on ("themes — small squares"), the
-  // plain shipped shape when one or none.
+  // Rows sit to the right of the pin; a pin whose block would cross the
+  // map's right edge flips it to the left. Decided from the pin's on-map
+  // position, so it is re-checked when the camera comes to rest — width,
+  // the thing folding prices, is identical either side.
+  function updateRowFlips() {
+    if (!map) return;
+    var w = map.getContainer().clientWidth;
+    (MANIFEST.layers || []).forEach(function (L) {
+      if (!keyState[L.id]) return;
+      (markersByLayer[L.id] || []).forEach(function (e) {
+        if (!e._rowsEl) return;
+        var x = map.project(e.mk.getLngLat()).x;
+        e._rowsEl.classList.toggle("flip", x + PIN_W / 2 + e._rowsW > w - 6);
+      });
+    });
+  }
+  var rowFlipsWired = false;
+  function wireRowFlips() {
+    if (rowFlipsWired || !map) return;
+    rowFlipsWired = true;
+    map.on("moveend", updateRowFlips);
+    map.on("zoomend", updateRowFlips);
+  }
+
+  // The key beside the layer, rebuilt with the marks: each switched-on key's
+  // kinds under a header pairing it with its shape ("categories — circles"),
+  // from the first key on — the pin no longer says any of it, so the panel
+  // must. Nothing on: one row, the layer's own colour and name.
   function keyLegendRows(L, act) {
     if (!act.length) {
       return [{ color: oneColorOf(L), label: String(L.label || "").slice(0, 40), shape: "dot" }];
     }
-    var rows = [], crowned = act.length > 1;
+    var rows = [];
     act.forEach(function (opt, fi) {
-      var fam = crowned ? (fi ? SAT_SHAPES[fi - 1] : "round") : undefined;
-      if (crowned) rows.push({ header: true, label: opt.label + " — " + SAT_WORDS[fi] });
+      rows.push({ header: true, label: opt.label + " — " + ROW_WORDS[fi] });
       opt.kept.forEach(function (kind, i) {
-        rows.push({ color: keyKindColor(L, opt, fi, i), label: kind, categorical: true, family: fam });
+        rows.push({ color: keyKindColor(L, opt, fi, i), label: kind, categorical: true, family: ROW_SHAPES[fi] });
       });
-      if (opt.hasOther) rows.push({ color: KEY_OTHER, label: "other", categorical: true, family: fam });
+      if (opt.hasOther) rows.push({ color: KEY_OTHER, label: "other", categorical: true, family: ROW_SHAPES[fi] });
     });
     return rows;
   }
 
-  // What this place is, key by key: one row per key that is ON, in crown
-  // order, each row wearing the key panel's own mark — swatch(), the same
-  // renderer the panel uses, drawing the same shapes and colours the map
-  // does. The rows come back as one DOM box: the hover bubble appends it,
-  // the tap popup serialises it. One builder, so the bubble, the popup,
-  // the panel and the map can never tell different stories. A key this
-  // place leaves blank keeps its row — the grey mark the map actually
-  // draws, and "left blank" in words — because dropping the row would
-  // make the place look like it wears fewer marks than it does. Built
-  // only when a pointer enters a pin or a popup opens, never per move.
+  // What this place is, key by key: one line per key that is ON, in row
+  // order — the key's shape, the key's name, then EVERY answer the place
+  // holds under it, in the order its row wears them ("categories · Culture,
+  // Nature"). The lines come back as one DOM box: the hover bubble appends
+  // it, the tap popup serialises it — one builder, so the bubble, the
+  // popup, the panel and the map can never tell different stories. A key
+  // this place leaves blank keeps its line, saying "left blank" — its row
+  // is missing from the map on purpose, and the words say so. Built only
+  // when a pointer enters a pin or a popup opens, never per move.
   function keyRowsEl(L, props) {
     var act = activeKeyOptions(L);
     if (!act.length) return null;
     var f = { properties: props };
     var box = el("div", "key-rows");
     act.forEach(function (opt, fi) {
-      var v = optValueOf(L, opt, f);
-      var slot = v ? opt.kept.indexOf(v) : -1;
-      var row = el("div", "key-row" + (v ? "" : " blank"));
-      // family "round" is the anchor's miniature pin — its icon derived
-      // from the same words the map derives it from
-      row.appendChild(swatch({ family: fi ? SAT_SHAPES[fi - 1] : "round",
-                               color: slot >= 0 ? keyKindColor(L, opt, fi, slot) : KEY_OTHER,
-                               label: v }));
-      row.appendChild(el("span", "key-word", v ? esc(v) : "left blank"));
+      var vals = optValuesOf(L, opt, f);
+      var row = el("div", "key-row" + (vals.length ? "" : " blank"));
+      var mini = markEl(ROW_SHAPES[fi], "#6b6353");   // names the key, claims no colour
+      mini.setAttribute("class", "key-mark");
+      row.appendChild(mini);
+      row.appendChild(el("span", "key-name", esc(opt.label)));
+      row.appendChild(el("span", "key-word", vals.length ? esc(vals.join(", ")) : "left blank"));
       box.appendChild(row);
     });
     return box;
@@ -1084,20 +1160,33 @@
     var act = activeKeyOptions(L);
     (markersByLayer[L.id] || []).forEach(function (e) { renderMarks(L, e, act); });
     hideHint();   // a bubble built from the old keys must not outlive them
-    // the committed single key is the layer's shipped look — shipped key too
-    L._legend = (act.length === 1 && act[0].committed) ? null : keyLegendRows(L, act);
+    updateRowFlips();   // fresh blocks near the right edge flip straight away
+    // the panel always describes what the pins now wear — the manifest's own
+    // key described coloured pins that no longer exist once keys are offered
+    L._legend = keyLegendRows(L, act);
     renderExtra(L);
-    applyMarkerVisibility(L);   // discs re-read the new mark widths (fold radius included)
+    applyMarkerVisibility(L);   // discs re-read the new footprints (fold distance included)
   }
 
-  // Any visible layer wearing a crown (two or more keys) folds pins at the
-  // crown's true footprint everywhere.
-  function crownActive() {
-    var any = false;
+  // Fold distance follows the markers' true footprint. With nothing switched
+  // on every pin is the plain 20px circle; with keys on, a pin plus its rows
+  // is as wide as the pin, the gap and its widest row. The folding engine
+  // takes ONE distance per build (see CLUSTERS), so it folds at the mean
+  // footprint of the pins wearing rows — recomputed on every toggle, and the
+  // engine is rebuilt whenever the number moves (refreshClusterIndex).
+  function keyedFoldRadius() {
+    var sum = 0, n = 0;
     (MANIFEST.layers || []).forEach(function (L) {
-      if (L._visible !== false && keyState[L.id] && keyState[L.id].active.length > 1) any = true;
+      if (L._visible === false) return;
+      var st = keyState[L.id];
+      if (!st || !st.active.length) return;
+      (markersByLayer[L.id] || []).forEach(function (e) {
+        if (e.hidden) return;
+        sum += PIN_W + (e._rowsW || 0);
+        n++;
+      });
     });
-    return any;
+    return n ? Math.round(sum / n) : CLUSTER_RADIUS;
   }
 
   function buildKeyChips(L) {
@@ -1110,17 +1199,18 @@
       c.onclick = function () {
         var i = st.active.indexOf(opt.col);
         if (i >= 0) st.active.splice(i, 1);
-        else if (st.active.length >= 5) {
-          // the cap: the pin has exactly four corners, so one full pin plus
-          // four corner marks is every place a mark can sit
-          st.note = "Five keys are already on — the pin's four corners are all taken. Turn one off to add " + opt.label + ".";
+        else if (st.active.length >= KEY_STACK_CAP) {
+          // the cap is vertical now: rows stack, and past this many the
+          // stack hangs further below a pin than the folding rule keeps
+          // pins apart — measured, see the KEYS WEAR ROWS block
+          st.note = KEY_STACK_NOTE.replace("{name}", opt.label);
           renderExtra(L);
           return;
         } else {
           st.active.push(opt.col);
-          // family order follows the offered order, not tap order, so the
+          // row order follows the offered order, not tap order, so the
           // committed key keeps its circles and its colours, and each key
-          // keeps its one corner
+          // keeps its own shape
           st.active = L._keyOptions.filter(function (o) { return st.active.indexOf(o.col) >= 0; })
             .map(function (o) { return o.col; });
         }
@@ -1266,10 +1356,10 @@
   var CLUSTER_BOUNDS_SRC = "atlas-cluster-bounds-src";
   var CLUSTER_LAYER = "atlas-cluster-disc";
   var CLUSTER_RADIUS = 20;   // = pin diameter: fold only what truly collides
-  // when any visible layer wears a crown its pins are ~40px wide — and stay
-  // 40px at two, three, four or five keys, because the corner marks are
-  // already there — so "truly collides" starts further out, by the same amount
-  var CLUSTER_RADIUS_CROWN = 40;
+  // With keys switched on a pin wears rows beside it and its true footprint
+  // grows with the data, so "truly collides" starts further out — the engine
+  // folds at the mean footprint of the pins wearing rows (keyedFoldRadius),
+  // recomputed on every toggle.
   var CLUSTER = { ready: false, off: false, wired: false, radiusNow: CLUSTER_RADIUS,
                   hovering: false, hoverId: null,
                   byKey: {}, boundsCache: {}, refreshTimer: null, syncTimer: null };
@@ -1515,9 +1605,10 @@
   // better than pins blinking off and back on.
   function refreshClusterIndex() {
     if (!map) return;
-    // every rebuild reconciles the fold radius with the pins' current width;
-    // single-key atlases never leave CLUSTER_RADIUS, so nothing is torn down
-    var want = crownActive() ? CLUSTER_RADIUS_CROWN : CLUSTER_RADIUS;
+    // every rebuild reconciles the fold distance with the pins' current
+    // footprint; atlases with no keys on never leave CLUSTER_RADIUS, so
+    // nothing is torn down
+    var want = keyedFoldRadius();
     if (CLUSTER.radiusNow !== want) { clusterTeardown(); CLUSTER.radiusNow = want; }
     if (!ensureClusterEngine()) return;
     if (SPIDER.items) { scheduleClusterRefresh(); return; }   // never re-index under an open fan
@@ -1603,10 +1694,13 @@
     wireSpider();
     hideHint();
     var a = map.project(anchor);
-    // crowned pins need elbow room for their corner marks (~44px), still
-    // less than the retired two-mark row asked for
+    // pins wearing rows need elbow room for their widest block: neighbours
+    // in the fan stay a whole footprint apart, plus a little air
     var gap = FAN_GAP;
-    stack.forEach(function (it) { if (it.e._crowned) gap = FAN_GAP + 16; });
+    stack.forEach(function (it) {
+      var w = PIN_W + (it.e._rowsW || 0) + 8;
+      if (w > gap) gap = w;
+    });
     var feet = fanFeet(stack.length, gap);
     SPIDER.anchor = anchor;
     SPIDER.items = stack.map(function (it, i) {
@@ -2337,7 +2431,7 @@
       leg.appendChild(lab);
     } else if (data && data.length) {
       data.forEach(function (it) {
-        // crowned layers group their kinds under a header per shape family
+        // keyed layers group their kinds under a header per key's shape
         if (it.header) { leg.appendChild(el("div", "leg-head", esc(it.label))); return; }
         var r = el("div", "leg-item" + (it.faint ? " faint" : ""));
         r.appendChild(swatch(it));
@@ -2375,41 +2469,27 @@
   }
 
   function swatch(it) {
-    // crowned rows: the swatch is the mark itself — satellite families the
-    // solid shape at true size, the anchor family the pin in miniature (the
-    // kind's colour and icon inside a circle)
-    if (it.family && it.family !== "round") {
-      var sv = satEl(it.family, it.color);
+    // keyed rows: the swatch is the map's own mark — the key's shape, the
+    // kind's colour, at the panel's size
+    if (it.family) {
+      var sv = markEl(it.family, it.color);
       sv.setAttribute("class", "leg-sat");
       sv.setAttribute("viewBox", "1 1 18 18");
       return sv;
     }
-    if (it.family) {
-      var p = el("span", "leg-pin");
-      p.style.setProperty("--c", it.color);
-      var fic = iconFor(it.label);
-      if (fic.icon && ICONS[fic.icon]) p.innerHTML = ICONS[fic.icon];
-      else {
-        p.textContent = fic.badge;
-        p.classList.add("badge");
-        if (paleHex(it.color)) p.classList.add("pale");
+      // An atlas's own declared picture still shows (deoria's factory, flask).
+      // The DERIVED picture is retired with the pins that carried it: a
+      // contributed pin draws plain now, so its category row shows the colour
+      // alone, as a dot matching that pin. This is the whole point of sharing
+      // one renderer with the panel — neither may claim a picture the map does
+      // not draw.
+      var key = it.icon;
+      if (key && ICONS[key]) {
+        var w = el("span", "leg-icon", ICONS[key]);
+        w.style.setProperty("--c", it.color);
+        return w;
       }
-      return p;
-    }
-    var key = it.icon, badge = null;
-    // category legend rows carry the value in `label`; derive icon/badge to match the markers
-    if (!key && it.categorical) { var ic = iconFor(it.label); if (ic.icon) key = ic.icon; else badge = ic.badge; }
-    if (key && ICONS[key]) {
-      var w = el("span", "leg-icon", ICONS[key]);
-      w.style.setProperty("--c", it.color);
-      return w;
-    }
-    if (badge) {
-      var b = el("span", "leg-badge" + (paleHex(it.color) ? " pale" : ""), badge);
-      b.style.setProperty("--c", it.color);
-      return b;
-    }
-    var s = el("span", "leg-swatch " + (it.shape || "box"));
+      var s = el("span", "leg-swatch " + (it.shape || (it.categorical ? "dot" : "box")));
     s.style.setProperty("--c", it.color);
     return s;
   }

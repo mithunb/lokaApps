@@ -188,36 +188,29 @@
     .key-chips .crop-chips { margin:0; }
     .crop-chip.keychip::before { content:none; }   /* a key is many colours — no single dot can stand for it */
     .key-note { font-size:.7rem; color:var(--color-text-muted); line-height:1.45; margin:.3rem 0 .05rem; }
-    /* the crown: keys 2–5 are small solid marks at fixed corners of the
-       anchor pin — square upper right, triangle upper left, diamond lower
-       right, flat bar lower left — placed 16.5px off the pin's centre at
-       45°. The pin sits last in the stack so it paints over the corner each
-       mark tucks under, and the whole place stays ~40px wide at two, three,
-       four or five keys: the bar is flat exactly so the second low corner
-       reaches only half as far down as the diamond does. */
-    .atlas-crown { position:relative; width:20px; height:20px;
+    /* keys wear rows: each switched-on key is one row of small marks beside
+       the neutral pin — the first key circles, then squares, triangles,
+       diamonds, bars. The holder is exactly the pin's 20px box, so MapLibre
+       keeps the pin itself on the place; the block hangs beside it without
+       moving anything, stacked in key order and centred on the pin's middle.
+       A block that would cross the map's right edge gets .flip and sits to
+       the left instead (updateRowFlips in atlas.js). */
+    .atlas-rowed { position:relative; width:20px; height:20px;
       transition:transform .18s cubic-bezier(.25,1,.5,1), filter .18s ease; }
-    .atlas-crown .atlas-pin { position:relative; }
-    .atlas-sat { position:absolute; width:20px; height:20px; }
-    .atlas-sat.sat-square   { left:11.7px;  top:-11.7px; }
-    .atlas-sat.sat-triangle { left:-11.7px; top:-11.7px; }
-    .atlas-sat.sat-diamond  { left:11.7px;  top:11.7px; }
-    .atlas-sat.sat-bar      { left:-11.7px; top:11.7px; }
-    /* a crowned place lifts as one thing — the pin's own lift would tear the
-       corner marks off it */
+    .atlas-rowed .atlas-pin { position:relative; }
+    .atlas-keyrows { position:absolute; left:23px; top:10px; transform:translateY(-50%);
+      display:flex; flex-direction:column; gap:2px; align-items:flex-start; }
+    .atlas-keyrows.flip { left:auto; right:23px; align-items:flex-end; }
+    .atlas-keyrow { display:block; overflow:visible; }
+    /* a place with rows lifts as one thing — the pin's own lift would tear
+       the rows off it */
     @media (hover:hover){
-      .atlas-marker:hover .atlas-crown { transform:translateY(-2px) scale(1.14); }
-      .atlas-marker:hover .atlas-crown .atlas-pin { transform:none; box-shadow:0 3px 8px rgba(42,36,26,.4); }
+      .atlas-marker:hover .atlas-rowed { transform:translateY(-2px) scale(1.14); }
+      .atlas-marker:hover .atlas-rowed .atlas-pin { transform:none; box-shadow:0 3px 8px rgba(42,36,26,.4); }
     }
-    /* crowned legend: kinds grouped under a header per shape family — the
-       anchor family the pin in miniature, the others their solid shape at
-       true size */
+    /* keyed legend: kinds grouped under a header per key, each row wearing
+       the key's own shape at the panel's size */
     .leg-head { font-size:.68rem; font-weight:600; color:var(--color-text-muted); margin:.3rem 0 .05rem; }
-    .leg-pin { flex:0 0 auto; width:16px; height:16px; border-radius:50%; background:#fff; border:1.6px solid var(--c);
-      color:var(--c); display:inline-flex; align-items:center; justify-content:center; box-sizing:border-box; }
-    .leg-pin svg { width:9px; height:9px; display:block; }
-    .leg-pin.badge { background:var(--c); color:#fff; font-size:7px; font-weight:700; }
-    .leg-pin.badge.pale { color:#2A241A; }
     .leg-sat { flex:0 0 auto; width:18px; height:18px; display:block; }
 
     .ctl-opacity { display:flex; align-items:center; gap:.5rem; margin:.45rem 0 .1rem; }
@@ -321,14 +314,18 @@
       color:var(--color-text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
       opacity:0; visibility:hidden; transition:opacity .12s ease; }
     .atlas-hint.on { opacity:1; visibility:visible; }
-    /* what this place is, key by key: the same rows in the hover bubble and
-       the tap popup, wearing the key panel's own marks (leg-pin / leg-sat) —
-       one renderer, so bubble, popup, panel and map always agree */
+    /* what this place is, key by key: one line per switched-on key in the
+       hover bubble and the tap popup — the key's shape, its name, then every
+       answer the place holds under it, in the order its row wears them. One
+       renderer (keyRowsEl), so bubble, popup, panel and map always agree. */
     .atlas-hint .hint-name { font-weight:600; }
     .key-rows { display:flex; flex-direction:column; gap:.18rem; margin-top:.26rem; }
-    .key-row { display:flex; align-items:center; gap:.42rem; min-width:0; }
-    .key-row .key-word { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .key-row.blank .key-word { color:var(--color-text-muted); }
+    .key-row { display:flex; align-items:center; gap:.32rem; min-width:0; }
+    .key-row .key-mark { flex:0 0 auto; width:14px; height:14px; display:block; }
+    .key-row .key-name { flex:0 0 auto; color:var(--color-text-muted); }
+    .key-row .key-name::after { content:" ·"; }
+    .key-row .key-word { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; }
+    .key-row.blank .key-word { color:var(--color-text-muted); font-weight:400; }
     .pop .key-rows { margin:.55rem 0 .15rem; }
 
     /* ---- popups ---- */
@@ -641,8 +638,8 @@
        deploy that changes atlas.js reaches nobody until the token moves. Bump
        it (all pages share one) whenever a local .js or .css changes. Vendored
        libraries are left alone — their filenames change when they do. -->
-  <script src="./iconkit.js?v=20260814-6"></script>
-  <script src="./share.js?v=20260814-6"></script>
-  <script src="./atlas.js?v=20260814-6"></script>
+  <script src="./iconkit.js?v=20260818-1"></script>
+  <script src="./share.js?v=20260818-1"></script>
+  <script src="./atlas.js?v=20260818-1"></script>
 </body>
 </html>

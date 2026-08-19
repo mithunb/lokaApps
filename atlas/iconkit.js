@@ -110,18 +110,18 @@
      supply their own class prefix because the viewer's panel and the editor's
      panel size these differently; what they must not do is decide differently
      WHICH mark to draw. */
+  // An atlas's own declared picture still shows. The DERIVED picture is retired
+  // with the contributed pins that carried it: those pins draw plain now, so a
+  // category row shows its colour alone, as a dot matching the pin. Shared by
+  // the editor and the add-data preview, so no panel can claim a picture the
+  // map does not draw.
   function swatchHTML(row, esc) {
     var key = row.icon;
-    if (!key && row.categorical) {
-      var ic = iconFor(row.label);
-      if (ic.icon) key = ic.icon;
-      else return '<span class="leg-badge' + (paleHex(row.color) ? " pale" : "") +
-        '" style="--c:' + esc(row.color || "") + '">' + esc(ic.badge) + "</span>";
-    }
     if (key && ICONS[key]) {
       return '<span class="leg-icon" style="--c:' + esc(row.color || "") + '">' + ICONS[key] + "</span>";
     }
-    return '<span class="leg-swatch ' + (row.shape || "box") + '" style="--c:' + esc(row.color || "") + '"></span>';
+    var shape = row.shape || (row.categorical ? "dot" : "box");
+    return '<span class="leg-swatch ' + shape + '" style="--c:' + esc(row.color || "") + '"></span>';
   }
 
   global.LokaIcons = {
