@@ -5,11 +5,6 @@
 //      with --env-file.
 //   2. the local sendmail binary (postfix/exim) when present,
 //   3. log fallback — the full message (with any links) lands in `pm2 logs`.
-//
-// SendGrid used to be first and is gone. It was tried ahead of SMTP whenever
-// SG_KEY was set, so a lapsed SendGrid account meant every send burned a failed
-// request and a warning line before falling through — and the code claimed a
-// preference the infrastructure no longer had.
 import fs from 'node:fs';
 
 let transportPromise = null;
