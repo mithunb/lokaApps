@@ -352,6 +352,14 @@
       host.appendChild(el);
     });
     $("#chips-empty").hidden = S.chosen.length > 0;
+    // name the chosen place at the field as well as in the chips: a label reading
+    // only "Place" beside an empty box made a finished step look untouched
+    var chosen = $("#place-chosen");
+    if (chosen) {
+      chosen.textContent = !S.chosen.length ? ""
+        : S.chosen.length === 1 ? S.chosen[0].label
+        : S.chosen[0].label + " +" + (S.chosen.length - 1) + " more";
+    }
     var v = $("#verdict");
     if (!S.chosen.length) { v.hidden = true; return; }
     v.hidden = false;

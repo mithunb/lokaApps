@@ -2349,7 +2349,12 @@ const ROW_MIN_COSINE = 0.50;
 const EMBED_DIM = 768;
 // embedContent accepts a batch; ~100 keeps one request comfortably inside the
 // API's payload limits even with 4,000-char row blobs.
-const EMBED_BATCH = 100;
+// Google's own message reads "at most 100 requests can be in one batch", so 100
+// looked safe and was not: the live log shows every batch of exactly 100 rejected
+// with that 400. Whatever the boundary counts, 100 is over it, so sit clearly
+// under. This is why search-by-meaning has never built for a contributed layer —
+// and why I was wrong to call this fixed from a log that turned out to be stale.
+const EMBED_BATCH = 64;
 
 async function embedTexts(texts) {
   if (!ai || !texts.length) return null;

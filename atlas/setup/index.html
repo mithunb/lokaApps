@@ -157,6 +157,11 @@
 
     /* A file may answer "where is it?" — see setup.js. Styled to sit under the
        search box as a peer offer, not as a step someone has to complete. */
+    /* the chosen place, named at the field itself — the chips below are the full
+       list, but a label that still reads only "Place" makes a filled-in step look
+       empty, which is exactly how it read to the owner */
+    .f-chosen { font-weight:600; color:var(--color-moss); }
+    .f-chosen:not(:empty)::before { content:"— "; color:var(--color-text-muted,#6B6350); font-weight:400; }
     .fromfile { margin-top:.9rem; }
     .drop { display:block; border:2px dashed var(--color-border); border-radius:var(--radius-lg);
       background:var(--color-bg-alt,#F0EFEA); padding:.85rem 1rem; text-align:center; cursor:pointer;
@@ -230,7 +235,7 @@
         <button class="stp" data-s="2" disabled><b>2</b> Geography</button>
         <!-- appears only when a file was dropped; numbering shifts with it. No
              data-s: it is not part of the numeric step machinery, setup.js drives it -->
-        <button class="stp" id="stp-file" hidden><b>3</b> Your file</button>
+        <button class="stp" id="stp-file" hidden><b>3</b> Prepare your data</button>
         <button class="stp" data-s="3" disabled><b>3</b> Open data</button>
         <button class="stp" data-s="4" disabled><b>4</b> Build</button>
       </nav>
@@ -268,7 +273,7 @@
           <label class="f">Country
             <select id="country"></select>
           </label>
-          <label class="f combo">Place
+          <label class="f combo">Place <span id="place-chosen" class="f-chosen"></span>
             <input type="text" id="place" placeholder="Start typing a district or state…"
               autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list"
               aria-controls="sugg" />
@@ -298,7 +303,7 @@
 
       <!-- 3 -->
       <section class="panel" id="s2b" hidden>
-        <h2>Check your file</h2>
+        <h2>Prepare your data for the atlas</h2>
         <p class="hint">Your file is matched against the places you just confirmed. Fix anything that
           needs a second look now — after the atlas is built this list is gone.</p>
         <p class="verdict" id="check-verdict"></p>
