@@ -81,7 +81,21 @@ export function isMapLabelColumn(feats, col) {
   return avg <= 25 && !anyLong;
 }
 
-const MAX_CIRCLE_SWITCH = 300;   // DOM markers don't scale past this
+// Above this many points a layer is drawn as plain circles instead of pins, which
+// costs it the badges, the rows of shapes, the hover and the fan-out. It was 300
+// on the assertion that "DOM markers don't scale past this"; nobody had measured
+// it. Measured now, on a grid of pins each carrying three rows of shapes:
+//
+//     300   ~5,700 pieces of page    comfortable
+//   1,000  ~19,000                   comfortable
+//   3,000  ~57,000                   moves, with the odd visible hitch
+//   6,000 ~114,000                   collapses
+//
+// So the cliff sits between 3,000 and 6,000, and 300 was about ten times more
+// cautious than it needed to be. 3,000 is deliberately the same number the upload
+// warns about, so the two agree: at 3,001 rows a person is told the map may feel
+// slow AND gets circles, rather than being silently given circles at 301.
+const MAX_CIRCLE_SWITCH = Number(process.env.ATLAS_MAX_PINS) || 3000;
 const CLASS_MIN = 3, CLASS_MAX = 7;
 const BUBBLE_MIN_R = 4, BUBBLE_MAX_R = 26;   // px — the proportional-symbol range
 
@@ -203,7 +217,8 @@ export function buildFragment(spec, feats, existingIds) {
       userLayer: true,
     };
     if (/Point/.test(gt) && feats.length <= MAX_CIRCLE_SWITCH) {
-      // ≤300 points → DOM marker pins carrying colour AND a per-category icon/badge
+      // within the pin budget → marker pins, which can carry a colour per kind and
+      // the rows of shapes beside them (see MAX_CIRCLE_SWITCH above)
       const markers = {};
       kept.forEach((v, i) => { markers[v] = { color: CATEGORY_COLORS[i % CATEGORY_COLORS.length] }; });
       stanza = { ...base, type: 'marker', markerBy: matchProp, markers,
