@@ -782,7 +782,16 @@
       api("layers/enrich/keep", { method: "POST", body: { dataset: S.dataset, categorySet: r.categorySet } })
         .catch(function () {});
     }
-    msg("#msg-enrich", "Kept — “" + esc(target.name) + "” is a new column in the table below. Your original columns are unchanged.", "ok");
+    // The rows may already be on the server — the setup flow sends them the moment
+    // the check panel opens, and the add-data flow whenever the person pressed
+    // "place it on the map". Either way its copy predates this column, so send
+    // them again. Without this, Keep changed the table and nothing else: the
+    // themes were real on screen and absent from the map, which is exactly what
+    // the owner hit.
+    var already = !!S.result;
+    if (already) sendRows();
+    msg("#msg-enrich", "Kept — “" + esc(target.name) + "” is a new column, and your original columns are unchanged." +
+      (already ? " The map is being rebuilt to include it." : ""), "ok");
     checkChanged();
   };
 
@@ -823,7 +832,12 @@
     };
   }
 
-  $("#to-place").onclick = function () {
+  /* Sending the rows is the ONLY moment the server sees them — everything after
+     works from its copy, keyed by importId. So anything that changes the table
+     afterwards (keeping themes writes a whole new column) has to send them again,
+     or the map is built from data the person is no longer looking at. Named so
+     Keep can call it; the button just calls it too. */
+  function sendRows() {
     if (!S.canonical) return;
     var cols = activeColumns();
     var names = cols.map(function (c) { return c.name; });
@@ -875,7 +889,8 @@
       if (e.needsAuth) msg("#msg-check", "Sign in first — it's on the previous step, under the drop zone.");
       else msg("#msg-check", esc(errMsg(e)));
     });
-  };
+  }
+  $("#to-place").onclick = sendRows;
 
   // What the host needs to render a per-file verdict, and to know whether the
   // user still has to look at something.
