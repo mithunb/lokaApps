@@ -333,6 +333,61 @@ router.get('/geo/search', async (req, res) => {
   }
 });
 
+// Work out WHICH REGION a file is about, so someone who does not know the places
+// in their own data can still answer "where is it?". Every row is read (bounded
+// by the same 5,000-row ceiling as an upload) — a sample could not report an
+// honest "96 of 104 rows", and could miss a small group sitting in another state
+// entirely, which is exactly the group that would later go unplaced.
+// Response: { iso3, mode, level, units, bbox, coverage, rows, matchedRows,
+//             unreadRows, sharedRows, parents, ancestors }
+router.post('/geo/infer', async (req, res) => {
+  const b = req.body || {};
+  let iso3 = String(b.iso3 || '').toUpperCase();
+  const points = Array.isArray(b.points) ? b.points
+    .map((p) => [Number(p && p[0]), Number(p && p[1])])
+    .filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]) && Math.abs(p[1]) <= 90 && Math.abs(p[0]) <= 180)
+    .slice(0, MAX_ROWS) : [];
+  const names = Array.isArray(b.names)
+    ? b.names.map((n) => String(n == null ? '' : n).trim()).filter(Boolean).slice(0, MAX_ROWS) : [];
+  if (!points.length && !names.length) return res.status(400).json({ error: 'points or names required' });
+  try {
+    // no country given: coordinates can resolve it; bare place names cannot
+    if (!/^[A-Z]{3}$/.test(iso3)) {
+      if (!points.length) {
+        return res.status(400).json({ error: 'couldn’t tell the country from place names alone — choose it', needsCountry: true });
+      }
+      iso3 = await resolveCountryFromPoints(points);
+      if (!iso3) {
+        return res.status(400).json({ error: 'couldn’t tell the country from this data — choose it', needsCountry: true });
+      }
+    }
+    let avail;
+    try { avail = JSON.parse(fs.readFileSync(path.join(GEOCACHE_DIR, `${iso3}-levels.json`), 'utf8')).levels; }
+    catch { avail = [1, 2, 3, 4]; }
+    let r = null, mode = null;
+    if (points.length) { r = await inferRegionFromPoints(iso3, points, avail); mode = 'points'; }
+    else { r = await inferRegionFromNames(iso3, names, avail); mode = 'names'; }
+    if (!r || !r.units.length) {
+      return res.json({ iso3, mode, level: null, units: [], bbox: null, coverage: 0,
+                        rows: (r && r.rows) || points.length || names.length, matchedRows: 0,
+                        unreadRows: (r && r.unreadRows) || 0, parents: [], ancestors: [] });
+    }
+    const parents = await parentUnitsOf(iso3, r.level, r.units);
+    const ancestors = await ancestorChainOf(iso3, r.level, r.units);
+    // geometry rides along for the confirmation map, but a huge covering set
+    // (data spread across dozens of units) would bloat the response — drop it then
+    const units = r.units.length <= 60 ? r.units : r.units.map(({ geometry, ...u }) => u);
+    res.json({ iso3, mode, level: r.level, units, bbox: r.bbox,
+               coverage: Number(r.coverage.toFixed(3)),
+               rows: r.rows, matchedRows: r.matchedRows, unreadRows: r.unreadRows,
+               sharedRows: r.sharedRows || 0,
+               parents, ancestors });
+  } catch (e) {
+    console.warn('[atlas] geo/infer failed:', e.message);
+    res.status(502).json({ error: 'inference failed: ' + e.message });
+  }
+});
+
 /* ============ data-first: infer the region from the uploaded data ============ */
 
 const INFER_MIN_COVERAGE = 0.9;
@@ -355,6 +410,7 @@ async function inferRegionFromPoints(iso3, points, avail) {
   for (const L of order) {
     let doc; try { doc = await loadAdmin(iso3, L); } catch { continue; }
     const feats = doc.features || [];
+    const byId = new Map(feats.map((f) => [f.properties.id, f]));
     const counts = new Map();
     let covered = 0;
     for (const [x, y] of points) {
@@ -367,38 +423,143 @@ async function inferRegionFromPoints(iso3, points, avail) {
     }
     const coverage = points.length ? covered / points.length : 0;
     const units = [...counts.keys()].map((id) => {
-      const f = feats.find((f) => f.properties.id === id);
+      const f = byId.get(id);
       return { id, name: f.properties.name, bbox: f.bbox, geometry: f.geometry };
     });
-    const cand = { level: L, coverage, units, bbox: unionBboxOf(units) };
+    const cand = { level: L, coverage, units, bbox: unionBboxOf(units),
+                   rows: points.length, matchedRows: covered, unreadRows: 0 };
     if (coverage >= INFER_MIN_COVERAGE && units.length) return cand;
     if (!best || coverage > best.coverage) best = cand;
   }
   return best;
 }
 
-// names [str…] → best (level, units) by exact/dice hit-rate against admin names.
+// names — ONE ENTRY PER ROW, repeats included. Coverage is measured in rows, not
+// in distinct spellings, because "96 of 104 rows" is the sentence the person is
+// shown and a per-spelling rate would quietly flatter a file that says "Deoria"
+// ninety times. Every row is read; each distinct spelling is still only looked
+// up once, so repetition costs nothing.
+//
+// SHARED NAMES ARE SETTLED LAST, ON PURPOSE. Place names repeat: "Ramgarh" is
+// seven different places at level 3, spread 1,500km apart, and 221 names at that
+// level are shared. Taking the first one the boundary file happens to list would
+// anchor an atlas anywhere — and the offending row could be row one, before there
+// is anything to compare it against. So the names that can only mean one place
+// are counted first and become the anchor; only then is each shared name settled
+// to whichever of its candidates sits nearest that anchor. When NOTHING is
+// certain — every name in the file shared — the candidates are asked which
+// arrangement is most tightly packed, so the file still lands in one region
+// instead of scattering across the country.
+//
+// The exact lookup is instant. Guessing the nearest spelling is not, so it runs
+// last and on a budget; running out stops the guessing, never the counting — the
+// rows it could not reach are reported as unread rather than called misses. And
+// once a level explains nearly all the rows, finer levels are not scanned at all.
+const INFER_FUZZY_BUDGET = 400;
+function bboxCentre(b) {
+  return (b && b.length === 4) ? [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] : null;
+}
+function farness(a, b) {
+  if (!a || !b) return Infinity;
+  const dx = a[0] - b[0], dy = a[1] - b[1];
+  return dx * dx + dy * dy;                       // squared degrees: only ever compared
+}
+// Nothing certain to anchor to: try each candidate of the best-represented shared
+// name as a hypothesis, let every other shared name fall to its nearest candidate,
+// and keep the hypothesis with the least total spread.
+function anchorFromSpread(deferred) {
+  let seed = null;
+  for (const d of deferred) if (!seed || d[1] > seed[1]) seed = d;
+  if (!seed) return null;
+  let bestC = null, bestCost = Infinity;
+  for (const f of seed[2].slice(0, 12)) {
+    const c = bboxCentre(f.bbox);
+    if (!c) continue;
+    let cost = 0;
+    for (const [, n, cands] of deferred) {
+      let near = Infinity;
+      for (const g of cands) near = Math.min(near, farness(bboxCentre(g.bbox), c));
+      if (Number.isFinite(near)) cost += near * n;
+    }
+    if (cost < bestCost) { bestCost = cost; bestC = c; }
+  }
+  return bestC;
+}
 async function inferRegionFromNames(iso3, names, avail) {
   const order = [2, 3, 4, 1].filter((l) => avail.includes(l));
+  const tally = new Map();                       // spelling -> how many rows carry it
+  for (const nm of names) tally.set(nm, (tally.get(nm) || 0) + 1);
+  const rows = names.length;
   let best = null;
   for (const L of order) {
     let doc; try { doc = await loadAdmin(iso3, L); } catch { continue; }
     const feats = doc.features || [];
-    const idx = new Map();
-    for (const f of feats) { const k = norm(f.properties.name); if (!idx.has(k)) idx.set(k, f); }
-    const hitU = new Map(); let hits = 0;
-    for (const nm of names) {
-      let f = idx.get(norm(nm));
-      if (!f) { let bs = 0, bf = null; for (const g of feats) { const sc = dice(nm, g.properties.name); if (sc > bs) { bs = sc; bf = g; } } if (bs >= AUTO_ACCEPT) f = bf; }
-      if (f) { hits++; hitU.set(f.properties.id, 1); }
+    const byId = new Map(feats.map((f) => [f.properties.id, f]));
+    const byName = new Map();                    // EVERY place sharing a name, not the first
+    for (const f of feats) {
+      const k = norm(f.properties.name);
+      if (!byName.has(k)) byName.set(k, []);
+      byName.get(k).push(f);
     }
-    const rate = names.length ? hits / names.length : 0;
+
+    const hitU = new Map();
+    let matchedRows = 0, unreadRows = 0, sharedRows = 0;
+    const deferred = [];                         // [spelling, rows, candidates]
+    const unknown = [];                          // [spelling, rows]
+
+    // 1) the names that can only mean one place — these anchor everything else
+    let ax = 0, ay = 0, aw = 0;
+    for (const [nm, n] of tally) {
+      const cands = byName.get(norm(nm));
+      if (!cands) { unknown.push([nm, n]); continue; }
+      if (cands.length > 1) { deferred.push([nm, n, cands]); continue; }
+      const f = cands[0];
+      matchedRows += n;
+      hitU.set(f.properties.id, (hitU.get(f.properties.id) || 0) + n);
+      const c = bboxCentre(f.bbox);
+      if (c) { ax += c[0] * n; ay += c[1] * n; aw += n; }
+    }
+
+    // 2) AT THE END: every shared name goes to its candidate nearest the anchor
+    const anchor = aw ? [ax / aw, ay / aw] : anchorFromSpread(deferred);
+    for (const [, n, cands] of deferred) {
+      let pick = cands[0], bestD = Infinity;
+      for (const f of cands) {
+        const d = farness(bboxCentre(f.bbox), anchor);
+        if (d < bestD) { bestD = d; pick = f; }
+      }
+      matchedRows += n; sharedRows += n;
+      hitU.set(pick.properties.id, (hitU.get(pick.properties.id) || 0) + n);
+    }
+
+    // 3) last, and budgeted: no place is spelled like this, so guess the nearest
+    // spelling — and where scores tie, prefer the region the rest of the data is in
+    let guesses = 0;
+    for (const [nm, n] of unknown) {
+      if (guesses >= INFER_FUZZY_BUDGET) { unreadRows += n; continue; }
+      guesses++;
+      let bs = 0, bf = null, bd = Infinity;
+      for (const g of feats) {
+        const sc = dice(nm, g.properties.name);
+        if (sc < bs) continue;
+        const d = farness(bboxCentre(g.bbox), anchor);
+        if (sc > bs || d < bd) { bs = sc; bf = g; bd = d; }
+      }
+      if (bs >= AUTO_ACCEPT && bf) {
+        matchedRows += n;
+        hitU.set(bf.properties.id, (hitU.get(bf.properties.id) || 0) + n);
+      }
+    }
+
+    const coverage = rows ? matchedRows / rows : 0;
     const units = [...hitU.keys()].map((id) => {
-      const f = feats.find((f) => f.properties.id === id);
+      const f = byId.get(id);
       return { id, name: f.properties.name, bbox: f.bbox, geometry: f.geometry };
     });
-    const cand = { level: L, coverage: rate, units, bbox: unionBboxOf(units) };
-    if (!best || rate > best.coverage) best = cand;
+    const cand = { level: L, coverage, units, bbox: unionBboxOf(units),
+                   rows, matchedRows, unreadRows, sharedRows };
+    if (coverage >= INFER_MIN_COVERAGE && units.length) return cand;
+    if (!best || coverage > best.coverage) best = cand;
   }
   return best;
 }

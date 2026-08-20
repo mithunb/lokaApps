@@ -319,7 +319,7 @@
 
   function add(p, label) {
     if (!has(p.id)) {
-      S.chosen.push({ id: p.id, name: p.name, label: label || p.name, level: p.level });
+      S.chosen.push({ id: p.id, name: p.name, label: label || p.name, level: p.level, bbox: p.bbox });
       // Every unit in one build has to come from one admin level — the API
       // resolves shapeIDs against a single level. The finest level chosen wins,
       // and anything coarser is dropped rather than silently mis-resolved.
@@ -359,6 +359,258 @@
       (S.chosen.length > 1 ? " — " + S.chosen.length + " places" : "") + ". Ready to build.";
   }
 
+  /* ---- 2b · let a file answer "where is it?" ----
+     Someone who does not know which districts their own spreadsheet covers cannot
+     get past this step by typing — that is the whole reason this exists. The file
+     is read HERE, in the browser; only a list of coordinates or place names is
+     sent, never the file itself. What comes back fills the same chips a typed
+     answer fills, so the person confirms with the same button, and can take any
+     of them out. */
+
+  // What the dropped file is, and what we read out of it. Held so the SAME file
+  // can be carried into the build instead of being asked for a second time.
+  var GEO = { file: null, canonical: null, rows: 0 };
+
+  // A representative point for any shape — the mean of its coordinates, which sits
+  // inside a district where a single vertex might fall in its neighbour.
+  function geomCentre(g) {
+    if (!g || !g.coordinates) return null;
+    var sx = 0, sy = 0, n = 0;
+    (function walk(c) {
+      if (!Array.isArray(c)) return;
+      if (typeof c[0] === "number" && typeof c[1] === "number") { sx += c[0]; sy += c[1]; n++; return; }
+      for (var i = 0; i < c.length; i++) walk(c[i]);
+    })(g.coordinates);
+    return n ? [sx / n, sy / n] : null;
+  }
+
+  function pointsFrom(c) {
+    var pts = [];
+    if (c.geoms && c.geoms.length) {                      // shapes already in the file
+      c.geoms.forEach(function (g) { var p = geomCentre(g); if (p) pts.push(p); });
+      if (pts.length) return pts;
+    }
+    var num = (c.schema || []).filter(function (s) { return s.type === "number"; });
+    var lat = num.filter(function (s) { return /lat/i.test(s.name); })[0];
+    var lng = num.filter(function (s) { return /(lon|lng)/i.test(s.name); })[0];
+    if (!lat || !lng) return null;
+    (c.rows || []).forEach(function (r) {
+      var y = Number(r[lat.name]), x = Number(r[lng.name]);
+      if (isFinite(x) && isFinite(y) && Math.abs(y) <= 90 && Math.abs(x) <= 180) pts.push([x, y]);
+    });
+    return pts.length ? pts : null;
+  }
+
+  // The column most likely to hold place names: one that is named like a place
+  // first, otherwise the text column that reads as short labels rather than prose.
+  function namesFrom(c) {
+    var text = (c.schema || []).filter(function (s) { return s.type === "string"; });
+    if (!text.length) return null;
+    var named = text.filter(function (s) {
+      return /(name|village|town|city|district|block|place|ward|panchayat|taluk|tehsil|mandal|gram)/i.test(s.name);
+    })[0];
+    var pick = named;
+    if (!pick) {
+      var best = null;
+      text.forEach(function (s) {
+        var vals = (c.rows || []).map(function (r) { return String(r[s.name] == null ? "" : r[s.name]).trim(); })
+          .filter(Boolean);
+        if (!vals.length) return;
+        var chars = 0, words = 0;
+        vals.forEach(function (v) { chars += v.length; words += v.split(/\s+/).length; });
+        chars /= vals.length; words /= vals.length;
+        if (chars > 40 || words > 4) return;              // prose, not a label
+        var score = vals.length / (chars + words);
+        if (!best || score > best.score) best = { s: s, score: score };
+      });
+      pick = best && best.s;
+    }
+    if (!pick) return null;
+    var out = [];
+    (c.rows || []).forEach(function (r) {
+      var v = String(r[pick.name] == null ? "" : r[pick.name]).trim();
+      if (v) out.push(v);
+    });
+    return out.length ? { col: pick.name, names: out } : null;
+  }
+
+  function showFileCard(name, note) {
+    var host = $("#geo-file-card");
+    if (!host) return;
+    if (!name) { host.innerHTML = ""; return; }
+    host.innerHTML = '<div class="filecard"><span></span><button type="button" title="Forget this file">✕</button></div>';
+    host.querySelector("span").textContent = name + (note ? " · " + note : "");
+    host.querySelector("button").onclick = function () {
+      host.innerHTML = ""; msg(2, "");
+      GEO.file = null; GEO.canonical = null; GEO.rows = 0;
+      if (BENCH) { BENCH.destroy(); BENCH = null; BENCH_KEY = ""; }
+    };
+  }
+
+  function placesFromFile(file) {
+    if (!window.LokaIngest) { msg(2, "The file reader didn’t load — reload the page and try again."); return; }
+    msg(2, "Reading " + file.name + "…", "ok");
+    showFileCard(file.name, "reading…");
+    LokaIngest.fromFile(file, function (err, res) {
+      if (err) { msg(2, "That file couldn’t be read: " + err.message); showFileCard(null); return; }
+      if (res.kind === "unsupported") { msg(2, res.message); showFileCard(null); return; }
+      // a workbook or a mixed shapes file: take the first, and say which
+      if (res.kind === "sheets") {
+        return res.pick(res.sheets[0].name, function (e2, r2) {
+          if (e2 || !r2 || r2.kind !== "table") { msg(2, "That workbook couldn’t be read."); showFileCard(null); return; }
+          useCanonical(r2.canonical, file, "sheet “" + res.sheets[0].name + "”");
+        });
+      }
+      if (res.kind === "classes") {
+        return res.pick(res.classes[0].cls, function (e2, r2) {
+          if (e2 || !r2 || r2.kind !== "table") { msg(2, "That file couldn’t be read."); showFileCard(null); return; }
+          useCanonical(r2.canonical, file, res.classes[0].label);
+        });
+      }
+      if (res.kind !== "table") { msg(2, "That file couldn’t be read."); showFileCard(null); return; }
+      useCanonical(res.canonical, file, "");
+    });
+  }
+
+  function useCanonical(c, file, part) {
+    var rows = (c.rows || []).length;
+    GEO.file = file; GEO.canonical = c; GEO.rows = rows;
+    var pts = pointsFrom(c);
+    var nm = pts ? null : namesFrom(c);
+    if (!pts && !nm) {
+      msg(2, "This file has no coordinates and no column that reads like place names, so it can’t " +
+        "say where it belongs. Search for the place above instead.");
+      showFileCard(file.name, rows + " rows · couldn’t find places");
+      return;
+    }
+    if (!pts && !S.iso3) {
+      msg(2, "Place names can’t say which country they are in — choose the country above, then drop the file again.");
+      showFileCard(file.name, rows + " rows");
+      return;
+    }
+    showFileCard(file.name, rows + " rows" + (part ? " · " + part : "") + " · finding places…");
+    msg(2, "Reading all " + rows.toLocaleString() + " rows to find the places…", "ok");
+    var body = pts ? { iso3: S.iso3, points: pts } : { iso3: S.iso3, names: nm.names };
+    api("geo/infer", { method: "POST", body: body })
+      .then(function (d) { applyInferred(d, file, rows, pts ? "coordinates" : "the “" + nm.col + "” column"); })
+      .catch(function (e) {
+        msg(2, e && e.needsCountry ? "Choose the country above, then drop the file again." : errMsg(e));
+        showFileCard(file.name, rows + " rows");
+      });
+  }
+
+  function applyInferred(d, file, rows, how) {
+    var units = (d && d.units) || [];
+    if (!units.length) {
+      msg(2, "We couldn’t match these rows to any place we know. Search for the place above instead — " +
+        "your data will still go on the atlas afterwards.");
+      showFileCard(file.name, rows + " rows · no places found");
+      return;
+    }
+    var before = S.chosen.length;
+    units.forEach(function (u) { add({ id: u.id, name: u.name, level: d.level }, u.name); });
+    var added = S.chosen.length - before;
+    var shownNames = S.chosen.slice(0, 3).map(function (c) { return c.label; }).join(", ");
+    var more = S.chosen.length > 3 ? " and " + (S.chosen.length - 3) + " more" : "";
+    var said = "From " + how + ": your file’s places sit in " + shownNames + more +
+      " — " + (d.matchedRows || 0).toLocaleString() + " of " + (d.rows || rows).toLocaleString() + " rows.";
+    if (d.sharedRows) {
+      said += " " + d.sharedRows.toLocaleString() + " row" + (d.sharedRows > 1 ? "s name" : " names") +
+        " a place that exists in more than one part of the country — we took the ones nearest the rest of your data.";
+    }
+    if (d.unreadRows) {
+      said += " " + d.unreadRows.toLocaleString() + " row" + (d.unreadRows > 1 ? "s" : "") + " we couldn’t read.";
+    }
+    said += " Take any out, or search to add more.";
+    msg(2, said, "ok");
+    showFileCard(file.name, rows + " rows · " + added + " place" + (added === 1 ? "" : "s") + " found");
+  }
+
+  (function wireGeoDrop() {
+    var drop = $("#geo-drop"), input = $("#geo-file");
+    if (!drop || !input) return;
+    ["dragenter", "dragover"].forEach(function (t) {
+      drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add("over"); });
+    });
+    ["dragleave", "dragend"].forEach(function (t) {
+      drop.addEventListener(t, function () { drop.classList.remove("over"); });
+    });
+    drop.addEventListener("drop", function (e) {
+      e.preventDefault(); drop.classList.remove("over");
+      var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) placesFromFile(f);
+    });
+    input.addEventListener("change", function () {
+      if (input.files && input.files[0]) placesFromFile(input.files[0]);
+      input.value = "";                                   // same file twice should re-read
+    });
+  })();
+
+  /* ---- 2c · check the file against the places, before the atlas is built ----
+     The file goes to the server ONCE, here, as a pending piece of work: there is
+     no atlas yet to attach it to, so it carries the region instead and waits. This
+     is also the only moment the fix-list exists — after the build it is gone —
+     which is why checking happens before Open data rather than after. */
+
+  var BENCH = null, BENCH_KEY = "";
+
+  function chosenBbox() {
+    var w = 180, so = 90, e = -180, n = -90, any = false;
+    S.chosen.forEach(function (c) {
+      var b = c.bbox;
+      if (!b || b.length !== 4) return;
+      any = true;
+      if (b[0] < w) w = b[0];
+      if (b[1] < so) so = b[1];
+      if (b[2] > e) e = b[2];
+      if (b[3] > n) n = b[3];
+    });
+    return any ? [w, so, e, n] : null;
+  }
+
+  function showCheck() {
+    [1, 2, 3, 4].forEach(function (i) { $("#s" + i).hidden = true; });
+    $("#s2b").hidden = false;
+    // still rung 2: this is part of answering "where is it", not a fifth step
+    $$(".stp").forEach(function (b) {
+      if (Number(b.dataset.s) === 2) b.setAttribute("aria-current", "step");
+      else b.removeAttribute("aria-current");
+    });
+    window.scrollTo({ top: 0 });
+
+    var key = S.iso3 + "|" + S.level + "|" +
+      S.chosen.map(function (c) { return c.id; }).sort().join(",");
+    if (BENCH && BENCH_KEY === key) return;        // already checked against these places
+    if (BENCH) { BENCH.destroy(); BENCH = null; }
+    BENCH_KEY = key;
+    $("#check-verdict").textContent = "Reading " + GEO.file.name + "…";
+    try {
+      BENCH = window.LokaDataBench.mount($("#bench"), {
+        mode: "embedded",
+        api: API,
+        viewer: "../",
+        stages: "checkPlace",
+        region: {
+          iso3: S.iso3, level: S.level,
+          shapeIDs: S.chosen.map(function (c) { return c.id; }),
+          bbox: chosenBbox(),
+        },
+        onReady: function (sum) {
+          var left = sum.needsAttention || 0;
+          $("#check-verdict").textContent = left
+            ? sum.features + " of " + sum.rows + " rows are on the map — " + left +
+              " need a second look below."
+            : sum.rows + " rows, all placed. Nothing to fix.";
+        },
+      });
+      BENCH.start(GEO.canonical);
+    } catch (e) {
+      BENCH = null; BENCH_KEY = "";
+      msg("2b", "Your file couldn’t be checked here: " + e.message +
+        " — build the atlas anyway, then add the file from the atlas’s own page.");
+    }
+  }
+
   $("#next-2").onclick = function () {
     if (!S.chosen.length) {
       msg(2, "An atlas needs at least one place. Search above to add one.");
@@ -366,8 +618,11 @@
       return;
     }
     msg(2, "");
+    if (GEO.canonical) { showCheck(); return; }
     step(3);
   };
+
+  $("#next-2b").onclick = function () { msg("2b", ""); step(3); };
 
   /* ---- 3 · open data ---- */
 
@@ -456,6 +711,11 @@
     if (!layers.length) { msg(3, "Something has gone wrong: not even the boundaries are selected."); return; }
     btn.disabled = true; msg(3, "");
     step(4);
+    // "you can safely leave this page" stops being true when a file is riding
+    // along: the page is what hands it over once the atlas exists
+    if (GEO.canonical && $("#build-leave")) {
+      $("#build-leave").textContent = "Your file is added at the end, so keep this page open.";
+    }
     $("#done-row").hidden = true;
     $("#log").textContent = "";
     $("#build-title").textContent = "Building your atlas…";
@@ -533,6 +793,18 @@
     $("#open-editor").href = "../edit/?dataset=" + encodeURIComponent(S.slug);
     $("#done-row").hidden = false;
     $("#open-editor").focus();
+    // the file has waited on the server since the check step; the atlas exists
+    // now, so it can be told where it belongs and added
+    if (BENCH && GEO.canonical) {
+      $("#prog-msg").textContent = "Adding " + GEO.file.name + " to your atlas…";
+      BENCH.bindDataset(S.slug);
+      BENCH.commit().then(function () {
+        $("#prog-msg").textContent = "Your atlas is ready — your data is on it.";
+      }).catch(function () {
+        $("#prog-msg").textContent = "Your atlas is built, but your file couldn’t be added " +
+          "automatically. Open the atlas and drop it there — it takes a minute.";
+      });
+    }
   }
 
   boot();
