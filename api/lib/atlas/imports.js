@@ -14,15 +14,40 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { DATA_DIR } from './registry.js';
-import { DATASETS_ROOT } from './jobs.js';
+import { DATASETS_ROOT, PRIVATE_ROOT } from './jobs.js';
 
 const IMPORTS_DIR = path.join(DATA_DIR, 'imports');
 const TTL_MS = 24 * 3600 * 1000;
 
+// A built atlas lives under ONE of two roots: public ones the web server can
+// serve as static files, private ones outside the web root that only the keyed
+// API route serves. A slug can never exist in both — creating an atlas checks
+// both — so looking in both is unambiguous. Without it, every upload route
+// answered "unknown dataset" for a private atlas, so a private atlas could take
+// no data at all.
+//
+// Callers must NOT read "I got a directory" as "this is public". Anything that
+// hands data to a reader makes its own access check — see the gate added to
+// /layers/search, which is otherwise open by design.
+const DATASET_ROOTS = [DATASETS_ROOT, PRIVATE_ROOT];
 export function datasetDir(id) {
-  const dir = path.join(DATASETS_ROOT, id);
-  if (!/^[a-z0-9][a-z0-9-]{0,60}$/.test(id) || !dir.startsWith(DATASETS_ROOT)) return null;
-  return fs.existsSync(path.join(dir, 'manifest.json')) ? dir : null;
+  if (!/^[a-z0-9][a-z0-9-]{0,60}$/.test(id)) return null;
+  for (const root of DATASET_ROOTS) {
+    const dir = path.join(root, id);
+    if (!dir.startsWith(root)) continue;
+    if (fs.existsSync(path.join(dir, 'manifest.json'))) return dir;
+  }
+  return null;
+}
+
+// Which root a slug (or a draft of it) belongs under. A draft sits beside its
+// parent so a private atlas's draft never appears in the public web root.
+export function rootForDataset(id) {
+  const base = String(id).split('--draft-')[0];
+  for (const root of DATASET_ROOTS) {
+    if (fs.existsSync(path.join(root, base, 'manifest.json'))) return root;
+  }
+  return DATASETS_ROOT;
 }
 
 export function readManifest(id) {
@@ -69,9 +94,11 @@ export function discardImport(id) {
   try { fs.rmSync(path.join(IMPORTS_DIR, id + '.targets.json'), { force: true }); } catch {}
   // remove any draft folder for this import
   try {
-    for (const d of fs.readdirSync(DATASETS_ROOT)) {
-      if (d.includes('--draft-' + id.replace('imp_', ''))) {
-        fs.rmSync(path.join(DATASETS_ROOT, d), { recursive: true, force: true });
+    for (const root of DATASET_ROOTS) {
+      for (const d of fs.readdirSync(root)) {
+        if (d.includes('--draft-' + id.replace('imp_', ''))) {
+          fs.rmSync(path.join(root, d), { recursive: true, force: true });
+        }
       }
     }
   } catch {}
@@ -183,7 +210,10 @@ export function writeDraft(datasetId, importId, stanza, sourceFile, geojson, rep
   if (!m) throw new Error('dataset not found');
   const suffix = importId.replace('imp_', '');
   const draftId = datasetId + '--draft-' + suffix;
-  const draftDir = path.join(DATASETS_ROOT, draftId);
+  // beside its parent, whichever root that is: a private atlas's draft must not
+  // land in the public web root, and the '../<id>/' sources written below only
+  // resolve when draft and parent share a root
+  const draftDir = path.join(rootForDataset(datasetId), draftId);
   fs.rmSync(draftDir, { recursive: true, force: true });
   fs.mkdirSync(draftDir, { recursive: true });
 

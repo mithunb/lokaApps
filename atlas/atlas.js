@@ -47,9 +47,14 @@
   // basemap machinery it wires is exactly what the host drives.
   var PANEL_OFF = QS.get("panel") === "0";
   if (PANEL_OFF) document.documentElement.classList.add("atlas-nopanel");
-  // Private datasets live outside the web root and are served by the API behind
-  // a view key; public datasets are plain static files.
-  var BASE = KEY ? "./api/datasets/" + DATASET + "/" : "./datasets/" + DATASET + "/";
+  // Public datasets are plain static files. A private atlas's files sit outside
+  // the web root, so they come through the API instead, and there are two ways to
+  // be allowed: a view key in the address, or — with ?via=api and no key — the
+  // signed-in owner's own session. The session route is what lets the editor
+  // preview a private atlas, since the plaintext key is issued once at creation
+  // and only its hash is kept, so no page can look it up later.
+  var VIA_API = !!KEY || QS.get("via") === "api";
+  var BASE = VIA_API ? "./api/datasets/" + DATASET + "/" : "./datasets/" + DATASET + "/";
   function dataUrl(file) {
     if (!KEY) return BASE + file;
     return BASE + file + (file.indexOf("?") < 0 ? "?key=" : "&key=") + encodeURIComponent(KEY);
@@ -2099,7 +2104,13 @@
     var seq = ++searchSeq;                    // semantic expansion (public atlases with embeddings)
     clearTimeout(searchTimer);
     searchTimer = setTimeout(function () {
-      fetch("./api/layers/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dataset: DATASET, q: q }) })
+      // the key rides along so search works on a private atlas the same way its
+      // files do; with no key the API falls back to the caller's own session
+      fetch("./api/layers/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataset: DATASET, q: q, key: KEY || undefined }),
+      })
         .then(function (r) { return r.json(); })
         .then(function (r) {
           if (seq !== searchSeq) return;      // a newer keystroke won

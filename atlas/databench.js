@@ -303,6 +303,10 @@
     // ...and to the viewer, which the preview frame loads. Defaults to "./" for
     // a host sitting beside it; a host one directory deeper must say so.
     var VIEWER = opts.viewer || "./";
+    // a private atlas's draft is not a static file — the preview frame and the
+    // shape tally both have to ask the API, which authorises by session here
+    var PRIVATE = !!opts.private;
+    var VIA = PRIVATE ? "&via=api" : "";
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
@@ -1252,7 +1256,7 @@
     clearTimeout(previewGuard);
     previewGuard = setTimeout(done, 8000);
     f.dataset.draft = draftId;
-    f.src = VIEWER + "?embed=map&dataset=" + encodeURIComponent(draftId) + "&v=" + (++previewSeq);
+    f.src = VIEWER + "?embed=map&dataset=" + encodeURIComponent(draftId) + VIA + "&v=" + (++previewSeq);
   }
 
   /* "How it looks" asks two questions — the shape a place is drawn as, and
@@ -1582,7 +1586,7 @@
     var draft = S.result.draftDataset;
     if (c.mode !== "cat" || !draft || !frag || !frag.source) return;
     var mine = ++keySeq;
-    tallyFile(VIEWER + "datasets/" + encodeURIComponent(draft) + "/" + frag.source, c.column)
+    tallyFile(VIEWER + (PRIVATE ? "api/datasets/" : "datasets/") + encodeURIComponent(draft) + "/" + frag.source, c.column)
       .then(function (t) {
         if (mine !== keySeq || !t || S.step !== 4) return;
         renderKey(rows, t, total);

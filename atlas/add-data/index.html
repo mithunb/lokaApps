@@ -162,7 +162,7 @@
         document.title = "Add data to " + (inst.title || SLUG) + " — LOKA Atlas";
         $("#bar").hidden = false;
         $("#wrap").hidden = false;
-        start();
+        start(inst);
       })
       .catch(function (e) {
         if (e && (e._status === 401 || e.needsAuth)) {
@@ -174,10 +174,13 @@
         }
       });
 
-    function start() {
+    function start(inst) {
       window.__bench = window.LokaDataBench.mount($("#bench"), {
         mode: "standalone",
         api: API,
+        // a private atlas lives outside the web root, so its draft preview has to
+        // be fetched through the API instead of as a static file
+        private: inst.visibility === "private",
         // this page sits one directory below the viewer, so the preview frame
         // must be told where the viewer is rather than assuming "./"
         viewer: "../",

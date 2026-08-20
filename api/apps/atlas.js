@@ -1393,8 +1393,13 @@ const MIME = {
   '.png': 'image/png', '.jpg': 'image/jpeg',
 };
 router.get('/datasets/:slug/:file', (req, res) => {
-  const slug = String(req.params.slug);
+  const folder = String(req.params.slug);
   const file = String(req.params.file);
+  if (!/^[a-z0-9][a-z0-9-]{0,90}$/.test(folder)) return res.status(400).json({ error: 'bad path' });
+  // A draft preview folder (<slug>--draft-<import>) is read under its PARENT's
+  // permission: it has no registry entry of its own, and it exists precisely so
+  // the owner can see a proposed layer before committing it.
+  const slug = folder.split('--draft-')[0];
   const inst = reg.getInstance(slug);
   if (!inst || inst.visibility !== 'private') return res.status(404).json({ error: 'not found' });
 
@@ -1405,8 +1410,8 @@ router.get('/datasets/:slug/:file', (req, res) => {
   if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(file) || file.includes('..')) {
     return res.status(400).json({ error: 'bad path' });
   }
-  const full = path.join(PRIVATE_ROOT, slug, file);
-  if (!full.startsWith(path.join(PRIVATE_ROOT, slug))) return res.status(400).json({ error: 'bad path' });
+  const full = path.join(PRIVATE_ROOT, folder, file);
+  if (!full.startsWith(path.join(PRIVATE_ROOT, folder) + path.sep)) return res.status(400).json({ error: 'bad path' });
   if (!fs.existsSync(full)) return res.status(404).json({ error: 'not found' });
 
   res.setHeader('Cache-Control', 'private, max-age=60');
@@ -2651,6 +2656,20 @@ router.post('/layers/search', async (req, res) => {
   const q = String(b.q || '').trim().slice(0, 200).toLowerCase();
   const empty = { tags: [], hits: [], matched: 0, semantic: false, layers: 0, total: 0 };
   if (!dataset || q.length < 2 || !imports.datasetDir(dataset)) return res.json(empty);
+
+  // This route is open on purpose — the viewer's search box calls it with no
+  // credentials. Until private atlases could hold data at all, the folder lookup
+  // above failed for them and THAT was the protection. It resolves now, so the
+  // gate has to be explicit: a private atlas answers only to its view key, or to
+  // someone who may edit it. Same test as GET /datasets/:slug/:file.
+  const searchInst = reg.getInstance(dataset);
+  if (searchInst && searchInst.visibility === 'private') {
+    const k = String(b.key || req.query.key || req.headers['x-atlas-key'] || '');
+    const kOk = k && reg.hashToken(k) === searchInst.viewKeyHash;
+    if (!kOk && !callerCanEdit(req, searchInst)) {
+      return res.status(403).json({ error: 'this atlas is private — a view key is needed to search it' });
+    }
+  }
 
   let built = { dir: null, layers: [], idx: {}, built: [] };
   try { built = ensureSearchIndex(dataset); }
