@@ -17,6 +17,13 @@ ssh -o BatchMode=yes -o ConnectTimeout=15 "$HOST" "REPO='$REPO' OWNER='$OWNER' b
 set -euo pipefail
 echo "== deploying on $(hostname) =="
 
+# The cache tokens in the served HTML are DERIVED, never authored: the repo
+# carries "?v=dev" and each deploy stamps the commit being shipped. Hand-kept
+# tokens were missed three times in one day, which left browsers pinned to old
+# JavaScript and made shipped fixes invisible. Because stamping dirties tracked
+# files on purpose, the previous stamp is discarded first so the pull stays clean.
+sudo -u "$OWNER" git -C "$REPO" checkout -- 'atlas/*.html' 'atlas/*/*.html' 2>/dev/null || true
+
 before=$(sudo -u "$OWNER" git -C "$REPO" rev-parse --short HEAD)
 sudo -u "$OWNER" git -C "$REPO" pull --ff-only --quiet
 after=$(sudo -u "$OWNER" git -C "$REPO" rev-parse --short HEAD)
@@ -26,6 +33,11 @@ if [ "$before" != "$after" ]; then
 else
   echo "   (already up to date)"
 fi
+
+# stamp every ?v= with the commit just deployed, so a returning browser fetches
+# fresh JavaScript the moment anything ships and never needs a manual reload
+stamped=$(sudo -u "$OWNER" bash -lc "cd '$REPO' && grep -rl -- '?v=' atlas --include='*.html' | tee /dev/stderr | xargs -r sed -i -E 's/\\?v=[0-9A-Za-z._-]+/?v=$after/g' && grep -rho -- '?v=[0-9A-Za-z._-]*' atlas --include='*.html' | sort -u | tr '\\n' ' '" 2>/dev/null)
+echo "cache tokens stamped: $stamped"
 
 # node deps — fast no-op when the lockfile is unchanged
 sudo -u "$OWNER" bash -lc "cd '$REPO/api' && npm install --omit=dev --no-audit --no-fund --silent"

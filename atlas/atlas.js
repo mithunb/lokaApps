@@ -2260,10 +2260,14 @@
     groupList.forEach(function (g) {
       var layers = MANIFEST.layers.filter(function (L) { return (L.group || "userdata") === g.id; });
       if (!layers.length) return;
-      // Only Base is expanded on load; all other groups collapse so the panel
-      // isn't overwhelming (users open the ones they want). The engine owns this
-      // — manifests' per-group `open` flag is intentionally ignored here.
-      var sec = el("section", "ctl-group" + (g.id === "base" ? "" : " collapsed"));
+      // Base is expanded on load, and so is any group holding data somebody
+      // contributed — that is the whole reason they opened this atlas, and its
+      // colour keys live inside that layer's row. Folding it away by default hid
+      // the keys completely: they were built, correct, and behind a shut fold.
+      // Everything else still collapses so the panel isn't overwhelming. The
+      // engine owns this — a manifest's per-group `open` flag is ignored here.
+      var mine = layers.some(function (L) { return L.userLayer; });
+      var sec = el("section", "ctl-group" + (g.id === "base" || mine ? "" : " collapsed"));
       var head = el("button", "ctl-group-head");
       head.innerHTML = '<span>' + esc(g.label) + '</span><span class="chev">' + ICONS.chevron + '</span>';
       head.onclick = function () { sec.classList.toggle("collapsed"); };
