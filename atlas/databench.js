@@ -287,7 +287,12 @@
     if (MODE === "embedded") {
       var scoped = [
         ["#back-1", null],                              // the host's ✕ removes the file
-        ["#to-place", "Next — check the locations"],
+        // With stages:"checkPlace" the host owns the forward action, and start()
+        // clicks this one itself to produce the verdict — so by the time anyone
+        // sees the panel its job is done. Leaving it visible put two forward
+        // buttons side by side, one of which only re-ran what you were looking at.
+        // Hidden rather than relabelled because startCheck() rewrites its text.
+        ["#to-place", STAGES === "checkPlace" ? null : "Next — check the locations"],
         ["#back-2", "← Back to the columns"],
         ["#to-style", "Done — this looks right"],
       ];

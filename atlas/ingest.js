@@ -15,6 +15,11 @@
 
   var MAX_FILE_BYTES = 25 * 1024 * 1024;
   var MAX_ROWS = 5000, MAX_COLS = 40;
+  // How big a map we have actually panned and timed, as opposed to how big a file
+  // we will accept. Measured on a grid of pins with three rows of shapes each:
+  // 3,000 places is ~57,000 pieces of page and still moves; 6,000 is ~114,000 and
+  // does not. Rows above this are kept, not refused — the person is told instead.
+  var TESTED_ROWS = 3000;
   var TYPE_DOMINANCE = 0.95;            // share of non-empty values a type needs to win
   var ISSUE_ROWS_KEPT = 20;
 
@@ -430,6 +435,13 @@
     if (stats.rewound) notices.push(stats.rewound + " ring" + (stats.rewound > 1 ? "s" : "") + " had reversed winding — fixed.");
     if (stats.selfIntersecting) notices.push(stats.selfIntersecting + " polygon" + (stats.selfIntersecting > 1 ? "s look" : " looks") + " self-intersecting — the map will render them, but check the source if shapes look wrong.");
     if (stats.unchecked) notices.push(stats.unchecked + " large polygon" + (stats.unchecked > 1 ? "s were" : " was") + " not checked for self-intersection.");
+    // same honesty as the table path: a shapes file of 4,000 points is exactly as
+    // heavy as a spreadsheet of 4,000 rows
+    if (geoms.length > TESTED_ROWS) {
+      notices.push("This file has " + geoms.length.toLocaleString() +
+        " shapes. We have tested atlases up to " + TESTED_ROWS.toLocaleString() +
+        " — beyond that the map may feel slow to pan, especially on an older machine.");
+    }
 
     // vertex budget: escalate the simplification tolerance until it fits
     var total = 0;
@@ -626,6 +638,11 @@
     if (encoding === "windows-1252") canonical.meta.notices.push("The file wasn't UTF-8 — read as Windows-1252 so accented characters survive.");
     if (truncated.rows) canonical.meta.notices.push("Only the first " + MAX_ROWS.toLocaleString() + " rows were kept — " + truncated.rows.toLocaleString() + " more were cut. Split the file if you need them all.");
     if (truncated.cols) canonical.meta.notices.push("Only the first " + MAX_COLS + " columns were kept — " + truncated.cols + " more were cut.");
+    if (typed.rows.length > TESTED_ROWS) {
+      canonical.meta.notices.push("This file has " + typed.rows.length.toLocaleString() +
+        " rows. We have tested atlases up to " + TESTED_ROWS.toLocaleString() +
+        " — beyond that the map may feel slow to pan, especially on an older machine.");
+    }
     return { kind: "table", canonical: canonical };
   }
 

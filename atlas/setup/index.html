@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Figtree:wght@500;600;700&display=swap" />
-  <link rel="stylesheet" href="../databench.css?v=20260819-1" />
+  <link rel="stylesheet" href="../databench.css?v=20260819-2" />
   <style>
     :root {
       --color-bg:#F9F9F7; --color-bg-alt:#F0EFEA; --color-surface:#FFFFFF;
@@ -228,6 +228,9 @@
       <nav class="stepper" aria-label="Steps">
         <button class="stp" data-s="1"><b>1</b> Org &amp; branding</button>
         <button class="stp" data-s="2" disabled><b>2</b> Geography</button>
+        <!-- appears only when a file was dropped; numbering shifts with it. No
+             data-s: it is not part of the numeric step machinery, setup.js drives it -->
+        <button class="stp" id="stp-file" hidden><b>3</b> Your file</button>
         <button class="stp" data-s="3" disabled><b>3</b> Open data</button>
         <button class="stp" data-s="4" disabled><b>4</b> Build</button>
       </nav>
@@ -340,9 +343,9 @@
   <!-- ?v= — bump on every deploy that touches a local .js/.css; see index.html -->
   <script src="../vendor/papaparse.min.js"></script>
   <script src="../vendor/simplify.js"></script>
-  <script src="../ingest.js?v=20260819-1"></script>
-  <script src="../checktable.js?v=20260819-1"></script>
-  <script src="../databench.js?v=20260819-1"></script>
-  <script src="./setup.js?v=20260819-1"></script>
+  <script src="../ingest.js?v=20260819-2"></script>
+  <script src="../checktable.js?v=20260819-2"></script>
+  <script src="../databench.js?v=20260819-2"></script>
+  <script src="./setup.js?v=20260819-2"></script>
 </body>
 </html>

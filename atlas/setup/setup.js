@@ -369,7 +369,10 @@
 
   // What the dropped file is, and what we read out of it. Held so the SAME file
   // can be carried into the build instead of being asked for a second time.
-  var GEO = { file: null, canonical: null, rows: 0 };
+  // addedIds: the places THIS FILE put on the list. The card's ✕ takes the file and
+  // these, and nothing else — a place you typed yourself is yours, and a single
+  // dismiss should never quietly undo your own typing.
+  var GEO = { file: null, canonical: null, rows: 0, addedIds: [] };
 
   // A representative point for any shape — the mean of its coordinates, which sits
   // inside a district where a single vertex might fall in its neighbour.
@@ -438,12 +441,27 @@
     var host = $("#geo-file-card");
     if (!host) return;
     if (!name) { host.innerHTML = ""; return; }
-    host.innerHTML = '<div class="filecard"><span></span><button type="button" title="Forget this file">✕</button></div>';
+    var n = GEO.addedIds.length;
+    var tip = n
+      ? "Forget this file and the " + n + " place" + (n > 1 ? "s" : "") + " it found"
+      : "Forget this file";
+    host.innerHTML = '<div class="filecard"><span></span><button type="button"></button></div>';
     host.querySelector("span").textContent = name + (note ? " · " + note : "");
-    host.querySelector("button").onclick = function () {
+    var x = host.querySelector("button");
+    x.textContent = "✕";
+    x.title = tip;
+    x.setAttribute("aria-label", tip);
+    x.onclick = function () {
+      // the file and the places it found leave together; anything typed by hand stays
+      if (GEO.addedIds.length) {
+        S.chosen = S.chosen.filter(function (c) { return GEO.addedIds.indexOf(c.id) < 0; });
+        if (S.chosen.length) S.level = Math.max.apply(null, S.chosen.map(function (c) { return c.level || 2; }));
+        paintChips();
+      }
       host.innerHTML = ""; msg(2, "");
-      GEO.file = null; GEO.canonical = null; GEO.rows = 0;
+      GEO.file = null; GEO.canonical = null; GEO.rows = 0; GEO.addedIds = [];
       if (BENCH) { BENCH.destroy(); BENCH = null; BENCH_KEY = ""; }
+      syncRungs();
     };
   }
 
@@ -507,9 +525,11 @@
       showFileCard(file.name, rows + " rows · no places found");
       return;
     }
-    var before = S.chosen.length;
-    units.forEach(function (u) { add({ id: u.id, name: u.name, level: d.level }, u.name); });
-    var added = S.chosen.length - before;
+    var had = S.chosen.map(function (c) { return c.id; });
+    units.forEach(function (u) { add({ id: u.id, name: u.name, level: d.level, bbox: u.bbox }, u.name); });
+    GEO.addedIds = S.chosen.map(function (c) { return c.id; })
+      .filter(function (id) { return had.indexOf(id) < 0; });
+    var added = GEO.addedIds.length;
     var shownNames = S.chosen.slice(0, 3).map(function (c) { return c.label; }).join(", ");
     var more = S.chosen.length > 3 ? " and " + (S.chosen.length - 3) + " more" : "";
     var said = "From " + how + ": your file’s places sit in " + shownNames + more +
@@ -524,6 +544,7 @@
     said += " Take any out, or search to add more.";
     msg(2, said, "ok");
     showFileCard(file.name, rows + " rows · " + added + " place" + (added === 1 ? "" : "s") + " found");
+    syncRungs();
   }
 
   (function wireGeoDrop() {
@@ -568,14 +589,29 @@
     return any ? [w, so, e, n] : null;
   }
 
+  /* Checking a file IS a step, and pretending otherwise is what confused the owner:
+     the stepper said four questions, none of them "your data", while a data screen
+     sat inside Geography. So the file gets its own rung — but only when there is a
+     file. Someone mapping a region from public data still sees four. */
+  function syncRungs() {
+    var rung = $("#stp-file");
+    if (!rung) return;
+    var withFile = !!GEO.canonical;
+    rung.hidden = !withFile;
+    var order = withFile ? ["1", "2", "file", "3", "4"] : ["1", "2", "3", "4"];
+    order.forEach(function (key, i) {
+      var b = key === "file" ? rung : $('.stp[data-s="' + key + '"]');
+      if (b) b.querySelector("b").textContent = String(i + 1);
+    });
+  }
+
   function showCheck() {
     [1, 2, 3, 4].forEach(function (i) { $("#s" + i).hidden = true; });
     $("#s2b").hidden = false;
-    // still rung 2: this is part of answering "where is it", not a fifth step
-    $$(".stp").forEach(function (b) {
-      if (Number(b.dataset.s) === 2) b.setAttribute("aria-current", "step");
-      else b.removeAttribute("aria-current");
-    });
+    syncRungs();
+    $$(".stp").forEach(function (b) { b.removeAttribute("aria-current"); });
+    var rung = $("#stp-file");
+    if (rung) { rung.hidden = false; rung.disabled = false; rung.setAttribute("aria-current", "step"); }
     window.scrollTo({ top: 0 });
 
     var key = S.iso3 + "|" + S.level + "|" +
@@ -623,6 +659,7 @@
   };
 
   $("#next-2b").onclick = function () { msg("2b", ""); step(3); };
+  if ($("#stp-file")) $("#stp-file").onclick = function () { if (GEO.canonical) showCheck(); };
 
   /* ---- 3 · open data ---- */
 
