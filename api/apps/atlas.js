@@ -857,6 +857,24 @@ router.get('/admin/action', async (req, res) => {
     }
     return res.send(page('Approved', `“${inst.title}” approved — build queued.`));
   }
+  // A denied REBUILD leaves a working atlas exactly as it was — its status, the
+  // area it covers and its layers all go back. Only a first build ends "denied".
+  if (inst.rebuildPrior) {
+    const prior = inst.rebuildPrior;
+    reg.updateInstance(p.slug, {
+      status: prior.status, region: prior.region,
+      regionLabel: prior.regionLabel, layers: prior.layers,
+      rebuildPrior: undefined, rebuildKeepPublished: undefined,
+    });
+    if (inst.email) {
+      await sendMail({
+        to: inst.email,
+        subject: `[LOKA Atlas] not widened: ${inst.title}`,
+        text: `"${inst.title}" stays as it is for now — covering more ground wasn't approved this time.\nYour atlas and its data are untouched. Reply to this email if you'd like to talk it through.`,
+      });
+    }
+    return res.send(page('Left as it was', `"${inst.title}" keeps its current map.`));
+  }
   reg.updateInstance(p.slug, { status: 'denied' });
   if (inst.email) {
     await sendMail({
@@ -1185,15 +1203,13 @@ router.post('/instances/:slug/rebuild', async (req, res) => {
   for (const l of allowed.values()) if (l.required && !layerIds.includes(l.id)) layerIds.unshift(l.id);
   if (!layerIds.length) return res.status(400).json({ error: 'pick at least one layer' });
 
-  // v1: a rebuild that would newly need approval (big region / heavy layer) is
-  // refused with guidance — keeps the live atlas untouched.
+  // A rebuild that crosses into approval territory used to be refused outright
+  // with "email us" — a dead end for the case that most needs it: widening an
+  // atlas to cover data that turned out to sit outside it. It now enters the same
+  // queue a first build uses. The live atlas keeps serving its existing files
+  // throughout, because a build only swaps them on success.
   const heavy = layerIds.some((id) => allowed.get(id).cost === 'approval');
-  if (heavy || areaDeg2 > FREE_AREA_DEG2) {
-    return res.status(400).json({
-      error: 'This change is bigger than the free tier (a large region or a heavy layer) and needs a quick approval — email mithun@socratus.org and we’ll set it up.',
-      approvalNeeded: true,
-    });
-  }
+  const needsApproval = heavy || areaDeg2 > FREE_AREA_DEG2;
 
   const shapeNames = picked.map((f) => f.properties.name);
   const regionLabel = shapeNames.slice(0, 3).join(' · ') + (shapeNames.length > 3 ? ` +${shapeNames.length - 3}` : '');
@@ -1222,8 +1238,40 @@ router.post('/instances/:slug/rebuild', async (req, res) => {
     tier, region: { iso3: useR.iso3, level: useR.level, shapeIDs: useR.shapeIDs, shapeNames, bbox, areaDeg2 },
     regionLabel, layers: layerIds, spec,
     rebuildKeepPublished: wasPublished || undefined,
-    status: wasPublished ? 'published' : 'building',
+    // The new region is recorded now so an approval needs no extra bookkeeping —
+    // but that makes the record describe an area the built files do not cover yet,
+    // so the whole prior state is kept and a denial puts every bit of it back.
+    rebuildPrior: needsApproval
+      ? { status: inst.status, region: inst.region, regionLabel: inst.regionLabel, layers: inst.layers }
+      : undefined,
+    status: needsApproval ? 'pending-approval' : (wasPublished ? 'published' : 'building'),
   });
+
+  if (needsApproval) {
+    const base = siteBase(req);
+    const approve = `${base}/apps/atlas/api/admin/action?token=${auth.makeActionToken(inst.slug, 'approve')}`;
+    const deny = `${base}/apps/atlas/api/admin/action?token=${auth.makeActionToken(inst.slug, 'deny')}`;
+    const why = [];
+    if (heavy) why.push('heavy layers');
+    if (areaDeg2 > FREE_AREA_DEG2) {
+      why.push(`large region: ${regionLabel} (~${Math.round(areaDeg2 * 12300).toLocaleString('en-IN')} km2)`);
+    }
+    await sendMail({
+      to: ADMIN_EMAIL,
+      subject: `[LOKA Atlas] widen request: ${inst.title}`,
+      text: `"${inst.title}" (${inst.slug}) asks to cover more ground.\n\n`
+        + `Reason: ${why.join('; ')}\nWould cover: ${regionLabel}\n\n`
+        + `Approve: ${approve}\nDeny:    ${deny}\n\n`
+        + `The atlas keeps serving its current map until this is approved.`,
+    });
+    return res.json({
+      ok: true, pendingApproval: true, slug: inst.slug, regionLabel,
+      message: 'That covers a lot of ground, so the LOKA team takes a quick look first — '
+        + 'usually within a day. Your atlas carries on exactly as it is until then, and '
+        + 'your data stays where it is.',
+    });
+  }
+
   const jobId = enqueueBuild(spec);
   reg.updateInstance(inst.slug, { jobId });
   res.json({ ok: true, jobId, slug: inst.slug, wasPublished });

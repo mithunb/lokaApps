@@ -170,6 +170,7 @@
         <button class="btn secondary" id="back-2">← Back to the table</button>
         <button class="btn" id="to-style">Continue — preview the layer</button>
       </div>
+      <div id="db-widen" hidden style="margin:.5rem 0 0"></div>
       <div id="msg-place"></div>
     </section>
 
@@ -1033,6 +1034,99 @@
     var total = (S.canonical && S.canonical.rows) ? S.canonical.rows.length : 0;
     return total > 0 && missed > total / 2;
   }
+  /* When most rows name places this atlas does not cover, the honest fix is not a
+     different column — it is a bigger atlas. Step 2 made the product SAY that;
+     this makes it doable. Two taps: find out where the rows actually are, then
+     widen. The atlas keeps serving its current map throughout, and a widening big
+     enough to need the LOKA team's approval says so instead of failing. */
+  function widenBox() { return $("#db-widen"); }
+  function hideWiden() { var w = widenBox(); if (w) { w.hidden = true; w.innerHTML = ""; } }
+
+  function offerWiden(rep) {
+    var w = widenBox();
+    if (!w) return;
+    var open = (rep.unmatched || []).length;
+    // only for an atlas that exists (a pre-build session has nothing to widen),
+    // only for name matching, and only when the region is the likely cause
+    if (!S.dataset || !missedMost(rep, open)) { hideWiden(); return; }
+    w.hidden = false;
+    w.innerHTML = '<div class="msg"><span></span> ' +
+      '<button type="button" class="btn" id="db-widen-go">See where these places are</button></div>';
+    w.querySelector("span").textContent =
+      open + " of these rows name places this atlas does not cover.";
+    w.querySelector("#db-widen-go").onclick = function () { findWhere(rep); };
+  }
+
+  function findWhere(rep) {
+    var w = widenBox();
+    var names = (rep.unmatched || []).map(function (u) { return u.name; }).filter(Boolean);
+    if (!names.length) { hideWiden(); return; }
+    w.innerHTML = '<div class="msg">Looking up where these rows belong…</div>';
+    var inst = null;
+    api("instances/" + encodeURIComponent(S.dataset))
+      .then(function (i) {
+        inst = i;
+        var iso3 = (i.region && i.region.iso3) || "";
+        return api("geo/infer", { method: "POST", body: { iso3: iso3, names: names } });
+      })
+      .then(function (d) {
+        var units = (d && d.units) || [];
+        if (!units.length) {
+          w.innerHTML = '<div class="msg">We could not tell where these rows belong, so widening ' +
+            'would be a guess. Check the column above, or leave these rows off the map.</div>';
+          return;
+        }
+        // an atlas is built at ONE level of detail; widening can only add places
+        // at the level it already uses
+        var cur = (inst.region && inst.region.shapeIDs) || [];
+        if (d.level !== (inst.region && inst.region.level)) {
+          w.innerHTML = '<div class="msg"></div>';
+          w.querySelector(".msg").textContent = "These rows look like they are in " +
+            units.slice(0, 3).map(function (u) { return u.name; }).join(", ") +
+            ", but at a different level of detail from this atlas. Widening it is a bigger " +
+            "change than this step can make — open the atlas and change its area there.";
+          return;
+        }
+        var add = units.map(function (u) { return u.id; }).filter(function (id) { return cur.indexOf(id) < 0; });
+        if (!add.length) {
+          w.innerHTML = '<div class="msg">These places are already inside this atlas, so the ' +
+            'column above is the more likely problem.</div>';
+          return;
+        }
+        var namesShown = units.slice(0, 3).map(function (u) { return u.name; }).join(", ") +
+          (units.length > 3 ? " and " + (units.length - 3) + " more" : "");
+        w.innerHTML = '<div class="msg"><span></span> ' +
+          '<button type="button" class="btn" id="db-widen-do">Widen the atlas</button></div>';
+        w.querySelector("span").textContent = "These rows are in " + namesShown +
+          ", which this atlas does not cover. Widening rebuilds the map — a few minutes — " +
+          "and your data stays where it is.";
+        w.querySelector("#db-widen-do").onclick = function () { doWiden(inst, cur.concat(add)); };
+      })
+      .catch(function (e) {
+        w.innerHTML = '<div class="msg err"></div>';
+        w.querySelector(".msg").textContent = errMsg(e);
+      });
+  }
+
+  function doWiden(inst, shapeIDs) {
+    var w = widenBox();
+    w.innerHTML = '<div class="msg">Widening the atlas…</div>';
+    api("instances/" + encodeURIComponent(S.dataset) + "/rebuild", {
+      method: "POST",
+      body: { region: { iso3: inst.region.iso3, level: inst.region.level, shapeIDs: shapeIDs } },
+    }).then(function (r) {
+      w.innerHTML = '<div class="msg ok"></div>';
+      w.querySelector(".msg").textContent = r.pendingApproval
+        ? r.message
+        : "The atlas is being rebuilt to cover " + (r.regionLabel || "the wider area") +
+          ". Give it a few minutes, then upload this file again — the places will match.";
+    }).catch(function (e) {
+      w.innerHTML = '<div class="msg err"></div>';
+      w.querySelector(".msg").textContent = errMsg(e) +
+        " — your atlas and its data are untouched.";
+    });
+  }
+
   function nothingPlacedText(rep) {
     return rep.strategy === "adminJoin"
       ? "None of these places were found in " + joinedTo(rep) + ". Either the column above isn't the one with place names in it, or this data is about somewhere outside your atlas's area."
@@ -1041,6 +1135,7 @@
 
   function renderReport(result) {
     var rep = result.matchReport || {};
+    offerWiden(rep);
     var bits = ["<b>" + (result.stats ? result.stats.features : 0) + "</b> features on the map"];
     if (rep.strategy === "adminJoin") {
       bits.push("joined to <b>" + esc(rep.joinLabel || rep.joinLayer || "boundaries") + "</b>");
