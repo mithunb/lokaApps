@@ -67,9 +67,9 @@
 
   var STEPS234_HTML = `    <section class="panel step" id="db-step-2" hidden>
       <h2 id="check-title">Check your table</h2>
-      <p class="hint db-prose">Here's every field we found, with its detected type and the role it'll play on
-        the map. Untick anything you don't want, or hit <b>✎</b> to rename or re-type a field. Switch to
-        <b>Preview rows</b> to see a sample of the data and fix values by hand.</p>
+      <p class="hint db-prose">Here's every column we found, with the kind of thing it holds and the role it'll play on
+        the map. Untick anything you don't want, or hit <b>✎</b> to rename one or change what it holds. Switch to
+        <b>Preview rows</b> to see a sample of the data and fix entries by hand.</p>
       <div id="sheet-pick" hidden>
         <p id="sheet-pick-title">That workbook has several sheets — which one holds the table?</p>
         <div class="sheet-list" id="sheet-list"></div>
@@ -287,7 +287,7 @@
       var scoped = [
         ["#back-1", null],                              // the host's ✕ removes the file
         ["#to-place", "Next — check the locations"],
-        ["#back-2", "← Back to the fields"],
+        ["#back-2", "← Back to the columns"],
         ["#to-style", "Done — this looks right"],
       ];
       scoped.forEach(function (pair) {
@@ -554,7 +554,7 @@
       $("#to-place").textContent = "Looks right — preview the layer";
     } else {
       gs.hidden = true;
-      $("#check-title").textContent = "Choose the fields for your map" +
+      $("#check-title").textContent = "Choose the columns for your map" +
         (canonical.meta.sheet ? " — sheet “" + canonical.meta.sheet + "”" : "");
       showLocationFirst(canonical);
       $("#to-place").textContent = "Looks right — place it on the map";
@@ -592,7 +592,7 @@
       box.innerHTML = "📍 <b>Location: the place names in " + esc(place.name) + ".</b> We'll match them to boundaries — you confirm on the next step.";
     } else {
       box.className = "loc-first warn";
-      box.innerHTML = "📍 <b>No location found yet.</b> A map needs either latitude and longitude columns, or a column of place names. Check the fields below — you can rename or re-type one if we read it wrongly.";
+      box.innerHTML = "📍 <b>No location found yet.</b> A map needs either latitude and longitude columns, or a column of place names. Check the columns below — you can rename one, or say what it holds, if we read it wrongly.";
     }
     // the way back into the placement step, for the person who wants it after
     // coordinates carried them past it
@@ -1014,6 +1014,27 @@
     return el ? el.value : "keep";
   }
 
+  /* When name matching leaves rows behind, the likeliest cause is often NOT the
+     column someone picked — it is that the data describes somewhere this atlas
+     does not cover. The old wording only ever offered the column, which sent
+     people hunting through their own spreadsheet for a fault that wasn't there.
+     So name both causes, and only raise the area when the numbers make it the
+     likely one. Rows placed by latitude and longitude are left alone: they get
+     the out-of-area keep-or-drop choice already, which says it better. */
+  function joinedTo(rep) {
+    return esc(rep.joinLabel || rep.joinLayer || "the boundaries on this atlas");
+  }
+  function missedMost(rep, missed) {
+    if (rep.strategy !== "adminJoin") return false;
+    var total = (S.canonical && S.canonical.rows) ? S.canonical.rows.length : 0;
+    return total > 0 && missed > total / 2;
+  }
+  function nothingPlacedText(rep) {
+    return rep.strategy === "adminJoin"
+      ? "None of these places were found in " + joinedTo(rep) + ". Either the column above isn't the one with place names in it, or this data is about somewhere outside your atlas's area."
+      : "Nothing matched yet — pick the place-name column (or lat/lng) above.";
+  }
+
   function renderReport(result) {
     var rep = result.matchReport || {};
     var bits = ["<b>" + (result.stats ? result.stats.features : 0) + "</b> features on the map"];
@@ -1174,15 +1195,19 @@
     var open = (rep.ambiguous || []).length + (rep.unmatched || []).length;
     if (STAGES === "checkPlace") {
       if (!S.result.stats || !S.result.stats.features) {
-        msg("#msg-place", "Nothing matched yet — pick the place-name column (or lat/lng) above."); return;
+        msg("#msg-place", nothingPlacedText(rep)); return;
       }
       readyCheck(true);
       return;
     }
     if (!S.result.stats || !S.result.stats.features) {
-      msg("#msg-place", "Nothing matched yet — pick the place-name column (or lat/lng) above."); return;
+      msg("#msg-place", nothingPlacedText(rep)); return;
     }
-    if (open && !confirm(open + " row" + (open > 1 ? "s are" : " is") + " still unmatched and will be left off the map. Continue anyway?")) return;
+    if (open) {
+      var stillOpen = open + " row" + (open > 1 ? "s are" : " is") + " still unmatched and will be left off the map.";
+      if (missedMost(rep, open)) stillOpen += " That's most of your data — these places may sit outside your atlas's area.";
+      if (!confirm(stillOpen + " Continue anyway?")) return;
+    }
     $("#to-style").disabled = true;
     msg("#msg-place", "Building the preview…", "ok");
     runApply(function () {
@@ -1719,6 +1744,7 @@
     var un = (rep.unmatched || []).length;
     $("#style-state").textContent = un
       ? un + " row" + (un > 1 ? "s" : "") + " couldn't be placed and " + (un > 1 ? "are" : "is") + " left off the map."
+        + (missedMost(rep, un) ? " That's most of your data — they may be outside your atlas's area." : "")
       : "";
     goStep(4);
   }

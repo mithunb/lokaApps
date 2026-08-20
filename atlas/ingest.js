@@ -249,7 +249,7 @@
         .filter(function (p) { return Object.keys(p).length; });
       if (propRows.length) {
         var t = tableFromObjects(name, sourceType, encoding, propRows);
-        if (t.kind === "table") t.canonical.meta.notices.push("The file had no usable geometry — its attribute table was read instead.");
+        if (t.kind === "table") t.canonical.meta.notices.push("The file had no shapes we could use — its table of details was read instead.");
         return t;
       }
       return { kind: "unsupported", message: "No usable features found in that file." };

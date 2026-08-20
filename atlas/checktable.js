@@ -1,4 +1,4 @@
-/* LOKA Atlas — the "Choose the fields" step (window.LokaCheck).
+/* LOKA Atlas — the "Choose the columns" step (window.LokaCheck).
    Reframes the imported table as a decision, not a spreadsheet: a compact
    card per field (auto-detected type + the role it will play on the map +
    an Include toggle) is the primary view, so the user can glance every field
@@ -29,7 +29,7 @@
 
   var TYPE_LABEL = { string: "text", number: "number", date: "date", boolean: "yes / no" };
   var ISSUE_TEXT = {
-    "mixed-types": "values that don't fit",
+    "mixed-types": "entries that don't fit",
     "mostly-empty": "empty cells",
     "empty-column": "the whole column is empty",
     "ambiguous-dates": "dates that could be day- or month-first (read as day-first)",
@@ -309,10 +309,10 @@
 
         h += '<div class="ck-field' + (c.ignored ? " off" : "") + '">' +
           '<div class="ck-field-top">' +
-            '<input type="checkbox" class="ck-inc" data-ci="' + ci + '"' + (c.ignored ? "" : " checked") + ' title="Include this field in the layer" />' +
+            '<input type="checkbox" class="ck-inc" data-ci="' + ci + '"' + (c.ignored ? "" : " checked") + ' title="Include this column in the layer" />' +
             '<span class="ck-fname" title="' + esc(c.name) + '">' + esc(c.name) + "</span>" +
             (c.derived ? '<span class="ck-gen">generated</span>' : "") +
-            '<button type="button" class="ck-edit-btn' + (openEdit[c.name] ? " on" : "") + '" data-ci="' + ci + '" title="Rename or change the type" aria-label="Edit field">✎</button>' +
+            '<button type="button" class="ck-edit-btn' + (openEdit[c.name] ? " on" : "") + '" data-ci="' + ci + '" title="Rename or change the type" aria-label="Edit column">✎</button>' +
           "</div>" +
           '<div class="ck-meta">' +
             '<span class="ck-type-badge ck-tb-' + c.type + '">' + (TYPE_LABEL[c.type] || c.type) + "</span>" +
@@ -330,7 +330,7 @@
                   return '<option value="' + t + '"' + sel + ">" + lbl + "</option>";
                 }).join("") +
               "</select></label>" +
-            (hasGaps ? '<button type="button" class="ck-mini" data-act="filldown" data-ci="' + ci + '" title="Copy each value into the empty cells below it (merged-cell exports)">Fill empty cells ↓</button>' : "") +
+            (hasGaps ? '<button type="button" class="ck-mini" data-act="filldown" data-ci="' + ci + '" title="Copy each entry into the empty cells below it (merged-cell exports)">Fill empty cells ↓</button>' : "") +
           "</div>" +
         "</div>";
       });
@@ -339,8 +339,8 @@
       // derived count column helper — only when there's a yes/no grid to count
       var boolCols = s.filter(function (c) { return c.type === "boolean" && !c.ignored; });
       if (boolCols.length >= 2) {
-        h += '<details class="ck-derive"><summary>Add a count column (from the yes/no fields)</summary>' +
-          '<p class="hint">Counts, per row, how many of the picked fields say yes — a number the map can colour by.</p>' +
+        h += '<details class="ck-derive"><summary>Add a count column (from the yes/no columns)</summary>' +
+          '<p class="hint">Counts, per row, how many of the picked columns say yes — a number the map can colour by.</p>' +
           '<div class="ck-derive-cols">' + boolCols.map(function (c) {
             return '<label><input type="checkbox" class="ck-dc" value="' + esc(c.name) + '" checked /> ' + esc(c.name) + "</label>";
           }).join("") + "</div>" +
@@ -370,7 +370,7 @@
           var shown = v === true ? "yes" : v === false ? "no" : v;
           h += '<td class="ck-cell ' + cls + '" contenteditable="true" spellcheck="false"' +
             ' data-col="' + esc(c.name) + '" data-row="' + ri + '"' +
-            ' title="' + (off ? "doesn't fit the field type — click to fix" : "click to edit") + '">' + esc(shown) + "</td>";
+            ' title="' + (off ? "doesn't fit what this column holds — click to fix" : "click to edit") + '">' + esc(shown) + "</td>";
         });
         h += "</tr>";
       });
@@ -386,7 +386,7 @@
       var included = canonical.schema.filter(function (c) { return !c.ignored; }).length;
       var h = headerHTML();
       h += '<div class="ck-viewtabs" role="tablist">' +
-        '<button type="button" class="ck-viewtab' + (view === "fields" ? " on" : "") + '" data-view="fields">Fields · ' + included + " on</button>" +
+        '<button type="button" class="ck-viewtab' + (view === "fields" ? " on" : "") + '" data-view="fields">Columns · ' + included + " on</button>" +
         '<button type="button" class="ck-viewtab' + (view === "rows" ? " on" : "") + '" data-view="rows">Preview rows</button>' +
       "</div>";
       h += view === "fields" ? fieldsHTML(stats) : rowsHTML(stats);
