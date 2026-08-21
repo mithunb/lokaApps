@@ -1888,9 +1888,19 @@ function transform(session) {
   // build the fragment + sanitize
   const m = session.dataset ? imports.readManifest(session.dataset) : null;
   const existingIds = m ? imports.mergedLayers(m).map((l) => l.id) : [];
+  // EVERY column the person kept survives. A role says what a column is FOR —
+  // which one is the place name, which is latitude — and must never decide what
+  // gets thrown away. This used to drop role 'ignore', and a model is allowed to
+  // assign that while profiling an upload (see the enum in the profiling call).
+  // So a column of image links was quietly deleted, while the popup went on
+  // promising a photo from it. The add-data flow hid this, because its style step
+  // overwrites the model's roles with plain ones before anything is built; the
+  // setup flow has no style step, so the model's opinion stood.
+  //
+  // Unticking a column in the table still removes it — that is the person's call,
+  // and it never reaches this list.
   const keep = new Set(['name']);
-  const roles2 = session.columns || [];
-  for (const c of roles2) if (!['ignore'].includes(c.role)) keep.add(c.name);
+  for (const c of (session.columns || [])) keep.add(c.name);
   const spec = session.spec || {};
   // a retired ramp name (the red↔green diverging pair) becomes its safe
   // successor here, not just at paint time, so the workbench's ramp picker shows
@@ -1921,6 +1931,22 @@ function transform(session) {
   const clean = sanitizeFeatures(feats, [...keep], sessionBounds(session), spec.outsideAction);
   report.outside = clean.outside;
   if (spec.outsideAction === 'drop' && clean.outside) report.outsideDropped = true;
+
+  // A column that was kept and STILL vanished is a fault, not a preference, and
+  // the last one cost a day of the owner's time while a popup went on promising a
+  // photo from data that no longer had it. So check, and say so out loud. Only
+  // columns that actually carried something count — a column empty in every row
+  // is legitimately absent from the features and must not raise a false alarm.
+  const present = new Set();
+  for (const f of clean.features.slice(0, 200)) {
+    for (const k in (f.properties || {})) present.add(k);
+  }
+  const lost = [...keep].filter((k) => k !== 'name' && !present.has(k)
+    && rows.some((r) => r && r[k] !== undefined && r[k] !== null && r[k] !== ''));
+  if (lost.length) {
+    report.droppedColumns = lost;
+    console.warn('[atlas] columns had values but did not survive the build:', lost.join(', '));
+  }
 
   return { frag, features: clean.features, report };
 }
@@ -2184,7 +2210,11 @@ router.post('/layers/ingest', async (req, res) => {
     session.inference = { rowSubject: inference.rowSubject, notes: inference.notes || '' };
     session.strategy = inference.strategy;
     session.joinLayer = inference.joinLayer || (allOptions[0] && allOptions[0].id);
-    session.columns = (inference.columns || []).filter((c) => columns.includes(c.name));
+    // the model's read of each column is kept for placement, but 'ignore' is
+    // downgraded on the way in: nothing it says should be able to delete data
+    session.columns = (inference.columns || [])
+      .filter((c) => columns.includes(c.name))
+      .map((c) => (c.role === 'ignore' ? { ...c, role: 'text' } : c));
     session.spec = inference.layer;
   } else {
     // heuristic pre-fill (also the no-Gemini path)

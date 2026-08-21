@@ -1163,6 +1163,12 @@
       if (rep.unmatched && rep.unmatched.length) bits.push(rep.unmatched.length + " unmatched");
     }
     if (rep.note) bits.push(esc(rep.note));
+    // a column that was kept, held something, and still did not make it onto the
+    // map is a fault worth saying plainly rather than leaving to be discovered
+    if (rep.droppedColumns && rep.droppedColumns.length) {
+      bits.push('<b style="color:var(--color-rust-deep)">' +
+        esc(rep.droppedColumns.join(", ")) + " did not reach the map — please report this</b>");
+    }
     $("#stat-line").innerHTML = bits.join(" · ");
 
     // out-of-area choice
