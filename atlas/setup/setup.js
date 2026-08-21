@@ -2,7 +2,7 @@
  *
  * The wizard that lived here used to do everything: pick a region by drilling
  * country → state → district, choose and style layers, add data, preview and
- * publish. All of that now lives on the atlas itself (/apps/atlas/edit/), so
+ * publish. All of that now lives on the atlas itself, on its own page, so
  * this asks the only things that must be known BEFORE an atlas can exist:
  * who it belongs to, where it is, and what open data to start it with.
  *
@@ -127,7 +127,7 @@
     list.forEach(function (i) {
       var a = document.createElement("a");
       a.className = "row";
-      a.href = "../edit/?dataset=" + encodeURIComponent(i.slug);
+      a.href = "../?dataset=" + encodeURIComponent(i.slug);
       a.innerHTML = '<span class="t"><b>' + esc(i.title || i.slug) + "</b><span>" +
           esc(i.regionLabel || "") + (i.role === "editor" ? " · you were invited to this" : "") + "</span></span>" +
         '<span class="st' + (i.status === "published" ? " live" : "") + '">' +
@@ -838,7 +838,7 @@
     $("#fill").style.transform = "scaleX(1)";
     $("#build-title").textContent = "Your atlas is ready";
     $("#build-sub").textContent = "Built from open data just now.";
-    var go = "../edit/?dataset=" + encodeURIComponent(S.slug);
+    var go = "../?dataset=" + encodeURIComponent(S.slug);
     $("#open-editor").href = go;
     // The atlas opens itself — a button saying "open your atlas" on a page whose
     // only remaining purpose is to open your atlas is a step for its own sake. It

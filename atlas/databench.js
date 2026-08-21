@@ -176,7 +176,7 @@
 
     <!-- ============ STEP 4 · PREVIEW & ADD ============
          The same questions, in the same order and the same words, as the
-         approved edit screen (edit/index.html #view-edit) — plus the two
+         layer's own card on the atlas (owner.js, #own-edit) — plus the two
          things that only exist at birth: the shape question (asked only when
          the data offers a real choice) and the moment of adding. A question
          with one possible answer is not asked; the map and the key show it. -->

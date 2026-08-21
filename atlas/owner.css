@@ -1,0 +1,299 @@
+/* LOKA Atlas — the owner's tools, dressed in the atlas's own clothes.
+ *
+ * Loaded beside owner.js and only for whoever may edit (checkOwner in
+ * atlas.js). Every colour, radius and type size here comes from the tokens the
+ * atlas page already declares — there is no second palette, because the owner
+ * and the reader are looking at one page and it should look like one page.
+ *
+ * Buttons reuse the page's own .share-btn and add .primary / .danger, rather
+ * than introducing a parallel button. Everything else is prefixed .own- so it
+ * can never collide with the viewer's classes.
+ */
+
+/* ---------- the row beside Share ---------- */
+
+.own-acts { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+
+.own-status {
+  display:inline-flex; align-items:center; gap:.35rem;
+  font-size:.8rem; color:var(--color-text-secondary);
+  padding:.3rem .55rem; border-radius:var(--radius-md);
+  background:var(--color-bg-alt);
+}
+.own-dot {
+  width:.5rem; height:.5rem; border-radius:50%;
+  background:var(--color-text-muted); flex:none;
+}
+.own-status.live .own-dot { background:var(--color-moss); }
+.own-what { font-weight:600; color:var(--color-text-primary); }
+.own-status.live .own-what { color:var(--color-canopy); }
+.own-who { color:var(--color-text-muted); }
+
+.share-btn.primary {
+  background:var(--color-moss); border-color:var(--color-moss); color:#fff;
+}
+.share-btn.primary:hover { background:var(--color-canopy); border-color:var(--color-canopy); color:#fff; }
+.share-btn.danger { color:var(--color-rust-deep); border-color:var(--color-rust); }
+.share-btn.danger:hover { background:var(--color-rust); border-color:var(--color-rust); color:#fff; }
+.share-btn:disabled { opacity:.5; cursor:default; }
+.share-btn:disabled:hover { border-color:var(--color-border); color:var(--color-text-primary); }
+
+/* ---------- what the owner adds to the viewer's panel ---------- */
+
+.own-region-wrap { margin:0 0 .6rem; }
+.own-region {
+  display:grid; grid-template-columns:1fr auto; align-items:baseline;
+  gap:.15rem .5rem; width:100%; text-align:left;
+  font:inherit; font-size:.85rem; cursor:pointer;
+  padding:.5rem .6rem; border:1px solid var(--color-border);
+  border-radius:var(--radius-md); background:var(--color-surface);
+}
+.own-region:hover { border-color:var(--color-moss); }
+.own-region-k { grid-column:1; color:var(--color-text-muted); font-size:.75rem; }
+.own-region-v { grid-column:1; font-weight:600; color:var(--color-text-primary); }
+.own-region-go { grid-column:2; grid-row:1 / span 2; align-self:center;
+  font-size:.75rem; font-weight:600; color:var(--color-moss); }
+.own-region:hover .own-region-go { color:var(--color-canopy); }
+.own-region-warn {
+  margin:.35rem 0 0; font-size:.78rem; color:var(--color-rust-deep);
+}
+
+/* "Change" ends the layer's name line, just before the little "i" — the toggle
+   row is already flex, so margin-left:auto is all it takes. */
+.own-change {
+  margin-left:auto; flex:none;
+  font:inherit; font-size:.72rem; font-weight:600; line-height:18px;
+  color:var(--color-moss); background:none; border:0; cursor:pointer;
+  padding:0 .15rem; border-radius:var(--radius-md);
+}
+.own-change:hover { color:var(--color-canopy); text-decoration:underline; }
+.own-change:focus-visible { outline:2px solid var(--color-moss); outline-offset:1px; }
+.own-by {
+  display:block; font-size:.72rem; color:var(--color-text-muted);
+  padding-left:2.6rem; margin-top:-.1rem;
+}
+
+/* ---------- one layer's card, in the panel, beside the viewer's controls ----------
+
+   The card stands exactly where #atlas-controls stands, so it has to behave
+   exactly like it. The panel is a flex column with overflow:hidden and a
+   max-height; the SCROLLER is the child, and the child carries the insets. Miss
+   that and a layer with ten kinds is simply cut off at the panel's edge with no
+   way to reach the rest.
+
+   The save bar is the one part that must not scroll away: it is the footer, so
+   the body above it scrolls and the bar stays put. */
+
+#own-edit {
+  flex:0 1 auto; min-height:0; overflow:hidden;
+  display:flex; flex-direction:column;
+}
+.own-ev-body {
+  flex:1 1 auto; min-height:0; overflow-y:auto; scrollbar-width:thin;
+  padding:.6rem .8rem .8rem;          /* the same insets #atlas-controls uses */
+  display:flex; flex-direction:column; gap:.55rem;
+}
+
+.own-back {
+  align-self:flex-start; font:inherit; font-size:.78rem; font-weight:600;
+  color:var(--color-moss); background:none; border:0; cursor:pointer; padding:.1rem 0;
+}
+.own-back:hover { color:var(--color-canopy); text-decoration:underline; }
+
+.own-ev-title {
+  margin:0; font-family:'Figtree',sans-serif; font-size:1rem; font-weight:600;
+  color:var(--color-text-primary);
+}
+.own-ev-title:focus { outline:none; }
+.own-ev-sub, .own-ev-loading {
+  margin:0; font-size:.78rem; color:var(--color-text-muted);
+}
+
+.own-fld {
+  display:flex; flex-direction:column; gap:.25rem;
+  font-size:.78rem; color:var(--color-text-secondary);
+}
+.own-fld input[type="text"], .own-fld input[type="email"],
+.own-fld select, .own-fld textarea {
+  font:inherit; font-size:.85rem; color:var(--color-text-primary);
+  padding:.4rem .5rem; border:1px solid var(--color-border);
+  border-radius:var(--radius-md); background:var(--color-surface);
+  width:100%; box-sizing:border-box;
+}
+.own-fld textarea { resize:vertical; }
+.own-fld input:focus, .own-fld select:focus, .own-fld textarea:focus {
+  outline:none; border-color:var(--color-moss);
+}
+.own-note { font-size:.72rem; color:var(--color-text-muted); font-weight:400; }
+.own-note.warnish { color:var(--color-rust-deep); }
+.own-err { font-size:.75rem; color:var(--color-rust-deep); margin:0; }
+
+.own-ramp { display:flex; height:.5rem; border-radius:2px; overflow:hidden; }
+.own-ramp i { flex:1; background:var(--c); }
+
+.own-swatches { display:flex; gap:.35rem; }
+.own-sw {
+  width:1.5rem; height:1.5rem; padding:0; cursor:pointer;
+  border:1px solid var(--color-border); border-radius:50%;
+  background:var(--color-surface); display:grid; place-items:center;
+}
+.own-sw i { width:1rem; height:1rem; border-radius:50%; background:var(--c); display:block; }
+.own-sw[aria-pressed="true"] { border-color:var(--color-text-primary); border-width:2px; }
+
+.own-key-head { display:flex; align-items:baseline; justify-content:space-between; gap:.5rem; }
+.own-group {
+  font-size:.7rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--color-text-muted);
+}
+.own-key-note { font-size:.72rem; color:var(--color-text-muted); }
+
+.own-key { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.2rem; }
+.own-key li { display:flex; align-items:center; gap:.4rem; font-size:.8rem; }
+.own-k-label { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.own-k-count { font-variant-numeric:tabular-nums; color:var(--color-text-muted); font-size:.75rem; }
+.own-k-ramp { flex-direction:column; align-items:stretch; gap:.2rem; }
+.own-k-bar { display:flex; height:.5rem; border-radius:2px; overflow:hidden; }
+.own-k-bar i { flex:1; background:var(--c); }
+.own-k-ends {
+  display:flex; justify-content:space-between; gap:.5rem;
+  font-size:.72rem; color:var(--color-text-muted);
+}
+
+.own-remove { margin-top:.3rem; padding-top:.5rem; border-top:1px solid var(--color-divider); }
+.own-linkish {
+  font:inherit; font-size:.75rem; color:var(--color-text-muted);
+  background:none; border:0; padding:0; cursor:pointer; text-align:left;
+}
+.own-linkish:hover { color:var(--color-rust-deep); text-decoration:underline; }
+.own-linkish.danger { color:var(--color-rust-deep); }
+
+.own-confirm {
+  margin-top:.5rem; padding:.6rem; border-radius:var(--radius-md);
+  background:var(--color-rust-tint);
+}
+.own-confirm p { margin:0 0 .5rem; font-size:.78rem; color:var(--color-text-secondary); }
+.own-row { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+.own-row-tight { padding-top:.2rem; }
+.own-row-top { margin-top:1.25rem; }
+
+/* the save bar only exists once something changed, and slides rather than jumps.
+   It is the card's footer: pinned below the scrolling body, so the way to save
+   is never something you have to scroll to find. */
+.own-save {
+  flex:0 0 auto;
+  padding:.6rem .8rem .8rem; border-top:1px solid var(--color-divider);
+  display:flex; flex-direction:column; gap:.4rem;
+  opacity:0; transform:translateY(.35rem);
+  transition:opacity .18s cubic-bezier(.22,1,.36,1), transform .18s cubic-bezier(.22,1,.36,1);
+}
+.own-save.on { opacity:1; transform:none; }
+.own-save-note { margin:0; font-size:.75rem; color:var(--color-text-muted); }
+.own-save-note.warn { color:var(--color-rust-deep); font-weight:600; }
+
+@media (prefers-reduced-motion: reduce) {
+  .own-save { transition:none; }
+}
+
+/* ---------- Settings, as a sheet ---------- */
+
+.own-scrim {
+  position:fixed; inset:0; z-index:120;
+  background:rgba(42,36,26,.34);
+  display:grid; place-items:start center;
+  padding:2.5rem 1rem; overflow-y:auto;
+}
+.own-sheet {
+  width:min(34rem,100%); background:var(--color-surface);
+  border-radius:var(--radius-lg, .375rem); box-shadow:0 8px 30px rgba(42,36,26,.22);
+  padding:0 1.25rem 1.25rem;
+}
+.own-sheet h2 {
+  margin:0 0 .3rem; font-family:'Figtree',sans-serif; font-size:1.15rem;
+  color:var(--color-text-primary);
+}
+.own-xrow { display:flex; justify-content:flex-end; padding-top:.6rem; }
+.own-x {
+  font:inherit; font-size:1rem; line-height:1; color:var(--color-text-muted);
+  background:none; border:0; cursor:pointer; padding:.2rem .3rem;
+}
+.own-x:hover { color:var(--color-text-primary); }
+
+.own-set-h {
+  margin:1.25rem 0 .3rem; font-family:'Figtree',sans-serif; font-size:.9rem;
+  color:var(--color-text-primary);
+}
+.own-set-p { margin:0 0 .5rem; font-size:.8rem; color:var(--color-text-secondary); }
+.own-sheet .own-fld { margin-bottom:.7rem; }
+
+.own-chips { display:flex; flex-wrap:wrap; gap:.35rem; }
+.own-chip {
+  display:inline-flex; align-items:center; gap:.3rem;
+  font-size:.8rem; padding:.25rem .3rem .25rem .55rem;
+  border-radius:1rem; background:var(--color-moss-tint); color:var(--color-canopy);
+}
+.own-chip-alt { color:var(--color-text-muted); font-size:.72rem; }
+.own-chip-x {
+  font:inherit; font-size:.7rem; line-height:1; cursor:pointer;
+  background:none; border:0; color:inherit; padding:.15rem;
+}
+.own-chip-x:hover { color:var(--color-rust-deep); }
+
+/* the place search: a listbox under the field, escaping nothing it cannot */
+.own-combo { position:relative; }
+.own-sugg {
+  list-style:none; margin:.2rem 0 0; padding:.2rem;
+  position:absolute; top:100%; left:0; right:0; z-index:2;
+  max-height:14rem; overflow-y:auto;
+  background:var(--color-surface); border:1px solid var(--color-border);
+  border-radius:var(--radius-md); box-shadow:0 4px 16px rgba(42,36,26,.14);
+}
+.own-sugg button {
+  display:flex; flex-direction:column; gap:.05rem; width:100%; text-align:left;
+  font:inherit; background:none; border:0; cursor:pointer;
+  padding:.35rem .45rem; border-radius:var(--radius-md);
+}
+.own-sugg button:hover, .own-sugg button[aria-selected="true"] { background:var(--color-bg-alt); }
+.own-nm { font-size:.85rem; font-weight:600; color:var(--color-text-primary); }
+.own-wh { font-size:.72rem; color:var(--color-text-muted); }
+
+.own-inv { display:flex; flex-direction:column; gap:.3rem; }
+.own-inv-row {
+  display:flex; align-items:center; gap:.5rem;
+  font-size:.82rem; padding:.3rem .4rem;
+  border:1px solid var(--color-divider); border-radius:var(--radius-md);
+}
+.own-inv-who { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.own-inv-role { font-size:.72rem; color:var(--color-text-muted); }
+.own-inv-x {
+  font:inherit; font-size:.75rem; line-height:1; cursor:pointer;
+  background:none; border:0; color:var(--color-text-muted); padding:.15rem .25rem;
+}
+.own-inv-x:hover { color:var(--color-rust-deep); }
+.own-inv-add { display:flex; gap:.4rem; margin-top:.4rem; }
+.own-inv-add input {
+  flex:1; font:inherit; font-size:.85rem; padding:.4rem .5rem;
+  border:1px solid var(--color-border); border-radius:var(--radius-md);
+}
+.own-inv-add input:focus { outline:none; border-color:var(--color-moss); }
+
+.own-del { margin-top:1.5rem; padding-top:.8rem; border-top:1px solid var(--color-divider); }
+
+/* ---------- the one-line note that appears and goes ---------- */
+
+.own-toast {
+  position:fixed; left:50%; bottom:1.5rem; transform:translateX(-50%); z-index:200;
+  max-width:min(28rem,calc(100vw - 2rem));
+  font-size:.85rem; padding:.55rem .9rem; border-radius:var(--radius-md);
+  background:var(--color-text-primary); color:var(--color-bg);
+  box-shadow:0 4px 18px rgba(42,36,26,.28);
+}
+
+/* ---------- the panel's own two behaviours, which name their child by hand ----------
+   #atlas-controls is written into these rules directly, so the card has to be
+   written in beside it: on a narrow screen the panel is a bottom sheet you pull
+   up, and pulling it shut has to shut whichever of the two is showing. */
+
+@media (max-width: 720px) {
+  .atlas-panel #own-edit { flex:1 1 auto; min-height:0; }
+  .atlas-panel.collapsed #own-edit { display:none; }
+}

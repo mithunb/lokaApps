@@ -1,7 +1,7 @@
 /* ==========================================================================
    LOKA Atlas — category icons, shared.
    --------------------------------------------------------------------------
-   The viewer draws a category's marker and its legend swatch; the editor's
+   The viewer draws a category's marker and its legend swatch; the owner's
    panel draws that same legend beside the map. Those used to be two bodies of
    code, and they disagreed: the editor showed a coloured dot where the map
    showed an icon, because the editor's renderer never knew icons existed.

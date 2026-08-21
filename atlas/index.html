@@ -61,7 +61,7 @@
     #atlas-about { max-width:46rem; font-size:.95rem; color:var(--color-text-secondary); margin:.35rem 0 0; }
     .hero-top { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
     .hero-actions { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
-    #manage-btn { text-decoration:none; }
+    #add-data-btn { text-decoration:none; }
     .share-btn { display:inline-flex; align-items:center; gap:.4rem; font:inherit; font-size:.85rem; font-weight:600;
       padding:.45rem .85rem; border:1px solid var(--color-border); border-radius:var(--radius-md);
       background:var(--color-surface); color:var(--color-text-primary); cursor:pointer; }
@@ -445,14 +445,6 @@
     .atlas-embed-map main { padding:0; }
     .atlas-embed-map .atlas-stage { width:100%; height:100dvh; margin:0;
       border-radius:0; border:none; box-shadow:none; }
-    /* ?panel=0 — a host page (the editor) has taken the panel's jobs over the
-       frame messages in atlas.js, so showing the panel too would say everything
-       twice. Hidden, not removed from the document: buildControls() still wires
-       the search and basemap machinery the host drives, and on a phone this
-       also dissolves the bottom sheet, handing the sheet's slice of the stage
-       back to the map. */
-    .atlas-nopanel .atlas-panel { display:none; }
-
     /* Coarse pointer (touch): comfortable 44px targets regardless of screen size */
     @media (pointer:coarse){
       .ctl-toggle, .ctl-sub-toggle { min-height:44px; }
@@ -526,10 +518,6 @@
            title="Add your own data as a map layer — experimental, under development">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
           Add data
-        </a>
-        <a id="manage-btn" class="share-btn" hidden href="#" aria-label="Manage this atlas">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-          Manage this atlas
         </a>
         <button id="share-btn" class="share-btn" hidden type="button" aria-label="Share this atlas">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>

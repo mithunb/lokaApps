@@ -21,36 +21,25 @@
   var KEY = QS.get("key") || "";
   // ?embed=1 strips the page furniture — site nav, the build-your-own CTA and
   // the footer — leaving the atlas's own identity and the map. It's what the
-  // wizard's preview pane wants: a look at the atlas, not at loka.place.
-  // ?embed=map goes further: nothing but the stage, filling the frame. The
-  // editor wraps the atlas in its own bar, so the hero would say the title
-  // twice and the credits would push the map off the bottom.
+  // add-data preview wants: a look at the atlas, not at loka.place.
+  // ?embed=map goes further: nothing but the stage, filling the frame.
   var EMBED = QS.get("embed") === "1" || QS.get("embed") === "map";
   if (EMBED) {
     document.documentElement.classList.add("atlas-embed");
     if (QS.get("embed") === "map") document.documentElement.classList.add("atlas-embed-map");
     // The owner's own tooling has no business inside someone else's frame:
-    // Share offers a link to an atlas that may not be published yet, Manage
-    // opens the wizard inside the wizard, and Add data walks the frame off to
-    // the data bench in the middle of a flow. Take the row out of the document
-    // rather than hide it — a display:none button is still a button waiting for
-    // the next line of code to unhide it, and CSS can't stop `hidden = false`.
+    // Share offers a link to an atlas that may not be published yet, and Add
+    // data walks the frame off to the data bench in the middle of a flow. Take
+    // the row out of the document rather than hide it — a display:none button
+    // is still a button waiting for the next line of code to unhide it, and CSS
+    // can't stop `hidden = false`.
     var ownerActions = document.querySelector(".hero-actions");
     if (ownerActions && ownerActions.parentNode) ownerActions.parentNode.removeChild(ownerActions);
   }
-  // ?panel=0 — the map stays, the control panel goes. The editor frames this
-  // page (embed=map) and grew an authoring panel of its own, so a reader there
-  // saw two panels, each titled "Layers" and meaning different things. The
-  // host that asks for panel=0 takes the panel's jobs over — basemap, search,
-  // legend — through the REMOTE CONTROL messages below. Hidden by CSS rather
-  // than unbuilt: one buildControls() serves every mode, and the search and
-  // basemap machinery it wires is exactly what the host drives.
-  var PANEL_OFF = QS.get("panel") === "0";
-  if (PANEL_OFF) document.documentElement.classList.add("atlas-nopanel");
   // Public datasets are plain static files. A private atlas's files sit outside
   // the web root, so they come through the API instead, and there are two ways to
   // be allowed: a view key in the address, or — with ?via=api and no key — the
-  // signed-in owner's own session. The session route is what lets the editor
+  // signed-in owner's own session. The session route is what lets the owner
   // preview a private atlas, since the plaintext key is issued once at creation
   // and only its hash is kept, so no page can look it up later.
   var VIA_API = !!KEY || QS.get("via") === "api";
@@ -73,12 +62,13 @@
   };
 
   /* Category icons and the value->icon matcher live in iconkit.js, loaded
-     before this file and shared with the editor panel that draws the same
+     before this file and shared with the owner's tools, which draw the same
      legend beside the map — see the note there on why one table beats two.
      Aliased locally so the rest of this file reads as it always did. */
   var ICONS = LokaIcons.ICONS;
 
   var map, MANIFEST, activeBasemap, DATA = {}, markersByLayer = {}, cropState = {};
+  var flipWired = false;   // the layout-flip listener outlives any one map — see start()
 
   /* ---- more than one key: shared palette + state ----
      The colours are fragment.js's CATEGORY_COLORS, duplicated because this is
@@ -130,25 +120,36 @@
   if (!DATASET) {
     renderHome();
   } else {
-  fetch(dataUrl("manifest.json"))
-    .then(function (r) {
-      if (!r.ok) throw new Error(r.status === 404
-        ? "There's no atlas at that address — it may have been removed, or it's still being built."
-        : "The atlas data couldn't be loaded (error " + r.status + "). Try again in a moment.");
-      // A web-server error page answering 200 would otherwise surface as a raw
-      // JSON parse error; say something the reader can act on instead.
-      return r.text().then(function (t) {
-        try { return JSON.parse(t); }
-        catch (e) { throw new Error("The atlas data came back unreadable — reload the page, and tell us if it keeps happening."); }
+    draw().then(function (ok) { if (ok) checkOwner(); });
+  }
+
+  /* Read the atlas's manifest and draw from it. One function rather than a
+     chain at the top level, because it has to be repeatable: while the owner
+     edits a layer the map previews a DRAFT copy of the atlas, and the honest
+     way to show a draft is the real viewer reading the real draft folder — not
+     a second renderer that could quietly disagree with this one. See reboot().
+     Resolves true when something was drawn, false when the reader has been
+     handed an error in the map's place. */
+  function draw() {
+    return fetch(dataUrl("manifest.json"))
+      .then(function (r) {
+        if (!r.ok) throw new Error(r.status === 404
+          ? "There's no atlas at that address — it may have been removed, or it's still being built."
+          : "The atlas data couldn't be loaded (error " + r.status + "). Try again in a moment.");
+        // A web-server error page answering 200 would otherwise surface as a raw
+        // JSON parse error; say something the reader can act on instead.
+        return r.text().then(function (t) {
+          try { return JSON.parse(t); }
+          catch (e) { throw new Error("The atlas data came back unreadable — reload the page, and tell us if it keeps happening."); }
+        });
+      })
+      .then(mergeLocalOverlay)
+      .then(function (m) { start(m); return true; })
+      .catch(function (err) {
+        $("#atlas-map").innerHTML =
+          '<div class="atlas-error">Could not load “' + esc(DATASET) + '”.<br><small>' + esc(err.message) + "</small></div>";
+        return false;
       });
-    })
-    .then(mergeLocalOverlay)
-    .then(start)
-    .then(checkOwner)
-    .catch(function (err) {
-      $("#atlas-map").innerHTML =
-        '<div class="atlas-error">Could not load “' + esc(DATASET) + '”.<br><small>' + esc(err.message) + "</small></div>";
-    });
   }
 
   // The LOKA Atlas home: featured reference instance, published instances, build CTA.
@@ -273,10 +274,6 @@
         buildLayers().then(function () {
           wirePopups();
           syncSearchBox();   // the data is in: keep the search box only if it has text to search
-          // only now can a host's messages do real work (markers exist, layers
-          // are addressable) — so only now does the frame declare itself, and
-          // says whether a search box would have anything to act on
-          tellHost({ atlas: "ready", searchable: searchableLayers().length > 0 });
           if (!focusFit()) fitToData(false);
           renderMapAttrib(); // re-run once layer sources (e.g. labels) are added
           // If the container had no real size when we fit (hidden iframe or a
@@ -290,10 +287,16 @@
             window.addEventListener("resize", once);
           }
         }).catch(function (err) { console.error("Atlas build error:", err && err.message, err && err.stack); });
-        // re-frame when the layout flips between the floating panel (desktop) and the bottom sheet (mobile)
-        window.matchMedia("(max-width: 720px)").addEventListener("change", function () {
-          setTimeout(function () { if (!focusFit(true)) fitToData(true); }, 80);
-        });
+        // re-frame when the layout flips between the floating panel (desktop) and
+        // the bottom sheet (mobile). Wired once for the life of the page: start()
+        // runs again on every draft preview (reboot), and this listener outlives
+        // the map it was registered alongside.
+        if (!flipWired) {
+          flipWired = true;
+          window.matchMedia("(max-width: 720px)").addEventListener("change", function () {
+            setTimeout(function () { if (map && !focusFit(true)) fitToData(true); }, 80);
+          });
+        }
       } catch (err) { console.error("Atlas build error:", err && err.message, err && err.stack); }
     });
   }
@@ -364,29 +367,47 @@
     });
   }
 
-  // Show a "Manage this atlas" link only to the owner. The API returns
-  // canEdit:true when the caller's session owns this instance (same-origin
-  // cookie); everyone else gets public fields and no button.
+  /* Whoever owns this atlas gets its controls, here, on the atlas itself.
+
+     The API answers canEdit:true when the caller's session owns the instance
+     or was invited to it (same-origin cookie); everyone else gets the public
+     fields and nothing more. Only then is owner.js fetched — a reader never
+     downloads a byte of it, which is the other half of why the tools live in
+     their own file rather than in this one. */
   function checkOwner() {
-    // embedded: the action row is gone and ownership is nobody's business inside
-    // the frame, so don't even ask the API who the caller is.
-    if (EMBED) return;
-    var btn = $("#manage-btn");
-    if (!btn || !DATASET) return;
+    // embedded: ownership is nobody's business inside someone else's frame, so
+    // don't even ask the API who the caller is
+    if (EMBED || !DATASET) return;
     fetch("./api/instances/" + encodeURIComponent(DATASET), { credentials: "same-origin" })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (inst) {
-        if (inst && inst.canEdit) {
-          btn.href = "./edit/?dataset=" + encodeURIComponent(DATASET);
-          btn.hidden = false;
-          var add = $("#add-data-btn");
-          if (add) {
-            add.href = "./add-data/?dataset=" + encodeURIComponent(DATASET);
-            add.hidden = false;
-          }
-        }
+        if (!inst || !inst.canEdit) return;
+        loadOwnerTools(inst);
       })
       .catch(function () {});
+  }
+
+  /* ?v= is stamped by deploy/deploy.sh on every ship, exactly as it is on the
+     script tags in the HTML, so a returning owner is never left running last
+     week's tools against this week's API. */
+  var OWNER_V = (function () {
+    var tag = document.querySelector('script[src*="atlas.js"]');
+    var m = tag && /[?&]v=([0-9A-Za-z._-]+)/.exec(tag.getAttribute("src") || "");
+    return m ? m[1] : "dev";
+  })();
+
+  function loadOwnerTools(inst) {
+    var css = document.createElement("link");
+    css.rel = "stylesheet";
+    css.href = "./owner.css?v=" + OWNER_V;
+    document.head.appendChild(css);
+    var js = document.createElement("script");
+    js.src = "./owner.js?v=" + OWNER_V;
+    js.onload = function () {
+      if (window.LokaAtlasOwner) window.LokaAtlasOwner.mount(inst);
+    };
+    js.onerror = function () { console.error("Atlas: the owner tools could not be loaded."); };
+    document.head.appendChild(js);
   }
 
   function wireShare(manifest) {
@@ -2057,9 +2078,6 @@
     return Object.keys(v);
   }
   function updateSearchCount(shown, total) {
-    // a panel-less host is showing this count in its own search box; push it
-    // there too (tellHost is a no-op everywhere else — see REMOTE CONTROL)
-    tellHost({ atlas: "count", shown: shown == null ? null : shown, total: total || 0 });
     var c = $("#atlas-search-count"); if (!c) return;
     if (shown == null) { c.hidden = true; c.textContent = ""; }
     else { c.hidden = false; c.textContent = shown ? (shown + " of " + total + " shown") : "nothing matched — try another word"; }
@@ -2171,44 +2189,6 @@
   }
 
   /* ==================================================================
-     REMOTE CONTROL — with ?panel=0 a same-origin host page (the atlas
-     editor) owns the panel's jobs, and this page does them on request.
-     postMessage, not the host reaching into this window, although both
-     work same-origin: the editor reloads this frame whenever settings
-     change, and any function reference it had captured would die with
-     the old document — a message is addressed to whichever document is
-     in the frame right now. It also keeps timing honest in the other
-     direction: the map boots asynchronously, so the frame says "ready"
-     only once the controls actually work, and pushes search counts as
-     they land (the semantic pass arrives ~250ms after the keystroke —
-     no return value could have carried it).
-  ================================================================== */
-  function tellHost(msg) {
-    // standalone, or the panel is intact: nobody took the jobs, say nothing
-    if (!PANEL_OFF || window.parent === window) return;
-    try { window.parent.postMessage(msg, location.origin); } catch (e) {}
-  }
-  if (PANEL_OFF) {
-    window.addEventListener("message", function (e) {
-      if (e.origin !== location.origin) return;   // same-origin hosts only
-      var m = e.data || {};
-      if (m.atlas === "set-basemap" && map && MANIFEST) {
-        // only ids the manifest declares — a stray message must not blank the map
-        if (MANIFEST.basemaps.some(function (b) { return b.id === m.id; })) switchBasemap(m.id);
-      } else if (m.atlas === "search") {
-        runSearch(String(m.q == null ? "" : m.q));
-      } else if (m.atlas === "set-layer-visible" && map && MANIFEST) {
-        // The layer tree is the host's now. Same path the panel's own checkbox
-        // took, so a marker layer still folds its fan, refreshes its clusters
-        // and honours per-basemap layers — none of which the host can see.
-        var L = null;
-        MANIFEST.layers.forEach(function (x) { if (x.id === m.id) L = x; });
-        if (L) setLayerVisible(L, !!m.show);
-      }
-    });
-  }
-
-  /* ==================================================================
      CONTROL WIDGET
   ================================================================== */
   function buildControls() {
@@ -2290,6 +2270,11 @@
 
       sec.appendChild(body);
       panel.appendChild(sec);
+    });
+
+    // the owner's tools add their rows to this panel — see LokaAtlas.onControlsBuilt
+    controlsHooks.forEach(function (fn) {
+      try { fn(); } catch (e) { console.error("Atlas owner hook error:", e && e.message); }
     });
   }
 
@@ -2711,6 +2696,78 @@
       }).join("");
     }
   }
+
+  /* ==================================================================
+     THE OWNER'S DOOR INTO THIS PAGE
+
+     An atlas has one home, and this is it. A reader sees the map; whoever
+     owns the atlas sees the same map with its controls live, because
+     checkOwner() fetches owner.js once the API confirms they may edit.
+
+     Everything the owner's tools are allowed to touch is listed below and
+     nothing else. The narrow door is the point: the atlas used to be edited
+     on a second page that framed this one, and the two grew a second panel,
+     a second layer list and a second idea of what a layer was. A small,
+     named surface is what stops that happening again.
+  ================================================================== */
+
+  var controlsHooks = [];
+
+  /* Draw a DIFFERENT dataset into this same page, keeping the page itself.
+
+     Editing a layer previews a draft build of the atlas, and the draft is a
+     real folder that the real viewer can read — so previewing means pointing
+     this viewer at it, not reloading the browser and losing the panel, the
+     open sheet and the scroll position.
+
+     Everything start() built is torn down first. A map left behind keeps its
+     canvas, its markers and its listeners alive underneath the new one, and
+     the three "wired" guards below all protect map listeners, which die with
+     the map — leaving them set would silently kill fanning and clustering
+     for the rest of the visit. */
+  function reboot(dataset) {
+    Object.keys(markersByLayer).forEach(function (id) {
+      (markersByLayer[id] || []).forEach(function (mk) { try { mk.remove(); } catch (e) {} });
+    });
+    if (map) { try { map.remove(); } catch (e) {} map = null; }
+    MANIFEST = null; activeBasemap = null;
+    DATA = {}; markersByLayer = {}; cropState = {}; keyState = {}; pmSources = {};
+    SPIDER = { items: null, anchor: null, svg: null, pop: null, cid: null };
+    CLUSTER = { ready: false, off: false, wired: false, radiusNow: CLUSTER_RADIUS,
+                hovering: false, hoverId: null,
+                byKey: {}, boundsCache: {}, refreshTimer: null, syncTimer: null };
+    DIM = { el: null };
+    HINT = { el: null, key: null };
+    rowFlipsWired = false; spiderWired = false;
+    var panel = $("#atlas-controls");
+    if (panel) panel.innerHTML = "";
+    $("#atlas-map").innerHTML = "";
+    DATASET = dataset;
+    BASE = VIA_API ? "./api/datasets/" + DATASET + "/" : "./datasets/" + DATASET + "/";
+    return draw();
+  }
+
+  window.LokaAtlas = {
+    get map() { return map; },
+    get manifest() { return MANIFEST; },
+    get dataset() { return DATASET; },
+    /* Called every time the panel is rebuilt — on first draw and after every
+       reboot. The owner's tools add their rows to the panel that is already
+       here rather than drawing a panel of their own, so "layers" can never
+       mean two different things in two places again. */
+    onControlsBuilt: function (fn) {
+      controlsHooks.push(fn);
+      if (MANIFEST) { try { fn(); } catch (e) { console.error("Atlas owner hook error:", e && e.message); } }
+    },
+    /* Where a data file for the atlas CURRENTLY drawn actually lives. The
+       owner's tools count the kinds in a layer by reading its own geojson, and
+       a private atlas is served from a different root than a public one — so
+       the address has to come from whoever already knows, not be guessed a
+       second time. After a reboot this answers for the draft, which is exactly
+       what the preview needs. */
+    fileUrl: function (name) { return dataUrl(name); },
+    reboot: reboot,
+  };
 
   function setText(sel, txt) { var e = $(sel); if (e) e.textContent = txt; }
 })();

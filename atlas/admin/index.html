@@ -326,9 +326,12 @@
         '<td class="num">' + (i.sizeBytes ? esc(fmtBytes(i.sizeBytes)) : '<span class="muted">—</span>') + "</td>" +
         '<td class="num">' + dateCell(i.createdAt) + "</td>" +
         '<td class="num">' + dateCell(i.publishedAt) + "</td>" +
-        '<td class="acts"><a href="../?dataset=' + slug + '">Open</a>' +
-          '<span class="dim" aria-hidden="true">·</span>' +
-          '<a href="../edit/?dataset=' + slug + '">Edit</a></td>' +
+        /* One link, because there is now only one place to go. An atlas is
+           managed on its own page, and its controls appear there for whoever
+           may edit it — so for an atlas this operator owns, Open IS manage,
+           and for anyone else's it is the reader's view, which is all the API
+           would allow a second link to show anyway. */
+        '<td class="acts"><a href="../?dataset=' + slug + '">Open</a></td>' +
         "</tr>";
     }
 
