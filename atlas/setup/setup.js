@@ -148,6 +148,10 @@
 
   function step(n) {
     [1, 2, 3, 4].forEach(function (i) { $("#s" + i).hidden = i !== n; });
+    // the file panel is not in that numbered set, and forgetting it here left it
+    // visible underneath whatever step you moved to — so checking your data looked
+    // like it was happening under "Open data"
+    if ($("#s2b")) $("#s2b").hidden = true;
     if (n === 2) loadCountries();
     if (n === 3) loadCatalog();
     $$(".stp").forEach(function (b) {
@@ -834,22 +838,33 @@
     $("#fill").style.transform = "scaleX(1)";
     $("#build-title").textContent = "Your atlas is ready";
     $("#build-sub").textContent = "Built from open data just now.";
-    $("#prog-msg").textContent = "Opening it so you can add your data and style it.";
-    $("#open-editor").href = "../edit/?dataset=" + encodeURIComponent(S.slug);
-    $("#done-row").hidden = false;
-    $("#open-editor").focus();
+    var go = "../edit/?dataset=" + encodeURIComponent(S.slug);
+    $("#open-editor").href = go;
+    // The atlas opens itself — a button saying "open your atlas" on a page whose
+    // only remaining purpose is to open your atlas is a step for its own sake. It
+    // stays hidden unless something goes wrong, where it becomes the way out.
+    $("#done-row").hidden = true;
+
     // the file has waited on the server since the check step; the atlas exists
-    // now, so it can be told where it belongs and added
+    // now, so it is told where it belongs and added BEFORE we leave the page —
+    // this page is what hands it over, so navigating early would lose it
     if (BENCH && GEO.canonical) {
       $("#prog-msg").textContent = "Adding " + GEO.file.name + " to your atlas…";
       BENCH.bindDataset(S.slug);
       BENCH.commit().then(function () {
-        $("#prog-msg").textContent = "Your atlas is ready — your data is on it.";
+        $("#prog-msg").textContent = "Your data is on it — opening your atlas…";
+        location.href = go;
       }).catch(function () {
+        // stay put: this needs reading, and the button is the way on
         $("#prog-msg").textContent = "Your atlas is built, but your file couldn’t be added " +
           "automatically. Open the atlas and drop it there — it takes a minute.";
+        $("#done-row").hidden = false;
+        $("#open-editor").focus();
       });
+      return;
     }
+    $("#prog-msg").textContent = "Opening your atlas…";
+    location.href = go;
   }
 
   boot();
