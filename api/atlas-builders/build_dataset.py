@@ -42,13 +42,21 @@ BASEMAPS = [
         "attribution": "Imagery © Esri, Maxar, Earthstar Geographics",
     },
     {
+        # "Streets & colour": roads, parks and water in gentle colour.
+        #
+        # These tiles are written so a manifest still describes itself, but the
+        # VIEWER is the authority — APP_BASEMAPS in atlas/atlas.js applies the
+        # app's current base map to every atlas as it loads, so a change of house
+        # style reaches everything already published instead of only what gets
+        # built afterwards. Change it there; keep this in step so the two agree.
+        #
         # @2x with tileSize 256 — a 512px image drawn into a 256pt tile, which is
         # what a retina screen needs. At 1x the whole map surface was upscaled and
         # soft, labels worst of all, because text is where blur is visible first.
         "id": "light", "label": "Map", "default": True,
-        "tiles": ["https://a.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}@2x.png",
-                  "https://b.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}@2x.png",
-                  "https://c.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}@2x.png"],
+        "tiles": ["https://a.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}@2x.png",
+                  "https://b.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}@2x.png",
+                  "https://c.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}@2x.png"],
         "tileSize": 256, "maxzoom": 19,
         "attribution": "© OpenStreetMap contributors © CARTO",
     },

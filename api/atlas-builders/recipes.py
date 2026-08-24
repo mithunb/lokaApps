@@ -660,9 +660,12 @@ def labels_esri(ctx):
         # of upscaled and soft. The 1x tiles were the reason place names looked
         # blurred. Esri's reference layer has no @2x, so it stays as it is.
         "tilesByBasemap": {
-            "light": ["https://a.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}@2x.png",
-                      "https://b.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}@2x.png",
-                      "https://c.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}@2x.png"],
+            # the names that go with "Streets & colour" — see BASEMAPS in
+            # build_dataset.py, and APP_BASEMAPS in atlas/atlas.js which is
+            # the authority and re-applies these to atlases already built
+            "light": ["https://a.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}@2x.png",
+                      "https://b.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}@2x.png",
+                      "https://c.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}@2x.png"],
             "satellite": ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"],
         },
         "tileSize": 256, "attribution": "Labels © Esri, © CARTO",

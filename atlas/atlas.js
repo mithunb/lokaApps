@@ -145,6 +145,7 @@
         });
       })
       .then(mergeLocalOverlay)
+      .then(applyAppBasemaps)
       .then(function (m) { start(m); return true; })
       .catch(function (err) {
         $("#atlas-map").innerHTML =
@@ -474,9 +475,84 @@
   }
 
   /* ---- base style (glyphs + background + basemaps) ---- */
+  /* ==================================================================
+     THE APP'S BASE MAP — one place, and it is this one.
+
+     A basemap is not an atlas's data, it is the ground the app draws on. It
+     used to be written into every manifest at build time, which meant the look
+     of the product was frozen into each atlas on the day it was built: change
+     the house style and only atlases built afterwards would show it, while
+     everything already published stayed as it was.
+
+     So the tiles live here and are applied to whatever the manifest says, for
+     the ids the app knows. Every atlas picks up the current look on its next
+     load, old ones included, and no dataset file is touched to do it. The
+     builder writes matching tiles so a manifest still describes itself, but
+     this table is the authority — if the two ever disagree, this one wins and
+     nothing breaks.
+
+     An id the app does not know is left exactly as the manifest wrote it, so a
+     hand-made atlas can still carry a basemap of its own.
+  ================================================================== */
+  var CARTO = ["a", "b", "c"];
+  function cartoTiles(style) {
+    // @2x with tileSize 256 — a 512px image drawn into a 256pt tile, which is
+    // what a retina screen needs. At 1x the whole surface is upscaled and soft,
+    // labels worst of all, because text is where blur shows first.
+    return CARTO.map(function (h) {
+      return "https://" + h + ".basemaps.cartocdn.com/" + style + "/{z}/{x}/{y}@2x.png";
+    });
+  }
+
+  var APP_BASEMAPS = {
+    // "Streets & colour" — roads, parks and water in gentle colour. Chosen from
+    // the six laid out in map-style-variations.html.
+    light: {
+      tiles: cartoTiles("rastertiles/voyager_nolabels"),
+      labels: cartoTiles("rastertiles/voyager_only_labels"),
+      tileSize: 256, maxzoom: 19,
+      attribution: "© OpenStreetMap contributors © CARTO",
+      ground: "#FBF8F3",
+    },
+    satellite: {
+      tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+      labels: ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"],
+      tileSize: 256, maxzoom: 19,
+      attribution: "Imagery © Esri, Maxar, Earthstar Geographics",
+      ground: "#2B2F33",
+    },
+  };
+
+  // The ground behind the tiles, so a slow fetch shows the map's own colour
+  // rather than a grey belonging to no basemap. Starts as the app's everyday
+  // map and is re-read from whichever basemap the atlas opens on, so there is
+  // no third colour to keep in step.
+  var mapGround = APP_BASEMAPS.light.ground;
+
+  function applyAppBasemaps(m) {
+    (m.basemaps || []).forEach(function (b) {
+      var app = APP_BASEMAPS[b.id];
+      if (!app) return;                        // not ours to speak for
+      b.tiles = app.tiles;
+      b.tileSize = app.tileSize;
+      b.maxzoom = app.maxzoom;
+      b.attribution = app.attribution;
+      if (b.default) mapGround = app.ground;
+    });
+    // the place-name layer rides on top of whichever basemap is showing, so its
+    // tiles belong to the basemap, not to the atlas
+    (m.layers || []).forEach(function (L) {
+      if (!L.tilesByBasemap) return;
+      Object.keys(L.tilesByBasemap).forEach(function (id) {
+        if (APP_BASEMAPS[id] && APP_BASEMAPS[id].labels) L.tilesByBasemap[id] = APP_BASEMAPS[id].labels;
+      });
+    });
+    return m;
+  }
+
   function baseStyle(m) {
     var sources = {}, layers = [
-      { id: "bg", type: "background", paint: { "background-color": "#EAE9E3" } }
+      { id: "bg", type: "background", paint: { "background-color": mapGround } }
     ];
     m.basemaps.forEach(function (b) {
       sources["base-" + b.id] = {
@@ -2263,6 +2339,13 @@
     MANIFEST.basemaps.forEach(function (b) {
       if (map.getLayer("base-" + b.id)) map.setLayoutProperty("base-" + b.id, "visibility", b.id === id ? "visible" : "none");
     });
+    // the ground behind the tiles belongs to whichever base map is showing, so
+    // a gap while satellite tiles load is dark rather than paper-coloured
+    var app = APP_BASEMAPS[id];
+    if (app && app.ground && map.getLayer("bg")) {
+      mapGround = app.ground;
+      map.setPaintProperty("bg", "background-color", app.ground);
+    }
     renderMapAttrib();
     // sub-layers tied to a specific basemap (e.g. per-basemap place names)
     MANIFEST.layers.forEach(function (L) {

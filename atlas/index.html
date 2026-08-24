@@ -18,6 +18,10 @@
       --color-sienna:#99582F; --color-ochre:#B8862F;           /* sienna + ochre accents */
       --color-text-primary:#2A241A; --color-text-secondary:#564E3C; --color-text-muted:#6B6350;
       --color-divider:rgba(42,36,26,.09); --color-border:rgba(42,36,26,.14);
+      /* the ground the stage shows before any tile arrives — kept the same as
+         the app's base map (APP_BASEMAPS in atlas.js) so a slow first fetch
+         reads as the map still loading, not as a grey fault */
+      --color-map-ground:#FBF8F3;
       --color-moss-tint:rgba(74,90,51,.10); --color-rust-tint:rgba(174,80,40,.10);
       --radius-md:.25rem; --radius-lg:.375rem;
       /* type roles, by the job they do — the ramp documented in DESIGN.md */
@@ -83,7 +87,7 @@
     /* ---- map stage ---- */
     .atlas-stage { position:relative; width:var(--container); margin:0 auto .4rem;
       height:clamp(560px,80vh,940px); border-radius:var(--radius-lg); overflow:hidden;
-      box-shadow:var(--shadow-lg); background:#EAE9E3; border:1px solid var(--color-border); }
+      box-shadow:var(--shadow-lg); background:var(--color-map-ground); border:1px solid var(--color-border); }
     #atlas-map { position:absolute; inset:0; }
     /* basemap attribution rendered below the map, not overlaying it */
     .map-attrib { width:var(--container); margin:0 auto 1.5rem; text-align:right;
