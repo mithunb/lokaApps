@@ -39,7 +39,10 @@
   .opt span { display:block; font-size:.84rem; color:var(--ink2); margin-top:.25rem; }
   .opt small { display:block; font-size:.72rem; color:var(--muted); margin-top:.35rem; }
   .stagecol { display:flex; flex-direction:column; min-width:0; }
-  #map { flex:1 1 auto; min-height:420px; }
+  /* position:relative so the nudge below has something to move. See the
+     pixel-grid note in the script — a page for judging how a map LOOKS has to
+     render it honestly, or every option is judged through the same softness. */
+  #map { flex:1 1 auto; min-height:420px; position:relative; }
   .foot { display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap;
     padding:.55rem 1.4rem .8rem; font-size:.78rem; color:var(--muted); }
   .foot #attrib a { color:inherit; }
@@ -146,6 +149,41 @@
     return { slug: slug, dir: dir, admin: dir + "admin.geojson" };
   })();
 
+  /* Crisp text on every option. The map is composited as its own picture, and
+     the heading and intro above it flow to fractional heights, so the map was
+     landing 0.08px off the whole-pixel grid and being softly resampled — which
+     would have blurred all six options equally and made the comparison a
+     comparison of the wrong thing. Nudge it onto the grid (never more than half
+     a pixel) and re-nudge whenever the layout moves. */
+  (function () {
+    var host = document.getElementById("map");
+    if (!host) return;
+    var raf = 0;
+    function snap() {
+      raf = 0;
+      host.style.top = "";
+      var r = host.getBoundingClientRect();
+      var top = r.top + window.scrollY;
+      var fy = top - Math.round(top);
+      if (fy) host.style.top = (-fy) + "px";
+    }
+    function queue() { if (!raf) raf = requestAnimationFrame(snap); }
+    window.__snapMap = queue;      // the places count rewrites the intro; see below
+    queue();
+    window.addEventListener("resize", queue);
+    // watch the HEADER, not the body: the body's height is pinned by the grid's
+    // min-height, so it never reports a change — but the intro paragraph above
+    // the map grows by a line when the count of places is written into it, and
+    // that is exactly what pushes the map off the grid again.
+    if (window.ResizeObserver) {
+      var ro = new ResizeObserver(queue);
+      var head = document.querySelector("header");
+      if (head) ro.observe(head);
+      ro.observe(document.body);
+    }
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(queue);
+  })();
+
   map.on("load", function () {
     OPTIONS.forEach(function (o) {
       map.addSource("base-" + o.id, { type: "raster", tiles: o.base, tileSize: 256, maxzoom: o.maxzoom || 19 });
@@ -199,6 +237,7 @@
         // the sentence only claims places once they are actually on screen
         var n = document.getElementById("place-clause");
         if (n) n.textContent = ", and every one of its " + feats.length + " places";
+        if (window.__snapMap) window.__snapMap();   // that sentence just changed height
       });
     });
 
