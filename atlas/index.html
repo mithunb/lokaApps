@@ -210,12 +210,23 @@
     .crop-chip:active { transform:scale(.95); }
     @media (hover:hover){ .crop-chip:hover:not(.on){ border-color:var(--color-moss); color:var(--color-text-primary); } }
 
-    /* ---- colour keys (contributed marker layers can wear more than one) ---- */
+    /* ---- colour keys (contributed marker layers can wear more than one) ----
+       Each key is a switch — the same control a layer is turned on with, one
+       size down and indented under its layer: same vocabulary ("this can be
+       switched on"), lower rank. The old chips read as a pick-one row, which
+       a stack of keys is not. */
     .key-chips { margin:.45rem 0 .1rem; }
-    .key-chips-lbl { display:block; font-size:.68rem; font-weight:600; letter-spacing:.02em; color:var(--color-text-muted); margin-bottom:.25rem; }
-    .key-chips .crop-chips { margin:0; }
-    .crop-chip.keychip::before { content:none; }   /* a key is many colours — no single dot can stand for it */
+    .key-chips-lbl { display:block; font-size:.72rem; font-weight:600; letter-spacing:.02em; color:var(--color-text-muted); margin-bottom:.1rem; }
+    .key-list { display:flex; flex-direction:column; }
+    .key-toggle { padding:.17rem 0; gap:.5rem; min-height:24px; }
+    .ctl-switch.small { width:26px; height:15px; }
+    .ctl-switch.small::after { width:11px; height:11px; }
+    .ctl-toggle input:checked + .ctl-switch.small::after { transform:translateX(11px); }
+    .key-tname { font-size:.8rem; line-height:1.25; color:var(--color-text-secondary); }
+    .key-toggle input:checked ~ .key-tname { color:var(--color-text-primary); }
     .key-note { font-size:.7rem; color:var(--color-text-muted); line-height:1.45; margin:.3rem 0 .05rem; }
+    /* where the folded places went — kept current by updateFoldNote */
+    .key-fold { font-size:.7rem; color:var(--color-text-muted); line-height:1.45; margin:.3rem 0 .05rem; }
     /* keys wear rows: each switched-on key is one row of small marks beside
        the neutral pin — the first key circles, then squares, triangles,
        diamonds, bars. The holder is exactly the pin's 20px box, so MapLibre
@@ -238,7 +249,7 @@
     }
     /* keyed legend: kinds grouped under a header per key, each row wearing
        the key's own shape at the panel's size */
-    .leg-head { font-size:.68rem; font-weight:600; color:var(--color-text-muted); margin:.3rem 0 .05rem; }
+    .leg-head { font-size:.72rem; font-weight:600; color:var(--color-text-muted); margin:.3rem 0 .05rem; }
     .leg-sat { flex:0 0 auto; width:18px; height:18px; display:block; }
 
     .ctl-opacity { display:flex; align-items:center; gap:.5rem; margin:.45rem 0 .1rem; }
@@ -372,7 +383,16 @@
     .pop-lbl { font-size:var(--t-label); text-transform:uppercase; letter-spacing:.06em; color:var(--color-text-muted); }
     .pop-val { font-size:.88rem; color:var(--color-text-primary); }
     .pop-tags { display:flex; flex-wrap:wrap; gap:.3rem; margin-top:.25rem; }
-    .pop-tag { font-size:.74rem; padding:.15rem .5rem; background:var(--color-moss-tint); color:var(--color-canopy); border-radius:4px; font-weight:500; }
+    /* A tag is a button now — tap it to see the places that share it. It keeps
+       the same quiet look it had as a label, because it is still first of all a
+       thing to read; the pointer and the hover say it can be pressed, and the
+       lit state says which one is doing the showing. */
+    .pop-tag { font:inherit; font-size:.74rem; padding:.15rem .5rem; background:var(--color-moss-tint);
+      color:var(--color-canopy); border-radius:4px; font-weight:500; border:1px solid transparent;
+      cursor:pointer; transition:background .15s ease, border-color .15s ease; }
+    .pop-tag:hover { border-color:var(--color-moss); }
+    .pop-tag.on { background:var(--color-moss); color:#fff; border-color:var(--color-moss); }
+    .pop-tag:focus-visible { outline:2px solid var(--color-moss); outline-offset:1px; }
     .pop-notes { margin-top:.6rem; display:flex; flex-direction:column; gap:.5rem; }
     .pop-note { font-size:var(--t-meta); }
     /* at-a-glance hover tooltip (crop distribution) — never intercepts the pointer */
@@ -480,6 +500,12 @@
       .ctl-switch::after { width:18px; height:18px; }
       .ctl-toggle input:checked + .ctl-switch::after { transform:translateX(16px); }
       .ctl-sub-toggle input:indeterminate + .ctl-switch::after { transform:translateX(8px); }
+      /* key switches keep their lower rank at thumb sizes too (the whole
+         44px row is the tap target, so the pill can stay small) */
+      .ctl-switch.small { width:30px; height:18px; }
+      .ctl-switch.small::after { width:14px; height:14px; }
+      .ctl-toggle input:checked + .ctl-switch.small::after { transform:translateX(12px); }
+      .key-tname { font-size:.85rem; }
       .ctl-sub-chev { min-width:40px; min-height:40px; align-items:center; justify-content:center; }
       .ctl-group-head { padding:.75rem .1rem; }
       .ctl-search-box { min-height:44px; }

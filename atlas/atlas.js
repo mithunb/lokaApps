@@ -1013,7 +1013,7 @@
     (markersByLayer[L.id] || []).forEach(function (e) { renderMarks(L, e, []); });
     L._legend = keyLegendRows(L, []);
     wireRowFlips();
-    renderExtra(L);   // the chips exist only once the data has said which columns qualify
+    renderExtra(L);   // the switches exist only once the data has said which columns qualify
   }
 
   function computeKeyOptions(L, feats) {
@@ -1161,9 +1161,16 @@
     // 67.3px, where that graze deepens to about 13px and can hide a whole mark
     // on the pair below. The owner set the cap at five knowing that cost: the
     // fifth key is worth more than the rare hidden mark, and a reader who hits
-    // it can turn a key off.
+    // it can turn a key off. (Those measurements hold at street zooms, where
+    // the fold charges the rows' full width. Zoomed out the fold eases to the
+    // plain pin distance — keyedFoldRadius — so tall stacks can overlap there:
+    // the accepted price of keys-on no longer emptying the city view.)
     var KEY_STACK_CAP = 5;
-    var KEY_STACK_NOTE = "Five keys are already on — a sixth row would stack taller than the space the map keeps between places. Turn one off to add {name}.";
+    // Reader-facing, and it must speak the same language as the heading it sits
+    // under ("Show key"). It says "keys" for that reason, not "colourings":
+    // colour is not what tells two keys apart — each key wears its own shape,
+    // and colours repeat between them.
+    var KEY_STACK_NOTE = "The map can show five keys at once, and all five are on. Turn one off to add {name}.";
   var SVG_NS = "http://www.w3.org/2000/svg";
   function markPathD(shape, cx, cy) {
     if (shape === "square") { var s = 10.6 / 2; return "M" + (cx - s) + " " + (cy - s) + "h" + (2 * s) + "v" + (2 * s) + "h" + (-2 * s) + "z"; }
@@ -1340,6 +1347,16 @@
   // takes ONE distance per build (see CLUSTERS), so it folds at the mean
   // footprint of the pins wearing rows — recomputed on every toggle, and the
   // engine is rebuilt whenever the number moves (refreshClusterIndex).
+  //
+  // The rows' width is only charged where the rows are truly in play: zoomed
+  // in past KEY_FOLD_NEAR. Out past KEY_FOLD_FAR the fold distance stays
+  // exactly what it was before any key was on — so switching a key on at
+  // city view colours the pins the reader already had instead of folding
+  // them away, and rows that brush a neighbour out there are the accepted
+  // price. Between the two the distance climbs in 4px steps, so zooming
+  // through rebuilds the engine a handful of times, never continuously
+  // (syncLeafVisibility notices the step and rebuilds).
+  var KEY_FOLD_FAR = 13, KEY_FOLD_NEAR = 16;
   function keyedFoldRadius() {
     var sum = 0, n = 0;
     (MANIFEST.layers || []).forEach(function (L) {
@@ -1352,54 +1369,129 @@
         n++;
       });
     });
-    return n ? Math.round(sum / n) : CLUSTER_RADIUS;
+    if (!n) return CLUSTER_RADIUS;
+    var full = Math.round(sum / n);
+    var t = (map.getZoom() - KEY_FOLD_FAR) / (KEY_FOLD_NEAR - KEY_FOLD_FAR);
+    t = Math.max(0, Math.min(1, t));
+    var extra = Math.max(0, full - CLUSTER_RADIUS);
+    return CLUSTER_RADIUS + Math.round(extra * t / 4) * 4;
   }
 
-  function buildKeyChips(L) {
+  // This layer's places that are folded away inside counted discs in the
+  // current view. _clustered alone would overcount: the engine also flags
+  // pins that are merely outside the viewport, and those are not "hiding".
+  function foldedCount(L) {
+    var n = 0, b = map.getBounds();
+    (markersByLayer[L.id] || []).forEach(function (e) {
+      if (!e.hidden && e._clustered && !e._fanned && b.contains(e.mk.getLngLat())) n++;
+    });
+    return n;
+  }
+
+  // The one-line answer to "the map got emptier": with keys on, some places
+  // sit inside the counted discs, marks and all. Say so in numbers, right
+  // under the switches — and keep the line current as the reader zooms and
+  // pans (syncLeafVisibility calls back in after every camera rest).
+  function updateFoldNote(L) {
+    var box = L._foldEl;
+    if (!box || !box.isConnected) return;
+    var st = keyState[L.id];
+    var n = (st && st.active.length && L._visible !== false) ? foldedCount(L) : 0;
+    if (!n) { box.hidden = true; box.textContent = ""; return; }
+    box.textContent = n === 1
+      ? "1 place in this view is inside a numbered disc — zoom in to see its marks."
+      : n + " places in this view are inside the numbered discs — zoom in to see their marks.";
+    box.hidden = false;
+  }
+
+  // Each key the layer offers is a switch, the same control a layer itself
+  // is turned on with — one vocabulary for "this can be switched on" — a
+  // size down and indented under its layer, because a key belongs to its
+  // layer rather than standing beside it. Keys stack (up to KEY_STACK_CAP),
+  // and every switch shows its own state, so nothing here can read as a
+  // pick-one row the way the old chips did. The old "one colour" chip is
+  // gone with the chips: it was a reset dressed as a colour choice — with
+  // switches, all-off is visible on the switches themselves, and the legend
+  // already names the layer's one colour when nothing is on.
+  function buildKeyToggles(L) {
     var st = keyState[L.id];
     var wrap = el("div", "key-chips");
-    wrap.appendChild(el("span", "key-chips-lbl", "Colour by"));
-    var row = el("div", "crop-chips");
+    // the switches are one named group to a screen reader, as they are to the eye
+    wrap.setAttribute("role", "group");
+    // "Show key", not "Colour by": what a mark belongs to is said by its SHAPE
+    // (circles, squares, triangles…), and colours repeat between keys, so a
+    // heading promising colour described the wrong half of the system. The
+    // legend below already names both — "categories — circles".
+    wrap.setAttribute("aria-label", "Show key");
+    wrap.appendChild(el("span", "key-chips-lbl", "Show key"));
+    var list = el("div", "key-list");
+    // The cap message, when it has something to say (kept in st.note so a
+    // rebuild mid-conversation does not eat it). role=status: the refused
+    // switch snaps back visually — a screen reader must hear why.
+    var note = el("div", "key-note");
+    note.setAttribute("role", "status");
+    note.hidden = !st.note;
+    if (st.note) note.textContent = st.note;
     L._keyOptions.forEach(function (opt) {
-      var c = el("button", "crop-chip keychip" + (st.active.indexOf(opt.col) >= 0 ? " on" : ""), esc(opt.label));
-      c.onclick = function () {
+      var lab = el("label", "ctl-toggle key-toggle");
+      var cb = el("input"); cb.type = "checkbox";
+      cb.checked = st.active.indexOf(opt.col) >= 0;
+      cb._col = opt.col;
+      lab.appendChild(cb);
+      lab.appendChild(el("span", "ctl-switch small"));
+      lab.appendChild(el("span", "key-tname", esc(opt.label)));
+      cb.onchange = function () {
         var i = st.active.indexOf(opt.col);
-        if (i >= 0) st.active.splice(i, 1);
-        else if (st.active.length >= KEY_STACK_CAP) {
-          // the cap is vertical now: rows stack, and past this many the
-          // stack hangs further below a pin than the folding rule keeps
-          // pins apart — measured, see the KEYS WEAR ROWS block
-          st.note = KEY_STACK_NOTE.replace("{name}", opt.label);
-          renderExtra(L);
-          return;
-        } else {
+        if (cb.checked && i < 0) {
+          if (st.active.length >= KEY_STACK_CAP) {
+            // the cap is vertical: rows stack, and past this many the
+            // stack hangs further below a pin than the folding rule keeps
+            // pins apart — measured, see the KEYS WEAR ROWS block. The
+            // switch snaps back rather than lying about what the map wears.
+            cb.checked = false;
+            st.note = KEY_STACK_NOTE.replace("{name}", opt.label);
+            note.textContent = st.note;
+            note.hidden = false;
+            return;
+          }
           st.active.push(opt.col);
           // row order follows the offered order, not tap order, so the
           // committed key keeps its circles and its colours, and each key
           // keeps its own shape
           st.active = L._keyOptions.filter(function (o) { return st.active.indexOf(o.col) >= 0; })
             .map(function (o) { return o.col; });
-        }
+        } else if (!cb.checked && i >= 0) {
+          st.active.splice(i, 1);
+        } else return;
         st.note = null;
+        st._focus = opt.col;   // the rebuild below must hand the keyboard back
         applyLayerKeys(L);
       };
-      row.appendChild(c);
+      list.appendChild(lab);
     });
-    var one = el("button", "crop-chip" + (st.active.length ? "" : " on"), "one colour");
-    one.style.setProperty("--c", oneColorOf(L));
-    one.onclick = function () {
-      if (!st.active.length) return;
-      st.active = [];
-      st.note = null;
-      applyLayerKeys(L);
-    };
-    row.appendChild(one);
-    wrap.appendChild(row);
-    // st.note is the stack-cap message only. The old standing line about
-    // colours repeating between keys explained a design decision nobody
-    // asked about — the owner asked for it to go, and the shapes in the
-    // legend already show the difference without words.
-    if (st.note) wrap.appendChild(el("div", "key-note", esc(st.note)));
+    wrap.appendChild(list);
+    wrap.appendChild(note);
+    // "N places are inside the discs" — filled in by updateFoldNote once
+    // renderExtra has attached this block (and on every camera rest after).
+    // Deliberately NOT a live region: the count moves on every pan and zoom,
+    // and announcing each change would talk over a screen reader's whole
+    // visit. It sits in reading order right under the switches instead.
+    var fold = el("div", "key-fold");
+    fold.hidden = true;
+    wrap.appendChild(fold);
+    L._foldEl = fold;
+    // applyLayerKeys rebuilds this whole block, which would drop keyboard
+    // focus on the floor mid-tabbing — put it back on the switch just flipped
+    if (st._focus != null) {
+      var want = st._focus;
+      st._focus = null;
+      setTimeout(function () {
+        var ins = wrap.querySelectorAll("input");
+        for (var i = 0; i < ins.length; i++) {
+          if (ins[i]._col === want) { ins[i].focus({ preventScroll: true }); break; }
+        }
+      }, 0);
+    }
     return wrap;
   }
 
@@ -1806,6 +1898,10 @@
   // spatial work already happened in the source's worker.
   function syncLeafVisibility() {
     if (!map || !CLUSTER.ready || SPIDER.items) return;
+    // the zoom may have moved the keyed fold distance a step (keyedFoldRadius):
+    // rebuild first — reading leaves out of an engine built for another zoom
+    // would paint pins with a verdict about to be replaced
+    if (keyedFoldRadius() !== CLUSTER.radiusNow) { refreshClusterIndex(); return; }
     var loose = {};
     try {
       map.querySourceFeatures(CLUSTER_SRC, { filter: ["!", ["has", "point_count"]] }).forEach(function (f) {
@@ -1819,6 +1915,9 @@
       touched[it.L.id] = it.L;
     }
     for (var id in touched) paintMarkerDisplay(touched[id]);
+    // every keyed layer's fold note re-reads the fresh verdicts — including
+    // layers whose pins all left the population (search can empty one)
+    (MANIFEST.layers || []).forEach(function (L) { if (L._foldEl) updateFoldNote(L); });
   }
 
   // every marker click lands here: a fanned pin opens its own popup (fan
@@ -2216,11 +2315,28 @@
     searchableLayers().forEach(function (L) { (markersByLayer[L.id] || []).forEach(function (e) { for (var t in featureTagSet(L, e.f)) v[t] = 1; }); });
     return Object.keys(v);
   }
-  function updateSearchCount(shown, total, pts) {
+  // `lead` names what is being shown when it is not a typed search — a tapped
+  // tag, say. Without it the line reads "5 of 66 shown", which is true and
+  // says nothing about why.
+  function updateSearchCount(shown, total, pts, lead) {
     var c = $("#atlas-search-count"); if (!c) return;
     if (shown == null) { c.hidden = true; c.textContent = ""; return; }
     c.hidden = false;
-    c.textContent = shown ? (shown + " of " + total + " shown") : "nothing matched — try another word";
+    if (lead) {
+      c.textContent = shown
+        ? shown + (shown === 1 ? " place " : " places ") + lead
+        : "no places " + lead;
+    } else {
+      c.textContent = shown ? (shown + " of " + total + " shown") : "nothing matched — try another word";
+    }
+    // a filter with no way out is a trap; the words name the way out
+    if (lead) {
+      var all = el("button", "ctl-search-go", "show all");
+      all.type = "button";
+      all.onclick = function () { clearSearch(); };
+      c.appendChild(document.createTextNode(" · "));
+      c.appendChild(all);
+    }
     // Matches that all sit off-screen look exactly like no matches: the map
     // under the box doesn't change. Offer the one move that resolves it.
     if (shown && pts && pts.length && map) {
@@ -2270,8 +2386,79 @@
     });
     updateSearchCount(shown, total, matchPts);
   }
+  /* ==================================================================
+     TAP A TAG — the places that share it
+
+     A tag set is the one thing a colour key cannot summarise. On the real
+     Bengaluru layer there are 335 distinct tags across 66 places and 303 of
+     them are used exactly once: fold that into eight coloured rows and the top
+     eight describe twelve places while fifty-four go grey. So tags get this
+     instead of a key — tap one and the map answers "which places share this",
+     which is a question 335 kinds can actually answer.
+
+     It borrows the search box's gating (hide a marker, refresh the layer, say
+     the count in the same line) but NOT its matching. Search tests words
+     against everything a place has written down, with a loose boundary — right
+     for a search box, wrong here: tapping "shrine" would also light every
+     "devotional-shrine", and would light a place whose description merely says
+     the word. Membership of the place's own tag list is exact, and
+     featureTagSet already reads it — the same helper these chips came from.
+
+     One tag at a time. Tapping the lit tag again, or "show all", comes back. */
+  var TAGFILTER = null;
+
+  function filterByTag(tag) {
+    // the line is the only way back, so without it this would be a trap
+    if (!$("#atlas-search-count")) return;
+    if (TAGFILTER === tag) { clearSearch(); return; }
+    TAGFILTER = tag;
+    var box = $(".ctl-search-input");
+    if (box) box.value = "";          // one filter at a time, and it is this one
+    searchTags = [];
+    searchSeq++;                       // orphan any search still in flight
+    clearTimeout(searchTimer);
+    var shown = 0, total = 0, pts = [];
+    // featureTagSet lowercases as it splits, and the chip carries the tag in
+    // the case the data wrote it ("Culture") because that is how it should be
+    // read. Compare on the set's own terms, or every capitalised tag matches
+    // nothing at all.
+    var want = String(tag).trim().toLowerCase();
+    searchableLayers().forEach(function (L) {
+      (markersByLayer[L.id] || []).forEach(function (e) {
+        total++;
+        var has = !!featureTagSet(L, e.f)[want];
+        e.hidden = !has;
+        if (has) { shown++; pts.push(e.f.geometry.coordinates); }
+      });
+      applyMarkerVisibility(L);
+    });
+    updateSearchCount(shown, total, pts, "tagged \u201c" + tag + "\u201d");
+    markLitTags();
+  }
+
+  // the tapped tag shows as on wherever it appears — in this popup and in any
+  // other the reader opens while the filter stands
+  function markLitTags() {
+    document.querySelectorAll(".pop-tag[data-tag]").forEach(function (b) {
+      var on = TAGFILTER && b.getAttribute("data-tag") === TAGFILTER;
+      b.classList.toggle("on", !!on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+
+  // one listener for every tag chip there will ever be: popups are built and
+  // thrown away constantly, and a per-chip handler would die with each one
+  document.addEventListener("click", function (e) {
+    var b = e.target && e.target.closest && e.target.closest(".pop-tag[data-tag]");
+    if (!b) return;
+    e.preventDefault();
+    filterByTag(b.getAttribute("data-tag"));
+  });
+
   function clearSearch() {
     searchTags = [];
+    TAGFILTER = null;
+    markLitTags();
     searchableLayers().forEach(function (L) { (markersByLayer[L.id] || []).forEach(function (e) { e.hidden = false; }); applyMarkerVisibility(L); });
     updateSearchCount(null);
   }
@@ -2585,7 +2772,10 @@
     }
 
     // colour keys for contributed marker layers (see MORE THAN ONE KEY)
-    if (L._keyOptions && keyState[L.id]) box.appendChild(buildKeyChips(L));
+    if (L._keyOptions && keyState[L.id]) {
+      box.appendChild(buildKeyToggles(L));
+      updateFoldNote(L);   // the block is attached now — say straight away what is folded
+    }
 
     // opacity slider
     if (L.opacityControl) {
@@ -2841,8 +3031,14 @@
       if (fld.type === "tags") {
         var arr = Array.isArray(v) ? v : tagArr(v);
         if (!arr.length) return;
+        // Each tag is a button, not a label: tapping one shows the places that
+        // share it (see filterByTag). A button so a keyboard reaches it, and so
+        // it announces itself as something that does a thing.
         h += '<div class="pop-field"><div class="pop-lbl">' + esc(fld.label) + '</div><div class="pop-tags">' +
-          arr.map(function (t) { return '<span class="pop-tag">' + esc(t) + "</span>"; }).join("") + "</div></div>";
+          arr.map(function (t) {
+            return '<button type="button" class="pop-tag" data-tag="' + esc(t) +
+              '" title="Show the places tagged ' + esc(t) + '">' + esc(t) + "</button>";
+          }).join("") + "</div></div>";
       } else if (fld.type === "notes") {
         var notes = Array.isArray(v) ? v : safeArr(v);
         if (!notes.length) return;
