@@ -152,16 +152,49 @@ export function buildFragment(spec, feats, existingIds) {
     .filter((v) => v !== undefined && v !== null && v !== '').map(String);
 
   const popup = { title: null, fields: [] };
-  if (spec.popupTitleColumn) popup.title = String(spec.popupTitleColumn);
+  // The stanza must describe the data it ships with, not the data the spec
+  // remembers: a title column that was renamed or dropped upstream produced
+  // popups that opened as an empty white box. Only a column the features
+  // actually carry may be the title; failing that, fall back to the most
+  // readable text column on board.
+  const colsAboard = Object.keys((feats[0] && feats[0].properties) || {});
+  const hasCol = (c) => c && colsAboard.includes(String(c)) && sampleVals(String(c)).length > 0;
+  if (hasCol(spec.popupTitleColumn)) popup.title = String(spec.popupTitleColumn);
   // a photo column renders as an image at the top of the popup
   if (spec.imageColumn) popup.fields.push({ label: prettify(spec.imageColumn), property: String(spec.imageColumn), type: 'image' });
   for (const c of (spec.popupColumns || []).slice(0, 6)) {
     if (c === popup.title || c === spec.imageColumn) continue;
+    if (!hasCol(c)) continue;   // a field the data no longer carries says nothing
     const fld = { label: prettify(c), property: String(c) };
     // ';'-delimited columns (labels, categories) render as tag chips — ';' is a
     // deliberate tag separator; commas stay plain text (prose, addresses)
     if (detectDelimiter(sampleVals(c)) === ';') fld.type = 'tags';
     popup.fields.push(fld);
+  }
+  if (!popup.title && !popup.fields.length) {
+    // Nothing the spec asked for survived. A pin that answers a tap with
+    // silence reads as broken, so show what the rows really hold: readable
+    // columns, tag-like ones first, never coordinates, ids or engine columns.
+    const looksNumeric = (vals) => vals.length > 0 && vals.every((v) => v !== '' && !Number.isNaN(Number(v)));
+    const candidates = colsAboard.filter((c) => {
+      if (c.startsWith('_')) return false;
+      if (/^(lat|latitude|lng|lon|long|longitude|x|y)$/i.test(c)) return false;
+      const vals = sampleVals(c);
+      if (!vals.length) return false;
+      if (looksNumeric(vals)) return false;
+      if (/(^|_)(id|uuid|guid)$/i.test(c)) return false;
+      if (vals.every((v) => /^https?:\/\//i.test(v))) return false;
+      return true;
+    });
+    const tagish = (c) => (detectDelimiter(sampleVals(c)) === ';' ? 0 : 1);
+    candidates.sort((a, b) => tagish(a) - tagish(b));
+    popup.title = candidates.find((c) => tagish(c) === 1) || null;
+    for (const c of candidates.slice(0, 5)) {
+      if (c === popup.title) continue;
+      const fld = { label: prettify(c), property: String(c) };
+      if (detectDelimiter(sampleVals(c)) === ';') fld.type = 'tags';
+      popup.fields.push(fld);
+    }
   }
 
   let stanza;

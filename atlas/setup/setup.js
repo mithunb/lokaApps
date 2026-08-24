@@ -511,11 +511,13 @@
       msg(2, "This file has no coordinates and no column that reads like place names, so it can’t " +
         "say where it belongs. Search for the place above instead.");
       showFileCard(file.name, rows + " rows · couldn’t find places");
+      syncRungs();   // the file is aboard even though it couldn't name places
       return;
     }
     if (!pts && !S.iso3) {
       msg(2, "Place names can’t say which country they are in — choose the country above, then drop the file again.");
       showFileCard(file.name, rows + " rows");
+      syncRungs();
       return;
     }
     showFileCard(file.name, rows + " rows" + (part ? " · " + part : "") + " · finding places…");
@@ -610,6 +612,16 @@
     if (!rung) return;
     var withFile = !!GEO.canonical;
     rung.hidden = !withFile;
+    // The step button names where it actually goes. With a file aboard, the
+    // next stop is checking that file — a button still saying "Choose open
+    // data" walked you somewhere it didn't say.
+    var fwd = $("#next-2");
+    if (fwd) fwd.textContent = withFile ? "Check your data →" : "Choose open data →";
+    // ...and the page's own summary counts the same steps the rail shows
+    var lede = $("#flow .lede");
+    if (lede) lede.textContent = withFile
+      ? "Five steps: who you are, where it is, a look at your data, what open data goes on it. Then we build it and hand you the map."
+      : "Four steps: who you are, where it is, what open data goes on it. Then we build it and hand you the map.";
     var order = withFile ? ["1", "2", "file", "3", "4"] : ["1", "2", "3", "4"];
     order.forEach(function (key, i) {
       var b = key === "file" ? rung : $('.stp[data-s="' + key + '"]');
@@ -631,6 +643,7 @@
     if (BENCH && BENCH_KEY === key) return;        // already checked against these places
     if (BENCH) { BENCH.destroy(); BENCH = null; }
     BENCH_KEY = key;
+    $("#check-verdict").classList.remove("err");
     $("#check-verdict").textContent = "Reading " + GEO.file.name + "…";
     try {
       BENCH = window.LokaDataBench.mount($("#bench"), {
@@ -643,9 +656,21 @@
           shapeIDs: S.chosen.map(function (c) { return c.id; }),
           bbox: chosenBbox(),
         },
+        // the bench's progress and errors surface HERE, in the verdict line
+        // the person is already reading — its own message sits below a table
+        // that can be screens tall
+        onStatus: function (text, kind) {
+          if (!text) return;   // cleared: the verdict or onReady speaks next
+          var v = $("#check-verdict");
+          v.hidden = false;
+          v.classList.toggle("err", kind === "err");
+          v.textContent = text;
+        },
         onReady: function (sum) {
           var left = sum.needsAttention || 0;
-          $("#check-verdict").textContent = left
+          var v = $("#check-verdict");
+          v.classList.remove("err");
+          v.textContent = left
             ? sum.features + " of " + sum.rows + " rows are on the map — " + left +
               " need a second look below."
             : sum.rows + " rows, all placed. Nothing to fix.";
@@ -702,8 +727,12 @@
     // required layers are not a choice; say what always comes rather than
     // showing a checkbox nobody may untick
     var always = S.catalog.filter(function (l) { return l.required || l.id === "labels"; });
+    // catalogue names can be technical ("Admin boundaries"); this line speaks
+    // to a person setting up their first atlas
+    var plainNames = { admin: "your region’s boundaries", labels: "place names" };
+    var names = always.map(function (l) { return "<b>" + esc(plainNames[l.id] || l.label) + "</b>"; });
     $("#given").innerHTML = "Included in every atlas: " +
-      always.map(function (l) { return "<b>" + esc(l.label) + "</b>"; }).join(", ") +
+      (names.length === 2 ? names.join(" and ") : names.join(", ")) +
       ". Sources are credited on the map.";
     always.forEach(function (l) { S.picked[l.id] = true; });
 

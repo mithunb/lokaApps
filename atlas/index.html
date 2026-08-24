@@ -45,7 +45,7 @@
     .eyebrow { display:inline-block; font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:600;
       letter-spacing:.14em; text-transform:uppercase; color:var(--color-moss); margin:0 0 .75rem;
       padding:.25rem .6rem; background:var(--color-moss-tint); border-radius:4px; }
-    .lead { font-size:var(--t-body); color:var(--color-text-secondary); max-width:46rem; }
+    .lead { font-size:var(--t-body); color:var(--color-text-secondary); max-width:72ch; }
 
     header.site { border-bottom:1px solid var(--color-divider); background:var(--color-bg); position:relative; z-index:2; }
     .nav { width:var(--container); margin:0 auto; padding:1rem 0; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
@@ -58,7 +58,7 @@
     #nav-user { color:var(--color-text-primary); font-size:.9rem; font-weight:600; }
 
     .atlas-hero { width:var(--container); margin:0 auto; padding:2rem 0 1.25rem; }
-    #atlas-about { max-width:46rem; font-size:.95rem; color:var(--color-text-secondary); margin:.35rem 0 0; }
+    #atlas-about { max-width:72ch; font-size:.95rem; color:var(--color-text-secondary); margin:.35rem 0 0; }
     .hero-top { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
     .hero-actions { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
     #add-data-btn { text-decoration:none; }
@@ -120,11 +120,35 @@
       background:var(--color-bg-alt); color:var(--color-text-secondary); border:1px solid transparent; border-radius:4px; }
     .bm-btn.active { background:var(--color-moss); color:#fff; }
 
-    .ctl-search { margin-bottom:.7rem; }
-    .ctl-search-input { width:100%; box-sizing:border-box; font:inherit; font-size:.85rem; padding:.45rem .6rem;
-      border:1px solid var(--color-border); border-radius:6px; background:var(--color-surface); color:var(--color-text-primary); }
-    .ctl-search-input:focus { outline:2px solid var(--color-moss); outline-offset:-1px; border-color:var(--color-moss); }
-    .ctl-search-count { margin-top:.3rem; font-size:.76rem; color:var(--color-text-muted); }
+    /* ---- search: floats top-centre over the map ----
+       Searching is a reader's first move; inside the panel it read as one
+       more layer setting. It wears the panel's own materials (white at 95%,
+       hairline border, the sanctioned blur) so the pair reads as one kit. */
+    .ctl-search { position:absolute; z-index:6; top:1rem; left:0; right:0; margin:0 auto;
+      width:22rem; max-width:calc(100% - 2rem); text-align:center; pointer-events:none; }
+    .ctl-search-box { pointer-events:auto; display:flex; align-items:center; gap:.4rem;
+      padding:0 .3rem 0 .75rem; text-align:left;
+      background:rgba(255,255,255,.95); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+      border:1px solid var(--color-border); border-radius:var(--radius-md); box-shadow:var(--shadow-md); }
+    .ctl-search-box svg { flex:0 0 auto; width:16px; height:16px; color:var(--color-text-muted); }
+    .ctl-search-box:focus-within { border-color:var(--color-moss); outline:2px solid var(--color-moss); outline-offset:-1px; }
+    .ctl-search-box:focus-within svg { color:var(--color-moss); }
+    .ctl-search-input { flex:1 1 auto; min-width:0; font:inherit; font-size:.95rem; padding:.55rem .3rem .55rem .1rem;
+      border:none; background:none; color:var(--color-text-primary); }
+    .ctl-search-input:focus { outline:none; }
+    .ctl-search-count { pointer-events:auto; display:inline-block; margin-top:.35rem; padding:.2rem .6rem;
+      font-size:.76rem; color:var(--color-text-secondary);
+      background:rgba(255,255,255,.95); border:1px solid var(--color-border);
+      border-radius:var(--radius-md); box-shadow:var(--shadow-md); }
+    .ctl-search-go { font:inherit; font-weight:600; border:none; background:none; padding:0;
+      color:var(--color-moss); cursor:pointer; text-decoration:underline; }
+    .ctl-search-go:hover { color:var(--color-canopy); }
+    /* pins are reachable by keyboard — the focused one must say so */
+    .atlas-mnode:focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:50%; }
+    /* mid widths: the centred box would cross the layer panel — park it top-right */
+    @media (min-width:721px) and (max-width:1080px){
+      .ctl-search { left:auto; right:1rem; margin:0; width:18rem; text-align:right; }
+    }
 
     .ctl-group { border-top:1px solid var(--color-divider); }
     .ctl-group:first-of-type { border-top:none; }
@@ -141,8 +165,8 @@
     .ctl-row.off .ctl-name { color:var(--color-text-muted); }
     .ctl-toggle { display:flex; align-items:center; gap:.55rem; cursor:pointer; }
     .ctl-toggle input { position:absolute; opacity:0; width:0; height:0; }
-    .ctl-switch { flex:0 0 auto; width:32px; height:18px; border-radius:999px; background:#CBC9C1; position:relative; transition:background .2s cubic-bezier(.25,1,.5,1); }
-    .ctl-switch::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#FFFFFF; box-shadow:0 1px 2px rgba(0,0,0,.25); transition:transform .2s cubic-bezier(.25,1,.5,1); }
+    .ctl-switch { flex:0 0 auto; width:32px; height:18px; border-radius:999px; background:#cfd6cf; position:relative; transition:background .2s cubic-bezier(.25,1,.5,1); }
+    .ctl-switch::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#FFFFFF; box-shadow:0 1px 2px rgba(42,36,26,.25); transition:transform .2s cubic-bezier(.25,1,.5,1); }
     .ctl-toggle input:checked + .ctl-switch { background:var(--color-moss); }
     .ctl-toggle input:checked + .ctl-switch::after { transform:translateX(14px); }
     .ctl-toggle input:focus-visible + .ctl-switch { outline:2px solid var(--color-moss); outline-offset:2px; }
@@ -175,7 +199,7 @@
     .crop-chip { font:inherit; font-size:.72rem; padding:.2rem .5rem; border-radius:4px; cursor:pointer;
       border:1px solid var(--color-border); background:#FFFFFF; color:var(--color-text-secondary); display:inline-flex; align-items:center; gap:.3rem;
       transition:background .15s ease, border-color .15s ease, color .15s ease, transform .1s cubic-bezier(.25,1,.5,1); }
-    .crop-chip::before { content:''; width:8px; height:8px; border-radius:2px; background:var(--c,#888); transition:transform .15s cubic-bezier(.34,1.4,.6,1); }
+    .crop-chip::before { content:''; width:8px; height:8px; border-radius:2px; background:var(--c,#888); transition:transform .15s cubic-bezier(.25,1,.5,1); }
     .crop-chip.diversity::before { background:linear-gradient(90deg,#cdd3b4,#39502f); }
     .crop-chip.on { border-color:var(--color-moss); background:var(--color-moss-tint); color:var(--color-text-primary); font-weight:600; }
     .crop-chip.on::before { transform:scale(1.25); }
@@ -221,7 +245,7 @@
     .leg-item { display:flex; align-items:center; gap:.45rem; font-size:.76rem; color:var(--color-text-secondary); }
     .leg-item.faint { opacity:.7; }
     /* sequential scale: one graduated bar, endpoints labelled */
-    .leg-ramp { display:flex; height:9px; border-radius:3px; overflow:hidden; margin:.15rem 0 .25rem; box-shadow:inset 0 0 0 1px rgba(0,0,0,.06); }
+    .leg-ramp { display:flex; height:9px; border-radius:3px; overflow:hidden; margin:.15rem 0 .25rem; box-shadow:inset 0 0 0 1px rgba(42,36,26,.08); }
     .leg-ramp-seg { flex:1 1 0; }
     .leg-ramp-labels { display:flex; justify-content:space-between; align-items:baseline; gap:.5rem; }
     .leg-ramp-end { font-size:.72rem; color:var(--color-text-secondary); font-variant-numeric:tabular-nums; }
@@ -242,7 +266,7 @@
     .leg-size { display:flex; align-items:flex-end; gap:.75rem; padding:.2rem 0 .1rem; }
     .leg-size-item { display:flex; flex-direction:column; align-items:center; gap:.2rem; }
     .leg-size-circle { flex:0 0 auto; border-radius:50%; background:var(--c); opacity:.78;
-      border:1.2px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.08); box-sizing:border-box; }
+      border:1.2px solid #fff; box-shadow:0 0 0 1px rgba(42,36,26,.10); box-sizing:border-box; }
     .leg-size-val { font-size:.7rem; color:var(--color-text-secondary); font-variant-numeric:tabular-nums; line-height:1; }
 
     /* ---- DOM markers ---- */
@@ -278,7 +302,7 @@
     .atlas-marker { transition:opacity .18s ease; }
     .atlas-fanned .atlas-marker:not(.fanned), .atlas-fanned .atlas-cluster { opacity:.25; }
 
-    .atlas-mlabel { margin-top:2px; font-family:'Figtree',sans-serif; font-size:var(--t-label); font-weight:600; color:#14261a;
+    .atlas-mlabel { margin-top:2px; font-family:'Figtree',sans-serif; font-size:var(--t-label); font-weight:600; color:#1e2a1c;
       text-shadow:0 0 2px #fff,0 0 3px #fff,0 0 4px #fff,0 1px 1px #fff; white-space:nowrap; pointer-events:none; }
 
     /* ---- spiderfy: stacked markers fan out on click ---- */
@@ -367,9 +391,9 @@
       background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg);
       padding:1.6rem 1.75rem; box-shadow:var(--shadow-sm); }
     @media (max-width:720px){ .credits-grid{ grid-template-columns:1fr; gap:1.5rem; } }
-    .credits-col h3 { display:flex; align-items:center; gap:.5rem; font-family:'Figtree',sans-serif; font-size:.72rem;
+    .credits-col h2 { display:flex; align-items:center; gap:.5rem; font-family:'Figtree',sans-serif; font-size:.72rem;
       font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--color-text-muted); margin:0 0 .8rem; }
-    .credits-col h3 svg { width:15px; height:15px; color:var(--color-moss); }
+    .credits-col h2 svg { width:15px; height:15px; color:var(--color-moss); }
     .loka-wordmark-link { display:inline-block; margin:0 0 .85rem; transition:opacity .15s ease; }
     .loka-wordmark-link:hover { opacity:.78; }
     .loka-wordmark { display:block; height:28px; width:auto; }
@@ -454,6 +478,7 @@
       .ctl-sub-toggle input:indeterminate + .ctl-switch::after { transform:translateX(8px); }
       .ctl-sub-chev { min-width:40px; min-height:40px; align-items:center; justify-content:center; }
       .ctl-group-head { padding:.75rem .1rem; }
+      .ctl-search-box { min-height:44px; }
       .bm-btn { padding:.6rem .5rem; }
       .crop-chip { padding:.4rem .6rem; font-size:.78rem; }
       .panel-collapse { min-width:40px; min-height:40px; }
@@ -551,10 +576,10 @@
   <section class="atlas-credits">
     <div class="credits-grid">
       <div class="credits-col">
-        <h3>
+        <h2>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           Made by
-        </h3>
+        </h2>
         <div id="org-credit"></div>
         <a class="loka-wordmark-link" href="https://discoverloka.org" target="_blank" rel="noopener" aria-label="LOKA — discoverloka.org"><img class="loka-wordmark" src="./loka-logo.png" alt="LOKA" /></a>
         <p class="cr-lede">A platform built by Socratus.<span id="collab-lede"></span></p>
@@ -564,13 +589,13 @@
         </div>
       </div>
       <div class="credits-col">
-        <h3>
+        <h2>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/></svg>
           Data &amp; sources
-        </h3>
+        </h2>
         <ul id="data-credits"></ul>
         <div id="contrib-credits" hidden>
-          <h4 class="contrib-head">Contributed data</h4>
+          <h3 class="contrib-head">Contributed data</h3>
           <ul id="contrib-list"></ul>
         </div>
         <div class="credits-foot">
@@ -616,6 +641,44 @@
       apply();
       mq.addEventListener("change", apply);
       head.addEventListener("click", function () { panel.classList.toggle("collapsed"); sync(); resizeMap(); });
+    })();
+
+    /* Crisp text over the map. The map canvas and the blurred panel are
+       composited as their own layers, and when the stage lands on a
+       fractional pixel (text above it flows to fractional heights by
+       nature) the compositor resamples them — every place name and panel
+       label goes faintly soft. The stage is nudged onto the whole-pixel
+       grid (never more than half a pixel, invisible to the eye). It is
+       already position:relative, so top/left move where it paints without
+       touching the page's flow. */
+    (function () {
+      var stage = document.querySelector(".atlas-stage");
+      if (!stage) return;
+      var raf = 0;
+      function snap() {
+        raf = 0;
+        stage.style.top = "";
+        stage.style.left = "";
+        var r = stage.getBoundingClientRect();
+        var top = r.top + window.scrollY, left = r.left + window.scrollX;
+        var fy = top - Math.round(top), fx = left - Math.round(left);
+        if (fy) stage.style.top = (-fy) + "px";
+        if (fx) stage.style.left = (-fx) + "px";
+      }
+      function schedule() { if (!raf) raf = requestAnimationFrame(snap); }
+      window.addEventListener("resize", schedule);
+      window.addEventListener("load", schedule);
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(schedule);
+      // the hero's text arrives from the manifest after first paint — its
+      // height moves the stage, so watch everything that sits above the map
+      if (window.ResizeObserver) {
+        var ro = new ResizeObserver(schedule);
+        ["header.site", ".atlas-hero", ".atlas-home"].forEach(function (sel) {
+          var n = document.querySelector(sel);
+          if (n) ro.observe(n);
+        });
+      }
+      snap();
     })();
   </script>
 

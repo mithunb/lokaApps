@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Which map should the atlas stand on? — LOKA Atlas</title>
+<meta name="robots" content="noindex" />
+<!-- A decision page for Mithun, not a product page. Six ways the base map
+     could look, switchable in place, with the atlas's REAL Bengaluru data
+     drawn on every one so the judgement is honest: the district boundary,
+     its name, and every place on it. Pan and zoom carry across
+     switches. Nothing here changes any atlas — pick one and say its name. -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Figtree:wght@600;700&display=swap" />
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+<style>
+  :root {
+    --bg:#F9F9F7; --surface:#FFFFFF; --ink:#2A241A; --ink2:#564E3C; --muted:#6B6350;
+    --border:rgba(42,36,26,.14); --divider:rgba(42,36,26,.09);
+    --moss:#4A5A33; --canopy:#384526; --moss-tint:rgba(74,90,51,.10); --rust:#AE5028;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.55 'DM Sans',system-ui,-apple-system,sans-serif; }
+  header { padding:1.1rem 1.4rem .9rem; border-bottom:1px solid var(--divider); }
+  h1 { margin:0 0 .25rem; font:700 1.35rem/1.2 'Figtree',sans-serif; letter-spacing:-.01em; }
+  header p { margin:0; color:var(--ink2); font-size:.9rem; max-width:64ch; }
+  main { display:grid; grid-template-columns:21rem 1fr; min-height:calc(100vh - 92px); }
+  .rail { padding:1rem; border-right:1px solid var(--divider); overflow-y:auto; }
+  .opt { display:block; width:100%; text-align:left; font:inherit; cursor:pointer;
+    background:var(--surface); border:1px solid var(--border); border-radius:6px;
+    padding:.8rem .9rem; margin-bottom:.6rem; color:inherit; }
+  .opt:hover { border-color:var(--moss); }
+  .opt.on { border-color:var(--moss); background:var(--moss-tint); outline:2px solid var(--moss); outline-offset:-2px; }
+  .opt b { display:flex; align-items:baseline; gap:.45rem; font:600 .98rem/1.3 'Figtree',sans-serif; }
+  .opt b .kbd { margin-left:auto; font:500 .7rem/1 'DM Sans',sans-serif; color:var(--muted);
+    border:1px solid var(--border); border-radius:4px; padding:.15rem .35rem; }
+  .opt span { display:block; font-size:.84rem; color:var(--ink2); margin-top:.25rem; }
+  .opt small { display:block; font-size:.72rem; color:var(--muted); margin-top:.35rem; }
+  .stagecol { display:flex; flex-direction:column; min-width:0; }
+  #map { flex:1 1 auto; min-height:420px; }
+  .foot { display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap;
+    padding:.55rem 1.4rem .8rem; font-size:.78rem; color:var(--muted); }
+  .foot #attrib a { color:inherit; }
+  .pick { font-size:.84rem; color:var(--ink2); padding:.8rem .9rem; margin-top:.4rem;
+    background:var(--surface); border:1px dashed var(--border); border-radius:6px; }
+  .pick b { color:var(--ink); font-family:'Figtree',sans-serif; }
+  @media (max-width:900px){
+    main { grid-template-columns:1fr; min-height:0; }
+    .rail { display:flex; gap:.6rem; overflow-x:auto; border-right:none;
+      border-bottom:1px solid var(--divider); padding:.8rem 1rem; }
+    .opt { flex:0 0 15.5rem; margin-bottom:0; }
+    .opt .kbd { display:none; }
+    .pick { flex:0 0 15.5rem; margin-top:0; }
+    #map { height:62vh; min-height:340px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Which map should the atlas stand on?</h1>
+  <p>Six ways the base could look — every one free to use, switched in place. Your own atlas
+    data is drawn on each so the comparison is honest: the boundary, its name<span id="place-clause"></span>.
+    Pan and zoom stay where you left them when you switch.</p>
+</header>
+<main>
+  <nav class="rail" id="rail" aria-label="Map style options"></nav>
+  <div class="stagecol">
+    <div id="map"></div>
+    <div class="foot">
+      <span>Keys 1–6 switch styles. Nothing here changes the live atlas.</span>
+      <span id="attrib"></span>
+    </div>
+  </div>
+</main>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+(function () {
+  "use strict";
+  var CARTO = "abc".split("").map(function (s) { return "https://" + s + ".basemaps.cartocdn.com/"; });
+  function carto(path) { return CARTO.map(function (b) { return b + path + "/{z}/{x}/{y}@2x.png"; }); }
+  var ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
+
+  /* Each option: plain-language name, what it is good for, tiles for the ground
+     and (separately, when the source offers them) for the place names — the
+     atlas keeps place names as its own layer, so options that can do the same
+     stay honest to how the product works. */
+  var OPTIONS = [
+    { id: "today", name: "Today's map", blurb: "The pale grey base the atlas uses now. Quiet, but a little cold next to the paper page around it.",
+      src: "Map © OpenStreetMap contributors © CARTO", bg: "#F4F3F1",
+      base: carto("light_nolabels"), labels: carto("light_only_labels") },
+    { id: "paper", name: "Field paper", blurb: "The same map, warmed to sit with the page — like the rest of the notebook. The cheapest change: same tiles, warmed in place.",
+      src: "Map © OpenStreetMap contributors © CARTO", bg: "#F1EBDD", warm: true,
+      base: carto("light_nolabels"), labels: carto("light_only_labels") },
+    { id: "voyager", name: "Streets & colour", blurb: "Roads, parks and water in gentle colour. Friendlier for city atlases; a bit busier under many pins.",
+      src: "Map © OpenStreetMap contributors © CARTO", bg: "#FBF8F3",
+      base: carto("rastertiles/voyager_nolabels"), labels: carto("rastertiles/voyager_only_labels") },
+    { id: "grey", name: "Soft grey", blurb: "The quietest ground there is — everything you add becomes the loudest thing on the map.",
+      src: "Map © Esri & contributors", bg: "#E8E8E6", maxzoom: 16,
+      base: [ESRI + "Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"],
+      labels: [ESRI + "Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}"] },
+    { id: "terrain", name: "Hills & rivers", blurb: "Land shading, green cover and water, with names built in. Suits countryside and river atlases; the busiest of the six.",
+      src: "Map © Esri & contributors", bg: "#EDEAE2",
+      base: [ESRI + "World_Topo_Map/MapServer/tile/{z}/{y}/{x}"], labels: null },
+    { id: "dark", name: "After dark", blurb: "A dark ground where the data glows. Striking on screens and in presentations; furthest from the paper look.",
+      src: "Map © OpenStreetMap contributors © CARTO", bg: "#14181B", dark: true,
+      base: carto("dark_nolabels"), labels: carto("dark_only_labels") }
+  ];
+
+  var BOUNDS = [[77.2848, 12.6114], [77.8769, 13.2791]];
+  var map = new maplibregl.Map({
+    container: "map",
+    style: { version: 8, glyphs: "https://tiles.basemaps.cartocdn.com/fonts/{fontstack}/{range}.pbf",
+      sources: {}, layers: [{ id: "bg", type: "background", paint: { "background-color": "#F4F3F1" } }] },
+    bounds: BOUNDS,
+    fitBoundsOptions: { padding: 24 },
+    minZoom: 7, maxZoom: 17, attributionControl: false
+  });
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
+  window.__map = map;   // same debug hook the atlas itself exposes
+  // The grid can settle after the map constructs (fonts, scrollbars, an
+  // embedded pane) — follow the container, and re-fit the view once the
+  // first REAL size arrives: a fit computed against a collapsed box keeps
+  // a world-level zoom even after the box grows.
+  if (window.ResizeObserver) {
+    var fitted = document.getElementById("map").clientWidth > 200;
+    new ResizeObserver(function () {
+      map.resize();
+      if (!fitted && document.getElementById("map").clientWidth > 200) {
+        fitted = true;
+        map.fitBounds(BOUNDS, { padding: 24, duration: 0 });
+      }
+    }).observe(document.getElementById("map"));
+  }
+
+  var current = null;
+  /* Which atlas the comparison stands on. Named in the address so this page
+     works wherever it is opened — ?dataset=<slug>, defaulting to the Bengaluru
+     atlas that is actually published. The boundary and the pins are found in
+     that atlas's own manifest rather than spelled out here, because a page that
+     hard-codes one machine's test data is a page only one machine can open. */
+  var DS = (function () {
+    var slug = (new URLSearchParams(location.search).get("dataset") || "loka-x-bengaluru").trim();
+    var dir = "./datasets/" + encodeURIComponent(slug) + "/";
+    return { slug: slug, dir: dir, admin: dir + "admin.geojson" };
+  })();
+
+  map.on("load", function () {
+    OPTIONS.forEach(function (o) {
+      map.addSource("base-" + o.id, { type: "raster", tiles: o.base, tileSize: 256, maxzoom: o.maxzoom || 19 });
+      map.addLayer({ id: "base-" + o.id, type: "raster", source: "base-" + o.id,
+        layout: { visibility: "none" },
+        // "Field paper": today's tiles at slight transparency over a warm
+        // paper background, faintly desaturated — a change the atlas could
+        // ship as paint numbers alone, no new tile source
+        paint: o.warm ? { "raster-opacity": 0.82, "raster-saturation": -0.35 } : {} });
+    });
+
+    // the atlas's real boundary + pins, drawn ABOVE every base
+    map.addSource("admin", { type: "geojson", data: DS.admin });
+    map.addLayer({ id: "admin-line", type: "line", source: "admin",
+      paint: { "line-color": "#B0863A", "line-width": 2.6 } });
+
+    OPTIONS.forEach(function (o) {
+      if (!o.labels) return;
+      map.addSource("lbl-" + o.id, { type: "raster", tiles: o.labels, tileSize: 256, maxzoom: o.maxzoom || 19 });
+      map.addLayer({ id: "lbl-" + o.id, type: "raster", source: "lbl-" + o.id, layout: { visibility: "none" } });
+    });
+
+    // Which file holds this atlas's places is the atlas's own business, so ask
+    // it: the contributed layers live in the overlay beside the manifest. The
+    // source starts empty and fills when the answer arrives, so the bases can
+    // be compared straight away rather than waiting on the pins.
+    map.addSource("pins", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    map.addLayer({ id: "pins", type: "circle", source: "pins",
+      paint: { "circle-radius": 4.5, "circle-color": "#A6522F",
+               "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 1.4 } });
+
+    Promise.all(["manifest.local.json", "manifest.json"].map(function (f) {
+      return fetch(DS.dir + f).then(function (r) { return r.ok ? r.json() : null; })
+        .catch(function () { return null; });
+    })).then(function (both) {
+      var srcs = [];
+      both.forEach(function (m) {
+        ((m && m.layers) || []).forEach(function (L) {
+          if (L.type === "marker" && L.source && srcs.indexOf(L.source) < 0) srcs.push(L.source);
+        });
+      });
+      if (!srcs.length) return;
+      return Promise.all(srcs.map(function (f) {
+        return fetch(DS.dir + f).then(function (r) { return r.ok ? r.json() : null; })
+          .catch(function () { return null; });
+      })).then(function (gjs) {
+        var feats = [];
+        gjs.forEach(function (g) { if (g && g.features) feats = feats.concat(g.features); });
+        if (!feats.length || !map.getSource("pins")) return;
+        map.getSource("pins").setData({ type: "FeatureCollection", features: feats });
+        // the sentence only claims places once they are actually on screen
+        var n = document.getElementById("place-clause");
+        if (n) n.textContent = ", and every one of its " + feats.length + " places";
+      });
+    });
+
+    // the district's name, once, at the centre of its largest ring —
+    // the same rule the atlas itself now uses
+    fetch(DS.admin).then(function (r) { return r.json(); }).then(function (gj) {
+      var pts = [];
+      (gj.features || []).forEach(function (f) {
+        var g = f.geometry, rings = g.type === "Polygon" ? [g.coordinates[0]]
+          : g.type === "MultiPolygon" ? g.coordinates.map(function (p) { return p[0]; }) : [];
+        var best = null, bestA = -1;
+        rings.forEach(function (ring) {
+          var a = 0, cx = 0, cy = 0;
+          for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+            var cr = ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+            a += cr; cx += (ring[j][0] + ring[i][0]) * cr; cy += (ring[j][1] + ring[i][1]) * cr;
+          }
+          if (!a) return;
+          if (Math.abs(a / 2) > bestA) { bestA = Math.abs(a / 2); best = [cx / (3 * a), cy / (3 * a)]; }
+        });
+        if (best) pts.push({ type: "Feature", properties: { name: f.properties.name },
+          geometry: { type: "Point", coordinates: best } });
+      });
+      map.addSource("admin-pt", { type: "geojson", data: { type: "FeatureCollection", features: pts } });
+      map.addLayer({ id: "admin-name", type: "symbol", source: "admin-pt",
+        layout: { "text-field": ["get", "name"], "text-size": 15, "text-font": ["Open Sans Regular"],
+                  "text-transform": "uppercase", "text-letter-spacing": 0.12 },
+        paint: { "text-color": "#1e2a1c", "text-halo-color": "#ffffff", "text-halo-width": 2.2 } });
+      show(OPTIONS[0]);
+    });
+  });
+
+  function show(o) {
+    current = o;
+    OPTIONS.forEach(function (x) {
+      map.setLayoutProperty("base-" + x.id, "visibility", x === o ? "visible" : "none");
+      if (x.labels) map.setLayoutProperty("lbl-" + x.id, "visibility", x === o ? "visible" : "none");
+    });
+    map.setPaintProperty("bg", "background-color", o.bg);
+    if (map.getLayer("admin-name")) {
+      map.setPaintProperty("admin-name", "text-color", o.dark ? "#F3EFE4" : "#1e2a1c");
+      map.setPaintProperty("admin-name", "text-halo-color", o.dark ? "rgba(16,20,14,.9)" : "#ffffff");
+    }
+    document.getElementById("attrib").textContent = o.src;
+    Array.prototype.forEach.call(document.querySelectorAll(".opt"), function (b) {
+      b.classList.toggle("on", b.getAttribute("data-id") === o.id);
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-id") === o.id));
+    });
+    document.getElementById("picked").innerHTML =
+      "Looking at: <b>" + o.name + "</b>. To make it the atlas's map, just say this name.";
+  }
+
+  var rail = document.getElementById("rail");
+  OPTIONS.forEach(function (o, i) {
+    var b = document.createElement("button");
+    b.className = "opt"; b.setAttribute("data-id", o.id); b.setAttribute("aria-pressed", "false");
+    b.innerHTML = "<b>" + o.name + "<span class='kbd'>" + (i + 1) + "</span></b>" +
+      "<span>" + o.blurb + "</span><small>" + o.src + "</small>";
+    b.onclick = function () { show(o); };
+    rail.appendChild(b);
+  });
+  var pick = document.createElement("p");
+  pick.className = "pick"; pick.id = "picked";
+  pick.textContent = "Click an option — the map switches in place.";
+  rail.appendChild(pick);
+
+  document.addEventListener("keydown", function (e) {
+    var n = parseInt(e.key, 10);
+    if (n >= 1 && n <= OPTIONS.length && !e.metaKey && !e.ctrlKey && !e.altKey) show(OPTIONS[n - 1]);
+  });
+})();
+</script>
+</body>
+</html>

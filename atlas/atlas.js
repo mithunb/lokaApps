@@ -69,6 +69,7 @@
 
   var map, MANIFEST, activeBasemap, DATA = {}, markersByLayer = {}, cropState = {};
   var flipWired = false;   // the layout-flip listener outlives any one map — see start()
+  var searchKeyWired = false;   // "/"-to-search is wired once, however often the panel rebuilds
 
   /* ---- more than one key: shared palette + state ----
      The colours are fragment.js's CATEGORY_COLORS, duplicated because this is
@@ -155,6 +156,8 @@
   // The LOKA Atlas home: featured reference instance, published instances, build CTA.
   function renderHome() {
     document.title = "LOKA Atlas \u2014 layered maps for any geography";
+    // the eyebrow claims "interactive map" \u2014 on the gallery there is no map
+    setText(".eyebrow", "atlas gallery \u00b7 loka atlas");
     setText("#atlas-title", "LOKA Atlas");
     setText("#atlas-subtitle", "Layered, shareable maps for any geography \u2014 built from open data.");
     setText("#atlas-about", "Every atlas below is built with the same engine: pick a region, choose layers, add your data, and share it. Public tech by Socratus.");
@@ -415,14 +418,16 @@
     var btn = $("#share-btn");
     if (!btn || !window.AtlasShare) return;
     btn.hidden = false;
-    btn.onclick = function () {
-      window.AtlasShare.open({
-        url: location.href,
-        title: manifest.title + " — LOKA Atlas",
-        slug: DATASET,
-        private: !!KEY,
-      });
+    // The owner's tools add facts the viewer can't know (e.g. that the atlas
+    // isn't live yet, so the link only works for its owner). The panel opens
+    // with whatever the button carries at click time.
+    btn.__shareOpts = {
+      url: location.href,
+      title: manifest.title + " — LOKA Atlas",
+      slug: DATASET,
+      private: !!KEY,
     };
+    btn.onclick = function () { window.AtlasShare.open(btn.__shareOpts); };
   }
 
   // Frame the data within the map area that's actually visible — i.e. to the right of the
@@ -631,9 +636,55 @@
     });
   }
 
+  /* A polygon's name must be written ONCE. Symbols hang per tile, so a
+     district spanning three tiles wrote "Bengaluru Urban" three times (and
+     alwaysShow kept every copy). The fix is one point per feature — an
+     area-weighted centre of its largest ring — on a source of its own, so
+     the map says each name exactly once at any zoom. Lines keep the tiled
+     source: their labels follow the line itself. */
+  function labelAnchorPoint(geom) {
+    if (!geom) return null;
+    if (geom.type === "Point") return geom.coordinates;
+    if (geom.type === "MultiPoint") return geom.coordinates[0] || null;
+    var rings = [];
+    if (geom.type === "Polygon") rings = [geom.coordinates[0]];
+    else if (geom.type === "MultiPolygon") rings = geom.coordinates.map(function (p) { return p[0]; });
+    else return null;
+    var best = null, bestA = -1;
+    rings.forEach(function (ring) {
+      if (!ring || ring.length < 3) return;
+      var a = 0, cx = 0, cy = 0;
+      for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        var cross = ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+        a += cross;
+        cx += (ring[j][0] + ring[i][0]) * cross;
+        cy += (ring[j][1] + ring[i][1]) * cross;
+      }
+      if (!a) return;
+      var area = Math.abs(a / 2);
+      if (area > bestA) { bestA = area; best = [cx / (3 * a), cy / (3 * a)]; }
+    });
+    return best;
+  }
+  function labelPointSource(L) {
+    var gj = DATA[L.id];
+    if (!gj || !gj.features) return null;
+    var pts = [];
+    gj.features.forEach(function (f) {
+      var p = labelAnchorPoint(f.geometry);
+      if (p) pts.push({ type: "Feature", properties: f.properties, geometry: { type: "Point", coordinates: p } });
+    });
+    if (!pts.length) return null;
+    var sid = srcId(L) + "-lblpt";
+    if (!map.getSource(sid)) map.addSource(sid, { type: "geojson", data: { type: "FeatureCollection", features: pts } });
+    return sid;
+  }
+
   function addLabel(L) {
     var t = L.label_text;
     if (!t) return;
+    var source = srcId(L);
+    if (L.type !== "line") source = labelPointSource(L) || source;
     var layout = {
       visibility: vis(L),
       "text-field": ["coalesce", ["get", t.property], ""],
@@ -652,7 +703,7 @@
       "text-halo-color": t.haloColor || "#000",
       "text-halo-width": t.haloWidth || 1.2
     };
-    map.addLayer(withFilter(L, { id: L.id + "-label", type: "symbol", source: srcId(L), layout: layout, paint: paint }));
+    map.addLayer(withFilter(L, { id: L.id + "-label", type: "symbol", source: source, layout: layout, paint: paint }));
     L._ids.push(L.id + "-label");
   }
 
@@ -784,6 +835,19 @@
       // clicks route through the spiderfy gate: a fanned pin opens its own
       // popup, any other visible pin is a loner by construction and pops up
       wrap.addEventListener("click", function (e) { e.stopPropagation(); spiderClick(L, entry); });
+      // A pin must be reachable without a pointer. The inner node is the
+      // button (the wrap belongs to MapLibre); a hidden or folded pin is
+      // display:none, so the tab order only ever holds what's visible.
+      node.setAttribute("role", "button");
+      node.tabIndex = 0;
+      var pinName = popupTitleText(L, f.properties);
+      node.setAttribute("aria-label", pinName || (L.label || "place") + " — details");
+      node.addEventListener("keydown", function (e) {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        e.stopPropagation();
+        spiderClick(L, entry);
+      });
       // hovering names the pin without a click (see HOVER TOOLTIP), and when
       // keys are on it also says what this place is under each of them
       wireMarkerHint(node, function () { return popupTitleText(L, f.properties); },
@@ -1255,12 +1319,11 @@
     };
     row.appendChild(one);
     wrap.appendChild(row);
-    var noteText = st.note;
-    if (!noteText && activeKeyOptions(L).length > 1) {
-      // the accepted cost, stated once
-      noteText = "Colours can repeat between keys — the shape says which key a mark belongs to.";
-    }
-    if (noteText) wrap.appendChild(el("div", "key-note", esc(noteText)));
+    // st.note is the stack-cap message only. The old standing line about
+    // colours repeating between keys explained a design decision nobody
+    // asked about — the owner asked for it to go, and the shapes in the
+    // legend already show the difference without words.
+    if (st.note) wrap.appendChild(el("div", "key-note", esc(st.note)));
     return wrap;
   }
 
@@ -2077,10 +2140,32 @@
     searchableLayers().forEach(function (L) { (markersByLayer[L.id] || []).forEach(function (e) { for (var t in featureTagSet(L, e.f)) v[t] = 1; }); });
     return Object.keys(v);
   }
-  function updateSearchCount(shown, total) {
+  function updateSearchCount(shown, total, pts) {
     var c = $("#atlas-search-count"); if (!c) return;
-    if (shown == null) { c.hidden = true; c.textContent = ""; }
-    else { c.hidden = false; c.textContent = shown ? (shown + " of " + total + " shown") : "nothing matched — try another word"; }
+    if (shown == null) { c.hidden = true; c.textContent = ""; return; }
+    c.hidden = false;
+    c.textContent = shown ? (shown + " of " + total + " shown") : "nothing matched — try another word";
+    // Matches that all sit off-screen look exactly like no matches: the map
+    // under the box doesn't change. Offer the one move that resolves it.
+    if (shown && pts && pts.length && map) {
+      var inView = false;
+      try {
+        var b = map.getBounds();
+        inView = pts.some(function (p) { return b.contains(p); });
+      } catch (e) { inView = true; }
+      if (!inView) {
+        var go = el("button", "ctl-search-go", "Show me →");
+        go.type = "button";
+        var sep = document.createTextNode(" · ");
+        go.onclick = function () {
+          fitPoints(pts);
+          sep.parentNode && sep.parentNode.removeChild(sep);   // its job is done
+          go.parentNode && go.parentNode.removeChild(go);
+        };
+        c.appendChild(sep);
+        c.appendChild(go);
+      }
+    }
   }
   // An expansion term must land on a word boundary ("art" shouldn't match
   // "smart"); the user's own query stays a plain substring, as typed.
@@ -2095,18 +2180,19 @@
   function applySearch(q, tags) {
     var terms = [];
     tags.forEach(function (t) { t = String(t || "").toLowerCase(); if (t && terms.indexOf(t) < 0) terms.push(t); });
-    var shown = 0, total = 0;
+    var shown = 0, total = 0, matchPts = [];
     searchableLayers().forEach(function (L) {
       (markersByLayer[L.id] || []).forEach(function (e) {
         total++;
         var text = featureText(L, e.f);
         var match = !!(q && text.indexOf(q) >= 0);
         for (var i = 0; !match && i < terms.length; i++) match = termRe(terms[i]).test(text);
-        e.hidden = !match; if (match) shown++;
+        e.hidden = !match;
+        if (match) { shown++; matchPts.push(e.f.geometry.coordinates); }
       });
       applyMarkerVisibility(L);
     });
-    updateSearchCount(shown, total);
+    updateSearchCount(shown, total, matchPts);
   }
   function clearSearch() {
     searchTags = [];
@@ -2191,6 +2277,18 @@
   /* ==================================================================
      CONTROL WIDGET
   ================================================================== */
+  // Boundaries and place names ARE the base map: the wizard always draws
+  // them, they open switched on, and the owner's region row already speaks
+  // for them ("Boundaries & place names for …"). Listing them again as
+  // switchable layers made every fresh atlas open on two rows nobody asked
+  // to manage — the retired editor filtered them for exactly this reason.
+  // The layers still render; only their panel rows go. Curated layers with
+  // their own ids (Deoria's districts, blocks) keep their rows.
+  function isBaseMapRow(L) {
+    return !L.userLayer &&
+      /^(admin|labels|boundary|boundaries|placenames|place-names)$/i.test(String(L.id || ""));
+  }
+
   function buildControls() {
     var panel = $("#atlas-controls");
     panel.innerHTML = "";
@@ -2211,16 +2309,41 @@
     // search box — over marker layers that could carry text (keyword now,
     // semantic on public atlases with embeddings). syncSearchBox() takes it away
     // again once the data is in if none of them actually had any.
-    if (manifestSearchable().length) {
+    // It floats top-centre OVER THE MAP, not inside this panel: searching the
+    // map is a reader's first move, and buried under the layer switches it
+    // read as a setting. It lives on the stage so a rebuilt panel (reboot)
+    // neither loses nor doubles it — the old one is removed first.
+    var stage = document.querySelector(".atlas-stage");
+    var oldSearch = stage && stage.querySelector(".ctl-search");
+    if (oldSearch) oldSearch.parentNode.removeChild(oldSearch);
+    if (stage && manifestSearchable().length) {
       var sc = el("div", "ctl-search");
+      var slab = el("label", "ctl-search-box");
+      slab.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
       var si = el("input", "ctl-search-input");
-      si.type = "search"; si.placeholder = "Search the map…"; si.setAttribute("aria-label", "Search the map");
+      si.type = "search"; si.placeholder = "Search this map…"; si.setAttribute("aria-label", "Search this map");
       si.addEventListener("input", function () { runSearch(si.value); });
       si.addEventListener("search", function () { runSearch(si.value); });
-      sc.appendChild(si);
+      slab.appendChild(si);
+      sc.appendChild(slab);
       var cnt = el("div", "ctl-search-count"); cnt.id = "atlas-search-count"; cnt.hidden = true;
+      cnt.setAttribute("aria-live", "polite");   // pins vanishing is silent otherwise
       sc.appendChild(cnt);
-      panel.appendChild(sc);
+      stage.appendChild(sc);
+      if (!searchKeyWired) {
+        searchKeyWired = true;
+        // "/" reaches the box from anywhere on the page — the map idiom —
+        // unless the visitor is already typing somewhere
+        document.addEventListener("keydown", function (e) {
+          if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+          var a = document.activeElement;
+          if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.isContentEditable)) return;
+          var box = document.querySelector(".ctl-search-input");
+          if (!box) return;
+          e.preventDefault();
+          box.focus();
+        });
+      }
     }
 
     // groups + layers — declared groups first, then a synthesized group for any
@@ -2238,7 +2361,9 @@
       }
     });
     groupList.forEach(function (g) {
-      var layers = MANIFEST.layers.filter(function (L) { return (L.group || "userdata") === g.id; });
+      var layers = MANIFEST.layers.filter(function (L) {
+        return (L.group || "userdata") === g.id && !isBaseMapRow(L);
+      });
       if (!layers.length) return;
       // Base is expanded on load, and so is any group holding data somebody
       // contributed — that is the whole reason they opened this atlas, and its
@@ -2622,7 +2747,8 @@
     spec = spec || {};
     var title = popupTitleText(L, props);
     var sub = spec.subtitle || (spec.subtitleProperty ? props[spec.subtitleProperty] : "");
-    var h = '<div class="pop">';
+    var shell = '<div class="pop">';
+    var h = shell;
     if (title) h += '<div class="pop-title">' + esc(title) + "</div>";
     if (sub) h += '<div class="pop-sub">' + esc(sub) + "</div>";
     if (krows) h += krows.outerHTML;
@@ -2656,6 +2782,10 @@
           esc(v) + (fld.suffix || "") + "</div></div>";
       }
     });
+    // A popup stanza can point at columns the data no longer carries — that
+    // used to open a bare white box with nothing but a close button. If
+    // nothing resolved, there is nothing to say: no popup at all.
+    if (h === shell) return "";
     return h + "</div>";
   }
   function safeArr(v) { try { return JSON.parse(v); } catch (e) { return []; } }

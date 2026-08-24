@@ -221,6 +221,10 @@
     act.hidden = INST.role !== "owner" || INST.status === "building";
     act.textContent = live ? "Take it off" : "Make it live";
     act.classList.toggle("primary", !live);
+    // the Share panel must say when a link and QR will only work for the
+    // owner — a printed poster of a not-live atlas is a dead poster
+    var share = $("#share-btn");
+    if (share && share.__shareOpts) share.__shareOpts.notLive = !live;
   }
 
   function toggleLive() {
@@ -249,6 +253,10 @@
     if (!LA || !LA.manifest) return;
     addRegionRow();
     (LA.manifest.layers || []).forEach(addChangeButton);
+    // a reboot rebuilds the viewer's Share wiring too — restate what only
+    // the owner knows (see paintStatus)
+    var share = $("#share-btn");
+    if (share && share.__shareOpts && INST) share.__shareOpts.notLive = INST.status !== "published";
   }
 
   // What the base map actually draws, rather than what we would like to claim:
@@ -330,6 +338,14 @@
       note.className = "own-by";
       note.textContent = "added by " + who;
       row.appendChild(note);
+      // the viewer's info tooltip carries the same credit for readers — with
+      // the visible note here, saying it twice on one row is noise
+      var info = row.querySelector(".ctl-info");
+      if (info && info.title) {
+        var trimmed = info.title.replace(/(\s*—\s*)?Added by [^—]*$/, "").trim();
+        if (trimmed) info.title = trimmed;
+        else info.parentNode.removeChild(info);
+      }
     }
   }
 
@@ -1144,6 +1160,13 @@
       '<div class="own-row own-row-tight">' +
         '<button class="share-btn" id="own-region-save" disabled>Rebuild with this region</button>' +
         '<span class="own-err" id="own-region-msg" role="alert"></span></div>' +
+      '<div class="own-confirm" id="own-region-confirm" hidden>' +
+        '<p id="own-region-warn"></p>' +
+        '<div class="own-row">' +
+          '<button class="share-btn primary" id="own-region-yes" type="button">Rebuild the base map</button>' +
+          '<button class="share-btn" id="own-region-no" type="button">Keep it as it is</button>' +
+        "</div>" +
+      "</div>" +
 
       '<h3 class="own-set-h">Identity</h3>' +
       '<label class="own-fld">Atlas title' +
@@ -1346,30 +1369,41 @@
     }).join(" ");
   }
 
+  // The one question here used to be a native window.confirm — the only
+  // browser-chrome dialog left in the product, guarding its biggest owner
+  // action. It now asks inline, in the same styled confirm the remove-layer
+  // and delete flows use. The chosen places are captured at confirm time so
+  // the words and the action can never drift apart.
   function rebuildRegion(scrim, btn) {
     var m = scrim.querySelector("#own-region-msg");
     var mine = MINE.length;
-    var where = REG.chosen.map(function (c) { return c.label; }).join(", ");
-    var warn = mine
+    var chosen = REG.chosen.slice();
+    var level = REG.level;
+    var where = chosen.map(function (c) { return c.label; }).join(", ");
+    var box = scrim.querySelector("#own-region-confirm");
+    scrim.querySelector("#own-region-warn").textContent = mine
       ? "Rebuilding the base map for " + where + ". Your " + mine +
         (mine === 1 ? " data layer is" : " data layers are") + " kept, but rows " +
-        "outside the new region will sit off the map. Go ahead?"
-      : "Rebuilding the base map for " + where + ". Go ahead?";
-    if (!window.confirm(warn)) return;
-
-    btn.disabled = true; m.textContent = "";
-    api("instances/" + encodeURIComponent(SLUG) + "/rebuild", {
-      method: "POST",
-      body: { region: { iso3: (INST.region && INST.region.iso3) || "IND", level: REG.level,
-                        shapeIDs: REG.chosen.map(function (c) { return c.id; }) } },
-    }).then(function (r) {
-      closeDialog(scrim);
-      toast("Rebuilding — this takes a few minutes. The atlas stays up meanwhile.");
-      if (r.jobId) watchRebuild(r.jobId);
-    }).catch(function (e) {
-      btn.disabled = false;
-      m.textContent = errMsg(e);
-    });
+        "outside the new region will sit off the map."
+      : "Rebuilding the base map for " + where + ".";
+    box.hidden = false;
+    scrim.querySelector("#own-region-no").onclick = function () { box.hidden = true; };
+    scrim.querySelector("#own-region-yes").onclick = function () {
+      box.hidden = true;
+      btn.disabled = true; m.textContent = "";
+      api("instances/" + encodeURIComponent(SLUG) + "/rebuild", {
+        method: "POST",
+        body: { region: { iso3: (INST.region && INST.region.iso3) || "IND", level: level,
+                          shapeIDs: chosen.map(function (c) { return c.id; }) } },
+      }).then(function (r) {
+        closeDialog(scrim);
+        toast("Rebuilding — this takes a few minutes. The atlas stays up meanwhile.");
+        if (r.jobId) watchRebuild(r.jobId);
+      }).catch(function (e) {
+        btn.disabled = false;
+        m.textContent = errMsg(e);
+      });
+    };
   }
 
   // the atlas is live throughout, so this only has to say when it is done

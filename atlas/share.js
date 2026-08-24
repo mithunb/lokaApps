@@ -72,6 +72,15 @@
     var isPrivate = !!opts.private;
     var root = el("div", "shr");
 
+    // A not-live atlas answers this link with "no atlas at that address" for
+    // everyone but its owner. Say so BEFORE offering WhatsApp buttons and a
+    // poster QR — the status pill and this panel must never disagree.
+    if (opts.notLive) {
+      root.appendChild(el("p", "shr-note shr-warn",
+        "<b>This atlas isn't live yet</b> — the link and QR code below work only for you. " +
+        "Make it live first (the button at the top of the page), then share it."));
+    }
+
     // link row
     var linkRow = el("div", "shr-row");
     var input = el("input", "shr-link");
@@ -149,6 +158,8 @@
       ".shr-btn:hover{border-color:#4A5A33;color:#384526;text-decoration:none}",
       ".shr-btn svg{width:15px;height:15px}",
       ".shr-note{margin:0;color:#564E3C}",
+      ".shr-warn{padding:.6rem .8rem;border-radius:4px;background:rgba(174,80,40,.10);color:#7C3616}",
+      ".shr-warn b{color:#7C3616}",
       ".shr-qr{display:flex;gap:1rem;align-items:center;flex-wrap:wrap}",
       ".shr-qr canvas{border:1px solid rgba(42,36,26,.16);border-radius:4px;width:132px;height:132px;image-rendering:pixelated}",
       ".shr-qr-col{display:flex;flex-direction:column;gap:.35rem;max-width:20rem}",

@@ -276,6 +276,10 @@
       onBack: typeof opts.onBack === "function" ? opts.onBack : null,
       // called when check+place are settled and styling is all that's left
       onReady: typeof opts.onReady === "function" ? opts.onReady : null,
+      // hosts that auto-run the check (the setup wizard) show progress and
+      // errors in their own one-line verdict at the top of the page — said
+      // at the bottom of a long table, nobody sees it
+      onStatus: typeof opts.onStatus === "function" ? opts.onStatus : null,
     };
     // "checkPlace" stops after placement; "all" runs through style and commit
     var STAGES = opts.stages === "checkPlace" ? "checkPlace" : "all";
@@ -422,7 +426,7 @@
     api("auth/request-link", { method: "POST", body: { email: email } }).then(function (r) {
       msg("#msg-auth", r.sent
         ? "We emailed you a 6-digit code — type it and sign in."
-        : "This server can't send email yet — ask the LOKA team (mithun@socratus.org) for your code.", r.sent ? "ok" : "err");
+        : "This server can't send email yet — ask the LOKA team for your code.", r.sent ? "ok" : "err");
       $("#code-wrap").hidden = false;
       $("#auth-verify").hidden = false;
       $("#f-auth-code").value = "";
@@ -855,8 +859,15 @@
       meta: S.canonical.meta,
     };
     if (S.spatial) { body.geoms = S.canonical.geoms; body.geomIdx = S.canonical.geomIdx; }
+    // Progress and errors for this step go where the person is looking: a
+    // host with its own verdict line (the wizard's, top of the page) takes
+    // them; otherwise they sit beside the button that was just pressed.
+    function say(text, cls) {
+      if (HOST.onStatus) { HOST.onStatus(text || "", cls || ""); msg("#msg-check", ""); return; }
+      msg("#msg-check", text ? esc(text) : "", cls);
+    }
     $("#to-place").disabled = true;
-    msg("#msg-check", S.spatial ? "Placing your shapes on the map…" : "Reading your table and matching it to the atlas…", "ok");
+    say(S.spatial ? "Placing your shapes on the map…" : "Reading your table and matching it to the atlas…", "ok");
     Promise.all([
       api("layers/options?dataset=" + encodeURIComponent(S.dataset)),
       api("layers/ingest", { method: "POST", body: body }),
@@ -870,24 +881,24 @@
           return api("layers/apply", { method: "POST", body: applyBody(true, S.result.spec) })
             .then(function (r) {
               S.result = r;
-              msg("#msg-check", "");
+              say("");
               $("#to-place").disabled = false;
               if (STAGES === "checkPlace") { readyCheck(); return; }
               enterStyle(r);
             })
-            .catch(function (e) { $("#to-place").disabled = false; msg("#msg-check", esc(errMsg(e))); });
+            .catch(function (e) { $("#to-place").disabled = false; say(errMsg(e), "err"); });
         });
         return;
       }
-      msg("#msg-check", "");
+      say("");
       $("#to-place").disabled = false;
       enterPlace(out[1]);
       warnDuplicate(out[1]);
       if (STAGES === "checkPlace") readyCheck();
     }).catch(function (e) {
       $("#to-place").disabled = false;
-      if (e.needsAuth) msg("#msg-check", "Sign in first — it's on the previous step, under the drop zone.");
-      else msg("#msg-check", esc(errMsg(e)));
+      if (e.needsAuth) say("Sign in first — it's on the previous step, under the drop zone.", "err");
+      else say(errMsg(e), "err");
     });
   }
   $("#to-place").onclick = sendRows;
