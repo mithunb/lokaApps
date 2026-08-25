@@ -331,12 +331,38 @@
     if (opts.body && typeof opts.body !== "string") opts.body = JSON.stringify(opts.body);
     return fetch(API + path, opts).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (j) {
-        if (!r.ok) { j._status = r.status; throw j; }
+        // Remember WHICH call failed and how. A refusal that carries no words of
+        // its own used to reach the person as "something went wrong", which is
+        // the least useful true sentence there is — it cost a day of the owner's
+        // time and two rounds of guessing to learn nothing from it.
+        if (!r.ok) { j._status = r.status; j._path = String(path).split("?")[0]; throw j; }
         return j;
       });
+    }, function (netErr) {
+      // the request never landed at all — a different fault, and worth saying so
+      throw { _status: 0, _path: String(path).split("?")[0], error: "could not reach the server — check your connection and try again" };
     });
   }
-  function errMsg(e) { return (e && (e.error || e.message)) || "something went wrong"; }
+  /* Never let a failure arrive wordless. When the server says nothing we can
+     read, say what we DO know — which step it was and what it answered — so the
+     next report is a diagnosis instead of a shrug. */
+  function errMsg(e) {
+    var said = e && (e.error || e.message);
+    if (said) return said;
+    var st = e && e._status;
+    // 502/503/504 mean the site is up but the part that does the work is not —
+    // almost always the few seconds while a new version is being put in place.
+    // Nothing is wrong with the person's file and nothing is lost; the honest
+    // instruction is to wait and press it again.
+    if (st === 502 || st === 503 || st === 504) {
+      return "The server is being updated right now. Nothing is lost — wait a few seconds and press this again.";
+    }
+    if (st === 0) return "Could not reach the server — check your connection and try again.";
+    var where = e && e._path ? e._path : "the server";
+    console.error("[databench] " + where + " answered " + (st || "nothing"), e);
+    return "Something went wrong at this step (" + where + " answered " + (st || "nothing") +
+      "). Tell us that, and we can fix it.";
+  }
   function msg(sel, text, cls) {
     $(sel).innerHTML = text ? '<div class="msg ' + (cls || "err") + '">' + text + "</div>" : "";
   }

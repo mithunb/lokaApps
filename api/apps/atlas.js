@@ -36,6 +36,24 @@ const jsonBig = express.json({ limit: '10mb' });
 const jsonStd = express.json({ limit: '2mb' });
 router.use((req, res, next) => (req.path === '/layers/ingest' ? jsonBig : jsonStd)(req, res, next));
 
+/* Every refusal leaves a trace. Twice now a person has hit a wall in the setup
+   flow and reported "something went wrong", and the log held nothing at all —
+   because a clean 4xx writes to no stream, so there was nothing to read and
+   nothing to do but guess. One line per non-2xx, naming the route, the status
+   and whatever the body said, turns the next report into a diagnosis.
+   Successes stay silent; this is for the ones that failed. */
+router.use((req, res, next) => {
+  const send = res.json.bind(res);
+  res.json = (body) => {
+    if (res.statusCode >= 400) {
+      const why = (body && (body.error || body.message)) || '(no message)';
+      console.warn(`[atlas] ${res.statusCode} ${req.method} ${req.path} — ${why}`);
+    }
+    return send(body);
+  };
+  next();
+});
+
 /* ================= catalog ================= */
 
 let catalogCache = null, catalogMtime = 0;
