@@ -660,6 +660,10 @@
         // the person is already reading — its own message sits below a table
         // that can be screens tall
         onStatus: function (text, kind) {
+          var bar = $("#check-working");
+          // the bar runs while the work does: a status that is neither empty
+          // nor a failure IS the work in progress
+          if (bar) bar.hidden = !text || kind === "err";
           if (!text) return;   // cleared: the verdict or onReady speaks next
           var v = $("#check-verdict");
           v.hidden = false;
@@ -668,6 +672,8 @@
         },
         onReady: function (sum) {
           var left = sum.needsAttention || 0;
+          var bar = $("#check-working");
+          if (bar) bar.hidden = true;      // the answer is in; the work is over
           var v = $("#check-verdict");
           v.classList.remove("err");
           v.textContent = left

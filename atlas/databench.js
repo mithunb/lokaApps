@@ -86,9 +86,9 @@
       <div id="enrich-panel" class="enrich-panel" hidden>
         <div class="enrich-head">
           <b>Find themes</b>
-          <span class="hint">Reads every place's description and tags, then suggests a few themes that run
-            through them — so the map can be coloured by theme. They arrive as one new column for you to
-            keep or discard. What you uploaded is never changed.</span>
+          <span class="hint">We read your data with AI to find the patterns running through it, and show
+            them to you as themes. They arrive as one new column you can keep or discard — what you
+            uploaded is never changed.</span>
         </div>
         <div class="enrich-row">
           <button class="btn secondary" id="enrich-go">Find themes</button>
@@ -102,8 +102,9 @@
           <p class="theme-lede" id="theme-lede"></p>
           <div class="theme-chips" id="theme-chips"></div>
           <div class="theme-verbs">
-            <button class="btn" id="theme-keep">Keep</button>
+            <button class="btn" id="theme-keep">Keep these themes</button>
             <button class="btn secondary" id="theme-discard">Discard</button>
+            <span class="hint" id="theme-warn">Nothing is added until you keep them.</span>
             <span class="hint">Keep adds them as a new column below — your original columns are unchanged.</span>
           </div>
         </div>
@@ -818,11 +819,22 @@
     // them again. Without this, Keep changed the table and nothing else: the
     // themes were real on screen and absent from the map, which is exactly what
     // the owner hit.
+    // The server is holding the table from BEFORE this column existed, so send it
+    // again — and say plainly if that fails. The old code fired and forgot, so a
+    // refused send left the themes on screen, absent from the map, under a line
+    // promising the map was being rebuilt.
     var already = !!S.result;
-    if (already) sendRows();
     msg("#msg-enrich", "Kept — “" + esc(target.name) + "” is a new column, and your original columns are unchanged." +
-      (already ? " The map is being rebuilt to include it." : ""), "ok");
+      (already ? " Sending it to the map…" : ""), "ok");
     checkChanged();
+    if (already) {
+      sendRows().then(function () {
+        msg("#msg-enrich", "Kept — “" + esc(target.name) + "” is a new column, and the map has it now.", "ok");
+      }).catch(function (e) {
+        msg("#msg-enrich", "“" + esc(target.name) + "” is in your table, but the map could not be told: " +
+          esc(errMsg(e)) + " Press Find themes again, or carry on and add the file from the atlas afterwards.");
+      });
+    }
   };
 
   $("#theme-discard").onclick = function () {
@@ -894,7 +906,11 @@
     }
     $("#to-place").disabled = true;
     say(S.spatial ? "Placing your shapes on the map…" : "Reading your table and matching it to the atlas…", "ok");
-    Promise.all([
+    // Whoever needs the server to be holding THIS table waits on this. Keeping
+    // themes rewrites the table and sends it again; the build that follows must
+    // not commit the copy from before that, or the themes are real on screen and
+    // missing from the map — which is exactly what happened.
+    S.sending = Promise.all([
       api("layers/options?dataset=" + encodeURIComponent(S.dataset)),
       api("layers/ingest", { method: "POST", body: body }),
     ]).then(function (out) {
@@ -925,9 +941,11 @@
       $("#to-place").disabled = false;
       if (e.needsAuth) say("Sign in first — it's on the previous step, under the drop zone.", "err");
       else say(errMsg(e), "err");
+      throw e;                    // the waiter must learn it failed, not hang
     });
+    return S.sending;
   }
-  $("#to-place").onclick = sendRows;
+  $("#to-place").onclick = function () { sendRows().catch(function () {}); };
 
   // What the host needs to render a per-file verdict, and to know whether the
   // user still has to look at something.
@@ -2039,10 +2057,18 @@
         return api("layers/apply", { method: "POST", body: applyBody(true, spec) })
           .then(function (r) { S.result = r; enterStyle(r); return readySummary(); });
       },
+      /* Adds the file to the atlas. Waits first for any send still in flight:
+         keeping themes rewrites the table and sends it again, and building the
+         atlas can begin the moment that starts — commit would then bind the
+         session from before the themes, losing a column the person watched
+         arrive. Wait, then read S.result, which the finished send has updated. */
       commit: function () {
-        if (!S.result) return Promise.reject(new Error("nothing to add yet"));
-        return api("layers/commit", { method: "POST", body: { importId: S.result.importId, dataset: S.dataset } })
-          .then(function (r) { HOST.onCommitted({ layerId: r.layerId, dataset: r.dataset }); return r; });
+        var ready = S.sending ? S.sending.catch(function () {}) : Promise.resolve();
+        return ready.then(function () {
+          if (!S.result) return Promise.reject(new Error("nothing to add yet"));
+          return api("layers/commit", { method: "POST", body: { importId: S.result.importId, dataset: S.dataset } })
+            .then(function (r) { HOST.onCommitted({ layerId: r.layerId, dataset: r.dataset }); return r; });
+        });
       },
       destroy: function () { root.innerHTML = ""; },
     };

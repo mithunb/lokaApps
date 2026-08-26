@@ -27,6 +27,10 @@ const queue = [];
 let running = null;
 let onJobDone = null; // hook set by the router (status transitions, emails)
 
+// declared BEFORE loadJobs() runs: loadJobs is called at import time, and a
+// `let` read before its own line is a dead-zone error that takes the whole
+// server down on boot — which is worse than the limbo it is here to fix
+let strandedAtBoot = [];
 loadJobs();
 
 function pythonBin() {
@@ -35,7 +39,20 @@ function pythonBin() {
   return fs.existsSync(venv) ? venv : 'python3';
 }
 
+/* Set by atlas.js so a build that died with the process can put its ATLAS back
+   too, not just its job record. Without it the job reads "failed" while the
+   instance is still "building" — and an atlas stuck at building can be neither
+   resumed nor deleted. That is not a stuck build, it is a stranded atlas, and it
+   is how loka-x-bengaluru ended up in limbo. */
+let onStrandedBuild = null;
+export function setStrandedBuildHook(fn) {
+  onStrandedBuild = fn;
+  for (const j of strandedAtBoot) { try { fn(j); } catch (e) { console.warn('[atlas] stranded-build hook:', e.message); } }
+  strandedAtBoot = [];
+}
+
 function loadJobs() {
+  const stranded = [];
   try {
     const arr = JSON.parse(fs.readFileSync(JOBS_FILE, 'utf8'));
     for (const j of arr) {
@@ -44,12 +61,16 @@ function loadJobs() {
         j.status = 'failed';
         j.message = 'interrupted by server restart';
         cleanupBuildDir(j.slug);
+        if (j.slug) stranded.push(j);
       }
       jobs.set(j.id, j);
     }
   } catch {
     // first run
   }
+  // hand them over once the registry is listening; loadJobs runs at import time,
+  // so the hook is wired after and replays what it missed
+  strandedAtBoot = stranded;
 }
 
 let persistPending = false;

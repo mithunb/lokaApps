@@ -16,7 +16,7 @@ import * as reg from '../lib/atlas/registry.js';
 import * as auth from '../lib/atlas/auth.js';
 import { sendMail } from '../lib/mailer.js';
 import {
-  enqueueBuild, getJob, setJobDoneHook, DATASETS_ROOT, PRIVATE_ROOT,
+  enqueueBuild, getJob, setJobDoneHook, setStrandedBuildHook, DATASETS_ROOT, PRIVATE_ROOT,
 } from '../lib/atlas/jobs.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -946,6 +946,26 @@ router.get('/admin/instances', (req, res) => {
 });
 
 /* ================= jobs ================= */
+
+/* A build that died with the process leaves its atlas saying "building" for
+   ever: the watcher that would have put it right went down with it. An atlas
+   stuck there can be neither opened, resumed, nor deleted — it is simply
+   stranded, and the person who was building it has no way out. So the first
+   thing this router does on boot is put those atlases back.
+
+   A rebuild of a LIVE atlas is the exception worth keeping: the build only
+   swaps the data on success, so the published atlas was never touched and
+   should stay published. */
+setStrandedBuildHook((job) => {
+  const inst = reg.getInstance(job.slug);
+  if (!inst || inst.status !== 'building') return;
+  const keepPublished = !!inst.rebuildKeepPublished;
+  reg.updateInstance(job.slug, keepPublished
+    ? { status: 'published', failReason: job.message, rebuildKeepPublished: undefined }
+    : { status: 'failed', failReason: job.message });
+  console.warn(`[atlas] ${job.slug} was left mid-build by a restart — put back to ` +
+    (keepPublished ? 'published' : 'failed') + ' so it can be opened or removed');
+});
 
 setJobDoneHook((job) => {
   const inst = reg.getInstance(job.slug);

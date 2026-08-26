@@ -15,6 +15,17 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Figtree:wght@500;600;700&display=swap" />
   <link rel="stylesheet" href="../databench.css?v=dev" />
   <style>
+    .working { height:3px; border-radius:999px; overflow:hidden; background:var(--color-bg-alt);
+      margin:.45rem 0 .1rem; max-width:22rem; }
+    .working i { display:block; height:100%; width:38%; border-radius:999px; background:var(--color-moss);
+      animation:working 1.15s cubic-bezier(.45,0,.55,1) infinite; }
+    @keyframes working { 0% { transform:translateX(-100%); } 100% { transform:translateX(360%); } }
+    /* a stripe that never stops moving is worse than no stripe for anyone who
+       finds motion difficult; the bar still says "working", just without travel */
+    @media (prefers-reduced-motion: reduce) {
+      .working i { animation:none; width:100%; opacity:.55; }
+    }
+
     :root {
       --color-bg:#F9F9F7; --color-bg-alt:#F0EFEA; --color-surface:#FFFFFF;
       --color-moss:#4A5A33; --color-canopy:#384526;
@@ -308,6 +319,12 @@
         <p class="hint">Your file is matched against the places you just confirmed. Fix anything that
           needs a second look now — after the atlas is built this list is gone.</p>
         <p class="verdict" id="check-verdict"></p>
+        <!-- Shown only while the check is actually running. It does NOT claim a
+             percentage: the work is one request to the server, which does not
+             report its progress, so a filling bar would be an invented number.
+             A travelling stripe says "this is running" truthfully, and the line
+             above says what it is running. -->
+        <div class="working" id="check-working" hidden role="presentation"><i></i></div>
         <div id="bench"></div>
         <div class="btnrow">
           <button class="btn quiet" data-go="2">← Back</button>

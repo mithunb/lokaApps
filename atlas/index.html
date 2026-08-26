@@ -169,9 +169,17 @@
     .ctl-row.off .ctl-name { color:var(--color-text-muted); }
     .ctl-toggle { display:flex; align-items:center; gap:.55rem; cursor:pointer; }
     .ctl-toggle input { position:absolute; opacity:0; width:0; height:0; }
-    .ctl-switch { flex:0 0 auto; width:32px; height:18px; border-radius:999px; background:#cfd6cf; position:relative; transition:background .2s cubic-bezier(.25,1,.5,1); }
+    /* The off track was #cfd6cf on a near-white panel — 1.44:1, about half the
+       3:1 a control's own outline needs, on every switch in the product. The
+       fill stays (the quiet look is deliberate); a hairline ring carries the
+       contrast instead, at 3.28:1. An INSET SHADOW rather than a border, so the
+       switch does not change size by a pixel and the knob keeps its geometry.
+       The on state is moss, which clears 3:1 on its own, so it drops the ring. */
+    .ctl-switch { flex:0 0 auto; width:32px; height:18px; border-radius:999px; background:#cfd6cf;
+      box-shadow:inset 0 0 0 1px #82907f; position:relative;
+      transition:background .2s cubic-bezier(.25,1,.5,1), box-shadow .2s ease; }
     .ctl-switch::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#FFFFFF; box-shadow:0 1px 2px rgba(42,36,26,.25); transition:transform .2s cubic-bezier(.25,1,.5,1); }
-    .ctl-toggle input:checked + .ctl-switch { background:var(--color-moss); }
+    .ctl-toggle input:checked + .ctl-switch { background:var(--color-moss); box-shadow:none; }
     .ctl-toggle input:checked + .ctl-switch::after { transform:translateX(14px); }
     .ctl-toggle input:focus-visible + .ctl-switch { outline:2px solid var(--color-moss); outline-offset:2px; }
     .ctl-name { font-size:.9rem; line-height:1.25; }
@@ -215,7 +223,12 @@
        size down and indented under its layer: same vocabulary ("this can be
        switched on"), lower rank. The old chips read as a pick-one row, which
        a stack of keys is not. */
-    .key-chips { margin:.45rem 0 .1rem; }
+    /* The keys belong to the layer above them, and on a short bottom sheet that
+       layer's name can scroll out of sight — leaving a column of switches with
+       no visible owner. A rule down their left side says "these are a branch of
+       something" wherever you are in the scroll, which a heading cannot. */
+    .key-chips { margin:.45rem 0 .1rem; padding-left:.55rem;
+      border-left:2px solid rgba(74,90,51,.30); }
     .key-chips-lbl { display:block; font-size:.72rem; font-weight:600; letter-spacing:.02em; color:var(--color-text-muted); margin-bottom:.1rem; }
     .key-list { display:flex; flex-direction:column; }
     .key-toggle { padding:.17rem 0; gap:.5rem; min-height:24px; }
@@ -516,6 +529,16 @@
 
     /* Mobile: the layer widget becomes a bottom sheet — map stays visible, thumb-reachable */
     @media (max-width:720px){
+      /* The sheet shows about three rows at a time, so the section you are in
+         scrolls away almost at once. The heading holds its place at the top of
+         the scroller instead. One per group, so at most a couple can ever
+         stack — and it is opaque, because rows passing behind a translucent
+         heading read as a rendering fault. */
+      .atlas-panel #atlas-controls .ctl-group-head {
+        position:sticky; top:0; z-index:2;
+        background:var(--color-surface);
+        box-shadow:0 1px 0 var(--color-divider);
+      }
       .atlas-hero { padding:1.15rem 0 .8rem; }
       #atlas-about { display:none; }        /* keep the mobile hero compact so the map + sheet fit */
       /* Map on top, sheet docked below — the sheet never covers the map; the map shrinks to fit. */
