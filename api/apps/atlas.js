@@ -3143,6 +3143,72 @@ router.post('/layers/enrich', async (req, res) => {
   }
 });
 
+/* Families of meaning: the labels on a layer, shelved so they can be browsed.
+
+   This reads a BUILT layer rather than a table being uploaded, because it is a
+   reader's feature, not an author's — a way into "what did people notice here"
+   once the atlas exists. It reads the layer's own file, counts the vocabulary
+   and asks for shelves; the answer is cached beside the dataset, because the
+   labels only change when the layer does and nobody should pay for this twice.
+*/
+router.get('/layers/families', async (req, res) => {
+  const dataset = String(req.query.dataset || '');
+  const layerId = String(req.query.layer || '');
+  if (!dataset || !layerId) return res.status(400).json({ error: 'which atlas and which layer?' });
+  const dir = imports.datasetDir(dataset);
+  if (!dir) return res.status(404).json({ error: 'unknown dataset' });
+  // a private atlas answers only to someone who may see it
+  const inst = reg.getInstance(dataset);
+  if (inst && inst.visibility === 'private' && !callerCanEdit(req, inst)) {
+    return res.status(404).json({ error: 'not found' });
+  }
+
+  const m = imports.readManifest(dataset);
+  const layer = imports.mergedLayers(m).find((L) => L.id === layerId);
+  if (!layer || !layer.source) return res.status(404).json({ error: 'unknown layer' });
+
+  // the columns that hold labels, as the layer's own popup declares them
+  const fields = ((layer.popup && layer.popup.fields) || [])
+    .filter((f) => f.type === 'tags').map((f) => String(f.property || '')).filter(Boolean);
+  if (!fields.length) return res.json({ verdict: 'no_labels' });
+
+  const cachePath = path.join(dir, 'families-' + layerId.replace(/[^a-z0-9-]/gi, '') + '.json');
+  let rows = [];
+  try {
+    const gj = JSON.parse(fs.readFileSync(path.join(dir, layer.source), 'utf8'));
+    rows = (gj.features || []).map((f) => f.properties || {});
+  } catch { return res.status(404).json({ error: 'the layer\'s data could not be read' }); }
+
+  const vocab = enrich.buildVocab(rows, fields);
+  // the cache is keyed by the vocabulary itself, so re-styling a layer keeps it
+  // and re-importing different data does not
+  const stamp = crypto.createHash('sha1')
+    .update(vocab.map((v) => v.label + ':' + v.n).join('|')).digest('hex').slice(0, 16);
+  try {
+    const cached = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+    if (cached && cached.stamp === stamp) return res.json(cached.result);
+  } catch { /* no cache yet */ }
+
+  if (!(ai && geminiAllowed(clientIp(req)))) {
+    // the whole vocabulary, not a slice: the panel offers "browse all N labels"
+    // and showing 200 of them under that promise is the promise broken. A few
+    // hundred short words is a trivial amount of data to send.
+    return res.json({ verdict: 'unavailable', total: vocab.length, vocab });
+  }
+  const callJSON = (model, prompt, schema, o) =>
+    (o && o.think ? geminiJSONDeep(model, prompt, schema) : geminiJSON(model, prompt, schema));
+  try {
+    const out = await enrich.induceFamilies({
+      vocab, title: (inst && inst.title) || '', callJSON, model: getFlashModel(),
+    });
+    if (!out) return res.status(502).json({ error: 'the labels could not be arranged just now' });
+    try { fs.writeFileSync(cachePath, JSON.stringify({ stamp, result: out })); } catch { /* cache is optional */ }
+    res.json(out);
+  } catch (e) {
+    res.status(502).json({ error: 'arranging the labels failed: ' + e.message });
+  }
+});
+
 // The owner KEPT the suggestion: only now does the theme set persist, so a
 // later contribution files into the same set. Pre-build sessions have no
 // dataset directory yet — nothing to persist against, which is fine.

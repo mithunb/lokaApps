@@ -446,3 +446,132 @@ function withCounts({ categorySet, categories, withText, seeded }) {
     categories, counts, other, withText, seeded,
   };
 }
+
+/* ================= FAMILIES OF MEANING =================
+
+   Themes answer "what are these places about" and colour the map by it. This
+   answers a different question, and it exists because of a measurement: on the
+   Bengaluru layer there are 335 distinct labels across 66 places and 303 of them
+   are used exactly once. As a colouring that is hopeless — the top eight labels
+   describe twelve places and leave fifty-four grey. As an INDEX it is the most
+   interesting thing in the data: what the people walking a city thought worth
+   writing down.
+
+   So the labels are not folded into a key. They are shelved. A family gathers
+   labels that speak of the same thing — "carved-stone" and "granite-shrine"
+   belong together however differently they were typed — and tapping a label
+   shows the places carrying it, which is the question 335 kinds can answer.
+
+   The vocabulary goes in, not the rows: this reads a list of words and their
+   counts, so it costs the same whether the layer holds 60 places or 6,000. */
+
+const FAMILY_MIN = 4;            // fewer shelves than this is not an arrangement
+const FAMILY_MAX = 14;           // more than this is a list wearing headings
+const VOCAB_MAX = 600;           // labels sent; the rest ride in the tail count
+
+const FAMILY_SCHEMA = {
+  type: 'OBJECT', required: ['verdict', 'families'],
+  properties: {
+    verdict: { type: 'STRING', enum: ['families', 'no_clear_families'] },
+    note: { type: 'STRING' },
+    families: { type: 'ARRAY', items: {
+      type: 'OBJECT', required: ['name', 'labels'],
+      properties: {
+        name: { type: 'STRING' },
+        labels: { type: 'ARRAY', items: { type: 'STRING' } },
+      } } },
+  },
+};
+
+/* Count every label across the layer's tag columns. Returns them commonest
+   first, which is also the order the shelves end up in. */
+export function buildVocab(rows, fields) {
+  const counts = new Map();
+  for (const r of (rows || [])) {
+    for (const f of (fields || [])) {
+      const raw = r && r[f];
+      if (raw === undefined || raw === null || raw === '') continue;
+      const parts = Array.isArray(raw) ? raw : String(raw).split(/[;,]/);
+      for (const p of parts) {
+        const t = String(p).trim();
+        if (!t) continue;
+        const k = t.toLowerCase();
+        const cur = counts.get(k);
+        if (cur) cur.n++;
+        else counts.set(k, { label: t, n: 1 });   // first spelling seen wins the display
+      }
+    }
+  }
+  return [...counts.values()].sort((a, b) => b.n - a.n || a.label.localeCompare(b.label));
+}
+
+export async function induceFamilies({ vocab, title, callJSON, model }) {
+  if (!callJSON) return null;
+  const all = Array.isArray(vocab) ? vocab : [];
+  if (all.length < FAMILY_MIN * 2) return { verdict: 'no_clear_families', note: 'there are too few labels to arrange' };
+  const sent = all.slice(0, VOCAB_MAX);
+  const tail = all.length - sent.length;
+  const mapPhrase = title ? 'a map called "' + title + '"' : 'a map';
+  const prompt = [
+    'You are helping the owner of ' + mapPhrase + '. The people who added its places wrote ' +
+      all.length + ' different labels between them. Most were used only once.',
+    '',
+    'Your job: shelve these labels into families of meaning, so a reader can browse what this place\'s walkers found worth noticing. A family gathers labels that speak of the same thing, however differently they were typed — "carved-stone", "granite shrine" and "stone-carving" belong on one shelf.',
+    '',
+    'Rules:',
+    '- Make between ' + FAMILY_MIN + ' and ' + FAMILY_MAX + ' families. Fewer, fuller shelves beat many thin ones.',
+    '- Name each family in 1 to 4 everyday words that a stranger would understand, naming what the labels are ABOUT — "Trees & shade", "Made by hand", "Sacred & devotional". Not a category word like "miscellaneous", and never "other".',
+    '- Every label you place must be one of the labels given, copied exactly as written.',
+    '- A label belongs to at most one family. Put the ones that fit nowhere into no family at all — leftovers are handled separately and are not a failure.',
+    '- Judge by meaning, not by spelling: labels that differ only in hyphens, case or word order belong together.',
+    '',
+    'If these labels do not arrange into at least ' + FAMILY_MIN + ' real families, set verdict to "no_clear_families" and give one plain sentence saying why.',
+    '',
+    'The labels, commonest first, with how many places carry each:',
+    sent.map((v) => v.label + ' (' + v.n + ')').join(', '),
+    tail > 0 ? '' : '',
+    tail > 0 ? 'There are ' + tail + ' further labels, each used once; they are not listed.' : '',
+  ].filter(Boolean).join('\n');
+
+  let out = null;
+  try { out = await callJSON(model, prompt, FAMILY_SCHEMA, { think: true }); } catch { return null; }
+  if (!out || (out.verdict !== 'families' && out.verdict !== 'no_clear_families')) return null;
+  if (out.verdict === 'no_clear_families') {
+    return { verdict: 'no_clear_families', note: String(out.note || '').slice(0, 200) };
+  }
+
+  // Only labels the data actually carries may be shelved, and only once. A
+  // model that invents a label, or files one twice, would send a reader to a
+  // tap that finds nothing — the whole point of this is that every label on a
+  // shelf is a question the map can answer.
+  const byKey = new Map(all.map((v) => [v.label.toLowerCase(), v]));
+  const placed = new Set();
+  const families = [];
+  for (const f of (Array.isArray(out.families) ? out.families : [])) {
+    const name = String(f && f.name || '').trim().slice(0, 40);
+    if (!name || /^(other|misc|miscellaneous)$/i.test(name)) continue;
+    const labels = [];
+    for (const raw of (Array.isArray(f.labels) ? f.labels : [])) {
+      const k = String(raw || '').trim().toLowerCase();
+      const hit = byKey.get(k);
+      if (!hit || placed.has(k)) continue;
+      placed.add(k);
+      labels.push({ label: hit.label, n: hit.n });
+    }
+    if (!labels.length) continue;
+    labels.sort((a, b) => b.n - a.n || a.label.localeCompare(b.label));
+    families.push({ name, labels, mentions: labels.reduce((s, l) => s + l.n, 0) });
+  }
+  if (families.length < FAMILY_MIN) {
+    return { verdict: 'no_clear_families', note: 'the labels did not arrange into enough families' };
+  }
+  families.sort((a, b) => b.mentions - a.mentions || b.labels.length - a.labels.length);
+  const loose = all.filter((v) => !placed.has(v.label.toLowerCase()));
+  return {
+    verdict: 'families',
+    families,
+    shelved: placed.size,
+    loose: loose.length,
+    total: all.length,
+  };
+}

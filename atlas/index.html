@@ -395,6 +395,35 @@
     .pop-img { display:block; width:100%; max-height:180px; object-fit:cover; border-radius:4px; margin:.5rem 0 .1rem; }
     .pop-lbl { font-size:var(--t-label); text-transform:uppercase; letter-spacing:.06em; color:var(--color-text-muted); }
     .pop-val { font-size:.88rem; color:var(--color-text-primary); }
+    /* ---------- the labels, shelved (FAMILIES OF MEANING) ---------- */
+    .label-index { margin:.4rem 0 .1rem; }
+    .label-index-go { font:inherit; font-size:.75rem; font-weight:600; color:var(--color-moss);
+      background:none; border:0; padding:0; cursor:pointer; text-align:left; }
+    .label-index-go:hover { color:var(--color-canopy); text-decoration:underline; }
+
+    .lx-scrim { position:fixed; inset:0; z-index:140; background:rgba(42,36,26,.34);
+      display:grid; place-items:start center; padding:2.5rem 1rem; overflow-y:auto; }
+    .lx-sheet { width:min(40rem,100%); background:var(--color-surface);
+      border-radius:var(--radius-lg); box-shadow:0 8px 30px rgba(42,36,26,.22); padding:1rem 1.25rem 1.5rem; }
+    .lx-head { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
+    .lx-head h2 { margin:0; font-family:'Figtree',sans-serif; font-size:1.05rem; color:var(--color-text-primary); }
+    .lx-x { font:inherit; font-size:1rem; line-height:1; color:var(--color-text-muted);
+      background:none; border:0; cursor:pointer; padding:.2rem .3rem; }
+    .lx-x:hover { color:var(--color-text-primary); }
+    .lx-sub { margin:.3rem 0 .9rem; font-size:.82rem; color:var(--color-text-secondary); }
+    .lx-family { margin-bottom:1rem; }
+    .lx-family h3 { margin:0 0 .35rem; font-family:'Figtree',sans-serif; font-size:.9rem;
+      color:var(--color-text-primary); }
+    .lx-count { font-family:'DM Sans',sans-serif; font-weight:400; font-size:.72rem; color:var(--color-text-muted); }
+    .lx-tags { display:flex; flex-wrap:wrap; gap:.3rem; }
+    /* the same chip the popups use, so a label looks the same wherever it is read */
+    .lx-tag { font:inherit; font-size:.74rem; padding:.15rem .5rem; background:var(--color-moss-tint);
+      color:var(--color-canopy); border-radius:4px; font-weight:500; border:1px solid transparent;
+      cursor:pointer; transition:background .15s ease, border-color .15s ease; }
+    .lx-tag:hover { border-color:var(--color-moss); }
+    .lx-tag b { font-weight:600; opacity:.6; margin-left:.15rem; }
+    .lx-tag:focus-visible { outline:2px solid var(--color-moss); outline-offset:1px; }
+
     .pop-tags { display:flex; flex-wrap:wrap; gap:.3rem; margin-top:.25rem; }
     /* A tag is a button now — tap it to see the places that share it. It keeps
        the same quiet look it had as a label, because it is still first of all a

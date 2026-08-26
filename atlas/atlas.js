@@ -2405,13 +2405,19 @@
      featureTagSet already reads it — the same helper these chips came from.
 
      One tag at a time. Tapping the lit tag again, or "show all", comes back. */
-  var TAGFILTER = null;
+  var TAGFILTER = null, TAGFILTER_LAYER = null;
 
-  function filterByTag(tag) {
+  /* `layerId` scopes the answer to the layer the tag was tapped on. Both ways in
+     belong to one layer — a popup is one place on one layer, and the label index
+     is opened from a layer's own row — so answering across every layer made the
+     index say "5 places" and the map say "10". Two numbers for one question is
+     worse than the narrower answer. */
+  function filterByTag(tag, layerId) {
     // the line is the only way back, so without it this would be a trap
     if (!$("#atlas-search-count")) return;
-    if (TAGFILTER === tag) { clearSearch(); return; }
+    if (TAGFILTER === tag && TAGFILTER_LAYER === (layerId || null)) { clearSearch(); return; }
     TAGFILTER = tag;
+    TAGFILTER_LAYER = layerId || null;
     var box = $(".ctl-search-input");
     if (box) box.value = "";          // one filter at a time, and it is this one
     searchTags = [];
@@ -2424,9 +2430,10 @@
     // nothing at all.
     var want = String(tag).trim().toLowerCase();
     searchableLayers().forEach(function (L) {
+      var mine = !TAGFILTER_LAYER || L.id === TAGFILTER_LAYER;
       (markersByLayer[L.id] || []).forEach(function (e) {
         total++;
-        var has = !!featureTagSet(L, e.f)[want];
+        var has = mine && !!featureTagSet(L, e.f)[want];
         e.hidden = !has;
         if (has) { shown++; pts.push(e.f.geometry.coordinates); }
       });
@@ -2448,16 +2455,18 @@
 
   // one listener for every tag chip there will ever be: popups are built and
   // thrown away constantly, and a per-chip handler would die with each one
+  var POPUP_LAYER = null;
   document.addEventListener("click", function (e) {
     var b = e.target && e.target.closest && e.target.closest(".pop-tag[data-tag]");
     if (!b) return;
     e.preventDefault();
-    filterByTag(b.getAttribute("data-tag"));
+    filterByTag(b.getAttribute("data-tag"), b.getAttribute("data-layer") || POPUP_LAYER);
   });
 
   function clearSearch() {
     searchTags = [];
     TAGFILTER = null;
+    TAGFILTER_LAYER = null;
     markLitTags();
     searchableLayers().forEach(function (L) { (markersByLayer[L.id] || []).forEach(function (e) { e.hidden = false; }); applyMarkerVisibility(L); });
     updateSearchCount(null);
@@ -2746,6 +2755,129 @@
     return row;
   }
 
+  /* ==================================================================
+     FAMILIES OF MEANING — the labels, shelved so they can be browsed
+
+     A colour key can hold eight kinds. This layer has hundreds of labels, most
+     used exactly once, and that is not a failure of the data — it is the data:
+     what the people walking a city thought worth writing down. Folding it into
+     eight rows would describe a handful of places and grey out the rest.
+
+     So the labels get an index instead of a key. The server shelves them into
+     families by meaning (/layers/families) and caches the answer; tapping any
+     label runs the filter that already exists, and the map answers "who shares
+     this". Without AI the shelves are simply absent and the labels are listed
+     commonest first, which is still an index and still answers taps.
+  ================================================================== */
+  var LABEL_INDEX_MIN = 12;   // below this a key already shows them; an index would be a second way to say the same thing
+
+  function tagFieldCount(L) {
+    var fields = tagFieldsOf(L);
+    if (!fields.length) return 0;
+    var seen = {}, n = 0;
+    (markersByLayer[L.id] || []).forEach(function (e) {
+      var set = featureTagSet(L, e.f);
+      for (var t in set) if (!seen[t]) { seen[t] = 1; n++; }
+    });
+    return n;
+  }
+
+  function labelIndexLink(L) {
+    if (!L.userLayer || L.type !== "marker") return null;
+    // The panel is built before the layer's data arrives — buildControls does not
+    // wait on it, deliberately. So a count taken then is zero, and caching that
+    // zero would hide the index for the rest of the visit. Only a real count is
+    // worth keeping; until the markers exist there is nothing to count.
+    if (!L._labelCount) {
+      var n = tagFieldCount(L);
+      if (!n) return null;
+      L._labelCount = n;
+    }
+    if (L._labelCount < LABEL_INDEX_MIN) return null;
+    var wrap = el("div", "label-index");
+    var b = el("button", "label-index-go",
+      "Browse all " + L._labelCount + " labels");
+    b.type = "button";
+    b.onclick = function () { openLabelIndex(L); };
+    wrap.appendChild(b);
+    return wrap;
+  }
+
+  function openLabelIndex(L) {
+    var scrim = el("div", "lx-scrim");
+    var sheet = el("div", "lx-sheet");
+    sheet.setAttribute("role", "dialog");
+    sheet.setAttribute("aria-modal", "true");
+    sheet.setAttribute("aria-label", "Labels on " + (L.label || L.id));
+    sheet.innerHTML =
+      '<div class="lx-head"><h2>' + esc(L.label || L.id) + " — what people noticed</h2>" +
+      '<button type="button" class="lx-x" aria-label="Close">✕</button></div>' +
+      '<p class="lx-sub" id="lx-sub">Reading the labels…</p>' +
+      '<div class="lx-body" id="lx-body"></div>';
+    scrim.appendChild(sheet);
+    document.body.appendChild(scrim);
+
+    function close() {
+      scrim.remove();
+      document.removeEventListener("keydown", onKey);
+    }
+    function onKey(e) { if (e.key === "Escape") close(); }
+    document.addEventListener("keydown", onKey);
+    scrim.onclick = function (e) { if (e.target === scrim) close(); };
+    $(".lx-x", sheet).onclick = close;
+    $(".lx-x", sheet).focus();
+
+    var url = "./api/layers/families?dataset=" + encodeURIComponent(DATASET) +
+      "&layer=" + encodeURIComponent(L.id) + (KEY ? "&key=" + encodeURIComponent(KEY) : "");
+    fetch(url, { credentials: "same-origin" })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { paintLabelIndex(L, sheet, d, close); })
+      .catch(function () {
+        $("#lx-sub", sheet).textContent = "The labels could not be read just now.";
+      });
+  }
+
+  function paintLabelIndex(L, sheet, d, close) {
+    var body = $("#lx-body", sheet), sub = $("#lx-sub", sheet);
+    body.innerHTML = "";
+
+    function labelChip(item) {
+      var b = el("button", "lx-tag", esc(item.label) + ' <b>' + item.n + "</b>");
+      b.type = "button";
+      b.setAttribute("data-tag", item.label);
+      b.onclick = function () { close(); filterByTag(item.label, L.id); };
+      return b;
+    }
+
+    if (d.verdict === "families" && d.families && d.families.length) {
+      sub.textContent = d.families.length + " families across " + d.total + " labels" +
+        (d.loose ? " · " + d.loose + " sit on their own" : "");
+      d.families.forEach(function (f) {
+        var sec = el("div", "lx-family");
+        sec.appendChild(el("h3", null, esc(f.name) +
+          ' <span class="lx-count">' + f.labels.length + " labels · " + f.mentions + " mentions</span>"));
+        var row = el("div", "lx-tags");
+        f.labels.forEach(function (item) { row.appendChild(labelChip(item)); });
+        sec.appendChild(row);
+        body.appendChild(sec);
+      });
+      return;
+    }
+
+    // no shelves — the labels themselves are still worth browsing, commonest first
+    var list = d.vocab || [];
+    if (!list.length) {
+      sub.textContent = d.verdict === "no_labels"
+        ? "This layer has no labels to browse."
+        : "These labels did not arrange into families." + (d.note ? " " + d.note : "");
+      return;
+    }
+    sub.textContent = list.length + " labels, commonest first. Tap one to see the places that carry it.";
+    var row = el("div", "lx-tags");
+    list.forEach(function (item) { row.appendChild(labelChip(item)); });
+    body.appendChild(row);
+  }
+
   function renderExtra(L) {
     var box = L._extra; if (!box) return;
     box.innerHTML = "";
@@ -2776,6 +2908,11 @@
       box.appendChild(buildKeyToggles(L));
       updateFoldNote(L);   // the block is attached now — say straight away what is folded
     }
+
+    // the way into this layer's labels, when it has more of them than a key
+    // could ever show (see FAMILIES OF MEANING)
+    var idx = labelIndexLink(L);
+    if (idx) box.appendChild(idx);
 
     // opacity slider
     if (L.opacityControl) {
@@ -3011,6 +3148,7 @@
   }
 
   function popupHTML(L, props) {
+    POPUP_LAYER = L && L.id;   // the tag chips below belong to this layer
     var spec = L.popup;
     // the same key-by-key rows the hover bubble shows — a touch screen has
     // no hover, so the tap popup is where the marks get decoded there. A
@@ -3037,6 +3175,7 @@
         h += '<div class="pop-field"><div class="pop-lbl">' + esc(fld.label) + '</div><div class="pop-tags">' +
           arr.map(function (t) {
             return '<button type="button" class="pop-tag" data-tag="' + esc(t) +
+              '" data-layer="' + esc(L.id) +
               '" title="Show the places tagged ' + esc(t) + '">' + esc(t) + "</button>";
           }).join("") + "</div></div>";
       } else if (fld.type === "notes") {
