@@ -121,7 +121,12 @@
   if (!DATASET) {
     renderHome();
   } else {
-    draw().then(function (ok) { if (ok) checkOwner(); });
+    // The owner's tools mount whether or not the map drew. An atlas whose files
+    // are missing cannot render — and that is exactly when its owner most needs
+    // Settings, because Delete lives there. Gating the tools on a successful
+    // draw left a broken atlas impossible to throw away: it would not open, and
+    // the only way to remove it was the one the failure had just taken away.
+    draw().then(function () { checkOwner(); });
   }
 
   /* Read the atlas's manifest and draw from it. One function rather than a
