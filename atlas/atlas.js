@@ -1350,12 +1350,28 @@
       return [{ color: oneColorOf(L), label: String(L.label || "").slice(0, 40), shape: "dot" }];
     }
     var rows = [];
+    var entries = markersByLayer[L.id] || [];
     act.forEach(function (opt, fi) {
+      // How many places wear each kind's mark — counted from the same answers
+      // the marks themselves are drawn from (optValuesOf), so the number in
+      // the key can never disagree with the marks on the map. "other" counts
+      // places carrying at least one answer outside the kept kinds.
+      var tally = {}, other = 0;
+      entries.forEach(function (e) {
+        var hitOther = false;
+        optValuesOf(L, opt, e.f).forEach(function (v) {
+          if (opt.kept.indexOf(v) >= 0) tally[v] = (tally[v] || 0) + 1;
+          else hitOther = true;
+        });
+        if (hitOther) other++;
+      });
       rows.push({ header: true, label: opt.label + " — " + ROW_WORDS[fi] });
       opt.kept.forEach(function (kind, i) {
-        rows.push({ color: keyKindColor(L, opt, fi, i), label: kind, categorical: true, family: ROW_SHAPES[fi] });
+        rows.push({ color: keyKindColor(L, opt, fi, i), label: kind, categorical: true, family: ROW_SHAPES[fi],
+                    n: entries.length ? (tally[kind] || 0) : null });
       });
-      if (opt.hasOther) rows.push({ color: KEY_OTHER, label: "other", categorical: true, family: ROW_SHAPES[fi] });
+      if (opt.hasOther) rows.push({ color: KEY_OTHER, label: "other", categorical: true, family: ROW_SHAPES[fi],
+                                    n: entries.length ? other : null });
     });
     return rows;
   }
@@ -2638,11 +2654,76 @@
       /^(admin|labels|boundary|boundaries|placenames|place-names)$/i.test(String(L.id || ""));
   }
 
+  /* ---- the strip: what is true of the whole atlas rides the map's top edge ----
+     Map/Satellite, search and (for the owner) the region each give ONE answer
+     for the whole atlas, so they live on a slim strip across the top of the
+     stage rather than opening the panel — the panel keeps only the layers and
+     their keys, and its first scroll-stop is a layer. Rebuilt with the panel;
+     the owner's region row arrives later through owner.js and is re-homed by
+     placeStripPieces, which also owns the 720px flip: phones keep
+     Map/Satellite and the region row in the bottom sheet exactly as before,
+     and the strip carries search alone. */
+  function ensureStrip(stage) {
+    var strip = stage.querySelector(".atlas-strip");
+    if (!strip) {
+      strip = el("div", "atlas-strip");
+      stage.insertBefore(strip, stage.firstChild);
+      stage.classList.add("has-strip");
+      // the panel starts just below the strip — measured, never guessed, so a
+      // wrapped or touch-sized strip can never overlap it
+      var syncH = function () { stage.style.setProperty("--strip-h", strip.offsetHeight + "px"); };
+      if (window.ResizeObserver) new ResizeObserver(syncH).observe(strip);
+      else window.addEventListener("resize", syncH);
+      requestAnimationFrame(syncH);
+    }
+    strip.innerHTML = "";   // a rebuild remakes every piece below
+    return strip;
+  }
+
+  var stripWired = false;
+  function placeStripPieces() {
+    var stage = document.querySelector(".atlas-stage");
+    var strip = stage && stage.querySelector(".atlas-strip");
+    var panel = $("#atlas-controls");
+    if (!strip || !panel) return;
+    var phone = window.matchMedia("(max-width: 720px)").matches;
+    var bm = document.querySelector(".ctl-basemaps");
+    var region = document.querySelector(".own-region-wrap");   // owner.js's row
+    if (phone) {
+      // the bottom sheet keeps its old order: Map/Satellite first, region under it
+      if (bm && bm.parentNode !== panel) panel.insertBefore(bm, panel.firstChild);
+      if (region && region.parentNode !== panel) {
+        if (bm && bm.parentNode === panel) panel.insertBefore(region, bm.nextSibling);
+        else panel.insertBefore(region, panel.firstChild);
+      }
+    } else {
+      // strip order: Map/Satellite, search (already there), the region row
+      if (bm && bm.parentNode !== strip) strip.insertBefore(bm, strip.firstChild);
+      if (region && region.parentNode !== strip) strip.appendChild(region);
+    }
+  }
+  function wireStripPlacement() {
+    if (stripWired) return;
+    stripWired = true;
+    window.matchMedia("(max-width: 720px)").addEventListener("change", placeStripPieces);
+    // owner.js adds its region row to the panel whenever it mounts — often
+    // long after this build. Watch the panel and re-home the row the moment
+    // it lands. placeStripPieces is idempotent, and its own moves re-trigger
+    // the observer only to find nothing left to do.
+    var panel = $("#atlas-controls");
+    if (panel && window.MutationObserver) {
+      new MutationObserver(placeStripPieces).observe(panel, { childList: true });
+    }
+  }
+
   function buildControls() {
     var panel = $("#atlas-controls");
     panel.innerHTML = "";
+    var stage = document.querySelector(".atlas-stage");
+    var strip = stage ? ensureStrip(stage) : null;
 
-    // basemap switch
+    // basemap switch — placed by placeStripPieces: the strip on wide screens,
+    // the top of the bottom sheet on phones
     var bm = el("div", "ctl-basemaps");
     MANIFEST.basemaps.forEach(function (b) {
       var btn = el("button", "bm-btn" + (b.id === activeBasemap ? " active" : ""), esc(b.label));
@@ -2653,19 +2734,16 @@
       };
       bm.appendChild(btn);
     });
-    panel.appendChild(bm);
+    if (strip) strip.appendChild(bm); else panel.appendChild(bm);
 
     // search box — over marker layers that could carry text (keyword now,
     // semantic on public atlases with embeddings). syncSearchBox() takes it away
     // again once the data is in if none of them actually had any.
-    // It floats top-centre OVER THE MAP, not inside this panel: searching the
-    // map is a reader's first move, and buried under the layer switches it
-    // read as a setting. It lives on the stage so a rebuilt panel (reboot)
-    // neither loses nor doubles it — the old one is removed first.
-    var stage = document.querySelector(".atlas-stage");
-    var oldSearch = stage && stage.querySelector(".ctl-search");
-    if (oldSearch) oldSearch.parentNode.removeChild(oldSearch);
-    if (stage && manifestSearchable().length) {
+    // It lives in the strip, not in this panel: searching the map is a
+    // reader's first move, and buried under the layer switches it read as a
+    // setting. ensureStrip() cleared the old box, so a rebuilt panel (reboot)
+    // neither loses nor doubles it.
+    if (strip && manifestSearchable().length) {
       var sc = el("div", "ctl-search");
       var slab = el("label", "ctl-search-box");
       slab.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
@@ -2678,7 +2756,7 @@
       var cnt = el("div", "ctl-search-count"); cnt.id = "atlas-search-count"; cnt.hidden = true;
       cnt.setAttribute("aria-live", "polite");   // pins vanishing is silent otherwise
       sc.appendChild(cnt);
-      stage.appendChild(sc);
+      strip.appendChild(sc);
       if (!searchKeyWired) {
         searchKeyWired = true;
         // "/" reaches the box from anywhere on the page — the map idiom —
@@ -2709,11 +2787,13 @@
         groupList.push({ id: gid, label: GROUP_LABELS[gid] || gid.charAt(0).toUpperCase() + gid.slice(1).replace(/[-_]/g, " ") });
       }
     });
+    var groupsShown = 0, layersShown = 0;
     groupList.forEach(function (g) {
       var layers = MANIFEST.layers.filter(function (L) {
         return (L.group || "userdata") === g.id && !isBaseMapRow(L);
       });
       if (!layers.length) return;
+      groupsShown++; layersShown += layers.length;
       // Base is expanded on load, and so is any group holding data somebody
       // contributed — that is the whole reason they opened this atlas, and its
       // colour keys live inside that layer's row. Folding it away by default hid
@@ -2721,10 +2801,20 @@
       // Everything else still collapses so the panel isn't overwhelming. The
       // engine owns this — a manifest's per-group `open` flag is ignored here.
       var mine = layers.some(function (L) { return L.userLayer; });
-      var sec = el("section", "ctl-group" + (g.id === "base" || mine ? "" : " collapsed"));
+      var open = g.id === "base" || mine;
+      var sec = el("section", "ctl-group" + (open ? "" : " collapsed"));
       var head = el("button", "ctl-group-head");
-      head.innerHTML = '<span>' + esc(g.label) + '</span><span class="chev">' + ICONS.chevron + '</span>';
-      head.onclick = function () { sec.classList.toggle("collapsed"); };
+      // the count stays on the head, so a closed group still says how much it holds
+      head.innerHTML = '<span>' + esc(g.label) + '</span>' +
+        '<span class="gcount">· ' + layers.length + '</span>' +
+        '<span class="chev">' + ICONS.chevron + '</span>';
+      head.setAttribute("aria-label",
+        g.label + " — " + layers.length + (layers.length === 1 ? " layer" : " layers"));
+      head.setAttribute("aria-expanded", String(open));
+      head.onclick = function () {
+        var closed = sec.classList.toggle("collapsed");
+        head.setAttribute("aria-expanded", String(!closed));
+      };
       sec.appendChild(head);
       var body = el("div", "ctl-group-body");
 
@@ -2746,10 +2836,20 @@
       panel.appendChild(sec);
     });
 
+    // the panel head says how much the shelf holds — only when more than one
+    // group shares it; a lone group's own head already says the number
+    setText("#panel-count", groupsShown > 1
+      ? "· " + layersShown + (layersShown === 1 ? " layer" : " layers") : "");
+
     // the owner's tools add their rows to this panel — see LokaAtlas.onControlsBuilt
     controlsHooks.forEach(function (fn) {
       try { fn(); } catch (e) { console.error("Atlas owner hook error:", e && e.message); }
     });
+
+    // home the strip's pieces for the current width, and keep them homed
+    // across the 720px flip and the owner's late arrival
+    wireStripPlacement();
+    placeStripPieces();
   }
 
   // sub-group: a master (tri-state) toggle over related layers + a collapse chevron,
@@ -2855,7 +2955,11 @@
 
   function tagFieldCount(L) {
     var owned = keyOwnedColumns(L);
-    var fields = tagFieldsOf(L).filter(function (f) { return !owned[f]; });
+    // "_"-prefixed columns are derived twins of a committed column (markerBy's
+    // "_category" holds its first answers) — their words are the key's words,
+    // and the server's family count skips them too. Counting them here made
+    // the button say 345 while the sheet it opens said 335.
+    var fields = tagFieldsOf(L).filter(function (f) { return !owned[f] && f.charAt(0) !== "_"; });
     if (!fields.length) return 0;
     var seen = {}, n = 0;
     (markersByLayer[L.id] || []).forEach(function (e) {
@@ -3057,6 +3161,8 @@
         var r = el("div", "leg-item" + (it.faint ? " faint" : ""));
         r.appendChild(swatch(it));
         r.appendChild(el("span", "leg-label", esc(it.label)));
+        // the name leads its row; the count of places wearing the mark sits in ink
+        if (it.n != null) r.appendChild(el("span", "leg-n", String(it.n)));
         leg.appendChild(r);
       });
     }

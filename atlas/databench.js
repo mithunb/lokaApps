@@ -684,6 +684,12 @@
   }
   function setupEnrich() {
     var panel = $("#enrich-panel");
+    /* Not while an atlas is being set up. Themes are a judgement about places,
+       and the only honest way to judge them is to watch them colour the map —
+       over a table you are guessing. Nothing later in the wizard uses them
+       (setup.js does not mention them once), so the wizard loses nothing by
+       asking later, and it loses a step it did not need to carry. */
+    if (STAGES === "checkPlace") { panel.hidden = true; return; }
     var cands = enrichCandidates();
     if (!cands.some(function (c) { return c.on; })) { panel.hidden = true; return; }
     panel.hidden = false;

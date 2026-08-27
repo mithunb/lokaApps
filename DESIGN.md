@@ -198,6 +198,13 @@ humanist, comfortable at length. The pairing contrasts by role, not by style.
 **The Two Voices Rule.** Figtree for structure, DM Sans for reading. Never a third family;
 never Figtree for paragraphs; never DM Sans for uppercase labels.
 
+**The Two-Channel Rule.** Every step down in rank — and every state change on one rank —
+moves at least two of size, weight and colour at once. One channel moving alone is a wobble
+the reader must interpret; two moving together is a step they feel. A layer that is on reads
+0.875rem/600/ink; switched off it drops weight *and* colour (400/faded). A group head drops
+size *and* family against the rows it governs. If a proposed style differs from its
+neighbour by one channel only, either merge the two ranks or move a second channel.
+
 ## 4. Elevation
 
 Flat, ink on paper. Depth is conveyed by white cards lifting off the near-white page via a hairline ink border
@@ -258,10 +265,26 @@ or lighten a fill rather than adding emphasis.
 - A thin top bar: wordmark "LOKA / APPS" in Label type, ink; links in ink-soft 0.9rem.
   No active-state pills, no bottom borders — the page title does the orienting.
 
-### The Layer Panel (signature)
-- Desktop: floats top-left over the map, 19.5rem wide, white at 94% + blur backdrop,
-  6px radius, panel-lift shadow. Mobile: docks below the map as a fixed-height bottom
-  sheet (46%) with a drag-handle bar — it never covers the map.
+### The Strip and the Shelf (signature)
+- The map's controls split by the question they answer. **The strip** — a slim band across
+  the top of the stage, wearing the panel's materials (white at 95%, hairline bottom edge,
+  the sanctioned blur) — holds what is true of the whole atlas and gives one answer each:
+  Map/Satellite, search, and (owner-only) the region row. **The panel** is the shelf of
+  layers and nothing else: switches, keys, legends, fold notes. Keys are lists, and lists
+  need a column — seventeen switches with an eleven-line crops key need window-heights,
+  which a panel has and a header never will. On phones the strip carries search only and
+  the bottom sheet keeps Map/Satellite and the region row.
+- Panel geometry: floats top-left below the strip, 19.5rem wide, white at 95% + blur
+  backdrop, 4px radius, panel-lift shadow. Mobile: docks below the map as a fixed-height
+  bottom sheet (46%) with a drag-handle bar — it never covers the map.
+
+### Named Rules
+**The One-Skeleton Rule.** A list wears one row skeleton, however many kinds of thing it
+holds: lead mark, name, then anything else pushed to the row's end (counts in ink,
+tabular). Detail a row owns hangs behind one moss rule directly beneath it. Groups breathe:
+the gap between groups is at least three times the gap between the rows inside them, and a
+group's edge is a real hairline on its head — never whitespace alone. A group head carries
+its count and keeps it when the group is folded shut.
 
 ## 6. Do's and Don'ts
 

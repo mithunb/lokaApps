@@ -2159,11 +2159,28 @@ router.post('/layers/ingest', async (req, res) => {
   const { options } = dataset ? boundaryOptions(dataset) : { options: [] };
   const m = dataset ? imports.readManifest(dataset) : null;
 
+  /* A table may arrive as a REPLACEMENT for a layer already on the atlas.
+     Adding a themes column to a layer is exactly that — the same places, one
+     column more — and without this mark the commit would add a second copy
+     beside the original instead of putting it back in place. It is the same
+     mark /layers/reopen sets, so the layer keeps its id and its authorship
+     through the code that already handles a reopened layer. */
+  let replacing = null;
+  if (b.replaceLayerId && dataset) {
+    const id = String(b.replaceLayerId);
+    const prior = imports.mergedLayers(imports.readManifest(dataset)).find((L) => L.id === id);
+    if (!prior) return res.status(404).json({ error: 'there is no layer here called ' + id });
+    replacing = { id, addedBy: prior.addedBy || null, addedAt: prior.addedAt || null };
+  }
+
   const session = imports.newImport({
     dataset, region: pendingRegion || undefined,
     filename: String(b.filename || '').slice(0, 120), meta,
     columnsRaw: columns, rows, profilesSummary: profiles.map((p) => ({ name: p.name, type: p.type })),
     geomIdx: geomIdx || undefined,
+    replacingLayerId: replacing ? replacing.id : undefined,
+    replacingAddedBy: replacing ? replacing.addedBy : undefined,
+    replacingAddedAt: replacing ? replacing.addedAt : undefined,
   });
   if (geoms) imports.writeGeoms(session.id, geoms);
 

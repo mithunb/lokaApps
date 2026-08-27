@@ -297,3 +297,23 @@
   .atlas-panel #own-edit { flex:1 1 auto; min-height:0; }
   .atlas-panel.collapsed #own-edit { display:none; }
 }
+
+/* ---------- Find themes, on the layer you are looking at ----------
+   Themes moved here from the setup wizard: a theme is a claim about what these
+   places ARE, and it can only honestly be judged against the map it colours. */
+
+.own-themes {
+  margin-top:.5rem; padding-top:.6rem;
+  border-top:1px solid var(--color-divider);
+}
+.own-themes .own-note { margin:.2rem 0 .45rem; }
+.own-th-chips { display:flex; flex-wrap:wrap; gap:.3rem; margin:.15rem 0 .5rem; }
+.own-th-chip {
+  font-size:.74rem; padding:.15rem .5rem; border-radius:4px; font-weight:500;
+  background:var(--color-moss-tint); color:var(--color-canopy);
+}
+/* the leftovers are a fact, not a theme — said quietly and in the ink of a caveat */
+.own-th-chip.other {
+  background:var(--color-bg-alt); color:var(--color-text-muted); font-weight:400;
+}
+.own-th-chip b { font-weight:600; opacity:.65; margin-left:.2rem; }

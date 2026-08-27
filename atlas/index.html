@@ -97,17 +97,59 @@
     .atlas-error { position:absolute; inset:0; display:flex; flex-direction:column; gap:.5rem;
       align-items:center; justify-content:center; color:var(--color-text-secondary); font-size:var(--t-body); text-align:center; padding:2rem; }
 
+    /* ---- the strip: one calm edge for what is true of the whole atlas ----
+       Map/Satellite, search, and (for the owner) the region each give ONE
+       answer for the whole map, so they ride a slim strip across the top of
+       the stage instead of opening the panel — the panel keeps only the
+       layers and their keys, and its first scroll-stop is a layer. The strip
+       wears the panel's own materials (white at 95%, hairline edge, the
+       sanctioned blur), so what were three floating objects — panel chrome,
+       a search box adrift mid-air, the region row — become one edge. Its
+       real height is measured into --strip-h by atlas.js, so the panel
+       below always clears it exactly. */
+    .atlas-strip { position:absolute; top:0; left:0; right:0; z-index:6;
+      display:flex; align-items:center; gap:.75rem; min-height:48px; padding:.4rem .75rem;
+      background:rgba(255,255,255,.95); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+      border-bottom:1px solid var(--color-border); }
+    .atlas-strip .ctl-basemaps { flex:0 0 auto; margin:0; }
+    .atlas-strip .bm-btn { flex:0 0 auto; }
+    /* The owner's region row (owner.js's .own-region-wrap, relocated here by
+       atlas.js on wide screens) reads as one line: the card costume it wears
+       inside the bottom sheet is undone, and its warning note hangs just
+       below the strip's edge, the same way the search count does. */
+    .atlas-strip .own-region-wrap { flex:0 0 auto; min-width:0; margin:0; }
+    .atlas-strip .own-region { display:flex; align-items:baseline; gap:.4rem;
+      border:none; background:none; padding:.2rem 0; }
+    .atlas-strip .own-region-k { flex:0 0 auto; }
+    .atlas-strip .own-region-v { min-width:0; max-width:clamp(6rem,24vw,16rem);
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .atlas-strip .own-region-go { flex:0 0 auto; }
+    .atlas-strip .own-region-warn { position:absolute; top:calc(100% + .55rem); right:.75rem;
+      margin:0; padding:.2rem .6rem; font-size:var(--t-label); font-weight:400; letter-spacing:0;
+      background:rgba(255,255,255,.95); border:1px solid var(--color-border);
+      border-radius:var(--radius-md); box-shadow:var(--shadow-md); }
+
     /* ---- control widget ---- */
     .atlas-panel { position:absolute; top:1rem; left:1rem; z-index:5; width:19.5rem; max-width:calc(100% - 2rem);
       max-height:calc(100% - 2rem); display:flex; flex-direction:column;
       background:rgba(255,255,255,.95); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
       border:1px solid var(--color-border); border-radius:var(--radius-md); box-shadow:var(--shadow-md); overflow:hidden; }
-    .panel-head { display:flex; align-items:center; justify-content:space-between; gap:.5rem;
+    @media (min-width:721px){
+      .atlas-stage.has-strip .atlas-panel { top:calc(var(--strip-h,48px) + .75rem);
+        max-height:calc(100% - var(--strip-h,48px) - 1.5rem); }
+    }
+    .panel-head { display:flex; align-items:center; gap:.45rem;
       padding:.7rem .9rem; border-bottom:1px solid var(--color-divider); flex:0 0 auto; }
     .panel-head strong { font-family:'Figtree',sans-serif; font-size:.7rem; letter-spacing:.14em; text-transform:uppercase; color:var(--color-text-secondary); }
-    .panel-collapse { border:none; background:none; cursor:pointer; color:var(--color-text-muted); padding:.2rem .4rem; border-radius:4px; display:none; align-items:center; justify-content:center; }
+    .panel-count { font-size:.7rem; color:var(--color-text-muted); white-space:nowrap; }
+    .panel-count:empty { display:none; }
+    /* the count describes the layer list; while the owner's edit card stands
+       in for the list, the head names the layer instead and the count would
+       be describing something no longer shown */
+    .atlas-panel:has(#atlas-controls[hidden]) .panel-count { display:none; }
+    .panel-collapse { margin-left:auto; border:none; background:none; cursor:pointer; color:var(--color-text-muted); padding:.2rem .4rem; border-radius:4px; display:none; align-items:center; justify-content:center; }
     .panel-collapse svg { width:18px; height:18px; display:block; }
-    #atlas-controls { overflow-y:auto; padding:.6rem .8rem .8rem; scrollbar-width:thin; }
+    #atlas-controls { overflow-y:auto; padding:.35rem .8rem .9rem; scrollbar-width:thin; }
     /* Desktop: the panel folds to a compact "Map layers" pill, freeing the whole
        canvas — the choice is remembered per visitor. */
     @media (min-width:721px){
@@ -119,29 +161,30 @@
       .atlas-panel.collapsed .panel-collapse { transform:rotate(180deg); }
     }
 
-    .ctl-basemaps { display:flex; gap:.35rem; margin-bottom:.7rem; }
+    .ctl-basemaps { display:flex; gap:.35rem; }
+    /* on phones the pair lives at the top of the bottom sheet, as before */
+    #atlas-controls .ctl-basemaps { margin-bottom:.7rem; }
     .bm-btn { flex:1; padding:.4rem .5rem; font:inherit; font-size:.8rem; font-weight:500; cursor:pointer;
       background:var(--color-bg-alt); color:var(--color-text-secondary); border:1px solid transparent; border-radius:4px; }
     .bm-btn.active { background:var(--color-moss); color:#fff; }
 
-    /* ---- search: floats top-centre over the map ----
+    /* ---- search: lives in the strip ----
        Searching is a reader's first move; inside the panel it read as one
-       more layer setting. It wears the panel's own materials (white at 95%,
-       hairline border, the sanctioned blur) so the pair reads as one kit. */
-    .ctl-search { position:absolute; z-index:6; top:1rem; left:0; right:0; margin:0 auto;
-      width:22rem; max-width:calc(100% - 2rem); text-align:center; pointer-events:none; }
-    .ctl-search-box { pointer-events:auto; display:flex; align-items:center; gap:.4rem;
-      padding:0 .3rem 0 .75rem; text-align:left;
-      background:rgba(255,255,255,.95); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
-      border:1px solid var(--color-border); border-radius:var(--radius-md); box-shadow:var(--shadow-md); }
+       more layer setting, and floating alone it was mid-air. The strip is
+       its home. The count line hangs just under the strip's edge, over the
+       map, exactly where the vanishing pins are. */
+    .ctl-search { position:relative; flex:1 1 auto; min-width:7rem; max-width:26rem; margin:0 auto; }
+    .ctl-search-box { display:flex; align-items:center; gap:.4rem; padding:0 .3rem 0 .75rem;
+      background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md); }
     .ctl-search-box svg { flex:0 0 auto; width:16px; height:16px; color:var(--color-text-muted); }
     .ctl-search-box:focus-within { border-color:var(--color-moss); outline:2px solid var(--color-moss); outline-offset:-1px; }
     .ctl-search-box:focus-within svg { color:var(--color-moss); }
-    .ctl-search-input { flex:1 1 auto; min-width:0; font:inherit; font-size:.95rem; padding:.55rem .3rem .55rem .1rem;
+    .ctl-search-input { flex:1 1 auto; min-width:0; font:inherit; font-size:.9rem; padding:.42rem .3rem .42rem .1rem;
       border:none; background:none; color:var(--color-text-primary); }
     .ctl-search-input:focus { outline:none; }
-    .ctl-search-count { pointer-events:auto; display:inline-block; margin-top:.35rem; padding:.2rem .6rem;
-      font-size:.76rem; color:var(--color-text-secondary);
+    .ctl-search-count { position:absolute; top:calc(100% + .95rem); left:50%; transform:translateX(-50%);
+      width:max-content; max-width:min(24rem, calc(100vw - 2rem)); text-align:center;
+      padding:.2rem .6rem; font-size:.76rem; color:var(--color-text-secondary);
       background:rgba(255,255,255,.95); border:1px solid var(--color-border);
       border-radius:var(--radius-md); box-shadow:var(--shadow-md); }
     .ctl-search-go { font:inherit; font-weight:600; border:none; background:none; padding:0;
@@ -149,25 +192,33 @@
     .ctl-search-go:hover { color:var(--color-canopy); }
     /* pins are reachable by keyboard — the focused one must say so */
     .atlas-mnode:focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:50%; }
-    /* mid widths: the centred box would cross the layer panel — park it top-right */
-    @media (min-width:721px) and (max-width:1080px){
-      .ctl-search { left:auto; right:1rem; margin:0; width:18rem; text-align:right; }
-    }
 
-    .ctl-group { border-top:1px solid var(--color-divider); }
-    .ctl-group:first-of-type { border-top:none; }
-    .ctl-group-head { width:100%; display:flex; align-items:center; justify-content:space-between;
-      background:none; border:none; cursor:pointer; padding:.55rem .1rem; font-family:'Figtree',sans-serif;
-      font-size:.78rem; font-weight:600; letter-spacing:.04em; color:var(--color-text-primary); text-transform:uppercase; }
-    .ctl-group-head .chev { display:inline-flex; transition:transform .18s cubic-bezier(.25,1,.5,1); color:var(--color-text-muted); }
+    /* Groups: real edges, wide air. Each head owns a hairline edge and a
+       count that stays when the group is folded, and groups sit at least
+       three times as far apart as the rows inside them — the One-Skeleton
+       Rule in DESIGN.md. */
+    .ctl-group { margin-top:1.05rem; }
+    .ctl-group:first-of-type { margin-top:.45rem; }
+    .ctl-group-head { width:100%; display:flex; align-items:baseline; gap:.4rem; text-align:left;
+      background:none; border:none; border-bottom:1px solid var(--color-divider); cursor:pointer;
+      padding:.15rem .1rem .3rem; margin-bottom:.15rem; font-family:'Figtree',sans-serif;
+      font-size:var(--t-label); font-weight:700; letter-spacing:.08em; color:var(--color-text-secondary); text-transform:uppercase; }
+    .ctl-group-head .gcount { font-family:'DM Sans',sans-serif; font-size:var(--t-label); font-weight:400;
+      letter-spacing:0; color:var(--color-text-muted); font-variant-numeric:tabular-nums; }
+    .ctl-group-head .chev { margin-left:auto; align-self:center; display:inline-flex;
+      transition:transform .18s cubic-bezier(.25,1,.5,1); color:var(--color-text-muted); }
     .ctl-group-head .chev svg { width:16px; height:16px; }
     .ctl-group.collapsed .chev { transform:rotate(-90deg); }
     .ctl-group.collapsed .ctl-group-body { display:none; }
     .ctl-group-body { padding-bottom:.35rem; }
 
-    .ctl-row { padding:.28rem 0; }
-    .ctl-row.off .ctl-name { color:var(--color-text-muted); }
-    .ctl-toggle { display:flex; align-items:center; gap:.55rem; cursor:pointer; }
+    /* Rows: one skeleton — switch, name, anything else pushed to the row's
+       end. Rank and state each move two of size, weight and colour at once
+       (the Two-Channel Rule in DESIGN.md): a layer that is on reads
+       .875rem/600/ink; off drops weight AND colour together. */
+    .ctl-row { padding:.12rem 0; }
+    .ctl-row.off .ctl-name { font-weight:400; color:var(--color-text-muted); }
+    .ctl-toggle { display:flex; align-items:center; gap:.55rem; cursor:pointer; min-height:32px; }
     .ctl-toggle input { position:absolute; opacity:0; width:0; height:0; }
     /* The off track was #cfd6cf on a near-white panel — 1.44:1, about half the
        3:1 a control's own outline needs, on every switch in the product. The
@@ -182,20 +233,25 @@
     .ctl-toggle input:checked + .ctl-switch { background:var(--color-moss); box-shadow:none; }
     .ctl-toggle input:checked + .ctl-switch::after { transform:translateX(14px); }
     .ctl-toggle input:focus-visible + .ctl-switch { outline:2px solid var(--color-moss); outline-offset:2px; }
-    .ctl-name { font-size:.9rem; line-height:1.25; }
+    .ctl-name { font-size:var(--t-ui); font-weight:600; line-height:1.25; }
     .ctl-info { margin-left:auto; flex:0 0 auto; width:16px; height:16px; color:var(--color-text-muted);
       display:inline-flex; align-items:center; justify-content:center; cursor:help; }
     .ctl-info svg { width:15px; height:15px; }
     .ctl-info:hover { color:var(--color-moss); }
-    .ctl-extra { padding-left:2.1rem; }
-    .ctl-extra:empty { padding:0; }
+    /* Everything a layer owns — keys, legend, fold note, browse link,
+       opacity — hangs behind one moss rule, so wherever the sheet is
+       scrolled the branch visibly belongs to something above it. (The rule
+       used to sit on the key block alone; it now holds the whole branch.) */
+    .ctl-extra { margin:.05rem 0 .35rem; padding-left:.6rem;
+      border-left:2px solid rgba(74,90,51,.30); }
+    .ctl-extra:empty { display:none; }
 
     /* related-layer sub-group: master toggle + collapsible children */
     .ctl-sub { margin:.1rem 0 .2rem; }
-    .ctl-sub-head { display:flex; align-items:center; gap:.4rem; padding:.24rem 0; }
+    .ctl-sub-head { display:flex; align-items:center; gap:.4rem; padding:.24rem 0; min-height:26px; }
     .ctl-sub-toggle { display:flex; align-items:center; gap:.55rem; cursor:pointer; flex:1 1 auto; }
     .ctl-sub-toggle input { position:absolute; opacity:0; width:0; height:0; }
-    .ctl-sub-name { font-size:.74rem; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--color-text-secondary); }
+    .ctl-sub-name { font-size:var(--t-label); font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:var(--color-text-secondary); }
     .ctl-sub-head.off .ctl-sub-name { color:var(--color-text-muted); }
     .ctl-sub-toggle input:indeterminate + .ctl-switch { background:var(--color-moss); opacity:.6; }
     .ctl-sub-toggle input:indeterminate + .ctl-switch::after { transform:translateX(7px); }
@@ -227,22 +283,22 @@
        layer's name can scroll out of sight — leaving a column of switches with
        no visible owner. A rule down their left side says "these are a branch of
        something" wherever you are in the scroll, which a heading cannot. */
-    .key-chips { margin:.45rem 0 .1rem; padding-left:.55rem;
-      border-left:2px solid rgba(74,90,51,.30); }
-    .key-chips-lbl { display:block; font-size:.72rem; font-weight:600; letter-spacing:.02em; color:var(--color-text-muted); margin-bottom:.1rem; }
+    .key-chips { margin:.3rem 0 .1rem; }
+    .key-chips-lbl { display:block; font-size:var(--t-label); font-weight:600; letter-spacing:.02em; color:var(--color-text-muted); margin-bottom:.1rem; }
     /* said once per layer, quiet enough to skip and there when you look for it */
-    .key-hint { display:block; font-size:.68rem; line-height:1.45; color:var(--color-text-muted);
-      margin:0 0 .3rem; max-width:26ch; }
+    .key-hint { display:block; font-size:var(--t-label); font-weight:400; line-height:1.45; color:var(--color-text-muted);
+      margin:0 0 .3rem; max-width:28ch; }
     .key-list { display:flex; flex-direction:column; }
-    .key-toggle { padding:.17rem 0; gap:.5rem; min-height:24px; }
+    .key-toggle { padding:.1rem 0; gap:.5rem; min-height:24px; }
     .ctl-switch.small { width:26px; height:15px; }
     .ctl-switch.small::after { width:11px; height:11px; }
     .ctl-toggle input:checked + .ctl-switch.small::after { transform:translateX(11px); }
-    .key-tname { font-size:.8rem; line-height:1.25; color:var(--color-text-secondary); }
-    .key-toggle input:checked ~ .key-tname { color:var(--color-text-primary); }
-    .key-note { font-size:.7rem; color:var(--color-text-muted); line-height:1.45; margin:.3rem 0 .05rem; }
+    /* a key's name is a thing you can act on — it keeps its ink and weight
+       whichever way its switch points; the switch alone says the state */
+    .key-tname { font-size:.8rem; font-weight:600; line-height:1.25; color:var(--color-text-primary); }
+    .key-note { font-size:var(--t-label); font-weight:400; color:var(--color-text-muted); line-height:1.45; margin:.3rem 0 .05rem; }
     /* where the folded places went — kept current by updateFoldNote */
-    .key-fold { font-size:.7rem; color:var(--color-text-muted); line-height:1.45; margin:.3rem 0 .05rem; }
+    .key-fold { font-size:var(--t-label); font-weight:400; color:var(--color-text-muted); line-height:1.45; margin:.3rem 0 .05rem; }
     /* keys wear rows: each switched-on key is one row of small marks beside
        the neutral pin — the first key circles, then squares, triangles,
        diamonds, bars. The holder is exactly the pin's 20px box, so MapLibre
@@ -272,9 +328,13 @@
     .ctl-opacity-lbl { font-size:.72rem; color:var(--color-text-muted); }
     .ctl-opacity input { flex:1; accent-color:var(--color-moss); }
 
-    .ctl-legend { margin:.4rem 0 .2rem; display:flex; flex-direction:column; gap:.2rem; }
-    .leg-item { display:flex; align-items:center; gap:.45rem; font-size:.76rem; color:var(--color-text-secondary); }
+    .ctl-legend { margin:.4rem 0 .2rem; display:flex; flex-direction:column; }
+    .leg-item { display:flex; align-items:center; gap:.5rem; min-height:24px; padding:.1rem 0;
+      font-size:.8rem; color:var(--color-text-secondary); }
     .leg-item.faint { opacity:.7; }
+    /* how many places wear this mark — the name leads, the count sits in ink */
+    .leg-n { margin-left:auto; flex:0 0 auto; padding-left:.5rem; font-size:.75rem; font-weight:700;
+      color:var(--color-text-primary); font-variant-numeric:tabular-nums; }
     /* sequential scale: one graduated bar, endpoints labelled */
     .leg-ramp { display:flex; height:9px; border-radius:3px; overflow:hidden; margin:.15rem 0 .25rem; box-shadow:inset 0 0 0 1px rgba(42,36,26,.08); }
     .leg-ramp-seg { flex:1 1 0; }
@@ -561,16 +621,30 @@
 
     /* Mobile: the layer widget becomes a bottom sheet — map stays visible, thumb-reachable */
     @media (max-width:720px){
+      /* Phones: the strip carries search only. Map/Satellite and the region
+         row live in the bottom sheet as before (atlas.js re-homes them), and
+         the band itself goes quiet — no surface, no edge — leaving just the
+         floating search box the phone always had. The empty band must not
+         swallow map drags, so it gives up the pointer except on its child. */
+      .atlas-strip { background:none; border-bottom:none;
+        backdrop-filter:none; -webkit-backdrop-filter:none;
+        min-height:0; padding:.75rem .75rem 0; pointer-events:none; }
+      .atlas-strip > * { pointer-events:auto; }
+      .ctl-search-box { box-shadow:var(--shadow-md); }
       /* The sheet shows about three rows at a time, so the section you are in
          scrolls away almost at once. The heading holds its place at the top of
          the scroller instead. One per group, so at most a couple can ever
          stack — and it is opaque, because rows passing behind a translucent
-         heading read as a rendering fault. */
+         heading read as a rendering fault. Its own hairline edge (border-
+         bottom) draws the line rows pass beneath. */
       .atlas-panel #atlas-controls .ctl-group-head {
         position:sticky; top:0; z-index:2;
         background:var(--color-surface);
-        box-shadow:0 1px 0 var(--color-divider);
+        margin-bottom:0;   /* a margin is a crack rows would show through while pinned */
       }
+      /* no top padding on the scroller: content would stay visible in it
+         while sliding past a pinned heading, as a half-row sliver */
+      .atlas-panel #atlas-controls { padding-top:0; }
       .atlas-hero { padding:1.15rem 0 .8rem; }
       #atlas-about { display:none; }        /* keep the mobile hero compact so the map + sheet fit */
       /* Map on top, sheet docked below — the sheet never covers the map; the map shrinks to fit. */
@@ -651,6 +725,7 @@
     <aside class="atlas-panel" id="atlas-panel">
       <div class="panel-head">
         <strong>Map layers</strong>
+        <span class="panel-count" id="panel-count"></span>
         <button class="panel-collapse" type="button" aria-label="Show or hide map layers" aria-expanded="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
       </div>
       <div id="atlas-controls"></div>

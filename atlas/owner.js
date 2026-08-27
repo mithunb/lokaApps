@@ -440,6 +440,26 @@
             '<select id="own-f-title"></select>' +
             '<span class="own-note">The name shown when someone points at or opens a place.</span>' +
           "</label>" +
+          /* Themes used to be asked for in the wizard, over a table of rows.
+             They belong here: a theme is a claim about what these places ARE,
+             and the only honest way to judge one is to watch it colour the map
+             you are looking at. */
+          '<div class="own-themes" id="own-themes">' +
+            '<div class="own-group">Find themes</div>' +
+            '<p class="own-note">We read your data with AI to find the patterns running ' +
+              'through it, and show them as themes. They arrive as one new column you can ' +
+              'keep or discard — what you uploaded is never changed.</p>' +
+            '<button class="share-btn" id="own-th-go" type="button">Find themes</button>' +
+            '<p class="own-note" id="own-th-msg" hidden></p>' +
+            '<div id="own-th-offer" hidden>' +
+              '<div class="own-th-chips" id="own-th-chips"></div>' +
+              '<div class="own-row own-row-tight">' +
+                '<button class="share-btn primary" id="own-th-keep" type="button">Keep these themes</button>' +
+                '<button class="share-btn" id="own-th-drop" type="button">Discard</button>' +
+              "</div>" +
+              '<p class="own-note">Nothing is added until you keep them.</p>' +
+            "</div>" +
+          "</div>" +
           '<div class="own-remove">' +
             '<button class="own-linkish" id="own-rm-link" type="button">Remove this layer from the atlas…</button>' +
             '<div class="own-confirm" id="own-rm-confirm" hidden>' +
@@ -1085,6 +1105,139 @@
     });
     $("#own-save-btn").onclick = saveChanges;
     $("#own-discard-btn").onclick = discardChanges;
+
+    /* ---- Find themes, on the layer you are looking at ----------------------
+       The whole loop runs on endpoints that already exist. The layer's own file
+       supplies the rows; /layers/enrich proposes the themes; keeping them sends
+       the table back with one new column and commits it in place, which is
+       exactly what the add-data bench does minus the upload.
+
+       The column is the point: once it is in the data the viewer offers it as a
+       key of its own accord — no wiring here decides that. */
+    var TH = null;   // the proposal awaiting a decision
+
+    function thMsg(text, warn) {
+      var n = $("#own-th-msg");
+      n.hidden = !text;
+      n.textContent = text || "";
+      n.classList.toggle("warnish", !!warn);
+    }
+
+    // the columns worth reading: words people wrote, not ids or coordinates
+    function thFields() {
+      return (ED.profiles || []).filter(function (p) {
+        return p.type === "string" && !p.looksLikeImage && p.name.charAt(0) !== "_" &&
+          !/^(lat|latitude|lon|lng|long|longitude)$/i.test(p.name) && p.name !== "themes";
+      }).map(function (p) { return p.name; });
+    }
+
+    $("#own-th-go").onclick = function () {
+      if (!ED || !ED.ready || ED.busy) return;
+      var fields = thFields();
+      if (!fields.length) { thMsg("There is no written description or tags here to read.", true); return; }
+      var btn = this, lid = ED.layerId;
+      btn.disabled = true;
+      $("#own-th-offer").hidden = true;
+      thMsg("Reading every place…");
+      // the layer's own file, from wherever the viewer reads it
+      fetch(window.LokaAtlas.fileUrl(ED.stanza.source))
+        .then(function (r) { if (!r.ok) throw new Error("the layer's data could not be read"); return r.json(); })
+        .then(function (gj) {
+          var rows = (gj.features || []).map(function (f) { return f.properties || {}; });
+          return api("layers/enrich", { method: "POST", body: { dataset: SLUG, fields: fields, rows: rows } });
+        })
+        .then(function (r) {
+          if (!ED || ED.layerId !== lid) return;
+          btn.disabled = false;
+          if (r.verdict !== "themes" || !(r.counts || []).length) {
+            thMsg(r.verdict === "no_clear_themes"
+              ? "No clear themes here" + (r.note ? ": " + r.note : ".") + " Nothing was added."
+              : "No themes could be found just now. Nothing was added.", true);
+            return;
+          }
+          TH = r;
+          thMsg("");
+          var chips = $("#own-th-chips");
+          chips.innerHTML = "";
+          r.counts.forEach(function (c) {
+            var el2 = document.createElement("span");
+            el2.className = "own-th-chip";
+            if (c.definition) el2.title = c.definition;
+            el2.innerHTML = esc(c.name) + " <b>" + c.count + "</b>";
+            chips.appendChild(el2);
+          });
+          if (r.other) {
+            var o = document.createElement("span");
+            o.className = "own-th-chip other";
+            o.textContent = r.other + " fitted none";
+            chips.appendChild(o);
+          }
+          $("#own-th-offer").hidden = false;
+        })
+        .catch(function (e) {
+          if (!ED || ED.layerId !== lid) return;
+          btn.disabled = false;
+          thMsg(errMsg(e), true);
+        });
+    };
+
+    $("#own-th-drop").onclick = function () {
+      TH = null;
+      $("#own-th-offer").hidden = true;
+      thMsg("Discarded — nothing was added.");
+    };
+
+    $("#own-th-keep").onclick = function () {
+      if (!TH || !ED || ED.busy) return;
+      var lid = ED.layerId, keep = this, drop = $("#own-th-drop");
+      keep.disabled = drop.disabled = true;
+      thMsg("Adding the themes to the map…");
+      fetch(window.LokaAtlas.fileUrl(ED.stanza.source))
+        .then(function (r) { return r.json(); })
+        .then(function (gj) {
+          var feats = gj.features || [];
+          // one NEW column; everything the layer already carries is untouched
+          var rows = feats.map(function (f, i) {
+            var o = Object.assign({}, f.properties || {});
+            delete o._category;                       // the engine's own, re-derived on build
+            o.themes = (TH.categories && TH.categories[i]) || "";
+            return o;
+          });
+          var names = Object.keys(rows[0] || {});
+          if (!rows.some(function (r2) { return r2.themes; })) {
+            throw new Error("the themes came back empty, so nothing was added");
+          }
+          return api("layers/ingest", { method: "POST", body: {
+            dataset: SLUG,
+            // the same layer with one column more, not a second copy of it
+            replaceLayerId: lid,
+            filename: ED.stanza.label || lid,
+            schema: names.map(function (n) {
+              return { name: n, type: (n === "latitude" || n === "longitude") ? "number" : "string" };
+            }),
+            rows: rows,
+            meta: { sourceName: ED.stanza.source, rowCount: rows.length },
+          } });
+        })
+        .then(function (ing) {
+          // the session already knows it is a replacement, so commit puts it back
+          // in place with its own id and its original contributor's credit
+          return api("layers/commit", { method: "POST", body: {
+            importId: ing.importId, dataset: SLUG,
+          } });
+        })
+        .then(function () {
+          TH = null;
+          $("#own-th-offer").hidden = true;
+          toast("Themes added — the atlas can be coloured by them now.");
+          closeEdit(null);
+          return refreshLayers();
+        })
+        .catch(function (e) {
+          keep.disabled = drop.disabled = false;
+          thMsg(errMsg(e), true);
+        });
+    };
 
     $("#own-rm-link").onclick = function () {
       if (!ED || !ED.ready) return;
