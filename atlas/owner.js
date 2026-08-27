@@ -1231,7 +1231,13 @@
           $("#own-th-offer").hidden = true;
           toast("Themes added — the atlas can be coloured by them now.");
           closeEdit(null);
-          return refreshLayers();
+          /* Re-read the layer. The new column is on the server, but this page is
+             still showing the copy it loaded when it opened — and which columns
+             may become a key is worked out once, as the layer's data arrives. So
+             without this the themes were really added and the switch for them
+             could not appear until the person reloaded, which is indistinguishable
+             from nothing having happened. */
+          return preview(SLUG).then(refreshLayers);
         })
         .catch(function (e) {
           keep.disabled = drop.disabled = false;

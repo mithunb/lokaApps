@@ -582,6 +582,40 @@
     return m;
   }
 
+  /* OSM Bright asks whether a road's rank or a boundary's level is above some
+     number. Where the tiles carry nothing for one of those, MapLibre refuses the
+     comparison outright — "Expected value to be of type number, but found null
+     instead" — once per tile, in the console, for as long as the map is open.
+
+     It is not our data and not our style: it is a mismatch between the two, and
+     the map draws correctly either way. But a console full of errors is a
+     console nobody reads, and this one buried a real fault of ours for most of a
+     day, so it is worth removing rather than explaining.
+
+     A missing number is read as zero, which is what the comparison would have
+     concluded anyway — every one of these filters asks whether the number is at
+     least something, so absent and zero are already treated alike. Nothing that
+     was drawn stops being drawn. */
+  function numbersOrZero(style) {
+    var CMP = { "<": 1, ">": 1, "<=": 1, ">=": 1 };
+    function fix(e) {
+      if (!Array.isArray(e)) return e;
+      var out = e.map(fix);
+      if (CMP[out[0]]) {
+        for (var i = 1; i < out.length; i++) {
+          if (Array.isArray(out[i]) && out[i][0] === "get") {
+            out[i] = ["coalesce", out[i], 0];
+          }
+        }
+      }
+      return out;
+    }
+    (style.layers || []).forEach(function (L) {
+      if (L.filter) L.filter = fix(L.filter);
+    });
+    return style;
+  }
+
   /* The style the map opens with.
 
      A basemap is normally a set of raster tiles, and those become one raster
@@ -627,7 +661,7 @@
         // vector map has no shapes to draw and no font to draw names in
         st.sources = Object.assign({}, st.sources, raster.sources);
         st.layers = (st.layers || []).concat(raster.layers);
-        return st;
+        return numbersOrZero(st);
       })
       .catch(function (e) {
         // the atlas is not held hostage by a style server: fall back to the
