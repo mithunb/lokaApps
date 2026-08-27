@@ -404,7 +404,27 @@ export async function enrichRows(opts) {
   if (!ind) return { verdict: 'unavailable' };
   if (ind.verdict === 'no_clear_themes') return { verdict: 'no_clear_themes', note: ind.note };
 
-  const gA = gateNames(ind.themes, { title, listLength: ind.listLength, reserved: fields });
+  /* A theme may not take a word an existing key already uses. The gate has
+     always reserved the atlas's title and the column NAMES; it did not reserve
+     the KINDS inside a key column, so a theme called "Nature" could be proposed
+     while a categories key already coloured the map by Nature — two keys, one
+     word, two different splits, which is the worst way for these to collide. */
+  const keyKinds = [];
+  for (const f of keyShapedColumns(rows, fields)) {
+    const seen = new Set();
+    for (const r of (rows || [])) {
+      const raw = r && r[f];
+      if (raw === undefined || raw === null || raw === '') continue;
+      const str = Array.isArray(raw) ? String(raw[0] || '') : String(raw);
+      for (const part of str.split(/[;,]/)) {
+        const t = part.trim().slice(0, 40);
+        if (t && !seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); keyKinds.push(t); }
+      }
+    }
+  }
+  const gA = gateNames(ind.themes, {
+    title, listLength: ind.listLength, reserved: [...fields, ...keyKinds],
+  });
   if (gA.kept.length < MIN_CATS) {
     return { verdict: 'refused', reason: 'too few themes fit enough places' };
   }
@@ -574,4 +594,38 @@ export async function induceFamilies({ vocab, title, callJSON, model }) {
     loose: loose.length,
     total: all.length,
   };
+}
+
+/* Which of these columns is KEY-SHAPED — that is, a short list a stranger could
+   learn that says something about nearly every place. The viewer decides this
+   for itself (computeKeyOptions in atlas/atlas.js) and this is the same ruler
+   with the same numbers, because the two must agree: a column the viewer offers
+   as a colouring must not also arrive in the label index as a browsable word.
+   One vocabulary, one costume.
+
+   Kept deliberately simple and name-blind, like the viewer's version: counting
+   only, so a column called anything at all is judged on what it holds. */
+export function keyShapedColumns(rows, fields, KEY_MAX = 8) {
+    const out = new Set();
+    for (const f of (fields || [])) {
+    const firsts = [];
+    for (const r of (rows || [])) {
+      const raw = r && r[f];
+      if (raw === undefined || raw === null || raw === '') continue;
+      const s = Array.isArray(raw) ? String(raw[0] || '') : String(raw);
+      const delim = /[;,]/.test(s) ? (s.includes(';') ? ';' : ',') : null;
+      const first = (delim ? s.split(delim)[0] : s).trim().slice(0, 40);
+      if (first) firsts.push(first);
+    }
+    if (!firsts.length) continue;
+    const counts = new Map();
+    for (const v of firsts) counts.set(v, (counts.get(v) || 0) + 1);
+    // a learnable list: the viewer allows 2–9 for one-answer columns and up to
+    // 12 first-tags for list columns; 12 is the looser of the two, so use it
+    if (counts.size < 2 || counts.size > 12) continue;
+    const top = [...counts.values()].sort((a, b) => b - a).slice(0, KEY_MAX)
+      .reduce((s, n) => s + n, 0);
+    if (top / (rows || []).length >= 0.6) out.add(f);
+  }
+  return out;
 }

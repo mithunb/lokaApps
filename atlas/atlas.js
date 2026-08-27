@@ -151,7 +151,12 @@
       })
       .then(mergeLocalOverlay)
       .then(applyAppBasemaps)
-      .then(function (m) { start(m); return true; })
+      .then(function (m) {
+        // the everyday map is a style document that has to arrive before the
+        // map can be built from it
+        activeBasemap = (m.basemaps.find(function (b) { return b.default; }) || m.basemaps[0]).id;
+        return baseStyle(m).then(function (st) { start(m, st); return true; });
+      })
       .catch(function (err) {
         $("#atlas-map").innerHTML =
           '<div class="atlas-error">Could not load “' + esc(DATASET) + '”.<br><small>' + esc(err.message) + "</small></div>";
@@ -239,7 +244,7 @@
       });
   }
 
-  function start(manifest) {
+  function start(manifest, styleDoc) {
     MANIFEST = manifest;
     document.title = manifest.title + " — LOKA Atlas";
     setText("#atlas-title", manifest.title);
@@ -249,11 +254,13 @@
     renderCollaborators(manifest);
     wireShare(manifest);
 
-    activeBasemap = (manifest.basemaps.find(function (b) { return b.default; }) || manifest.basemaps[0]).id;
+    // activeBasemap is chosen in draw(), before the style is fetched — the style
+    // that gets fetched depends on which basemap is active, so it cannot wait
+    // until here.
 
     map = new maplibregl.Map({
       container: "atlas-map",
-      style: baseStyle(manifest),
+      style: styleDoc,
       center: manifest.center,
       zoom: manifest.zoom,
       minZoom: manifest.minzoom || 5,
@@ -510,14 +517,22 @@
   }
 
   var APP_BASEMAPS = {
-    // "Streets & colour" — roads, parks and water in gentle colour. Chosen from
-    // the six laid out in map-style-variations.html.
+    /* OSM Bright, from OpenFreeMap — roads, parks and water in gentle colour,
+       the look chosen from map-style-variations.html, but drawn from VECTOR
+       tiles and served without an API key.
+
+       CARTO was the earlier choice and had to go: it began stamping
+       "API KEY REQUIRED" across the tiles of an atlas that asks nobody to sign
+       up for anything. Vector is also simply sharper — the text is drawn by the
+       browser at the screen's own resolution rather than baked into a picture,
+       which is the same problem the pixel-grid fix was chasing from the other
+       end. Bright carries its own place names, so this basemap asks for no
+       separate label layer. */
     light: {
-      tiles: cartoTiles("rastertiles/voyager_nolabels"),
-      labels: cartoTiles("rastertiles/voyager_only_labels"),
-      tileSize: 256, maxzoom: 19,
-      attribution: "© OpenStreetMap contributors © CARTO",
-      ground: "#FBF8F3",
+      style: "https://tiles.openfreemap.org/styles/bright",
+      labels: null,                    // built into the style
+      attribution: "© OpenStreetMap contributors, © OpenFreeMap",
+      ground: "#F8F4EC",
     },
     satellite: {
       tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
@@ -549,27 +564,70 @@
     (m.layers || []).forEach(function (L) {
       if (!L.tilesByBasemap) return;
       Object.keys(L.tilesByBasemap).forEach(function (id) {
-        if (APP_BASEMAPS[id] && APP_BASEMAPS[id].labels) L.tilesByBasemap[id] = APP_BASEMAPS[id].labels;
+        var app = APP_BASEMAPS[id];
+        if (!app) return;
+        // labels:null means the basemap draws its own names — a second layer of
+        // them would print every town twice
+        if (app.labels) L.tilesByBasemap[id] = app.labels;
+        else delete L.tilesByBasemap[id];
       });
     });
     return m;
   }
 
+  /* The style the map opens with.
+
+     A basemap is normally a set of raster tiles, and those become one raster
+     layer each whose visibility the Map/Satellite switch flips. One of them —
+     the everyday map — is a VECTOR style instead (OSM Bright), which arrives as
+     a whole style document of its own. When that is the case its document
+     becomes the foundation and the raster basemaps are laid on top of it, still
+     as toggleable layers, so the switch keeps working exactly as it did: turn
+     satellite on and its opaque tiles cover the vector map beneath.
+
+     Returns a promise, because a style document has to be fetched. */
   function baseStyle(m) {
-    var sources = {}, layers = [
-      { id: "bg", type: "background", paint: { "background-color": mapGround } }
-    ];
+    var raster = { sources: {}, layers: [] };
+    var vector = null;
     m.basemaps.forEach(function (b) {
-      sources["base-" + b.id] = {
+      var app = APP_BASEMAPS[b.id];
+      if (app && app.style) {
+        if (b.id === activeBasemap || !vector) vector = { id: b.id, url: app.style };
+        return;                       // no raster layer of its own
+      }
+      raster.sources["base-" + b.id] = {
         type: "raster", tiles: b.tiles, tileSize: b.tileSize || 256,
         maxzoom: b.maxzoom || 19, attribution: b.attribution || ""
       };
-      layers.push({
+      raster.layers.push({
         id: "base-" + b.id, type: "raster", source: "base-" + b.id,
         layout: { visibility: b.id === activeBasemap ? "visible" : "none" }
       });
     });
-    return { version: 8, glyphs: m.glyphs, sources: sources, layers: layers };
+
+    var plain = {
+      version: 8, glyphs: m.glyphs,
+      sources: raster.sources,
+      layers: [{ id: "bg", type: "background", paint: { "background-color": mapGround } }]
+        .concat(raster.layers),
+    };
+    if (!vector) return Promise.resolve(plain);
+
+    return fetch(vector.url)
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (st) {
+        // its own sources, sprite and glyphs come along — without them the
+        // vector map has no shapes to draw and no font to draw names in
+        st.sources = Object.assign({}, st.sources, raster.sources);
+        st.layers = (st.layers || []).concat(raster.layers);
+        return st;
+      })
+      .catch(function (e) {
+        // the atlas is not held hostage by a style server: fall back to the
+        // plain background and whatever raster basemaps exist, and say why
+        console.error("Atlas: the base map style could not be loaded (" + e.message + ")");
+        return plain;
+      });
   }
 
   /* ==================================================================
@@ -1429,6 +1487,13 @@
     // legend below already names both — "categories — circles".
     wrap.setAttribute("aria-label", "Show key");
     wrap.appendChild(el("span", "key-chips-lbl", "Show key"));
+    /* Two ways of finding things live side by side in this panel, and until now
+       neither said which it was. A key COLOURS the map; a word you tap NARROWS
+       it. One sentence, said once per layer, so a reader meeting "Culture" as a
+       colour here and as a tappable word on a place knows they are the same
+       word doing two different jobs. */
+    wrap.appendChild(el("span", "key-hint",
+      "Keys colour the map — each wears its own shape. Tap any word on a place to see who shares it."));
     var list = el("div", "key-list");
     // The cap message, when it has something to say (kept in st.note so a
     // rebuild mid-conversation does not eat it). role=status: the refused
@@ -2479,6 +2544,11 @@
   function runSearch(raw) {
     var q = (raw || "").trim().toLowerCase();
     if (!q) { clearSearch(); return; }
+    // Typing replaces a tapped tag rather than joining it: one filter at a
+    // time, the same rule tapping a second tag follows. Without this the chip
+    // stayed lit — and announced as pressed — for a filter that had already
+    // been replaced, and tapping it then cleared a search the box still showed.
+    if (TAGFILTER) { TAGFILTER = null; TAGFILTER_LAYER = null; markLitTags(); }
     searchTags = [];                         // expansion belongs to the query that fetched it
     var kw = layerVocab().filter(function (t) { return t.indexOf(q) >= 0 || q.indexOf(t) >= 0; });
     applySearch(q, kw);                      // instant keyword pass
@@ -2776,13 +2846,29 @@
   ================================================================== */
   var LABEL_INDEX_MIN = 12;   // below this a key already shows them; an index would be a second way to say the same thing
 
+  /* A column that qualifies as a key is NOT a label. Its kinds are already on
+     offer as a colouring and already tappable on every place, so counting them
+     in the label index gave the reader one vocabulary in two costumes — the
+     button said "Browse all 345 labels" when the layer has 335, and Culture,
+     Nature and Heritage sat at the head of the browse list while simultaneously
+     being the key. A key owns its words. */
+  function keyOwnedColumns(L) {
+    var owned = {};
+    (L._keyOptions || []).forEach(function (o) { if (o.col) owned[o.col] = 1; });
+    return owned;
+  }
+
   function tagFieldCount(L) {
-    var fields = tagFieldsOf(L);
+    var owned = keyOwnedColumns(L);
+    var fields = tagFieldsOf(L).filter(function (f) { return !owned[f]; });
     if (!fields.length) return 0;
     var seen = {}, n = 0;
     (markersByLayer[L.id] || []).forEach(function (e) {
-      var set = featureTagSet(L, e.f);
-      for (var t in set) if (!seen[t]) { seen[t] = 1; n++; }
+      fields.forEach(function (f) {
+        splitTags(e.f.properties ? e.f.properties[f] : null).forEach(function (t) {
+          if (!seen[t]) { seen[t] = 1; n++; }
+        });
+      });
     });
     return n;
   }

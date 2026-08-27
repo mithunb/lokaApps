@@ -829,6 +829,27 @@
     checkChanged();
     if (already) {
       sendRows().then(function () {
+        // Do not take the send's word for it. Twice the themes were kept, the
+        // line said the map had them, and the built layer had no such column —
+        // with nothing anywhere saying so. The server answers with the columns
+        // it now holds, so ASK, and if the column is not among them say that
+        // instead of a success nobody can check.
+        var cols = (S.result && S.result.profiles || []).map(function (p) { return p.name; });
+        if (cols.length && cols.indexOf(target.name) < 0) {
+          msg("#msg-enrich", "“" + esc(target.name) + "” is in your table, but the map did not take it. " +
+            "Tell us this happened — the atlas will build without the themes.");
+          return;
+        }
+        // The rows are on the server, but this file was ALREADY added to the
+        // atlas — so the layer on the map is the older copy, without this
+        // column, and re-sending rows does not replace it. Saying "the map has
+        // it now" here would be false, and it is exactly the shape of a theme
+        // set that seems kept and never appears.
+        if (S.committedLayer) {
+          msg("#msg-enrich", "“" + esc(target.name) + "” is in your table, but this file is already on the " +
+            "atlas — press “Add to the atlas” again to replace it with the themed version.", "ok");
+          return;
+        }
         msg("#msg-enrich", "Kept — “" + esc(target.name) + "” is a new column, and the map has it now.", "ok");
       }).catch(function (e) {
         msg("#msg-enrich", "“" + esc(target.name) + "” is in your table, but the map could not be told: " +
@@ -2018,6 +2039,7 @@
     if (!S.result) return;
     api("layers/commit", { method: "POST", body: { importId: S.result.importId, dataset: S.dataset } })
       .then(function (r) {
+        S.committedLayer = r.layerId;   // the file is on the map now — see Keep
         loadAddedLayers();
         HOST.onCommitted({ layerId: r.layerId, dataset: r.dataset });
         var openLink = '<a href="./?dataset=' + encodeURIComponent(r.dataset) + '" target="_blank">open the atlas</a>';

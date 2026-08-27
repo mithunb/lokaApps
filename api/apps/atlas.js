@@ -2250,9 +2250,26 @@ router.post('/layers/ingest', async (req, res) => {
     session.joinLayer = inference.joinLayer || (allOptions[0] && allOptions[0].id);
     // the model's read of each column is kept for placement, but 'ignore' is
     // downgraded on the way in: nothing it says should be able to delete data
-    session.columns = (inference.columns || [])
-      .filter((c) => columns.includes(c.name))
-      .map((c) => (c.role === 'ignore' ? { ...c, role: 'text' } : c));
+    /* The model's read of the columns is a HINT about roles, never the list of
+       columns. It used to be both: the list was rebuilt from whatever the model
+       named, filtered to columns that really exist. When the model answered with
+       names that did not match — a renamed column, a spelling, an empty answer —
+       the filter left NOTHING, and a session with no columns strips every column
+       from the built layer, because the keep-list downstream is built from it.
+
+       Found in a real session on the server: a re-send at 21:22 stored
+       `columns: []` while the same file's earlier send stored all ten. This is
+       also why it never showed up in local testing — without an AI key this
+       branch does not run at all.
+
+       So: start from the columns the data actually has, and let the model only
+       colour in the roles. A model that says nothing now costs nothing. */
+    const inferred = new Map(
+      (inference.columns || [])
+        .filter((c) => c && columns.includes(c.name))
+        .map((c) => [c.name, c.role === 'ignore' ? 'text' : c.role]),
+    );
+    session.columns = columns.map((name) => ({ name, role: inferred.get(name) || 'text' }));
     session.spec = inference.layer;
   } else {
     // heuristic pre-fill (also the no-Gemini path)
@@ -3179,7 +3196,13 @@ router.get('/layers/families', async (req, res) => {
     rows = (gj.features || []).map((f) => f.properties || {});
   } catch { return res.status(404).json({ error: 'the layer\'s data could not be read' }); }
 
-  const vocab = enrich.buildVocab(rows, fields);
+  // a column the viewer would offer as a key is not a label — its kinds are
+  // already a colouring and already tappable, so counting them here would put
+  // the same words in two places wearing two meanings
+  const keyShaped = enrich.keyShapedColumns(rows, fields);
+  const labelFields = fields.filter((f) => !keyShaped.has(f));
+  if (!labelFields.length) return res.json({ verdict: 'no_labels' });
+  const vocab = enrich.buildVocab(rows, labelFields);
   // the cache is keyed by the vocabulary itself, so re-styling a layer keeps it
   // and re-importing different data does not
   const stamp = crypto.createHash('sha1')

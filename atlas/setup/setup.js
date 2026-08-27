@@ -646,7 +646,11 @@
     $("#check-verdict").classList.remove("err");
     $("#check-verdict").textContent = "Reading " + GEO.file.name + "…";
     try {
-      BENCH = window.LokaDataBench.mount($("#bench"), {
+      // window.__bench mirrors what the add-data page already exposes: a handle
+      // on the bench from the console. It is how a wizard-only fault in the data
+      // steps can be reproduced at all — without it the bench's state is sealed
+      // inside this closure and the only way to test the flow is by hand.
+      BENCH = window.__bench = window.LokaDataBench.mount($("#bench"), {
         mode: "embedded",
         api: API,
         viewer: "../",
