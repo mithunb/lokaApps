@@ -557,7 +557,13 @@
     }
     said += " Take any out, or search to add more.";
     msg(2, said, "ok");
-    showFileCard(file.name, rows + " rows · " + added + " place" + (added === 1 ? "" : "s") + " found");
+    /* The card used to count only the places this file ADDED to the selection,
+       so a file whose places you had already chosen read "0 places found"
+       directly under a sentence saying they had been found. Two lines of the
+       same screen disagreeing. Report what the file's places ARE. */
+    var found = S.chosen.length;
+    showFileCard(file.name, rows + " rows · " + found + " place" + (found === 1 ? "" : "s") +
+      (added ? "" : " (already chosen)"));
     syncRungs();
   }
 

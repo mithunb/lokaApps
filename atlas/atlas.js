@@ -506,16 +506,6 @@
      An id the app does not know is left exactly as the manifest wrote it, so a
      hand-made atlas can still carry a basemap of its own.
   ================================================================== */
-  var CARTO = ["a", "b", "c"];
-  function cartoTiles(style) {
-    // @2x with tileSize 256 — a 512px image drawn into a 256pt tile, which is
-    // what a retina screen needs. At 1x the whole surface is upscaled and soft,
-    // labels worst of all, because text is where blur shows first.
-    return CARTO.map(function (h) {
-      return "https://" + h + ".basemaps.cartocdn.com/" + style + "/{z}/{x}/{y}@2x.png";
-    });
-  }
-
   var APP_BASEMAPS = {
     /* OSM Bright, from OpenFreeMap — roads, parks and water in gentle colour,
        the look chosen from map-style-variations.html, but drawn from VECTOR
@@ -918,7 +908,12 @@
   }
 
   function categoryLegend(L) {
-    var mode = cropState[L.id];
+    // The panel is built before the layer's data lands — deliberately, so the
+    // controls never wait on a tile fetch — which means this can run before
+    // cropState has been given its opening value. Reading it raw printed
+    // "Grows undefined" on the live map: a developer's word, in the key, where
+    // a crop's name belongs. Fall back to the same default the layer sets.
+    var mode = cropState[L.id] || L.defaultMode || "diversity";
     if (mode === "diversity") {
       var r = L.diversity.ramp;
       return { ramp: r, min: "1", max: r.length + "+", unit: "crops / block" };
