@@ -533,6 +533,23 @@
     },
   };
 
+  /* Which font names the ACTIVE glyph source can serve.
+
+     Every piece of text the atlas draws itself — a boundary's name, the number
+     on a cluster disc — has to name a font, and the name has to exist in
+     whichever glyph server the style points at. OSM Bright's fonts come from
+     OpenFreeMap and are Noto; the old CARTO style's were Open Sans. Asking for
+     the wrong one does not fall back: the glyph fetch 404s and the whole text
+     layer draws nothing.
+
+     That is exactly how the map came up empty after the basemap changed. The
+     cluster disc's count could not be drawn, so the disc was not drawn, and
+     because every marker was folded into a disc there was nothing left to see —
+     66 markers in the page and an empty map.
+
+     So the names are chosen with the style, not hard-coded at the point of use. */
+  var GLYPH_FONTS = { regular: "Noto Sans Regular", bold: "Noto Sans Bold" };
+
   // The ground behind the tiles, so a slow fetch shows the map's own colour
   // rather than a grey belonging to no basemap. Starts as the app's everyday
   // map and is re-read from whichever basemap the atlas opens on, so there is
@@ -614,8 +631,11 @@
       })
       .catch(function (e) {
         // the atlas is not held hostage by a style server: fall back to the
-        // plain background and whatever raster basemaps exist, and say why
+        // plain background and whatever raster basemaps exist, and say why —
+        // and back to the font names THAT glyph source serves, or the fallback
+        // would draw no text either
         console.error("Atlas: the base map style could not be loaded (" + e.message + ")");
+        GLYPH_FONTS = { regular: "Open Sans Regular", bold: "Open Sans Bold" };
         return plain;
       });
   }
@@ -818,7 +838,7 @@
       visibility: vis(L),
       "text-field": ["coalesce", ["get", t.property], ""],
       "text-size": t.size || 12,
-      "text-font": ["Open Sans Regular"],
+      "text-font": [GLYPH_FONTS.regular],
       "symbol-placement": L.type === "line" ? "line" : "point",
       "text-allow-overlap": !!t.alwaysShow,
       "text-ignore-placement": !!t.alwaysShow,
@@ -1768,7 +1788,7 @@
       filter: ["has", "point_count"],
       layout: {
         "text-field": ["get", "point_count_abbreviated"],
-        "text-font": ["Open Sans Bold"],
+        "text-font": [GLYPH_FONTS.bold],
         "text-size": ["step", ["get", "point_count"], 12, 10, 13, 50, 14],
         // the count IS the feature — it must never lose a placement contest
         "text-allow-overlap": true,
