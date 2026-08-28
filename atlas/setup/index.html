@@ -119,6 +119,11 @@
     .sugg button[aria-selected="true"] { outline:2px solid var(--color-moss); outline-offset:-2px; }
     .sugg .nm { display:block; font-family:'Figtree',sans-serif; font-size:var(--t-ui); font-weight:600; }
     .sugg .wh { display:block; font-size:var(--t-meta); color:var(--color-text-muted); }
+    /* A cold lookup takes about four seconds — the server reads the whole
+       country's boundary list the first time. Silence there reads as broken. */
+    .sugg .note { display:flex; align-items:center; padding:.55rem .6rem;
+      font-size:var(--t-ui); color:var(--color-text-secondary); }
+    .sugg .note.is-err { color:var(--color-rust-deep); }
     .chips { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.7rem; }
     .chip { display:inline-flex; align-items:center; gap:.15rem; padding:.3rem .3rem .3rem .6rem;
       background:var(--color-bg-alt); border-radius:999px; font-size:var(--t-ui); }

@@ -27,6 +27,62 @@ from common import (
 )
 
 
+# The official district list and the map people pick from are two different
+# drawings of the same country, and they disagree at the edges. Keeping a
+# district only when most of IT sits inside the pick answers "I chose a state,
+# give me its districts" — but it throws away the opposite case. Picking the
+# city of Kolkata gave a selection holding 94% of one official district while
+# covering only 46% of it, four points under the old cut, so every district was
+# dropped and the build died with nothing to draw. A district now survives if
+# most of it is inside the pick, OR if it accounts for a real share of what was
+# picked. Measured on that selection: Kolkata is kept at 94%, and its three
+# neighbours still go at 5.7%, 0.4% and 0.0%.
+_MOST_OF_DISTRICT = 0.5
+_REAL_SHARE_OF_PICK = 0.2
+
+
+def _pick_districts(features, sel, parts=None):
+    """Which official districts belong to the picked area, as (feature, shape).
+
+    Two tests and a floor. A district is in if most of IT sits inside the pick
+    — which is what "I chose a state, give me its districts" means — or if it
+    accounts for a real share of what was picked, which is the opposite case
+    and the one that used to be thrown away.
+
+    The floor then guarantees the promise the search box makes: every place a
+    person actually picked contributes its best-overlapping district, so a
+    place offered while typing always comes back with boundaries drawn. Picking
+    Kolkata alongside Haora used to return Haora's district and quietly lose
+    Kolkata's; the floor keeps both.
+    """
+    cand = []
+    for f in features:
+        g = shape(f["geometry"]).buffer(0)
+        if g.intersects(sel):
+            cand.append((f, g))
+
+    keep = set()
+    for i, (f, g) in enumerate(cand):
+        inter = g.intersection(sel)
+        if inter.is_empty:
+            continue
+        if (inter.area / max(g.area, 1e-12) >= _MOST_OF_DISTRICT
+                or inter.area / max(sel.area, 1e-12) >= _REAL_SHARE_OF_PICK):
+            keep.add(i)
+
+    for part in (parts or []):
+        pg = shape(part["geometry"]).buffer(0)
+        best_i, best_area = None, 0.0
+        for i, (f, g) in enumerate(cand):
+            a = g.intersection(pg).area
+            if a > best_area:
+                best_area, best_i = a, i
+        if best_i is not None:
+            keep.add(best_i)
+
+    return [cand[i] for i in sorted(keep)]
+
+
 # ---------------------------------------------------------------- admin
 
 def admin(ctx):
@@ -63,12 +119,8 @@ def _admin_lgd(ctx):
     gj = json.load(open(path))
     sel = ctx["sel"]
     feats = []
-    for f in gj["features"]:
+    for f, g in _pick_districts(gj["features"], sel, ctx.get("selParts")):
         p = f["properties"]
-        g = shape(f["geometry"]).buffer(0)
-        inter = g.intersection(sel)
-        if inter.is_empty or inter.area / max(g.area, 1e-12) < 0.5:
-            continue
         g = g.simplify(0.0007, preserve_topology=True)
         name = str(p.get("dtname") or "").strip().title()
         feats.append({"type": "Feature", "properties": {
@@ -1241,11 +1293,7 @@ def _nfhs_choropleth(ctx, key):
     sel = ctx["sel"]
     feats = []
     have = 0
-    for f in gj["features"]:
-        g = shape(f["geometry"]).buffer(0)
-        inter = g.intersection(sel)
-        if inter.is_empty or inter.area / max(g.area, 1e-12) < 0.5:
-            continue
+    for f, g in _pick_districts(gj["features"], sel, ctx.get("selParts")):
         p = f["properties"]
         st = str(p.get("stname") or "").strip()
         dt = str(p.get("dtname") or "").strip()

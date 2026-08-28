@@ -162,11 +162,14 @@ def main():
     LAYER_LO, LAYER_HI = 5.0, 95.0
     set_window(0.0, LAYER_LO, "Preparing your region", 0, n)
     progress("region", 40, "resolving your region")
-    sel, sel_bounds, _ = load_selection(spec)
+    sel, sel_bounds, sel_parts = load_selection(spec)
     bbox = pad_bbox(sel_bounds, 0.06)
     ctx = {
         "spec": spec, "tier": spec["tier"], "out": out, "cache": cache,
         "sel": sel, "bbox": bbox, "clip": bbox_geom(bbox),
+        # the picked places one by one, not just their union — the district
+        # pickers use these to guarantee every picked place gets boundaries
+        "selParts": sel_parts,
     }
 
     layers = []

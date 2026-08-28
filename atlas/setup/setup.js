@@ -229,6 +229,29 @@
   function closeSugg() {
     sugg.hidden = true; box.setAttribute("aria-expanded", "false"); cursor = -1;
     box.removeAttribute("aria-activedescendant");
+    box.setAttribute("aria-busy", "false");
+  }
+  /* One row in the list that is not a place: what the lookup is doing, or why
+     it came back with nothing. A cold lookup takes about four seconds, and
+     silence for four seconds is indistinguishable from broken. */
+  function noteSugg(text, kind) {
+    sugg.innerHTML = "";
+    var li = document.createElement("li");
+    li.setAttribute("role", "presentation");
+    var row = document.createElement("span");
+    row.className = "note" + (kind === "err" ? " is-err" : "");
+    if (kind === "busy") {
+      var sp = document.createElement("span");
+      sp.className = "spin"; sp.setAttribute("aria-hidden", "true");
+      row.appendChild(sp);
+    }
+    row.appendChild(document.createTextNode(text));
+    li.appendChild(row); sugg.appendChild(li);
+    shown = []; cursor = -1;
+    sugg.hidden = false;
+    box.setAttribute("aria-expanded", "true");
+    box.setAttribute("aria-busy", kind === "busy" ? "true" : "false");
+    box.removeAttribute("aria-activedescendant");
   }
   function has(id) { return S.chosen.some(function (c) { return c.id === id; }); }
   // "tumakuru" typed, "Tumakuru" shown — the match is case-insensitive but the
@@ -276,22 +299,29 @@
     q = q.trim();
     if (q.length < 2 || !S.iso3) { shown = []; closeSugg(); return; }
     var seq = ++searchSeq;
+    noteSugg("Looking for places…", "busy");
     api("geo/search?iso3=" + encodeURIComponent(S.iso3) + "&q=" + encodeURIComponent(q) + "&limit=8")
       .then(function (r) {
         if (seq !== searchSeq) return;            // a newer keystroke won
-        shown = (r.matches || []).filter(function (m) { return !has(m.id); });
-        cursor = -1;
+        var matches = (r.matches || []).filter(function (m) { return !has(m.id); });
+        box.setAttribute("aria-busy", "false");
+        if (!matches.length) { noteSugg("No places here match “" + q + "”.", "empty"); return; }
+        shown = matches; cursor = -1;
         paintSugg();
       })
       .catch(function (e) {
         if (seq !== searchSeq) return;
-        shown = []; closeSugg();
+        noteSugg("Could not reach the list of places. Try again in a moment.", "err");
         msg(2, e && e._status === 404 ? "" : errMsg(e));
       });
   }
   box.addEventListener("input", function () {
     clearTimeout(searchTimer);
     var v = this.value;
+    // the wait shows straight away rather than after the typing pause — that
+    // pause was itself part of what felt broken
+    if (v.trim().length >= 2 && S.iso3) noteSugg("Looking for places…", "busy");
+    else closeSugg();
     searchTimer = setTimeout(function () { search(v); }, 220);
   });
   box.addEventListener("keydown", function (e) {
@@ -301,6 +331,7 @@
     }
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
+      if (!shown.length) return; // a wait or a message is showing — nothing to step through
       cursor += e.key === "ArrowDown" ? 1 : -1;
       if (cursor < 0) cursor = shown.length - 1;
       if (cursor >= shown.length) cursor = 0;

@@ -1443,6 +1443,29 @@
     function close() {
       sugg.hidden = true; box.setAttribute("aria-expanded", "false"); cursor = -1;
       box.removeAttribute("aria-activedescendant");
+      box.setAttribute("aria-busy", "false");
+    }
+    /* One row in the suggestion box that is not a place: what the lookup is
+       doing, or why it came back with nothing. A failure used to close the box
+       in silence, which looked exactly like "there is no such place". */
+    function suggNote(text, kind) {
+      sugg.innerHTML = "";
+      var li = document.createElement("li");
+      li.setAttribute("role", "presentation");
+      var row = document.createElement("span");
+      row.className = "own-sugg-note" + (kind === "err" ? " is-err" : "");
+      if (kind === "busy") {
+        var sp = document.createElement("span");
+        sp.className = "own-spin"; sp.setAttribute("aria-hidden", "true");
+        row.appendChild(sp);
+      }
+      row.appendChild(document.createTextNode(text));
+      li.appendChild(row); sugg.appendChild(li);
+      shown = []; cursor = -1;
+      sugg.hidden = false;
+      box.setAttribute("aria-expanded", "true");
+      box.setAttribute("aria-busy", kind === "busy" ? "true" : "false");
+      box.removeAttribute("aria-activedescendant");
     }
     function paint() {
       sugg.innerHTML = "";
@@ -1488,19 +1511,29 @@
       q = q.trim();
       if (q.length < 2) { shown = []; close(); return; }
       var mine = ++seq;
+      suggNote("Looking for places…", "busy");
       api("geo/search?iso3=" + encodeURIComponent(iso3) + "&q=" + encodeURIComponent(q) + "&limit=8")
         .then(function (r) {
           if (mine !== seq) return;
-          shown = (r.matches || []).filter(function (m) {
+          var matches = (r.matches || []).filter(function (m) {
             return !REG.chosen.some(function (c) { return c.id === m.id; });
           });
-          cursor = -1; paint();
+          box.setAttribute("aria-busy", "false");
+          if (!matches.length) { suggNote("No places here match “" + q + "”.", "empty"); return; }
+          shown = matches; cursor = -1; paint();
         })
-        .catch(function () { if (mine === seq) { shown = []; close(); } });
+        .catch(function () {
+          if (mine !== seq) return;
+          suggNote("Could not reach the list of places. Try again in a moment.", "err");
+        });
     }
     box.addEventListener("input", function () {
       clearTimeout(timer);
       var v = this.value;
+      // the wait shows straight away rather than after the typing pause — that
+      // pause was itself part of what felt broken
+      if (v.trim().length >= 2) suggNote("Looking for places…", "busy");
+      else close();
       timer = setTimeout(function () { search(v); }, 220);
     });
     box.addEventListener("keydown", function (e) {
@@ -1510,6 +1543,7 @@
       }
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
+        if (!shown.length) return; // a wait or a message is showing — nothing to step through
         cursor += e.key === "ArrowDown" ? 1 : -1;
         if (cursor < 0) cursor = shown.length - 1;
         if (cursor >= shown.length) cursor = 0;

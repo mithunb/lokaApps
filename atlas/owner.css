@@ -256,6 +256,22 @@
 .own-nm { font-size:.85rem; font-weight:600; color:var(--color-text-primary); }
 .own-wh { font-size:.72rem; color:var(--color-text-muted); }
 
+/* A cold place lookup costs about four seconds — the server reads the whole
+   country's boundary list the first time. Silence there reads as broken, so the
+   box says what it is doing, in the same place the answers will appear. */
+.own-sugg-note {
+  display:flex; align-items:center;
+  padding:.45rem .5rem; font-size:.8rem; color:var(--color-text-secondary);
+}
+.own-sugg-note.is-err { color:var(--color-rust-deep); }
+.own-spin {
+  display:inline-block; width:.8em; height:.8em; margin-right:.45em; flex:none;
+  border:2px solid currentColor; border-right-color:transparent; border-radius:50%;
+  animation:own-spin .6s linear infinite;
+}
+@keyframes own-spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .own-spin { animation-duration:1.6s; } }
+
 .own-inv { display:flex; flex-direction:column; gap:.3rem; }
 .own-inv-row {
   display:flex; align-items:center; gap:.5rem;
