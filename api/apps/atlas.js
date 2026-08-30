@@ -160,6 +160,21 @@ function pointInGeom(x, y, geom) {
 // Which ADM depths does geoBoundaries actually have for this country? (cached probe)
 const MAX_LEVEL = 4;
 
+/* What the builders can actually honour, per country.
+
+   India's boundary layer always resolves to the official district list
+   whatever level was picked, so a subdistrict or a locality is a choice that
+   cannot change the atlas — only confuse it. Typing "kolkata" returned three
+   rows all reading Kolkata; the one labelled "district" was 92 km² against
+   the official district's 186, and picking it is what killed a build. All
+   three produce the same atlas, so only the two real levels are offered.
+
+   Everywhere else the builder draws exactly the level that was picked, so
+   every level is honest. null means no limit. */
+function buildableLevels(iso3) {
+  return tierOf(iso3) === 'india' ? [1, 2] : null;
+}
+
 
 /* ---- free-text place search (backs the box that replaces the drill-down) ---- */
 
@@ -271,8 +286,10 @@ router.get('/geo/search', async (req, res) => {
     // /geo/levels owns it, and two writers is how caches rot.)
     let avail = null;
     try { avail = JSON.parse(fs.readFileSync(path.join(GEOCACHE_DIR, `${iso3}-levels.json`), 'utf8')).levels; } catch {}
+    const reach = buildableLevels(iso3);
     const levels = (avail || Array.from({ length: MAX_LEVEL }, (_, i) => i + 1))
       .filter((l) => l >= 1 && l <= MAX_LEVEL)
+      .filter((l) => !reach || reach.includes(l))   // never offer ground no builder can draw
       .sort((a, b) => a - b);
 
     const found = [];
@@ -779,16 +796,27 @@ router.post('/instances', async (req, res) => {
   // numeric suffix rather than an error the user can't act on. A caller that
   // pins an explicit slug still gets the strict 409.
   const slugTaken = (s) => !reg.slugAvailable(s, DATASETS_ROOT) || fs.existsSync(path.join(PRIVATE_ROOT, s));
+  /* A build that died still holds its address, so a second attempt at
+     "Kolkatta" became "kolkatta-2" for a name nobody else wanted. Take the
+     address back when — and only when — it belongs to this same person's
+     own failed atlas, one that published nothing and left no files behind. */
+  const reclaimable = (s) => {
+    const prev = reg.getInstance(s);
+    if (!prev || prev.status !== 'failed' || prev.publishedAt) return false;
+    if (fs.existsSync(path.join(DATASETS_ROOT, s))) return false;
+    if (fs.existsSync(path.join(PRIVATE_ROOT, s))) return false;
+    return callerRole(req, prev) === 'owner';
+  };
   let slug;
   if (b.slug) {
     slug = String(b.slug);
     if (slugTaken(slug)) return res.status(409).json({ error: 'slug unavailable', slug });
   } else {
     const base = reg.validSlug(reg.slugify(`${title}`)) ? reg.slugify(`${title}`) : 'atlas';
-    slug = slugTaken(base) ? null : base;
+    slug = (!slugTaken(base) || reclaimable(base)) ? base : null;
     for (let n = 2; !slug && n <= 99; n++) {
       const cand = (base + '-' + n).slice(0, 40);
-      if (!slugTaken(cand)) slug = cand;
+      if (!slugTaken(cand) || reclaimable(cand)) slug = cand;
     }
     if (!slug) return res.status(409).json({ error: 'couldn’t find a free web address for that title — try a different one' });
   }
@@ -2178,6 +2206,14 @@ router.post('/layers/ingest', async (req, res) => {
     filename: String(b.filename || '').slice(0, 120), meta,
     columnsRaw: columns, rows, profilesSummary: profiles.map((p) => ({ name: p.name, type: p.type })),
     geomIdx: geomIdx || undefined,
+    // What the owner wants each key called. Kept beside the rows so it survives
+    // to commit — a key otherwise wears its raw column name, and "themes" says
+    // how it was made rather than what it holds.
+    keyLabels: (b.keyLabels && typeof b.keyLabels === 'object')
+      ? Object.fromEntries(Object.entries(b.keyLabels)
+          .filter(([k, v]) => k && typeof v === 'string' && v.trim())
+          .map(([k, v]) => [String(k).slice(0, 60), v.trim().slice(0, 40)]))
+      : undefined,
     replacingLayerId: replacing ? replacing.id : undefined,
     replacingAddedBy: replacing ? replacing.addedBy : undefined,
     replacingAddedAt: replacing ? replacing.addedAt : undefined,
@@ -2964,6 +3000,10 @@ router.post('/layers/commit', (req, res) => {
       frag.stanza.addedBy = session.replacingAddedBy || undefined;
       frag.stanza.addedAt = session.replacingAddedBy
         ? (session.replacingAddedAt || Date.now()) : undefined;
+    }
+    if (session.keyLabels && Object.keys(session.keyLabels).length) {
+      // merge, never replace: a layer may already carry a name for another key
+      frag.stanza.keyLabels = Object.assign({}, frag.stanza.keyLabels || {}, session.keyLabels);
     }
     const out = imports.commitLayer(session.dataset, frag.stanza, frag.sourceFile,
       { type: 'FeatureCollection', features });

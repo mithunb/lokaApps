@@ -359,6 +359,14 @@
         <div class="prog"><i id="fill"></i></div>
         <p class="hint" id="prog-msg" aria-live="polite">Starting…</p>
         <div class="log" id="log"></div>
+        <!-- A build that stops used to leave this screen with no button on it and
+             Build still greyed out behind it — the only way on was to abandon the
+             wizard, which is exactly what happened. -->
+        <div class="btnrow" id="failed-row" hidden>
+          <button class="btn" id="build-retry">Try building again</button>
+          <button class="btn quiet" data-go="2">Change the region</button>
+          <span class="hint">Nothing was published, and the name is still yours.</span>
+        </div>
         <div class="btnrow" id="done-row" hidden>
           <a class="btn" id="open-editor" href="#">Open your atlas →</a>
           <span class="hint">It starts unlisted: only you can see it until you make it live.</span>

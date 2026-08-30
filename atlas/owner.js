@@ -445,16 +445,42 @@
              and the only honest way to judge one is to watch it colour the map
              you are looking at. */
           '<div class="own-themes" id="own-themes">' +
-            '<div class="own-group">Find themes</div>' +
-            '<p class="own-note">We read your data with AI to find the patterns running ' +
-              'through it, and show them as themes. They arrive as one new column you can ' +
-              'keep or discard — what you uploaded is never changed.</p>' +
-            '<button class="share-btn" id="own-th-go" type="button">Find themes</button>' +
+            '<div class="own-group">Discover underlying patterns</div>' +
+            /* Already found once: say so, and never offer a second reading as
+               though it were free. Reading again does not refine the patterns —
+               it replaces them with different ones, so the key readers learned
+               disappears. Both costs are named before the button. */
+            '<div id="own-th-have" hidden>' +
+              '<p class="own-note" id="own-th-have-msg"></p>' +
+              '<button class="share-btn quiet" id="own-th-again" type="button">Read them again…</button>' +
+              '<div id="own-th-again-warn" hidden>' +
+                '<p class="own-note own-th-warn">Reading again does not sharpen what is here — it ' +
+                  'replaces it. The patterns below go, different ones take their place, and anyone ' +
+                  'who learned this key sees a new one. It costs another reading of every place.</p>' +
+                '<div class="own-row own-row-tight">' +
+                  '<button class="share-btn" id="own-th-again-yes" type="button">Read again anyway</button>' +
+                  '<button class="share-btn" id="own-th-again-no" type="button">Keep what I have</button>' +
+                "</div>" +
+              "</div>" +
+            "</div>" +
+            '<div id="own-th-none">' +
+              '<p class="own-note">We read the words your places carry and look for the patterns ' +
+                'running through them. They arrive as one new column you can keep or discard — ' +
+                'what you uploaded is never changed.</p>' +
+              '<button class="share-btn" id="own-th-go" type="button">Discover underlying patterns</button>' +
+            "</div>" +
             '<p class="own-note" id="own-th-msg" hidden></p>' +
             '<div id="own-th-offer" hidden>' +
               '<div class="own-th-chips" id="own-th-chips"></div>' +
+              /* The key wears whatever this says. Left as it is, readers saw the
+                 raw column name — "themes" — which describes how it was made,
+                 not what it holds. */
+              '<label class="own-fld" for="own-th-name">Call this key' +
+                '<input type="text" id="own-th-name" maxlength="40" placeholder="What these places are" />' +
+                '<span class="own-note">The words above the switch a reader turns on.</span>' +
+              "</label>" +
               '<div class="own-row own-row-tight">' +
-                '<button class="share-btn primary" id="own-th-keep" type="button">Keep these themes</button>' +
+                '<button class="share-btn primary" id="own-th-keep" type="button">Keep these patterns</button>' +
                 '<button class="share-btn" id="own-th-drop" type="button">Discard</button>' +
               "</div>" +
               '<p class="own-note">Nothing is added until you keep them.</p>' +
@@ -701,6 +727,7 @@
     renderPalette();
     renderSwatches();
     syncOneColour();
+    renderThemesState();
     var wt = $("#own-w-title");
     if (ED.titleCols.length && ED.cur.titleBy) {
       var topts = ED.titleCols.map(function (n) { return { value: n, label: n }; });
@@ -712,6 +739,29 @@
     } else {
       wt.hidden = true;
     }
+  }
+
+  /* Patterns are found once and recorded. A layer that already carries them
+     says so and offers only a deliberate re-reading; a layer that does not gets
+     the plain offer. Without this the same button sat there afterwards looking
+     free, and pressing it paid for a full reading of every place again. */
+  function themesProfile() {
+    return (ED && ED.profiles || []).filter(function (p) { return p.name === "themes"; })[0] || null;
+  }
+  function renderThemesState() {
+    var have = $("#own-th-have"), none = $("#own-th-none");
+    if (!have || !none) return;
+    var p = themesProfile();
+    var kinds = p && Number(p.kinds || 0);
+    if (p && kinds >= 2) {
+      $("#own-th-have-msg").textContent =
+        "Patterns were found for this layer already — " + kinds +
+        (kinds === 1 ? " kind" : " kinds") + ", and the map can be coloured by them now.";
+      have.hidden = false; none.hidden = true;
+    } else {
+      have.hidden = true; none.hidden = false;
+    }
+    $("#own-th-again-warn").hidden = true;
   }
 
   function renderPalette() {
@@ -1106,7 +1156,7 @@
     $("#own-save-btn").onclick = saveChanges;
     $("#own-discard-btn").onclick = discardChanges;
 
-    /* ---- Find themes, on the layer you are looking at ----------------------
+    /* ---- Discover underlying patterns, on the layer you are looking at -----
        The whole loop runs on endpoints that already exist. The layer's own file
        supplies the rows; /layers/enrich proposes the themes; keeping them sends
        the table back with one new column and commits it in place, which is
@@ -1181,6 +1231,16 @@
         });
     };
 
+    // the deliberate second reading: warn, then let them through or back out
+    $("#own-th-again").onclick = function () { $("#own-th-again-warn").hidden = false; };
+    $("#own-th-again-no").onclick = function () { $("#own-th-again-warn").hidden = true; };
+    $("#own-th-again-yes").onclick = function () {
+      $("#own-th-again-warn").hidden = true;
+      $("#own-th-have").hidden = true;
+      $("#own-th-none").hidden = false;
+      $("#own-th-go").click();
+    };
+
     $("#own-th-drop").onclick = function () {
       TH = null;
       $("#own-th-offer").hidden = true;
@@ -1216,6 +1276,8 @@
               return { name: n, type: (n === "latitude" || n === "longitude") ? "number" : "string" };
             }),
             rows: rows,
+            // what the switch should say; blank falls back to the column name
+            keyLabels: { themes: (($("#own-th-name") || {}).value || "").trim() },
             meta: { sourceName: ED.stanza.source, rowCount: rows.length },
           } });
         })
@@ -1229,7 +1291,7 @@
         .then(function () {
           TH = null;
           $("#own-th-offer").hidden = true;
-          toast("Themes added — the atlas can be coloured by them now.");
+          toast("Patterns added — the atlas can be coloured by them now.");
           closeEdit(null);
           /* Re-read the layer. The new column is on the server, but this page is
              still showing the copy it loaded when it opened — and which columns

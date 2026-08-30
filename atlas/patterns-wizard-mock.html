@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fork A — the door opens: a small wizard, or the panel itself</title>
+<meta name="robots" content="noindex">
+<!-- A decision page for Mithun, not a product page. Nothing here is wired to a server.
+     The decided things it builds on: the door is called "Discover underlying patterns";
+     pressing it opens a small wizard; found patterns are recorded so nobody pays twice
+     by accident. The open fork: the wizard he asked for (A1), or the earlier in-place
+     design that unfolds inside the panel (A2). Both drawn at true size, on the real
+     Bengaluru layer. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Figtree:wght@600;700&display=swap">
+<style>
+  :root{
+    /* study chrome — the warm paper the other decision pages wear */
+    --paper:#f4f0e4; --ink:#2A241A; --muted:#6b6353; --line:#d9d2bf;
+    --moss:#40573D; --rust:#A6522F; --rustdeep:#7C3616; --card:#fbf9f2;
+    --moss-soft:#e7ecdf; --rust-soft:#f3e3d9;
+    /* the product's own tokens, for everything drawn as product */
+    --p-surface:#FFFFFF; --p-moss:#4A5A33; --p-canopy:#384526;
+    --p-ink:#2A241A; --p-ink2:#564E3C; --p-mut:#6B6350;
+    --p-border:rgba(42,36,26,.14); --p-div:rgba(42,36,26,.09);
+    --p-paperalt:#F0EFEA; --p-rust:#AE5028;
+    /* the key palette, assigned by the system in count order */
+    --k1:#332288; --k2:#999933; --k3:#44AA99; --k4:#AA4499; --k5:#117733;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font-family:'Figtree','Avenir Next',system-ui,sans-serif; background:var(--paper); color:var(--ink); }
+
+  header.study{ padding:1.4rem 1.6rem 1.2rem; border-bottom:1px solid var(--line); }
+  header.study h1{ margin:0 0 .35rem; font-size:1.25rem; }
+  header.study p{ margin:.2rem 0; max-width:62rem; color:var(--muted); font-size:.86rem; line-height:1.55; }
+  header.study p b{ color:var(--ink); }
+  .verdicts{ display:flex; flex-wrap:wrap; gap:.8rem; margin-top:.8rem; max-width:64rem; }
+  .verdict-line{ flex:1 1 26rem; background:var(--card); border:1.4px solid var(--moss); border-radius:10px;
+    padding:.7rem .9rem .75rem; font-size:.92rem; line-height:1.5; }
+  .verdict-line .vk{ display:block; font-size:.68rem; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--moss); margin-bottom:.25rem; }
+
+  section{ padding:1.3rem 1.6rem 1.6rem; border-bottom:1px solid var(--line); }
+  h2{ font-size:1.02rem; margin:.1rem 0 .25rem; }
+  .sub{ color:var(--muted); font-size:.84rem; margin:.15rem 0 1rem; max-width:62rem; line-height:1.6; }
+  .sub b{ color:var(--ink); }
+  footer{ padding:1.1rem 1.6rem 1.8rem; font-size:.76rem; color:var(--muted); line-height:1.7; max-width:64rem; }
+  footer b{ color:var(--ink); }
+
+  /* ---------- product drawings: shared ---------- */
+  .prod{ font-family:'DM Sans',system-ui,sans-serif; color:var(--p-ink); }
+  .stagewrap{ display:flex; flex-wrap:wrap; gap:1.5rem; align-items:flex-start; }
+  .drawing{ flex:0 0 auto; max-width:100%; }
+  .drawing > .caption{ max-width:22rem; margin-top:.55rem; font-size:.76rem; line-height:1.55; color:var(--muted); font-family:'Figtree',sans-serif; }
+  .drawing > .caption b{ color:var(--ink); }
+  .drawing > .caption .n{ color:var(--moss); font-weight:700; }
+
+  /* the floating panel, true size */
+  .ppanel{ width:19.5rem; background:var(--p-surface); border:1px solid var(--p-border); border-radius:4px;
+    box-shadow:0 2px 12px rgba(42,36,26,.12); overflow:hidden; }
+  .phead{ display:flex; align-items:center; justify-content:space-between; padding:.55rem .8rem;
+    border-bottom:1px solid var(--p-div); }
+  .phead strong{ font-family:'Figtree',sans-serif; font-size:.7rem; font-weight:600; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--p-ink2); }
+  .phead .chev{ color:var(--p-mut); font-size:.7rem; }
+  .pbody{ padding:.6rem .8rem .7rem; }
+  .ppanel.crop{ border-top:2px dashed var(--p-border); border-top-left-radius:0; border-top-right-radius:0; }
+  .pgroup{ font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:700; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--p-ink2); padding:.2rem 0 .45rem; border-bottom:1px solid var(--p-div);
+    margin-bottom:.45rem; }
+  .pgroup span{ font-family:'DM Sans',sans-serif; font-weight:400; letter-spacing:0; color:var(--p-mut); }
+  .prow{ display:flex; align-items:center; gap:.55rem; min-height:32px; }
+  .psw{ flex:0 0 auto; width:32px; height:18px; border-radius:999px; background:#cfd6cf; position:relative; }
+  .psw::after{ content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%;
+    background:#fff; box-shadow:0 1px 2px rgba(42,36,26,.25); }
+  .psw.on{ background:var(--p-moss); }
+  .psw.on::after{ left:auto; right:2px; }
+  .psw.sm{ width:26px; height:15px; }
+  .psw.sm::after{ width:11px; height:11px; }
+  .pname{ font-size:.875rem; font-weight:600; line-height:1.25; }
+  .pchange{ margin-left:auto; font-size:.72rem; font-weight:600; color:var(--p-moss);
+    border:1px solid var(--p-border); border-radius:4px; padding:.1rem .45rem; background:#fff; }
+  .keylbl{ font-size:.72rem; font-weight:600; color:var(--p-mut); margin:.35rem 0 .1rem; }
+  .keyrow{ display:flex; align-items:center; gap:.5rem; min-height:24px; padding:.1rem 0; }
+  .keyrow .kname{ font-size:.8rem; font-weight:600; }
+  .keyrow.newkey{ border-radius:4px; }
+  @media (prefers-reduced-motion: no-preference){
+    .keyrow.newkey{ animation:landed 2.4s ease-out 1; }
+    @keyframes landed{ 0%{ background:rgba(74,90,51,.22);} 100%{ background:transparent;} }
+  }
+  .doorline{ margin:.4rem 0 .1rem; }
+  .door{ font-size:.75rem; font-weight:600; color:var(--p-moss); }
+  .plegend{ margin:.45rem 0 .1rem; display:flex; flex-direction:column; gap:.2rem; }
+  .plegend .lr{ display:flex; align-items:center; gap:.4rem; font-size:.8rem; }
+  .dot{ width:10px; height:10px; border-radius:50%; flex:0 0 auto; }
+  .pby{ font-size:.72rem; color:var(--p-mut); padding-left:calc(32px + .55rem); margin-top:.1rem; }
+
+  /* the record line — what "written down" looks like at rest */
+  .rec{ margin:.45rem 0 .1rem; padding:.45rem .55rem; background:rgba(74,90,51,.07); border-radius:4px;
+    font-size:.72rem; line-height:1.5; color:var(--p-ink2); }
+  .rec b{ font-weight:600; color:var(--p-ink); }
+  .rec .again{ display:inline-block; margin-top:.15rem; font-weight:600; color:var(--p-moss); }
+
+  /* ---------- the wizard sheet, true size ---------- */
+  .wiz{ width:22rem; background:var(--p-surface); border:1px solid var(--p-border); border-radius:4px;
+    box-shadow:0 2px 12px rgba(42,36,26,.12); }
+  .wizhead{ padding:.65rem .9rem .55rem; border-bottom:1px solid var(--p-div); display:flex; align-items:baseline; justify-content:space-between; gap:.6rem; }
+  .wizhead strong{ font-family:'Figtree',sans-serif; font-size:.92rem; font-weight:700; }
+  .wizhead .x{ color:var(--p-mut); font-size:.85rem; }
+  .wizstep{ font-size:.68rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--p-mut); }
+  .wizbody{ padding:.7rem .9rem .85rem; }
+  .wizbody p{ font-size:.8rem; line-height:1.55; color:var(--p-ink2); margin:.2rem 0 .6rem; }
+  .wizbody p b{ color:var(--p-ink); font-weight:600; }
+  .readplan{ margin:.2rem 0 .7rem; border:1px solid var(--p-div); border-radius:4px; }
+  .rp-row{ display:flex; align-items:baseline; gap:.5rem; padding:.4rem .55rem; border-top:1px solid var(--p-div); font-size:.78rem; }
+  .rp-row:first-child{ border-top:none; }
+  .rp-row .rc{ font-weight:600; min-width:6.2rem; }
+  .rp-row .rn{ color:var(--p-mut); font-size:.72rem; }
+  .costline{ display:flex; align-items:center; gap:.45rem; margin:.55rem 0 .65rem; flex-wrap:wrap; }
+  .badge{ font-size:.62rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; border-radius:4px; padding:.14rem .4rem; }
+  .badge.paid{ background:var(--rust-soft); color:var(--rustdeep); }
+  .badge.free{ background:rgba(74,90,51,.12); color:var(--p-canopy); }
+  .costline .t{ font-size:.72rem; color:var(--p-mut); }
+  .btnrow{ display:flex; gap:.45rem; flex-wrap:wrap; align-items:center; }
+  .sbtn{ font-family:'DM Sans',sans-serif; font-size:.78rem; font-weight:600; border-radius:4px;
+    padding:.32rem .7rem; border:1px solid var(--p-border); background:#fff; color:var(--p-ink); }
+  .sbtn.primary{ background:var(--p-moss); border-color:var(--p-moss); color:#fff; }
+  .sbtn.ghost{ border:none; background:none; color:var(--p-mut); padding:.32rem .2rem; }
+  .fb-note{ font-size:.7rem; color:var(--p-mut); margin:.5rem 0 0; }
+
+  /* found-pattern rows, one decision each */
+  .pat{ display:flex; align-items:center; gap:.55rem; padding:.4rem 0; border-top:1px solid var(--p-div); }
+  .pat:first-of-type{ border-top:none; }
+  .pat .pd{ width:10px; height:10px; border-radius:50%; flex:0 0 auto; }
+  .pat .pn{ font-size:.8rem; font-weight:600; line-height:1.3; }
+  .pat .pn small{ display:block; font-weight:400; font-size:.7rem; color:var(--p-mut); line-height:1.4; }
+  .pat .pc{ margin-left:auto; font-size:.74rem; color:var(--p-mut); font-variant-numeric:tabular-nums; }
+  .pat .psw{ margin-left:.1rem; }
+  .wizfoot{ padding:.6rem .9rem .75rem; border-top:1px solid var(--p-div); }
+
+  /* ---------- the map plate with the true 66 ---------- */
+  .duo{ display:flex; gap:1.2rem; flex-wrap:wrap; align-items:flex-start; }
+  .plate{ position:relative; width:21rem; max-width:100%; aspect-ratio:1/1; background:var(--p-paperalt);
+    border:1px solid var(--p-border); border-radius:4px; box-shadow:0 2px 12px rgba(42,36,26,.12); overflow:hidden; }
+  .plate .cityname{ position:absolute; left:50%; top:52%; transform:translate(-50%,-50%);
+    font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:600; letter-spacing:.18em; text-transform:uppercase;
+    color:#8d8672; text-shadow:0 0 3px #fff, 0 0 6px #fff; pointer-events:none; }
+  .pp{ position:absolute; width:11px; height:11px; border-radius:50%; border:1.5px solid #fff;
+    box-shadow:0 0 0 .5px rgba(42,36,26,.25); transform:translate(-50%,-50%); transition:opacity .18s ease-out; }
+  .pp.g{ background:var(--k1); } .pp.c{ background:var(--k2); } .pp.h{ background:var(--k3); }
+  .pp.r{ background:var(--k4); } .pp.m{ background:var(--k5); }
+  .pd.g,.dot.g{ background:var(--k1); } .pd.c,.dot.c{ background:var(--k2); } .pd.h,.dot.h{ background:var(--k3); }
+  .pd.r,.dot.r{ background:var(--k4); } .pd.m,.dot.m{ background:var(--k5); }
+  /* the one authored moment: point at a pattern, its places stay lit */
+  .duo:has(.pat.hg:hover) .pp:not(.g){ opacity:.12; }
+  .duo:has(.pat.hc:hover) .pp:not(.c){ opacity:.12; }
+  .duo:has(.pat.hh:hover) .pp:not(.h){ opacity:.12; }
+  .duo:has(.pat.hr:hover) .pp:not(.r){ opacity:.12; }
+  .duo:has(.pat.hm:hover) .pp:not(.m){ opacity:.12; }
+  .duo:has(.pat:hover) .cityname{ opacity:.4; }
+  .pat.hg:hover,.pat.hc:hover,.pat.hh:hover,.pat.hr:hover,.pat.hm:hover{ background:rgba(74,90,51,.06); }
+
+  /* ---------- the cost table ---------- */
+  .costtab{ max-width:52rem; border:1px solid var(--line); border-radius:10px; background:var(--card); overflow:hidden; }
+  .ct-row{ display:grid; grid-template-columns:13rem 1fr 1fr; border-top:1px solid var(--line); }
+  .ct-row:first-child{ border-top:none; background:#efeadd; }
+  .ct-row > div{ padding:.55rem .8rem; font-size:.8rem; line-height:1.5; }
+  .ct-row .h{ font-weight:700; font-size:.74rem; }
+  .ct-row:first-child > div{ font-weight:700; font-size:.78rem; }
+  .ct-row .win{ color:var(--moss); font-weight:600; }
+  .ct-row .lose{ color:var(--muted); }
+  @media (max-width:44rem){ .ct-row{ grid-template-columns:1fr; } .ct-row > div{ padding:.35rem .8rem; } }
+</style>
+</head>
+<body>
+
+<header class="study">
+  <h1>Fork A — the door opens: a small wizard, or the panel itself</h1>
+  <p>The door is settled: one line in the layer panel that says <b>Discover underlying patterns</b>. This page
+    decides what pressing it opens. <b>A1</b> is the small wizard you asked for. <b>A2</b> is the earlier design,
+    which unfolds inside the panel and never opens a new surface. Both are drawn at true size on your real layer:
+    66 places, and the five patterns your kept reading found.</p>
+  <div class="verdicts">
+    <div class="verdict-line"><span class="vk">I would ship</span>
+      <b>A1, the wizard — docked beside the map, never over it.</b> Same three presses as the door either way.
+      The wizard wins because what you decided must be shown (a decision per pattern, what was read, and the
+      written record) needs more room than the narrow panel has.</div>
+    <div class="verdict-line"><span class="vk">Stolen from A2</span>
+      The map stays the judge. The wizard sits beside the map, and pointing at a pattern lights its places; try it in the second drawing. A pattern is a claim about places; the map is where the claim is checked.</div>
+  </div>
+</header>
+
+<section class="prod">
+  <h2>A1 · The small wizard, three moments left to right</h2>
+  <p class="sub">Press the door and a sheet opens <b>next to the panel, beside the map</b>, small enough that the
+    map stays in view, because the map is how you judge what it finds. Three presses from start to kept:
+    <b>Read the places → (wait about half a minute) → Keep.</b></p>
+
+  <div class="stagewrap">
+    <div class="drawing">
+      <div class="wiz">
+        <div class="wizhead"><strong>Discover underlying patterns</strong><span class="x">✕</span></div>
+        <div class="wizbody">
+          <span class="wizstep">First, what will be read</span>
+          <p>AI reads what people wrote about all <b>66 places</b> and looks for a few patterns running
+            through them. Anything it finds is offered back to you — nothing is added until you keep it.</p>
+          <div class="readplan">
+            <div class="rp-row"><span class="rc">description</span><span class="rn">what each place is — 66 of 66 filled in</span></div>
+            <div class="rp-row"><span class="rc">labels</span><span class="rn">374 words people added — 66 of 66 filled in</span></div>
+          </div>
+          <div class="costline"><span class="badge paid">costs one reading</span><span class="t">about half a minute · your table is not changed</span></div>
+          <div class="btnrow"><span class="sbtn primary">Read the places</span><span class="sbtn ghost">Not now</span></div>
+        </div>
+      </div>
+      <p class="caption"><span class="n">1 · The ask.</span> Before anything is spent, the wizard says what it
+        will read and what it costs. Which columns appear here is Fork B's question — this drawing shows the
+        two your kept reading used.</p>
+    </div>
+
+    <div class="drawing">
+      <div class="duo">
+        <div class="wiz">
+          <div class="wizhead"><strong>Discover underlying patterns</strong><span class="x">✕</span></div>
+          <div class="wizbody">
+            <span class="wizstep">Found — 5 patterns, from description + labels</span>
+            <p style="margin-bottom:.45rem">Each pattern is a claim about your places. Point at one to see its
+              places on the map. Switch off any you don't believe.</p>
+            <div class="pat hg"><span class="pd g"></span><span class="pn">Green Spaces<small>Places that are parks, trees and green shade</small></span><span class="pc">25</span><span class="psw sm on"></span></div>
+            <div class="pat hc"><span class="pd c"></span><span class="pn">Cultural Hubs<small>Places that host art, gatherings and events</small></span><span class="pc">22</span><span class="psw sm on"></span></div>
+            <div class="pat hh"><span class="pd h"></span><span class="pn">Heritage Sites<small>Places that carry the city's built memory</small></span><span class="pc">8</span><span class="psw sm on"></span></div>
+            <div class="pat hr"><span class="pd r"></span><span class="pn">Recycled Creations<small>Places made from waste and reused material</small></span><span class="pc">7</span><span class="psw sm on"></span></div>
+            <div class="pat hm"><span class="pd m"></span><span class="pn">Markets &amp; Crafts<small>Places that sell or make by hand</small></span><span class="pc">4</span><span class="psw sm on"></span></div>
+          </div>
+          <div class="wizfoot">
+            <div class="btnrow"><span class="sbtn primary">Keep 5 patterns as a key</span><span class="sbtn">Discard</span></div>
+            <p class="fb-note">Keeping adds one new column called <b>patterns</b>. What you uploaded is never changed.</p>
+          </div>
+        </div>
+        <div class="plate" aria-hidden="true">
+          <span class="cityname">Bengaluru</span>
+      <i class="pp r" style="left:20.8%;top:38.6%"></i><i class="pp h" style="left:12.5%;top:94.4%"></i><i class="pp r" style="left:20.8%;top:38.6%"></i>
+      <i class="pp m" style="left:96.0%;top:36.4%"></i><i class="pp g" style="left:10.0%;top:94.4%"></i><i class="pp c" style="left:12.5%;top:94.5%"></i>
+      <i class="pp g" style="left:12.0%;top:96.0%"></i><i class="pp r" style="left:20.8%;top:38.5%"></i><i class="pp g" style="left:20.8%;top:38.6%"></i>
+      <i class="pp h" style="left:96.0%;top:36.4%"></i><i class="pp g" style="left:20.6%;top:38.5%"></i><i class="pp c" style="left:12.3%;top:94.9%"></i>
+      <i class="pp c" style="left:20.8%;top:38.5%"></i><i class="pp r" style="left:20.8%;top:38.5%"></i><i class="pp m" style="left:12.3%;top:93.1%"></i>
+      <i class="pp m" style="left:96.0%;top:36.4%"></i><i class="pp m" style="left:64.9%;top:55.4%"></i><i class="pp r" style="left:20.8%;top:38.5%"></i>
+      <i class="pp c" style="left:47.2%;top:56.7%"></i><i class="pp r" style="left:20.8%;top:38.6%"></i><i class="pp g" style="left:65.2%;top:55.6%"></i>
+      <i class="pp g" style="left:65.9%;top:55.6%"></i><i class="pp g" style="left:65.9%;top:55.6%"></i><i class="pp g" style="left:65.4%;top:59.8%"></i>
+      <i class="pp g" style="left:65.3%;top:59.7%"></i><i class="pp g" style="left:64.9%;top:55.5%"></i><i class="pp g" style="left:63.7%;top:55.2%"></i>
+      <i class="pp g" style="left:66.6%;top:55.1%"></i><i class="pp g" style="left:81.2%;top:56.0%"></i><i class="pp h" style="left:81.1%;top:55.8%"></i>
+      <i class="pp g" style="left:64.9%;top:54.6%"></i><i class="pp g" style="left:63.8%;top:54.6%"></i><i class="pp g" style="left:63.5%;top:54.6%"></i>
+      <i class="pp g" style="left:63.5%;top:54.5%"></i><i class="pp c" style="left:64.8%;top:55.3%"></i><i class="pp h" style="left:64.9%;top:55.3%"></i>
+      <i class="pp g" style="left:76.4%;top:57.3%"></i><i class="pp g" style="left:46.6%;top:85.3%"></i><i class="pp g" style="left:34.8%;top:74.4%"></i>
+      <i class="pp g" style="left:40.0%;top:50.1%"></i><i class="pp g" style="left:40.3%;top:50.1%"></i><i class="pp g" style="left:40.2%;top:50.0%"></i>
+      <i class="pp c" style="left:40.1%;top:50.0%"></i><i class="pp c" style="left:40.1%;top:50.2%"></i><i class="pp c" style="left:20.3%;top:57.2%"></i>
+      <i class="pp g" style="left:28.4%;top:42.5%"></i><i class="pp c" style="left:28.5%;top:42.5%"></i><i class="pp h" style="left:28.8%;top:42.6%"></i>
+      <i class="pp g" style="left:28.9%;top:42.3%"></i><i class="pp c" style="left:40.1%;top:49.9%"></i><i class="pp c" style="left:55.4%;top:46.6%"></i>
+      <i class="pp c" style="left:55.2%;top:46.7%"></i><i class="pp c" style="left:6.7%;top:75.3%"></i><i class="pp h" style="left:14.9%;top:92.0%"></i>
+      <i class="pp h" style="left:14.9%;top:91.7%"></i><i class="pp c" style="left:65.6%;top:55.6%"></i><i class="pp h" style="left:62.0%;top:61.0%"></i>
+      <i class="pp c" style="left:39.9%;top:4.0%"></i><i class="pp c" style="left:41.7%;top:25.9%"></i><i class="pp c" style="left:47.7%;top:58.0%"></i>
+      <i class="pp c" style="left:20.7%;top:17.9%"></i><i class="pp c" style="left:4.0%;top:55.0%"></i><i class="pp c" style="left:52.2%;top:49.0%"></i>
+      <i class="pp c" style="left:39.6%;top:87.2%"></i><i class="pp c" style="left:45.3%;top:57.4%"></i><i class="pp r" style="left:88.8%;top:88.7%"></i>
+        </div>
+      </div>
+      <p class="caption"><span class="n">2 · The findings, judged against the map.</span> Every dot is one of
+        your 66 places at its true spot. A pattern with a believable shape on the map — Green Spaces gathering
+        along the parks — earns its keep-switch staying on. This is the wizard's whole argument for sitting
+        beside the map instead of on top of it.</p>
+    </div>
+
+    <div class="drawing">
+      <div class="ppanel">
+        <div class="phead"><strong>Map layers</strong><span class="chev">⌄</span></div>
+        <div class="pbody">
+          <div class="pgroup">Your data <span>· 2</span></div>
+          <div class="prow"><span class="psw on"></span><span class="pname">LOKA Places · Bengaluru</span><span class="pchange">Change</span></div>
+          <div class="keylbl">Show key</div>
+          <div class="keyrow"><span class="psw sm"></span><span class="kname">categories</span></div>
+          <div class="keyrow"><span class="psw sm"></span><span class="kname">creator</span></div>
+          <div class="keyrow newkey"><span class="psw sm on"></span><span class="kname">patterns</span></div>
+          <div class="doorline"><span class="door">Browse all 335 labels</span></div>
+          <div class="rec">Patterns read once — 21&nbsp;Aug, from <b>description + labels</b>. 5 kept.
+            <span class="again">Read afresh…</span></div>
+          <div class="plegend"><div class="lr"><span class="dot" style="background:#AE5028"></span>LOKA Places · Bengaluru</div></div>
+          <div class="pby">added by Partner Works</div>
+        </div>
+      </div>
+      <p class="caption"><span class="n">3 · Kept, and written down.</span> The wizard closes; the new key
+        arrives <b>switched on</b> where the keys live. The door's line is replaced by the record: when it was
+        read, from which columns, what was kept. That record is the promise that nobody pays twice by accident.</p>
+    </div>
+  </div>
+</section>
+
+<section class="prod">
+  <h2>A2 · The earlier design: the door unfolds in place</h2>
+  <p class="sub">No new surface at all: pressing the door grows a small block inside the panel, and the result
+    lands one line above where the door stood. Same three presses. Drawn here renamed to your words, with the
+    record added, so the comparison is fair.</p>
+
+  <div class="stagewrap">
+    <div class="drawing">
+      <div class="ppanel crop">
+        <div class="pbody">
+          <div class="keyrow"><span class="psw sm"></span><span class="kname">categories</span></div>
+          <div class="keyrow"><span class="psw sm"></span><span class="kname">creator</span></div>
+          <div class="doorline"><span class="door">Browse all 335 labels</span></div>
+          <div style="margin:.45rem 0 .2rem; padding:.55rem .6rem .6rem; border:1px solid var(--p-div); border-radius:4px; background:rgba(74,90,51,.04)">
+            <p style="font-size:.72rem; color:var(--p-ink2); line-height:1.5; margin:0 0 .5rem">AI reads what
+              people wrote about all 66 places — the description and the labels — and looks for a few patterns
+              running through them. Anything it finds arrives as one more key you can switch on.</p>
+            <div class="costline" style="margin:.3rem 0 .5rem"><span class="badge paid">costs one reading</span><span class="t">about half a minute</span></div>
+            <div class="btnrow"><span class="sbtn primary">Read the places</span><span class="sbtn ghost">Not now</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="caption"><span class="n">The ask, unfolded in place</span> (detail, cropped). Quiet and cheap:
+        no new surface, and the panel is already where keys live.</p>
+    </div>
+
+    <div class="drawing">
+      <div class="ppanel crop">
+        <div class="pbody">
+          <div class="keyrow"><span class="psw sm"></span><span class="kname">categories</span></div>
+          <div class="keyrow"><span class="psw sm"></span><span class="kname">creator</span></div>
+          <div class="doorline"><span class="door">Browse all 335 labels</span></div>
+          <div style="margin:.45rem 0 .2rem; padding:.55rem .6rem .6rem; border:1px solid var(--p-div); border-radius:4px; background:rgba(74,90,51,.04)">
+            <p style="font-size:.74rem; font-weight:600; color:var(--p-ink); margin:0 0 .35rem">5 patterns across 66 places</p>
+            <div style="display:flex; flex-wrap:wrap; gap:.3rem; margin:.1rem 0 .5rem">
+              <span style="font-size:.74rem; font-weight:600; background:#fff; border:1px solid var(--p-border); border-radius:4px; padding:.18rem .45rem">Green Spaces <b style="font-weight:600; opacity:.6">25</b></span>
+              <span style="font-size:.74rem; font-weight:600; background:#fff; border:1px solid var(--p-border); border-radius:4px; padding:.18rem .45rem">Cultural Hubs <b style="font-weight:600; opacity:.6">22</b></span>
+              <span style="font-size:.74rem; font-weight:600; background:#fff; border:1px solid var(--p-border); border-radius:4px; padding:.18rem .45rem">Heritage Sites <b style="font-weight:600; opacity:.6">8</b></span>
+              <span style="font-size:.74rem; font-weight:600; background:#fff; border:1px solid var(--p-border); border-radius:4px; padding:.18rem .45rem">Recycled Creations <b style="font-weight:600; opacity:.6">7</b></span>
+              <span style="font-size:.74rem; font-weight:600; background:#fff; border:1px solid var(--p-border); border-radius:4px; padding:.18rem .45rem">Markets &amp; Crafts <b style="font-weight:600; opacity:.6">4</b></span>
+            </div>
+            <div class="btnrow"><span class="sbtn primary">Keep these patterns</span><span class="sbtn">Discard</span></div>
+            <p class="fb-note">All five or none — this design has no room for a switch per pattern.</p>
+          </div>
+        </div>
+      </div>
+      <p class="caption"><span class="n">The offer, in place</span> (detail, cropped). Here is where the panel's
+        width runs out: the five patterns fit only as chips, so there is no decision per pattern, no meaning line
+        under each name, and no map beside them. The panel itself covers the map's corner while you judge.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>What each costs you</h2>
+  <p class="sub">Counted on the drawings above, not guessed. The presses are the same; the differences are room
+    and where your eyes are while you decide.</p>
+  <div class="costtab">
+    <div class="ct-row"><div></div><div>A1 · the wizard</div><div>A2 · in the panel</div></div>
+    <div class="ct-row"><div class="h">Presses, door to kept key</div><div>3</div><div>3</div></div>
+    <div class="ct-row"><div class="h">New surfaces opened</div><div class="lose">one small sheet</div><div class="win">none</div></div>
+    <div class="ct-row"><div class="h">A decision per pattern</div><div class="win">yes: a switch on each row</div><div class="lose">no: keep all five or none</div></div>
+    <div class="ct-row"><div class="h">What each pattern means</div><div class="win">a line under each name</div><div class="lose">a tooltip, if you hover</div></div>
+    <div class="ct-row"><div class="h">The map while judging</div><div class="win">beside you; patterns light their places</div><div class="lose">visible, but the panel sits on its corner</div></div>
+    <div class="ct-row"><div class="h">Room for the record</div><div class="win">a full step: when, what, kept</div><div class="lose">one squeezed line</div></div>
+    <div class="ct-row"><div class="h">On a phone</div><div>the sheet the panel already becomes</div><div class="lose">a long scroll inside the sheet</div></div>
+  </div>
+</section>
+
+<section class="prod">
+  <h2>Already found — what the door looks like ever after</h2>
+  <p class="sub">Your decision 6, drawn. Once patterns are kept, the door never again opens onto a paid run by
+    default. The record line stands where the door stood; <b>Read afresh…</b> reopens the wizard on a warning
+    step, and only a deliberate press spends money.</p>
+
+  <div class="stagewrap">
+    <div class="drawing">
+      <div class="ppanel crop">
+        <div class="pbody">
+          <div class="keyrow"><span class="psw sm"></span><span class="kname">categories</span></div>
+          <div class="keyrow"><span class="psw sm"></span><span class="kname">creator</span></div>
+          <div class="keyrow"><span class="psw sm on"></span><span class="kname">patterns</span></div>
+          <div class="doorline"><span class="door">Browse all 335 labels</span></div>
+          <div class="rec">Patterns read once — 21&nbsp;Aug, from <b>description + labels</b>. 5 kept.
+            <span class="again">Read afresh…</span></div>
+        </div>
+      </div>
+      <p class="caption"><span class="n">At rest, forever.</span> The record is the door now. It answers the
+        three questions that stop an accidental second payment: when it was read, what it read, what was kept.</p>
+    </div>
+
+    <div class="drawing">
+      <div class="wiz">
+        <div class="wizhead"><strong>Read afresh?</strong><span class="x">✕</span></div>
+        <div class="wizbody">
+          <p>These places were already read on <b>21&nbsp;Aug</b> (description + labels), and you kept
+            <b>5 patterns</b>. They stay on the map either way.</p>
+          <p>Reading again <b>costs one more reading</b>, and a fresh reading can name different patterns.
+            Different runs over these same 66 places have already answered differently. Read afresh when the
+            places have changed, not to get a second opinion on the same table.</p>
+          <div class="costline"><span class="badge paid">costs one reading</span><span class="t">about half a minute</span></div>
+          <div class="btnrow"><span class="sbtn">Read the places again</span><span class="sbtn primary">Keep what I have</span></div>
+        </div>
+      </div>
+      <p class="caption"><span class="n">The deliberate second reading.</span> Note which button is quiet and
+        which is primary: keeping what exists is the default; paying again is the deliberate act. The warning
+        that runs disagree is not scare copy — see the footer.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <b>How this page knows what it claims.</b> Measured: the 66 places, their true positions on the plate, the
+  five kept pattern names and counts (25 · 22 · 8 · 7 · 4 = 66), the 335 labels and 374 label words, and the
+  fill counts in the read plan — all from the layer's own file. Also measured: runs disagree: the same 66
+  places carry a 4-pattern reading in one working copy (17 · 17 · 16 · 16) and a different 5-pattern reading in
+  another (13 · 12 · 12 · 11 · 11, with 7 places fitting none), beside the 5 you kept. Traced in the code: one
+  reading = 3 model calls for 66 places; about half a minute; today nothing is recorded between runs — the
+  record drawn here is the new thing. Drawn for illustration: the date 21&nbsp;Aug (nothing records dates yet —
+  that is the point), which pattern colours each dot (the counts are real; the per-place list lives with your
+  live layer), and every meaning line under a pattern name. Nothing on this page is wired to a server.
+</footer>
+
+</body>
+</html>

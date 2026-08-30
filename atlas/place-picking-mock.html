@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Picking a place that builds — the Kolkata autopsy, the three Kolkatas drawn real, and the rule</title>
+<meta name="robots" content="noindex">
+<!-- A decision page for Mithun. Nothing here is wired to a server. It answers two asks at
+     once, because they are the same moment in the product: "Once a place is shown while
+     typing in the place textbox, it should be guaranteed to render on the map", and
+     "multiple views of Kolkata is causing confusion — have a mechanism to resolve this
+     from the beginning". Every outline on this page is the real boundary, extracted from
+     the same cached files the product searches; every quoted string is verbatim from the
+     live code. Measured vs reasoned is ledgered in the footer. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Figtree:wght@600;700&display=swap">
+<style>
+  :root{
+    --paper:#f4f0e4; --ink:#2A241A; --muted:#6b6353; --line:#d9d2bf;
+    --moss:#40573D; --rust:#A6522F; --rustdeep:#7C3616; --card:#fbf9f2;
+    --moss-soft:#e7ecdf; --rust-soft:#f3e3d9;
+    --p-surface:#FFFFFF; --p-moss:#4A5A33; --p-ink:#2A241A; --p-ink2:#564E3C; --p-mut:#6B6350;
+    --p-border:rgba(42,36,26,.14); --p-div:rgba(42,36,26,.09); --p-paperalt:#F0EFEA;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font-family:'Figtree','Avenir Next',system-ui,sans-serif; background:var(--paper); color:var(--ink); }
+  header.study{ padding:1.4rem 1.6rem 1.2rem; border-bottom:1px solid var(--line); }
+  header.study h1{ margin:0 0 .35rem; font-size:1.25rem; }
+  header.study p{ margin:.2rem 0; max-width:62rem; color:var(--muted); font-size:.86rem; line-height:1.55; }
+  header.study p b{ color:var(--ink); }
+  .verdicts{ display:flex; flex-wrap:wrap; gap:.8rem; margin-top:.8rem; max-width:64rem; }
+  .verdict-line{ flex:1 1 26rem; background:var(--card); border:1.4px solid var(--moss); border-radius:10px;
+    padding:.7rem .9rem .75rem; font-size:.92rem; line-height:1.5; }
+  .verdict-line .vk{ display:block; font-size:.68rem; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--moss); margin-bottom:.25rem; }
+  section{ padding:1.3rem 1.6rem 1.6rem; border-bottom:1px solid var(--line); }
+  h2{ font-size:1.02rem; margin:.1rem 0 .25rem; }
+  .sub{ color:var(--muted); font-size:.84rem; margin:.15rem 0 1rem; max-width:62rem; line-height:1.6; }
+  .sub b{ color:var(--ink); }
+  footer{ padding:1.1rem 1.6rem 1.8rem; font-size:.76rem; color:var(--muted); line-height:1.7; max-width:64rem; }
+  footer b{ color:var(--ink); }
+  .prod{ font-family:'DM Sans',system-ui,sans-serif; color:var(--p-ink); }
+  .m{ color:var(--moss); font-weight:700; } .r{ color:var(--rustdeep); font-weight:700; }
+  svg text{ font-family:'Figtree',system-ui,sans-serif; }
+
+  /* ---------- the search box, drawn ---------- */
+  .searchcard{ width:21.5rem; max-width:100%; background:var(--p-surface); border:1px solid var(--p-border); border-radius:6px;
+    box-shadow:0 2px 12px rgba(42,36,26,.12); overflow:hidden; }
+  .sc-input{ display:flex; align-items:center; gap:.5rem; padding:.55rem .75rem; border-bottom:1px solid var(--p-div); }
+  .sc-input .cursor{ display:inline-block; width:1px; height:1.05em; background:var(--p-ink); vertical-align:text-bottom; }
+  .sc-input span.q{ font-size:.9rem; font-weight:600; }
+  .sc-input .hintt{ margin-left:auto; font-size:.68rem; color:var(--p-mut); }
+  .sc-rows{ padding:.25rem 0 .3rem; }
+  .srow{ padding:.42rem .75rem .4rem; display:flex; flex-direction:column; gap:.05rem; }
+  .srow + .srow{ border-top:1px solid var(--p-div); }
+  .srow .nm{ font-size:.88rem; font-weight:700; line-height:1.2; }
+  .srow .wh{ font-size:.72rem; color:var(--p-mut); line-height:1.3; }
+  .srow.hot{ background:var(--p-paperalt); }
+  .srow .ghost{ display:flex; align-items:center; gap:.6rem; }
+  .srow .ghost svg{ flex:0 0 auto; }
+  .sc-note{ padding:.45rem .75rem .55rem; font-size:.7rem; color:var(--p-mut); line-height:1.45; border-top:1px solid var(--p-div); background:#FCFBF7; }
+  .trapline{ font-family:'Figtree',sans-serif; font-size:.7rem; color:var(--rustdeep); font-weight:600; margin:.15rem .75rem .4rem; }
+
+  /* choices inside a grouped row */
+  .choices{ display:flex; gap:.6rem; padding:.15rem .75rem .55rem; }
+  .choice{ flex:1 1 0; border:1px solid var(--p-border); border-radius:6px; padding:.45rem .5rem .5rem; display:flex; flex-direction:column; align-items:flex-start; gap:.25rem; background:#fff; }
+  .choice.sel{ border-color:var(--p-moss); box-shadow:0 0 0 1.4px var(--p-moss) inset; }
+  .choice .cw{ font-size:.74rem; font-weight:700; line-height:1.25; }
+  .choice .ck{ font-size:.68rem; color:var(--p-mut); }
+
+  /* the promise card */
+  .promise{ width:21.5rem; max-width:100%; background:var(--p-surface); border:1px solid var(--p-border); border-radius:6px;
+    box-shadow:0 2px 12px rgba(42,36,26,.12); padding:.65rem .8rem .75rem; }
+  .promise .ph{ font-family:'Figtree',sans-serif; font-size:.7rem; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--p-ink2); margin-bottom:.4rem; }
+  .promise .prow{ display:flex; gap:.65rem; align-items:flex-start; }
+  .promise .pdesc{ font-size:.8rem; line-height:1.5; }
+  .promise .pdesc b{ font-weight:700; }
+  .promise .pcheck{ margin-top:.45rem; padding-top:.45rem; border-top:1px solid var(--p-div); font-size:.72rem; color:var(--p-ink2); line-height:1.5; }
+  .promise .pcheck .tick{ color:var(--p-moss); font-weight:700; }
+
+  /* ---------- autopsy strip ---------- */
+  .autopsy{ display:flex; flex-wrap:wrap; gap:1.4rem; align-items:flex-start; }
+  .steps{ flex:1 1 24rem; max-width:34rem; }
+  .step{ display:flex; gap:.7rem; padding:.5rem 0; border-top:1px solid var(--line); font-size:.8rem; line-height:1.5; }
+  .step:first-child{ border-top:none; }
+  .step .sn{ flex:0 0 1.5rem; font-weight:700; color:var(--moss); font-variant-numeric:tabular-nums; }
+  .step .sd{ color:var(--muted); } .step .sd b{ color:var(--ink); }
+  .bar{ display:block; height:10px; border-radius:5px; background:#e4ddc9; margin:.45rem 0 .3rem; max-width:20rem; position:relative; }
+  .bar .fill{ display:block; height:100%; width:46%; background:var(--p-moss); border-radius:5px 0 0 5px; }
+  .bar .x{ position:absolute; left:46%; top:-4px; color:var(--rustdeep); font-weight:700; font-size:.85rem; }
+  .redbox{ font-family:'DM Sans',sans-serif; border:1.4px solid #b3402a; background:#f8e8e2; color:#7C2D16; border-radius:6px;
+    padding:.5rem .65rem; font-size:.78rem; line-height:1.45; max-width:20rem; }
+  .aftermath{ display:flex; flex-direction:column; gap:.4rem; margin-top:.5rem; }
+  .deadbtn{ display:inline-block; font-family:'DM Sans',sans-serif; font-size:.8rem; font-weight:600; color:#9b937f;
+    background:#eceadf; border:1px solid var(--p-border); border-radius:6px; padding:.35rem .8rem; width:fit-content; }
+  .deadrow{ display:flex; align-items:center; gap:.5rem; font-family:'DM Sans',sans-serif; font-size:.78rem; color:var(--p-ink2); }
+  .deadrow .tag{ font-size:.64rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#8a5a25; background:#f3ead7; border-radius:4px; padding:.1rem .35rem; }
+
+  /* ---------- shapes panel ---------- */
+  .shapes{ display:flex; flex-wrap:wrap; gap:1rem; }
+  .shapecell{ flex:1 1 15rem; max-width:19rem; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:.6rem .7rem .65rem; }
+  .shapecell h3{ margin:0 0 .1rem; font-size:.8rem; }
+  .shapecell .lvl{ font-size:.68rem; color:var(--muted); margin-bottom:.35rem; }
+  .shapecell p{ margin:.35rem 0 0; font-size:.72rem; line-height:1.5; color:var(--muted); }
+  .shapecell p b{ color:var(--ink); }
+  .legendline{ display:flex; gap:1.1rem; flex-wrap:wrap; margin:.6rem 0 0; font-size:.72rem; color:var(--muted); }
+  .legendline span{ display:inline-flex; align-items:center; gap:.35rem; }
+  .lg-real{ width:18px; height:3px; background:var(--rust); border-radius:2px; display:inline-block; }
+  .lg-lgd{ width:18px; height:0; border-top:2.5px dashed var(--moss); display:inline-block; }
+  .converge{ margin-top:1.2rem; }
+  .converge h3{ font-size:.86rem; margin:0 0 .4rem; }
+  .convrow{ display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; }
+  .convrow .arrow{ font-size:1.1rem; color:var(--muted); }
+  .convcap{ font-size:.76rem; color:var(--muted); line-height:1.55; margin-top:.5rem; max-width:56rem; }
+  .convcap b{ color:var(--ink); }
+
+  /* ---------- rules table ---------- */
+  .rules{ width:100%; max-width:64rem; border-collapse:collapse; font-size:.8rem; }
+  .rules th{ text-align:left; font-size:.66rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
+    padding:.35rem .7rem .35rem 0; border-bottom:1px solid var(--line); font-weight:700; vertical-align:bottom; }
+  .rules td{ padding:.5rem .7rem .5rem 0; border-bottom:1px solid var(--line); vertical-align:top; line-height:1.5; color:var(--muted); }
+  .rules td:first-child{ color:var(--ink); font-weight:600; white-space:nowrap; }
+  .rules td b{ color:var(--ink); }
+  .rules .win{ color:var(--moss); font-weight:700; }
+  .rules .lose{ color:var(--rustdeep); }
+
+  .duo{ display:flex; flex-wrap:wrap; gap:1.6rem; align-items:flex-start; }
+  .duo > div > .cap{ max-width:22rem; margin-top:.55rem; font-size:.76rem; line-height:1.55; color:var(--muted); font-family:'Figtree',sans-serif; }
+  .duo > div > .cap b{ color:var(--ink); }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
+</style>
+</head>
+<body>
+
+<header class="study">
+  <h1>Picking a place that builds</h1>
+  <p>Your two asks, verbatim: <b>“Once a place is shown while typing in the place textbox, it should be guaranteed to
+     render on the map.”</b> And: <b>“You mentioned that there are multiple views of Kolkata, this is causing confusion —
+     have a mechanism to resolve this from the beginning.”</b> They are one moment in the product, so this is one page.
+     Every outline below is the real boundary from the same cached files the product searches; every quoted string is
+     verbatim from the live code.</p>
+  <div class="verdicts">
+    <div class="verdict-line"><span class="vk">I would ship — one rule in three parts</span>
+      <b>1.</b> The list offers only ground the builder can honour — for India today that is states and districts, so
+      “kolkata” returns <b>one row, not three</b>. <b>2.</b> A name shared by several grounds becomes one row that opens
+      into drawn choices: real outline, real size, plain words (seven Indian district names are shared today).
+      <b>3.</b> The row says what it will produce before any wait — and if a build still dies, it leaves a working
+      “Try again”, not a dead button and a burnt name.
+    </div>
+    <div class="verdict-line"><span class="vk">The finding that reframes the question</span>
+      The row labelled <b>“district”</b> was the <b>smallest</b> of the three Kolkatas — 91&nbsp;km² against the official
+      district’s 185. The level words under the rows are admitted guesses in the code, and here they invert the truth.
+      Worse: after the threshold fix, <b>all three rows build nearly the same district atlas anyway</b>. A choice that can
+      kill the build but cannot meaningfully change it should not be a choice at all.
+    </div>
+  </div>
+</header>
+
+<section>
+  <h2>1 · What happened — the autopsy, measured</h2>
+  <p class="sub">The failing pick, replayed end to end with the live strings. The box offered four rows for “kolkata”;
+     the one that reads most natural — <b>district</b> — was the one that could not build.</p>
+  <div class="autopsy prod">
+    <div>
+      <div class="searchcard">
+        <div class="sc-input"><span class="q">kolkata</span><span class="cursor"></span><span class="hintt">type a place</span></div>
+        <div class="sc-rows">
+          <div class="srow hot"><span class="nm">Kolkata</span><span class="wh">district · West Bengal, India</span></div>
+          <div class="srow"><span class="nm">Kolkata</span><span class="wh">subdistrict · Kolkata, West Bengal, India</span></div>
+          <div class="srow"><span class="nm">Kolkata</span><span class="wh">locality · Kolkata, Kolkata, West Bengal, India</span></div>
+          <div class="srow"><span class="nm">Cuttack</span><span class="wh">district · Odisha, India</span></div>
+        </div>
+      </div>
+      <p class="trapline">Three identical names. The only separation is a level word most people cannot rank —
+        and the trail repeats “Kolkata” back at you.</p>
+    </div>
+    <div class="steps" style="font-family:'Figtree',sans-serif">
+      <div class="step"><span class="sn">1</span><span class="sd">Picks the first row — <b>“district · West Bengal, India”</b> —
+        the natural reading of “I want Kolkata”.</span></div>
+      <div class="step"><span class="sn">2</span><span class="sd">Presses <b>Build my atlas →</b>. The screen says
+        <b>“Building your atlas… usually a minute or two. You can safely leave this page.”</b></span></div>
+      <div class="step"><span class="sn">3</span><span class="sd">The bar climbs while the machine fetches the official
+        district list (a <b>93&nbsp;MB</b> download when cold) and lays the picked shape over it.
+        <span class="bar"><span class="fill"></span><span class="x">✕</span></span>
+        The official Kolkata district sat only <b>46.4%</b> inside the picked shape, against a <b>50%</b> rule —
+        even though <b>94%</b> of the pick lay inside that district. Zero districts survived.</span></div>
+      <div class="step"><span class="sn">4</span><span class="sd">The red box, verbatim:
+        <div class="redbox" style="margin-top:.3rem">Admin boundaries failed: no LGD districts matched the selection</div></span></div>
+      <div class="step"><span class="sn">5</span><span class="sd">What failure leaves behind, all three measured:
+        <div class="aftermath">
+          <span class="deadbtn">Build my atlas →</span>
+          <span class="sd" style="font-size:.72rem">…stays switched off for good — only a page reload brings it back.</span>
+          <div class="deadrow"><span class="tag">Not live</span> Kolkata Commons — sits in the account, name taken.</div>
+          <span class="sd" style="font-size:.72rem">And no button at all on the failure screen — the “done” row never appears.</span>
+        </div></span></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>2 · The three Kolkatas, drawn for real</h2>
+  <p class="sub">The actual boundaries behind the three rows, at one shared scale, each laid over the
+     <b>official district</b> (dashed moss) that every India build must match. The words said
+     district&nbsp;&gt;&nbsp;subdistrict&nbsp;&gt;&nbsp;locality. The ground says the opposite.</p>
+  <div class="shapes" id="shapes"></div>
+  <div class="legendline"><span><span class="lg-real"></span>the row’s real boundary</span>
+    <span><span class="lg-lgd"></span>the official Kolkata district — 185 km²</span></div>
+
+  <div class="converge prod">
+    <h3>And after the threshold fix — all three rows lead to the same ground</h3>
+    <div class="convrow" id="converge"></div>
+    <p class="convcap">The India boundary builder never reads which level was picked: it lays the pick over the official
+      district list and <b>the matching districts become the atlas</b>. All three Kolkata rows match the same one district,
+      so all three build the same boundary layer, the same map frame, the same key facts — only the crop of the picture
+      layers (satellite views, land-use images) differs a little. <b>Four rows offered, one meaningful outcome, one of the
+      four fatal before the fix.</b> That is why the mechanism below removes the fake choice rather than explaining it.</p>
+  </div>
+</section>
+
+<section>
+  <h2>3 · The rule, weighed</h2>
+  <p class="sub">Three candidate rules for “nothing offered that cannot build”. The differences are <b>when the person
+     learns</b> and <b>what they are left holding</b>.</p>
+  <table class="rules">
+    <thead><tr><th></th><th>Offer everything, explain each row</th><th>Check the moment a row is picked</th><th>Offer only what builds — checked when the list is made</th></tr></thead>
+    <tbody>
+      <tr><td>When you learn</td>
+        <td class="lose">After reading — and the words can lie (§2: “district” was the smallest shape).</td>
+        <td>At pick time — a second’s pause while the builder’s own match runs ahead of the wait.</td>
+        <td class="win">Never — an unbuildable row simply never appears.</td></tr>
+      <tr><td>What you hold</td>
+        <td class="lose">A four-way choice with one meaningful outcome — the fake choice survives, now with more words.</td>
+        <td>A refusal <b>after</b> you have already chosen — “you can’t have what we offered”.</td>
+        <td class="win">Only real choices. “kolkata” becomes one row.</td></tr>
+      <tr><td>What it costs</td>
+        <td>Longer rows, no engineering.</td>
+        <td>One check per pick against the official list — quick (a warm build is under 5 s), but paid on every pick, forever.</td>
+        <td>A small table per country of what each builder honours, kept next to the builders; India’s says “states, districts” today and grows when the builders do.</td></tr>
+    </tbody>
+  </table>
+  <p class="sub" style="margin-top:.9rem"><b>Shipped rule: the third, with the second as its safety net.</b> The list is
+     generated from the builder’s own reach, so the guarantee is structural, not checked per pick. The pick-time check
+     remains only as a backstop for the day a source moves — and when it fires, it refuses in the box, in words, before
+     any wait.</p>
+</section>
+
+<section>
+  <h2>4 · The box, redrawn — both asks answered in one drawing</h2>
+  <p class="sub">True size. One row per place. The ground is drawn, sized, and checked before the person can start a
+     build. Where one name means several grounds, the row opens into <b>drawn</b> choices — outline and size, not level
+     words. Seven Indian district names need this today: Bilaspur, Hamirpur, Aurangabad, Balrampur, Bijapur, Raigarh,
+     Pratapgarh — all measured from the real files.</p>
+  <div class="duo prod">
+    <div>
+      <div class="searchcard">
+        <div class="sc-input"><span class="q">kolkata</span><span class="cursor"></span><span class="hintt">type a place</span></div>
+        <div class="sc-rows">
+          <div class="srow hot">
+            <div class="ghost"><svg id="th-kol" width="44" height="40" aria-hidden="true"></svg>
+              <div><span class="nm">Kolkata</span><br><span class="wh">West Bengal, India · the official district — 185 km²</span></div>
+            </div>
+          </div>
+          <div class="srow">
+            <div class="ghost"><svg id="th-cut" width="44" height="40" aria-hidden="true"></svg>
+              <div><span class="nm">Cuttack</span><br><span class="wh">Odisha, India · the official district</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="sc-note">Smaller grounds — one part of a city — aren’t offered for India yet: the official boundary
+          source stops at districts. They return here the day the builders learn them.</div>
+      </div>
+      <p class="cap">One Kolkata. The row already shows the ground it means — its real outline and size — because §2
+        proved the level words cannot be trusted to say it. The note under the list says plainly what is not offered and
+        why, so the person who wanted a neighbourhood is told now, not after a wait.</p>
+
+      <div class="promise" style="margin-top:1rem">
+        <div class="ph">Your atlas will cover</div>
+        <div class="prow">
+          <svg id="pr-kol" width="64" height="58" aria-hidden="true"></svg>
+          <div class="pdesc"><b>Kolkata district</b> — 185 km², West Bengal.<br>
+            You’ll get its outline and place names, plus every layer you tick, cropped to this ground.</div>
+        </div>
+        <div class="pcheck"><span class="tick">✓ Ready to build</span> — this ground was matched against the official
+          district list when the list was made, not after you wait.</div>
+      </div>
+      <p class="cap">The promise card appears on pick: the ground drawn, what a build produces in plain words, and the
+        guarantee stated. The strings “your region’s boundaries and place names” already exist in setup — this card gives
+        them the outline.</p>
+    </div>
+
+    <div>
+      <div class="searchcard">
+        <div class="sc-input"><span class="q">aurangabad</span><span class="cursor"></span><span class="hintt">type a place</span></div>
+        <div class="sc-rows">
+          <div class="srow hot"><span class="nm">Aurangabad</span><span class="wh">2 districts share this name — which one?</span></div>
+          <div class="choices">
+            <div class="choice sel"><svg id="th-au-mh" width="64" height="52" aria-hidden="true"></svg>
+              <span class="cw">in Mahārāshtra</span><span class="ck">10,226 km²</span></div>
+            <div class="choice"><svg id="th-au-br" width="64" height="52" aria-hidden="true"></svg>
+              <span class="cw">in Bihār</span><span class="ck">3,471 km²</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="cap"><b>The mechanism, general:</b> one row per name; where the name is honestly several grounds, the
+        grounds are drawn side by side at true relative scale — a 3× size difference is visible in a way “district ·
+        Mahārāshtra” never was. The same drawing carries any future case: when India’s builders learn blocks, “Kolkata —
+        the whole district” and “one part of it” sit here as two drawn choices, sized, both guaranteed, because neither
+        is offered until it builds.</p>
+
+      <div class="promise" style="margin-top:1rem">
+        <div class="ph">When a build still dies — the back half of the guarantee</div>
+        <div class="pdesc" style="font-size:.78rem;line-height:1.5">A source can still move after the list was made. Then:
+          the message stays in plain words, <b>“Try again” works without reloading</b>, and the atlas’s name is released
+          instead of a “Not live” husk holding it. Today all three are missing (§1, step 5).</div>
+        <div style="margin-top:.5rem;display:flex;gap:.5rem;align-items:center">
+          <span style="font-family:'DM Sans',sans-serif;font-size:.8rem;font-weight:600;color:#fff;background:var(--p-moss);border-radius:6px;padding:.35rem .8rem">Try again</span>
+          <span style="font-family:'DM Sans',sans-serif;font-size:.72rem;color:var(--p-mut)">the name “Kolkata Commons” is yours again</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <b>Measured</b> (run against the live code and files): the four rows and their strings — the search endpoint composes
+  “level word · trail”, and its own comment admits the level words are display-only guesses; ranking puts shallower
+  levels first, which is why “district” led the list; no grouping or dedup exists on either side. The pick keeps the
+  boundary’s size box and throws away the parent names the server already sends. The India boundary builder ignores the
+  picked level and rebuilds the region from the official district list with a 50%-of-district rule (the uncommitted fix
+  adds: or ≥20% of the pick); the official Kolkata district was 46.4% inside the picked “district” row and 94% of that
+  pick lay inside it. Real areas, computed from the cached boundaries: “district” row 91.3 km², “subdistrict” 201.8,
+  “locality” 199.7, official district 185. Warm India builds finish in 3.9–4.4 s; a cold one first downloads 93 MB.
+  Failure leaves the Build button off, no button on the failure screen, and a “Not live” atlas holding the name — all
+  from the live setup code. Duplicate district names: 7, listed in §4. All outlines on this page are the real polygons,
+  simplified only for drawing.
+  <br><br>
+  <b>Reasoned</b> (thought, not run): that the pick-time backstop check costs about a second (the full warm build is
+  under 5 s, and the check is one overlay of one shape); that thumbnails in rows cost one small request per grouped row
+  (the server already returns full shapes on a sibling endpoint but strips them from search to keep the index small);
+  the per-country table of what each builder honours is design intent, not code. The “Kolkata Commons” name is an
+  example, not his atlas’s real name.
+</footer>
+
+<script>
+var KOL = {"adm2":{"name":"Kolkata","id":"76128533B72507508533064","areaKm2":91.3,"pts":[[88.2736,22.5558],[88.2748,22.55],[88.2776,22.5476],[88.2845,22.5471],[88.2884,22.5387],[88.2908,22.5292],[88.291,22.5181],[88.315,22.51],[88.3272,22.5095],[88.339,22.5019],[88.3495,22.499],[88.3672,22.4993],[88.3705,22.5046],[88.3744,22.5269],[88.3788,22.5254],[88.3825,22.5276],[88.3898,22.5379],[88.39,22.543],[88.3945,22.5445],[88.4013,22.553],[88.4008,22.5578],[88.4022,22.5587],[88.4085,22.5579],[88.4101,22.5604],[88.3947,22.5947],[88.3958,22.6016],[88.395,22.6231],[88.3934,22.6286],[88.3914,22.6302],[88.3828,22.6317],[88.3625,22.6336],[88.3671,22.6239],[88.3684,22.6162],[88.3673,22.6088],[88.3626,22.6099],[88.3552,22.6007],[88.3509,22.5929],[88.3463,22.5775],[88.3317,22.5561],[88.3236,22.5509],[88.311,22.5486],[88.2865,22.5521],[88.2736,22.5558]]},"adm3":{"name":"Kolkata","id":"7132399B12066186320957","areaKm2":201.8,"pts":[[88.3531,22.4497],[88.356,22.4532],[88.3621,22.455],[88.3778,22.4541],[88.3889,22.4561],[88.3959,22.46],[88.4032,22.471],[88.4062,22.4731],[88.413,22.4731],[88.4175,22.4758],[88.4201,22.4799],[88.4178,22.5019],[88.4188,22.5131],[88.4219,22.5171],[88.426,22.5189],[88.4342,22.5158],[88.4468,22.507],[88.4523,22.5061],[88.4634,22.5077],[88.4602,22.5172],[88.4409,22.5263],[88.4258,22.5425],[88.4091,22.5574],[88.4108,22.56],[88.3954,22.5943],[88.3965,22.6012],[88.3956,22.6219],[88.3941,22.6282],[88.3921,22.6298],[88.3841,22.6312],[88.3632,22.6332],[88.3571,22.6376],[88.355,22.6373],[88.3613,22.6222],[88.3587,22.6127],[88.3466,22.5939],[88.3423,22.5793],[88.3296,22.5656],[88.3246,22.5576],[88.3159,22.5522],[88.3064,22.5511],[88.2709,22.5585],[88.27,22.5565],[88.2608,22.559],[88.2478,22.56],[88.2472,22.557],[88.2506,22.5494],[88.2554,22.5451],[88.2591,22.5453],[88.2613,22.544],[88.2582,22.5417],[88.2632,22.5373],[88.267,22.5378],[88.2717,22.5408],[88.2747,22.5403],[88.2773,22.5434],[88.2797,22.5406],[88.2896,22.5371],[88.2915,22.5287],[88.2916,22.5177],[88.3004,22.5145],[88.2988,22.5075],[88.3006,22.5054],[88.2998,22.5036],[88.2927,22.4936],[88.2879,22.4915],[88.2864,22.4876],[88.2713,22.4911],[88.2745,22.4857],[88.2778,22.4837],[88.2776,22.48],[88.2796,22.4764],[88.2884,22.471],[88.2898,22.4654],[88.2875,22.4589],[88.2887,22.4577],[88.2963,22.4592],[88.3001,22.4616],[88.3039,22.4603],[88.3129,22.462],[88.3153,22.4562],[88.3244,22.4554],[88.3256,22.4603],[88.3285,22.46],[88.3294,22.4634],[88.3275,22.465],[88.3266,22.4698],[88.3296,22.4684],[88.3359,22.4689],[88.3316,22.4656],[88.3317,22.4632],[88.336,22.4607],[88.3419,22.4606],[88.342,22.4583],[88.3395,22.4564],[88.3414,22.4552],[88.3502,22.4569],[88.3531,22.4497]]},"adm4":{"name":"Kolkata","id":"45978901B13908031128432","areaKm2":199.7,"pts":[[88.4602,22.5172],[88.4409,22.5263],[88.4258,22.5425],[88.4091,22.5574],[88.4108,22.56],[88.3954,22.5943],[88.3965,22.6012],[88.3956,22.6219],[88.3941,22.6282],[88.3921,22.6298],[88.3841,22.6312],[88.3632,22.6332],[88.3571,22.6376],[88.355,22.6373],[88.3613,22.6222],[88.3587,22.6127],[88.3466,22.5939],[88.3423,22.5793],[88.3296,22.5656],[88.3246,22.5576],[88.3159,22.5522],[88.3064,22.5511],[88.2709,22.5585],[88.27,22.5565],[88.2608,22.559],[88.2478,22.56],[88.2472,22.557],[88.2506,22.5494],[88.2554,22.5451],[88.2591,22.5453],[88.2613,22.544],[88.2582,22.5417],[88.2632,22.5373],[88.267,22.5378],[88.2717,22.5408],[88.2747,22.5403],[88.2773,22.5434],[88.2797,22.5406],[88.2896,22.5371],[88.2915,22.5287],[88.2916,22.5177],[88.3004,22.5145],[88.2988,22.5075],[88.3006,22.5054],[88.2927,22.4936],[88.2879,22.4915],[88.2864,22.4876],[88.2713,22.4911],[88.2745,22.4857],[88.2778,22.4837],[88.2776,22.48],[88.2796,22.4764],[88.2884,22.471],[88.2895,22.4677],[88.2962,22.4676],[88.2981,22.4715],[88.3003,22.47],[88.3049,22.4702],[88.3059,22.4682],[88.3112,22.4676],[88.3093,22.4606],[88.3129,22.462],[88.3147,22.4568],[88.3185,22.4552],[88.3244,22.4554],[88.3256,22.4603],[88.3289,22.4605],[88.3294,22.4634],[88.3275,22.465],[88.3266,22.4698],[88.3296,22.4684],[88.3359,22.4689],[88.3316,22.4656],[88.3317,22.4632],[88.336,22.4607],[88.3419,22.4606],[88.342,22.4583],[88.3395,22.4564],[88.3414,22.4552],[88.3502,22.4569],[88.3531,22.4497],[88.356,22.4532],[88.3621,22.455],[88.3778,22.4541],[88.3889,22.4561],[88.3959,22.46],[88.4032,22.471],[88.4062,22.4731],[88.413,22.4731],[88.4175,22.4758],[88.4201,22.4799],[88.4178,22.5019],[88.4188,22.5131],[88.4219,22.5171],[88.426,22.5189],[88.4342,22.5158],[88.4468,22.507],[88.4523,22.5061],[88.4634,22.5077],[88.4602,22.5172]]},"lgd":{"props":{"OBJECTID":519,"dtname":"Kolkata","stname":"WEST BENGAL","stcode11":"19","dtcode11":"342","year_stat":"2011_c","dist_lgd":315,"state_lgd":19,"remarks":" ","Dist":"Kolkata","InPoly_FID":1287,"SimPgnFlag":0,"MaxSimpTol":100,"MinSimpTol":100,"SHAPE_Length":106287.28895040821,"SHAPE_Area":218328462.2948199},"areaKm2":185,"pts":[[88.3841,22.6188],[88.3658,22.6184],[88.3655,22.609],[88.3592,22.6125],[88.3482,22.595],[88.3429,22.5788],[88.322,22.5557],[88.3232,22.5533],[88.3198,22.551],[88.3156,22.5498],[88.306,22.5501],[88.2742,22.5559],[88.2488,22.5624],[88.2403,22.5608],[88.2353,22.5562],[88.2336,22.5492],[88.24,22.5492],[88.25,22.5452],[88.2535,22.5475],[88.2544,22.5469],[88.2551,22.5431],[88.2586,22.5398],[88.2557,22.5363],[88.2574,22.5365],[88.2603,22.5328],[88.2611,22.5346],[88.2642,22.5346],[88.266,22.5376],[88.2708,22.5379],[88.2776,22.543],[88.2916,22.5385],[88.2912,22.5299],[88.2892,22.5274],[88.2908,22.525],[88.29,22.5207],[88.2917,22.5171],[88.3006,22.5162],[88.3024,22.5111],[88.3053,22.508],[88.3072,22.5],[88.3111,22.498],[88.3115,22.4926],[88.3106,22.4909],[88.3036,22.4903],[88.2985,22.4842],[88.2942,22.4821],[88.2754,22.4879],[88.2717,22.4915],[88.2686,22.4904],[88.2683,22.4871],[88.2773,22.4843],[88.2798,22.4792],[88.2896,22.4706],[88.2904,22.4658],[88.288,22.456],[88.3027,22.4554],[88.3047,22.459],[88.3073,22.4594],[88.311,22.4565],[88.3189,22.4575],[88.3211,22.4656],[88.3237,22.4674],[88.329,22.468],[88.3338,22.4671],[88.3317,22.4644],[88.3324,22.4623],[88.3342,22.4616],[88.3427,22.4627],[88.3459,22.4567],[88.3506,22.4569],[88.3543,22.4611],[88.3597,22.4629],[88.3596,22.4608],[88.3622,22.4587],[88.3612,22.4568],[88.362,22.4553],[88.3653,22.4541],[88.3694,22.457],[88.3702,22.4564],[88.3689,22.4529],[88.372,22.452],[88.3749,22.457],[88.3766,22.4555],[88.3799,22.4561],[88.3805,22.4585],[88.3827,22.4594],[88.3778,22.4655],[88.3842,22.4652],[88.3935,22.4676],[88.3969,22.4718],[88.3954,22.4727],[88.3959,22.4736],[88.3981,22.4719],[88.4002,22.4739],[88.4048,22.4744],[88.4069,22.4787],[88.4145,22.4778],[88.4151,22.4821],[88.417,22.4845],[88.416,22.4886],[88.4121,22.4912],[88.4071,22.4899],[88.4063,22.4909],[88.408,22.4934],[88.4132,22.4948],[88.4132,22.4977],[88.4112,22.498],[88.4103,22.5017],[88.4158,22.5055],[88.4163,22.5142],[88.4201,22.5174],[88.4205,22.5238],[88.4271,22.5186],[88.4351,22.5171],[88.4397,22.5095],[88.4442,22.5118],[88.4484,22.5085],[88.4547,22.5096],[88.4559,22.5151],[88.4585,22.5174],[88.4557,22.5189],[88.4596,22.5191],[88.4611,22.5226],[88.4397,22.5281],[88.4341,22.5363],[88.4267,22.5418],[88.4206,22.5488],[88.4138,22.5535],[88.405,22.5702],[88.4005,22.5835],[88.3923,22.5952],[88.3933,22.6087],[88.3923,22.6182],[88.3841,22.6188]]}};
+var AUR = [{"state":"Bihār","areaKm2":3471,"pts":[[84.329,24.49],[84.356,24.492],[84.4,24.515],[84.402,24.522],[84.399,24.534],[84.41,24.535],[84.409,24.558],[84.416,24.552],[84.422,24.566],[84.419,24.575],[84.431,24.578],[84.45,24.556],[84.457,24.575],[84.465,24.575],[84.471,24.566],[84.476,24.536],[84.495,24.538],[84.513,24.512],[84.547,24.524],[84.571,24.524],[84.59,24.542],[84.589,24.552],[84.599,24.556],[84.583,24.562],[84.614,24.597],[84.61,24.616],[84.623,24.626],[84.616,24.626],[84.621,24.655],[84.631,24.658],[84.653,24.652],[84.657,24.668],[84.664,24.669],[84.663,24.684],[84.669,24.681],[84.681,24.687],[84.716,24.684],[84.714,24.697],[84.718,24.705],[84.742,24.706],[84.749,24.756],[84.739,24.761],[84.738,24.77],[84.754,24.772],[84.752,24.786],[84.745,24.789],[84.755,24.793],[84.756,24.799],[84.725,24.807],[84.726,24.817],[84.721,24.82],[84.723,24.831],[84.718,24.84],[84.698,24.842],[84.696,24.856],[84.676,24.865],[84.665,24.887],[84.682,24.888],[84.692,24.881],[84.696,24.889],[84.687,24.892],[84.688,24.898],[84.702,24.899],[84.706,24.91],[84.728,24.907],[84.742,24.937],[84.734,24.961],[84.76,24.966],[84.761,24.972],[84.753,24.978],[84.753,24.985],[84.757,24.992],[84.769,24.994],[84.77,25.009],[84.762,25.014],[84.744,25.012],[84.74,25.025],[84.723,25.043],[84.725,25.05],[84.752,25.05],[84.759,25.064],[84.759,25.073],[84.753,25.074],[84.744,25.087],[84.733,25.087],[84.734,25.096],[84.698,25.115],[84.69,25.108],[84.668,25.121],[84.649,25.105],[84.647,25.091],[84.641,25.103],[84.645,25.111],[84.643,25.122],[84.629,25.127],[84.629,25.115],[84.618,25.118],[84.616,25.097],[84.598,25.094],[84.598,25.099],[84.606,25.103],[84.605,25.126],[84.603,25.129],[84.581,25.129],[84.585,25.139],[84.483,25.106],[84.467,25.112],[84.474,25.119],[84.469,25.139],[84.456,25.148],[84.418,25.074],[84.365,25.044],[84.336,25.032],[84.304,25.01],[84.188,24.871],[84.1,24.788],[84.063,24.742],[84.032,24.694],[84.005,24.636],[84.022,24.631],[84.023,24.627],[84.032,24.628],[84.054,24.612],[84.052,24.606],[84.06,24.587],[84.069,24.589],[84.067,24.576],[84.08,24.569],[84.086,24.545],[84.097,24.534],[84.097,24.504],[84.108,24.488],[84.117,24.481],[84.13,24.486],[84.132,24.498],[84.147,24.504],[84.144,24.529],[84.154,24.54],[84.172,24.533],[84.161,24.517],[84.187,24.51],[84.194,24.522],[84.18,24.547],[84.194,24.549],[84.196,24.555],[84.207,24.557],[84.216,24.537],[84.225,24.535],[84.228,24.55],[84.242,24.553],[84.242,24.543],[84.256,24.538],[84.256,24.531],[84.265,24.53],[84.266,24.537],[84.288,24.552],[84.279,24.554],[84.277,24.564],[84.3,24.566],[84.32,24.527],[84.326,24.522],[84.334,24.503],[84.329,24.49]]},{"state":"Mahārāshtra","areaKm2":10226,"pts":[[75.48,19.422],[75.481,19.432],[75.493,19.441],[75.509,19.431],[75.524,19.401],[75.573,19.38],[75.611,19.382],[75.619,19.426],[75.61,19.431],[75.612,19.454],[75.62,19.468],[75.633,19.461],[75.644,19.487],[75.645,19.529],[75.658,19.567],[75.653,19.595],[75.602,19.603],[75.592,19.638],[75.608,19.642],[75.611,19.657],[75.634,19.656],[75.637,19.679],[75.631,19.702],[75.637,19.735],[75.631,19.738],[75.629,19.746],[75.629,19.777],[75.639,19.777],[75.637,19.783],[75.646,19.786],[75.638,19.814],[75.653,19.816],[75.648,19.836],[75.648,19.875],[75.655,19.911],[75.668,19.921],[75.669,19.94],[75.638,19.956],[75.642,19.961],[75.635,19.983],[75.637,19.995],[75.631,20.001],[75.639,20.004],[75.606,20.006],[75.595,20.024],[75.608,20.052],[75.601,20.063],[75.595,20.062],[75.59,20.103],[75.628,20.106],[75.65,20.192],[75.68,20.192],[75.685,20.205],[75.682,20.234],[75.677,20.241],[75.697,20.287],[75.687,20.31],[75.713,20.318],[75.72,20.332],[75.735,20.332],[75.742,20.339],[75.746,20.338],[75.747,20.33],[75.757,20.328],[75.774,20.337],[75.77,20.354],[75.762,20.361],[75.761,20.371],[75.753,20.374],[75.753,20.404],[75.741,20.409],[75.738,20.415],[75.744,20.424],[75.761,20.428],[75.766,20.451],[75.774,20.457],[75.8,20.454],[75.8,20.464],[75.816,20.466],[75.821,20.474],[75.826,20.475],[75.845,20.461],[75.86,20.462],[75.87,20.449],[75.866,20.442],[75.883,20.44],[75.885,20.446],[75.911,20.45],[75.916,20.458],[75.906,20.499],[75.908,20.535],[75.922,20.563],[75.923,20.58],[75.91,20.577],[75.888,20.597],[75.875,20.601],[75.87,20.624],[75.847,20.646],[75.832,20.645],[75.827,20.626],[75.817,20.615],[75.798,20.616],[75.722,20.636],[75.704,20.653],[75.707,20.662],[75.67,20.671],[75.659,20.662],[75.657,20.653],[75.661,20.654],[75.663,20.644],[75.661,20.627],[75.649,20.621],[75.616,20.625],[75.61,20.623],[75.616,20.61],[75.591,20.603],[75.566,20.613],[75.56,20.614],[75.556,20.605],[75.538,20.61],[75.534,20.597],[75.523,20.591],[75.527,20.561],[75.51,20.555],[75.506,20.546],[75.5,20.543],[75.497,20.528],[75.486,20.544],[75.47,20.545],[75.462,20.553],[75.464,20.522],[75.46,20.517],[75.452,20.541],[75.429,20.533],[75.435,20.514],[75.414,20.524],[75.398,20.525],[75.395,20.575],[75.392,20.58],[75.371,20.577],[75.363,20.597],[75.354,20.59],[75.322,20.592],[75.319,20.577],[75.302,20.577],[75.294,20.57],[75.268,20.572],[75.261,20.579],[75.253,20.556],[75.246,20.552],[75.248,20.543],[75.244,20.54],[75.24,20.522],[75.228,20.515],[75.232,20.494],[75.213,20.499],[75.214,20.493],[75.203,20.492],[75.202,20.477],[75.164,20.477],[75.162,20.437],[75.13,20.432],[75.109,20.412],[75.123,20.376],[75.126,20.35],[75.105,20.346],[75.093,20.335],[75.06,20.335],[75.057,20.308],[75.049,20.308],[75.001,20.337],[74.996,20.336],[74.99,20.331],[74.986,20.318],[74.988,20.303],[74.972,20.305],[74.955,20.29],[74.945,20.28],[74.95,20.274],[74.936,20.27],[74.935,20.247],[74.909,20.244],[74.912,20.216],[74.932,20.214],[74.933,20.182],[74.928,20.179],[74.926,20.164],[74.931,20.153],[74.912,20.153],[74.908,20.166],[74.899,20.17],[74.9,20.177],[74.857,20.178],[74.854,20.209],[74.86,20.228],[74.831,20.234],[74.83,20.244],[74.817,20.245],[74.804,20.235],[74.785,20.231],[74.786,20.226],[74.805,20.232],[74.785,20.205],[74.761,20.2],[74.765,20.183],[74.743,20.187],[74.739,20.195],[74.725,20.191],[74.716,20.168],[74.72,20.161],[74.716,20.136],[74.712,20.134],[74.706,20.115],[74.731,20.112],[74.739,20.083],[74.712,20.079],[74.724,20.055],[74.711,20.041],[74.721,20.022],[74.719,20.018],[74.702,20.019],[74.693,20.007],[74.694,19.997],[74.686,19.99],[74.69,19.972],[74.676,19.964],[74.675,19.936],[74.683,19.933],[74.683,19.926],[74.657,19.923],[74.65,19.91],[74.649,19.862],[74.664,19.862],[74.662,19.84],[74.608,19.85],[74.602,19.802],[74.593,19.788],[74.594,19.777],[74.603,19.772],[74.616,19.773],[74.629,19.791],[74.637,19.795],[74.657,19.779],[74.693,19.769],[74.696,19.76],[74.708,19.763],[74.705,19.776],[74.714,19.783],[74.721,19.778],[74.724,19.751],[74.708,19.722],[74.719,19.726],[74.724,19.721],[74.731,19.724],[74.731,19.7],[74.752,19.691],[74.788,19.717],[74.807,19.704],[74.802,19.695],[74.789,19.688],[74.781,19.653],[74.79,19.65],[74.826,19.673],[74.854,19.649],[74.89,19.657],[74.892,19.647],[74.9,19.645],[74.928,19.65],[74.939,19.641],[74.949,19.647],[74.967,19.648],[74.982,19.641],[75.001,19.622],[75.039,19.625],[75.044,19.621],[75.046,19.611],[75.067,19.604],[75.093,19.61],[75.109,19.609],[75.104,19.603],[75.118,19.603],[75.131,19.593],[75.147,19.596],[75.156,19.588],[75.167,19.595],[75.189,19.596],[75.207,19.579],[75.208,19.562],[75.258,19.524],[75.265,19.524],[75.272,19.552],[75.28,19.551],[75.286,19.536],[75.278,19.514],[75.307,19.508],[75.307,19.501],[75.315,19.495],[75.328,19.495],[75.329,19.504],[75.334,19.504],[75.331,19.48],[75.339,19.479],[75.344,19.497],[75.357,19.501],[75.363,19.488],[75.37,19.486],[75.362,19.48],[75.351,19.482],[75.342,19.464],[75.327,19.464],[75.326,19.455],[75.333,19.438],[75.35,19.448],[75.357,19.442],[75.355,19.424],[75.344,19.406],[75.367,19.398],[75.397,19.415],[75.431,19.417],[75.445,19.428],[75.454,19.412],[75.474,19.415],[75.48,19.422]]}];
+var NS="http://www.w3.org/2000/svg";
+function E(n,at){ var e=document.createElementNS(NS,n); for(var k in at)e.setAttribute(k,at[k]); return e; }
+
+/* draw a lng/lat ring into an svg, given a shared scale (px per degree-lat) and a bbox to center on */
+function ringPath(ring){
+  return "M"+ring.map(function(p){ return p[0].toFixed(2)+" "+p[1].toFixed(2); }).join("L")+"Z";
+}
+function fitRings(rings, W, H, pad, kmScale){
+  /* rings: array of {pts, ...}; shared true scale. Project lng/lat -> local km, then to px. */
+  var lat0=22.55, kx=111.32*Math.cos(lat0*Math.PI/180), ky=110.57;
+  var all=[].concat.apply([],rings.map(function(r){return r.pts;}));
+  var xs=all.map(function(p){return p[0]*kx;}), ys=all.map(function(p){return -p[1]*ky;});
+  var minx=Math.min.apply(0,xs), maxx=Math.max.apply(0,xs), miny=Math.min.apply(0,ys), maxy=Math.max.apply(0,ys);
+  var s = kmScale || Math.min((W-2*pad)/(maxx-minx),(H-2*pad)/(maxy-miny));
+  var ox=(W-(maxx-minx)*s)/2 - minx*s, oy=(H-(maxy-miny)*s)/2 - miny*s;
+  return { s:s, map:function(p){ return [p[0]*kx*s+ox, -p[1]*ky*s+oy]; } };
+}
+function drawShapeCell(host, title, lvlWord, real, areaTxt, note, sharedScale){
+  var cell=document.createElement("div"); cell.className="shapecell";
+  cell.innerHTML="<h3>"+title+"</h3><div class='lvl'>"+lvlWord+"</div>";
+  var svg=E("svg",{width:"100%",viewBox:"0 0 250 218",style:"display:block"});
+  cell.appendChild(svg);
+  var fit=fitRings([{pts:KOL.lgd.pts},{pts:real.pts}],250,218,14,sharedScale);
+  svg.appendChild(E("path",{d:ringPath(KOL.lgd.pts.map(fit.map)),fill:"rgba(74,90,51,.07)",stroke:"#40573D","stroke-width":2,"stroke-dasharray":"5 4"}));
+  svg.appendChild(E("path",{d:ringPath(real.pts.map(fit.map)),fill:"rgba(166,82,47,.10)",stroke:"#A6522F","stroke-width":2.4}));
+  var p=document.createElement("p"); p.innerHTML=note; cell.appendChild(p);
+  document.getElementById("shapes").appendChild(cell);
+  return fit.s;
+}
+(function(){
+  var lat0=22.55, kx=111.32*Math.cos(lat0*Math.PI/180), ky=110.57;
+  function extent(pts){ var xs=pts.map(function(p){return p[0]*kx;}), ys=pts.map(function(p){return p[1]*ky;});
+    return [Math.max.apply(0,xs)-Math.min.apply(0,xs), Math.max.apply(0,ys)-Math.min.apply(0,ys)]; }
+  var big=[KOL.adm3.pts,KOL.adm4.pts,KOL.adm2.pts,KOL.lgd.pts].map(extent);
+  var maxw=Math.max.apply(0,big.map(function(e){return e[0];})), maxh=Math.max.apply(0,big.map(function(e){return e[1];}));
+  var scale=Math.min((250-28)/maxw,(218-28)/maxh);   /* km -> px, shared by all three cells */
+  drawShapeCell(document, "The row that was picked", "labelled “district” — 91.3 km²", KOL.adm2,
+    "", "<b>Half the official district.</b> Only 46.4% of the dashed shape lies inside it — under the 50% rule, so the build died. Yet 94% of this shape is inside the district: the pick was honest, the words were not.", scale);
+  drawShapeCell(document, "The second row", "labelled “subdistrict” — 201.8 km²", KOL.adm3,
+    "", "Covers the official district almost exactly (96.5% of it) — <b>this “smaller” row is the one that meant the whole city</b>, and it would have built.", scale);
+  drawShapeCell(document, "The third row", "labelled “locality” — 199.7 km²", KOL.adm4,
+    "", "Nearly the same shape again (95.5% of the district inside). Three rows, two of them twins, the odd one out mislabelled — <b>no wording fixes this; only drawing it does.</b>", scale);
+})();
+
+/* convergence strip: three small real outlines -> one official district */
+(function(){
+  var host=document.getElementById("converge");
+  function mini(pts, label, w){
+    var box=document.createElement("div"); box.style.textAlign="center";
+    var svg=E("svg",{width:w||70,height:64,viewBox:"0 0 70 64"});
+    var lat0=22.55, kx=111.32*Math.cos(lat0*Math.PI/180), ky=110.57;
+    var xs=pts.map(function(p){return p[0]*kx;}), ys=pts.map(function(p){return -p[1]*ky;});
+    var minx=Math.min.apply(0,xs), maxx=Math.max.apply(0,xs), miny=Math.min.apply(0,ys), maxy=Math.max.apply(0,ys);
+    var s=Math.min(58/(maxx-minx),52/(maxy-miny)), ox=(70-(maxx-minx)*s)/2-minx*s, oy=(60-(maxy-miny)*s)/2-miny*s;
+    svg.appendChild(E("path",{d:ringPath(pts.map(function(p){return [p[0]*kx*s+ox,-p[1]*ky*s+oy];})),
+      fill:"rgba(166,82,47,.10)",stroke:"#A6522F","stroke-width":1.6}));
+    box.appendChild(svg);
+    var t=document.createElement("div"); t.style.cssText="font-size:.62rem;color:#6b6353;margin-top:.1rem"; t.textContent=label;
+    box.appendChild(t);
+    return box;
+  }
+  host.appendChild(mini(KOL.adm2.pts,"“district”"));
+  host.appendChild(mini(KOL.adm3.pts,"“subdistrict”"));
+  host.appendChild(mini(KOL.adm4.pts,"“locality”"));
+  var ar=document.createElement("span"); ar.className="arrow"; ar.textContent="→"; host.appendChild(ar);
+  var final=document.createElement("div"); final.style.textAlign="center";
+  var svg=E("svg",{width:96,height:88,viewBox:"0 0 96 88"});
+  var lat0=22.55, kx=111.32*Math.cos(lat0*Math.PI/180), ky=110.57;
+  var pts=KOL.lgd.pts, xs=pts.map(function(p){return p[0]*kx;}), ys=pts.map(function(p){return -p[1]*ky;});
+  var minx=Math.min.apply(0,xs), maxx=Math.max.apply(0,xs), miny=Math.min.apply(0,ys), maxy=Math.max.apply(0,ys);
+  var s=Math.min(80/(maxx-minx),72/(maxy-miny)), ox=(96-(maxx-minx)*s)/2-minx*s, oy=(82-(maxy-miny)*s)/2-miny*s;
+  svg.appendChild(E("path",{d:ringPath(pts.map(function(p){return [p[0]*kx*s+ox,-p[1]*ky*s+oy];})),
+    fill:"rgba(74,90,51,.10)",stroke:"#40573D","stroke-width":2.2,"stroke-dasharray":"6 4"}));
+  final.appendChild(svg);
+  var t=document.createElement("div"); t.style.cssText="font-size:.62rem;color:#40573D;font-weight:700;margin-top:.1rem";
+  t.textContent="the official district — what every pick becomes";
+  final.appendChild(t);
+  host.appendChild(final);
+})();
+
+/* row thumbnails + promise outline + aurangabad choices */
+function thumb(id, pts, stroke){
+  var svg=document.getElementById(id);
+  var W=+svg.getAttribute("width"), H=+svg.getAttribute("height");
+  var lat0=pts[0][1], kx=111.32*Math.cos(lat0*Math.PI/180), ky=110.57;
+  var xs=pts.map(function(p){return p[0]*kx;}), ys=pts.map(function(p){return -p[1]*ky;});
+  var minx=Math.min.apply(0,xs), maxx=Math.max.apply(0,xs), miny=Math.min.apply(0,ys), maxy=Math.max.apply(0,ys);
+  var s=Math.min((W-8)/(maxx-minx),(H-8)/(maxy-miny)), ox=(W-(maxx-minx)*s)/2-minx*s, oy=(H-(maxy-miny)*s)/2-miny*s;
+  svg.appendChild(E("path",{d:ringPath(pts.map(function(p){return [p[0]*kx*s+ox,-p[1]*ky*s+oy];})),
+    fill:"rgba(166,82,47,.10)",stroke:stroke||"#A6522F","stroke-width":1.6}));
+}
+thumb("th-kol", KOL.lgd.pts, "#40573D");
+thumb("pr-kol", KOL.lgd.pts, "#40573D");
+/* Cuttack: no shape embedded; draw the LGD Kolkata ghosted? No — draw a small unspecific outline would be dishonest.
+   Use the real Aurangabad-Bihar ring as a stand-in? Also dishonest. So: draw nothing, say so. */
+(function(){
+  var svg=document.getElementById("th-cut");
+  svg.appendChild(E("circle",{cx:22,cy:20,r:14,fill:"none",stroke:"#d9d2bf","stroke-width":1.6,"stroke-dasharray":"3 3"}));
+  var t=E("text",{x:22,y:23,"text-anchor":"middle","font-size":8,fill:"#9b937f"}); t.textContent="…"; svg.appendChild(t);
+})();
+/* Aurangabad pair at true relative scale: share one km->px scale across both */
+(function(){
+  var mh=AUR.filter(function(a){return /Mah/.test(a.state);})[0], br=AUR.filter(function(a){return /Bih/.test(a.state);})[0];
+  var kx=111.32*Math.cos(21*Math.PI/180), ky=110.57;
+  function ext(pts){ var xs=pts.map(function(p){return p[0]*kx;}), ys=pts.map(function(p){return p[1]*ky;});
+    return [Math.max.apply(0,xs)-Math.min.apply(0,xs), Math.max.apply(0,ys)-Math.min.apply(0,ys)]; }
+  var e1=ext(mh.pts), e2=ext(br.pts);
+  var s=Math.min(56/Math.max(e1[0],e2[0]), 46/Math.max(e1[1],e2[1]));
+  function draw(id, pts){
+    var svg=document.getElementById(id), W=+svg.getAttribute("width"), H=+svg.getAttribute("height");
+    var xs=pts.map(function(p){return p[0]*kx;}), ys=pts.map(function(p){return -p[1]*ky;});
+    var minx=Math.min.apply(0,xs), maxx=Math.max.apply(0,xs), miny=Math.min.apply(0,ys), maxy=Math.max.apply(0,ys);
+    var ox=(W-(maxx-minx)*s)/2-minx*s, oy=(H-(maxy-miny)*s)/2-miny*s;
+    svg.appendChild(E("path",{d:ringPath(pts.map(function(p){return [p[0]*kx*s+ox,-p[1]*ky*s+oy];})),
+      fill:"rgba(166,82,47,.10)",stroke:"#A6522F","stroke-width":1.6}));
+  }
+  draw("th-au-mh", mh.pts); draw("th-au-br", br.pts);
+})();
+</script>
+</body>
+</html>

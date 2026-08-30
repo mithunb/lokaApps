@@ -1,0 +1,1126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Change a layer — prototype — LOKA Atlas</title>
+  <meta name="robots" content="noindex" />
+  <!-- PROTOTYPE. Open this file directly (file://) — nothing here talks to the
+       API. The map is a drawn stand-in; the layer is the real one (LOKA Tagged
+       Places, 66 places, the bengaluru-tags atlas). It exists to be clicked and
+       critiqued: it proposes where and how an EXISTING data layer gets changed,
+       replacing the add-data wizard's step 4 doing double duty as an editor.
+
+       DIRECTION (extension of the editor, not a new world)
+       THESIS: a layer you already have is changed where it lives — in the
+         atlas's own panel, over the live map. Editing is three questions and a
+         map key, not a wizard step that re-asks the upload's questions.
+       OWN-WORLD: the editor's, wholesale — paper ground, hairline ink borders,
+         moss as the only interactive colour, Figtree stamps on DM Sans. Pins,
+         key rows and popups reuse the viewer's own renderers (atlas.js: ICONS,
+         iconFor, swatch), so what this panel shows is what the map shows.
+       STORY: this is my layer; I can rename it, recolour it, and watch the map
+         and its key change as I do; nothing is public until I say so.
+       FIRST VIEWPORT: the atlas as its owner knows it — map edge to edge,
+         panel top-left listing the layers. One tap on a layer opens that
+         layer's own view in the same panel. Save changes / Discard changes
+         appear only once something has actually changed.
+       FORM: master–detail inside the one panel the editor already has. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Figtree:wght@500;600;700&display=swap" />
+  <style>
+    /* ---------- tokens: the editor's, verbatim ---------- */
+    :root {
+      --color-bg:#F9F9F7; --color-bg-alt:#F0EFEA; --color-surface:#FFFFFF;
+      --color-moss:#4A5A33; --color-canopy:#384526;
+      --color-rust:#AE5028; --color-rust-deep:#7C3616;
+      --color-ochre:#B8862F;
+      --color-text-primary:#2A241A; --color-text-secondary:#564E3C; --color-text-muted:#6B6350;
+      --color-divider:rgba(42,36,26,.09); --color-border:rgba(42,36,26,.14);
+      --color-moss-tint:rgba(74,90,51,.10); --color-rust-tint:rgba(174,80,40,.10);
+      --color-ochre-tint:rgba(184,134,47,.14);
+      --color-map-ground:#EAE9E3;
+      --color-cat-other:#7a756c;
+      --t-section:1.15rem; --t-body:1rem; --t-control:.95rem; --t-ui:.875rem;
+      --t-meta:.78rem; --t-label:.72rem;
+      --shadow-md:0 1px 4px rgba(42,36,26,.10);
+      --shadow-lg:0 2px 12px rgba(42,36,26,.12);
+      --radius-md:.25rem; --radius-lg:.375rem;
+      --sheet-peek:4.5rem;
+    }
+    * { box-sizing:border-box; }
+    html, body { height:100%; }
+    body { margin:0; background:var(--color-bg); color:var(--color-text-primary);
+      font-family:'DM Sans',system-ui,-apple-system,sans-serif; font-size:var(--t-body); line-height:1.55;
+      -webkit-font-smoothing:antialiased; display:flex; flex-direction:column; }
+    h1,h2,h3 { font-family:'Figtree',sans-serif; letter-spacing:-.01em; margin:0; text-wrap:balance; }
+    button { font:inherit; }
+    [hidden] { display:none !important; }
+    :focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:4px; }
+
+    /* ---------- top bar (editor chrome, for context) ---------- */
+    .ed-bar { display:flex; align-items:center; gap:1rem; flex-wrap:wrap;
+      padding:.75rem clamp(.9rem,3vw,1.5rem); border-bottom:1px solid var(--color-divider);
+      background:var(--color-bg); flex:0 0 auto; }
+    .ed-id { min-width:0; flex:1 1 14rem; }
+    .ed-id h1 { font-size:var(--t-section); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ed-id .by { font-size:var(--t-meta); color:var(--color-text-muted); }
+    .ed-acts { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+    .ed-status { display:inline-flex; align-items:center; gap:.45rem; font-size:var(--t-ui);
+      padding:.35rem .7rem; border-radius:999px; border:1px solid var(--color-border);
+      background:var(--color-surface); min-height:2rem; }
+    .ed-status .dot { width:.5rem; height:.5rem; border-radius:50%; background:var(--color-text-muted); flex:0 0 auto; }
+    .ed-status.live { border-color:rgba(74,90,51,.35); background:var(--color-moss-tint); color:var(--color-canopy); }
+    .ed-status.live .dot { background:var(--color-moss); }
+
+    .btn { min-height:2.75rem; padding:.55rem 1rem; border:1px solid transparent;
+      border-radius:var(--radius-md); background:var(--color-moss); color:#fff;
+      font-weight:600; font-size:var(--t-control); cursor:pointer; }
+    .btn:hover { background:var(--color-canopy); }
+    .btn.secondary { background:var(--color-surface); color:var(--color-text-primary); border-color:var(--color-border); }
+    .btn.secondary:hover { background:var(--color-bg-alt); }
+    .btn.quiet { background:none; color:var(--color-text-secondary); }
+    .btn.quiet:hover { background:var(--color-bg-alt); }
+    .btn.danger { background:var(--color-surface); color:var(--color-rust-deep); border-color:var(--color-rust); }
+    .btn.danger:hover { background:var(--color-rust-tint); }
+    .btn:disabled, .btn:disabled:hover { background:var(--color-bg-alt); color:var(--color-text-muted);
+      border-color:var(--color-border); cursor:not-allowed; }
+
+    /* ---------- the stage: mocked map, real proportions ---------- */
+    .ed-stage { position:relative; flex:1 1 auto; min-height:0; background:var(--color-map-ground); overflow:hidden; }
+    .map-ground { position:absolute; inset:0; overflow:hidden;
+      background:
+        radial-gradient(38rem 26rem at 30% 20%, #E7E5DC 0%, rgba(231,229,220,0) 70%),
+        radial-gradient(44rem 30rem at 75% 75%, #E4E2D6 0%, rgba(228,226,214,0) 70%),
+        var(--color-map-ground); }
+    .map-art { position:absolute; inset:0; width:100%; height:100%; display:block; }
+    .map-label { position:absolute; transform:translate(-50%,-50%); font-family:'Figtree',sans-serif;
+      font-size:var(--t-label); font-weight:600; letter-spacing:.12em; text-transform:uppercase;
+      color:#1e2a1c; text-shadow:0 0 2px #fff,0 0 3px #fff,0 0 4px #fff,0 1px 1px #fff;
+      pointer-events:none; white-space:nowrap; }
+    .map-label.water { color:#4c6a7c; letter-spacing:.08em; font-weight:500; font-size:.68rem; }
+    /* satellite: the same ground, photo-toned — enough to judge the panel over it */
+    body.sat .map-ground { background:
+        radial-gradient(40rem 28rem at 28% 22%, #5E6650 0%, rgba(94,102,80,0) 72%),
+        radial-gradient(46rem 32rem at 74% 74%, #6A6A52 0%, rgba(106,106,82,0) 70%),
+        #565E48; }
+    body.sat .map-label { color:#F4F2E8; text-shadow:0 0 2px #2A241A,0 0 3px #2A241A,0 1px 2px #2A241A; }
+    body.sat .map-label.water { color:#CFE2EA; }
+    body.sat .map-road { stroke:rgba(244,242,232,.35); }
+    body.sat .map-water { fill:#41616F; }
+
+    /* ---------- pins: the viewer's own marker, verbatim ---------- */
+    .atlas-marker { position:absolute; transform:translate(-50%,-100%); display:flex; flex-direction:column;
+      align-items:center; cursor:pointer; background:none; border:none; padding:0; z-index:2; }
+    .atlas-pin { width:20px; height:20px; border-radius:50%; background:#FFFFFF; border:2px solid var(--pin,#AE5028);
+      color:var(--pin,#AE5028); font-size:var(--t-label); line-height:1; display:flex; align-items:center; justify-content:center;
+      box-shadow:0 1px 3px rgba(42,36,26,.32); transition:transform .18s cubic-bezier(.25,1,.5,1), box-shadow .18s ease; }
+    .atlas-pin.badge { background:var(--pin,#AE5028); color:#fff; font-size:9px; font-weight:700; }
+    .atlas-pin.badge.pale { color:#2A241A; }
+    .atlas-pin svg { width:12px; height:12px; display:block; }
+    @media (hover:hover){ .atlas-marker:hover .atlas-pin, .atlas-marker:focus-visible .atlas-pin
+      { transform:translateY(-2px) scale(1.14); box-shadow:0 3px 8px rgba(42,36,26,.4); } }
+
+    /* hover hint — one element, moved to whichever pin is under the pointer */
+    .atlas-hint { position:absolute; z-index:4; pointer-events:none; max-width:16rem;
+      padding:.18rem .45rem; border-radius:4px; background:rgba(255,255,255,.97);
+      border:1px solid var(--color-border); box-shadow:0 1px 4px rgba(42,36,26,.2);
+      font-size:var(--t-meta); font-weight:500; line-height:1.3; color:var(--color-text-primary);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; transform:translate(-50%,-100%);
+      opacity:0; visibility:hidden; transition:opacity .12s ease; }
+    .atlas-hint.on { opacity:1; visibility:visible; }
+
+    /* ---------- popup: the viewer's own popup, verbatim ---------- */
+    .mock-pop { position:absolute; z-index:4; width:min(280px, 78vw);
+      background:var(--color-surface); border-radius:var(--radius-md); box-shadow:var(--shadow-md);
+      animation:pop-in .18s cubic-bezier(.25,1,.5,1); }
+    @keyframes pop-in { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
+    .mock-pop .x { position:absolute; top:0; right:0; width:2.25rem; height:2.25rem; display:flex;
+      align-items:center; justify-content:center; background:none; border:none; cursor:pointer;
+      font-size:var(--t-section); line-height:1; color:var(--color-text-muted); border-radius:var(--radius-md); }
+    .mock-pop .x:hover { color:var(--color-text-primary); background:var(--color-bg-alt); }
+    .pop { padding:.85rem .95rem; max-height:300px; overflow-y:auto; }
+    .pop-title { font-family:'Figtree',sans-serif; font-weight:700; font-size:1.02rem; color:var(--color-text-primary);
+      line-height:1.2; padding-right:1.6rem; }
+    .pop-field { margin-top:.6rem; }
+    .pop-lbl { font-size:var(--t-label); text-transform:uppercase; letter-spacing:.06em; color:var(--color-text-muted); }
+    .pop-val { font-size:.88rem; color:var(--color-text-primary); }
+    .pop-tags { display:flex; flex-wrap:wrap; gap:.3rem; margin-top:.25rem; }
+    .pop-tag { font-size:.74rem; padding:.15rem .5rem; background:var(--color-moss-tint); color:var(--color-canopy);
+      border-radius:4px; font-weight:500; }
+    .pop-img-ph { width:100%; height:110px; border-radius:4px; margin:.5rem 0 .1rem;
+      background:linear-gradient(115deg,#DCD8C8 0%, #C9CBB8 55%, #D6D2C2 100%);
+      display:flex; align-items:center; justify-content:center; color:#8A8474; }
+    .pop-img-ph svg { width:22px; height:22px; }
+
+    /* ---------- search over the map (editor chrome) ---------- */
+    .ed-search { position:absolute; z-index:6; top:1rem; left:50%; transform:translateX(-50%);
+      width:min(20rem, calc(100% - 1.5rem)); display:flex; flex-direction:column; gap:.3rem; }
+    .ed-search input { width:100%; font:inherit; font-size:var(--t-ui); min-height:2.75rem;
+      padding:.5rem .7rem; border:1px solid var(--color-border); border-radius:4px;
+      background:var(--color-surface); color:var(--color-text-primary); box-shadow:var(--shadow-md); }
+    .ed-search input:focus { outline:2px solid var(--color-moss); outline-offset:-1px; border-color:var(--color-moss); }
+    .ed-search-count { align-self:center; font-size:var(--t-meta); color:var(--color-text-secondary);
+      background:var(--color-surface); border:1px solid var(--color-divider); border-radius:999px;
+      padding:.15rem .6rem; box-shadow:var(--shadow-md); }
+    @media (min-width:821px) {
+      .ed-search { left:max(calc(50% - 10rem), 22.5rem); transform:none; width:20rem; }
+    }
+
+    /* ---------- the panel ---------- */
+    .pane { position:absolute; z-index:5; display:flex; flex-direction:column;
+      background:var(--color-surface); border:1px solid var(--color-border);
+      border-radius:var(--radius-md); box-shadow:var(--shadow-md); overflow:hidden; }
+    @media (min-width:821px) {
+      #pane { top:1rem; left:1rem; width:20.5rem; max-width:calc(100% - 2rem); max-height:calc(100% - 2rem); }
+    }
+    /* each view is the pane's flex column while shown, so its body scrolls and
+       its save bar stays pinned inside the pane's max-height */
+    .pane > div { display:flex; flex-direction:column; min-height:0; }
+    .pane-head { display:flex; align-items:center; gap:.5rem; padding:.6rem .85rem;
+      border-bottom:1px solid var(--color-divider); flex:0 0 auto; }
+    .pane-head h2 { flex:1 1 auto; font-size:var(--t-label); letter-spacing:.14em;
+      text-transform:uppercase; color:var(--color-text-secondary); font-weight:600; }
+    .pane-count { font-size:var(--t-meta); color:var(--color-text-muted); flex:0 0 auto; }
+    .pane-body { padding:.5rem .85rem .85rem; overflow:auto; flex:1 1 auto; min-height:0; }
+
+    /* --- list view: groups, base row, region line, layer rows --- */
+    .lyr-group { font-size:var(--t-label); letter-spacing:.12em; text-transform:uppercase;
+      color:var(--color-text-muted); font-weight:600; margin:.9rem 0 .2rem; }
+    .lyr-group:first-child { margin-top:.2rem; }
+    .seg { display:inline-flex; gap:.2rem; padding:.15rem; background:var(--color-bg-alt);
+      border:1px solid var(--color-border); border-radius:var(--radius-md); }
+    .seg-opt { font:inherit; font-size:var(--t-meta); padding:.4rem .7rem; min-height:2.5rem;
+      border:none; border-radius:4px; background:none; color:var(--color-text-secondary); cursor:pointer; }
+    .seg-opt.on { background:var(--color-moss-tint); color:var(--color-canopy); font-weight:600; }
+    .base-row { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; padding:.2rem 0 .5rem; }
+
+    .region-line { display:grid; grid-template-columns:1fr auto; gap:0 .6rem; align-items:baseline;
+      width:100%; min-height:2.75rem; padding:.4rem .5rem .45rem; margin:0 -.5rem .3rem;
+      background:none; border:none; border-radius:var(--radius-md); text-align:left; cursor:pointer;
+      color:inherit; font:inherit; }
+    .region-line:hover { background:var(--color-bg-alt); }
+    .region-k { grid-column:1; font-size:var(--t-meta); color:var(--color-text-muted); }
+    .region-v { grid-column:1; font-family:'Figtree',sans-serif; font-size:var(--t-ui); font-weight:600; }
+    .region-go { grid-column:2; grid-row:1/3; align-self:center; font-size:var(--t-meta);
+      font-weight:600; color:var(--color-canopy); }
+
+    /* a contributed layer's row opens its own view — the same affordance the
+       region row already taught: the whole row, with "Change" naming the act */
+    .lyr-row { display:grid; grid-template-columns:1fr auto; gap:0 .6rem; align-items:start;
+      width:100%; padding:.55rem .5rem; margin:0 -.5rem; background:none; border:none;
+      border-radius:var(--radius-md); text-align:left; cursor:pointer; color:inherit; font:inherit;
+      border-bottom:1px solid var(--color-divider); }
+    .lyr-row:hover { background:var(--color-bg-alt); }
+    .lyr-name { display:block; font-size:var(--t-ui); font-weight:600; }
+    .lyr-sub { display:block; font-size:var(--t-meta); color:var(--color-text-muted); }
+    .lyr-go { grid-column:2; grid-row:1; align-self:center; font-size:var(--t-meta);
+      font-weight:600; color:var(--color-canopy); }
+    .lyr-leg { grid-column:1 / -1; margin-top:.35rem; }
+
+    .empty { text-align:left; padding:.35rem 0 .6rem; }
+    .empty b { font-family:'Figtree',sans-serif; font-size:var(--t-ui); }
+    .empty p { font-size:var(--t-meta); color:var(--color-text-muted); margin:.15rem 0 0; max-width:34ch; }
+    .add-row { border-top:1px solid var(--color-divider); margin-top:.7rem; padding-top:.8rem; }
+    .add-row .btn { width:100%; }
+
+    /* --- the map key: icon + colour, exactly what the viewer draws --- */
+    .key { list-style:none; margin:.15rem 0 0; padding:0; display:flex; flex-direction:column; gap:.28rem; }
+    .key li { display:flex; align-items:center; gap:.45rem; font-size:var(--t-meta); color:var(--color-text-secondary); }
+    .k-label { flex:1 1 auto; line-height:1.2; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .k-count { flex:0 0 auto; color:var(--color-text-muted); font-variant-numeric:tabular-nums; }
+    .leg-icon { flex:0 0 auto; width:15px; height:15px; color:var(--c); display:inline-flex; align-items:center; justify-content:center; }
+    .leg-icon svg { width:15px; height:15px; }
+    .leg-badge { flex:0 0 auto; width:15px; height:15px; border-radius:50%; background:var(--c); color:#fff;
+      font-size:8px; font-weight:700; line-height:1; display:inline-flex; align-items:center; justify-content:center;
+      font-family:'DM Sans',sans-serif; }
+    .leg-badge.pale { color:#2A241A; }
+    .leg-dot { flex:0 0 auto; width:11px; height:11px; border-radius:50%; background:var(--c); margin:0 2px; }
+
+    /* --- edit view --- */
+    .ev-back { display:inline-flex; align-items:center; gap:.3rem; min-height:2.75rem; margin:0 0 0 -.4rem;
+      padding:.3rem .4rem; background:none; border:none; border-radius:var(--radius-md); cursor:pointer;
+      font:inherit; font-size:var(--t-meta); font-weight:600; color:var(--color-canopy); }
+    .ev-back:hover { background:var(--color-bg-alt); }
+    .ev-title { font-size:var(--t-section); font-weight:600; margin:.1rem 0 0; }
+    .ev-sub { font-size:var(--t-meta); color:var(--color-text-muted); margin:.1rem 0 .9rem; }
+
+    .fld { display:block; margin-bottom:1rem; font-size:var(--t-ui); font-weight:600; color:var(--color-text-secondary); }
+    .fld input, .fld select { display:block; font:inherit; font-size:var(--t-control); font-weight:400;
+      margin-top:.25rem; padding:.55rem .65rem; border:1px solid var(--color-border); border-radius:4px;
+      background:#fff; color:var(--color-text-primary); width:100%; min-height:2.75rem; }
+    .fld .note { display:block; font-size:var(--t-meta); font-weight:400; color:var(--color-text-muted); margin-top:.3rem; }
+    .fld .note.warnish { color:var(--color-text-secondary); }
+    .fld-err { font-size:var(--t-meta); font-weight:600; color:var(--color-rust-deep); margin-top:.3rem; }
+
+    .swatches { display:flex; gap:.35rem; margin-top:.45rem; }
+    .sw { width:2.75rem; height:2.75rem; display:inline-flex; align-items:center; justify-content:center;
+      background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md); cursor:pointer; }
+    .sw i { width:1.35rem; height:1.35rem; border-radius:50%; background:var(--c); display:block; }
+    .sw:hover { background:var(--color-bg-alt); }
+    .sw[aria-pressed="true"] { border-color:var(--color-moss); background:var(--color-moss-tint); }
+
+    .key-head { display:flex; align-items:baseline; gap:.6rem; margin:1.1rem 0 .2rem; }
+    .key-head .lyr-group { margin:0; flex:1 1 auto; }
+    .key-note { font-size:var(--t-meta); color:var(--color-text-muted); }
+    .key-block { padding:.55rem .65rem .6rem; border:1px solid var(--color-divider); border-radius:var(--radius-md);
+      background:var(--color-bg); }
+
+    .ev-remove { border-top:1px solid var(--color-divider); margin-top:1.2rem; padding-top:.9rem; }
+    .linkish { background:none; border:none; padding:.4rem 0; min-height:2.75rem; font:inherit;
+      font-size:var(--t-ui); color:var(--color-rust-deep); text-decoration:underline; cursor:pointer; }
+    .linkish:hover { text-decoration-thickness:2px; }
+    .rm-confirm { background:var(--color-rust-tint); border-radius:var(--radius-md); padding:.7rem .8rem; }
+    .rm-confirm p { margin:0 0 .6rem; font-size:var(--t-ui); color:var(--color-text-primary); max-width:38ch; }
+    .rm-confirm .row { display:flex; gap:.5rem; flex-wrap:wrap; }
+
+    /* save/discard: appears only once something changed */
+    .save-bar { flex:0 0 auto; border-top:1px solid var(--color-divider); background:var(--color-surface);
+      padding:.6rem .85rem .75rem; transform:translateY(105%); transition:transform .18s ease-out; }
+    .save-bar.on { transform:none; }
+    .save-bar[hidden] { display:none; }
+    .save-note { font-size:var(--t-meta); color:var(--color-text-secondary); margin:0 0 .5rem; }
+    .save-note.warn { color:var(--color-rust-deep); font-weight:600; }
+    .save-row { display:flex; gap:.5rem; flex-wrap:wrap; }
+    .save-row .btn { flex:1 1 auto; }
+
+    .toast { position:fixed; left:50%; bottom:1.2rem; transform:translateX(-50%); z-index:60;
+      background:var(--color-text-primary); color:#fff; font-size:var(--t-ui);
+      padding:.6rem 1rem; border-radius:var(--radius-md); box-shadow:var(--shadow-lg); max-width:90vw; }
+
+    /* ---------- phone: the panel becomes a bottom sheet (editor pattern) ---------- */
+    @media (max-width:820px) {
+      .ed-bar { gap:.5rem .6rem; padding:.6rem .9rem; }
+      .ed-id h1 { font-size:var(--t-body); }
+      .ed-id .by { display:none; }
+      .ed-status { padding:.3rem .55rem; font-size:var(--t-meta); }
+      .ed-status .who { display:none; }
+      #status-act, #share-btn, #settings-btn { padding:.4rem .6rem; font-size:var(--t-meta); }
+      .pane { position:fixed; left:0; right:0; bottom:0; top:auto; width:auto; max-width:none;
+        border-radius:var(--radius-lg) var(--radius-lg) 0 0; border-bottom:none;
+        max-height:min(78vh,36rem); box-shadow:var(--shadow-lg);
+        padding-bottom:env(safe-area-inset-bottom); }
+      #pane { transform:translateY(calc(100% - var(--sheet-peek))); transition:transform .22s cubic-bezier(.2,.8,.2,1); }
+      #pane.open { transform:translateY(0); }
+      .pane-head { cursor:pointer; padding:.8rem .9rem 0; position:relative; padding-top:1.1rem; }
+      .pane-head::before { content:""; position:absolute; top:.4rem; left:50%; transform:translateX(-50%);
+        width:2.25rem; height:.25rem; border-radius:999px; background:var(--color-border); }
+    }
+    @media (prefers-reduced-motion:reduce) {
+      #pane, .save-bar, .atlas-pin, .atlas-hint { transition:none; }
+      .mock-pop { animation:none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="ed-bar">
+    <div class="ed-id">
+      <h1 id="ed-title">Bengaluru Tags</h1>
+      <span class="by">by Socratus · you are the owner</span>
+    </div>
+    <div class="ed-acts">
+      <span class="ed-status live" role="status">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="what">Live</span>
+        <span class="who">— anyone with the link</span>
+      </span>
+      <button class="btn secondary" id="status-act">Take it off</button>
+      <button class="btn secondary" id="share-btn">Share</button>
+      <button class="btn quiet" id="settings-btn">Settings</button>
+    </div>
+  </header>
+
+  <main class="ed-stage" id="stage">
+    <div class="map-ground" aria-hidden="true">
+      <svg class="map-art" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <!-- roads: whisper-quiet texture -->
+        <g fill="none" stroke="#DDDACE" stroke-width="1.4" vector-effect="non-scaling-stroke" class="roads">
+          <path class="map-road" d="M8,64 C 26,52 44,50 60,38 C 70,30 82,26 97,22" stroke-width="1.4" vector-effect="non-scaling-stroke"/>
+          <path class="map-road" d="M30,97 C 38,74 46,58 50,42 C 53,30 55,18 54,2" vector-effect="non-scaling-stroke"/>
+          <path class="map-road" d="M2,30 C 20,34 38,38 56,50 C 72,60 84,74 96,90" vector-effect="non-scaling-stroke"/>
+          <path class="map-road" d="M70,3 C 66,24 68,44 76,62 C 81,73 88,82 97,89" vector-effect="non-scaling-stroke"/>
+        </g>
+        <!-- lakes -->
+        <path class="map-water" d="M60,32 C 63,30 67,31 68,34 C 69,37 66,40 62,40 C 58,40 57,34 60,32 Z" fill="#AFC5CE"/>
+        <path class="map-water" d="M40,27 C 43,25 46,27 46,30 C 46,33 43,34 40,33 C 37,32 37,29 40,27 Z" fill="#AFC5CE"/>
+        <path class="map-water" d="M52,8 C 56,6 60,8 60,11 C 60,14 55,16 51,14 C 48,12 49,9 52,8 Z" fill="#AFC5CE"/>
+        <path class="map-water" d="M78,80 C 85,76 93,79 94,84 C 95,89 88,93 81,91 C 74,89 73,83 78,80 Z" fill="#AFC5CE"/>
+        <!-- the district boundary, in the atlas's ochre boundary ink -->
+        <path d="M38,6 C 22,10 12,22 10,36 C 8,50 12,66 22,78 C 32,90 52,96 68,92 C 84,88 94,74 95,58 C 96,42 90,26 78,16 C 68,8 52,3 38,6 Z"
+          fill="none" stroke="#B0863A" stroke-width="2.4" vector-effect="non-scaling-stroke" opacity=".85"/>
+      </svg>
+      <span class="map-label" style="left:48%; top:37%">Cubbon Park</span>
+      <span class="map-label" style="left:40%; top:22%">Malleshwaram</span>
+      <span class="map-label" style="left:42%; top:74%">Basavanagudi</span>
+      <span class="map-label" style="left:74%; top:44%">Indiranagar</span>
+      <span class="map-label" style="left:68%; top:70%">Koramangala</span>
+      <span class="map-label" style="left:56%; top:6%">Yelahanka</span>
+      <span class="map-label water" style="left:66%; top:28%">Ulsoor Lake</span>
+      <span class="map-label water" style="left:85%; top:78%">Bellandur Lake</span>
+    </div>
+
+    <div id="pins"></div>
+    <div class="atlas-hint" id="hint" aria-hidden="true"></div>
+
+    <div class="ed-search">
+      <input type="search" id="search" placeholder="Search the map…" aria-label="Search the map" autocomplete="off" />
+      <span class="ed-search-count" id="search-count" role="status" hidden></span>
+    </div>
+
+    <section class="pane" id="pane" aria-label="Layers">
+      <!-- ============ list view ============ -->
+      <div id="view-list">
+        <div class="pane-head" id="pane-head-list">
+          <h2>Layers</h2>
+          <span class="pane-count" id="layers-count">1 on the map</span>
+        </div>
+        <div class="pane-body">
+          <div class="lyr-group">Base map</div>
+          <div class="base-row">
+            <div class="seg" role="radiogroup" aria-label="Base map style" id="basemap-seg">
+              <button type="button" class="seg-opt on" role="radio" aria-checked="true" data-base="light">Map</button>
+              <button type="button" class="seg-opt" role="radio" aria-checked="false" data-base="sat">Satellite</button>
+            </div>
+          </div>
+          <button class="region-line" id="region-line">
+            <span class="region-k">Boundaries &amp; place names for</span>
+            <span class="region-v">Bengaluru Urban</span>
+            <span class="region-go" aria-hidden="true">Change</span>
+          </button>
+
+          <div class="lyr-group">Your data</div>
+          <div id="layer-rows"></div>
+          <div class="empty" id="user-empty" hidden>
+            <b>Nothing of yours yet</b>
+            <p>Add a spreadsheet of places and it becomes a layer you can style.</p>
+            <p id="proto-reset-note" hidden>(Prototype — reload the page to bring the layer back.)</p>
+          </div>
+
+          <div class="lyr-group">Open data</div>
+          <div class="empty"><p>No extra open-data layers yet.</p></div>
+
+          <div class="add-row">
+            <button class="btn" id="add-data">＋ Add data</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ edit view: one layer, three questions and a key ============ -->
+      <div id="view-edit" hidden>
+        <div class="pane-head">
+          <h2 id="ev-eyebrow">Your layer</h2>
+        </div>
+        <div class="pane-body">
+          <button class="ev-back" id="ev-back">‹ All layers</button>
+          <h3 class="ev-title" id="ev-title" tabindex="-1">LOKA Tagged Places</h3>
+          <p class="ev-sub" id="ev-sub">66 places · added by Socratus</p>
+
+          <label class="fld" for="f-name">Layer name
+            <input type="text" id="f-name" maxlength="60" autocomplete="off" />
+            <span class="fld-err" id="name-err" role="alert" hidden>The layer needs a name.</span>
+          </label>
+
+          <label class="fld" for="f-colour">Colour places by
+            <select id="f-colour"></select>
+            <span class="note warnish" id="multi-note" hidden></span>
+          </label>
+
+          <div class="fld" id="one-colour" hidden>
+            <span id="one-colour-lbl">Which colour</span>
+            <div class="swatches" role="group" aria-labelledby="one-colour-lbl" id="swatches"></div>
+          </div>
+
+          <div class="key-head">
+            <div class="lyr-group" id="key-title">Map key</div>
+            <span class="key-note" id="key-note"></span>
+          </div>
+          <div class="key-block">
+            <ul class="key" id="key"></ul>
+          </div>
+
+          <label class="fld" for="f-title" style="margin-top:1.1rem">Call each place by
+            <select id="f-title"></select>
+            <span class="note">The name shown when someone points at or opens a place.</span>
+          </label>
+
+          <div class="ev-remove">
+            <button class="linkish" id="rm-link">Remove this layer from the atlas…</button>
+            <div class="rm-confirm" id="rm-confirm" hidden>
+              <p id="rm-text"></p>
+              <div class="row">
+                <button class="btn danger" id="rm-yes">Remove the layer</button>
+                <button class="btn secondary" id="rm-no">Keep it</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="save-bar" id="save-bar" hidden>
+          <p class="save-note" id="save-note" role="status">Only you see this until you save.</p>
+          <div class="save-row">
+            <button class="btn" id="save-btn">Save changes</button>
+            <button class="btn secondary" id="discard-btn">Discard changes</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+  (function () {
+    "use strict";
+    var $ = function (s, r) { return (r || document).querySelector(s); };
+
+    /* ================= the viewer's icon logic, verbatim (atlas.js) =================
+       The map draws every category as a coloured icon (or a monogram badge when
+       no keyword matches). Any key this panel draws must go through the SAME
+       functions, or the key and the map disagree — the bug this design retires. */
+    function svgIcon(inner) {
+      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+    }
+    var ICONS = {
+      leaf: svgIcon('<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/>'),
+      trees: svgIcon('<path d="M10 10v.2A3 3 0 0 1 8.9 16H5a3 3 0 0 1-1-5.8V10a3 3 0 0 1 6 0Z"/><path d="M7 16v6"/><path d="M13 19v3"/><path d="M12 19h8.3a1 1 0 0 0 .7-1.7L18 14h.3a1 1 0 0 0 .7-1.7L16 9h.2a1 1 0 0 0 .8-1.7L13 3l-1.4 1.5"/>'),
+      droplet: svgIcon('<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5C11.5 5.5 10 7.9 8 9.5 6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>'),
+      utensils: svgIcon('<path d="M3 2v7c0 1.1.9 2 2 2a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>'),
+      landmark: svgIcon('<line x1="3" x2="21" y1="22" y2="22"/><line x1="6" x2="6" y1="18" y2="11"/><line x1="10" x2="10" y1="18" y2="11"/><line x1="14" x2="14" y1="18" y2="11"/><line x1="18" x2="18" y1="18" y2="11"/><polygon points="12 2 20 7 4 7"/>'),
+      palette: svgIcon('<circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C22 6.012 17.461 2 12 2z"/>'),
+      cap: svgIcon('<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>'),
+      store: svgIcon('<path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M2 7h20"/><path d="M18 12a2 2 0 0 1-4 0 2 2 0 0 1-4 0 2 2 0 0 1-4 0"/>'),
+      health: svgIcon('<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/>'),
+      home: svgIcon('<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>'),
+      alert: svgIcon('<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>'),
+      users: svgIcon('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>')
+    };
+    var KEYWORD_ICONS = {
+      nature: "leaf", eco: "leaf", green: "leaf", park: "leaf", garden: "leaf", tree: "leaf", plant: "leaf",
+      forest: "trees", wood: "trees",
+      water: "droplet", river: "droplet", lake: "droplet", wetland: "droplet", pond: "droplet", stream: "droplet", drink: "droplet",
+      food: "utensils", restaurant: "utensils", cafe: "utensils", eat: "utensils", cuisine: "utensils", meal: "utensils",
+      heritage: "landmark", historic: "landmark", monument: "landmark", temple: "landmark", shrine: "landmark", idol: "landmark",
+      culture: "palette", art: "palette", craft: "palette", music: "palette", creative: "palette", decor: "palette",
+      learn: "cap", education: "cap", school: "cap", college: "cap", library: "cap", study: "cap",
+      market: "store", shop: "store", store: "store", vendor: "store", retail: "store", commerce: "store",
+      health: "health", clinic: "health", hospital: "health", medical: "health", care: "health",
+      infra: "home", building: "home", housing: "home", home: "home", construction: "home",
+      hazard: "alert", danger: "alert", risk: "alert", waste: "alert", pollution: "alert", safety: "alert", civic: "alert",
+      social: "users", community: "users", people: "users", activit: "users", gathering: "users"
+    };
+    function iconFor(value) {
+      var v = String(value == null ? "" : value).toLowerCase();
+      for (var k in KEYWORD_ICONS) { if (v.indexOf(k) >= 0) return { icon: KEYWORD_ICONS[k] }; }
+      var words = v.replace(/[^a-z0-9 ]+/g, " ").trim().split(/\s+/).filter(Boolean);
+      var initials = words.slice(0, 2).map(function (w) { return w.charAt(0); }).join("").toUpperCase();
+      return { badge: initials || "?" };
+    }
+    function paleHex(h) {
+      if (!/^#[0-9a-fA-F]{6}$/.test(h || "")) return false;
+      var r = parseInt(h.slice(1, 3), 16), g = parseInt(h.slice(3, 5), 16), b = parseInt(h.slice(5, 7), 16);
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b > 145;
+    }
+
+    /* ================= the server's colour model (api/lib/fragment.js) ================= */
+    // auto-assigned categorical palette (Paul Tol muted, colourblind-safe) + the
+    // residual bucket — never restyled, never hand-picked
+    var CATEGORY_COLORS = ["#332288", "#999933", "#44AA99", "#AA4499", "#117733", "#882255", "#88CCEE", "#DDCC77"];
+    var CATEGORY_OTHER = "#7a756c";
+    var MAX_CATEGORIES = 8;
+    // named single colours a person picks for a whole layer
+    var MARKER_COLORS = { rust: "#A6522F", moss: "#40573D", ochre: "#B0863A", sienna: "#9C5A34", slate: "#5f7f92" };
+    var MARKER_NAMES = { rust: "Rust", moss: "Moss", ochre: "Ochre", sienna: "Sienna", slate: "Slate" };
+    function primaryToken(v) { var s = String(v || ""); var i = s.indexOf(";"); return (i < 0 ? s : s.slice(0, i)).trim(); }
+
+    /* ================= LOKA Tagged Places — 66 places =================
+       Schema: tag_id, latitude, longitude, description, categories, labels,
+       address, creator, created_at, image_urls, themes, _category.
+       description doubles as the name (there is no title column);
+       categories is multi-value ("Social; Culture"); themes is the field
+       Data enrichment derived. Three records are verbatim from the layer. */
+    var THEMES = ["Community spaces", "Green & natural", "Everyday commerce", "Arts & crafts", "Built heritage"];
+    function R(desc, cats, addr, theme, img) { return { desc: desc, cats: cats, addr: addr, theme: theme, img: !!img }; }
+    var RECORDS = [
+      R("sofa made out of recycled materials", "Culture", "Church Street", 0),
+      R("hand-painted kannada movie mural", "Culture", "Gandhi Bazaar Main Road", 3, 1),
+      R("clay ganesha workshop", "Culture; Heritage", "Pottery Town", 3),
+      R("wall of old cinema posters", "Culture", "Majestic underpass", 3),
+      R("rangoli competition square", "Culture", "Jayanagar 4th Block", 3),
+      R("typewriter repair and letterpress", "Culture; Market", "Balepet", 2),
+      R("gombe dolls display window", "Culture", "Basavanagudi", 3),
+      R("street library cupboard", "Culture; Learning", "Richards Park gate", 0),
+      R("kolam stencil painters", "Culture", "Malleshwaram 8th Cross", 3),
+      R("vintage vinyl listening room", "Culture", "Indiranagar 100 Ft Road", 3, 1),
+      R("theatre rehearsal shed", "Culture", "Ravindra Kalakshetra lane", 3),
+      R("mural of city birds", "Culture; Nature", "Cubbon Park wall", 3),
+      R("handloom sari weavers unit", "Culture; Market", "Chickpet", 2),
+      R("storytelling circle under a tree", "Culture; Social", "Sankey Tank east gate", 3),
+      R("banyan katte with stone bench", "Nature; Heritage", "Bull Temple Road", 1),
+      R("butterfly garden patch", "Nature", "Lalbagh west gate", 1, 1),
+      R("rain tree avenue canopy", "Nature", "Sankey Road", 1),
+      R("urban beehive boxes", "Nature", "Yelahanka farm lane", 1),
+      R("medicinal plants nursery", "Nature; Learning", "Hebbal", 1),
+      R("lake birdwatch deck", "Nature", "Ulsoor Lake north", 1),
+      R("compost learning pit", "Nature; Civic", "HSR 27th Main", 1),
+      R("sacred grove remnant", "Nature; Heritage", "Kadugodi", 1),
+      R("terrace farm collective", "Nature", "Koramangala 5th Block", 1),
+      R("open well with pulley", "Nature; Heritage", "Basavanagudi", 1),
+      R("gulmohar flowering stretch", "Nature", "Jayamahal Road", 1),
+      R("Ganesha idol with granite mandapam", "Heritage; Culture", "Kempegowda Nagar", 4),
+      R("stone inscription slab", "Heritage", "Begur Road", 4, 1),
+      R("colonial post box in use", "Heritage", "St. Marks Road", 4),
+      R("old flour mill signage", "Heritage; Market", "Cottonpet", 4),
+      R("dhobi ghat stone rows", "Heritage; Civic", "Vyalikaval", 4),
+      R("clock tower with winding key", "Heritage", "Russell Market front", 4),
+      R("agrahara street houses", "Heritage", "Malleshwaram 6th Cross", 4),
+      R("fort wall fragment", "Heritage", "City Market rear", 4),
+      R("stepwell under restoration", "Heritage; Civic", "Anekal Road", 4),
+      R("flower sellers' morning line", "Market", "KR Market", 2, 1),
+      R("steel utensils exchange shop", "Market", "Shivajinagar", 2),
+      R("night fruit cart cluster", "Market; Food and Drink", "Ejipura signal", 2),
+      R("secondhand book stalls", "Market; Learning", "Avenue Road", 2),
+      R("plant sellers' pavement row", "Market; Nature", "Doddaballapur Road", 1),
+      R("sunday scrap bazaar", "Market", "Banaswadi", 2),
+      R("millet flour micro mill", "Market; Food and Drink", "Vijayanagar", 2),
+      R("khadi and yarn depot", "Market; Culture", "Gandhinagar", 2),
+      R("free evening tuition porch", "Learning", "Ulsoor", 0),
+      R("science toy tinkering room", "Learning; Activities", "Jayanagar 9th Block", 0, 1),
+      R("kannada learning circle", "Learning; Culture", "Basaveshwaranagar", 3),
+      R("seed saving workshop bench", "Learning; Nature", "Yelahanka New Town", 1),
+      R("community computer corner", "Learning; Civic", "DJ Halli", 0),
+      R("braille reading room", "Learning", "Langford Town", 0),
+      R("astronomy night terrace", "Learning; Activities", "Hennur", 0),
+      R("morning laughter club lawn", "Activities", "Cubbon Park bandstand", 0),
+      R("lagori pitch on sundays", "Activities", "Wilson Garden ground", 0),
+      R("cycling repair meetup", "Activities; Civic", "Koramangala BDA complex", 0),
+      R("open-air chess tables", "Activities; Learning", "Malleshwaram grounds", 0, 1),
+      R("kite flying terrace point", "Activities", "Shivajinagar rooftops", 0),
+      R("drummers' evening jam", "Activities; Culture", "Freedom Park", 3),
+      R("community notice board", "Civic", "HSR BDA complex", 0),
+      R("ward composting yard", "Civic; Nature", "Domlur", 1),
+      R("public water ATM", "Civic", "KR Puram station", 0),
+      R("repair café counter", "Civic", "Indiranagar clubhouse", 2),
+      R("rainwater harvesting demo", "Civic; Learning", "Jakkur Lake office", 1),
+      R("filter coffee counter since 1952", "Food and Drink", "Basavanagudi", 2, 1),
+      R("military hotel lunch line", "Food and Drink; Heritage", "Shivajinagar", 2),
+      R("avarekai festival stall", "Food and Drink; Culture", "VV Puram food street", 2),
+      R("free buttermilk stand in summer", "Food and Drink; Social", "Majestic bus stand", 0),
+      R("recycled library", "Social; Culture", "Cooke Town", 0, 1),
+      R("tool sharing shelf", "Repair", "Whitefield community hall", 0)
+    ];
+
+    /* positions: deterministic clusters over the mocked city (percent of stage) */
+    function mulberry32(a) {
+      return function () {
+        a |= 0; a = (a + 0x6D2B79F5) | 0;
+        var t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+    (function placeRecords() {
+      var rnd = mulberry32(11);
+      var clusters = [
+        [50, 34, 9, 13], [44, 64, 8, 11], [63, 30, 7, 10], [68, 55, 8, 10],
+        [55, 46, 6, 9], [80, 40, 6, 7], [37, 44, 6, 6]
+      ];
+      var placed = [], idx = 0;
+      clusters.forEach(function (c) {
+        for (var i = 0; i < c[3] && idx < RECORDS.length; i++) {
+          var x, y, ok = false, tries = 0;
+          while (!ok && tries++ < 60) {
+            x = c[0] + (rnd() + rnd() - 1) * c[2] * 1.5;
+            y = c[1] + (rnd() + rnd() - 1) * c[2] * 1.25;
+            x = Math.min(96, Math.max(6, x)); y = Math.min(92, Math.max(9, y));
+            ok = placed.every(function (p) {
+              var dx = (p[0] - x) * 1.6, dy = p[1] - y;
+              return dx * dx + dy * dy > 8.5;
+            });
+          }
+          placed.push([x, y]);
+          RECORDS[idx].x = x; RECORDS[idx].y = y;
+          idx++;
+        }
+      });
+    })();
+
+    /* ================= the layer's spec: saved vs draft ================= */
+    // colourBy: "categories" | "themes" | "one" — one select, one question
+    var SAVED = { name: "LOKA Tagged Places", colourBy: "categories", oneColour: "rust", titleBy: "description" };
+    var DRAFT = clone(SAVED);
+    var REMOVED = false;
+    function clone(s) { return { name: s.name, colourBy: s.colourBy, oneColour: s.oneColour, titleBy: s.titleBy }; }
+    function isDirty() {
+      if ($("#f-name").value.trim() !== SAVED.name) return true;
+      if (DRAFT.colourBy !== SAVED.colourBy) return true;
+      if (DRAFT.colourBy === "one" && DRAFT.oneColour !== SAVED.oneColour) return true;
+      if (DRAFT.titleBy !== SAVED.titleBy) return true;
+      return false;
+    }
+
+    /* colour rules: what the server's fragment builder would do with each choice */
+    function categoryValue(rec, by) { return by === "themes" ? THEMES[rec.theme] : primaryToken(rec.cats); }
+    // observed distinct values ordered by frequency; top 8 keep a palette slot,
+    // the rest fold into "other" — exactly the server's rule
+    function classesFor(by) {
+      var counts = {}, order = [];
+      RECORDS.forEach(function (r) {
+        var v = categoryValue(r, by);
+        if (!v) return;
+        if (!(v in counts)) { counts[v] = 0; order.push(v); }
+        counts[v]++;
+      });
+      order.sort(function (a, b) { return counts[b] - counts[a]; });
+      var kept = order.slice(0, MAX_CATEGORIES);
+      var colorOf = {};
+      kept.forEach(function (v, i) { colorOf[v] = CATEGORY_COLORS[i % CATEGORY_COLORS.length]; });
+      var folded = order.length > kept.length;
+      var otherCount = 0;
+      order.slice(MAX_CATEGORIES).forEach(function (v) { otherCount += counts[v]; });
+      return { kept: kept, counts: counts, colorOf: colorOf, folded: folded, otherCount: otherCount };
+    }
+
+    function styleFor(rec, spec) {
+      if (spec.colourBy === "one") return { color: MARKER_COLORS[spec.oneColour], plain: true };
+      var cls = classesFor(spec.colourBy);
+      var v = categoryValue(rec, spec.colourBy);
+      return { color: cls.colorOf[v] || CATEGORY_OTHER, value: v };
+    }
+    function titleOf(rec, spec) { return spec.titleBy === "address" ? rec.addr : rec.desc; }
+
+    /* ================= the mocked map ================= */
+    var stage = $("#stage"), pinsHost = $("#pins"), hint = $("#hint");
+    var openPop = null, searchQ = "";
+
+    function renderPins(spec) {
+      pinsHost.innerHTML = "";
+      closePopup();
+      if (REMOVED) return;
+      RECORDS.forEach(function (rec, i) {
+        var st = styleFor(rec, spec);
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "atlas-marker";
+        b.style.left = rec.x + "%";
+        b.style.top = rec.y + "%";
+        b.setAttribute("aria-label", titleOf(rec, spec) + (st.value ? " — " + st.value : ""));
+        var pin = document.createElement("div");
+        pin.className = "atlas-pin";
+        pin.style.setProperty("--pin", st.color);
+        if (!st.plain) {
+          var ic = iconFor(st.value);
+          if (ic.icon && ICONS[ic.icon]) pin.innerHTML = ICONS[ic.icon];
+          else {
+            pin.textContent = ic.badge;
+            pin.classList.add("badge");
+            if (paleHex(st.color)) pin.classList.add("pale");
+          }
+        }
+        b.appendChild(pin);
+        b.addEventListener("click", function (e) { e.stopPropagation(); showPopup(rec, b); });
+        b.addEventListener("mouseenter", function () { showHint(rec, b); });
+        b.addEventListener("mouseleave", hideHint);
+        b.addEventListener("focus", function () { showHint(rec, b); });
+        b.addEventListener("blur", hideHint);
+        rec._el = b;
+        pinsHost.appendChild(b);
+      });
+      applySearch();
+    }
+
+    function showHint(rec, el) {
+      hint.textContent = titleOf(rec, DRAFT);
+      hint.classList.add("on");
+      var r = el.getBoundingClientRect(), s = stage.getBoundingClientRect();
+      var x = r.left - s.left + r.width / 2;
+      var y = r.top - s.top - 4;
+      hint.style.left = Math.min(Math.max(x, 70), s.width - 70) + "px";
+      hint.style.top = Math.max(y, 26) + "px";
+    }
+    function hideHint() { hint.classList.remove("on"); }
+
+    function showPopup(rec, el) {
+      closePopup();
+      hideHint();
+      var pop = document.createElement("div");
+      pop.className = "mock-pop";
+      pop.setAttribute("role", "dialog");
+      pop.setAttribute("aria-label", titleOf(rec, DRAFT));
+      var h = '<button class="x" aria-label="Close">✕</button><div class="pop">';
+      h += '<div class="pop-title">' + esc(titleOf(rec, DRAFT)) + "</div>";
+      if (rec.img) {
+        h += '<div class="pop-img-ph" role="img" aria-label="Photo from the tag">' +
+          svgIcon('<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>') + "</div>";
+      }
+      // the popup's own field list (image, categories, address) is untouched by
+      // this screen — only its TITLE is a choice here; the un-chosen name column
+      // drops into the body so nothing is lost
+      if (DRAFT.titleBy === "address") {
+        h += '<div class="pop-field"><div class="pop-lbl">Description</div><div class="pop-val">' + esc(rec.desc) + "</div></div>";
+      }
+      h += '<div class="pop-field"><div class="pop-lbl">Categories</div><div class="pop-tags">' +
+        rec.cats.split(";").map(function (t) { return '<span class="pop-tag">' + esc(t.trim()) + "</span>"; }).join("") +
+        "</div></div>";
+      if (DRAFT.titleBy !== "address") {
+        h += '<div class="pop-field"><div class="pop-lbl">Address</div><div class="pop-val">' + esc(rec.addr) + "</div></div>";
+      }
+      h += "</div>";
+      pop.innerHTML = h;
+      stage.appendChild(pop);
+      // above the pin, clamped inside the stage
+      var r = el.getBoundingClientRect(), s = stage.getBoundingClientRect();
+      var w = pop.offsetWidth, hgt = pop.offsetHeight;
+      // keep clear of the floating panel on desktop — the map cannot pan here
+      var minLeft = 8;
+      if (window.matchMedia("(min-width:821px)").matches) {
+        var pr = $("#pane").getBoundingClientRect();
+        minLeft = Math.max(8, pr.right - s.left + 10);
+      }
+      var left = r.left - s.left + r.width / 2 - w / 2;
+      left = Math.min(Math.max(minLeft, left), s.width - w - 8);
+      var top = r.top - s.top - hgt - 10;
+      if (top < 8) top = r.bottom - s.top + 10;
+      pop.style.left = left + "px";
+      pop.style.top = top + "px";
+      pop.querySelector(".x").addEventListener("click", closePopup);
+      openPop = { el: pop, rec: rec };
+    }
+    function closePopup() {
+      if (openPop) { openPop.el.remove(); openPop = null; }
+    }
+    stage.addEventListener("click", function (e) {
+      if (openPop && !openPop.el.contains(e.target) && !e.target.closest(".atlas-marker")) closePopup();
+    });
+
+    /* search filters the pins, the same way the editor's search drives the frame */
+    $("#search").addEventListener("input", function () { searchQ = this.value; applySearch(); });
+    $("#search").addEventListener("search", function () { searchQ = this.value; applySearch(); });
+    function applySearch() {
+      var q = searchQ.trim().toLowerCase();
+      var count = $("#search-count");
+      if (REMOVED) { count.hidden = true; return; }
+      if (!q) {
+        RECORDS.forEach(function (r) { if (r._el) r._el.hidden = false; });
+        count.hidden = true; count.textContent = "";
+        return;
+      }
+      var shown = 0;
+      RECORDS.forEach(function (r) {
+        var hit = (r.desc + " " + r.cats + " " + r.addr + " " + THEMES[r.theme]).toLowerCase().indexOf(q) >= 0;
+        if (r._el) r._el.hidden = !hit;
+        if (hit) shown++;
+      });
+      count.hidden = false;
+      count.textContent = shown ? shown + " of " + RECORDS.length + " shown" : "nothing matched — try another word";
+      if (openPop && openPop.rec._el && openPop.rec._el.hidden) closePopup();
+    }
+
+    /* ================= the key: drawn by the viewer's swatch rules ================= */
+    function swatchEl(label, color) {
+      var ic = iconFor(label);
+      var el;
+      if (ic.icon && ICONS[ic.icon]) {
+        el = document.createElement("span");
+        el.className = "leg-icon";
+        el.innerHTML = ICONS[ic.icon];
+      } else {
+        el = document.createElement("span");
+        el.className = "leg-badge" + (paleHex(color) ? " pale" : "");
+        el.textContent = ic.badge;
+      }
+      el.style.setProperty("--c", color);
+      return el;
+    }
+    function keyRow(swatch, label, count) {
+      var li = document.createElement("li");
+      li.appendChild(swatch);
+      var lab = document.createElement("span");
+      lab.className = "k-label";
+      lab.textContent = label;
+      li.appendChild(lab);
+      if (count != null) {
+        var c = document.createElement("span");
+        c.className = "k-count";
+        c.textContent = count;
+        li.appendChild(c);
+      }
+      return li;
+    }
+    function renderKeyInto(host, spec, withCounts) {
+      host.innerHTML = "";
+      if (spec.colourBy === "one") {
+        var dot = document.createElement("span");
+        dot.className = "leg-dot";
+        dot.style.setProperty("--c", MARKER_COLORS[spec.oneColour]);
+        host.appendChild(keyRow(dot, spec.name, withCounts ? RECORDS.length : null));
+        return;
+      }
+      var cls = classesFor(spec.colourBy);
+      cls.kept.forEach(function (v) {
+        host.appendChild(keyRow(swatchEl(v, cls.colorOf[v]), v, withCounts ? cls.counts[v] : null));
+      });
+      if (cls.folded) {
+        host.appendChild(keyRow(swatchEl("other", CATEGORY_OTHER), "other", withCounts ? cls.otherCount : null));
+      }
+    }
+
+    /* ================= panel: list view ================= */
+    function renderLayerRow() {
+      var host = $("#layer-rows");
+      host.innerHTML = "";
+      $("#user-empty").hidden = !REMOVED;
+      $("#proto-reset-note").hidden = !REMOVED;
+      $("#layers-count").textContent = REMOVED ? "base map only" : "1 on the map";
+      if (REMOVED) return;
+      var row = document.createElement("button");
+      row.className = "lyr-row";
+      row.id = "layer-row";
+      row.innerHTML =
+        '<span><span class="lyr-name">' + esc(SAVED.name) + '</span>' +
+        '<span class="lyr-sub">66 places · added by Socratus</span></span>' +
+        '<span class="lyr-go" aria-hidden="true">Change</span>' +
+        '<ul class="key lyr-leg"></ul>';
+      row.setAttribute("aria-label", SAVED.name + ", 66 places. Change how it looks.");
+      renderKeyInto(row.querySelector(".key"), SAVED, false);
+      row.addEventListener("click", function () { openEdit(); });
+      host.appendChild(row);
+    }
+
+    /* ================= panel: edit view ================= */
+    var COLUMN_HINTS = {
+      categories: "categories", themes: "themes"
+    };
+    function colourOptions() {
+      // only columns that CAN carry colour are offered: text columns with a
+      // handful of distinct values. tag_id, image_urls and prose never appear.
+      var opts = [];
+      ["categories", "themes"].forEach(function (col) {
+        var spec = { colourBy: col };
+        var cls = classesFor(col);
+        var kinds = cls.kept.length + (cls.folded ? 1 : 0);
+        opts.push({ value: col, label: col + " — " + kinds + " kinds" });
+      });
+      opts.push({ value: "one", label: "One colour for every place" });
+      return opts;
+    }
+    function fillSelect(sel, opts, value) {
+      sel.innerHTML = "";
+      opts.forEach(function (o) {
+        var el = document.createElement("option");
+        el.value = o.value; el.textContent = o.label;
+        sel.appendChild(el);
+      });
+      sel.value = value;
+    }
+    function renderSwatches() {
+      var host = $("#swatches");
+      host.innerHTML = "";
+      Object.keys(MARKER_COLORS).forEach(function (k) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "sw";
+        b.setAttribute("aria-pressed", String(DRAFT.oneColour === k));
+        b.setAttribute("aria-label", MARKER_NAMES[k]);
+        b.title = MARKER_NAMES[k];
+        b.innerHTML = '<i style="--c:' + MARKER_COLORS[k] + '"></i>';
+        b.addEventListener("click", function () {
+          DRAFT.oneColour = k;
+          host.querySelectorAll(".sw").forEach(function (x) { x.setAttribute("aria-pressed", "false"); });
+          b.setAttribute("aria-pressed", "true");
+          changed();
+        });
+        host.appendChild(b);
+      });
+    }
+    function renderEditControls() {
+      $("#f-name").value = DRAFT.name;
+      $("#name-err").hidden = true;
+      fillSelect($("#f-colour"), colourOptions(), DRAFT.colourBy);
+      fillSelect($("#f-title"), [
+        { value: "description", label: "description" },
+        { value: "address", label: "address" }
+      ], DRAFT.titleBy);
+      renderSwatches();
+      syncEditView();
+    }
+    function syncEditView() {
+      $("#one-colour").hidden = DRAFT.colourBy !== "one";
+      // multi-value honesty, said once and only when it applies
+      var note = $("#multi-note");
+      if (DRAFT.colourBy === "categories") {
+        var multi = RECORDS.filter(function (r) { return r.cats.indexOf(";") >= 0; }).length;
+        note.hidden = false;
+        note.textContent = multi + " places carry two or more categories — the first one decides the colour.";
+      } else {
+        note.hidden = true;
+      }
+      var cls = DRAFT.colourBy === "one" ? null : classesFor(DRAFT.colourBy);
+      $("#key-note").textContent = cls
+        ? (cls.kept.length + (cls.folded ? 1 : 0)) + " kinds · 66 places"
+        : "66 places";
+      renderKeyInto($("#key"), currentDraftSpec(), true);
+      renderPins(currentDraftSpec());
+      syncSaveBar();
+    }
+    function currentDraftSpec() {
+      return { name: $("#f-name").value.trim() || DRAFT.name, colourBy: DRAFT.colourBy,
+               oneColour: DRAFT.oneColour, titleBy: DRAFT.titleBy };
+    }
+
+    /* --- dirty tracking: the bar appears when there is something to keep --- */
+    function changed() {
+      DRAFT.name = $("#f-name").value;
+      syncEditView();
+    }
+    function syncSaveBar() {
+      var bar = $("#save-bar");
+      var dirty = isDirty();
+      if (dirty) {
+        if (bar.hidden) {
+          bar.hidden = false;
+          void bar.offsetHeight;   // commit the hidden->shown layout, then slide
+        }
+        bar.classList.add("on");
+      } else {
+        bar.classList.remove("on");
+        bar.hidden = true;
+        setNote("Only you see this until you save.", false);
+      }
+      $("#save-btn").disabled = !$("#f-name").value.trim();
+      $("#name-err").hidden = !!$("#f-name").value.trim();
+    }
+    function setNote(text, warn) {
+      var n = $("#save-note");
+      n.textContent = text;
+      n.classList.toggle("warn", !!warn);
+    }
+
+    $("#f-name").addEventListener("input", changed);
+    $("#f-colour").addEventListener("change", function () { DRAFT.colourBy = this.value; changed(); });
+    $("#f-title").addEventListener("change", function () { DRAFT.titleBy = this.value; changed(); });
+
+    $("#save-btn").addEventListener("click", function () {
+      var name = $("#f-name").value.trim();
+      if (!name) { $("#name-err").hidden = false; $("#f-name").focus(); return; }
+      DRAFT.name = name;
+      SAVED = clone(DRAFT);
+      $("#ev-title").textContent = SAVED.name;
+      renderLayerRow();
+      syncEditView();
+      toast("Saved — the atlas shows the new look.");
+    });
+    $("#discard-btn").addEventListener("click", function () {
+      DRAFT = clone(SAVED);
+      renderEditControls();
+      toast("Put back the way it was.");
+    });
+
+    /* --- remove: the other thing you do to an existing layer --- */
+    $("#rm-link").addEventListener("click", function () {
+      $("#rm-text").textContent = "Remove “" + SAVED.name + "”? Its 66 places come off the map and the public atlas. " +
+        "Your original file stays with you.";
+      $("#rm-link").hidden = true;
+      $("#rm-confirm").hidden = false;
+      $("#rm-no").focus();
+    });
+    $("#rm-no").addEventListener("click", function () {
+      $("#rm-confirm").hidden = true;
+      $("#rm-link").hidden = false;
+      $("#rm-link").focus();
+    });
+    $("#rm-yes").addEventListener("click", function () {
+      REMOVED = true;
+      renderPins(SAVED);
+      renderLayerRow();
+      showList(null);
+      toast("“" + SAVED.name + "” removed from the atlas.");
+    });
+
+    /* ================= view switching: one panel, two states ================= */
+    function openEdit() {
+      DRAFT = clone(SAVED);
+      $("#ev-title").textContent = SAVED.name;
+      renderEditControls();
+      $("#rm-confirm").hidden = true;
+      $("#rm-link").hidden = false;
+      $("#view-list").hidden = true;
+      $("#view-edit").hidden = false;
+      if (window.matchMedia("(max-width:820px)").matches) $("#pane").classList.add("open");
+      $("#ev-title").focus();
+    }
+    function showList(focusRow) {
+      $("#view-edit").hidden = true;
+      $("#view-list").hidden = false;
+      renderPins(SAVED);
+      if (focusRow) {
+        var row = $("#layer-row");
+        if (row) row.focus();
+      }
+    }
+    $("#ev-back").addEventListener("click", function () {
+      if (isDirty()) {
+        setNote("Unsaved changes — save them or discard them below.", true);
+        $("#save-btn").focus();
+        return;
+      }
+      showList(true);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape") return;
+      if (openPop) { closePopup(); return; }
+      if (!$("#view-edit").hidden) {
+        if (isDirty()) { setNote("Unsaved changes — save them or discard them below.", true); $("#save-btn").focus(); }
+        else showList(true);
+      }
+    });
+
+    /* ================= chrome stubs, basemap, sheet, toast ================= */
+    var toastTimer, toastNode;
+    function toast(text) {
+      if (!toastNode) {
+        toastNode = document.createElement("div");
+        toastNode.className = "toast";
+        toastNode.setAttribute("role", "status");
+        document.body.appendChild(toastNode);
+      }
+      toastNode.textContent = text;
+      toastNode.hidden = false;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () { toastNode.hidden = true; }, 2600);
+    }
+    function stub(sel, what) {
+      $(sel).addEventListener("click", function () { toast(what + " isn’t part of this prototype."); });
+    }
+    stub("#share-btn", "Sharing");
+    stub("#settings-btn", "Settings");
+    stub("#status-act", "Publishing");
+    stub("#region-line", "Changing the region");
+    stub("#add-data", "Adding data");
+
+    document.querySelectorAll("#basemap-seg .seg-opt").forEach(function (b) {
+      b.addEventListener("click", function () {
+        document.body.classList.toggle("sat", b.dataset.base === "sat");
+        document.querySelectorAll("#basemap-seg .seg-opt").forEach(function (x) {
+          var on = x === b;
+          x.classList.toggle("on", on);
+          x.setAttribute("aria-checked", String(on));
+        });
+      });
+    });
+
+    // mobile: the panel is a bottom sheet you pull up (editor pattern)
+    $("#pane-head-list").addEventListener("click", function () {
+      if (window.matchMedia("(max-width:820px)").matches) $("#pane").classList.toggle("open");
+    });
+
+    function esc(v) {
+      return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    /* boot */
+    renderLayerRow();
+    renderPins(SAVED);
+  })();
+  </script>
+</body>
+</html>

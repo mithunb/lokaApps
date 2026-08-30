@@ -282,6 +282,11 @@
     try { buildControls(); buildCredits(); }
     catch (err) { console.error("Atlas controls error:", err && err.message, err && err.stack); }
 
+    /* The showing basemap's own credit needs no style and no sources, so it is
+       stated the moment the map exists. Leaving it to "load" meant a style that
+       was slow — or that never finished — left the map crediting nobody. */
+    renderMapAttrib();
+
     map.on("load", function () {
       try {
         // buildLayers preloads sources async, so layer ids (L._ids) only exist once
@@ -292,6 +297,11 @@
           syncSearchBox();   // the data is in: keep the search box only if it has text to search
           if (!focusFit()) fitToData(false);
           renderMapAttrib(); // re-run once layer sources (e.g. labels) are added
+          /* And once more when the style is genuinely up. A basemap given as a
+             whole style document is still fetching when "load" fires, so the
+             first two runs can find nothing to credit and leave the strip
+             blank — which is how the map ended up crediting nobody at all. */
+          map.once("idle", renderMapAttrib);
           // If the container had no real size when we fit (hidden iframe or a
           // backgrounded tab), the frame is garbage — refit once it gets one.
           var r = map.getContainer().getBoundingClientRect();
@@ -527,6 +537,7 @@
     satellite: {
       tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
       labels: ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"],
+      labelsAttribution: "Labels © Esri",
       tileSize: 256, maxzoom: 19,
       attribution: "Imagery © Esri, Maxar, Earthstar Geographics",
       ground: "#2B2F33",
@@ -575,8 +586,17 @@
         if (!app) return;
         // labels:null means the basemap draws its own names — a second layer of
         // them would print every town twice
-        if (app.labels) L.tilesByBasemap[id] = app.labels;
-        else delete L.tilesByBasemap[id];
+        /* The credit follows the tiles. These label tiles come from the app
+           now, so the atlas's own line — still naming CARTO, whose tiles left
+           with the old basemap — is a claim about something no longer drawn. */
+        L.attributionByBasemap = L.attributionByBasemap || {};
+        if (app.labels) {
+          L.tilesByBasemap[id] = app.labels;
+          L.attributionByBasemap[id] = app.labelsAttribution || "";
+        } else {
+          delete L.tilesByBasemap[id];
+          delete L.attributionByBasemap[id];
+        }
       });
     });
     return m;
@@ -909,7 +929,9 @@
       // CARTO labels on the map basemap, Esri labels on satellite).
       Object.keys(L.tilesByBasemap).forEach(function (bm) {
         var id = L.id + "-raster-" + bm;
-        map.addSource(srcId(L) + "-" + bm, { type: "raster", tiles: L.tilesByBasemap[bm], tileSize: L.tileSize || 256, attribution: L.attribution || "" });
+        var credit = (L.attributionByBasemap && L.attributionByBasemap[bm] != null)
+          ? L.attributionByBasemap[bm] : (L.attribution || "");
+        map.addSource(srcId(L) + "-" + bm, { type: "raster", tiles: L.tilesByBasemap[bm], tileSize: L.tileSize || 256, attribution: credit });
         map.addLayer({
           id: id, type: "raster", source: srcId(L) + "-" + bm,
           layout: { visibility: on(L) && bm === activeBasemap ? "visible" : "none" },
@@ -1183,7 +1205,12 @@
       var named = 0;
       counts.forEach(function (c) { if (kept.indexOf(c.kind) >= 0) named += c.n; });
       if (!committed && named / feats.length < 0.6) return;   // the named kinds must cover most places
-      opts.push({ col: col, label: prettyCol(col), delim: delim, committed: committed,
+      /* A name the owner gave this key wins over the column's own name. The
+         column is called "themes", which says how it was made rather than what
+         it holds — and the switch lowercased it while the popup capitalised it,
+         so a reader could meet "themes" and "Themes" in one sitting. */
+      var given = L.keyLabels && L.keyLabels[col];
+      opts.push({ col: col, label: given ? String(given) : prettyCol(col), delim: delim, committed: committed,
                   kept: kept, hasOther: named < feats.length });
     });
     // committed key first; the rest keep the order the data carries them in
@@ -2567,7 +2594,11 @@
     searchableLayers().forEach(function (L) {
       var mine = !TAGFILTER_LAYER || L.id === TAGFILTER_LAYER;
       (markersByLayer[L.id] || []).forEach(function (e) {
-        total++;
+        // Count only what this filter could possibly match. A tag belongs to one
+        // layer, so counting every layer's markers made the total describe a
+        // different population than the number beside it — on an atlas holding
+        // the same places twice, "of 132" for 66 places on screen.
+        if (mine) total++;
         var has = mine && !!featureTagSet(L, e.f)[want];
         e.hidden = !has;
         if (has) { shown++; pts.push(e.f.geometry.coordinates); }
@@ -2662,8 +2693,25 @@
     var el = $("#map-attrib"); if (!el || !map) return;
     var srcs = (map.getStyle() && map.getStyle().sources) || {};
     var seen = {}, parts = [];
+    /* A basemap given as a whole style document has no source of its own here,
+       and OpenFreeMap's style attributes nothing — so reading credits off the
+       sources alone left OpenStreetMap uncredited on the map people actually
+       look at. The active basemap's own credit is stated first, always. */
+    var activeBm = (MANIFEST.basemaps || []).filter(function (b) { return b.id === activeBasemap; })[0];
+    var own = (APP_BASEMAPS[activeBasemap] && APP_BASEMAPS[activeBasemap].attribution)
+      || (activeBm && activeBm.attribution) || "";
+    if (own) { seen[own] = 1; parts.push(own); }
     Object.keys(srcs).forEach(function (k) {
       if (/^base-/.test(k) && k !== "base-" + activeBasemap) return; // only the active basemap
+      // A layer that swaps tiles per basemap makes one source per basemap, but
+      // only one of them is on the map. Without this the hidden one's credit
+      // showed too — which is how Esri's label credit appeared over a map
+      // drawing no Esri labels.
+      var mine = true;
+      (MANIFEST.basemaps || []).forEach(function (bmp) {
+        if (bmp.id !== activeBasemap && k.slice(-(String(bmp.id).length + 1)) === "-" + bmp.id) mine = false;
+      });
+      if (!mine) return;
       var a = srcs[k] && srcs[k].attribution;
       if (a && !seen[a]) { seen[a] = 1; parts.push(a); }
     });

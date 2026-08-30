@@ -842,6 +842,9 @@
       $("#build-leave").textContent = "Your file is added at the end, so keep this page open.";
     }
     $("#done-row").hidden = true;
+    $("#failed-row").hidden = true;
+    var _sub = $("#build-sub"); if (_sub) _sub.hidden = false;
+    msg(4, "");
     $("#log").textContent = "";
     $("#build-title").textContent = "Building your atlas…";
     $("#prog-msg").textContent = "Sending it off…";
@@ -884,6 +887,14 @@
     });
   };
 
+  /* One button, one path: a retry is the same build, started again — so it
+     picks up the reset above and cannot drift from the first attempt. */
+  $("#build-retry").onclick = function () {
+    var go = $("#build-go");
+    go.disabled = false;
+    go.onclick.call(go);
+  };
+
   function log(line) {
     var el = $("#log");
     el.textContent += line + "\n";
@@ -901,7 +912,12 @@
       if (j.status === "failed") {
         $("#build-title").textContent = "The build stopped";
         $("#prog-msg").textContent = "";
+        var sub = $("#build-sub"); if (sub) sub.hidden = true;
         msg(4, j.message || "Something failed while building. Nothing was published.");
+        // the way out: without these two lines the screen is a dead end and the
+        // Build button behind it is still disabled from the first attempt
+        $("#failed-row").hidden = false;
+        $("#build-go").disabled = false;
         return;
       }
       setTimeout(poll, 1500);

@@ -333,3 +333,15 @@
   background:var(--color-bg-alt); color:var(--color-text-muted); font-weight:400;
 }
 .own-th-chip b { font-weight:600; opacity:.65; margin-left:.2rem; }
+
+/* Reading the patterns again is not a refresh — it replaces the key readers
+   learned, and it pays for a second reading of every place. The words carry
+   that; the colour stops the eye before the button does. */
+.own-th-warn {
+  border-left: 0;
+  background: var(--color-ochre-tint);
+  color: var(--color-text-secondary);
+  padding: .55rem .7rem;
+  border-radius: var(--radius-md);
+  margin: .45rem 0 .55rem;
+}

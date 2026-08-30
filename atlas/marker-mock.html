@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The pin as a plain pin — and whether its body can carry the keys</title>
+<style>
+  :root{
+    --paper:#f4f0e4; --ink:#2A241A; --muted:#6b6353; --line:#d9d2bf;
+    --moss:#40573D; --rust:#A6522F; --card:#fbf9f2;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font-family:'Figtree','Avenir Next',system-ui,sans-serif; background:var(--paper); color:var(--ink); }
+  header{ padding:1.4rem 1.6rem 1rem; border-bottom:1px solid var(--line); }
+  header h1{ margin:0 0 .3rem; font-size:1.25rem; }
+  header p{ margin:.2rem 0; max-width:64rem; color:var(--muted); font-size:.86rem; line-height:1.5; }
+  header .warn{ color:var(--rust); font-weight:600; }
+  section{ padding:1.2rem 1.6rem; border-bottom:1px solid var(--line); }
+  h2{ font-size:1rem; margin:.1rem 0 .2rem; }
+  .sub{ color:var(--muted); font-size:.82rem; margin:.1rem 0 .8rem; max-width:64rem; line-height:1.5; }
+  .cards{ display:flex; gap:1.2rem; flex-wrap:wrap; margin-top:.6rem; align-items:stretch; }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:8px; padding:.9rem 1rem; }
+  .card h3{ margin:.05rem 0 .5rem; font-size:.82rem; }
+  .card .cap{ font-size:.72rem; color:var(--muted); margin-top:.5rem; max-width:19rem; line-height:1.45; }
+  .card .meas{ font-size:.72rem; margin-top:.35rem; max-width:19rem; line-height:1.45; }
+  .meas b.ok{ color:var(--moss); } .meas b.bad{ color:var(--rust); }
+  .verdict{ font-size:.68rem; font-weight:700; padding:.1rem .45rem; border-radius:999px; display:inline-block; margin-bottom:.4rem; }
+  .verdict.in{ background:#e7ecdf; color:var(--moss); }
+  .verdict.out{ background:#f3e3da; color:var(--rust); }
+  .verdict.res{ background:#efe9d4; color:#8a6d1f; }
+  .stage{ background:#f4f0e4; border:1px dashed var(--line); border-radius:6px; display:flex; align-items:center;
+          justify-content:center; gap:2.2rem; padding:.8rem .9rem; }
+  .stage.big{ min-height:150px; }
+  table{ border-collapse:collapse; font-size:.8rem; margin-top:.4rem; }
+  th,td{ padding:.28rem .7rem; border-bottom:1px solid var(--line); text-align:right; }
+  th:first-child, td:first-child{ text-align:left; }
+  th{ font-size:.68rem; color:var(--muted); letter-spacing:.02em; }
+  td.bad{ color:var(--rust); font-weight:700; }
+  td.ok{ color:var(--moss); font-weight:700; }
+  .controls{ display:flex; flex-wrap:wrap; gap:1.1rem .9rem; align-items:flex-end; margin-bottom:.7rem; }
+  .ctl{ display:flex; flex-direction:column; gap:.28rem; }
+  .ctl .lbl{ font-size:.68rem; font-weight:600; letter-spacing:.02em; color:var(--muted); }
+  .seg{ display:flex; gap:4px; flex-wrap:wrap; }
+  .seg button{ font:inherit; font-size:.78rem; padding:.3rem .7rem; border:1.4px solid var(--line);
+    background:#fff; border-radius:999px; cursor:pointer; color:var(--ink); }
+  .seg button.on{ border-color:var(--moss); background:#e7ecdf; font-weight:600; }
+  .mapwrap{ position:relative; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#f4f0e4; }
+  .mapnote{ position:absolute; left:10px; bottom:8px; font-size:.72rem; color:var(--muted);
+    background:rgba(251,249,242,.88); padding:.2rem .5rem; border-radius:4px; }
+  .statline{ font-size:.82rem; margin:.55rem 0 0; }
+  .statline b{ color:var(--rust); }
+  .legrow{ display:flex; align-items:center; gap:.5rem; font-size:.76rem; padding:.12rem 0; }
+  .legrow .w{ min-width:11rem; }
+  .foot{ padding:1.1rem 1.6rem 2.2rem; font-size:.8rem; color:var(--muted); max-width:64rem; line-height:1.6; }
+  .foot b{ color:var(--ink); }
+  svg text{ font-family:'Figtree',system-ui,sans-serif; }
+  .hoverbubble{ display:inline-block; background:rgba(255,255,255,.97); border:1px solid var(--line); border-radius:4px;
+    box-shadow:0 1px 4px rgba(42,36,26,.2); padding:.3rem .55rem; font-size:.74rem; line-height:1.45; }
+  .hoverbubble .t{ font-weight:600; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>The pin as a plain pin — and whether its body can carry the keys</h1>
+  <p>The decision being explored: <span class="warn">a pin means only “a place is here.”</span> The little picture inside it goes,
+     no key starts switched on, and everything a place <i>is</i> — its kind, its theme, who added it — appears only when the reader
+     turns a key on.</p>
+  <p>The question this mock answers with pictures and measurements: once the inside of the pin is free, can the pin’s own body carry
+     the keys — a ring cut into parts, a body split into slices, rings inside rings — instead of the small corner marks that ship today?
+     Every size below is true to the screen, and every verdict comes from the same measuring sticks the corner marks already passed:
+     <b>each key’s colour patch must carry at least the ink of a 12&nbsp;px dot, in a blob at least as chunky as the flattest shipped mark.</b>
+     Marks that fail show a colour the eye cannot name — the map would lie.</p>
+</header>
+
+<section>
+  <h2>1 · The pin, before and after the icon leaves</h2>
+  <p class="sub">Left to right: today’s pin (the colour and the picture both said the kind); the proposed plain pin (white body,
+     the layer’s one colour, saying only “a place”); and two ways a pin can answer when the reader turns <b>one</b> key on.
+     Top row true size, bottom row three times enlarged.</p>
+  <div class="cards" id="row1"></div>
+  <p class="sub" style="margin-top:.8rem">Measured, and worth pausing on: with the picture gone, the thin coloured rim is all that is left —
+     and after the screen smooths its edges, <b>a 2&nbsp;px rim keeps not a single pixel of nameable colour</b> (its chunkiest solid patch
+     measures 0&nbsp;px against a floor of 6). If a key is on, the freed inside must carry the colour: either a solid dot in the middle
+     (the same 12&nbsp;px of ink every corner mark carries) or the whole body filled. Otherwise the map shows a colour nobody can read.</p>
+</section>
+
+<section>
+  <h2>2 · Six ways a marker could carry three keys — at true size</h2>
+  <p class="sub">The same real place from the layer — <b>Learning</b> under categories, <b>memory and history</b> under themes,
+     added by <b>LOKA&nbsp;Finds</b> — drawn six ways. Each candidate is shown at the <b>smallest size that passes both
+     measuring sticks</b>; the caption says what that size is and what the candidate still gets wrong. Top true size, bottom 3×.</p>
+  <div class="cards" id="row2"></div>
+  <table id="tbl2"></table>
+  <p class="sub" style="margin-top:.6rem">Sizes above already include the one honest correction the ring needs: its white joints must be
+     4&nbsp;px wide, not hairline — see section 3. At <b>five</b> keys the ring reaches 38.5&nbsp;px and the crown ~40&nbsp;px:
+     the size advantage is gone exactly where it would matter most.</p>
+</section>
+
+<section>
+  <h2>3 · The merging problem: colours repeat, and neighbours touch</h2>
+  <p class="sub">The shipped rule says colours may repeat between keys — the <b>shape</b> of a mark says which key it belongs to.
+     Inside one body, the parts have no shape of their own, only a position; when two neighbouring parts land on the same colour they
+     fuse into one part unless a wide white joint holds them apart. This is not rare: on the real Bengaluru layer,
+     <b>53 of 66 places</b> would have at least one pair of same-colour neighbouring ring parts with three keys on, and with two keys
+     as a split body, <b>13 of 66 places</b> would show both halves in one colour — a marker that looks exactly like a one-key pin.</p>
+  <div class="cards" id="row3"></div>
+</section>
+
+<section>
+  <h2>4 · The key panel has to teach which part is which — and it can’t, at panel size</h2>
+  <p class="sub">Whatever the map draws, the key panel and the hover bubble must repeat in miniature. The crown’s little shapes
+     survive shrinking: a small square drawn at panel size still carries an 8&nbsp;px blob of colour — above the floor. A ring part
+     drawn at panel size thins to a 4.5&nbsp;px sliver — <b>below the floor the map itself obeys</b>. And the words get worse:
+     “small squares” names a shape; a ring part can only be named by clock position.</p>
+  <div class="cards" id="row4"></div>
+</section>
+
+<section>
+  <h2>5 · At real density: what each choice folds away</h2>
+  <p class="sub">The densest real neighbourhood of the Bengaluru layer. Pins that would truly overlap fold into a counted disc —
+     the same rule the live map uses, fold distance = the marks’ true width. Three keys on. “As it grows” doubles the
+     neighbourhood to where this layer is heading.</p>
+  <div class="controls">
+    <div class="ctl"><span class="lbl">MARKER</span><div class="seg" id="segArr"></div></div>
+    <div class="ctl"><span class="lbl">ZOOM</span><div class="seg" id="segZoom"></div></div>
+    <div class="ctl"><span class="lbl">DENSITY</span><div class="seg" id="segDens"></div></div>
+    <div class="ctl"><span class="lbl">COLOUR SIGHT</span><div class="seg" id="segCvd"></div></div>
+  </div>
+  <div class="mapwrap"><div id="map"></div><div class="mapnote" id="mapnote"></div></div>
+  <p class="statline" id="stat"></p>
+  <p class="sub" style="margin-top:.7rem">The ring’s honest win, said plainly: at three keys it is ~26&nbsp;px wide against the crown’s
+     ~40, so across the whole layer at this zoom it keeps <b>40 places readable where the crown keeps 33</b> (51 against 43 one zoom in).
+     That is the whole case for the ring — and sections 3 and 4 are what it costs. At five keys even this win disappears.</p>
+</section>
+
+<section>
+  <h2>6 · What the icon was doing, and what remains when it goes</h2>
+  <p class="sub">The picture inside the pin said the kind directly — a leaf meant nature before any colour was read. That mattered most
+     to readers who cannot tell some colours apart. With the icon gone and no key on, the pin claims nothing, so nothing is lost.
+     With a key on, the colours doing the work are the eight chosen precisely because they stay apart under the two common kinds of
+     colour-blindness (measured: every pair stays clearly separate). And the words remain: resting on any pin names the place and
+     answers <b>every key that is on, in words</b>. Use the COLOUR SIGHT switch above to check the map through those eyes.</p>
+  <div class="cards">
+    <div class="card">
+      <h3>Resting on a pin still tells the whole story</h3>
+      <div class="stage" style="justify-content:flex-start; gap:1.2rem;">
+        <svg width="52" height="52" viewBox="0 0 52 52" id="hoverpin"></svg>
+        <div class="hoverbubble"><span class="t">a place, by name</span><br>
+          <span id="hb-rows"></span></div>
+      </div>
+      <p class="cap">The hover bubble (and the tap popup on phones) repeats each switched-on key in words — the reader who cannot
+        name the colour reads the answer instead of guessing it.</p>
+    </div>
+    <div class="card">
+      <h3>What is honestly lost</h3>
+      <p class="meas" style="max-width:21rem">Kind-at-a-glance, without touching the map. A leaf said “nature” from across the room;
+        a green dot says it only to readers who can read green, and says it to everyone else after one hover. That is the price of
+        the pin becoming just a pin — worth stating once, plainly, and it is the owner’s call that the cleaner map is worth it.</p>
+    </div>
+  </div>
+</section>
+
+<div class="foot" id="foot">
+  <b>The recommendation, in one breath:</b> keep the round 20&nbsp;px pin (phone-taken spots are only sure to about a pin-width anyway —
+  at this zoom a pointed tip would claim a pixel the data doesn’t know); let the plain pin be white with the layer’s one colour;
+  when the reader turns the <b>first</b> key on, let the freed inside carry that key — a solid colour dot where the icon used to be.
+  <b>That far, the owner’s container instinct is right and measured.</b> Beyond one key, every way of carving the body — ring parts,
+  slices, rings inside rings — either breaks the colour floors the shipped marks were built on, or merges on more than half the real
+  layer, or cannot be repeated at key-panel size. The corner marks stay the honest way to carry keys two to five: they keep full-size
+  colour patches, their shape names their key, and the panel can draw them truthfully. The ring’s only real win — a thinner marker at
+  exactly three keys — buys seven more readable places out of 66 and spends the pin’s own identity to get them.
+</div>
+
+<script>
+/* ============================ data ============================ */
+/* [lng, lat, category, theme, creator] — real rows from the Bengaluru layer */
+var PLACES = [[77.548309,13.013825,"Social","shade and canopy","LOKA Finds"],[77.531163,12.896292,"Heritage","craft and making","LOKA Finds"],[77.548216,13.013835,"Culture","water and lakes","LOKA Finds"],[77.703397,13.018372,"Culture","memory and history","LOKA Finds"],[77.525953,12.896195,"Culture","","LOKA Finds"],[77.531119,12.895982,"Activities","shade and canopy","LOKA Finds"],[77.530124,12.892896,"Nature","craft and making","LOKA Finds"],[77.548222,13.013841,"Culture","water and lakes","LOKA Finds"],[77.548283,13.01381,"Social","memory and history","LOKA Finds"],[77.703347,13.01846,"Culture","street life","LOKA Finds"],[77.547913,13.013891,"Culture","shade and canopy","LOKA Finds"],[77.530798,12.895116,"Civic","craft and making","LOKA Finds"],[77.548193,13.01386,"Culture","water and lakes","LOKA Finds"],[77.548216,13.013853,"Market","","LOKA Finds"],[77.530831,12.89907,"Market","street life","LOKA Finds"],[77.703354,13.018453,"Culture","shade and canopy","LOKA Finds"],[77.639328,12.978391,"Market","craft and making","LOKA Finds"],[77.548219,13.013855,"Culture","water and lakes","LOKA Finds"],[77.602643,12.975605,"Learning","memory and history","LOKA Finds"],[77.548209,13.01384,"Culture","street life","LOKA Finds"],[77.639888,12.978021,"Others","shade and canopy","LOKA Finds"],[77.641281,12.97795,"Nature","craft and making","LOKA Finds"],[77.64123,12.978045,"Nature","","LOKA Finds"],[77.640194,12.969159,"Nature","memory and history","WiseRobin338"],[77.640038,12.969277,"Nature","street life","WiseRobin338"],[77.639273,12.978075,"Nature","shade and canopy","LOKA Finds"],[77.636848,12.97869,"Nature","craft and making","LOKA Finds"],[77.642817,12.978933,"Nature","water and lakes","WiseRobin338"],[77.672902,12.977066,"Activities","memory and history","LOKA Finds"],[77.672685,12.977508,"Heritage","street life","LOKA Finds"],[77.639253,12.980021,"Activities","shade and canopy","LOKA Finds"],[77.637039,12.980106,"Nature","","LOKA Finds"],[77.636424,12.980146,"Nature","water and lakes","LOKA Finds"],[77.636389,12.980163,"Nature","memory and history","LOKA Finds"],[77.638986,12.978496,"Culture","street life","LOKA Finds"],[77.63933,12.978586,"Nature","shade and canopy","LOKA Finds"],[77.663003,12.974271,"Nature","craft and making","LOKA Finds"],[77.601575,12.915388,"Nature","water and lakes","ShinyFalcon37"],[77.577153,12.938284,"Nature","memory and history","BrightVenus254"],[77.587923,12.989515,"Culture","street life","LOKA Finds"],[77.588494,12.989593,"Nature","","LOKA Finds"],[77.588331,12.9897,"Culture","craft and making","LOKA Finds"],[77.588088,12.989666,"Learning","water and lakes","LOKA Finds"],[77.588117,12.989418,"Market","memory and history","LOKA Finds"],[77.547166,12.974579,"Civic","street life","BrightVenus254"],[77.563951,13.005434,"Learning","shade and canopy","LOKA Finds"],[77.564114,13.005432,"Activities","craft and making","LOKA Finds"],[77.564705,13.005392,"Heritage","water and lakes","LOKA Finds"],[77.564917,13.005956,"Food and Drink","memory and history","LOKA Finds"],[77.588178,12.989902,"Learning","","LOKA Finds"],[77.619593,12.996842,"Food and Drink","shade and canopy","LOKA Finds"],[77.619265,12.996757,"Market","craft and making","LOKA Finds"],[77.519194,12.936483,"Civic","water and lakes","LOKA Finds"],[77.536049,12.901422,"Culture","memory and history","LOKA Finds"],[77.536066,12.901973,"Culture","street life","LOKA Finds"],[77.640625,12.977946,"Learning","shade and canopy","LOKA Finds"],[77.633333,12.966667,"Culture","craft and making","LOKA Finds"],[77.587583,13.086577,"Heritage","water and lakes","LOKA Finds"],[77.591367,13.040372,"Heritage","","LOKA Finds"],[77.60379,12.97286,"Culture","street life","LOKA Finds"],[77.548086,13.057307,"Heritage","shade and canopy","LOKA Finds"],[77.513639,12.979233,"Nature","craft and making","LOKA Finds"],[77.613,12.9918,"Heritage","water and lakes","LOKA Finds"],[77.587053,12.911513,"Culture","memory and history","LOKA Finds"],[77.598862,12.974156,"Culture","street life","LOKA Finds"],[77.688552,12.908311,"Food and Drink","shade and canopy","Sharang"]];
+
+var PALETTE = ["#332288","#999933","#44AA99","#AA4499","#117733","#882255","#88CCEE","#DDCC77"];
+var OTHER = "#7a756c";
+var KEYS = [
+  { name:"categories", kinds:["Culture","Nature","Heritage","Market","Learning","Activities","Civic","Food and Drink"], get:function(p){return p[2];} },
+  { name:"themes", kinds:["shade and canopy","craft and making","water and lakes","memory and history","street life"], get:function(p){return p[3];} },
+  { name:"creator", kinds:["LOKA Finds","WiseRobin338","BrightVenus254","ShinyFalcon37","Sharang"], get:function(p){return p[4];} }
+];
+function colorOf(key,v){ var i=key.kinds.indexOf(v); return i>=0?PALETTE[i]:OTHER; }
+
+var NS="http://www.w3.org/2000/svg";
+function E(n,at){ var e=document.createElementNS(NS,n); for(var k in at)e.setAttribute(k,at[k]); return e; }
+function el(tag,cls,html){ var e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e; }
+
+/* ============================ marks ============================ */
+function pinBody(g,cx,cy,rimColor,inner){
+  /* the shipped pin: white body, 2px rim; inner = null | {dot:color} | {fill:color} | {icon:color} */
+  var fill = inner&&inner.fill ? inner.fill : "#fff";
+  g.appendChild(E("circle",{cx:cx,cy:cy,r:9,fill:fill,stroke:rimColor,"stroke-width":2}));
+  if(inner&&inner.dot) g.appendChild(E("circle",{cx:cx,cy:cy,r:6,fill:inner.dot}));
+  if(inner&&inner.icon){ /* a leaf-ish glyph standing in for today's icon */
+    var p=E("path",{d:"M"+(cx-3)+" "+(cy+3.5)+" Q"+(cx-4)+" "+(cy-4)+" "+(cx+4)+" "+(cy-4)+" Q"+(cx+4.5)+" "+(cy+3)+" "+(cx-3)+" "+(cy+3.5)+" M"+(cx-3)+" "+(cy+3.5)+" Q"+(cx)+" "+(cy-1)+" "+(cx+3.4)+" "+(cy-3.4),
+      fill:"none",stroke:inner.icon,"stroke-width":1.6,"stroke-linecap":"round"});
+    g.appendChild(p);
+  }
+}
+function satPath(shape,cx,cy){
+  if(shape==="square"){ var s=10.6/2; return "M"+(cx-s)+" "+(cy-s)+"h"+(2*s)+"v"+(2*s)+"h"+(-2*s)+"z"; }
+  if(shape==="triangle"){ var w=16.2/2,h=16.2*0.866,top=cy-h*0.6; return "M"+cx+" "+top+"L"+(cx+w)+" "+(top+h)+"L"+(cx-w)+" "+(top+h)+"z"; }
+  if(shape==="diamond"){ var d=15.1/2; return "M"+cx+" "+(cy-d)+"L"+(cx+d)+" "+cy+"L"+cx+" "+(cy+d)+"L"+(cx-d)+" "+cy+"z"; }
+  if(shape==="bar"){ var bw=15.1/2,bh=7.55/2; return "M"+(cx-bw)+" "+(cy-bh)+"h"+(2*bw)+"v"+(2*bh)+"h"+(-2*bw)+"z"; }
+  return "";
+}
+var SAT_SHAPES=["square","triangle","diamond","bar"];
+var SAT_POS=[[0.707,-0.707],[-0.707,-0.707],[0.707,0.707],[-0.707,0.707]];
+function drawCrown(g,x,y,colors){ /* colors[0] = anchor kind colour (dot form), colors[1..] = satellites */
+  colors.slice(1).forEach(function(c,i){
+    var cx=x+SAT_POS[i][0]*16.5, cy=y+SAT_POS[i][1]*16.5;
+    g.appendChild(E("path",{d:satPath(SAT_SHAPES[i],cx,cy),fill:c,stroke:"#fff","stroke-width":1.4}));
+  });
+  pinBody(g,x,y,colors[0],{dot:colors[0]});
+}
+function arcD(cx,cy,r,a0,a1){
+  var x0=cx+r*Math.cos(a0), y0=cy+r*Math.sin(a0), x1=cx+r*Math.cos(a1), y1=cy+r*Math.sin(a1);
+  return "M"+x0+" "+y0+" A"+r+" "+r+" 0 "+((a1-a0)>Math.PI?1:0)+" 1 "+x1+" "+y1;
+}
+function drawRing(g,x,y,colors,M,joint){ /* segmented ring: K arcs of band 7.6, white joints */
+  var t=7.6, rmid=M/2-t/2, K=colors.length;
+  var gapAng=(joint==null?4:joint)/rmid;
+  g.appendChild(E("circle",{cx:x,cy:y,r:M/2-t,fill:"#fff"}));
+  colors.forEach(function(c,i){
+    var a0=-Math.PI/2+i*2*Math.PI/K+gapAng/2, a1=-Math.PI/2+(i+1)*2*Math.PI/K-gapAng/2;
+    g.appendChild(E("path",{d:arcD(x,y,rmid,a0,a1),fill:"none",stroke:c,"stroke-width":t}));
+  });
+}
+function drawPie(g,x,y,colors,M,joint){
+  var R=M/2-1, K=colors.length, j=(joint==null?1.4:joint);
+  g.appendChild(E("circle",{cx:x,cy:y,r:R+1,fill:"#fff",stroke:"#fff","stroke-width":1}));
+  colors.forEach(function(c,i){
+    var a0=-Math.PI/2+i*2*Math.PI/K, a1=-Math.PI/2+(i+1)*2*Math.PI/K;
+    var d="M"+x+" "+y+" L"+(x+R*Math.cos(a0))+" "+(y+R*Math.sin(a0))+
+      " A"+R+" "+R+" 0 "+((a1-a0)>Math.PI?1:0)+" 1 "+(x+R*Math.cos(a1))+" "+(y+R*Math.sin(a1))+" z";
+    g.appendChild(E("path",{d:d,fill:c,stroke:"#fff","stroke-width":j}));
+  });
+}
+function drawBullseye(g,x,y,colors){ /* bands of 7.6 from the centre out */
+  var K=colors.length;
+  for(var i=K-1;i>=0;i--){
+    g.appendChild(E("circle",{cx:x,cy:y,r:7.6*(i+1),fill:colors[i],stroke:"#fff","stroke-width":1}));
+  }
+}
+function drawPlate(g,x,y,colors){ /* white plate holding full-ink marks (K=3 -> 33px) */
+  var R=16.5;
+  g.appendChild(E("circle",{cx:x,cy:y,r:R,fill:"#fff",stroke:"#c9c2ae","stroke-width":1.4}));
+  var pos=[[0,-6.4],[-6.2,4.6],[6.2,4.6]];
+  colors.forEach(function(c,i){
+    if(i===0) g.appendChild(E("circle",{cx:x+pos[0][0],cy:y+pos[0][1],r:6,fill:c}));
+    else g.appendChild(E("path",{d:satPath(SAT_SHAPES[i-1],x+pos[i][0],y+pos[i][1]),
+      fill:c,stroke:"#fff","stroke-width":1.4,transform:"scale(1)"}));
+  });
+}
+
+/* the demonstration place: a real row whose three keys land on three different
+   colours (Learning / memory and history / LOKA Finds). Plenty of real places
+   land on the SAME colour under two keys — that is section 3's subject. */
+function kcolors(vals){ return vals.map(function(v,i){ return colorOf(KEYS[i],v); }); }
+var P1=["Learning","memory and history","LOKA Finds"];
+var C1=kcolors(P1);
+
+/* ============================ section 1 ============================ */
+function stagePair(draw,w){
+  var host=el("div");
+  var s1=E("svg",{width:60,height:60,viewBox:"0 0 60 60"}); draw(s1,30,30);
+  var s2=E("svg",{width:150,height:150,viewBox:"0 0 50 50"}); draw(s2,25,25);
+  var d1=el("div","stage"); d1.appendChild(s1);
+  var d2=el("div","stage"); d2.style.marginTop=".5rem"; d2.appendChild(s2);
+  host.appendChild(d1); host.appendChild(d2);
+  return host;
+}
+(function(){
+  var host=document.getElementById("row1");
+  var cards=[
+    { t:"Today", cap:"White body, the kind’s colour on the rim, the kind’s picture inside. Colour and picture make the same claim twice.",
+      draw:function(s,x,y){ var g=E("g",{}); s.appendChild(g); pinBody(g,x,y,"#882255",{icon:"#882255"}); } },
+    { t:"Proposed: the plain pin", cap:"White body, the layer’s one colour. It says “a place is here” and nothing else. This state already ships — it is the “one colour” chip.",
+      draw:function(s,x,y){ var g=E("g",{}); s.appendChild(g); pinBody(g,x,y,"#A6522F",null); } },
+    { t:"One key on — a dot inside", cap:"The freed inside carries the answer: a 12px dot, exactly the ink every shipped corner mark carries. The pin stays the white thing the reader learned.",
+      draw:function(s,x,y){ var g=E("g",{}); s.appendChild(g); pinBody(g,x,y,"#882255",{dot:"#882255"}); } },
+    { t:"One key on — body filled", cap:"The alternative: fill the whole body (kinds without pictures already draw this way today). Louder; also honest.",
+      draw:function(s,x,y){ var g=E("g",{}); s.appendChild(g); pinBody(g,x,y,"#882255",{fill:"#882255"}); } }
+  ];
+  cards.forEach(function(c){
+    var card=el("div","card"); card.appendChild(el("h3",null,c.t));
+    card.appendChild(stagePair(c.draw));
+    card.appendChild(el("p","cap",c.cap));
+    host.appendChild(card);
+  });
+})();
+
+/* ============================ section 2 ============================ */
+(function(){
+  var host=document.getElementById("row2");
+  var cards=[
+    { t:"Corner marks (ships today)", v:"in", vt:"passes as shipped",
+      meas:"~40px wide with the marks on. Each key: full ink (113), chunky blob (6–8.5), and a <b>shape</b> that names its key.",
+      draw:function(s,x,y){ var g=E("g",{}); s.appendChild(g); drawCrown(g,x,y,C1); } },
+    { t:"Ring cut into parts", v:"res", vt:"passes at 26px, loses elsewhere",
+      meas:"Band 7.6px, joints 4px. Per part: ink <b class='ok'>116</b>, blob <b class='ok'>6.0</b> — but which key a part belongs to is told by <b>position alone</b>, and the panel cannot redraw a part at panel size (4.5 &lt; 6).",
+      draw:function(s,x,y){ var g=E("g",{}); s.appendChild(g); drawRing(g,x,y,C1,26,4); } },
+    { t:"Body split into slices", v:"res", vt:"passes at 26.5px, lies",
+      meas:"Per slice: ink <b class='ok'>117</b>, blob <b class='ok'>8.0</b>. But slices of one body read as <b>parts of one whole</b> — and a place’s keys are separate questions, not shares of it.",
+      draw:function(s,x,y){ var g=E("g",{}); s.appendChild(g); drawPie(g,x,y,C1,26.5,1.4); } },
+    { t:"Rings inside rings", v:"out", vt:"fails: 45.6px for 3 keys",
+      meas:"Every band must stay 7.6px thick, so three keys need a <b class='bad'>45.6px</b> marker — bigger than the crown — and the inner-to-outer order implies a ranking the keys don’t have.",
+      draw:function(s,x,y){ var g=E("g",{}); s.appendChild(g); drawBullseye(g,x,y,[C1[0],C1[1],C1[2]]); } },
+    { t:"Marks on a white plate", v:"res", vt:"33px, but the pin becomes a plate",
+      meas:"Keeps full ink and the shapes. But the place is now an opaque <b>33px white plate</b>, the first key loses the pin’s own body, and three dots on a disc read as a die face — a count, not three answers.",
+      draw:function(s,x,y){ var g=E("g",{}); s.appendChild(g); drawPlate(g,x,y,C1); } },
+    { t:"Rim as a second key", v:"out", vt:"fails at any size",
+      meas:"A 2px rim keeps a <b class='bad'>0px</b> blob of nameable colour after the screen smooths it; even 4px keeps only 2.8 against the floor of 6. The rim can support the body’s claim — it cannot make its own.",
+      draw:function(s,x,y){ var g=E("g",{}); s.appendChild(g); pinBody(g,x,y,C1[1],{fill:C1[0]}); } }
+  ];
+  cards.forEach(function(c){
+    var card=el("div","card");
+    card.appendChild(el("span","verdict "+c.v,c.vt));
+    card.appendChild(el("h3",null,c.t));
+    card.appendChild(stagePair(c.draw));
+    card.appendChild(el("p","meas",c.meas));
+    host.appendChild(card);
+  });
+  document.getElementById("tbl2").innerHTML =
+    "<tr><th>marker, 3 keys on</th><th>width</th><th>per-key ink (floor 113)</th><th>chunkiest blob (floor 6)</th><th>key named by</th></tr>"+
+    "<tr><td>corner marks (ships)</td><td>~40px</td><td class='ok'>110–114</td><td class='ok'>6.0–8.5</td><td class='ok'>shape + corner</td></tr>"+
+    "<tr><td>ring, honest joints</td><td>26px</td><td class='ok'>116</td><td class='ok'>6.0</td><td class='bad'>position only</td></tr>"+
+    "<tr><td>slices</td><td>26.5px</td><td class='ok'>117</td><td class='ok'>8.0</td><td class='bad'>position only</td></tr>"+
+    "<tr><td>rings inside rings</td><td class='bad'>45.6px</td><td class='ok'>113+</td><td class='ok'>7.6</td><td class='bad'>order from centre</td></tr>"+
+    "<tr><td>white plate</td><td>33px</td><td class='ok'>113</td><td class='ok'>6.0–8.5</td><td class='ok'>shape + position</td></tr>"+
+    "<tr><td>rim as a key</td><td>20px</td><td>113</td><td class='bad'>0–2.8</td><td>—</td></tr>";
+})();
+
+/* ============================ section 3 ============================ */
+(function(){
+  var host=document.getElementById("row3");
+  /* a real merging place: Nature (green #117733)... find one where two neighbours share colour */
+  /* categories Nature -> PALETTE[1]? Nature is kinds[1] -> #999933. themes craft and making -> kinds[1] -> #999933. Same! */
+  var PM=["Nature","craft and making","LOKA Finds"];   /* categories & themes both land on #999933 */
+  var CM=kcolors(PM);
+  var cards=[
+    { t:"Hairline joints: two keys fuse", cap:"A real place — Nature under categories, craft and making under themes: both land on the same olive. "+
+        "With hairline joints (the crown’s 1.4px rim width) only about a quarter of the white survives the screen’s smoothing — the two parts read as one long arc. 53 of 66 places hit this somewhere with three keys on.",
+      draw:function(s,x,y){ var g=E("g",{}); s.appendChild(g); drawRing(g,x,y,CM,23.5,1.4); } },
+    { t:"Honest joints: separated, but bigger", cap:"4px joints keep the cut visible (84% of the white survives) — and paying for them is what pushes the ring from 23.5 to 26px. This is the version measured everywhere else in this mock.",
+      draw:function(s,x,y){ var g=E("g",{}); s.appendChild(g); drawRing(g,x,y,CM,26,4); } },
+    { t:"Split body: the fake one-key pin", cap:"Two keys as halves, and both halves land on the same colour — 13 of 66 real places. Left: that place. Right: a genuine one-key place. The map would show two different truths with one picture.",
+      draw2:true }
+  ];
+  cards.forEach(function(c){
+    var card=el("div","card"); card.appendChild(el("h3",null,c.t));
+    if(c.draw2){
+      var d=el("div","stage big");
+      var s=E("svg",{width:220,height:110,viewBox:"0 0 110 55"});
+      var g=E("g",{}); s.appendChild(g);
+      drawPie(g,30,26,["#999933","#999933"],22,1.4);
+      pinBody(g,80,26,"#999933",{fill:"#999933"});
+      var t1=E("text",{x:30,y:48,"text-anchor":"middle","font-size":4.6,fill:"#6b6353"}); t1.textContent="two keys, same colour";
+      var t2=E("text",{x:80,y:48,"text-anchor":"middle","font-size":4.6,fill:"#6b6353"}); t2.textContent="one key";
+      s.appendChild(t1); s.appendChild(t2);
+      d.appendChild(s); card.appendChild(d);
+    } else {
+      card.appendChild(stagePair(c.draw));
+    }
+    card.appendChild(el("p","cap",c.cap));
+    host.appendChild(card);
+  });
+})();
+
+/* ============================ section 4 ============================ */
+(function(){
+  var host=document.getElementById("row4");
+  var c1=el("div","card"); c1.appendChild(el("h3",null,"The crown’s key panel — shapes survive shrinking"));
+  var d1=el("div");
+  [["#332288","Culture","circle"],["#999933","shade and canopy","square"],["#44AA99","LOKA Finds","triangle"]].forEach(function(r,i){
+    var row=el("div","legrow");
+    var s=E("svg",{width:18,height:18,viewBox:"0 0 20 20"});
+    var g=E("g",{}); s.appendChild(g);
+    if(r[2]==="circle") pinBody(g,10,10,r[0],{dot:r[0]});
+    else g.appendChild(E("path",{d:satPath(r[2],10,10),fill:r[0],stroke:"#fff","stroke-width":1}));
+    row.appendChild(s);
+    var w=el("span","w",(i===0?"categories — the pins":i===1?"themes — small squares":"creator — small triangles")); row.appendChild(w);
+    d1.appendChild(row);
+  });
+  c1.appendChild(d1);
+  c1.appendChild(el("p","meas","A small square at panel size still carries an <b class='ok'>8px</b> blob — above the floor of 6. The words name a shape."));
+  host.appendChild(c1);
+
+  var c2=el("div","card"); c2.appendChild(el("h3",null,"A ring’s key panel — parts thin to slivers"));
+  var d2=el("div");
+  [["categories — the top part of the ring",0],["themes — the lower-right part",1],["creator — the lower-left part",2]].forEach(function(r){
+    var row=el("div","legrow");
+    var s=E("svg",{width:18,height:18,viewBox:"0 0 26 26"});
+    var g=E("g",{}); s.appendChild(g);
+    var cols=["#e4ddc9","#e4ddc9","#e4ddc9"]; cols[r[1]]=["#332288","#999933","#44AA99"][r[1]];
+    drawRing(g,13,13,cols,26,4);
+    row.appendChild(s);
+    row.appendChild(el("span","w",r[0]));
+    d2.appendChild(row);
+  });
+  c2.appendChild(d2);
+  c2.appendChild(el("p","meas","The same part redrawn at panel size keeps only a <b class='bad'>4.5px</b> sliver of colour — below the floor the map itself obeys. And the words can only point at a clock position."));
+  host.appendChild(c2);
+})();
+
+/* ============================ section 5: density ============================ */
+function merc(lng,lat,z){
+  var w=512*Math.pow(2,z);
+  var x=(lng+180)/360*w;
+  var s=Math.sin(lat*Math.PI/180);
+  var y=(0.5-Math.log((1+s)/(1-s))/(4*Math.PI))*w;
+  return [x,y];
+}
+var CENTER=[77.6392,12.9784];
+function grown(){
+  var out=PLACES.slice(); var seed=42;
+  function rnd(){ seed=(Math.imul(seed,1103515245)+12345)&0x7fffffff; return seed/0x7fffffff; }
+  PLACES.forEach(function(p){
+    var d=(60+rnd()*100)/111320, a=rnd()*6.283;
+    var src=PLACES[Math.floor(rnd()*PLACES.length)];
+    out.push([p[0]+Math.cos(a)*d/Math.cos(p[1]*Math.PI/180), p[1]+Math.sin(a)*d, src[2], src[3], src[4]]);
+  });
+  return out;
+}
+var GROWN=grown();
+function fold(pts,w){
+  var taken=new Array(pts.length).fill(false), discs=[], loners=[];
+  for(var i=0;i<pts.length;i++){
+    if(taken[i])continue;
+    var mem=[i];
+    for(var j=i+1;j<pts.length;j++){
+      if(taken[j])continue;
+      var dx=pts[i][0]-pts[j][0], dy=pts[i][1]-pts[j][1];
+      if(Math.hypot(dx,dy)<w){ mem.push(j); taken[j]=true; }
+    }
+    if(mem.length>1) discs.push({x:pts[i][0],y:pts[i][1],n:mem.length});
+    else loners.push(i);
+  }
+  return {discs:discs,loners:loners};
+}
+function streets(svg,W,H,shift){
+  var g=E("g",{}); svg.appendChild(g);
+  g.appendChild(E("rect",{x:0,y:0,width:W,height:H,fill:"#f4f0e4"}));
+  [[0.18,0.3,150,90],[0.72,0.62,190,110],[0.45,0.82,120,70]].forEach(function(b){
+    g.appendChild(E("ellipse",{cx:b[0]*W+shift%37,cy:b[1]*H,rx:b[2],ry:b[3],fill:"#e3e9d3"}));
+  });
+  for(var i=-1;i<14;i++){
+    g.appendChild(E("path",{d:"M"+(i*90+((shift*13)%40))+" 0 l"+(H*0.12)+" "+H,stroke:"#e9e3d1","stroke-width":i%3?5:9,fill:"none"}));
+    g.appendChild(E("path",{d:"M0 "+(i*76+((shift*7)%30))+" l"+W+" "+(-W*0.06),stroke:"#e9e3d1","stroke-width":i%4?4:8,fill:"none"}));
+  }
+}
+var state={arr:"crown",zoom:16,dens:"today",cvd:"normal"};
+function seg(id,options,cur,set){
+  var host=document.getElementById(id); host.innerHTML="";
+  options.forEach(function(o){
+    var b=document.createElement("button");
+    b.textContent=o.label; if(o.value===cur)b.className="on";
+    b.onclick=function(){ set(o.value); render(); wire(); };
+    host.appendChild(b);
+  });
+}
+function wire(){
+  seg("segArr",[{label:"corner marks (ships) · 40px",value:"crown"},{label:"segmented ring · 26px",value:"ring"}],state.arr,function(v){state.arr=v;});
+  seg("segZoom",[{label:"neighbourhood (z16)",value:16},{label:"streets (z17)",value:17}],state.zoom,function(v){state.zoom=v;});
+  seg("segDens",[{label:"today · 66 places",value:"today"},{label:"as it grows",value:"grown"}],state.dens,function(v){state.dens=v;});
+  seg("segCvd",[{label:"typical",value:"normal"},{label:"red–green colour-blind (approx.)",value:"deutan"}],state.cvd,function(v){state.cvd=v;});
+}
+function drawMap(host,W,H,arr,zoom,dens,noteHost){
+  host.innerHTML="";
+  var svg=E("svg",{width:"100%",viewBox:"0 0 "+W+" "+H,style:"display:block"});
+  host.appendChild(svg);
+  var defs=E("defs",{});
+  var f=E("filter",{id:"deutan"});
+  f.appendChild(E("feColorMatrix",{type:"matrix",values:"0.367 0.861 -0.228 0 0 0.280 0.673 0.047 0 0 -0.012 0.043 0.969 0 0 0 0 0 1 0"}));
+  defs.appendChild(f); svg.appendChild(defs);
+  var root=E("g",state.cvd==="deutan"?{filter:"url(#deutan)"}:{ });
+  svg.appendChild(root);
+  streets(root,W,H,zoom+3);
+  var data=dens==="grown"?GROWN:PLACES;
+  var c=merc(CENTER[0],CENTER[1],zoom);
+  var pts=[],keep=[];
+  data.forEach(function(p){
+    var m=merc(p[0],p[1],zoom);
+    var x=m[0]-c[0]+W/2, y=m[1]-c[1]+H/2;
+    if(x>-60&&x<W+60&&y>-60&&y<H+60){ pts.push([x,y]); keep.push(p); }
+  });
+  var w=arr==="crown"?40:26;
+  var f2=fold(pts,w);
+  var g=E("g",{}); root.appendChild(g);
+  f2.loners.forEach(function(i){
+    var p=keep[i], cols=kcolors([p[2],p[3],p[4]]);
+    if(arr==="crown") drawCrown(g,pts[i][0],pts[i][1],cols);
+    else drawRing(g,pts[i][0],pts[i][1],cols,26,4);
+  });
+  f2.discs.forEach(function(d){
+    var dg=E("g",{});
+    dg.appendChild(E("circle",{cx:d.x,cy:d.y,r:15,fill:"#fbf9f2",stroke:"#A6522F","stroke-width":1.6}));
+    var t=E("text",{x:d.x,y:d.y,"text-anchor":"middle","dominant-baseline":"central","font-size":11,"font-weight":700,fill:"#A6522F"});
+    t.textContent=d.n; dg.appendChild(t); g.appendChild(dg);
+  });
+  if(noteHost){
+    noteHost.textContent=f2.loners.length+" of "+pts.length+" places in view stay readable as pins; "+
+      (pts.length-f2.loners.length)+" fold into "+f2.discs.length+" discs (fold distance "+w+"px).";
+  }
+  return {shown:f2.loners.length,total:pts.length};
+}
+function render(){
+  var r=drawMap(document.getElementById("map"),940,520,state.arr,state.zoom,state.dens,document.getElementById("mapnote"));
+  var alt=state.arr==="crown"?"ring":"crown";
+  var tmp=document.createElement("div");
+  var r2=drawMap(tmp,940,520,alt,state.zoom,state.dens,null);
+  document.getElementById("stat").innerHTML=
+    "This marker keeps <b>"+r.shown+"</b> of "+r.total+" places readable as pins here. The other choice would keep <b>"+r2.shown+"</b>. "+
+    (state.arr==="ring"?"The ring wins this count — sections 3 and 4 are what it spends to win it.":"");
+  wire();
+}
+wire(); render();
+
+/* ============================ section 6 hover pin ============================ */
+(function(){
+  var s=document.getElementById("hoverpin");
+  var g=E("g",{}); s.appendChild(g);
+  drawCrown(g,26,28,C1);
+  document.getElementById("hb-rows").innerHTML=
+    "categories &nbsp;·&nbsp; <b>Learning</b><br>themes &nbsp;·&nbsp; <b>memory and history</b><br>creator &nbsp;·&nbsp; <b>LOKA Finds</b>";
+})();
+</script>
+</body>
+</html>

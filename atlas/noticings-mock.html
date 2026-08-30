@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Noticings as chips beside search — the real Bengaluru layer</title>
+<style>
+  :root{
+    --paper:#f4f0e4; --ink:#2A241A; --muted:#6b6353; --line:#d9d2bf;
+    --moss:#40573D; --rust:#A6522F; --card:#fbf9f2; --moss-soft:#e7ecdf;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font-family:'Figtree','Avenir Next',system-ui,sans-serif; background:var(--paper); color:var(--ink); }
+  header{ padding:1.4rem 1.6rem 1rem; border-bottom:1px solid var(--line); }
+  header h1{ margin:0 0 .3rem; font-size:1.25rem; }
+  header p{ margin:.2rem 0; max-width:64rem; color:var(--muted); font-size:.86rem; line-height:1.5; }
+  header b{ color:var(--rust); }
+  section{ padding:1.2rem 1.6rem 1.5rem; border-bottom:1px solid var(--line); }
+  h2{ font-size:1rem; margin:.1rem 0 .2rem; }
+  .sub{ color:var(--muted); font-size:.82rem; margin:.1rem 0 .9rem; max-width:64rem; line-height:1.55; }
+  .sub b{ color:var(--ink); }
+
+  /* ---- the map with search + chips floating over it ---- */
+  .mapwrap{ position:relative; border:1px solid var(--line); border-radius:10px; overflow:hidden;
+    background:#efeadb; max-width:66rem; box-shadow:0 1px 4px rgba(42,36,26,.07); }
+  .mapwrap svg{ display:block; width:100%; height:auto; }
+  .searchbox{ position:absolute; top:.9rem; left:50%; transform:translateX(-50%); width:22rem; max-width:calc(100% - 2rem);
+    display:flex; flex-direction:column; gap:.35rem; }
+  .searchbox input{ width:100%; font:inherit; font-size:.86rem; min-height:2.4rem; padding:.4rem .8rem;
+    border:1.4px solid var(--line); border-radius:8px; background:#fff; color:var(--ink);
+    box-shadow:0 1px 4px rgba(42,36,26,.12); }
+  .searchbox input:focus{ outline:2px solid var(--moss); outline-offset:-1px; border-color:var(--moss); }
+  .search-count{ align-self:center; font-size:.7rem; color:var(--ink); background:rgba(251,249,242,.92);
+    border-radius:99px; padding:.06rem .6rem; border:1px solid var(--line); }
+  .search-count[hidden]{ display:none; }
+  .chipstrip{ display:flex; gap:5px; overflow-x:auto; padding:.1rem .1rem .25rem; scrollbar-width:thin; }
+  .chipstrip[hidden]{ display:none; }
+  .chipstrip button{ flex:0 0 auto; font:inherit; font-size:.72rem; padding:.24rem .62rem; border-radius:999px;
+    border:1.4px solid var(--line); background:rgba(255,255,255,.95); color:var(--ink); cursor:pointer;
+    box-shadow:0 1px 3px rgba(42,36,26,.10); }
+  .chipstrip button:hover{ border-color:var(--moss); }
+  .chipstrip button[aria-pressed="true"]{ background:var(--moss); border-color:var(--moss); color:#fff; font-weight:600; }
+  .mapnote{ font-size:.72rem; color:var(--muted); margin:.55rem 0 0; max-width:66rem; line-height:1.5; }
+  .tip{ position:absolute; pointer-events:none; background:#fff; border:1.4px solid var(--line); border-radius:8px;
+    padding:.45rem .6rem; font-size:.7rem; max-width:17rem; box-shadow:0 2px 8px rgba(42,36,26,.14); z-index:5; display:none; }
+  .tip b{ display:block; font-size:.74rem; margin-bottom:.15rem; }
+  .tip .tags{ color:var(--muted); line-height:1.45; }
+
+  /* ---- the picking step ---- */
+  .pickwrap{ max-width:46rem; }
+  .slotline{ font-size:.76rem; color:var(--muted); margin:.2rem 0 .6rem; }
+  .slotline b{ color:var(--rust); }
+  .sugg{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:.9rem; }
+  .sugg label{ display:inline-flex; align-items:center; gap:.35rem; font-size:.74rem; border:1.4px solid var(--line);
+    background:#fff; border-radius:999px; padding:.22rem .6rem .22rem .5rem; cursor:pointer; }
+  .sugg label:has(input:checked){ border-color:var(--moss); background:var(--moss-soft); }
+  .sugg input{ accent-color:var(--moss); margin:0; }
+  .sugg .n{ color:var(--rust); font-weight:700; }
+  .addrow{ display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; margin:.3rem 0 .55rem; }
+  .addrow label{ font-size:.72rem; font-weight:600; color:var(--muted); }
+  .addrow input{ font:inherit; font-size:.78rem; padding:.32rem .55rem; border:1.4px solid var(--line);
+    border-radius:6px; background:#fff; width:16rem; max-width:100%; }
+  .gemrow{ display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
+  .gemrow .lbl{ font-size:.7rem; font-weight:700; letter-spacing:.03em; color:var(--muted); margin-right:.2rem; }
+  .gemrow button{ font:inherit; font-size:.72rem; padding:.2rem .58rem; border-radius:999px; border:1.4px dashed var(--line);
+    background:#fff; cursor:pointer; color:var(--ink); }
+  .gemrow button:hover{ border-color:var(--rust); color:var(--rust); }
+  .pickmsg{ font-size:.74rem; color:var(--rust); min-height:1.1rem; margin:.4rem 0 0; }
+  .emptytoggle{ display:flex; gap:.45rem; align-items:flex-start; margin-top:1rem; font-size:.78rem; max-width:44rem;
+    line-height:1.5; color:var(--muted); }
+  .emptytoggle input{ accent-color:var(--moss); margin-top:.15rem; }
+
+  footer{ padding:1.1rem 1.6rem 1.6rem; font-size:.74rem; color:var(--muted); line-height:1.6; max-width:64rem; }
+  footer b{ color:var(--ink); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Noticings as chips beside search</h1>
+  <p>The real Bengaluru layer — <b>66 places, 335 noticings</b> — on a pretend map. The search box sits where the editor already puts it, top-centre over the map; the chips are one thin row underneath, and that is the whole footprint. A chip is a real noticing, exactly as someone wrote it. Tapping one just runs the search that already ships: same matching, same hiding of pins, same count. This page matches by words alone; the live atlas also matches by meaning, so a real tap lights these places and often a few more (that part is an estimate — the rest of this page is measured).</p>
+</header>
+
+<section>
+  <h2>The reader's side — tap a chip, or type</h2>
+  <p class="sub">Tap a chip: the word lands in the box, pins that don't match go away, the count reports. Tap it again — or clear the box — and the map comes back. Type your own words and the chips simply stand aside; <b>a chip is a hand that types for you</b>, so chip and typed search can never fight. Hover any pin to read its noticings. The small squares beside some pins are the theme badges the map already wears — when search hides a pin, its badges go with it; nothing new to reconcile.</p>
+  <div class="mapwrap" id="mapwrap">
+    <div class="searchbox">
+      <input type="search" id="q" placeholder="Search the map…" aria-label="Search the map" autocomplete="off">
+      <span class="search-count" id="count" hidden></span>
+      <div class="chipstrip" id="strip" aria-label="Noticings people wrote at these places"></div>
+    </div>
+    <div class="tip" id="tip"></div>
+  </div>
+  <p class="mapnote" id="mapnote"></p>
+</section>
+
+<section>
+  <h2>The owner's side — the machine suggests, you decide</h2>
+  <p class="sub">Same say you get over themes, but lighter: nothing is invented, so there is nothing to gate. The list below is derived by counting alone — each noticing ranked by how many places it lights through the existing search, skipping ones that would secretly act as a whole category (<i>urban-nature</i> lights all 20 Nature places because the search matches the category word inside it), and skipping near-repeats. Untick what bores you; add what you love — the one-of-a-kind noticings are where the delight lives, and only you can rank delight. Everything you change here updates the row on the map above, live.</p>
+  <div class="pickwrap">
+    <div class="slotline">The row holds up to <b>8</b> — <span id="slots"></span></div>
+    <div class="sugg" id="sugg"></div>
+    <div class="addrow">
+      <label for="addinp">Add any noticing</label>
+      <input id="addinp" list="alltags" placeholder="start typing… e.g. calico-cat">
+      <datalist id="alltags"></datalist>
+    </div>
+    <div class="gemrow" id="gemrow"><span class="lbl">ONE-OF-A-KIND, WORTH OFFERING:</span></div>
+    <div class="pickmsg" id="pickmsg"></div>
+    <label class="emptytoggle"><input type="checkbox" id="emptylayer">
+      <span><b>Show this map as most layers will have it</b> — no tag-like column, or nothing kept: the row is simply absent and search looks exactly as it does today. The row is a privilege of layers whose data earned it, not furniture every map must carry.</span></label>
+  </div>
+</section>
+
+<footer>
+  <b>What this page holds still:</b> the pretend basemap, and the matching-by-meaning (needs the live atlas). Everything else behaves: the counts beside each suggestion are real, the taps run the same word-matching the shipped search runs (same skip rules, same word boundaries), and the suggested list is computed from the data on this page while it loads — not written by hand. Pins are coloured by their first category and badged by theme, standing in for the committed key; the chips neither read nor change that — <b>keys colour what a shown pin is, search decides which pins are shown.</b>
+</footer>
+
+<script>
+/* the real 66 places: d description, la/lo coords, c categories, l labels (noticings), t theme, a address */
+var DATA = [{"d":"recycled library","la":13.01382474594303,"lo":77.54830934107304,"c":"Social; Culture","l":"bamboo-wall; string-lights; vintage-lanterns; curated-bookshelf; bohemian-decor; cozy-nook","t":"Recycled Design","a":"12/2, Yeshwanthpur Industrial Suburb, Estate, Bengaluru, Karnataka 560086, India"},{"d":"Ganesha idol with granite mandapam","la":12.89629237543734,"lo":77.53116331994534,"c":"Heritage; Culture","l":"carved-stone; floral-garlands; shrine; devotional-offering; open-air-structure","t":"Heritage Sites","a":"Brigade 7 gardens Entrance , Paduka Mandira Road, Uttarahalli Hobli, Bharath Housing Society Layout, Subramanyapura, Bengaluru, Karnataka 560061, India"},{"d":"sofa made out of recycled materials","la":13.01383487255206,"lo":77.5482164695859,"c":"Culture","l":"upcycled-furniture; whimsical-design; anthropomorphic; textile-art; creative-seating; sustainable-decor","t":"Recycled Design","a":"88/12/2, Yeshwanthpur Industrial Suburb, Yeswanthpur, Bengaluru, Karnataka 560086, India"},{"d":"handmade artisan painted leather puppets from Andhra pradesh","la":13.01837187844419,"lo":77.70339667797089,"c":"Culture; Market","l":"tholu-bommalata; translucent-hide; intricate-detailing; shadow-theatre; folk-art; backlit-display","t":"Creative Hubs","a":"Sattva Celesta, Robin, SALARPURIA SATTVA CELESTA, Old Madras Rd, TC Palya, Battarahalli, Bengaluru, Karnataka 560049, India"},{"d":"Granite sculpture by unknown artist. Does anyone know who the artist is?","la":12.8961953101753,"lo":77.52595279365778,"c":"Culture","l":"vandalized; etched-graffiti; mythological-creature; stone-carving; public-art; park-installation","t":"Urban Green Spaces","a":"VGWG+9FV, Banashankari 6th Stage 1st Block, Bharath Housing Society Layout, Subramanyapura, Bengaluru, Karnataka 560098, India"},{"d":"Basketball court. Pickup games after 5pm","la":12.89598157037466,"lo":77.53111872822046,"c":"Activities; Social","l":"fenced-enclosure; outdoor-recreation; evening-activity; hard-surface; community-sports","t":"other","a":"Club House, Sy 37/1, Paduka Mandira Rd, Uttarahalli Hobli, Bharath Housing Society Layout, Subramanyapura, Bengaluru, Karnataka 560061, India"},{"d":"This is a great place to hangout. Lot of green cover. Nice place to meditate or just to relax.","la":12.89289604933631,"lo":77.53012396395206,"c":"Nature; Activities","l":"shaded-walkway; trellis-canopy; hanging-vines; serene-atmosphere; outdoor-seating; foliage-enclosure","t":"Urban Green Spaces","a":"VGVJ+26R, 80 Feet Rd, Jayanagar housing society layout, Subramanyapura, Bengaluru, Karnataka 560061, India"},{"d":"library designed out of waste materials","la":13.01384140584798,"lo":77.54822183400393,"c":"Culture; Learning","l":"upcycled-decor; steampunk-aesthetic; industrial-design; repurposed-vehicle; reading-nook; creative-reuse; book-collection","t":"Recycled Design","a":"88/12/2, Yeshwanthpur Industrial Suburb, Yeswanthpur, Bengaluru, Karnataka 560086, India"},{"d":"green unconference space at Bangalore creative circus","la":13.0138103726908,"lo":77.54828285425901,"c":"Social; Activities; Culture","l":"botanical-setting; collaborative-hub; creative-workshop; event-venue; hanging-decor; sustainable-design","t":"Creative Hubs","a":"88/12/2, Yeshwanthpur Industrial Suburb, Yeswanthpur, Bengaluru, Karnataka 560086, India"},{"d":"make your own vishnu god jigsaw puzzle","la":13.01846040296887,"lo":77.70334705710411,"c":"Culture; Heritage","l":"kerala-mural-style; mythological-narrative; intricate-detailing; vibrant-pigments; framed-artwork; anantashayana-posture","t":"Heritage Sites","a":"102, Brindavan Layout, TC Palya, Battarahalli, Bengaluru, Karnataka 560049, India"},{"d":"Bangalore creative circus is a mixed use creative space for events","la":13.01389105889138,"lo":77.54791304469109,"c":"Culture; Social; Activities","l":"performance-venue; street-art; community-hub; multi-purpose-studio; urban-oasis; cultural-gathering","t":"Creative Hubs","a":"588, 30th Feet Rd, Ashokapuram, Yeshwanthpur Industrial Suburb, Yeswanthpur, Bengaluru, Karnataka 560086, India"},{"d":"EV charger. Need the Charzer app to use it.","la":12.89511647791007,"lo":77.53079753369093,"c":"Civic","l":"electric-vehicle-infrastructure; mobile-app-required; public-utility; wall-mounted; sustainable-transport","t":"other","a":"VGWJ+26F Block-A, Bharath Housing Society Layout, Subramanyapura, Bengaluru, Karnataka 560061, India"},{"d":"an event space with all sustainable materials Bangalore creative circus","la":13.01386035240519,"lo":77.54819266498089,"c":"Culture; Social; Activities","l":"repurposed-shipping-containers; industrial-aesthetic; eco-conscious-venue; multi-level-seating; community-hub; open-air-design; creative-workshop-space","t":"Creative Hubs","a":"12/2, Yeshwanthpur Industrial Suburb, Estate, Bengaluru, Karnataka 560086, India"},{"d":"chair made out of recycled paint brushes","la":13.01385251245066,"lo":77.5482164695859,"c":"Market; Culture","l":"upcycled-materials; artistic-furniture; distressed-finish; hand-carved-detailing; eclectic-upholstery; sustainable-design","t":"Recycled Design","a":"12/2, Yeshwanthpur Industrial Suburb, Estate, Bengaluru, Karnataka 560086, India"},{"d":"Kalapad mangoes available at this vendor","la":12.89906966789232,"lo":77.53083139657974,"c":"Market; Food and Drink","l":"mobile-cart; street-side-stall; digital-payment-enabled; seasonal-produce; fresh-harvest","t":"other","a":"Prestige Jindal City, 85, Bharath Housing Society Layout, Subramanyapura, Bengaluru, Karnataka 560061, India"},{"d":"handmade mask from sri lanka","la":13.01845256315984,"lo":77.70335376262665,"c":"Culture; Market","l":"peacock-motif; wood-carving; vibrant-pigments; traditional-craft; wall-decor; folk-art","t":"Creative Hubs","a":"102, Brindavan Layout, TC Palya, Battarahalli, Bengaluru, Karnataka 560049, India"},{"d":"fruit seller reads newspaper under the shade of the metro while vending fruits.","la":12.97839149712236,"lo":77.63932775706053,"c":"Market; Civic","l":"elevated-railway; street-vending; urban-shade; transit-hub; informal-commerce; commuter-thoroughfare","t":"Urban Green Spaces","a":"191, Chinmaya Mission Hospital Rd, Binnamangala, Hoysala Nagar, Indiranagar, Bengaluru, Karnataka 560038, India"},{"d":"chair made out of waste materials","la":13.01385545243363,"lo":77.54821948707104,"c":"Culture; Others","l":"upcycled-art; found-object-sculpture; industrial-repurposing; eclectic-decor; whimsical-design; creative-reuse","t":"Recycled Design","a":"12/2, Yeshwanthpur Industrial Suburb, Estate, Bengaluru, Karnataka 560086, India"},{"d":"rivers of bengaluru exhibition poster","la":12.97560528633002,"lo":77.60264251381159,"c":"Learning; Culture","l":"interactive-exhibit; water-conservation; educational-space; multimedia-display; environmental-awareness; urban-ecology","t":"Learning & Exhibitions","a":"Cobalt, Church St, Haridevpur, Shanthala Nagar, Ashok Nagar, Bengaluru, Karnataka 560001, India"},{"d":"display rack made out of old computer waste at Bangalore creative circus","la":13.0138404258536,"lo":77.5482090935111,"c":"Culture; Others","l":"upcycled-materials; electronic-salvage; sustainable-design; retro-tech; creative-installation; repurposed-furniture","t":"Recycled Design","a":"88/12/2, Yeshwanthpur Industrial Suburb, Yeswanthpur, Bengaluru, Karnataka 560086, India"},{"d":"The Socratus office. 1st floor","la":12.978020679358735,"lo":77.63988766819239,"c":"Others","l":"exposed-brick-facade; commercial-property; ground-level-parking; corporate-signage; urban-office-space","t":"Urban Green Spaces","a":"1469, NGEF Ln, Indira Nagar 1st Stage, Stage 1, Indiranagar, Bengaluru, Karnataka 560038, India"},{"d":"Cornerstone park. Open from 5am-8pm","la":12.97795043628393,"lo":77.6412807404995,"c":"Nature; Civic","l":"ornamental-gate; potted-plants; monolith; shaded-walkway; urban-oasis; botanical-display","t":"Urban Green Spaces","a":"Cornerstone park, 575/A, 1st Cross Rd, Defence Colony, Indiranagar, Bengaluru, Karnataka 560038, India"},{"d":"A beautiful specimen of a banyan tree. Trees of Indiranagar.","la":12.97804485604036,"lo":77.64123011380434,"c":"Nature","l":"aerial-prop-roots; botanical-specimen; urban-canopy; natural-shade; photo-worthy","t":"Urban Green Spaces","a":"Indiranagara Police Station / KFC, Defence Colony, Indiranagar, Bengaluru, Karnataka 560038, India"},{"d":"Golden trumpet tree, Trees of Indiranagar,  yellow, March","la":12.9691594405204,"lo":77.64019377529621,"c":"Nature","l":"tabebuia-chrysantha; seasonal-bloom; vibrant-canopy; spring-foliage; urban-nature","t":"Urban Green Spaces","a":"1006, 2nd Cross Rd, HAL 2nd Stage, Doopanahalli, Indiranagar, Bengaluru, Karnataka 560008, India"},{"d":"Golden trumpet tree, Trees of Indiranagar, bloom, Tree, Yellow, March.","la":12.969277387701498,"lo":77.6400375366211,"c":"Nature","l":"seasonal-flowering; vibrant-canopy; urban-flora; photo-worthy; botanical-display","t":"Urban Green Spaces","a":"II, HAL 2nd Stage, Doopanahalli, Indiranagar, Bengaluru, Karnataka 560008, India"},{"d":"Metro cat - Cats of Indiranagar","la":12.978074913533138,"lo":77.63927277177572,"c":"Nature; Civic","l":"calico-cat; electrical-enclosure; fire-extinguisher; feeding-station; urban-wildlife; transit-hub","t":"Urban Green Spaces","a":"No.10, Chinmaya Mission Hospital Rd, near Metro Station, Stage 1, Indiranagar, Bengaluru, Karnataka 560038, India"},{"d":"The tree canopy on Yogananda Rd. provide a contrast and relief from the traffic. Trees of Indiranagar. Tree cathedral","la":12.978689784490276,"lo":77.63684839010239,"c":"Nature; Civic","l":"urban-forest; painted-trunks; shaded-thoroughfare; dense-foliage; traffic-corridor; overhead-canopy; commuter-route","t":"Urban Green Spaces","a":"332, Paramahansa Yogananda Rd, Indira Nagar II Stage, Hoysala Nagar, Indiranagar, Bengaluru, Karnataka 560038, India"},{"d":"Big Rain Tree, trees of Indiranagar","la":12.978932857392897,"lo":77.64281697571278,"c":"Nature","l":"sprawling-canopy; urban-greenery; mature-specimen; natural-shade; street-landmark","t":"Urban Green Spaces","a":"470, Indira Nagar 1st Stage, Stage 1, Indiranagar, Bengaluru, Karnataka 560038, India"},{"d":"Skateboard park near Kaggadasapura lake.","la":12.977066351980557,"lo":77.67290230840445,"c":"Activities; Social","l":"concrete-ramps; grind-rails; floodlit; urban-recreation; evening-session","t":"Urban Green Spaces","a":"10/A, 10th A Main Rd, Malleshpalya, Kaggadasapura, Bengaluru, Karnataka 560075, India"},{"d":"Jalakanteshwara Swamy temple. Temples of Bengaluru","la":12.97750806781262,"lo":77.67268504947424,"c":"Heritage; Culture","l":"dravidian-architecture; gopuram-sculptures; stone-masonry; devotional-space; hindu-shrine; pilgrimage-site","t":"Heritage Sites","a":"10/A, 10th A Main Rd, Malleshpalya, Kaggadasapura, Bengaluru, Karnataka 560075, India"},{"d":"The Indiranagar walk starts from the Atta Galata book store on weekends.","la":12.980021455164614,"lo":77.6392526552081,"c":"Activities; Social; Culture","l":"guided-tour; urban-exploration; pedestrian-group; tree-lined-street; weekend-activity; community-gathering","t":"Urban Green Spaces","a":"177, 9th Cross Rd, Binnamangala, Hoysala Nagar, Indiranagar, Bengaluru, Karnataka 560038, India"},{"d":"The rain trees of Yogananda Road","la":12.980106072858957,"lo":77.6370394974947,"c":"Nature","l":"canopy-lined-street; painted-trunks; urban-greenery; pedestrian-friendly; shaded-thoroughfare; mature-foliage","t":"Urban Green Spaces","a":"212, 5th Main Rd, Indira Nagar II Stage, Hoysala Nagar, Indiranagar, Bengaluru, Karnataka 560038, India"},{"d":"Foliage around Wood Park Indiranagar","la":12.980145604667676,"lo":77.6364242658019,"c":"Nature; Activities","l":"grevillea-robusta; urban-canopy; pedestrian-walkway; shaded-path; neighborhood-park; botanical-specimen","t":"Urban Green Spaces","a":"XJHP+R9J Wood Park Indiranagar, 13th Cross Rd, Indira Nagar II Stage, Hoysala Nagar, Indiranagar, Bengaluru, Karnataka 560038, India"},{"d":"Flower cluster of the Silver Oak tree, a native of Australia. The tree must be close by. #treesofindiranagar","la":12.980162920251335,"lo":77.63638906180859,"c":"Nature","l":"grevillea-robusta; botanical-specimen; coiled-inflorescence; yellow-blooms; ornamental-foliage","t":"Urban Green Spaces","a":"XJHP+R9J Wood Park Indiranagar, 13th Cross Rd, Indira Nagar II Stage, Hoysala Nagar, Indiranagar, Bengaluru, Karnataka 560038, India"},{"d":"Yoga, Odissi dance, Carnatic music and Karate classes at the Arya Samaj","la":12.978495718050622,"lo":77.63898577541113,"c":"Culture; Activities; Learning","l":"community-hub; extracurricular-activities; skill-development; bulletin-board; traditional-arts; wellness-programs","t":"Creative Hubs","a":"7, Chinmaya Mission Hospital Rd, near Metro station, Binnamangala, Stage 1, Indiranagar, Bengaluru, Karnataka 560038, India"},{"d":"Tree outside Raghavendra Mutt. Exit A of Indiranagar Nagar Metro station is named after this religious institution.","la":12.978586217065747,"lo":77.63933043926954,"c":"Nature; Heritage; Civic","l":"sacred-fig; urban-canopy; transit-landmark; street-shrine; commuter-hub","t":"Heritage Sites","a":"732, 9th Cross Rd, near cavary school, Binnamangala, Stage 1, Indiranagar, Bengaluru, Karnataka 560038, India"},{"d":"An outstanding specimen of banyan outside what looks like a military facility","la":12.974270651550325,"lo":77.6630026102066,"c":"Nature","l":"aerial-prop-roots; sprawling-canopy; natural-shade; dense-foliage; perimeter-fencing","t":"Urban Green Spaces","a":"07, GM Palya, C V Raman Nagar, Bengaluru, Karnataka 560075, India"},{"d":"Public park that stays open during afternoons.","la":12.915387680698956,"lo":77.60157499462365,"c":"Nature; Activities","l":"outdoor-gym; fitness-equipment; shaded-recreation; urban-green-space; calisthenics-station","t":"Urban Green Spaces","a":"1/E, SFHS Layout, BHBCS Layout, Stage 2, BTM Layout, Bengaluru, Karnataka 560076, India"},{"d":"100 year old huge tree near southend circle","la":12.938283782437164,"lo":77.57715314626694,"c":"Nature","l":"baobab; wild-beehives; massive-girth; botanical-specimen; urban-landmark","t":"Urban Green Spaces","a":"7/3, Ratna Vilas Rd, Basavanagudi, Bengaluru, Karnataka 560004, India"},{"d":"Apart from housing artworks, the National Gallery of Modern Art also provides a peaceful and shaded campus with beautiful trees and serene landscape","la":12.989515446070476,"lo":77.58792322129011,"c":"Culture; Nature; Social","l":"al-fresco-seating; banyan-canopy; open-air-courtyard; modernist-architecture; tranquil-ambience; cultural-hub","t":"Creative Hubs","a":"49, Palace Rd, Vasanth Nagar, Bengaluru, Karnataka 560001, India"},{"d":"This beautiful tree specimen at the NGMA","la":12.9895931999008,"lo":77.58849419653416,"c":"Nature; Culture","l":"multi-stemmed-trunk; expansive-canopy; botanical-specimen; sculptural-branching; shaded-grounds; museum-gardens","t":"Urban Green Spaces","a":"National Gallery of Modern Art (Bengaluru) PARK, 49, Palace Rd, Vasanth Nagar, Bengaluru, Karnataka 560001, India"},{"d":"Sculptures at the NGMA lawns","la":12.989700356400187,"lo":77.5883312523365,"c":"Culture; Nature","l":"outdoor-gallery; stone-carvings; abstract-forms; metal-work; landscaped-grounds; art-installation","t":"Creative Hubs","a":"National Gallery of Modern Art (Bengaluru) PARK, 49, Palace Rd, Vasanth Nagar, Bengaluru, Karnataka 560001, India"},{"d":"Rivers of Bengaluru Experience Center at NGMA. #knowyourcity #kyc","la":12.98966572656093,"lo":77.58808817714453,"c":"Learning; Culture; Civic","l":"interactive-exhibits; urban-ecology; educational-hub; water-conservation; guided-tours; multimedia-displays; civic-engagement","t":"Learning & Exhibitions","a":"49, Palace Rd, Vasanth Nagar, Bengaluru, Karnataka 560001, India"},{"d":"The museum shop at NGMA. Posters, postcards, books, totes - they have got it all.","la":12.98941776370291,"lo":77.58811701089144,"c":"Market; Culture","l":"art-prints; stationery; curated-gifts; cultural-merchandise; exhibition-catalogues; retail-space","t":"Urban Green Spaces","a":"Manekyavelu Mansion, Palace Rd, Vasanth Nagar, Bengaluru, Karnataka 560001, India"},{"d":"Small Scale Industries Association","la":12.974578745355705,"lo":77.54716571420431,"c":"Civic; Learning","l":"industry-advocacy; business-resource-center; trade-organization; reception-desk; professional-networking; corporate-office","t":"Learning & Exhibitions","a":"2-206, Govindaraja Nagar Ward, Stage 1, Vijayanagar, Bengaluru, Karnataka 560040, India"},{"d":"Prakrutishaale - Nature as a school. Conducts programs for school children","la":13.005434218238483,"lo":77.56395064294338,"c":"Learning; Nature; Social","l":"outdoor-classroom; raised-garden-beds; terracotta-edging; environmental-education; hands-on-learning; community-initiative","t":"Learning & Exhibitions","a":"Mes Pu College Of Arts, Commerce & Science, Mes Pu College Of Arts, Commerce & Science, 46-53, 15th Cross Rd, Malleshwaram, Bengaluru, Karnataka 560003, India"},{"d":"Bangalore Boulders - indoor wall for rock climbing","la":13.005431931507399,"lo":77.56411392241716,"c":"Activities; Social","l":"climbing-gym; bouldering-facility; fitness-hub; recreational-sport; outdoor-seating; glass-facade","t":"Creative Hubs","a":"46, 15th Cross Rd, Peenya, Bengaluru, Karnataka 560003, India"},{"d":"C V Raman’s house. Located in this green pocket. Not open to the public all days. Open once a week if you make a plan to do wall climbing at Bangalore Boulder.","la":13.005392077048102,"lo":77.56470534950495,"c":"Heritage; Activities","l":"colonial-bungalow; arched-verandah; wooded-grounds; historic-residence; architectural-heritage; secluded-estate","t":"Urban Green Spaces","a":"45, 15th Cross Rd, Maruthi Extension, Malleshwaram, Bengaluru, Karnataka 560003, India"},{"d":"‘World famous egg rice’ of Malleshwaram","la":13.005955592373834,"lo":77.564916908741,"c":"Food and Drink","l":"counter-service; hole-in-the-wall; quick-bite; street-vendor; budget-friendly; takeout","t":"other","a":"151, 8th Main Rd, Malleshwaram, Bengaluru, Karnataka 560055, India"},{"d":"Learn about how heat has affected Bengaluru over the years because of urban expansion. How it effects the underprivileged demographics of our society. At the NGMA","la":12.989902254800864,"lo":77.58817803114653,"c":"Learning; Civic; Culture","l":"urban-planning-exhibit; environmental-awareness; sustainability-initiative; educational-installation; social-justice-advocacy; bengaluru-urban-studies","t":"Learning & Exhibitions","a":"49, Palace Rd, Vasanth Nagar, Bengaluru, Karnataka 560001, India"},{"d":"Dolphins Bar - Old school bar, an institution with coastal cuisine","la":12.996842334672465,"lo":77.61959276098759,"c":"Food and Drink; Culture","l":"maritime-theme; seafood-specialties; local-landmark; vintage-atmosphere; casual-dining","t":"Heritage Sites","a":"Ravinders House, Wheeler Rd, Cox Town, Bengaluru, Karnataka 560005, India"},{"d":"Directions to pottery town","la":12.996757483858076,"lo":77.61926524094812,"c":"Market; Culture","l":"artisanal-cluster; craft-hub; ceramic-production; workshop-district","t":"Creative Hubs","a":"56, Wheeler Rd, Cox Town, Bengaluru, Karnataka 560005, India"},{"d":"View from Rajarajeshwari metro station.","la":12.936482581711962,"lo":77.51919377920103,"c":"Civic","l":"elevated-platform; urban-transit; city-skyline; commuter-hub; panoramic-vantage","t":"Urban Green Spaces","a":"9/3, Iti Layout, Phase 3, Nayanda Halli, Bengaluru, Karnataka 560026, India"},{"d":"Sculpture of what looks like Krishna and Radha","la":12.901421549428767,"lo":77.53604860721882,"c":"Culture; Heritage","l":"hindu-iconography; devotional-art; mythological-figures; stone-carving; cultural-heritage","t":"Heritage Sites","a":"50, 1st Main Rd, Purnapragnya Layout, Happy Valley Layout, Subramanyapura, Bengaluru, Karnataka 560061, India"},{"d":"The sculpture of the Buddha by Balinese craftsmen and an antique traditional South-Indian door frame","la":12.901972566323987,"lo":77.53606604458058,"c":"Culture; Heritage","l":"hand-carved; ornate-woodwork; artisan-made; religious-iconography; architectural-salvage","t":"Heritage Sites","a":"1036, Poornapragna Housing Society Layout, Bengaluru, Karnataka 560061, India"},{"d":"Granthapura - Library and bookstore","la":12.977945905380622,"lo":77.64062505765726,"c":"Learning; Market","l":"literary-hub; reading-nook; independent-retailer; community-resource; quiet-study-space","t":"Urban Green Spaces","a":"29/A, 100 Feet Rd, Near-KFC Junction, Hoysala Nagar, Indiranagar, Bengaluru, Karnataka 560038, India"},{"d":"Perched within the quiet expanse of Omkar Hills, the Sri Matsya Narayana Temple serves as a focal point of the local Omkar Ashram. It is a rare space dedicated to the fish avatar of Vishnu, offering a contemplative atmosphere removed from the city's busy pace.\n\nPhoto: Gpkp, CC BY-SA 4.0, via Wikimedia Commons","la":12.96666667,"lo":77.63333333,"c":"Culture; Heritage","l":"hindu-iconography; meditative-sanctuary; ashram-grounds; serene-setting; devotional-site; architectural-rarity","t":"Urban Green Spaces","a":"Matsya Narayana Temple, Bangalore, Bengaluru"},{"d":"Embedded in the quiet history of North Bengaluru, these stones serve as a five-hundred-year-old record of local land and faith. A 1544 inscription found here documents the formal donation of the village to the Allalanatha temple in Jakkur, marking the site as a living archive.\n\nPhoto: Many.​ways, CC BY-SA 4.0, via Wikimedia Commons","la":13.0865769,"lo":77.5875828,"c":"Heritage","l":"epigraphic-record; sixteenth-century; religious-endowment; archival-site; monolithic-marker; devotional-legacy","t":"Heritage Sites","a":"Allalasandra inscriptions and hero stones, Bengaluru"},{"d":"Hebbal serves as a quiet witness to Bengaluru's ancient origins, with a history stretching back 1,300 years. Once marking the city's northern boundary, the area holds three valuable inscriptions that anchor its epigraphic heritage, with two now preserved for future study.\n\nPhoto: Pluday (Udaya Kumar P L), CC BY-SA 4.0, via Wikimedia Commons","la":13.040372222,"lo":77.591366666,"c":"Heritage; Learning","l":"epigraphic-records; archaeological-site; stone-inscriptions; medieval-era; local-chronicle","t":"Heritage Sites","a":"Hebbal Kittaya Inscription, Bengaluru"},{"d":"Housed within a 140-year-old post office, this museum traces the evolution of India's postal history and the varied modes of communication that once connected the nation. Since opening in 2019, the refurbished space serves as a quiet archive for the tools and stories of a bygone era.\n\nPhoto: Sne1295, CC BY 3.0, via Wikimedia Commons","la":12.97286,"lo":77.60379,"c":"Culture; Heritage; Learning","l":"philatelic-collection; archival-exhibits; adaptive-reuse; nineteenth-century-architecture; communication-heritage; curated-displays","t":"Learning & Exhibitions","a":"Sandesh Museum of Communication, Bengaluru"},{"d":"St. Mary's Orthodox Valiyapally serves as a cornerstone for the Bangalore Diocese, one of the thirty-two dioceses of the Malankara Orthodox Syrian Church. It stands as a quiet center for the Indian Orthodox community in the city, anchoring a long tradition of faith within Bengaluru.\n\nPhoto: Sanjeevgeorge123, CC BY-SA 3.0, via Wikimedia Commons","la":13.057307,"lo":77.548086,"c":"Heritage; Social","l":"malankara-tradition; diocesan-headquarters; liturgical-space; community-anchor; spiritual-sanctuary","t":"Urban Green Spaces","a":"St. Mary's Orthodox Valiyapally, Bengaluru"},{"d":"Buddha Shanthi Kanive serves as a quiet park within the city, offering a space for reflection amidst the urban landscape of Bengaluru. It provides a rare moment of stillness, inviting visitors to pause and appreciate a simple, green pocket tucked away from the surrounding bustle.\n\nPhoto: Yercaud-elango, CC BY-SA 4.0, via Wikimedia Commons","la":12.979233333,"lo":77.513638888,"c":"Nature","l":"urban-sanctuary; meditative-space; serene-retreat; botanical-enclave; solitary-escape","t":"Urban Green Spaces","a":"Buddha Shanthi Kanive, Bengaluru"},{"d":"Rising from the leafy surroundings of Cleveland Town, the distinct red edifice and towering steeple of St. John's Church mark it as the fourth oldest Protestant church in Bengaluru. Dedicated to St. John the Evangelist, the site remains a quiet landmark of the city's old Cantonment.\n\nPhoto: J. H. Furneaux, Public domain, via Wikimedia Commons","la":12.9918,"lo":77.613,"c":"Heritage","l":"gothic-revival; cantonment-era; historic-landmark; protestant-heritage; architectural-steeple; brick-masonry","t":"Heritage Sites","a":"St. John's Church, Bengaluru, Bengaluru"},{"d":"Opened in 2004, this J.P. Nagar theatre serves as a living memorial to the Kannada actor Shankar Nag. Envisioned by his wife, Arundathi Nag, and managed by the Sanket Trust, the space remains a dedicated home for the performing arts in the heart of south Bengaluru.\n\nPhoto: Shobith.​vj, CC BY-SA 3.0, via Wikimedia Commons","la":12.911513,"lo":77.587053,"c":"Culture; Heritage","l":"performing-arts-venue; cultural-landmark; theatrical-hub; non-profit-managed; commemorative-space","t":"Heritage Sites","a":"Ranga Shankara, Bengaluru"},{"d":"Gallery G functions as a bridge between the artistic community and those shaping the city's built environment. Beyond its role as a gallery, it serves as a resource for architects and interior designers, curating traveling shows that bring focused art access to wider audiences.\n\nPhoto: Gpkp, CC BY-SA 4.0, via Wikimedia Commons","la":12.974156,"lo":77.598862,"c":"Culture; Learning","l":"professional-network; curated-exhibitions; design-resource; urban-planning-focus; artistic-hub","t":"Creative Hubs","a":"Gallery G, Bengaluru"},{"d":"The Bier Library in Sarjapur. What a vibe!!","la":12.908310779889415,"lo":77.68855207022428,"c":"Food and Drink; Social; Activities","l":"open-air-seating; industrial-decor; nightlife; live-music-venue; sprawling-courtyard; social-hub; craft-brewery","t":"Creative Hubs","a":"49/1, Sarjapura Main Road, Halanayakana Halli, Bengaluru, Bengaluru Urban, Karnataka, 560035, India"}];
+
+/* ---------- shared little helpers ---------- */
+function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function splitTags(v){ return String(v==null?'':v).split(/[;,]/).map(function(s){return s.trim().toLowerCase();}).filter(Boolean); }
+function stem(w){ var s=w.toLowerCase();
+  if(/ies$/.test(s)) s=s.slice(0,-3)+'y';
+  else if(/(s|x|z|ch|sh)es$/.test(s)) s=s.slice(0,-2);
+  else if(!/ss$/.test(s)) s=s.replace(/(ing|ed|s)$/,'');
+  return s.slice(0,12); }
+function words(t){ return t.split(/[^a-z0-9]+/i).filter(Boolean).map(stem); }
+
+/* ---------- the search, replicated from the shipped atlas ----------
+   featureText: the searchable columns joined (description · categories ·
+   labels · address · creator · themes — ids, links, dates, coordinates
+   skipped, as the real one skips them). applySearch: the typed words as a
+   plain substring, plus any known tag containing the words or contained by
+   them, matched on word boundaries. */
+var TEXTS = DATA.map(function(r){ return [r.d, r.c, r.l, r.a, 'LOKA Finds', r.t].join(' · ').toLowerCase(); });
+var VOCAB = {};
+DATA.forEach(function(r){ ['l','c','t'].forEach(function(k){ splitTags(r[k]).forEach(function(t){ VOCAB[t]=1; }); }); });
+var VOCABLIST = Object.keys(VOCAB);
+var reCache = {};
+function termRe(t){
+  if(!reCache[t]) reCache[t] = new RegExp('(^|[^a-z0-9])' + t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '([^a-z0-9]|$)','i');
+  return reCache[t];
+}
+function matchesOf(q){
+  q = String(q||'').trim().toLowerCase();
+  if(!q) return null;                          /* null = no search: everything shows */
+  var kw = VOCABLIST.filter(function(t){ return t.indexOf(q)>=0 || q.indexOf(t)>=0; });
+  var out = [];
+  TEXTS.forEach(function(tx,i){
+    var m = tx.indexOf(q)>=0;
+    for(var j=0; !m && j<kw.length; j++) m = termRe(kw[j]).test(tx);
+    if(m) out.push(i);
+  });
+  return out;
+}
+
+/* ---------- deriving the suggested chips (counting only, no AI) ---------- */
+var OCC = {};
+DATA.forEach(function(r){ splitTags(r.l).forEach(function(t){ OCC[t]=(OCC[t]||0)+1; }); });
+var KINDS = [];                                 /* category + theme words the map already sorts by */
+DATA.forEach(function(r){ splitTags(r.c).concat(splitTags(r.t)).forEach(function(k){ if(KINDS.indexOf(k)<0) KINDS.push(k); }); });
+function echoesAKind(t){ return KINDS.some(function(k){ return t.indexOf(k)>=0 || k.indexOf(t)>=0; }); }
+var LIT = {};                                   /* places each noticing lights, measured */
+Object.keys(OCC).forEach(function(t){ LIT[t] = matchesOf(t).length; });
+var SUGGESTED = (function(){
+  var cand = Object.keys(OCC).filter(function(t){ return !echoesAKind(t); })
+    .map(function(t){ return { t:t, lit:LIT[t], occ:OCC[t] }; });
+  cand.sort(function(a,b){ return b.lit-a.lit || a.t.length-b.t.length || (a.t<b.t?-1:1); });
+  var kept=[], used={};
+  for(var i=0;i<cand.length && kept.length<12;i++){
+    var ws = words(cand[i].t);
+    if(ws.some(function(w){ return used[w]; })) continue;
+    ws.forEach(function(w){ used[w]=1; });
+    kept.push(cand[i]);
+  }
+  return kept;
+})();
+var GEMS = ['wild-beehives','tholu-bommalata','calico-cat','baobab','shadow-theatre','steampunk-aesthetic'];
+
+/* ---------- state: which chips the owner keeps ---------- */
+var CAP = 8;
+/* the machine pre-keeps six, leaving two spots for the owner's own picks —
+   the one-of-a-kind noticings only a person would choose */
+var keptChips = SUGGESTED.slice(0,6).map(function(c){ return c.t; });
+
+/* ---------- the pretend map ---------- */
+var W=1060, H=640, PAD=54;
+var las=DATA.map(function(r){return r.la;}), los=DATA.map(function(r){return r.lo;});
+var la0=Math.min.apply(null,las), la1=Math.max.apply(null,las), lo0=Math.min.apply(null,los), lo1=Math.max.apply(null,los);
+function px(r){ return { x: PAD+(r.lo-lo0)/(lo1-lo0)*(W-2*PAD), y: H-PAD-(r.la-la0)/(la1-la0)*(H-2*PAD-70)+35 }; }
+var KEY_COLORS=["#332288","#999933","#44AA99","#AA4499","#117733","#882255","#88CCEE","#DDCC77"], KEY_OTHER="#7a756c";
+var catOrder=[], themeOrder=[];
+DATA.forEach(function(r){
+  var c=splitTags(r.c)[0]; if(c && catOrder.indexOf(c)<0) catOrder.push(c);
+  var t=splitTags(r.t)[0]; if(t && themeOrder.indexOf(t)<0) themeOrder.push(t);
+});
+function catColor(r){ var c=splitTags(r.c)[0]; var i=catOrder.indexOf(c); return i<0||i>=8?KEY_OTHER:KEY_COLORS[i]; }
+function themeColor(r){ var t=splitTags(r.t)[0]; var i=themeOrder.indexOf(t); return i<0||i>=8?KEY_OTHER:KEY_COLORS[i]; }
+var NS='http://www.w3.org/2000/svg';
+function E(n,a){ var e=document.createElementNS(NS,n); for(var k in a) e.setAttribute(k,a[k]); return e; }
+/* faint street texture, seeded so it never shifts */
+function seeded(s){ return function(){ s=(s*1664525+1013904223)>>>0; return s/4294967296; }; }
+var svg=E('svg',{viewBox:'0 0 '+W+' '+H,role:'img','aria-label':'Pretend map of the 66 Bengaluru places'});
+document.getElementById('mapwrap').insertBefore(svg, document.getElementById('tip'));
+(function(){
+  var rnd=seeded(7), g=E('g',{stroke:'#e2dcc9','stroke-width':'2',fill:'none'});
+  for(var i=0;i<26;i++){
+    var x1=rnd()*W, y1=rnd()*H, dx=(rnd()-0.5)*W*0.9, dy=(rnd()-0.5)*H*0.6;
+    g.appendChild(E('path',{d:'M'+x1.toFixed(0)+' '+y1.toFixed(0)+' q '+(dx/2).toFixed(0)+' '+(dy/3).toFixed(0)+' '+dx.toFixed(0)+' '+dy.toFixed(0)}));
+  }
+  svg.appendChild(g);
+})();
+var pinEls=[];
+DATA.forEach(function(r,i){
+  var p=px(r), g=E('g',{'data-i':i,cursor:'pointer'});
+  g.appendChild(E('circle',{cx:p.x,cy:p.y,r:7,fill:catColor(r),stroke:'#fbf9f2','stroke-width':'1.8'}));
+  if(splitTags(r.t)[0]){  /* the theme badge the map already wears */
+    g.appendChild(E('rect',{x:p.x+5.5,y:p.y-11,width:6.5,height:6.5,fill:themeColor(r),stroke:'#fbf9f2','stroke-width':'1.2'}));
+  }
+  svg.appendChild(g); pinEls.push(g);
+});
+
+/* hover: name + the place's own noticings */
+var tip=document.getElementById('tip'), wrap=document.getElementById('mapwrap');
+svg.addEventListener('mousemove',function(ev){
+  var g=ev.target.closest('g[data-i]');
+  if(!g){ tip.style.display='none'; return; }
+  var r=DATA[+g.getAttribute('data-i')];
+  tip.innerHTML='<b>'+esc(r.d||'(no name)')+'</b><span class="tags">'+esc(splitTags(r.l).join(' · '))+'</span>';
+  var box=wrap.getBoundingClientRect();
+  tip.style.display='block';
+  tip.style.left=Math.min(ev.clientX-box.left+14, box.width-280)+'px';
+  tip.style.top=(ev.clientY-box.top+14)+'px';
+});
+svg.addEventListener('mouseleave',function(){ tip.style.display='none'; });
+
+/* ---------- search wiring: one control, chips just type into it ---------- */
+var qEl=document.getElementById('q'), countEl=document.getElementById('count');
+function paint(){
+  var hits=matchesOf(qEl.value);
+  pinEls.forEach(function(g,i){ g.style.display = (hits===null || hits.indexOf(i)>=0) ? '' : 'none'; });
+  if(hits===null){ countEl.hidden=true; countEl.textContent=''; }
+  else{ countEl.hidden=false;
+        countEl.textContent = hits.length ? hits.length+' of '+DATA.length+' shown' : 'nothing matched — try another word'; }
+  paintStrip();
+}
+qEl.addEventListener('input',paint);
+qEl.addEventListener('search',paint);
+
+/* ---------- the chips row ---------- */
+var strip=document.getElementById('strip');
+function paintStrip(){
+  strip.innerHTML='';
+  var active=qEl.value.trim().toLowerCase();
+  keptChips.forEach(function(t){
+    var b=document.createElement('button');
+    b.type='button'; b.textContent=t;
+    b.setAttribute('aria-pressed', active===t ? 'true':'false');
+    b.onclick=function(){
+      if(qEl.value.trim().toLowerCase()===t){ qEl.value=''; } else { qEl.value=t; }
+      paint();
+    };
+    strip.appendChild(b);
+  });
+  strip.hidden = !keptChips.length || document.getElementById('emptylayer').checked;
+}
+
+/* ---------- the picking step ---------- */
+var suggEl=document.getElementById('sugg'), slotsEl=document.getElementById('slots'), msgEl=document.getElementById('pickmsg');
+function say(m){ msgEl.textContent=m||''; }
+function keep(t){
+  if(keptChips.indexOf(t)>=0){ say('“'+t+'” is already in the row.'); return false; }
+  if(keptChips.length>=CAP){ say('The row is full — untick one of the '+CAP+' first.'); return false; }
+  keptChips.push(t); say(''); syncPicker(); paintStrip(); return true;
+}
+function unkeep(t){
+  var i=keptChips.indexOf(t); if(i<0) return;
+  keptChips.splice(i,1);
+  if(qEl.value.trim().toLowerCase()===t){ qEl.value=''; paint(); }
+  say(''); syncPicker(); paintStrip();
+}
+function syncPicker(){
+  slotsEl.innerHTML = keptChips.length ? '<b>'+keptChips.length+'</b> kept'+(keptChips.length>=CAP?' — full':'') : 'none kept — the row disappears';
+  suggEl.innerHTML='';
+  var listed={};
+  SUGGESTED.forEach(function(c){ listed[c.t]=1; });
+  /* suggestions first, then anything the owner added by hand */
+  var showRows = SUGGESTED.map(function(c){ return c.t; }).concat(keptChips.filter(function(t){ return !listed[t]; }));
+  showRows.forEach(function(t){
+    var lab=document.createElement('label');
+    var on=keptChips.indexOf(t)>=0;
+    lab.innerHTML='<input type="checkbox"'+(on?' checked':'')+'> '+esc(t)+' <span class="n">'+LIT[t]+'</span>';
+    lab.title=LIT[t]+' place'+(LIT[t]===1?'':'s')+' lit by the word-match alone — matching by meaning on the live atlas may add more';
+    lab.querySelector('input').onchange=function(){ this.checked ? (keep(t)||(this.checked=false)) : unkeep(t); };
+    suggEl.appendChild(lab);
+  });
+}
+document.getElementById('addinp').addEventListener('change',function(){
+  var t=this.value.trim().toLowerCase();
+  if(!t) return;
+  if(!(t in OCC)){ say('“'+t+'” isn’t a noticing anyone wrote on this layer.'); return; }
+  if(keep(t)) this.value='';
+});
+var dl=document.getElementById('alltags');
+Object.keys(OCC).sort().forEach(function(t){ var o=document.createElement('option'); o.value=t; dl.appendChild(o); });
+var gemrow=document.getElementById('gemrow');
+GEMS.forEach(function(t){
+  if(!(t in OCC)) return;
+  var b=document.createElement('button'); b.type='button';
+  b.textContent=t+' ('+LIT[t]+')';
+  b.onclick=function(){ keep(t); };
+  gemrow.appendChild(b);
+});
+document.getElementById('emptylayer').addEventListener('change',function(){
+  if(this.checked && qEl.value){ qEl.value=''; paint(); }
+  paintStrip();
+});
+
+/* the note under the map states the measured facts it demonstrates */
+document.getElementById('mapnote').textContent =
+  'Measured on this data: 273 of 335 noticings light exactly one place by word-match; the widest honest chip ('+
+  SUGGESTED[0].t+') lights '+SUGGESTED[0].lit+'. Chips are invitations, not filters — the big slices belong to the keys the pins already wear.';
+
+syncPicker(); paint();
+</script>
+</body>
+</html>
