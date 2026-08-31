@@ -295,6 +295,13 @@
         buildLayers().then(function () {
           wirePopups();
           syncSearchBox();   // the data is in: keep the search box only if it has text to search
+          /* Draw every layer's row again now the data is in. The panel is built
+             before the files land, so anything that depends on what a layer
+             actually contains — the owner's doors most of all — has nothing to
+             go on the first time round. initLayerKeys re-draws the rows it
+             touches, but it bails early on a layer with no key-shaped column,
+             and that layer is exactly the one whose door matters most. */
+          (MANIFEST.layers || []).forEach(function (L) { if (L._extra) renderExtra(L); });
           if (!focusFit()) fitToData(false);
           renderMapAttrib(); // re-run once layer sources (e.g. labels) are added
           /* And once more when the style is genuinely up. A basemap given as a
@@ -3271,6 +3278,16 @@
       box.appendChild(wrap);
     }
 
+    /* The owner's tools hang their per-layer doors here. renderExtra empties the
+       box on every toggle and every reboot, so a door added once would vanish the
+       first time someone switched the layer off and on — it has to be re-offered
+       each time the row is drawn. */
+    layerExtraHooks.forEach(function (fn) {
+      // a door that throws must say so: swallowed silently it looks exactly like
+      // a door that decided not to appear, which is a bug you cannot see
+      try { fn(L, box); } catch (e) { console.error("Atlas: a layer door failed —", e && e.message, e); }
+    });
+
     refreshLegend(L);
   }
 
@@ -3635,6 +3652,7 @@
   ================================================================== */
 
   var controlsHooks = [];
+  var layerExtraHooks = [];
 
   /* Draw a DIFFERENT dataset into this same page, keeping the page itself.
 
@@ -3678,6 +3696,13 @@
        reboot. The owner's tools add their rows to the panel that is already
        here rather than drawing a panel of their own, so "layers" can never
        mean two different things in two places again. */
+    onLayerExtra: function (fn) {
+      layerExtraHooks.push(fn);
+      // catch the rows already on screen when the tools arrive
+      (MANIFEST && MANIFEST.layers || []).forEach(function (L) {
+        if (L._extra) { try { fn(L, L._extra); } catch (e) { console.error("Atlas: a layer door failed —", e && e.message, e); } }
+      });
+    },
     onControlsBuilt: function (fn) {
       controlsHooks.push(fn);
       if (MANIFEST) { try { fn(); } catch (e) { console.error("Atlas owner hook error:", e && e.message); } }
@@ -3689,6 +3714,16 @@
        second time. After a reboot this answers for the draft, which is exactly
        what the preview needs. */
     fileUrl: function (name) { return dataUrl(name); },
+    // the owner's tools need a layer's loaded places to know what it already
+    // carries — without this the door would have to fetch the file twice
+    dataFor: function (id) { return DATA[id] || null; },
+    /* Draw every layer's row again. The owner's tools need this because who may
+       change which layer arrives from the server after the panel is already on
+       screen — without it a door that was refused at registration, for want of
+       an answer that had not come back yet, would never be offered again. */
+    redrawLayerRows: function () {
+      (MANIFEST && MANIFEST.layers || []).forEach(function (L) { if (L._extra) renderExtra(L); });
+    },
     reboot: reboot,
   };
 

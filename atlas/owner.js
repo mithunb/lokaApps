@@ -43,6 +43,15 @@
     });
   }
   function errMsg(e) { return (e && (e.error || e.message)) || "something went wrong"; }
+  // same shape as the viewer's helper, so the door reads the same in both files.
+  // NOTE: the third argument is innerHTML — anything from the data must be esc()'d.
+  var el = function (tag, cls, html) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (html != null) e.innerHTML = html;
+    return e;
+  };
+
   function esc(v) {
     return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;")
       .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -136,6 +145,219 @@
 
   /* ================= mounting ================= */
 
+  /* ---- Discover underlying patterns, on the layer's own row ---------------
+     This used to sit inside Change, where nobody would look for it: Change
+     reads as "adjust what is here", not "find out something new". It belongs
+     on the panel beside the layer it acts on, under the switches it creates,
+     because that is where its result lands.
+
+     Found once, and that is the end of it. There is no "read again": reading
+     a second time does not sharpen the patterns, it replaces them with
+     different ones, so the key a reader learned disappears. Four different
+     readings of the same 66 places are sitting on disk to prove it. Offering
+     that choice would be asking a question we already know the answer to.
+
+     The loop runs on endpoints that already exist: the layer's own file gives
+     the rows, /layers/enrich proposes, keeping sends the table back with one
+     new column and commits it in place. The column is the point — once it is
+     in the data the viewer offers it as a key of its own accord. */
+
+  // the columns worth reading: words people wrote, not ids, links or coordinates
+  /* Which columns hold words worth reading. Judged by counting, not by name, so
+     it works on data whose columns are called anything.
+
+     A column is thrown out when every place's entry is different AND none of
+     them contains a space: that is an identifier or a timestamp, not writing.
+     It cannot group anything and it cannot be read for meaning, yet it used to
+     be sent and paid for — a place's text arrived at the model beginning with
+     its own id string. Pictures go for the same reason: a link is not words. */
+  function wordColumns(feats) {
+    var props = (feats[0] && feats[0].properties) || {};
+    return Object.keys(props).filter(function (k) {
+      if (k.charAt(0) === "_" || k === "themes") return false;
+      if (/^(lat|latitude|lon|lng|long|longitude)$/i.test(k)) return false;
+      var seen = {}, n = 0, spaced = 0, filled = 0;
+      for (var i = 0; i < feats.length; i++) {
+        var v = (feats[i].properties || {})[k];
+        if (typeof v !== "string") continue;
+        v = v.trim();
+        if (!v) continue;
+        if (/^https?:\/\//i.test(v)) return false;      // a link, not words
+        filled++;
+        if (v.indexOf(" ") >= 0) spaced++;
+        if (!seen[v]) { seen[v] = 1; n++; }
+      }
+      if (!filled) return false;
+      return !(n === filled && spaced === 0);          // all different, none spaced -> an id
+    });
+  }
+
+  function patternsDoor(L, box) {
+    if (!L || L.type !== "marker" || !L.userLayer) return;
+    if (!MINE.some(function (m) { return m.id === L.id; })) return;   // not yours to change
+    var gj = window.LokaAtlas.dataFor && window.LokaAtlas.dataFor(L.id);
+    var feats = (gj && gj.features) || [];
+    if (!feats.length) return;
+
+    var wrap = el("div", "own-door");
+    box.appendChild(wrap);
+
+    var kinds = {};
+    feats.forEach(function (f) {
+      var v = (f.properties || {}).themes;
+      if (v && String(v).trim()) kinds[String(v).trim()] = 1;
+    });
+    var n = Object.keys(kinds).length;
+    if (n >= 2) {                        // found already — say so, offer nothing
+      wrap.appendChild(el("span", "own-door-said",
+        "Patterns found — " + n + " kinds, colouring this map."));
+      return;
+    }
+
+    var cols = wordColumns(feats);
+    if (!cols.length) return;            // nothing written here to read
+
+    var link = el("button", "own-door-link", "Discover underlying patterns");
+    link.type = "button";
+    var panel = el("div", "own-door-body");
+    panel.hidden = true;
+    wrap.appendChild(link);
+    wrap.appendChild(panel);
+
+    link.onclick = function () {
+      if (!panel.hidden) { panel.hidden = true; return; }
+      panel.hidden = false;
+      if (panel.childNodes.length) return;      // already built
+      panel.appendChild(el("p", "own-note",
+        "We read what people wrote about all " + feats.length + " places here and look for " +
+        "the few patterns running through them. They arrive as one new key you can keep or " +
+        "discard — what you uploaded is never changed."));
+      panel.appendChild(el("p", "own-note own-door-cost",
+        "Reads " + esc(cols.slice(0, 3).join(", ")) + " · about half a minute · costs one reading"));
+      var go = el("button", "share-btn", "Read the places");
+      go.type = "button";
+      panel.appendChild(go);
+      var msg = el("p", "own-note");
+      msg.hidden = true;
+      panel.appendChild(msg);
+      function say(t, warn) {
+        msg.hidden = !t; msg.textContent = t || "";
+        msg.classList.toggle("warnish", !!warn);
+      }
+
+      go.onclick = function () {
+        go.disabled = true;
+        say("Reading every place…");
+        fetch(window.LokaAtlas.fileUrl(L.source))
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            var rows = (d.features || []).map(function (f) { return f.properties || {}; });
+            return api("layers/enrich", { method: "POST", body: {
+              dataset: SLUG, rows: rows, fields: cols,
+              title: (window.LokaAtlas.manifest && window.LokaAtlas.manifest.title) || "",
+            } }).then(function (r) { return { r: r, rows: rows }; });
+          })
+          .then(function (out) {
+            if (out.r.verdict !== "themes" || !(out.r.counts || []).length) {
+              say(out.r.verdict === "no_clear_themes"
+                ? "No clear patterns here" + (out.r.note ? ": " + out.r.note : ".") + " Nothing was added."
+                : "No patterns could be found just now. Nothing was added.", true);
+              go.disabled = false;
+              return;
+            }
+            say("");
+            offerPatterns(L, panel, out.r, out.rows, go);
+          })
+          .catch(function (e) { go.disabled = false; say(errMsg(e), true); });
+      };
+    };
+  }
+
+  /* The chips, the name, and the two verbs. The name matters: a key otherwise
+     wears the raw column name — "themes" — which says how it was made rather
+     than what it holds. */
+  function offerPatterns(L, panel, r, rows, go) {
+    go.hidden = true;
+    var offer = el("div", "own-door-offer");
+    panel.appendChild(offer);
+
+    var chips = el("div", "own-th-chips");
+    (r.counts || []).forEach(function (c) {
+      var chip = el("span", "own-th-chip");
+      chip.innerHTML = esc(c.name) + " <b>" + c.n + "</b>";
+      chips.appendChild(chip);
+    });
+    if (r.other) {
+      var o = el("span", "own-th-chip other");
+      o.innerHTML = "other <b>" + r.other + "</b>";
+      chips.appendChild(o);
+    }
+    offer.appendChild(chips);
+
+    var lab = el("label", "own-fld", "Call this key");
+    var input = el("input");
+    input.type = "text"; input.maxLength = 40;
+    input.placeholder = "What these places are";
+    lab.appendChild(input);
+    lab.appendChild(el("span", "own-note", "The words above the switch a reader turns on."));
+    offer.appendChild(lab);
+
+    var row = el("div", "own-row own-row-tight");
+    var keep = el("button", "share-btn primary", "Keep these patterns");
+    var drop = el("button", "share-btn", "Discard");
+    keep.type = drop.type = "button";
+    row.appendChild(keep); row.appendChild(drop);
+    offer.appendChild(row);
+    var note = el("p", "own-note", "Nothing is added until you keep them.");
+    offer.appendChild(note);
+
+    drop.onclick = function () { offer.remove(); go.hidden = false; go.disabled = false; };
+
+    keep.onclick = function () {
+      keep.disabled = drop.disabled = true;
+      note.classList.remove("warnish");
+      note.textContent = "Adding them to the map…";
+      var out = rows.map(function (p, i) {
+        var o = Object.assign({}, p);
+        delete o._category;                 // the engine's own, re-derived on build
+        o.themes = (r.categories && r.categories[i]) || "";
+        return o;
+      });
+      if (!out.some(function (x) { return x.themes; })) {
+        note.textContent = "The patterns came back empty, so nothing was added.";
+        keep.disabled = drop.disabled = false;
+        return;
+      }
+      var names = Object.keys(out[0] || {});
+      api("layers/ingest", { method: "POST", body: {
+        dataset: SLUG, replaceLayerId: L.id, filename: L.label || L.id,
+        schema: names.map(function (nm) {
+          return { name: nm, type: (nm === "latitude" || nm === "longitude") ? "number" : "string" };
+        }),
+        rows: out,
+        keyLabels: { themes: (input.value || "").trim() },
+        meta: { sourceName: L.source, rowCount: out.length },
+      } })
+        .then(function (ing) {
+          return api("layers/commit", { method: "POST", body: { importId: ing.importId, dataset: SLUG } });
+        })
+        .then(function () {
+          toast("Patterns added — the atlas can be coloured by them now.");
+          // the column is on the server, but this page still holds the copy it
+          // loaded, and which columns may become a key is worked out once as a
+          // layer's data arrives — so the map has to read the layer again
+          return preview(SLUG).then(refreshLayers).then(function () {
+            if (window.LokaAtlas.reboot) window.LokaAtlas.reboot(SLUG);
+          });
+        })
+        .catch(function (e) {
+          keep.disabled = drop.disabled = false;
+          note.textContent = errMsg(e);
+          note.classList.add("warnish");
+        });
+    };
+  }
+
   function mount(inst) {
     if (MOUNTED) return;
     MOUNTED = true;
@@ -146,6 +368,8 @@
     // the panel is the viewer's and gets rebuilt on every draft preview, so the
     // owner's additions to it are re-applied each time rather than once
     window.LokaAtlas.onControlsBuilt(augmentPanel);
+    // and a door on every layer row the signed-in person may change
+    window.LokaAtlas.onLayerExtra(patternsDoor);
     refreshLayers();
     if (/(^|[?&])added=1/.test(location.search)) {
       toast("Layer added — it is on the map now");
@@ -162,7 +386,12 @@
     return api("layers/list?dataset=" + encodeURIComponent(SLUG))
       .then(function (r) { MINE = (r && r.layers) || []; })
       .catch(function () { MINE = []; })
-      .then(augmentPanel);
+      .then(augmentPanel)
+      // who may change what has only just arrived from the server; the layer
+      // doors were refused before it did, so offer them again now
+      .then(function () {
+        if (window.LokaAtlas.redrawLayerRows) window.LokaAtlas.redrawLayerRows();
+      });
   }
   function mineFor(id) {
     for (var i = 0; i < MINE.length; i++) if (MINE[i].id === id) return MINE[i];
@@ -440,52 +669,6 @@
             '<select id="own-f-title"></select>' +
             '<span class="own-note">The name shown when someone points at or opens a place.</span>' +
           "</label>" +
-          /* Themes used to be asked for in the wizard, over a table of rows.
-             They belong here: a theme is a claim about what these places ARE,
-             and the only honest way to judge one is to watch it colour the map
-             you are looking at. */
-          '<div class="own-themes" id="own-themes">' +
-            '<div class="own-group">Discover underlying patterns</div>' +
-            /* Already found once: say so, and never offer a second reading as
-               though it were free. Reading again does not refine the patterns —
-               it replaces them with different ones, so the key readers learned
-               disappears. Both costs are named before the button. */
-            '<div id="own-th-have" hidden>' +
-              '<p class="own-note" id="own-th-have-msg"></p>' +
-              '<button class="share-btn quiet" id="own-th-again" type="button">Read them again…</button>' +
-              '<div id="own-th-again-warn" hidden>' +
-                '<p class="own-note own-th-warn">Reading again does not sharpen what is here — it ' +
-                  'replaces it. The patterns below go, different ones take their place, and anyone ' +
-                  'who learned this key sees a new one. It costs another reading of every place.</p>' +
-                '<div class="own-row own-row-tight">' +
-                  '<button class="share-btn" id="own-th-again-yes" type="button">Read again anyway</button>' +
-                  '<button class="share-btn" id="own-th-again-no" type="button">Keep what I have</button>' +
-                "</div>" +
-              "</div>" +
-            "</div>" +
-            '<div id="own-th-none">' +
-              '<p class="own-note">We read the words your places carry and look for the patterns ' +
-                'running through them. They arrive as one new column you can keep or discard — ' +
-                'what you uploaded is never changed.</p>' +
-              '<button class="share-btn" id="own-th-go" type="button">Discover underlying patterns</button>' +
-            "</div>" +
-            '<p class="own-note" id="own-th-msg" hidden></p>' +
-            '<div id="own-th-offer" hidden>' +
-              '<div class="own-th-chips" id="own-th-chips"></div>' +
-              /* The key wears whatever this says. Left as it is, readers saw the
-                 raw column name — "themes" — which describes how it was made,
-                 not what it holds. */
-              '<label class="own-fld" for="own-th-name">Call this key' +
-                '<input type="text" id="own-th-name" maxlength="40" placeholder="What these places are" />' +
-                '<span class="own-note">The words above the switch a reader turns on.</span>' +
-              "</label>" +
-              '<div class="own-row own-row-tight">' +
-                '<button class="share-btn primary" id="own-th-keep" type="button">Keep these patterns</button>' +
-                '<button class="share-btn" id="own-th-drop" type="button">Discard</button>' +
-              "</div>" +
-              '<p class="own-note">Nothing is added until you keep them.</p>' +
-            "</div>" +
-          "</div>" +
           '<div class="own-remove">' +
             '<button class="own-linkish" id="own-rm-link" type="button">Remove this layer from the atlas…</button>' +
             '<div class="own-confirm" id="own-rm-confirm" hidden>' +
@@ -733,7 +916,6 @@
     renderPalette();
     renderSwatches();
     syncOneColour();
-    renderThemesState();
     var wt = $("#own-w-title");
     if (ED.titleCols.length && ED.cur.titleBy) {
       var topts = ED.titleCols.map(function (n) { return { value: n, label: n }; });
@@ -745,29 +927,6 @@
     } else {
       wt.hidden = true;
     }
-  }
-
-  /* Patterns are found once and recorded. A layer that already carries them
-     says so and offers only a deliberate re-reading; a layer that does not gets
-     the plain offer. Without this the same button sat there afterwards looking
-     free, and pressing it paid for a full reading of every place again. */
-  function themesProfile() {
-    return (ED && ED.profiles || []).filter(function (p) { return p.name === "themes"; })[0] || null;
-  }
-  function renderThemesState() {
-    var have = $("#own-th-have"), none = $("#own-th-none");
-    if (!have || !none) return;
-    var p = themesProfile();
-    var kinds = p && Number(p.kinds || 0);
-    if (p && kinds >= 2) {
-      $("#own-th-have-msg").textContent =
-        "Patterns were found for this layer already — " + kinds +
-        (kinds === 1 ? " kind" : " kinds") + ", and the map can be coloured by them now.";
-      have.hidden = false; none.hidden = true;
-    } else {
-      have.hidden = true; none.hidden = false;
-    }
-    $("#own-th-again-warn").hidden = true;
   }
 
   function renderPalette() {
@@ -1167,156 +1326,7 @@
     $("#own-save-btn").onclick = saveChanges;
     $("#own-discard-btn").onclick = discardChanges;
 
-    /* ---- Discover underlying patterns, on the layer you are looking at -----
-       The whole loop runs on endpoints that already exist. The layer's own file
-       supplies the rows; /layers/enrich proposes the themes; keeping them sends
-       the table back with one new column and commits it in place, which is
-       exactly what the add-data bench does minus the upload.
 
-       The column is the point: once it is in the data the viewer offers it as a
-       key of its own accord — no wiring here decides that. */
-    var TH = null;   // the proposal awaiting a decision
-
-    function thMsg(text, warn) {
-      var n = $("#own-th-msg");
-      n.hidden = !text;
-      n.textContent = text || "";
-      n.classList.toggle("warnish", !!warn);
-    }
-
-    // the columns worth reading: words people wrote, not ids or coordinates
-    function thFields() {
-      return (ED.profiles || []).filter(function (p) {
-        return p.type === "string" && !p.looksLikeImage && p.name.charAt(0) !== "_" &&
-          !/^(lat|latitude|lon|lng|long|longitude)$/i.test(p.name) && p.name !== "themes";
-      }).map(function (p) { return p.name; });
-    }
-
-    $("#own-th-go").onclick = function () {
-      if (!ED || !ED.ready || ED.busy) return;
-      var fields = thFields();
-      if (!fields.length) { thMsg("There is no written description or tags here to read.", true); return; }
-      var btn = this, lid = ED.layerId;
-      btn.disabled = true;
-      $("#own-th-offer").hidden = true;
-      thMsg("Reading every place…");
-      // the layer's own file, from wherever the viewer reads it
-      fetch(window.LokaAtlas.fileUrl(ED.stanza.source))
-        .then(function (r) { if (!r.ok) throw new Error("the layer's data could not be read"); return r.json(); })
-        .then(function (gj) {
-          var rows = (gj.features || []).map(function (f) { return f.properties || {}; });
-          return api("layers/enrich", { method: "POST", body: { dataset: SLUG, fields: fields, rows: rows } });
-        })
-        .then(function (r) {
-          if (!ED || ED.layerId !== lid) return;
-          btn.disabled = false;
-          if (r.verdict !== "themes" || !(r.counts || []).length) {
-            thMsg(r.verdict === "no_clear_themes"
-              ? "No clear themes here" + (r.note ? ": " + r.note : ".") + " Nothing was added."
-              : "No themes could be found just now. Nothing was added.", true);
-            return;
-          }
-          TH = r;
-          thMsg("");
-          var chips = $("#own-th-chips");
-          chips.innerHTML = "";
-          r.counts.forEach(function (c) {
-            var el2 = document.createElement("span");
-            el2.className = "own-th-chip";
-            if (c.definition) el2.title = c.definition;
-            el2.innerHTML = esc(c.name) + " <b>" + c.count + "</b>";
-            chips.appendChild(el2);
-          });
-          if (r.other) {
-            var o = document.createElement("span");
-            o.className = "own-th-chip other";
-            o.textContent = r.other + " fitted none";
-            chips.appendChild(o);
-          }
-          $("#own-th-offer").hidden = false;
-        })
-        .catch(function (e) {
-          if (!ED || ED.layerId !== lid) return;
-          btn.disabled = false;
-          thMsg(errMsg(e), true);
-        });
-    };
-
-    // the deliberate second reading: warn, then let them through or back out
-    $("#own-th-again").onclick = function () { $("#own-th-again-warn").hidden = false; };
-    $("#own-th-again-no").onclick = function () { $("#own-th-again-warn").hidden = true; };
-    $("#own-th-again-yes").onclick = function () {
-      $("#own-th-again-warn").hidden = true;
-      $("#own-th-have").hidden = true;
-      $("#own-th-none").hidden = false;
-      $("#own-th-go").click();
-    };
-
-    $("#own-th-drop").onclick = function () {
-      TH = null;
-      $("#own-th-offer").hidden = true;
-      thMsg("Discarded — nothing was added.");
-    };
-
-    $("#own-th-keep").onclick = function () {
-      if (!TH || !ED || ED.busy) return;
-      var lid = ED.layerId, keep = this, drop = $("#own-th-drop");
-      keep.disabled = drop.disabled = true;
-      thMsg("Adding the themes to the map…");
-      fetch(window.LokaAtlas.fileUrl(ED.stanza.source))
-        .then(function (r) { return r.json(); })
-        .then(function (gj) {
-          var feats = gj.features || [];
-          // one NEW column; everything the layer already carries is untouched
-          var rows = feats.map(function (f, i) {
-            var o = Object.assign({}, f.properties || {});
-            delete o._category;                       // the engine's own, re-derived on build
-            o.themes = (TH.categories && TH.categories[i]) || "";
-            return o;
-          });
-          var names = Object.keys(rows[0] || {});
-          if (!rows.some(function (r2) { return r2.themes; })) {
-            throw new Error("the themes came back empty, so nothing was added");
-          }
-          return api("layers/ingest", { method: "POST", body: {
-            dataset: SLUG,
-            // the same layer with one column more, not a second copy of it
-            replaceLayerId: lid,
-            filename: ED.stanza.label || lid,
-            schema: names.map(function (n) {
-              return { name: n, type: (n === "latitude" || n === "longitude") ? "number" : "string" };
-            }),
-            rows: rows,
-            // what the switch should say; blank falls back to the column name
-            keyLabels: { themes: (($("#own-th-name") || {}).value || "").trim() },
-            meta: { sourceName: ED.stanza.source, rowCount: rows.length },
-          } });
-        })
-        .then(function (ing) {
-          // the session already knows it is a replacement, so commit puts it back
-          // in place with its own id and its original contributor's credit
-          return api("layers/commit", { method: "POST", body: {
-            importId: ing.importId, dataset: SLUG,
-          } });
-        })
-        .then(function () {
-          TH = null;
-          $("#own-th-offer").hidden = true;
-          toast("Patterns added — the atlas can be coloured by them now.");
-          closeEdit(null);
-          /* Re-read the layer. The new column is on the server, but this page is
-             still showing the copy it loaded when it opened — and which columns
-             may become a key is worked out once, as the layer's data arrives. So
-             without this the themes were really added and the switch for them
-             could not appear until the person reloaded, which is indistinguishable
-             from nothing having happened. */
-          return preview(SLUG).then(refreshLayers);
-        })
-        .catch(function (e) {
-          keep.disabled = drop.disabled = false;
-          thMsg(errMsg(e), true);
-        });
-    };
 
     $("#own-rm-link").onclick = function () {
       if (!ED || !ED.ready) return;

@@ -500,6 +500,20 @@
       background:none; border:0; padding:0; cursor:pointer; text-align:left; }
     .label-index-go:hover { color:var(--color-canopy); text-decoration:underline; }
 
+    /* The owner's door on a layer's own row, beside the labels door. It reads as
+       the same kind of thing because it is: a way into what the places say. */
+    .own-door { margin:.35rem 0 .1rem; }
+    .own-door-link { font:inherit; font-size:.75rem; font-weight:600; color:var(--color-moss);
+      background:none; border:0; padding:0; cursor:pointer; text-align:left; }
+    .own-door-link:hover { color:var(--color-canopy); text-decoration:underline; }
+    .own-door-said { display:block; font-size:.72rem; color:var(--color-text-muted); }
+    .own-door-body { margin:.45rem 0 .2rem; padding:.55rem .6rem; border-radius:var(--radius-md);
+      background:var(--color-bg-alt); display:flex; flex-direction:column; gap:.45rem; }
+    .own-door-body .own-note { margin:0; font-size:.73rem; line-height:1.45; }
+    /* what it costs, said before the button rather than after */
+    .own-door-cost { color:var(--color-text-muted); font-variant-numeric:tabular-nums; }
+    .own-door-offer { display:flex; flex-direction:column; gap:.45rem; }
+
     .lx-scrim { position:fixed; inset:0; z-index:140; background:rgba(42,36,26,.34);
       display:grid; place-items:start center; padding:2.5rem 1rem; overflow-y:auto; }
     .lx-sheet { width:min(40rem,100%); background:var(--color-surface);
