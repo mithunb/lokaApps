@@ -3244,6 +3244,9 @@ router.post('/layers/enrich', async (req, res) => {
   try {
     const out = await enrich.enrichRows({
       rows, fields, title,
+      // questions mode asks what these places can be asked, rather than assuming
+      // the one question the old reading always asked
+      mode: b.mode === 'questions' ? 'questions' : undefined,
       seedSet: dataset ? keptCatSet(dataset) : [],
       callJSON,
       models: { flash: getFlashModel(), flashLite: getFlashLiteModel() },

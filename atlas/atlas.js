@@ -1217,13 +1217,23 @@
       }
       var named = 0;
       counts.forEach(function (c) { if (kept.indexOf(c.kind) >= 0) named += c.n; });
-      if (!committed && named / feats.length < 0.6) return;   // the named kinds must cover most places
+      /* A discovered question is offered whatever it reaches. The 60% rule is
+         right for a column somebody uploaded — a column that names a fifth of
+         the places is usually a column with a lot missing, and offering it as a
+         key would be offering a mostly-grey map with no explanation. A question
+         is different: it was asked of these places and this is the honest answer,
+         so it is offered with the share it can speak for written beside it. */
+      var isQuestion = /^pattern_\d+$/.test(col);
+      if (!committed && !isQuestion && named / feats.length < 0.6) return;
       /* A name the owner gave this key wins over the column's own name. The
          column is called "themes", which says how it was made rather than what
          it holds — and the switch lowercased it while the popup capitalised it,
          so a reader could meet "themes" and "Themes" in one sitting. */
       var given = L.keyLabels && L.keyLabels[col];
       opts.push({ col: col, label: given ? String(given) : prettyCol(col), delim: delim, committed: committed,
+        // what share of the places this key can actually speak for; shown beside
+        // a discovered question, whose whole point is that it may not reach all
+        reach: feats.length ? named / feats.length : 0, isQuestion: isQuestion,
                   kept: kept, hasOther: named < feats.length });
     });
     // committed key first; the rest keep the order the data carries them in
@@ -1661,6 +1671,12 @@
       lab.appendChild(cb);
       lab.appendChild(el("span", "ctl-switch small"));
       lab.appendChild(el("span", "key-tname", esc(opt.label)));
+      /* A question says what share of the places it can answer. Without it a
+         reader turns on "How old is it?" and meets a map that is mostly grey,
+         with nothing telling them that is the answer rather than a fault. */
+      if (opt.isQuestion) {
+        lab.appendChild(el("span", "key-reach", Math.round(opt.reach * 100) + "%"));
+      }
       cb.onchange = function () {
         var i = st.active.indexOf(opt.col);
         if (cb.checked && i < 0) {

@@ -174,7 +174,10 @@
   function wordColumns(feats) {
     var props = (feats[0] && feats[0].properties) || {};
     return Object.keys(props).filter(function (k) {
-      if (k.charAt(0) === "_" || k === "themes") return false;
+      // never read our own answers back in: a question's column is an answer,
+      // not evidence, and feeding it to the next reading would let one reading
+      // put words into the mouth of the next
+      if (k.charAt(0) === "_" || k === "themes" || /^pattern_\d+$/.test(k)) return false;
       if (/^(lat|latitude|lon|lng|long|longitude)$/i.test(k)) return false;
       var seen = {}, n = 0, spaced = 0, filled = 0;
       for (var i = 0; i < feats.length; i++) {
@@ -202,15 +205,16 @@
     var wrap = el("div", "own-door");
     box.appendChild(wrap);
 
-    var kinds = {};
-    feats.forEach(function (f) {
-      var v = (f.properties || {}).themes;
-      if (v && String(v).trim()) kinds[String(v).trim()] = 1;
-    });
-    var n = Object.keys(kinds).length;
-    if (n >= 2) {                        // found already — say so, offer nothing
+    /* Questions already answered? Then the door has done its work: each one is
+       a key in the list above, so there is nothing here to press. Their columns
+       are named pattern_1, pattern_2 …; the wording a reader sees comes from the
+       key name stored beside them. */
+    var done = Object.keys(feats[0].properties || {})
+      .filter(function (k) { return /^pattern_\d+$/.test(k); });
+    if (done.length) {
       wrap.appendChild(el("span", "own-door-said",
-        "Patterns found — " + n + " kinds, colouring this map."));
+        done.length + (done.length === 1 ? " question" : " questions") +
+        " answered for this layer — each one a key above."));
       return;
     }
 
@@ -253,109 +257,76 @@
           .then(function (d) {
             var rows = (d.features || []).map(function (f) { return f.properties || {}; });
             return api("layers/enrich", { method: "POST", body: {
-              dataset: SLUG, rows: rows, fields: cols,
+              dataset: SLUG, rows: rows, fields: cols, mode: "questions",
               title: (window.LokaAtlas.manifest && window.LokaAtlas.manifest.title) || "",
             } }).then(function (r) { return { r: r, rows: rows }; });
           })
           .then(function (out) {
-            if (out.r.verdict !== "themes" || !(out.r.counts || []).length) {
-              say(out.r.verdict === "no_clear_themes"
-                ? "No clear patterns here" + (out.r.note ? ": " + out.r.note : ".") + " Nothing was added."
-                : "No patterns could be found just now. Nothing was added.", true);
+            var qs = out.r.questions || [];
+            if (out.r.verdict !== "questions" || !qs.length) {
+              say(out.r.verdict === "no_clear_questions"
+                ? "These places do not clearly answer a question" +
+                  (out.r.note ? ": " + out.r.note : ".") + " Nothing was added."
+                : "No questions could be found just now. Nothing was added.", true);
               go.disabled = false;
               return;
             }
-            say("");
-            offerPatterns(L, panel, out.r, out.rows, go);
+            say("Adding " + qs.length + (qs.length === 1 ? " question" : " questions") + "…");
+            return keepQuestions(L, out.rows, qs).catch(function (e) {
+              go.disabled = false; say(errMsg(e), true);
+            });
           })
           .catch(function (e) { go.disabled = false; say(errMsg(e), true); });
       };
     };
   }
 
-  /* The chips, the name, and the two verbs. The name matters: a key otherwise
-     wears the raw column name — "themes" — which says how it was made rather
-     than what it holds. */
-  function offerPatterns(L, panel, r, rows, go) {
-    go.hidden = true;
-    var offer = el("div", "own-door-offer");
-    panel.appendChild(offer);
+  /* Every question is kept. There is no asking: the questions a place can answer
+     are universal, so the owner is not made to approve each one — they arrive as
+     keys, each carrying the share of places it can speak for, and any that is
+     not wanted is simply left switched off.
 
-    var chips = el("div", "own-th-chips");
-    (r.counts || []).forEach(function (c) {
-      var chip = el("span", "own-th-chip");
-      chip.innerHTML = esc(c.name) + " <b>" + c.n + "</b>";
-      chips.appendChild(chip);
+     One column per question, pattern_1, pattern_2 …, with the question itself
+     stored as the key's name so a reader meets "What can you do here?" rather
+     than a column named after how it was made. */
+  function keepQuestions(L, rows, questions) {
+    var labels = {};
+    var out = rows.map(function (p) {
+      var o = Object.assign({}, p);
+      delete o._category;                 // the engine's own, re-derived on build
+      return o;
     });
-    if (r.other) {
-      var o = el("span", "own-th-chip other");
-      o.innerHTML = "other <b>" + r.other + "</b>";
-      chips.appendChild(o);
-    }
-    offer.appendChild(chips);
-
-    var lab = el("label", "own-fld", "Call this key");
-    var input = el("input");
-    input.type = "text"; input.maxLength = 40;
-    input.placeholder = "What these places are";
-    lab.appendChild(input);
-    lab.appendChild(el("span", "own-note", "The words above the switch a reader turns on."));
-    offer.appendChild(lab);
-
-    var row = el("div", "own-row own-row-tight");
-    var keep = el("button", "share-btn primary", "Keep these patterns");
-    var drop = el("button", "share-btn", "Discard");
-    keep.type = drop.type = "button";
-    row.appendChild(keep); row.appendChild(drop);
-    offer.appendChild(row);
-    var note = el("p", "own-note", "Nothing is added until you keep them.");
-    offer.appendChild(note);
-
-    drop.onclick = function () { offer.remove(); go.hidden = false; go.disabled = false; };
-
-    keep.onclick = function () {
-      keep.disabled = drop.disabled = true;
-      note.classList.remove("warnish");
-      note.textContent = "Adding them to the map…";
-      var out = rows.map(function (p, i) {
-        var o = Object.assign({}, p);
-        delete o._category;                 // the engine's own, re-derived on build
-        o.themes = (r.categories && r.categories[i]) || "";
-        return o;
+    questions.forEach(function (q, n) {
+      var col = "pattern_" + (n + 1);
+      labels[col] = q.question;
+      (q.categories || []).forEach(function (c, i) {
+        if (out[i]) out[i][col] = c === "other" ? "" : (c || "");
       });
-      if (!out.some(function (x) { return x.themes; })) {
-        note.textContent = "The patterns came back empty, so nothing was added.";
-        keep.disabled = drop.disabled = false;
-        return;
-      }
-      var names = Object.keys(out[0] || {});
-      api("layers/ingest", { method: "POST", body: {
-        dataset: SLUG, replaceLayerId: L.id, filename: L.label || L.id,
-        schema: names.map(function (nm) {
-          return { name: nm, type: (nm === "latitude" || nm === "longitude") ? "number" : "string" };
-        }),
-        rows: out,
-        keyLabels: { themes: (input.value || "").trim() },
-        meta: { sourceName: L.source, rowCount: out.length },
-      } })
-        .then(function (ing) {
-          return api("layers/commit", { method: "POST", body: { importId: ing.importId, dataset: SLUG } });
-        })
-        .then(function () {
-          toast("Patterns added — the atlas can be coloured by them now.");
-          // the column is on the server, but this page still holds the copy it
-          // loaded, and which columns may become a key is worked out once as a
-          // layer's data arrives — so the map has to read the layer again
-          return preview(SLUG).then(refreshLayers).then(function () {
-            if (window.LokaAtlas.reboot) window.LokaAtlas.reboot(SLUG);
-          });
-        })
-        .catch(function (e) {
-          keep.disabled = drop.disabled = false;
-          note.textContent = errMsg(e);
-          note.classList.add("warnish");
+      out.forEach(function (o) { if (o[col] === undefined) o[col] = ""; });
+    });
+    var names = Object.keys(out[0] || {});
+    return api("layers/ingest", { method: "POST", body: {
+      dataset: SLUG, replaceLayerId: L.id, filename: L.label || L.id,
+      schema: names.map(function (nm) {
+        return { name: nm, type: (nm === "latitude" || nm === "longitude") ? "number" : "string" };
+      }),
+      rows: out,
+      keyLabels: labels,
+      meta: { sourceName: L.source, rowCount: out.length },
+    } })
+      .then(function (ing) {
+        return api("layers/commit", { method: "POST", body: { importId: ing.importId, dataset: SLUG } });
+      })
+      .then(function () {
+        toast(questions.length + (questions.length === 1 ? " question" : " questions") +
+              " added — the map can be coloured by any of them.");
+        // the columns are on the server; this page still holds the copy it
+        // loaded, and which columns may become a key is worked out once as a
+        // layer's data arrives — so the map has to read the layer again
+        return preview(SLUG).then(refreshLayers).then(function () {
+          if (window.LokaAtlas.reboot) window.LokaAtlas.reboot(SLUG);
         });
-    };
+      });
   }
 
   function mount(inst) {
