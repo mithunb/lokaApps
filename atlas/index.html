@@ -306,6 +306,7 @@
        moving anything, stacked in key order and centred on the pin's middle.
        A block that would cross the map's right edge gets .flip and sits to
        the left instead (updateRowFlips in atlas.js). */
+    .atlas-rowed.loc { height:28px; }   /* the taller pin; keyrows keep left:23px top:10px */
     .atlas-rowed { position:relative; width:20px; height:20px;
       transition:transform .18s cubic-bezier(.25,1,.5,1), filter .18s ease; }
     .atlas-rowed .atlas-pin { position:relative; }
@@ -366,6 +367,38 @@
       color:var(--pin,#AE5028); font-size:var(--t-label); line-height:1; display:flex; align-items:center; justify-content:center;
       box-shadow:0 1px 3px rgba(42,36,26,.32); transition:transform .18s cubic-bezier(.25,1,.5,1), box-shadow .18s ease; }
     .atlas-pin.ring { background:var(--pin,#AE5028); border-color:#fff; }
+
+    /* The standard location marker. A circle centred on a point never said which
+       pixel was the place; a pin's tip does — and the marker is already anchored at
+       its bottom edge, so the tip lands on the coordinate with nothing repositioned.
+       20 wide keeps every folding, fan and flip distance the same, since those are
+       all measured from the width.
+    
+       The colour is chosen for visibility over two very different grounds. Over the
+       street map the fill carries it: 8.0:1 on plain ground, 3.1:1 over its worst
+       case, tree-green. Over satellite every fill fails, and the white keyline and
+       heart carry it instead at 4-19:1 across vegetation and water. Which is why
+       Deoria's moss distillery pin still reads there on a dark garden ground where
+       its fill is invisible. */
+    .atlas-pin.loc {
+      width:20px; height:28px; border:0; border-radius:0; background:none; box-shadow:none;
+      color:var(--pin,#7C3616); position:relative; display:block;
+      filter:drop-shadow(0 1px 2px rgba(42,36,26,.45));
+      transform-origin:50% 100%;   /* it grows from its tip, so the place never moves */
+    }
+    .atlas-pin.loc .pin-body { width:20px; height:28px; display:block; }
+    .atlas-pin.loc .pin-heart {
+      position:absolute; left:50%; top:10px; transform:translate(-50%,-50%);
+      width:12px; height:12px; display:flex; align-items:center; justify-content:center;
+      color:#fff; pointer-events:none;
+    }
+    .atlas-pin.loc .pin-heart svg { width:12px; height:12px; display:block; }
+    @media (hover:hover){
+      .atlas-marker:hover .atlas-pin.loc {
+        transform:scale(1.12); box-shadow:none;
+        filter:drop-shadow(0 3px 6px rgba(42,36,26,.5));
+      }
+    }
     .atlas-pin.badge { background:var(--pin,#AE5028); color:#fff; font-size:9px; font-weight:700; }
     .atlas-pin.badge.pale, .leg-badge.pale { color:#2A241A; }   /* dark ink on pale fills */
     .atlas-pin svg { width:12px; height:12px; display:block; }
@@ -455,6 +488,9 @@
     .pop-title { font-family:'Figtree',sans-serif; font-weight:700; font-size:1.02rem; color:var(--color-text-primary); line-height:1.2; }
     .pop-sub { font-size:.78rem; text-transform:uppercase; letter-spacing:.08em; color:var(--color-moss); margin-top:.1rem; }
     .pop-field { margin-top:.6rem; }
+    /* Where this place came from — last, and quieter than the place itself. */
+    .pop-src { margin-top:.7rem; padding-top:.5rem; border-top:1px solid var(--color-border);
+      font-size:.72rem; color:var(--color-text-muted); }
     .pop-img { display:block; width:100%; max-height:180px; object-fit:cover; border-radius:4px; margin:.5rem 0 .1rem; }
     .pop-lbl { font-size:var(--t-label); text-transform:uppercase; letter-spacing:.06em; color:var(--color-text-muted); }
     .pop-val { font-size:.88rem; color:var(--color-text-primary); }

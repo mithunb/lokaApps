@@ -1025,15 +1025,21 @@
       // (true position), the node alone takes the spiderfy displacement — see
       // the SPIDERFY section below.
       var node = el("div", "atlas-mnode");
-      var pin = el("div", "atlas-pin" + (cfg.ring ? " ring" : ""));
-      pin.style.setProperty("--pin", cfg.color || "#f97316");
+      /* Every place now wears the standard location marker. `ring` and `glyph`
+         stop being read: a ring said which upload a place came from, which the
+         popup's Source row now says in words, and no contributed layer ever
+         declared a glyph. A declared icon still goes in the pin's head. */
+      /* A colour survives only where it tells two kinds apart. Deoria's sugar
+         mills and distilleries do that, so they keep sienna and moss; its survey
+         villages are all one kind, so their rust said nothing and they join every
+         other place at the one standard colour. */
+      var perKind = !!(L.markers && L.markerBy);
+      var pin = locPinEl((perKind && cfg.color) ? cfg.color : PIN_ONE, cfg.icon);
       // Explicit icons and glyphs are an atlas's own bespoke styling (deoria's
       // factory and flask) and stay exactly as declared. The DERIVED icon —
       // guessed from a kind's words on contributed layers — is retired: those
       // pins carry nothing inside, and the keys a layer can wear are drawn
       // beside the pin instead (see KEYS WEAR ROWS below).
-      if (cfg.icon && ICONS[cfg.icon]) pin.innerHTML = ICONS[cfg.icon];
-      else if (cfg.glyph) pin.textContent = cfg.glyph;
       node.appendChild(pin);
       if (L.label_text) node.appendChild(el("span", "atlas-mlabel", esc(f.properties[L.label_text.property])));
       wrap.appendChild(node);
@@ -1259,20 +1265,66 @@
     return out;
   }
 
+  /* One colour for every contributed place. The colour an owner used to pick
+     painted a 2px ring nobody could read, went missing the moment pins folded
+     into a group, and collided by default — two uploads in the only three-upload
+     atlas wore the same rust because neither had chosen. A colour that declares
+     a real difference still wins: Deoria's sugar mills and distilleries keep
+     sienna and moss, because there that colour IS the distinction. */
+  var PIN_ONE = "#7C3616";        // --color-rust-deep
   function oneColorOf(L) {
     if (L.marker && L.marker.color) return L.marker.color;
-    if (L.spec && ONE_COLORS[L.spec.markerColor]) return ONE_COLORS[L.spec.markerColor];
-    return ONE_COLORS.rust;
+    return PIN_ONE;
   }
 
   // The neutral pin: white body, thin border in the layer's one colour,
   // nothing inside. This is every keyed pin, keys on or off — the rows
   // beside it carry the answers.
-  function keyPinEl(color) {
-    var pin = el("div", "atlas-pin");
+  /* The standard location marker, drawn once. A round head 10px from the top and
+     a tip at the bottom middle: the tip is the place. The white keyline is not
+     decoration — over satellite it is the only thing that reads, because every
+     fill we could choose disappears into vegetation there. */
+  var PIN_PATH = "M10 27.4C10 27.4 19 16.2 19 10A9 9 0 1 0 1 10C1 16.2 10 27.4 10 27.4Z";
+  function pinBody() {
+    var ns = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 20 28");
+    svg.setAttribute("class", "pin-body");
+    svg.setAttribute("aria-hidden", "true");
+    var path = document.createElementNS(ns, "path");
+    path.setAttribute("d", PIN_PATH);
+    path.setAttribute("fill", "currentColor");
+    path.setAttribute("stroke", "#fff");
+    path.setAttribute("stroke-width", "2");
+    svg.appendChild(path);
+    return svg;
+  }
+  /* The head holds whatever the place has to say: a declared icon in white, or
+     failing that a plain white dot. Deoria's factory and flask live here — they
+     are the only thing separating a sugar mill from a distillery. */
+  function pinHeart(iconName) {
+    var heart = el("span", "pin-heart");
+    if (iconName && ICONS[iconName]) heart.innerHTML = ICONS[iconName];
+    else {
+      var ns = "http://www.w3.org/2000/svg";
+      var svg = document.createElementNS(ns, "svg");
+      svg.setAttribute("viewBox", "0 0 12 12");
+      svg.setAttribute("aria-hidden", "true");
+      var c = document.createElementNS(ns, "circle");
+      c.setAttribute("cx", "6"); c.setAttribute("cy", "6"); c.setAttribute("r", "3");
+      c.setAttribute("fill", "#fff");
+      svg.appendChild(c); heart.appendChild(svg);
+    }
+    return heart;
+  }
+  function locPinEl(color, iconName) {
+    var pin = el("div", "atlas-pin loc");
     pin.style.setProperty("--pin", color);
+    pin.appendChild(pinBody());
+    pin.appendChild(pinHeart(iconName));
     return pin;
   }
+  function keyPinEl(color) { return locPinEl(color, null); }
 
   /* The row marks: one shape per key — circles, squares, triangles,
      diamonds, bars, in the order the keys are offered. Solid fill, thin
@@ -1384,7 +1436,7 @@
       node.insertBefore(keyPinEl(oneColorOf(L)), node.firstChild);
       return;
     }
-    var holder = el("div", "atlas-rowed");
+    var holder = el("div", "atlas-rowed loc");
     holder.appendChild(keyPinEl(oneColorOf(L)));
     var block = el("div", "atlas-keyrows");
     var w = 0;
@@ -3409,6 +3461,9 @@
     var html = popupHTML(L, feature.properties);
     if (!html) return;
     var opts = { closeButton: true, maxWidth: "320px", className: "atlas-popup" };
+    // An un-fanned popup used to open with no offset, right on the pin — fine
+    // over a 20px circle, but the taller pin now sits under its own popup.
+    opts.offset = 30;
     // a spiderfied marker keeps its true lngLat plus a px displacement — the
     // popup takes the same displacement so it points at the pin the user
     // sees, and (fanned pins only) an anchor chosen to open away from the
@@ -3416,9 +3471,10 @@
     if (offsetPx) {
       var off = [offsetPx[0], offsetPx[1]];
       if (anchor) {
-        if (anchor.indexOf("bottom") === 0) off[1] -= 26;        // above the pin's head
+        // the pin is 28px tall now, not 20 — these clear its body
+        if (anchor.indexOf("bottom") === 0) off[1] -= 34;        // above the pin's head
         else if (anchor.indexOf("top") === 0) off[1] += 6;       // below its foot
-        else off[1] -= 12;                                       // beside its waist
+        else off[1] -= 20;                                       // beside its waist
         opts.anchor = anchor;
       }
       opts.offset = off;
@@ -3439,6 +3495,24 @@
     if (t == null) return "";
     t = String(t).trim();
     return (t && t !== "null" && t !== "undefined") ? t : "";
+  }
+
+  /* Three cases, in order of how much the upload can tell us: its own name; the
+     person who added it and when; or just when. Never the email — that belongs
+     to the owner's tools, not to every reader of the map. */
+  function sourceLine(L) {
+    if (!L || !L.userLayer) return "";
+    var by = L.addedBy || null;
+    var when = L.addedAt ? new Date(L.addedAt).toLocaleDateString("en-IN",
+      { day: "numeric", month: "short", year: "numeric" }) : "";
+    var name = String(L.label || "").trim();
+    var fileish = !name || name === L.id || /\.(csv|tsv|xlsx?|geojson|json)$/i.test(name);
+    if (!fileish) return name;
+    var who = by && (by.name || by.org) ? String(by.name || by.org).trim() : "";
+    if (who && when) return "Upload by " + who + ", " + when;
+    if (who) return "Upload by " + who;
+    if (when) return "Upload from " + when;
+    return "";
   }
 
   function popupHTML(L, props) {
@@ -3494,6 +3568,13 @@
           esc(v) + (fld.suffix || "") + "</div></div>";
       }
     });
+    /* Where this place came from, in words. The pin's ring used to hint at this
+       and could not be checked — the popup never named the upload, so a reader
+       who wondered had nowhere to look. Only contributed layers have an upload
+       to name; a curated atlas's own pins have none. */
+    var src = sourceLine(L);
+    if (src) h += '<div class="pop-src">Source · ' + esc(src) + "</div>";
+
     // A popup stanza can point at columns the data no longer carries — that
     // used to open a bare white box with nothing but a close button. If
     // nothing resolved, there is nothing to say: no popup at all.

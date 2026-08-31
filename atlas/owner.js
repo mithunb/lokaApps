@@ -700,6 +700,12 @@
     $("#own-f-name").value = ED.cur.name;
     $("#own-name-err").hidden = true;
     var wc = $("#own-w-colour"), mode = ED.mode || {};
+    /* A layer of places has no colour question left. Every pin wears the one
+       standard marker, and which column colours the map is the reader's own
+       choice through the key switches — the owner's pick only ever decided
+       which key came first. Shaded maps and drawn shapes keep their colour,
+       because there the colour is the content. */
+    if (mode.by === "cat") { wc.hidden = true; } else
     if (ED.colourable && mode.by === "cat") {
       $("#own-lbl-colour").textContent = mode.label;
       var opts = ED.catCols.map(function (p) {
@@ -811,7 +817,12 @@
   function syncOneColour() {
     if (!ED || !ED.cur) return;
     var mode = ED.mode || {};
-    var show = (ED.colourable && mode.by === "cat" && ED.cur.colourBy === "one") || !!mode.swatch;
+    /* The five swatches painted a 2px ring on a white circle and one dot in the
+       key — and from town height the ring vanished entirely, because a group of
+       pins folds into a disc that ignores it. A place now wears the one standard
+       marker. Drawn shapes keep their swatch: for a river or a boundary it is the
+       only dial there is, and it means something. */
+    var show = !!mode.swatch;
     $("#own-one-colour").hidden = !show;
     if (show) $("#own-one-lbl").textContent = mode.swatch || "Which colour";
   }
