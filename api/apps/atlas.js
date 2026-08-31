@@ -1598,14 +1598,53 @@ function requireDatasetEditor(req, res, datasetId) {
 
 const MAX_ROWS = 5000, MAX_COLS = 40;
 const geminiRate = new Map();
-function geminiAllowed(ip) {
+/* One request used to buy a single token at the door and then spend it as often
+   as it liked. The reading's filing step calls the model once per 40 rows, so a
+   5,000-row reading was 126 calls charged as one — about 3,780 calls an hour
+   from one address, and an address can be changed by moving networks.
+
+   Two things fix it. The budget is spent per CALL, inside the loop, so 126 calls
+   costs 126. And it is charged to the signed-in account where there is one,
+   because an account cannot be rotated the way an address can. An address is
+   still the fallback, and a stricter one, since it may stand for a whole office. */
+const AI_CALLS_PER_HOUR = 150;      // per signed-in account
+const AI_CALLS_PER_HOUR_IP = 40;    // per address, when nobody is signed in
+const AI_CALLS_PER_READING = 24;    // one reading may not exceed this
+
+function aiWho(req) {
+  const session = auth.sessionFromReq(req);
+  if (session && session.email) return { key: 'acct:' + session.email, cap: AI_CALLS_PER_HOUR };
+  return { key: 'ip:' + clientIp(req), cap: AI_CALLS_PER_HOUR_IP };
+}
+
+// take one call from this hour's budget; false when there is none left
+function aiTake(req) {
+  const who = aiWho(req);
   const now = Date.now();
-  const hits = (geminiRate.get(ip) || []).filter((t) => now - t < 3600 * 1000);
-  if (hits.length >= 30) return false;
+  const hits = (geminiRate.get(who.key) || []).filter((t) => now - t < 3600 * 1000);
+  if (hits.length >= who.cap) return false;
   hits.push(now);
-  geminiRate.set(ip, hits);
+  geminiRate.set(who.key, hits);
   return true;
 }
+
+/* A caller that pays its own way. Refusing by throwing is deliberate: every
+   place that uses it already treats a failed call as "no model for this batch"
+   and falls back to deterministic filing, so running out of budget degrades a
+   reading instead of breaking it, and never invents anything to fill the gap. */
+function aiCaller(req, perReading) {
+  const cap = perReading || AI_CALLS_PER_READING;
+  let spent = 0;
+  return function (model, prompt, schema, o) {
+    if (spent >= cap) throw new Error('this reading has used its share of the model');
+    if (!aiTake(req)) throw new Error('too many readings in the last hour — try again shortly');
+    spent += 1;
+    return (o && o.think) ? geminiJSONDeep(model, prompt, schema) : geminiJSON(model, prompt, schema);
+  };
+}
+
+// a single call, budgeted: for the one-shot uses that are not a whole reading
+function geminiAllowed(req) { return aiTake(req); }
 
 /* ---------- boundary discovery: joinable polygon layers in the dataset ---------- */
 
@@ -2277,7 +2316,7 @@ router.post('/layers/ingest', async (req, res) => {
   session.boundaryOptions = allOptions.map((o) => ({ id: o.id, label: o.label, group: o.group || '', count: o.count, exampleNames: (o.exampleNames || []).slice(0, 5) }));
 
   let inference = null;
-  if (ai && !b.manual && geminiAllowed(clientIp(req))) {
+  if (ai && !b.manual && geminiAllowed(req)) {
     try {
       const prompt = [
         'You are helping map a tabular dataset onto an interactive atlas. Infer its schema.',
@@ -2898,7 +2937,7 @@ router.post('/layers/search', async (req, res) => {
   // scoring RAN, not whether it hit — the useful fact when a curl of a thin
   // result has to distinguish "no vectors yet" from "floor filtered it all".
   let qv = null;
-  if (Object.keys(rowVecs).length && ai && geminiAllowed(clientIp(req))) {
+  if (Object.keys(rowVecs).length && ai && geminiAllowed(req)) {
     const got = await embedTexts([q]);           // embedTexts swallows its own errors
     if (got && got[0]) qv = got[0];
   }
@@ -3201,9 +3240,7 @@ router.post('/layers/enrich', async (req, res) => {
   // shipped junk and could never say "no clear themes", so it was removed.
   // Without AI nothing is invented — except filing into an owner-KEPT set,
   // which assignBySeed handles inside enrichRows.
-  const callJSON = (ai && geminiAllowed(clientIp(req)))
-    ? (model, prompt, schema, o) => (o && o.think ? geminiJSONDeep(model, prompt, schema) : geminiJSON(model, prompt, schema))
-    : null;
+  const callJSON = ai ? aiCaller(req) : null;
   try {
     const out = await enrich.enrichRows({
       rows, fields, title,
@@ -3269,7 +3306,7 @@ router.get('/layers/families', async (req, res) => {
     if (cached && cached.stamp === stamp) return res.json(cached.result);
   } catch { /* no cache yet */ }
 
-  if (!(ai && geminiAllowed(clientIp(req)))) {
+  if (!(ai && geminiAllowed(req))) {
     // the whole vocabulary, not a slice: the panel offers "browse all N labels"
     // and showing 200 of them under that promise is the promise broken. A few
     // hundred short words is a trivial amount of data to send.
