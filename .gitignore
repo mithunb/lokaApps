@@ -16,3 +16,10 @@ api/data/
 api/atlas-builders/.venv/
 __pycache__/
 .claude/
+
+# Design study pages. These are scratch: they carry working measurements, open
+# bugs and internal argument, and a `git add -A atlas/` swept sixteen of them
+# into the repo and onto the public site by accident. They stay on disk to be
+# read locally and out of the repo entirely.
+atlas/*-mock.html
+atlas/*-check.html
