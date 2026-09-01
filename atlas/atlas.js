@@ -1635,8 +1635,8 @@
     var n = (st && st.active.length && L._visible !== false) ? foldedCount(L) : 0;
     if (!n) { box.hidden = true; box.textContent = ""; return; }
     box.textContent = n === 1
-      ? "1 place in this view is inside a numbered disc — zoom in to see its marks."
-      : n + " places in this view are inside the numbered discs — zoom in to see their marks.";
+      ? "1 place here sits inside a numbered disc — zoom in to see it."
+      : n + " places here sit inside the numbered discs — zoom in to see them.";
     box.hidden = false;
   }
 

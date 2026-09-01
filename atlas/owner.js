@@ -218,15 +218,16 @@
        on the bill. */
     if (L.patternsNone) {
       wrap.appendChild(el("span", "own-door-said",
-        "These places do not answer a question the map can be coloured by."));
+        "Analysed once \u2014 no pattern here runs through enough places to colour the map by."));
       return;
     }
     var done = Object.keys(feats[0].properties || {})
       .filter(function (k) { return /^pattern_\d+$/.test(k); });
     if (done.length) {
       wrap.appendChild(el("span", "own-door-said",
-        done.length + (done.length === 1 ? " question" : " questions") +
-        " answered for this layer — each one a key above."));
+        "Patterns found once \u2014 " + done.length +
+        (done.length === 1 ? " question this data answers, now a key above."
+                           : " questions this data answers, each now a key above.")));
       return;
     }
 
@@ -251,8 +252,9 @@
     RUNNING[L.id] = true;
 
     panel.appendChild(el("p", "own-note own-door-cost",
-      "Reading " + esc(cols.slice(0, 3).join(", ")) + " across " + feats.length +
-      " places, to find the questions they answer · about half a minute"));
+      "Analysing your data to find the patterns underneath \u2014 reading " +
+      esc(cols.slice(0, 3).join(", ")) + " across " + feats.length +
+      " places \u00b7 about half a minute"));
     var msg = el("p", "own-note");
     msg.hidden = true;
     panel.appendChild(msg);

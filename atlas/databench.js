@@ -184,6 +184,8 @@
     <section class="bench step" id="db-step-4" hidden>
       <div class="card">
         <h2>How it looks</h2>
+        <p class="hint">Every row of your table is now a place on the map. Choose how
+          places are drawn, and what someone sees when they open one.</p>
 
         <label class="f">Layer name<input type="text" id="s-label" maxlength="60" /></label>
 
