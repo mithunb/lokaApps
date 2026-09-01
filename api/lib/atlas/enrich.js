@@ -404,7 +404,7 @@ export async function classifyRows({ digest, categorySet, title, callJSON, model
    the share of places they can answer shown beside them: a question that reaches
    a fifth of the map is a true answer about a fifth of the map, and saying so is
    better than hiding it. */
-const MAX_QUESTIONS = 4;
+const MAX_QUESTIONS = 6;
 
 const QUESTIONS_SCHEMA = {
   type: 'OBJECT', required: ['verdict', 'questions'],
@@ -437,8 +437,11 @@ async function induceQuestions({ digest, title, callJSON, model }) {
     '',
     'A question is something a reader would ask about a place, in their own words — "What can you do here?", "What grows here?", "What is it made of?", "How old is it?", "What is it about?", "How does it feel?". The most common is "What kind of place is this?", but it is only one of them, and a map that answers nothing else is a map that was only asked one thing.',
     '',
+    'Work through the list above one at a time and ask, of these particular places: can this question be answered here? Keep every one that can. Returning only "What kind of place is this?" when the words also say what you can do there and what grows there is the failure this is meant to end.',
+    '',
     'Rules:',
-    '- Propose between 1 and ' + MAX_QUESTIONS + ' questions. Most sets of places honestly answer only one or two. Fewer real questions beat more weak ones.',
+    '- Find EVERY question these places genuinely answer, up to ' + MAX_QUESTIONS + '. Do not stop at one. A set of places almost always answers several: what kind of place it is, what you can do there, what grows there, what it is made of, what it is about, how it feels, how old it is. Look for each of these in turn and keep the ones the words really support.',
+    '- A question is worth keeping even if it can only speak for some of the places. One that answers a fifth of them is a true answer about that fifth, and the map says so. Do not drop a real question for being narrow — only for being unsupported.',
     '- Each question must be a real question in everyday words, at most 40 characters, ending in a question mark.',
     '- Give each question between ' + MIN_CATS + ' and ' + MAX_CATS + ' kinds of answer. Name each kind in 1 to 3 everyday words.',
     '- Two questions must not be the same question in different words. "What kind of place is this?" and "What is it for?" are one question, not two.',

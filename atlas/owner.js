@@ -30,6 +30,9 @@
   var INST = null;         // the instance record: title, status, region, collaborators
   var MINE = [];           // GET /layers/list — the authority on which layers exist
   var MOUNTED = false;
+  // layers whose reading is in flight this visit — a row is redrawn on every
+  // toggle, and without this each redraw would start the reading again
+  var RUNNING = {};
 
   function api(path, opts) {
     opts = opts || {};
@@ -221,36 +224,35 @@
     var cols = wordColumns(feats);
     if (!cols.length) return;            // nothing written here to read
 
-    var link = el("button", "own-door-link", "Discover underlying patterns");
-    link.type = "button";
+    /* No press. The questions a place can answer are the same questions
+       everywhere, so asking permission to ask them was ceremony — the reading
+       starts the moment somebody who may change this layer opens the atlas,
+       and says what it is doing while it runs rather than before.
+
+       Once only: the guard is the answered columns themselves, which exist as
+       soon as the reading lands, so the next visit finds them and does nothing.
+       RUNNING stops one layer starting twice inside a visit, because its row is
+       redrawn every time the layer is switched or the panel rebuilt. */
     var panel = el("div", "own-door-body");
-    panel.hidden = true;
-    wrap.appendChild(link);
     wrap.appendChild(panel);
+    if (RUNNING[L.id]) {
+      panel.appendChild(el("p", "own-note", "Reading every place…"));
+      return;
+    }
+    RUNNING[L.id] = true;
 
-    link.onclick = function () {
-      if (!panel.hidden) { panel.hidden = true; return; }
-      panel.hidden = false;
-      if (panel.childNodes.length) return;      // already built
-      panel.appendChild(el("p", "own-note",
-        "We read what people wrote about all " + feats.length + " places here and look for " +
-        "the few patterns running through them. They arrive as one new key you can keep or " +
-        "discard — what you uploaded is never changed."));
-      panel.appendChild(el("p", "own-note own-door-cost",
-        "Reads " + esc(cols.slice(0, 3).join(", ")) + " · about half a minute · costs one reading"));
-      var go = el("button", "share-btn", "Read the places");
-      go.type = "button";
-      panel.appendChild(go);
-      var msg = el("p", "own-note");
-      msg.hidden = true;
-      panel.appendChild(msg);
-      function say(t, warn) {
-        msg.hidden = !t; msg.textContent = t || "";
-        msg.classList.toggle("warnish", !!warn);
-      }
+    panel.appendChild(el("p", "own-note own-door-cost",
+      "Reading " + esc(cols.slice(0, 3).join(", ")) + " across " + feats.length +
+      " places, to find the questions they answer · about half a minute"));
+    var msg = el("p", "own-note");
+    msg.hidden = true;
+    panel.appendChild(msg);
+    function say(t, warn) {
+      msg.hidden = !t; msg.textContent = t || "";
+      msg.classList.toggle("warnish", !!warn);
+    }
 
-      go.onclick = function () {
-        go.disabled = true;
+    (function () {
         say("Reading every place…");
         fetch(window.LokaAtlas.fileUrl(L.source))
           .then(function (r) { return r.json(); })
@@ -268,17 +270,15 @@
                 ? "These places do not clearly answer a question" +
                   (out.r.note ? ": " + out.r.note : ".") + " Nothing was added."
                 : "No questions could be found just now. Nothing was added.", true);
-              go.disabled = false;
               return;
             }
             say("Adding " + qs.length + (qs.length === 1 ? " question" : " questions") + "…");
             return keepQuestions(L, out.rows, qs).catch(function (e) {
-              go.disabled = false; say(errMsg(e), true);
+              say(errMsg(e), true);
             });
           })
-          .catch(function (e) { go.disabled = false; say(errMsg(e), true); });
-      };
-    };
+          .catch(function (e) { say(errMsg(e), true); });
+    }());
   }
 
   /* Every question is kept. There is no asking: the questions a place can answer
@@ -324,6 +324,9 @@
         // loaded, and which columns may become a key is worked out once as a
         // layer's data arrives — so the map has to read the layer again
         return preview(SLUG).then(refreshLayers).then(function () {
+          // the file was rewritten under the same name; say so before rebooting
+          // or the reboot reads the copy the browser already had
+          if (window.LokaAtlas.dataChanged) window.LokaAtlas.dataChanged();
           if (window.LokaAtlas.reboot) window.LokaAtlas.reboot(SLUG);
         });
       });
@@ -1817,7 +1820,6 @@
     var em = scrim.querySelector("#own-inv-email"), go = scrim.querySelector("#own-inv-go");
     var v = em.value.trim();
     if (!v) { em.focus(); return; }
-    go.disabled = true;
     api("instances/" + encodeURIComponent(SLUG) + "/collaborators", { method: "POST", body: { email: v } })
       .then(function (r) {
         INST.collaborators = r.collaborators || [];

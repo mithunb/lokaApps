@@ -44,9 +44,21 @@
   // and only its hash is kept, so no page can look it up later.
   var VIA_API = !!KEY || QS.get("via") === "api";
   var BASE = VIA_API ? "./api/datasets/" + DATASET + "/" : "./datasets/" + DATASET + "/";
+  /* A layer's file keeps its name when its contents change — adding a question
+     rewrites user-<layer>.geojson in place. So re-reading it after a change
+     fetched the browser's cached copy, the new columns were not in it, and the
+     new keys could not appear until someone reloaded by hand. DATA_V is bumped
+     whenever the data underneath is known to have changed, which makes the next
+     read a different address and therefore a real one. */
+  var DATA_V = "";
+  function bumpDataVersion() { DATA_V = String(Date.now()); }
   function dataUrl(file) {
-    if (!KEY) return BASE + file;
-    return BASE + file + (file.indexOf("?") < 0 ? "?key=" : "&key=") + encodeURIComponent(KEY);
+    var url = BASE + file;
+    var q = [];
+    if (KEY) q.push("key=" + encodeURIComponent(KEY));
+    if (DATA_V) q.push("v=" + DATA_V);
+    if (!q.length) return url;
+    return url + (url.indexOf("?") < 0 ? "?" : "&") + q.join("&");
   }
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
   var el = function (tag, cls, html) {
@@ -3733,6 +3745,9 @@
     // the owner's tools need a layer's loaded places to know what it already
     // carries — without this the door would have to fetch the file twice
     dataFor: function (id) { return DATA[id] || null; },
+    // call before reboot when a layer's file has been rewritten, so the reboot
+    // reads the new file instead of the one the browser already has
+    dataChanged: bumpDataVersion,
     /* Draw every layer's row again. The owner's tools need this because who may
        change which layer arrives from the server after the panel is already on
        screen — without it a door that was refused at registration, for want of
