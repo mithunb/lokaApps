@@ -125,6 +125,8 @@
     var host = $("#mine");
     host.innerHTML = "";
     list.forEach(function (i) {
+      var wrap = document.createElement("div");
+      wrap.className = "row-wrap";
       var a = document.createElement("a");
       a.className = "row";
       a.href = "../?dataset=" + encodeURIComponent(i.slug);
@@ -132,9 +134,73 @@
           esc(i.regionLabel || "") + (i.role === "editor" ? " · you were invited to this" : "") + "</span></span>" +
         '<span class="st' + (i.status === "published" ? " live" : "") + '">' +
           (i.status === "published" ? "Live" : "Not live") + "</span>";
-      host.appendChild(a);
+      wrap.appendChild(a);
+
+      /* Delete lived only inside an atlas's own Settings — unreachable for the very
+         atlas you most want rid of: one whose build failed and which therefore will
+         not open. Somebody invited to another person's atlas is not offered it;
+         deleting is the owner's alone, as the server already insists. */
+      if (i.role !== "editor") {
+        var kill = document.createElement("button");
+        kill.type = "button";
+        kill.className = "kill";
+        kill.textContent = "Delete";
+        kill.setAttribute("aria-label", "Delete " + (i.title || i.slug));
+        kill.onclick = function () { askDelete(i, wrap); };
+        wrap.appendChild(kill);
+      }
+      host.appendChild(wrap);
     });
   }
+  /* The question replaces the row rather than floating over it, so the atlas it
+     is about stays in view while you read it — and it is named, because "are you
+     sure?" about an unnamed thing is how the wrong atlas gets deleted. */
+  function askDelete(inst, wrap) {
+    var name = inst.title || inst.slug;
+    var box = document.createElement("div");
+    box.className = "confirm";
+    var p = document.createElement("p");
+    p.textContent = "Delete \u201c" + name + "\u201d? Its map, its layers and anything " +
+      "anyone added to it go for good. Your own files stay with you.";
+    box.appendChild(p);
+    var row = document.createElement("div");
+    row.className = "btnrow";
+    var yes = document.createElement("button");
+    yes.type = "button"; yes.className = "btn"; yes.textContent = "Delete it";
+    var no = document.createElement("button");
+    no.type = "button"; no.className = "btn quiet"; no.textContent = "Keep it";
+    row.appendChild(yes); row.appendChild(no);
+    box.appendChild(row);
+    var err = document.createElement("p");
+    err.className = "hint"; err.hidden = true;
+    box.appendChild(err);
+    wrap.replaceWith(box);
+    no.focus();                      // the safe one, for a stray Return
+
+    no.onclick = function () { box.replaceWith(wrap); };
+    yes.onclick = function () {
+      yes.disabled = no.disabled = true;
+      p.textContent = "Deleting \u201c" + name + "\u201d\u2026";
+      api("instances/" + encodeURIComponent(inst.slug), { method: "DELETE" })
+        .then(function () {
+          // drop it from what we hold, then redraw: asking the server again
+          // would be a round trip to learn something we already know
+          if (S.me && S.me.instances) {
+            S.me.instances = S.me.instances.filter(function (x) { return x.slug !== inst.slug; });
+          }
+          showHome();
+          var note = $("#deleted-note");
+          if (note) { note.textContent = "\u201c" + name + "\u201d was deleted."; note.hidden = false; }
+        })
+        .catch(function (e) {
+          yes.disabled = no.disabled = false;
+          p.textContent = "Delete \u201c" + name + "\u201d?";
+          err.textContent = errMsg(e);
+          err.hidden = false;
+        });
+    };
+  }
+
   $("#new-atlas").onclick = function () { startFlow(); };
 
   function startFlow() {

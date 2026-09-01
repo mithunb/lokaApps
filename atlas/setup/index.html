@@ -172,6 +172,23 @@
     .mine .st { flex:0 0 auto; font-size:var(--t-meta); color:var(--color-text-muted); }
     .mine .st.live { color:var(--color-canopy); font-weight:600; }
 
+    /* Delete, on the row. Until now the only way to remove an atlas was inside
+       its own Settings — which is unreachable for exactly the atlas you most
+       want rid of: one whose build failed and which therefore will not open. */
+    .mine .row-wrap { display:flex; align-items:stretch; gap:.4rem; }
+    .mine .row-wrap a.row { flex:1 1 auto; }
+    .mine .kill { flex:0 0 auto; font:inherit; font-size:var(--t-meta); cursor:pointer;
+      background:var(--color-surface); border:1px solid var(--color-border);
+      border-radius:var(--radius-md); color:var(--color-text-muted); padding:0 .7rem; }
+    .mine .kill:hover { border-color:var(--color-rust); color:var(--color-rust-deep); }
+    /* the confirm replaces the row rather than floating over it, so the atlas it
+       is about stays in view while you read the question */
+    .mine .confirm { background:var(--color-rust-tint); border:1px solid var(--color-rust);
+      border-radius:var(--radius-md); padding:.7rem .9rem; font-size:var(--t-ui); }
+    .mine .confirm p { margin:0 0 .55rem; }
+    .mine .confirm .btnrow { margin:0; gap:.45rem; }
+    .mine .confirm .btn { font-size:var(--t-meta); padding:.4rem .8rem; }
+
     /* A file may answer "where is it?" — see setup.js. Styled to sit under the
        search box as a peer offer, not as a step someone has to complete. */
     /* the chosen place, named at the field itself — the chips below are the full
