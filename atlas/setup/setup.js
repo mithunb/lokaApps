@@ -438,7 +438,11 @@
   function paintChips() {
     var host = $("#chips");
     host.innerHTML = "";
-    S.chosen.forEach(function (c) {
+    /* Only the places you typed. The ones a file found are shown inside that
+       file's own block, because they came as a set and they leave as a set —
+       showing them here too gave one act two homes and two delete buttons. */
+    var fromFile = GEO.addedIds || [];
+    S.chosen.filter(function (c) { return fromFile.indexOf(c.id) < 0; }).forEach(function (c) {
       var renamed = c.label !== c.name;
       var el = document.createElement("span");
       el.className = "chip";
@@ -453,6 +457,7 @@
       host.appendChild(el);
     });
     $("#chips-empty").hidden = S.chosen.length > 0;
+    paintFileBlock();      // the file's places live there, and its counts move with them
     // name the chosen place at the field as well as in the chips: a label reading
     // only "Place" beside an empty box made a finished step look untouched
     var chosen = $("#place-chosen");
@@ -546,32 +551,77 @@
     return out.length ? { col: pick.name, names: out } : null;
   }
 
+  /* One block for one act. Dropping a file used to produce two separate things —
+     a card naming the file, and a chip for each place it found, each with its own
+     bare ✕ — so a single act had two homes and two delete buttons, neither of
+     which said what it would take with it.
+
+     The file, its counts and the places it found are now one block with one
+     worded button. A layer is meaningless without its geography, so they go
+     together. The reverse does not hold: geography is perfectly meaningful with
+     no layer at all — that is every atlas built from open data — so places you
+     typed yourself keep their own chips and their own ✕, and this button never
+     touches them. */
+  var FILE_STATE = { name: "", note: "" };
+
   function showFileCard(name, note) {
+    FILE_STATE.name = name || "";
+    FILE_STATE.note = note || "";
+    paintFileBlock();
+  }
+
+  function paintFileBlock() {
     var host = $("#geo-file-card");
     if (!host) return;
-    if (!name) { host.innerHTML = ""; return; }
-    var n = GEO.addedIds.length;
-    var tip = n
-      ? "Forget this file and the " + n + " place" + (n > 1 ? "s" : "") + " it found"
+    host.innerHTML = "";
+    if (!FILE_STATE.name) return;
+
+    var box = document.createElement("div");
+    box.className = "filecard";
+
+    var head = document.createElement("div");
+    head.className = "filecard-head";
+    head.textContent = FILE_STATE.name + (FILE_STATE.note ? " · " + FILE_STATE.note : "");
+    box.appendChild(head);
+
+    // the places this file found, named — so the button's reach is visible
+    var ids = GEO.addedIds || [];
+    var mine = S.chosen.filter(function (c) { return ids.indexOf(c.id) >= 0; });
+    if (mine.length) {
+      var row = document.createElement("div");
+      row.className = "filecard-places";
+      mine.forEach(function (c) {
+        var chip = document.createElement("span");
+        chip.className = "chip chip-static";
+        chip.textContent = c.label;
+        row.appendChild(chip);
+      });
+      box.appendChild(row);
+    }
+
+    var kill = document.createElement("button");
+    kill.type = "button";
+    kill.className = "filecard-kill";
+    kill.textContent = "Delete layer";
+    kill.title = mine.length
+      ? "Forget this file and the " + mine.length + " place" + (mine.length > 1 ? "s" : "") + " it found"
       : "Forget this file";
-    host.innerHTML = '<div class="filecard"><span></span><button type="button"></button></div>';
-    host.querySelector("span").textContent = name + (note ? " · " + note : "");
-    var x = host.querySelector("button");
-    x.textContent = "✕";
-    x.title = tip;
-    x.setAttribute("aria-label", tip);
-    x.onclick = function () {
+    kill.setAttribute("aria-label", kill.title);
+    kill.onclick = function () {
       // the file and the places it found leave together; anything typed by hand stays
-      if (GEO.addedIds.length) {
+      if ((GEO.addedIds || []).length) {
         S.chosen = S.chosen.filter(function (c) { return GEO.addedIds.indexOf(c.id) < 0; });
         if (S.chosen.length) S.level = Math.max.apply(null, S.chosen.map(function (c) { return c.level || 2; }));
-        paintChips();
       }
-      host.innerHTML = ""; msg(2, "");
+      FILE_STATE.name = ""; FILE_STATE.note = "";
+      msg(2, "");
       GEO.file = null; GEO.canonical = null; GEO.rows = 0; GEO.addedIds = [];
       if (BENCH) { BENCH.destroy(); BENCH = null; BENCH_KEY = ""; }
+      paintChips();          // redraws the chips and, through them, this block
       syncRungs();
     };
+    box.appendChild(kill);
+    host.appendChild(box);
   }
 
   function placesFromFile(file) {
@@ -640,6 +690,11 @@
     units.forEach(function (u) { add({ id: u.id, name: u.name, level: d.level, bbox: u.bbox }, u.name); });
     GEO.addedIds = S.chosen.map(function (c) { return c.id; })
       .filter(function (id) { return had.indexOf(id) < 0; });
+    // add() painted the chips as each place arrived, before this list existed —
+    // so they were drawn as loose chips, and then a moment later also inside the
+    // file's block. Paint once more now the list is known, and they sit in one
+    // place only.
+    paintChips();
     var added = GEO.addedIds.length;
     var shownNames = S.chosen.slice(0, 3).map(function (c) { return c.label; }).join(", ");
     var more = S.chosen.length > 3 ? " and " + (S.chosen.length - 3) + " more" : "";

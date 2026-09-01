@@ -205,13 +205,22 @@
       color:var(--color-text-primary,#2A241A); margin-bottom:.15rem; }
     .drop input { display:none; }
     .drop-note { display:block; font-size:.78rem; color:var(--color-text-muted,#6B6350); margin-top:.35rem; }
-    .filecard { display:flex; align-items:center; gap:.5rem; margin-top:.6rem; padding:.5rem .7rem;
+    /* The file, what it found, and one button — one act, one block. It used to be
+       a card in a row with a bare ✕, and the places it found were loose chips
+       elsewhere with ✕s of their own: two homes and two buttons for one thing. */
+    .filecard { margin-top:.6rem; padding:.6rem .75rem; display:flex; flex-direction:column;
+      gap:.5rem; align-items:flex-start;
       border:1px solid var(--color-border); border-radius:var(--radius-md);
       background:var(--color-surface); font-size:.85rem; }
-    .filecard span { flex:1 1 auto; }
-    .filecard button { background:none; border:none; cursor:pointer; font:inherit;
-      color:var(--color-text-muted,#6B6350); padding:.1rem .35rem; }
-    .filecard button:hover { color:var(--color-rust-deep,#7C3616); }
+    .filecard-head { font-weight:600; }
+    .filecard-places { display:flex; flex-wrap:wrap; gap:.35rem; }
+    /* the places a file found carry no ✕ of their own: they arrived as a set and
+       the one button below takes the set */
+    .chip-static { cursor:default; }
+    .filecard-kill { font:inherit; font-size:.78rem; cursor:pointer; padding:.3rem .7rem;
+      background:none; border:1px solid var(--color-border); border-radius:var(--radius-md);
+      color:var(--color-text-muted,#6B6350); }
+    .filecard-kill:hover { border-color:var(--color-rust,#AE5028); color:var(--color-rust-deep,#7C3616); }
   </style>
 </head>
 <body>
