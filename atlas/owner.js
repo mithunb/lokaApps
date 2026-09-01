@@ -212,6 +212,15 @@
        a key in the list above, so there is nothing here to press. Their columns
        are named pattern_1, pattern_2 …; the wording a reader sees comes from the
        key name stored beside them. */
+    /* Already looked and found nothing? Then do not look again. Without this a
+       layer whose words answer no question pays for that discovery on every
+       visit, by every editor, for ever — the sort of cost that only shows up
+       on the bill. */
+    if (L.patternsNone) {
+      wrap.appendChild(el("span", "own-door-said",
+        "These places do not answer a question the map can be coloured by."));
+      return;
+    }
     var done = Object.keys(feats[0].properties || {})
       .filter(function (k) { return /^pattern_\d+$/.test(k); });
     if (done.length) {
@@ -270,6 +279,9 @@
                 ? "These places do not clearly answer a question" +
                   (out.r.note ? ": " + out.r.note : ".") + " Nothing was added."
                 : "No questions could be found just now. Nothing was added.", true);
+              // remember a considered "nothing here" so it is not rediscovered on
+              // every visit; a passing failure is not remembered, only a real no
+              if (out.r.verdict === "no_clear_questions") rememberNothingHere(L, out.rows);
               return;
             }
             say("Adding " + qs.length + (qs.length === 1 ? " question" : " questions") + "…");
@@ -289,6 +301,26 @@
      One column per question, pattern_1, pattern_2 …, with the question itself
      stored as the key's name so a reader meets "What can you do here?" rather
      than a column named after how it was made. */
+  /* Writes the layer back unchanged but for one mark on it: asked, nothing
+     found. One reading's cost once, instead of a small cost for ever. */
+  function rememberNothingHere(L, rows) {
+    var out = rows.map(function (p) { var o = Object.assign({}, p); delete o._category; return o; });
+    var names = Object.keys(out[0] || {});
+    return api("layers/ingest", { method: "POST", body: {
+      dataset: SLUG, replaceLayerId: L.id, filename: L.label || L.id,
+      patternsNone: true,
+      schema: names.map(function (nm) {
+        return { name: nm, type: (nm === "latitude" || nm === "longitude") ? "number" : "string" };
+      }),
+      rows: out,
+      meta: { sourceName: L.source, rowCount: out.length },
+    } })
+      .then(function (ing) {
+        return api("layers/commit", { method: "POST", body: { importId: ing.importId, dataset: SLUG } });
+      })
+      .catch(function () { /* not worth troubling anyone with — it retries next visit */ });
+  }
+
   function keepQuestions(L, rows, questions) {
     var labels = {};
     var out = rows.map(function (p) {

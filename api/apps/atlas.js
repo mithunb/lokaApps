@@ -2248,6 +2248,10 @@ router.post('/layers/ingest', async (req, res) => {
     // What the owner wants each key called. Kept beside the rows so it survives
     // to commit — a key otherwise wears its raw column name, and "themes" says
     // how it was made rather than what it holds.
+    /* The reading looked and found nothing. Recorded on the layer so it is not
+       asked again on every visit by every editor: a layer that genuinely answers
+       no question would otherwise pay for that discovery for ever. */
+    patternsNone: b.patternsNone ? true : undefined,
     keyLabels: (b.keyLabels && typeof b.keyLabels === 'object')
       ? Object.fromEntries(Object.entries(b.keyLabels)
           .filter(([k, v]) => k && typeof v === 'string' && v.trim())
@@ -3040,6 +3044,7 @@ router.post('/layers/commit', (req, res) => {
       frag.stanza.addedAt = session.replacingAddedBy
         ? (session.replacingAddedAt || Date.now()) : undefined;
     }
+    if (session.patternsNone) frag.stanza.patternsNone = true;
     if (session.keyLabels && Object.keys(session.keyLabels).length) {
       // merge, never replace: a layer may already carry a name for another key
       frag.stanza.keyLabels = Object.assign({}, frag.stanza.keyLabels || {}, session.keyLabels);
