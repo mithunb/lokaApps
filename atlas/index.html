@@ -339,6 +339,13 @@
     .leg-item.faint { opacity:.7; }
     /* how many places wear this mark — the name leads, the count sits in ink */
     .leg-n { margin-left:auto; flex:0 0 auto; padding-left:.5rem; font-size:.75rem; font-weight:700;
+    /* a kind you can open, and the words it opens into */
+    .leg-openable { cursor:pointer; border-radius:4px; }
+    .leg-openable:hover { background:var(--color-bg-alt); }
+    .leg-openable[aria-expanded="true"] { background:var(--color-bg-alt); }
+    .leg-why { display:flex; flex-wrap:wrap; gap:.2rem; padding:.1rem 0 .35rem 1.5rem; }
+    .leg-why-w { font-size:.68rem; background:var(--color-ochre-tint);
+      border-radius:3px; padding:0 .22rem; color:var(--color-text-secondary); }
       color:var(--color-text-primary); font-variant-numeric:tabular-nums; }
     /* sequential scale: one graduated bar, endpoints labelled */
     .leg-ramp { display:flex; height:9px; border-radius:3px; overflow:hidden; margin:.15rem 0 .25rem; box-shadow:inset 0 0 0 1px rgba(42,36,26,.08); }
@@ -477,6 +484,12 @@
     .key-row .key-name { flex:0 0 auto; color:var(--color-text-muted); }
     .key-row .key-name::after { content:" ·"; }
     .key-row .key-word { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; }
+    /* the words that earned an answer, quoted from the place itself */
+    .key-because { display:flex; flex-wrap:wrap; gap:.22rem; align-items:baseline;
+      padding:.1rem 0 .3rem 1.15rem; }
+    .key-because-lead { font-size:.7rem; color:var(--color-text-muted); }
+    .key-because-w { font-size:.7rem; background:var(--color-ochre-tint);
+      border-radius:3px; padding:0 .22rem; }
     .key-row.blank .key-word { color:var(--color-text-muted); font-weight:400; }
     .pop .key-rows { margin:.55rem 0 .15rem; }
 

@@ -1639,7 +1639,9 @@ function aiCaller(req, perReading) {
     if (spent >= cap) throw new Error('this reading has used its share of the model');
     if (!aiTake(req)) throw new Error('too many readings in the last hour — try again shortly');
     spent += 1;
-    return (o && o.think) ? geminiJSONDeep(model, prompt, schema) : geminiJSON(model, prompt, schema);
+    if (o && o.think) return geminiJSONDeep(model, prompt, schema);
+    if (o && o.file) return geminiJSONFile(model, prompt, schema);
+    return geminiJSON(model, prompt, schema);
   };
 }
 
@@ -1859,6 +1861,44 @@ async function geminiJSON(model, prompt, schema) {
     config: { responseMimeType: 'application/json', responseSchema: schema, maxOutputTokens: 2048 },
   });
   return JSON.parse(response.text ?? '');
+}
+
+/* Filing places into kinds is not reasoning, and must not be charged as if it
+   were. Measured on a real filing call: with thinking left at its default the
+   model spent 7,863 tokens thinking and had 314 left to answer in, so the answer
+   came back cut in half and unparseable — and every batch fell through to the
+   deterministic filing that exists for a failed call. The places were being
+   filed WITHOUT being read, and nothing anywhere said so.
+
+   Thinking off, and room to answer in. A batch of 40 places across several
+   questions, each with the words that justify it, runs about 3,000 tokens. */
+async function geminiJSONFile(model, prompt, schema) {
+  const r = await fetch(
+    'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: schema,
+          maxOutputTokens: 24000,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      }),
+    },
+  );
+  const j = await r.json();
+  const cand = j && j.candidates && j.candidates[0];
+  if (!cand) throw new Error('no answer from the model');
+  // name the truncation, so it can never again look like a model that just failed
+  if (cand.finishReason && cand.finishReason !== 'STOP') {
+    throw new Error('the answer stopped early (' + cand.finishReason + ')');
+  }
+  const text = cand.content && cand.content.parts && cand.content.parts[0] && cand.content.parts[0].text;
+  if (!text) throw new Error('the model answered with nothing');
+  return JSON.parse(text);
 }
 
 /* Theme-finding's induce call only: the one call that must REASON over the
@@ -3270,69 +3310,12 @@ router.post('/layers/enrich', async (req, res) => {
    and asks for shelves; the answer is cached beside the dataset, because the
    labels only change when the layer does and nobody should pay for this twice.
 */
-router.get('/layers/families', async (req, res) => {
-  const dataset = String(req.query.dataset || '');
-  const layerId = String(req.query.layer || '');
-  if (!dataset || !layerId) return res.status(400).json({ error: 'which atlas and which layer?' });
-  const dir = imports.datasetDir(dataset);
-  if (!dir) return res.status(404).json({ error: 'unknown dataset' });
-  // a private atlas answers only to someone who may see it
-  const inst = reg.getInstance(dataset);
-  if (inst && inst.visibility === 'private' && !callerCanEdit(req, inst)) {
-    return res.status(404).json({ error: 'not found' });
-  }
+/* The shelves endpoint stood here. It grouped a layer's label words into
+   families with a model call of its own, to be browsed. The reading now answers
+   that question properly and colours the map with the answer, so nothing called
+   this any more — and an endpoint that spends model calls with no caller is a
+   door left open onto the bill. Removed with its caller. */
 
-  const m = imports.readManifest(dataset);
-  const layer = imports.mergedLayers(m).find((L) => L.id === layerId);
-  if (!layer || !layer.source) return res.status(404).json({ error: 'unknown layer' });
-
-  // the columns that hold labels, as the layer's own popup declares them
-  const fields = ((layer.popup && layer.popup.fields) || [])
-    .filter((f) => f.type === 'tags').map((f) => String(f.property || '')).filter(Boolean);
-  if (!fields.length) return res.json({ verdict: 'no_labels' });
-
-  const cachePath = path.join(dir, 'families-' + layerId.replace(/[^a-z0-9-]/gi, '') + '.json');
-  let rows = [];
-  try {
-    const gj = JSON.parse(fs.readFileSync(path.join(dir, layer.source), 'utf8'));
-    rows = (gj.features || []).map((f) => f.properties || {});
-  } catch { return res.status(404).json({ error: 'the layer\'s data could not be read' }); }
-
-  // a column the viewer would offer as a key is not a label — its kinds are
-  // already a colouring and already tappable, so counting them here would put
-  // the same words in two places wearing two meanings
-  const keyShaped = enrich.keyShapedColumns(rows, fields);
-  const labelFields = fields.filter((f) => !keyShaped.has(f));
-  if (!labelFields.length) return res.json({ verdict: 'no_labels' });
-  const vocab = enrich.buildVocab(rows, labelFields);
-  // the cache is keyed by the vocabulary itself, so re-styling a layer keeps it
-  // and re-importing different data does not
-  const stamp = crypto.createHash('sha1')
-    .update(vocab.map((v) => v.label + ':' + v.n).join('|')).digest('hex').slice(0, 16);
-  try {
-    const cached = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
-    if (cached && cached.stamp === stamp) return res.json(cached.result);
-  } catch { /* no cache yet */ }
-
-  if (!(ai && geminiAllowed(req))) {
-    // the whole vocabulary, not a slice: the panel offers "browse all N labels"
-    // and showing 200 of them under that promise is the promise broken. A few
-    // hundred short words is a trivial amount of data to send.
-    return res.json({ verdict: 'unavailable', total: vocab.length, vocab });
-  }
-  const callJSON = (model, prompt, schema, o) =>
-    (o && o.think ? geminiJSONDeep(model, prompt, schema) : geminiJSON(model, prompt, schema));
-  try {
-    const out = await enrich.induceFamilies({
-      vocab, title: (inst && inst.title) || '', callJSON, model: getFlashModel(),
-    });
-    if (!out) return res.status(502).json({ error: 'the labels could not be arranged just now' });
-    try { fs.writeFileSync(cachePath, JSON.stringify({ stamp, result: out })); } catch { /* cache is optional */ }
-    res.json(out);
-  } catch (e) {
-    res.status(502).json({ error: 'arranging the labels failed: ' + e.message });
-  }
-});
 
 // The owner KEPT the suggestion: only now does the theme set persist, so a
 // later contribution files into the same set. Pre-build sessions have no

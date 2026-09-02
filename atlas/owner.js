@@ -180,7 +180,7 @@
       // never read our own answers back in: a question's column is an answer,
       // not evidence, and feeding it to the next reading would let one reading
       // put words into the mouth of the next
-      if (k.charAt(0) === "_" || k === "themes" || /^pattern_\d+$/.test(k)) return false;
+      if (k.charAt(0) === "_" || k === "themes" || /^pattern_/.test(k)) return false;
       if (/^(lat|latitude|lon|lng|long|longitude)$/i.test(k)) return false;
       var seen = {}, n = 0, spaced = 0, filled = 0;
       for (var i = 0; i < feats.length; i++) {
@@ -332,11 +332,20 @@
     });
     questions.forEach(function (q, n) {
       var col = "pattern_" + (n + 1);
+      var whyCol = col + "_why";
       labels[col] = q.question;
       (q.categories || []).forEach(function (c, i) {
         if (out[i]) out[i][col] = c === "other" ? "" : (c || "");
       });
-      out.forEach(function (o) { if (o[col] === undefined) o[col] = ""; });
+      /* The words that put each place where it is, kept beside the answer. An
+         answer with nothing under it is a judgement nobody can check. */
+      (q.why || []).forEach(function (w, i) {
+        if (out[i]) out[i][whyCol] = (w || []).join(", ");
+      });
+      out.forEach(function (o) {
+        if (o[col] === undefined) o[col] = "";
+        if (o[whyCol] === undefined) o[whyCol] = "";
+      });
     });
     var names = Object.keys(out[0] || {});
     return api("layers/ingest", { method: "POST", body: {

@@ -1235,6 +1235,7 @@
          key would be offering a mostly-grey map with no explanation. A question
          is different: it was asked of these places and this is the honest answer,
          so it is offered with the share it can speak for written beside it. */
+      if (/^pattern_\d+_why$/.test(col)) return;   // a reason is not a key
       var isQuestion = /^pattern_\d+$/.test(col);
       if (!committed && !isQuestion && named / feats.length < 0.6) return;
       /* A name the owner gave this key wins over the column's own name. The
@@ -1529,8 +1530,24 @@
       });
       rows.push({ header: true, label: opt.label + " — " + ROW_WORDS[fi] });
       opt.kept.forEach(function (kind, i) {
+        /* The words that gathered this kind's places, from their own text. Folded
+           away until asked for: a key is read at a glance, and a list of words
+           under every kind would bury the thing being glanced at. Tapping opens
+           one — which is what the shelves used to be, now attached to the key
+           that colours the map rather than standing beside it. */
+        var seen = {}, words = [];
+        if (opt.isQuestion) {
+          entries.forEach(function (e) {
+            if (optValuesOf(L, opt, e.f).indexOf(kind) < 0) return;
+            String((e.f.properties || {})[opt.col + "_why"] || "").split(",").forEach(function (w) {
+              w = w.trim();
+              if (w && !seen[w.toLowerCase()]) { seen[w.toLowerCase()] = 1; words.push(w); }
+            });
+          });
+        }
         rows.push({ color: keyKindColor(L, opt, fi, i), label: kind, categorical: true, family: ROW_SHAPES[fi],
-                    n: entries.length ? (tally[kind] || 0) : null });
+                    n: entries.length ? (tally[kind] || 0) : null,
+                    why: words.length ? words.slice(0, 14) : null });
       });
       if (opt.hasOther) rows.push({ color: KEY_OTHER, label: "other", categorical: true, family: ROW_SHAPES[fi],
                                     n: entries.length ? other : null });
@@ -1561,6 +1578,20 @@
       row.appendChild(el("span", "key-name", esc(opt.label)));
       row.appendChild(el("span", "key-word", vals.length ? esc(vals.join(", ")) : "left blank"));
       box.appendChild(row);
+      /* Why this place got that answer, in its own words. A question's answer is
+         a judgement; without the words behind it nobody can tell a good one from
+         a counter. Only shown where the reading actually quoted something — a
+         filing done by counting has no reason to give, and will not invent one. */
+      var why = props[opt.col + "_why"];
+      if (opt.isQuestion && vals.length && why && String(why).trim()) {
+        var b2 = el("div", "key-because");
+        b2.appendChild(el("span", "key-because-lead", "because"));
+        String(why).split(",").slice(0, 3).forEach(function (w) {
+          w = w.trim();
+          if (w) b2.appendChild(el("span", "key-because-w", esc(w)));
+        });
+        box.appendChild(b2);
+      }
     });
     return box;
   }
@@ -2523,6 +2554,9 @@
     if (f._stext != null) return f._stext;
     var parts = [];
     for (var k in f.properties) {
+      // a reason quotes words the place already carries, so counting it again
+      // would weight those places twice in a search
+      if (/^pattern_\d+_why$/.test(k)) continue;
       if (skipSearchProp(k) || skipSearchValue(f.properties[k])) continue;
       parts.push(cellText(f.properties[k]));
     }
@@ -3122,13 +3156,10 @@
      what the people walking a city thought worth writing down. Folding it into
      eight rows would describe a handful of places and grey out the rest.
 
-     So the labels get an index instead of a key. The server shelves them into
-     families by meaning (/layers/families) and caches the answer; tapping any
-     label runs the filter that already exists, and the map answers "who shares
-     this". Without AI the shelves are simply absent and the labels are listed
-     commonest first, which is still an index and still answers taps.
-  ================================================================== */
-  var LABEL_INDEX_MIN = 12;   // below this a key already shows them; an index would be a second way to say the same thing
+     So the labels are not a key and not a list. They are words you type: 303 of
+     one layer's 335 sat on a single place each, so listing them promised browsing
+     and delivered a directory. Tapping one still runs the filter that already
+     exists, and the map answers "who shares this".
 
   /* A column that qualifies as a key is NOT a label. Its kinds are already on
      offer as a colouring and already tappable on every place, so counting them
@@ -3161,102 +3192,9 @@
     return n;
   }
 
-  function labelIndexLink(L) {
-    if (!L.userLayer || L.type !== "marker") return null;
-    // The panel is built before the layer's data arrives — buildControls does not
-    // wait on it, deliberately. So a count taken then is zero, and caching that
-    // zero would hide the index for the rest of the visit. Only a real count is
-    // worth keeping; until the markers exist there is nothing to count.
-    if (!L._labelCount) {
-      var n = tagFieldCount(L);
-      if (!n) return null;
-      L._labelCount = n;
-    }
-    if (L._labelCount < LABEL_INDEX_MIN) return null;
-    var wrap = el("div", "label-index");
-    var b = el("button", "label-index-go",
-      "Browse all " + L._labelCount + " labels");
-    b.type = "button";
-    b.onclick = function () { openLabelIndex(L); };
-    wrap.appendChild(b);
-    return wrap;
-  }
-
-  function openLabelIndex(L) {
-    var scrim = el("div", "lx-scrim");
-    var sheet = el("div", "lx-sheet");
-    sheet.setAttribute("role", "dialog");
-    sheet.setAttribute("aria-modal", "true");
-    sheet.setAttribute("aria-label", "Labels on " + (L.label || L.id));
-    sheet.innerHTML =
-      '<div class="lx-head"><h2>' + esc(L.label || L.id) + " — what people noticed</h2>" +
-      '<button type="button" class="lx-x" aria-label="Close">✕</button></div>' +
-      '<p class="lx-sub" id="lx-sub">Reading the labels…</p>' +
-      '<div class="lx-body" id="lx-body"></div>';
-    scrim.appendChild(sheet);
-    document.body.appendChild(scrim);
-
-    function close() {
-      scrim.remove();
-      document.removeEventListener("keydown", onKey);
-    }
-    function onKey(e) { if (e.key === "Escape") close(); }
-    document.addEventListener("keydown", onKey);
-    scrim.onclick = function (e) { if (e.target === scrim) close(); };
-    $(".lx-x", sheet).onclick = close;
-    $(".lx-x", sheet).focus();
-
-    var url = "./api/layers/families?dataset=" + encodeURIComponent(DATASET) +
-      "&layer=" + encodeURIComponent(L.id) + (KEY ? "&key=" + encodeURIComponent(KEY) : "");
-    fetch(url, { credentials: "same-origin" })
-      .then(function (r) { return r.json(); })
-      .then(function (d) { paintLabelIndex(L, sheet, d, close); })
-      .catch(function () {
-        $("#lx-sub", sheet).textContent = "The labels could not be read just now.";
-      });
-  }
-
-  function paintLabelIndex(L, sheet, d, close) {
-    var body = $("#lx-body", sheet), sub = $("#lx-sub", sheet);
-    body.innerHTML = "";
-
-    function labelChip(item) {
-      var b = el("button", "lx-tag", esc(item.label) + ' <b>' + item.n + "</b>");
-      b.type = "button";
-      b.setAttribute("data-tag", item.label);
-      b.onclick = function () { close(); filterByTag(item.label, L.id); };
-      return b;
-    }
-
-    if (d.verdict === "families" && d.families && d.families.length) {
-      sub.textContent = d.families.length + " families across " + d.total + " labels" +
-        (d.loose ? " · " + d.loose + " sit on their own" : "");
-      d.families.forEach(function (f) {
-        var sec = el("div", "lx-family");
-        sec.appendChild(el("h3", null, esc(f.name) +
-          ' <span class="lx-count">' + f.labels.length + " labels · " + f.mentions + " mentions</span>"));
-        var row = el("div", "lx-tags");
-        f.labels.forEach(function (item) { row.appendChild(labelChip(item)); });
-        sec.appendChild(row);
-        body.appendChild(sec);
-      });
-      return;
-    }
-
-    // no shelves — the labels themselves are still worth browsing, commonest first
-    var list = d.vocab || [];
-    if (!list.length) {
-      sub.textContent = d.verdict === "no_labels"
-        ? "This layer has no labels to browse."
-        : "These labels did not arrange into families." + (d.note ? " " + d.note : "");
-      return;
-    }
-    sub.textContent = list.length + " labels, commonest first. Tap one to see the places that carry it.";
-    var row = el("div", "lx-tags");
-    list.forEach(function (item) { row.appendChild(labelChip(item)); });
-    body.appendChild(row);
-  }
-
+  
+  
+  
   function renderExtra(L) {
     var box = L._extra; if (!box) return;
     box.innerHTML = "";
@@ -3290,8 +3228,12 @@
 
     // the way into this layer's labels, when it has more of them than a key
     // could ever show (see FAMILIES OF MEANING)
-    var idx = labelIndexLink(L);
-    if (idx) box.appendChild(idx);
+    /* The shelves door stood here — "Browse all 335 labels", opening into groups
+       of words the model had shelved. It was a free approximation of the question
+       the reading now answers properly, and its own list could not be browsed
+       anyway: 303 of those 335 words sat on a single place each. The words remain
+       findable by typing; what grouped them is now a key that also colours the
+       map, and each kind opens into the words that gathered it. */
 
     // opacity slider
     if (L.opacityControl) {
@@ -3363,6 +3305,27 @@
         // the name leads its row; the count of places wearing the mark sits in ink
         if (it.n != null) r.appendChild(el("span", "leg-n", String(it.n)));
         leg.appendChild(r);
+        /* Folded away, not gone. A key is read at a glance, and the words behind
+           every kind would bury the thing being glanced at — so the row opens
+           only when asked, and shows what its places actually said. */
+        if (it.why && it.why.length) {
+          r.classList.add("leg-openable");
+          r.setAttribute("role", "button");
+          r.setAttribute("tabindex", "0");
+          r.setAttribute("aria-expanded", "false");
+          var words = el("div", "leg-why");
+          words.hidden = true;
+          it.why.forEach(function (w) { words.appendChild(el("span", "leg-why-w", esc(w))); });
+          leg.appendChild(words);
+          var flip = function () {
+            words.hidden = !words.hidden;
+            r.setAttribute("aria-expanded", String(!words.hidden));
+          };
+          r.onclick = flip;
+          r.onkeydown = function (e) {
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); flip(); }
+          };
+        }
       });
     }
     if (!leg.childNodes.length) return;
