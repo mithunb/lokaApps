@@ -1508,6 +1508,49 @@
   // kinds under a header pairing it with its shape ("categories — circles"),
   // from the first key on — the pin no longer says any of it, so the panel
   // must. Nothing on: one row, the layer's own colour and name.
+  /* One key's kinds as panel rows. Built from keyLegendRows so the panel, the
+     map and the popup can never tell different stories — it simply takes the
+     slice belonging to this key and drops the header the switch replaces. */
+  function keyKindRows(L, opt) {
+    var act = activeKeyOptions(L);
+    var fi = act.indexOf(opt);
+    if (fi < 0) return [];
+    var all = keyLegendRows(L, act);
+    var mine = [], seenHeads = -1;
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].header) { seenHeads++; continue; }
+      if (seenHeads === fi) mine.push(all[i]);
+      if (seenHeads > fi) break;
+    }
+    var out = [];
+    mine.forEach(function (it) {
+      var r = el("div", "leg-item key-kind" + (it.faint ? " faint" : ""));
+      r.appendChild(swatch(it));
+      r.appendChild(el("span", "leg-label", esc(it.label)));
+      if (it.n != null) r.appendChild(el("span", "leg-n", String(it.n)));
+      out.push(r);
+      if (it.why && it.why.length) {
+        r.classList.add("leg-openable");
+        r.setAttribute("role", "button");
+        r.setAttribute("tabindex", "0");
+        r.setAttribute("aria-expanded", "false");
+        var words = el("div", "leg-why");
+        words.hidden = true;
+        it.why.forEach(function (w) { words.appendChild(el("span", "leg-why-w", esc(w))); });
+        out.push(words);
+        var flip = function () {
+          words.hidden = !words.hidden;
+          r.setAttribute("aria-expanded", String(!words.hidden));
+        };
+        r.onclick = flip;
+        r.onkeydown = function (e) {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); flip(); }
+        };
+      }
+    });
+    return out;
+  }
+
   function keyLegendRows(L, act) {
     if (!act.length) {
       return [{ color: oneColorOf(L), label: String(L.label || "").slice(0, 40), shape: "dot" }];
@@ -1748,6 +1791,15 @@
         applyLayerKeys(L);
       };
       list.appendChild(lab);
+      /* This key's kinds, directly beneath the switch that turns them on. They
+         used to pool into one block below every switch, so flipping a switch put
+         its result somewhere further down, past everything else — and knowing
+         what a switch had just added meant hunting for its header. The header is
+         gone with the move: the switch already carries that name, and every kind
+         row already wears the key's shape. */
+      if (cb.checked) {
+        keyKindRows(L, opt).forEach(function (r) { list.appendChild(r); });
+      }
     });
     wrap.appendChild(list);
     wrap.appendChild(note);
@@ -3296,8 +3348,15 @@
       leg.appendChild(bar);
       leg.appendChild(lab);
     } else if (data && data.length) {
-      data.forEach(function (it) {
-        // keyed layers group their kinds under a header per key's shape
+      /* A keyed layer draws its kinds under their own switches now, so this
+         block would be saying it all a second time. Everything else it renders —
+         a shaded map's ramp, a bubble layer's reference circles, an atlas's own
+         declared legend, and the single row a layer wears when no key is on —
+         belongs to the layer rather than to one key, and still lives here. */
+      var keyed = !!(L._keyOptions && keyState[L.id] && keyState[L.id].active.length);
+      // skip these rows, do not leave the function: a bubble layer's reference
+      // circles were added just above and still have to be appended
+      if (!keyed) data.forEach(function (it) {
         if (it.header) { leg.appendChild(el("div", "leg-head", esc(it.label))); return; }
         var r = el("div", "leg-item" + (it.faint ? " faint" : ""));
         r.appendChild(swatch(it));
