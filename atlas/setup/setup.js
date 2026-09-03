@@ -35,7 +35,21 @@
       });
     });
   }
-  function errMsg(e) { return (e && (e.error || e.message)) || "something went wrong"; }
+  /* "something went wrong" tells you nothing you did not already know. The
+     bench's version names the step and what the server said, because that is
+     the sentence you can pass on to get it fixed. */
+  function errMsg(e) {
+    var said = e && (e.error || e.message);
+    if (said) return said;
+    var st = e && e._status;
+    if (st === 502 || st === 503 || st === 504) {
+      return "The server is being updated right now. Nothing is lost — wait a few seconds and try again.";
+    }
+    if (st === 0) return "Could not reach the server — check your connection and try again.";
+    var where = (e && e._path) || "the server";
+    return "Something went wrong here (" + where + " answered " + (st || "nothing") +
+      "). Tell us that, and we can fix it.";
+  }
   function msg(n, text, cls) {
     var box = $("#msg-" + n);
     if (box) box.innerHTML = text ? '<div class="msg ' + (cls || "err") + '">' + esc(text) + "</div>" : "";
@@ -602,7 +616,9 @@
     var kill = document.createElement("button");
     kill.type = "button";
     kill.className = "filecard-kill";
-    kill.textContent = "Delete layer";
+    // it forgets a file that has not been added to anything yet; its own
+    // tooltip has always said so
+    kill.textContent = "Forget this file";
     kill.title = mine.length
       ? "Forget this file and the " + mine.length + " place" + (mine.length > 1 ? "s" : "") + " it found"
       : "Forget this file";

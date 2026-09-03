@@ -125,7 +125,6 @@
 
       <!-- the auto-detected placement, in plain language, with a way to change it -->
       <div class="place-summary" id="place-summary">
-        <span class="ps-ico" aria-hidden="true" id="ps-ico">📍</span>
         <span class="ps-text" id="ps-line"></span>
         <button class="btn secondary ps-change" id="ps-change" type="button">Change</button>
       </div>
@@ -624,18 +623,18 @@
     box.hidden = false;
     if (geo) {
       box.className = "loc-first ok";
-      box.innerHTML = "📍 <b>Location: the shapes in your file.</b> They carry their own coordinates.";
+      box.innerHTML = "<b>Location: the shapes in your file.</b> They carry their own coordinates.";
     } else if (lat && lng) {
       box.className = "loc-first ok";
-      box.innerHTML = "📍 <b>Location: " + esc(lat.name) + " + " + esc(lng.name) + ".</b> " +
+      box.innerHTML = "<b>Location: " + esc(lat.name) + " + " + esc(lng.name) + ".</b> " +
         "Your rows will be placed at those coordinates. " +
         '<button type="button" class="linkish" id="loc-change">Place them another way</button>';
     } else if (place) {
       box.className = "loc-first ok";
-      box.innerHTML = "📍 <b>Location: the place names in " + esc(place.name) + ".</b> We'll match them to boundaries — you confirm on the next step.";
+      box.innerHTML = "<b>Location: the place names in " + esc(place.name) + ".</b> We'll match them to boundaries — you confirm on the next step.";
     } else {
       box.className = "loc-first warn";
-      box.innerHTML = "📍 <b>No location found yet.</b> A map needs either latitude and longitude columns, or a column of place names. Check the columns below — you can rename one, or say what it holds, if we read it wrongly.";
+      box.innerHTML = "<b>No location found yet.</b> A map needs either latitude and longitude columns, or a column of place names. Check the columns below — you can rename one, or say what it holds, if we read it wrongly.";
     }
     // the way back into the placement step, for the person who wants it after
     // coordinates carried them past it
@@ -1099,11 +1098,14 @@
 
   // the plain-language answer shown above the (collapsible) controls
   function updatePlaceSummary() {
-    var strat = $("#s-strategy").value, line = $("#ps-line"), ico = $("#ps-ico");
+    /* An emoji pin and compass used to sit beside this sentence, standing in
+       for an icon. The product draws its own marks everywhere else, and the
+       sentence already says which way the places were placed — a glyph
+       borrowed from the operating system was neither. */
+    var strat = $("#s-strategy").value, line = $("#ps-line");
     if (!line) return;
     if (strat === "coordinates") {
       var la = $("#s-lat").value, ln = $("#s-lng").value;
-      ico.textContent = "🧭";
       line.innerHTML = la && ln
         ? "Placed by their coordinates — <b>" + esc(la) + "</b> and <b>" + esc(ln) + "</b>."
         : '<span class="warn">Pick the latitude and longitude columns.</span>';
@@ -1111,7 +1113,6 @@
       var nm = $("#s-name").value, jo = $("#s-join");
       var joLabel = jo.options[jo.selectedIndex] ? jo.options[jo.selectedIndex].textContent.replace(/\s*\(.*\)$/, "") : "";
       var pa = $("#s-parent").value;
-      ico.textContent = "📍";
       line.innerHTML = nm
         ? "Matched by name — <b>" + esc(nm) + "</b> → <b>" + esc(joLabel) + "</b>" + (pa ? ", within <b>" + esc(pa) + "</b>" : "") + "."
         : '<span class="warn">Pick the column that holds the place names.</span>';
@@ -2051,7 +2052,7 @@
         loadAddedLayers();
         HOST.onCommitted({ layerId: r.layerId, dataset: r.dataset });
         var openLink = '<a href="./?dataset=' + encodeURIComponent(r.dataset) + '" target="_blank">open the atlas</a>';
-        msg("#msg-commit", "Layer added 🎉 — " + openLink, "ok");
+        msg("#msg-commit", "Layer added — " + openLink, "ok");
       })
       .catch(function (e) {
         if (e.needsAuth) {

@@ -1149,7 +1149,11 @@
      12 of 66 (a caption, never a key).
   ================================================================== */
   function prettyCol(name) {
-    return String(name).replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+    /* A key list holding "categories", "creator" and "What is this place for?"
+       is two grammars in one column. A column's own name cannot be made into a
+       question, but it can at least start like a sentence. */
+    var t = String(name).replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+    return t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
   }
 
   // Marker layers contributed through the wizard may offer their qualifying
@@ -1603,7 +1607,7 @@
         opt.kept.forEach(function (k) { answered += (tally[k] || 0); });
         var silent = entries.length - answered;
         if (silent > 0) {
-          rows.push({ color: KEY_OTHER, label: "unclassified", categorical: true, family: ROW_SHAPES[fi],
+          rows.push({ color: KEY_OTHER, label: "no answer", categorical: true, family: ROW_SHAPES[fi],
                       n: silent, faint: true });
         }
       } else if (opt.hasOther) {
@@ -1782,7 +1786,12 @@
          reader turns on "How old is it?" and meets a map that is mostly grey,
          with nothing telling them that is the answer rather than a fault. */
       if (opt.isQuestion) {
-        lab.appendChild(el("span", "key-reach", Math.round(opt.reach * 100) + "%"));
+        var pct = Math.round(opt.reach * 100);
+        var reach = el("span", "key-reach", pct + "%");
+        // a lone number on a switch is a riddle; the long form is one hover away
+        reach.title = "Has an answer for " + pct + " of every 100 places";
+        reach.setAttribute("aria-label", reach.title);
+        lab.appendChild(reach);
       }
       cb.onchange = function () {
         var i = st.active.indexOf(opt.col);
@@ -3619,9 +3628,22 @@
     if (title) h += '<div class="pop-title">' + esc(title) + "</div>";
     if (sub) h += '<div class="pop-sub">' + esc(sub) + "</div>";
     if (krows) h += krows.outerHTML;
+    /* A layer's popup rows are generated from its columns when it is added, so
+       every column a key later claims got said twice: once in the key rows above
+       and again as a row of its own. Worse, a question's column arrived as a raw
+       "Pattern 1" — the machinery's name for it, in front of a reader. And the
+       Source line at the foot already names whoever added the places, so a
+       Creator row repeated it a third time. */
+    var keyCols = {};
+    (L._keyOptions || []).forEach(function (o) { if (o.col) keyCols[o.col] = 1; });
+    var srcLine = sourceLine(L);
+
     (spec.fields || []).forEach(function (fld) {
       var v = props[fld.property];
       if (v == null || v === "" || v === "[]") return;
+      if (keyCols[fld.property]) return;                          // the key rows said it
+      if (/^pattern_\d+(_why)?$/.test(fld.property)) return;      // never show the machinery's name
+      if (srcLine && String(v).trim() === String(srcLine).trim()) return;   // the Source line said it
       if (fld.type === "tags") {
         var arr = Array.isArray(v) ? v : tagArr(v);
         if (!arr.length) return;

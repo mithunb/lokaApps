@@ -75,6 +75,11 @@
       border-radius:var(--radius-lg); padding:clamp(1rem,3vw,1.6rem); }
     .panel > h2 { font-size:var(--t-section); margin-bottom:.5rem; }
     .hint { font-size:var(--t-meta); color:var(--color-text-muted); max-width:52ch; }
+    /* A step's opening sentence is the most-read line on the page and was set
+       as a hint: 0.78rem, ink faded. A hint is an aside; this is the thing you
+       are meant to read first. */
+    .intro { font-size:var(--t-ui); color:var(--color-text-secondary);
+      max-width:46ch; margin:.15rem 0 0; }
     .btnrow { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; margin-top:1.3rem; }
 
     .btn { min-height:2.75rem; padding:.6rem 1.1rem; border:1px solid transparent;
@@ -235,7 +240,7 @@
     <!-- signed out ----------------------------------------------------- -->
     <section class="panel" id="gate" hidden>
       <h2>Build an atlas of your region</h2>
-      <p class="hint">A map of the place you work in, drawn from open data, that you can add your own
+      <p class="intro">A map of the place you work in, drawn from open data, that you can add your own
         data to and share. Free to build — we just need an email so the atlas stays yours.</p>
       <div id="gate-1">
         <label class="f" style="margin-top:1rem">Your email
@@ -308,7 +313,7 @@
       <!-- 2 -->
       <section class="panel" id="s2" hidden>
         <h2>Where is it?</h2>
-        <p class="hint">Search for the places your atlas covers. Add as many as you need: a district,
+        <p class="intro">Search for the places your atlas covers. Add as many as you need: a district,
           a few blocks, a whole state.</p>
         <p class="hint">Every atlas is drawn from public maps — its boundaries and place names are
           always included. Your own data is welcome too, now or whenever you have it.</p>
@@ -347,7 +352,7 @@
       <!-- 3 -->
       <section class="panel" id="s2b" hidden>
         <h2>Your data — check it before it goes on</h2>
-        <p class="hint">Your file is matched against the places you just confirmed. Fix anything that
+        <p class="intro">Your file is matched against the places you just confirmed. Fix anything that
           needs a second look now — after the atlas is built this list is gone.</p>
         <p class="verdict" id="check-verdict"></p>
         <!-- Shown only while the check is actually running. It does NOT claim a
@@ -365,7 +370,7 @@
       </section>
       <section class="panel" id="s3" hidden>
         <h2>What open data goes on it?</h2>
-        <p class="hint">Your atlas is always drawn with its boundaries and place names. Everything
+        <p class="intro">Your atlas is always drawn with its boundaries and place names. Everything
           below is optional, and you can add or remove any of it later.</p>
         <p class="given" id="given"></p>
         <div id="cats"></div>
@@ -395,7 +400,7 @@
         </div>
         <div class="btnrow" id="done-row" hidden>
           <a class="btn" id="open-editor" href="#">Open your atlas →</a>
-          <span class="hint">It starts unlisted: only you can see it until you make it live.</span>
+          <span class="hint">It starts not live: only you can see it until you make it live.</span>
         </div>
         <div id="msg-4"></div>
       </section>

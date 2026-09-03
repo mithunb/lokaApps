@@ -45,7 +45,21 @@
       });
     });
   }
-  function errMsg(e) { return (e && (e.error || e.message)) || "something went wrong"; }
+  /* "something went wrong" tells you nothing you did not already know. The
+     bench's version names the step and what the server said, because that is
+     the sentence you can pass on to get it fixed. */
+  function errMsg(e) {
+    var said = e && (e.error || e.message);
+    if (said) return said;
+    var st = e && e._status;
+    if (st === 502 || st === 503 || st === 504) {
+      return "The server is being updated right now. Nothing is lost — wait a few seconds and try again.";
+    }
+    if (st === 0) return "Could not reach the server — check your connection and try again.";
+    var where = (e && e._path) || "the server";
+    return "Something went wrong here (" + where + " answered " + (st || "nothing") +
+      "). Tell us that, and we can fix it.";
+  }
   // same shape as the viewer's helper, so the door reads the same in both files.
   // NOTE: the third argument is innerHTML — anything from the data must be esc()'d.
   var el = function (tag, cls, html) {
@@ -480,7 +494,7 @@
       .then(function () {
         INST.status = live ? "built" : "published";
         paintStatus();
-        toast(live ? "Taken off the air — only you can see it now"
+        toast(live ? "Taken off — only you can see it now"
                    : "Live — anyone with the link can open it");
       })
       .catch(function (e) { toast(errMsg(e)); })
@@ -1437,7 +1451,7 @@
 
       (owner ? '<h3 class="own-set-h">Who can edit it</h3>' +
       '<p class="own-set-p">Invite the people who need to work on this atlas. They can add and style ' +
-        "data; only you can delete it or take it off the air.</p>" +
+        "data; only you can delete it or take it off.</p>" +
       '<div class="own-inv" id="own-inv-list"></div>' +
       '<div class="own-inv-add">' +
         '<input type="email" id="own-inv-email" aria-label="Email address to invite" ' +

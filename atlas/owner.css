@@ -104,7 +104,7 @@
   margin:0; font-family:'Figtree',sans-serif; font-size:1rem; font-weight:600;
   color:var(--color-text-primary);
 }
-.own-ev-title:focus { outline:none; }
+.own-ev-title:focus { outline:2px solid var(--color-moss); outline-offset:2px; }
 .own-ev-sub, .own-ev-loading {
   margin:0; font-size:.78rem; color:var(--color-text-muted);
 }
@@ -122,7 +122,7 @@
 }
 .own-fld textarea { resize:vertical; }
 .own-fld input:focus, .own-fld select:focus, .own-fld textarea:focus {
-  outline:none; border-color:var(--color-moss);
+  outline:2px solid var(--color-moss); outline-offset:2px; border-color:var(--color-moss);
 }
 .own-note { font-size:.72rem; color:var(--color-text-muted); font-weight:400; }
 .own-note.warnish { color:var(--color-rust-deep); }
@@ -290,7 +290,7 @@
   flex:1; font:inherit; font-size:.85rem; padding:.4rem .5rem;
   border:1px solid var(--color-border); border-radius:var(--radius-md);
 }
-.own-inv-add input:focus { outline:none; border-color:var(--color-moss); }
+.own-inv-add input:focus { outline:2px solid var(--color-moss); outline-offset:2px; border-color:var(--color-moss); }
 
 .own-del { margin-top:1.5rem; padding-top:.8rem; border-top:1px solid var(--color-divider); }
 

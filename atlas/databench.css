@@ -150,7 +150,6 @@
 
     /* the single "where are these located?" answer + its confirm/change control */
     .place-summary { display:flex; align-items:center; gap:.6rem; padding:.7rem .9rem; margin:.2rem 0 .6rem; border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface); max-width:44rem; }
-    .ps-ico { font-size:1.05rem; line-height:1; flex:0 0 auto; }
     .ps-text { flex:1 1 auto; font-size:.92rem; color:var(--color-text-primary); }
     .ps-text b { font-weight:600; }
     .ps-text .warn { color:var(--color-rust-deep); }

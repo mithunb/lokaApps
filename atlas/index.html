@@ -15,6 +15,9 @@
       --color-bg:#F9F9F7; --color-bg-alt:#F0EFEA; --color-surface:#FFFFFF;
       --color-moss:#4A5A33; --color-canopy:#384526;           /* rustic dark green (primary) */
       --color-rust:#AE5028; --color-rust-deep:#7C3616;         /* rust accent */
+      /* the ground a quoted reason sits on; the wizard and the bench already
+         carry it, and the viewer needed it once the because arrived */
+      --color-ochre-tint:rgba(184,134,47,.14);
       --color-sienna:#99582F; --color-ochre:#B8862F;           /* sienna + ochre accents */
       --color-text-primary:#2A241A; --color-text-secondary:#564E3C; --color-text-muted:#6B6350;
       --color-divider:rgba(42,36,26,.09); --color-border:rgba(42,36,26,.14);
@@ -338,17 +341,23 @@
       font-size:.8rem; color:var(--color-text-secondary); }
     .leg-item.faint { opacity:.7; }
     /* how many places wear this mark — the name leads, the count sits in ink */
-    .leg-n { margin-left:auto; flex:0 0 auto; padding-left:.5rem; font-size:.75rem; font-weight:700;
+    .leg-n { margin-left:auto; flex:0 0 auto; padding-left:.5rem; font-size:.75rem; font-weight:700; color:var(--color-text-primary); font-variant-numeric:tabular-nums; }
     /* a kind you can open, and the words it opens into */
     /* a kind sitting under its own switch, indented to belong to it */
     .key-kind { padding-left:1.55rem; }
+    /* Air between one key and the next. With four keys on, twenty-two rows read
+       as a single list — the switch that starts each key has to be findable
+       without counting shapes. */
+    .key-list .key-kind + .key-toggle,
+    .key-list .leg-why + .key-toggle {
+      margin-top:.6rem; padding-top:.45rem; border-top:1px solid var(--color-divider);
+    }
     .leg-openable { cursor:pointer; border-radius:4px; }
     .leg-openable:hover { background:var(--color-bg-alt); }
     .leg-openable[aria-expanded="true"] { background:var(--color-bg-alt); }
     .leg-why { display:flex; flex-wrap:wrap; gap:.2rem; padding:.1rem 0 .35rem 1.5rem; }
-    .leg-why-w { font-size:.68rem; background:var(--color-ochre-tint);
+    .leg-why-w { font-size:var(--t-label); background:var(--color-ochre-tint);
       border-radius:3px; padding:0 .22rem; color:var(--color-text-secondary); }
-      color:var(--color-text-primary); font-variant-numeric:tabular-nums; }
     /* sequential scale: one graduated bar, endpoints labelled */
     .leg-ramp { display:flex; height:9px; border-radius:3px; overflow:hidden; margin:.15rem 0 .25rem; box-shadow:inset 0 0 0 1px rgba(42,36,26,.08); }
     .leg-ramp-seg { flex:1 1 0; }
@@ -501,12 +510,16 @@
        shrink below its content and then overflows the popup instead. */
     .key-because { display:flex; flex-wrap:wrap; gap:.22rem .28rem; align-items:baseline;
       padding:.05rem 0 .34rem 1.5rem; min-width:0; }
-    .key-because-lead { flex:0 0 auto; font-size:.7rem; color:var(--color-text-muted); }
-    .key-because-w { font-size:.7rem; background:var(--color-ochre-tint);
+    .key-because-lead { flex:0 0 auto; font-size:var(--t-label); color:var(--color-text-muted); }
+    .key-because-w { font-size:var(--t-label); background:var(--color-ochre-tint);
       border-radius:3px; padding:.02rem .26rem; min-width:0;
       overflow-wrap:anywhere; }
     .key-row.blank .key-word { color:var(--color-text-muted); font-weight:400; }
     .pop .key-rows { margin:.55rem 0 .15rem; }
+    /* In the popup the answer is what someone opened the place to read, so it
+       is set at reading size and the question stays quieter above it. */
+    .pop .key-name { font-size:var(--t-meta); }
+    .pop .key-word { font-size:var(--t-ui); }
 
     /* ---- popups ---- */
     .atlas-popup .maplibregl-popup-content { border-radius:var(--radius-md); padding:0; box-shadow:var(--shadow-md);
@@ -519,7 +532,10 @@
     /* Room for the reasons. At 340px a place answering four questions, each
        with the words behind it, started scrolling inside a box most people do
        not realise scrolls — which reads as text cut off. */
-    .pop { padding:.85rem .95rem; max-height:min(60vh, 480px); overflow-y:auto; }
+    /* The map's stage clips what leaves it, so a tall popup lost its foot below
+       the edge — measured at 1280×720, 101px of a 432px box. Room for four
+       questions and their reasons, and no taller than the stage. */
+    .pop { padding:.85rem .95rem; max-height:min(44vh, 400px); overflow-y:auto; }
     .pop-title { font-family:'Figtree',sans-serif; font-weight:700; font-size:1.02rem; color:var(--color-text-primary); line-height:1.2; }
     .pop-sub { font-size:.78rem; text-transform:uppercase; letter-spacing:.08em; color:var(--color-moss); margin-top:.1rem; }
     .pop-field { margin-top:.6rem; }

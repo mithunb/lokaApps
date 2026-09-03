@@ -36,7 +36,7 @@
   };
   var ROLE_LABEL = {
     location: "Location", colour: "Colour", tags: "Tags",
-    value: "Value", text: "Popup text", off: "Off",
+    value: "Number", text: "Popup text", off: "Off",
   };
   var ROLE_HINT = {
     location: "Used to place rows on the map (coordinates or place names).",
