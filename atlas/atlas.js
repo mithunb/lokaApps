@@ -179,8 +179,6 @@
   // The LOKA Atlas home: featured reference instance, published instances, build CTA.
   function renderHome() {
     document.title = "LOKA Atlas \u2014 layered maps for any geography";
-    // the eyebrow claims "interactive map" \u2014 on the gallery there is no map
-    setText(".eyebrow", "atlas gallery \u00b7 loka atlas");
     setText("#atlas-title", "LOKA Atlas");
     setText("#atlas-subtitle", "Layered, shareable maps for any geography \u2014 built from open data.");
     setText("#atlas-about", "Every atlas below is built with the same engine: pick a region, choose layers, add your data, and share it. Public tech by Socratus.");
@@ -1627,12 +1625,23 @@
   // this place leaves blank keeps its line, saying "left blank" — its row
   // is missing from the map on purpose, and the words say so. Built only
   // when a pointer enters a pin or a popup opens, never per move.
-  function keyRowsEl(L, props) {
-    var act = activeKeyOptions(L);
+  /* `all` is the difference between the two things this builds. A hover bubble
+     decodes the marks a pin is wearing, so it shows the keys that are on and
+     nothing else. A popup decodes nothing — somebody opened a place to read
+     about it, and every answer that place holds belongs there whether or not
+     its key happens to be switched on. One builder still, so the same answer
+     is worded the same way in both. */
+  function keyRowsEl(L, props, all) {
+    var act = all ? (L._keyOptions || []) : activeKeyOptions(L);
     if (!act.length) return null;
     var f = { properties: props };
     var box = el("div", "key-rows");
-    act.forEach(function (opt, fi) {
+    // marks are drawn in the order the keys came ON, so a shape means something
+    // only for a key that is on; an answer from a key that is off gets a plain
+    // dot, because there is nothing on the map for a shape to point at
+    var marked = activeKeyOptions(L);
+    act.forEach(function (opt) {
+      var fi = marked.indexOf(opt);
       var vals = optValuesOf(L, opt, f);
       /* A column somebody uploaded and left empty is worth saying out loud —
          the gap is in their data. A question with nothing to say about this
@@ -1640,7 +1649,9 @@
          reads as a fault. So the line simply does not appear. */
       if (!vals.length && opt.isQuestion) return;
       var row = el("div", "key-row" + (vals.length ? "" : " blank"));
-      var mini = markEl(ROW_SHAPES[fi], "#6b6353");   // names the key, claims no colour
+      // a key that is on wears its shape; one that is off gets a plain dot,
+      // because there is no mark on the map for a shape to point at
+      var mini = markEl(fi >= 0 ? ROW_SHAPES[fi] : "circle", "#6b6353");
       mini.setAttribute("class", "key-mark");
       row.appendChild(mini);
       row.appendChild(el("span", "key-name", esc(opt.label)));
@@ -3618,7 +3629,7 @@
     // the same key-by-key rows the hover bubble shows — a touch screen has
     // no hover, so the tap popup is where the marks get decoded there. A
     // keyed layer with no popup stanza still gets a popup of just the rows.
-    var krows = keyRowsEl(L, props);
+    var krows = keyRowsEl(L, props, true);   // a popup shows every answer, not only the marks
     if (!spec && !krows) return "";
     spec = spec || {};
     var title = popupTitleText(L, props);

@@ -49,9 +49,6 @@
     a { color:var(--color-moss); text-decoration:none; }
     a:hover { color:var(--color-canopy); text-decoration:underline; }
     :focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:4px; }
-    .eyebrow { display:inline-block; font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:600;
-      letter-spacing:.14em; text-transform:uppercase; color:var(--color-moss); margin:0 0 .75rem;
-      padding:.25rem .6rem; background:var(--color-moss-tint); border-radius:4px; }
     .lead { font-size:var(--t-body); color:var(--color-text-secondary); max-width:72ch; }
 
     header.site { border-bottom:1px solid var(--color-divider); background:var(--color-bg); position:relative; z-index:2; }
@@ -794,7 +791,9 @@
 
   <section class="atlas-hero">
     <div class="hero-top">
-      <span class="eyebrow">interactive map · loka atlas</span>
+      <!-- An eyebrow stood here reading "interactive map · loka atlas". It said
+           nothing the nav above and the title below were not already saying, and
+           on a phone it wrapped to two lines to say it. -->
       <div class="hero-actions">
         <a id="add-data-btn" class="share-btn" hidden href="#" aria-label="Add your data to this atlas (experimental)"
            title="Add your own data as a map layer — experimental, under development">
