@@ -1855,11 +1855,30 @@ const REFINE_SCHEMA = {
   properties: { layer: LAYER_SPEC_SCHEMA, reply: { type: Type.STRING } },
 };
 
+/* The everyday call: reading a spreadsheet's columns to work out where its rows
+   belong, and matching transliterated place names against the boundaries on
+   offer. Both need a little reasoning, and on 2.5 models the thinking is spent
+   out of the same allowance as the answer.
+
+   It had 2,048 tokens for both. Seen live on 3 September 2026: an infer call
+   came back cut off after 302 characters, JSON.parse threw, and the wizard
+   quietly fell back to its own placement rules without telling anyone. The join
+   adjudicator sat on the same ceiling while being asked for up to forty answers
+   at once. It is the same fault that made filing fall back to counting, on the
+   two paths that fix never reached.
+
+   Room to answer in, and a cut-off answer that says it was cut off. The pinned
+   SDK (0.3.1) cannot turn thinking down, but it does report how the answer
+   ended, and an answer that stopped early must never again read as a model that
+   simply failed. */
 async function geminiJSON(model, prompt, schema) {
   const response = await ai.models.generateContent({
     model, contents: prompt,
-    config: { responseMimeType: 'application/json', responseSchema: schema, maxOutputTokens: 2048 },
+    config: { responseMimeType: 'application/json', responseSchema: schema, maxOutputTokens: 8192 },
   });
+  const why = response && response.candidates && response.candidates[0] &&
+    response.candidates[0].finishReason;
+  if (why && why !== 'STOP') throw new Error('the answer stopped early (' + why + ')');
   return JSON.parse(response.text ?? '');
 }
 
@@ -1928,8 +1947,14 @@ async function geminiJSONDeep(model, prompt, schema) {
   );
   if (!r.ok) throw new Error('gemini ' + r.status);
   const data = await r.json();
-  const parts = (data && data.candidates && data.candidates[0] &&
-    data.candidates[0].content && data.candidates[0].content.parts) || [];
+  const cand = data && data.candidates && data.candidates[0];
+  if (!cand) throw new Error('no answer from the model');
+  // the same guard the filing call carries: thinking and answering share one
+  // allowance, so this call can run out of room mid-object too
+  if (cand.finishReason && cand.finishReason !== 'STOP') {
+    throw new Error('the answer stopped early (' + cand.finishReason + ')');
+  }
+  const parts = (cand.content && cand.content.parts) || [];
   const text = parts.filter((p) => typeof p.text === 'string' && !p.thought).map((p) => p.text).join('');
   return JSON.parse(text);
 }
