@@ -647,22 +647,34 @@
 
     /* ---- app home: instance gallery ---- */
     .atlas-home { width:var(--container); margin:0 auto 2.5rem; }
-    .home-grid { display:grid; gap:1rem; grid-template-columns:repeat(auto-fit,minmax(17rem,1fr)); }
-    .home-card { display:flex; flex-direction:column; gap:.4rem; background:var(--color-surface);
-      border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:1.25rem 1.35rem;
-      color:var(--color-text-primary); transition:border-color .15s ease; }
-    a.home-card:hover { border-color:var(--color-moss); text-decoration:none; color:var(--color-text-primary); }
-    .home-card .tag { align-self:flex-start; font-family:'Figtree',sans-serif; font-size:var(--t-label); font-weight:600;
-      letter-spacing:.1em; text-transform:uppercase; padding:.15rem .5rem; border-radius:4px;
-      background:var(--color-moss-tint); color:var(--color-canopy); }
-    .home-card .tag.template { background:var(--color-rust-tint); color:var(--color-rust-deep); }
-    .home-card h2 { font-size:var(--t-section); font-weight:600; margin:.2rem 0 0; }
-    .home-card p { font-size:.9rem; margin:0; }
-    .home-card .go { margin-top:auto; padding-top:.5rem; font-size:.88rem; font-weight:600; color:var(--color-moss); }
-    .home-card.build { background:var(--color-moss); border-color:var(--color-moss); }
-    .home-card.build h2, .home-card.build .go { color:#fff; }
-    .home-card.build p { color:#dde5d8; }
-    .home-card.build .tag { background:rgba(255,255,255,.16); color:#fff; }
+    /* This was a grid of same-sized bordered cards, and one of them — "build
+       your own atlas" — was filled solid moss. It was not an atlas, and it was
+       the loudest thing on a page whose whole subject is the atlases. So the
+       atlases are a list, which is what a list of things is, and the wizard
+       link went to the band this page already carries for it.
+
+       Each row is one atlas: its name, then where it is and who made it. The
+       arrow takes ink and steps right when you reach for the row, so the row
+       says it is a door without a border round it. */
+    .home-list { display:flex; flex-direction:column; border-top:1px solid var(--color-divider); }
+    a.home-row { display:grid; grid-template-columns:1fr auto; gap:.2rem 1rem;
+      padding:1.1rem .15rem; border-bottom:1px solid var(--color-divider);
+      color:var(--color-text-primary); text-decoration:none; }
+    a.home-row:hover, a.home-row:focus-visible { text-decoration:none; color:var(--color-text-primary); }
+    .home-row h2 { grid-column:1; margin:0; font-size:var(--t-section); font-weight:600; line-height:1.25;
+      transition:color .15s ease; }
+    a.home-row:hover h2 { color:var(--color-canopy); }
+    .home-row p { grid-column:1; margin:0; font-size:.9rem; color:var(--color-text-secondary); max-width:62ch; }
+    .home-row .feat { margin-left:.6rem; font-family:'Figtree',sans-serif; font-size:var(--t-label);
+      font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--color-rust-deep);
+      vertical-align:.12em; white-space:nowrap; }
+    .home-row .go { grid-column:2; grid-row:1 / span 2; align-self:center; font-size:1.15rem;
+      color:var(--color-text-muted); transition:transform .15s ease, color .15s ease; }
+    a.home-row:hover .go { color:var(--color-moss); transform:translateX(3px); }
+    @media (prefers-reduced-motion:reduce) {
+      .home-row .go, .home-row h2 { transition:none; }
+      a.home-row:hover .go { transform:none; }
+    }
 
     /* ---- "build your own" CTA band (fixed LOKA element on every instance) ---- */
     .atlas-cta { width:var(--container); margin:0 auto 2rem; }
@@ -814,7 +826,7 @@
 
   <!-- App home (no ?dataset= given): the instance gallery -->
   <section class="atlas-home" id="atlas-home" hidden aria-label="Published atlases">
-    <div class="home-grid" id="home-grid"></div>
+    <div class="home-list" id="home-grid"></div>
   </section>
 
   <div class="atlas-stage">
@@ -865,8 +877,8 @@
   <aside class="atlas-cta" aria-label="Create your own atlas">
     <div class="cta-inner">
       <div>
-        <b>Build an atlas like this for your own geography and data.</b>
-        <span>Your region, your layers, your branding — free to start.</span>
+        <b id="cta-lead">Build an atlas like this for your own geography and data.</b>
+        <span id="cta-sub">Your region, your layers, your branding — free to start.</span>
       </div>
       <a class="cta-btn" href="./setup/">Build your own atlas for free →</a>
     </div>

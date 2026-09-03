@@ -171,6 +171,7 @@
         <button class="btn" id="to-style">Continue — preview the layer</button>
       </div>
       <div id="db-widen" hidden style="margin:.5rem 0 0"></div>
+      <div id="db-leftover" hidden></div>
       <div id="msg-place"></div>
     </section>
 
@@ -372,7 +373,7 @@
   var S = {
     dataset: "", canonical: null, names: [], result: null, options: null,
     step: 1, me: null, styleReady: false, spatial: false,
-    editToken: null, oneColour: "rust", pendingThemes: null,
+    editToken: null, oneColour: "rust", pendingThemes: null, leftoverOk: null,
   };
   var CLASS_LABEL = { point: "points", line: "lines", polygon: "areas (polygons)" };
 
@@ -1355,7 +1356,11 @@
     if (!S.result) return Promise.resolve();
     var spec = Object.assign({}, S.result.spec, { outsideAction: outsideChoice() });
     return api("layers/apply", { method: "POST", body: applyBody(false, spec) })
-      .then(function (r) { S.result = r; renderReport(r); msg("#msg-place", ""); })
+      .then(function (r) {
+      /* a fresh match means a fresh count, so the question gets asked again */
+      S.result = r; S.leftoverOk = null; shutLeftover();
+      renderReport(r); msg("#msg-place", "");
+    })
       .catch(function (e) { msg("#msg-place", esc(errMsg(e))); });
   }
 
@@ -1413,11 +1418,40 @@
     if (!S.result.stats || !S.result.stats.features) {
       msg("#msg-place", nothingPlacedText(rep)); return;
     }
-    if (open) {
-      var stillOpen = open + " row" + (open > 1 ? "s are" : " is") + " still unmatched and will be left off the map.";
-      if (missedMost(rep, open)) stillOpen += " That's most of your data — these places may sit outside your atlas's area.";
-      if (!confirm(stillOpen + " Continue anyway?")) return;
-    }
+    /* Some rows have no place to sit, and continuing leaves them off the map.
+       That question used to be a browser confirm box — a grey system dialog in
+       a typeface that is not ours, which steals the keyboard and cannot put
+       the count in bold. It is asked here instead, in the page, right under
+       the button that raised it, with the outcome plain on both choices. */
+    if (open && S.leftoverOk !== open) { askLeftover(rep, open); return; }
+    buildPreview();
+  };
+
+  function askLeftover(rep, open) {
+    var box = $("#db-leftover");
+    var most = missedMost(rep, open)
+      ? "<p>That is most of your data. These places may sit outside the area this atlas covers.</p>" : "";
+    box.innerHTML =
+      '<div class="db-ask" role="group" aria-label="Rows with no place">' +
+        "<p><b>" + open + " row" + (open > 1 ? "s" : "") + "</b> could not be matched to a place, so " +
+          (open > 1 ? "they" : "it") + " will not appear on the map.</p>" + most +
+        '<div class="step-nav">' +
+          '<button class="btn secondary" id="db-ask-no">Go back to the table</button>' +
+          '<button class="btn" id="db-ask-yes">Leave ' + (open > 1 ? "them" : "it") + " off and continue</button>" +
+        "</div>" +
+      "</div>";
+    box.hidden = false;
+    $("#db-ask-no").onclick = function () { shutLeftover(); goStep(2); };
+    $("#db-ask-yes").onclick = function () { shutLeftover(); S.leftoverOk = open; buildPreview(); };
+    $("#db-ask-yes").focus();
+  }
+
+  function shutLeftover() {
+    var box = $("#db-leftover");
+    if (box) { box.hidden = true; box.innerHTML = ""; }
+  }
+
+  function buildPreview() {
     $("#to-style").disabled = true;
     msg("#msg-place", "Building the preview…", "ok");
     runApply(function () {
@@ -1429,7 +1463,7 @@
         enterStyle(r);
       }).catch(function (e) { $("#to-style").disabled = false; msg("#msg-place", esc(errMsg(e))); });
     });
-  };
+  }
 
   /* ================= step 4 · preview & add ================= */
 

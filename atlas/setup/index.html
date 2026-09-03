@@ -166,30 +166,49 @@
       padding:.6rem .7rem; margin-top:.6rem; max-height:9rem; overflow:auto; }
 
     /* ---- your atlases ---- */
-    .mine { display:flex; flex-direction:column; gap:.5rem; margin-top:1rem; }
-    .mine a.row { display:flex; align-items:center; gap:.8rem; padding:.8rem .9rem; text-decoration:none;
-      color:inherit; background:var(--color-surface); border:1px solid var(--color-border);
-      border-radius:var(--radius-md); }
-    .mine a.row:hover { border-color:var(--color-moss); background:var(--color-moss-tint); }
+    /* Your atlases is a list. Each row used to be a bordered, rounded card with
+       a second bordered card beside it for Delete, so three atlases read as six
+       boxes. Hairlines between rows, no border round each, and Delete as a quiet
+       control at the row's end — which is what DESIGN.md means by lists being
+       the default. */
+    .mine { display:flex; flex-direction:column; margin-top:1rem;
+      border-top:1px solid var(--color-divider); }
+    .mine a.row { display:flex; align-items:center; gap:.8rem; padding:.85rem .1rem;
+      text-decoration:none; color:inherit; background:none; border:0; border-radius:0; }
+    .mine .row-wrap:hover a.row .t b { color:var(--color-canopy); }
     .mine .t { flex:1 1 auto; min-width:0; }
     .mine .t b { display:block; font-family:'Figtree',sans-serif; font-size:var(--t-ui); }
     .mine .t span { display:block; font-size:var(--t-meta); color:var(--color-text-muted); }
-    .mine .st { flex:0 0 auto; font-size:var(--t-meta); color:var(--color-text-muted); }
+    /* wide enough for "Not live", right-aligned, so the status words on every
+       row end on the same edge instead of stepping in and out */
+    .mine .st { flex:0 0 4.4rem; text-align:right; font-size:var(--t-meta); color:var(--color-text-muted); }
     .mine .st.live { color:var(--color-canopy); font-weight:600; }
 
     /* Delete, on the row. Until now the only way to remove an atlas was inside
        its own Settings — which is unreachable for exactly the atlas you most
        want rid of: one whose build failed and which therefore will not open. */
-    .mine .row-wrap { display:flex; align-items:stretch; gap:.4rem; }
-    .mine .row-wrap a.row { flex:1 1 auto; }
-    .mine .kill { flex:0 0 auto; font:inherit; font-size:var(--t-meta); cursor:pointer;
-      background:var(--color-surface); border:1px solid var(--color-border);
-      border-radius:var(--radius-md); color:var(--color-text-muted); padding:0 .7rem; }
-    .mine .kill:hover { border-color:var(--color-rust); color:var(--color-rust-deep); }
+    /* A grid, not a flex row: an atlas somebody invited you to has no Delete,
+       and with flex its status word slid right into the empty space. The second
+       column is a fixed slot, so it stays reserved on the rows that do not use
+       it and every row's right edge lines up. */
+    .mine .row-wrap { display:grid; grid-template-columns:1fr 4rem; align-items:center;
+      border-bottom:1px solid var(--color-divider); }
+    .mine .row-wrap a.row { grid-column:1; }
+    /* Delete is present but not competing: no box of its own, and it only takes
+       ink when you reach for it. */
+    .mine .kill { grid-column:2; justify-self:end; font:inherit; font-size:var(--t-meta);
+      cursor:pointer; background:none; border:0; border-radius:var(--radius-md);
+      color:var(--color-text-muted); padding:.5rem .35rem; position:relative; }
+    .mine .kill:hover { color:var(--color-rust-deep); }
+    @media (pointer:coarse) {
+      .mine .kill::after { content:""; position:absolute; left:50%; top:50%;
+        width:44px; height:44px; transform:translate(-50%,-50%); }
+    }
     /* the confirm replaces the row rather than floating over it, so the atlas it
        is about stays in view while you read the question */
-    .mine .confirm { background:var(--color-rust-tint); border:1px solid var(--color-rust);
-      border-radius:var(--radius-md); padding:.7rem .9rem; font-size:var(--t-ui); }
+    .mine .confirm { margin:.5rem 0; background:var(--color-rust-tint);
+      border:1px solid var(--color-rust); border-radius:var(--radius-md);
+      padding:.7rem .9rem; font-size:var(--t-ui); }
     .mine .confirm p { margin:0 0 .55rem; }
     .mine .confirm .btnrow { margin:0; gap:.45rem; }
     .mine .confirm .btn { font-size:var(--t-meta); padding:.4rem .8rem; }

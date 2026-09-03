@@ -187,32 +187,31 @@
     if (stage) stage.style.display = "none";
     var credits = document.querySelector(".atlas-credits");
     if (credits) credits.style.display = "none";
-    var cta = document.querySelector(".atlas-cta");
-    if (cta) cta.style.display = "none";
+    /* The band was hidden here and a moss-filled card stood in for it inside
+       the gallery. The band is better: it is the same invitation this product
+       makes on every other page, in the same words and the same place. Its
+       lead says "an atlas like this", which needs an atlas on the screen to
+       mean anything, so on the home page it says what it means outright. */
+    setText("#cta-lead", "Build one of these for your own geography and data.");
     home.hidden = false;
 
     var grid = $("#home-grid");
     grid.innerHTML = "";
 
-    function card(href, tag, tagCls, title, blurb, go) {
-      var a = el("a", "home-card");
+    // one row per atlas: its name, then where it is and who built it
+    function row(href, title, blurb, featured) {
+      var a = el("a", "home-row");
       a.href = href;
-      a.innerHTML = '<span class="tag' + (tagCls ? " " + tagCls : "") + '">' + esc(tag) + "</span>" +
-        "<h2>" + esc(title) + "</h2><p>" + esc(blurb) + '</p><span class="go">' + esc(go) + " \u2192</span>";
+      a.innerHTML = "<h2>" + esc(title) +
+        (featured ? '<span class="feat">Featured</span>' : "") + "</h2>" +
+        "<p>" + esc(blurb) + '</p><span class="go" aria-hidden="true">\u2192</span>';
       return a;
     }
 
-    grid.appendChild(card("./?dataset=deoria-bioregion", "Featured atlas", "template",
+    grid.appendChild(row("./?dataset=deoria-bioregion",
       "Deoria \u00b7 Kushinagar \u00b7 Gorakhpur",
       "Built with the Systems Practice at Socratus and Jagriti \u2014 crops, value chains and ecology across three eastern-UP districts.",
-      "Open the atlas"));
-
-    var build = card("./setup/", "For organisations", "",
-      "Build your own atlas",
-      "Pick a region anywhere in the world, choose layers, add your branding and data \u2014 free to start. Sign in with just your email when you publish.",
-      "Start the wizard");
-    build.className = "home-card build";
-    grid.appendChild(build);
+      true));
 
     // published instances from the registry (best-effort; fine without the API)
     fetch("./api/instances")
@@ -221,10 +220,8 @@
         if (!data || !data.instances) return;
         data.instances.forEach(function (i) {
           if (i.slug === "deoria-bioregion") return;
-          var c = card("./?dataset=" + encodeURIComponent(i.slug), "Atlas", "",
-            i.title, [i.org, i.regionLabel].filter(Boolean).join(" \u00b7 ") || "Built with LOKA Atlas.",
-            "Open the atlas");
-          grid.insertBefore(c, build);
+          grid.appendChild(row("./?dataset=" + encodeURIComponent(i.slug), i.title,
+            [i.org, i.regionLabel].filter(Boolean).join(" \u00b7 ") || "Built with LOKA Atlas."));
         });
       })
       .catch(function () {});

@@ -131,12 +131,35 @@
     .ck-table td { border-bottom:1px solid var(--color-divider); padding:.32rem .55rem; white-space:nowrap; max-width:16rem; overflow:hidden; text-overflow:ellipsis; }
     .ck-cell { cursor:text; }
     .ck-cell:focus { outline:2px solid var(--color-moss); outline-offset:-2px; background:#fff; overflow:visible; text-overflow:clip; border-radius:3px; }
-    td.ck-number { background:var(--color-moss-tint); text-align:right; font-variant-numeric:tabular-nums; }
-    td.ck-date { background:var(--color-sienna-tint); }
-    td.ck-boolean { background:var(--color-ochre-tint); }
-    td.ck-off { background:var(--color-rust-tint); color:var(--color-rust-deep); }
+    /* Four whole columns used to be washed in four tints — moss, sienna, ochre,
+       rust — and the badge at the head of each column already names what it
+       holds. The wash said the same thing over ten times the area, and made a
+       page about somebody's own data look like a warning. What survives is the
+       cue a wash cannot give: numbers right-aligned on their digits, so a column
+       of them reads as a column of amounts.
+
+       "Off" was the worst of the four. A column you chose not to use is not an
+       error, and rust is this product's word for something wrong. It goes quiet
+       instead. */
+    td.ck-number { text-align:right; font-variant-numeric:tabular-nums; }
+    /* A cell whose contents do not fit the column still has to be findable. The
+       rust wash made it look like an error; plain grey made it look blank, which
+       is worse — a blank cell and a wrong one need different answers. So it is
+       marked, not filled: a dotted rust line under the words, the way a
+       spell-checker marks a word without shouting at it. */
+    td.ck-off { text-decoration:underline dotted var(--color-rust);
+      text-decoration-thickness:1px; text-underline-offset:3px; }
     td.ck-empty { color:var(--color-text-muted); }
     td.ck-ignored, th.ck-ignored { opacity:.45; }
+    /* The question that replaced the browser's confirm box. Tinted, not boxed:
+       it belongs to the step it interrupts, so it borrows the step's ground
+       rather than drawing a card of its own. */
+    .db-ask { margin:.6rem 0 0; padding:.75rem .85rem; border-radius:var(--radius-md);
+      background:var(--color-ochre-tint); }
+    .db-ask p { margin:0 0 .5rem; font-size:.85rem; color:var(--color-text-secondary); }
+    .db-ask p b { color:var(--color-text-primary); }
+    .db-ask .step-nav { margin:0; }
+
     .ck-foot { font-size:.8rem; color:var(--color-text-muted); margin:.5rem 0 0; }
     .ck-derive { margin-top:.9rem; }
     .ck-derive summary { cursor:pointer; font-size:.85rem; color:var(--color-text-secondary); }

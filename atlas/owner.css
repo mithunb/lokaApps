@@ -273,16 +273,34 @@
 @media (prefers-reduced-motion: reduce) { .own-spin { animation-duration:1.6s; } }
 
 .own-inv { display:flex; flex-direction:column; gap:.3rem; }
+/* A list of people is a list. Each name used to sit in its own bordered,
+   rounded box, so three collaborators read as three cards rather than three
+   rows — and DESIGN.md's own rule is that lists are the default. A hairline
+   between them says the same thing with none of the furniture. */
 .own-inv-row {
   display:flex; align-items:center; gap:.5rem;
-  font-size:.82rem; padding:.3rem .4rem;
-  border:1px solid var(--color-divider); border-radius:var(--radius-md);
+  font-size:var(--t-ui); padding:.5rem .1rem;
+  border:0; border-bottom:1px solid var(--color-divider); border-radius:0;
 }
+.own-inv-row:last-child { border-bottom:0; }
 .own-inv-who { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .own-inv-role { font-size:.72rem; color:var(--color-text-muted); }
 .own-inv-x {
   font:inherit; font-size:.75rem; line-height:1; cursor:pointer;
   background:none; border:0; color:var(--color-text-muted); padding:.15rem .25rem;
+  position:relative;
+}
+/* On a finger these were a fifth of the area a finger needs. The reach grows
+   invisibly rather than the control: the mark stays the size it should be, and
+   the area you may hit reaches the 44px a hand actually lands in. Only where
+   the pointer is coarse — on a desk a small target beside a cursor is fine, and
+   an inflated one would push the row apart for no reason. */
+@media (pointer:coarse) {
+  .own-inv-x::after, .own-x::after, .own-change::after, .own-sw::after {
+    content:""; position:absolute; left:50%; top:50%;
+    width:44px; height:44px; transform:translate(-50%,-50%);
+  }
+  .own-inv-x, .own-x, .own-change, .own-sw { position:relative; }
 }
 .own-inv-x:hover { color:var(--color-rust-deep); }
 .own-inv-add { display:flex; gap:.4rem; margin-top:.4rem; }
