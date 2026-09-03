@@ -481,17 +481,30 @@
        renderer (keyRowsEl), so bubble, popup, panel and map always agree. */
     .atlas-hint .hint-name { font-weight:600; }
     .key-rows { display:flex; flex-direction:column; gap:.18rem; margin-top:.26rem; }
-    .key-row { display:flex; align-items:center; gap:.32rem; min-width:0; }
-    .key-row .key-mark { flex:0 0 auto; width:14px; height:14px; display:block; }
-    .key-row .key-name { flex:0 0 auto; color:var(--color-text-muted); }
-    .key-row .key-name::after { content:" ·"; }
-    .key-row .key-word { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; }
+    /* The question and its answer used to share one line that refused to wrap,
+       so at the popup's 320px "What kind of place is this? · Historical
+       Landmark" came out as "Historical …". A question is a sentence and an
+       answer is the thing you came to read: they get a line each, and the
+       answer is never abbreviated. */
+    .key-row { display:grid; grid-template-columns:14px 1fr; gap:.06rem .32rem;
+      align-items:start; min-width:0; }
+    .key-row .key-mark { grid-column:1; grid-row:1; width:14px; height:14px; display:block;
+      margin-top:.15rem; }
+    .key-row .key-name { grid-column:2; font-size:.76rem; line-height:1.35;
+      color:var(--color-text-muted); }
+    .key-row .key-word { grid-column:2; min-width:0; font-weight:600;
+      overflow-wrap:anywhere; }
     /* the words that earned an answer, quoted from the place itself */
-    .key-because { display:flex; flex-wrap:wrap; gap:.22rem; align-items:baseline;
-      padding:.1rem 0 .3rem 1.15rem; }
-    .key-because-lead { font-size:.7rem; color:var(--color-text-muted); }
+    /* A reason is quoted text of unknown length — "devotional-offering",
+       "recycled library" — so it must be free to wrap onto as many lines as it
+       needs. min-width:0 lets it, because a flex item defaults to refusing to
+       shrink below its content and then overflows the popup instead. */
+    .key-because { display:flex; flex-wrap:wrap; gap:.22rem .28rem; align-items:baseline;
+      padding:.05rem 0 .34rem 1.5rem; min-width:0; }
+    .key-because-lead { flex:0 0 auto; font-size:.7rem; color:var(--color-text-muted); }
     .key-because-w { font-size:.7rem; background:var(--color-ochre-tint);
-      border-radius:3px; padding:0 .22rem; }
+      border-radius:3px; padding:.02rem .26rem; min-width:0;
+      overflow-wrap:anywhere; }
     .key-row.blank .key-word { color:var(--color-text-muted); font-weight:400; }
     .pop .key-rows { margin:.55rem 0 .15rem; }
 
@@ -503,7 +516,10 @@
     /* MapLibre ships its scale bar at 10px; it reports a distance, so it is read */
     .maplibregl-ctrl-scale { font-size:var(--t-label); }
     .atlas-popup .maplibregl-popup-close-button { font-size:var(--t-section); color:var(--color-text-muted); padding:.15rem .4rem; }
-    .pop { padding:.85rem .95rem; max-height:340px; overflow-y:auto; }
+    /* Room for the reasons. At 340px a place answering four questions, each
+       with the words behind it, started scrolling inside a box most people do
+       not realise scrolls — which reads as text cut off. */
+    .pop { padding:.85rem .95rem; max-height:min(60vh, 480px); overflow-y:auto; }
     .pop-title { font-family:'Figtree',sans-serif; font-weight:700; font-size:1.02rem; color:var(--color-text-primary); line-height:1.2; }
     .pop-sub { font-size:.78rem; text-transform:uppercase; letter-spacing:.08em; color:var(--color-moss); margin-top:.1rem; }
     .pop-field { margin-top:.6rem; }

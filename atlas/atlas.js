@@ -1592,8 +1592,24 @@
                     n: entries.length ? (tally[kind] || 0) : null,
                     why: words.length ? words.slice(0, 14) : null });
       });
-      if (opt.hasOther) rows.push({ color: KEY_OTHER, label: "other", categorical: true, family: ROW_SHAPES[fi],
-                                    n: entries.length ? other : null });
+      /* The leftover row. A question does not fail to classify a place — it has
+         nothing to say about it, which is a different thing and worth a
+         different word. And its count is the places the question could not
+         speak for, not the places carrying some answer outside the kept kinds:
+         an unanswered place holds no answer at all, so the old count read 0
+         beside a question that had missed a third of the map. */
+      if (opt.isQuestion) {
+        var answered = 0;
+        opt.kept.forEach(function (k) { answered += (tally[k] || 0); });
+        var silent = entries.length - answered;
+        if (silent > 0) {
+          rows.push({ color: KEY_OTHER, label: "unclassified", categorical: true, family: ROW_SHAPES[fi],
+                      n: silent, faint: true });
+        }
+      } else if (opt.hasOther) {
+        rows.push({ color: KEY_OTHER, label: "other", categorical: true, family: ROW_SHAPES[fi],
+                    n: entries.length ? other : null });
+      }
     });
     return rows;
   }
@@ -1614,6 +1630,11 @@
     var box = el("div", "key-rows");
     act.forEach(function (opt, fi) {
       var vals = optValuesOf(L, opt, f);
+      /* A column somebody uploaded and left empty is worth saying out loud —
+         the gap is in their data. A question with nothing to say about this
+         place is not a gap; it is an answer, and printing "left blank" under it
+         reads as a fault. So the line simply does not appear. */
+      if (!vals.length && opt.isQuestion) return;
       var row = el("div", "key-row" + (vals.length ? "" : " blank"));
       var mini = markEl(ROW_SHAPES[fi], "#6b6353");   // names the key, claims no colour
       mini.setAttribute("class", "key-mark");
@@ -1629,7 +1650,7 @@
       if (opt.isQuestion && vals.length && why && String(why).trim()) {
         var b2 = el("div", "key-because");
         b2.appendChild(el("span", "key-because-lead", "because"));
-        String(why).split(",").slice(0, 3).forEach(function (w) {
+        String(why).split(",").forEach(function (w) {
           w = w.trim();
           if (w) b2.appendChild(el("span", "key-because-w", esc(w)));
         });
