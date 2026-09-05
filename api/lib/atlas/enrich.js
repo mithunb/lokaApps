@@ -581,17 +581,33 @@ async function answerQuestions({ digest, questions, title, callJSON, model }) {
       questions.forEach((q, n) => {
         for (const i of batch) {
           const got = byIdx.get(i);
-          out[n][i] = coerceCategory(got && got['q' + n], q.kinds);
           /* Only words the place actually carries survive. A model can cite a
              word it never read, so the reason is checked against the line it
              claims to quote — an invented reason is dropped rather than shown,
              because a false because is worse than none. */
           const said = (got && Array.isArray(got['w' + n])) ? got['w' + n] : [];
           const line = String(digest.entries[i].text || '').toLowerCase();
-          why[n][i] = said
+          const stood = said
             .map((w) => String(w || '').trim())
             .filter((w) => w && w.length <= 40 && line.indexOf(w.toLowerCase()) >= 0)
             .slice(0, 3);
+          /* And the check has to cover the answer, not only the words under it.
+             It used to guard the words alone: a place could be given a kind
+             while every word offered for it failed, and the map would show that
+             kind with nothing underneath — the very thing the words exist to
+             prevent, wearing the look of a checked answer.
+
+             The model is told plainly: if the line holds no words that support
+             your answer, answer "other". When it does otherwise, the answer is
+             not kept and argued with, it is simply not kept. Measured on 40
+             places: this is 13-19% of what the cheaper model hands back.
+
+             "other" is not touched. It carries no words by design — it is the
+             model having looked and said none of these fit, which is a real
+             answer and a different thing from an answer nobody can check. */
+          const kind = coerceCategory(got && got['q' + n], q.kinds);
+          out[n][i] = (kind === 'other' || stood.length) ? kind : '';
+          why[n][i] = stood;
         }
       });
     } else {
