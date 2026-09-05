@@ -301,7 +301,20 @@
               return;
             }
             say("Adding " + qs.length + (qs.length === 1 ? " question" : " questions") + "…");
-            return keepQuestions(L, out.rows, qs).catch(function (e) {
+            return keepQuestions(L, out.rows, qs).then(function () {
+              /* When the model cannot be reached the places are still sorted — by
+                 matching words rather than by being read. That is a rougher answer
+                 and it carries no reason, so it must not sit on the map looking
+                 like the real thing. It is said here, plainly, rather than left
+                 for somebody to notice. */
+              var short = out.r.counted || 0;
+              if (!short) return;
+              say((short >= (out.r.batches || 0)
+                    ? "None of these places could be read just now"
+                    : "Some of these places could not be read just now") +
+                " — they have been sorted by matching words instead, which is rougher " +
+                "and leaves no reason under each answer. Read again later for the full result.", true);
+            }).catch(function (e) {
               say(errMsg(e), true);
             });
           })

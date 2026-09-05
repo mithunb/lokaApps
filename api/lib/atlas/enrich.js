@@ -120,6 +120,19 @@ function clipAtWord(s, n) {
 
 // rows + chosen columns -> per-row digest text ("description — tags: a, b"),
 // plus how many rows said anything and how often each tag recurs
+/* Every call to the model used to be wrapped in a bare `catch`, and every one
+   of those swallowed whatever went wrong. That is how a model id that Google
+   had RETIRED went unnoticed: each filing call came back 404, the catch turned
+   it into nothing, and the places were filed by counting words instead of by
+   being read. Not one line of it reached a log.
+
+   A failed call is still allowed to degrade the reading rather than break it —
+   that part was right. What was wrong is that it did so without a word. */
+function modelFailed(what, model, e) {
+  console.warn('[atlas] the model could not ' + what + ' (' + (model || 'no model') + '): ' +
+    ((e && e.message) || e));
+}
+
 export function buildDigest(rows, fields) {
   const cols = (fields || []).map((f) => String(f));
   const byCol = cols.map((f) => ({
@@ -232,7 +245,8 @@ export async function induceThemes({ digest, title, callJSON, model }) {
   ].join('\n');
 
   let out = null;
-  try { out = await callJSON(model, prompt, INDUCE_SCHEMA, { think: true }); } catch { return null; }
+  try { out = await callJSON(model, prompt, INDUCE_SCHEMA, { think: true }); }
+  catch (e) { modelFailed('find themes', model, e); return null; }
   if (!out || (out.verdict !== 'themes' && out.verdict !== 'no_clear_themes')) return null;
   if (out.verdict === 'no_clear_themes') {
     return { verdict: 'no_clear_themes', note: String(out.note || '').slice(0, 200), listLength: places.listLength };
@@ -374,7 +388,8 @@ export async function classifyRows({ digest, categorySet, title, callJSON, model
       FENCE_SHUT,
     ].join('\n');
     let res = null;
-    try { res = await callJSON(model, prompt, schema, { file: true }); } catch { res = null; }
+    try { res = await callJSON(model, prompt, schema, { file: true }); }
+    catch (e) { modelFailed('sort a batch of places', model, e); res = null; }
     if (res && Array.isArray(res.rows)) {
       const byIdx = new Map();
       res.rows.forEach((r) => byIdx.set(r.i, r));
@@ -476,7 +491,8 @@ async function induceQuestions({ digest, fields, title, callJSON, model }) {
   ].filter((l) => l !== null).join('\n');
 
   let out = null;
-  try { out = await callJSON(model, prompt, QUESTIONS_SCHEMA, { think: true }); } catch { return null; }
+  try { out = await callJSON(model, prompt, QUESTIONS_SCHEMA, { think: true }); }
+  catch (e) { modelFailed('find questions', model, e); return null; }
   if (!out) return null;
   if (out.verdict === 'no_clear_questions') return { verdict: 'no_clear_questions', note: String(out.note || '') };
   const questions = (Array.isArray(out.questions) ? out.questions : [])
@@ -523,6 +539,9 @@ async function answerQuestions({ digest, questions, title, callJSON, model }) {
   const mapPhrase = title ? 'A map called "' + title + '"' : 'This map';
   const out = questions.map(() => digest.entries.map(() => ''));
   const why = questions.map(() => digest.entries.map(() => []));
+  // a batch the model never answered is filed by counting words. That is a
+  // worse answer, honestly reached, and the reading has to be able to say so.
+  let batches = 0, counted = 0, trouble = '';
   const asked = questions.map((q, n) =>
     'q' + n + ' — ' + q.question + '\n' +
     q.kinds.map((k) => '   ' + k.name + (k.definition ? ' — ' + k.definition : '')).join('\n'));
@@ -553,7 +572,9 @@ async function answerQuestions({ digest, questions, title, callJSON, model }) {
     ].join('\n');
 
     let res = null;
-    try { res = await callJSON(model, prompt, schema, { file: true }); } catch { res = null; }
+    batches += 1;
+    try { res = await callJSON(model, prompt, schema, { file: true }); }
+    catch (e) { modelFailed('read a batch of places', model, e); trouble = (e && e.message) || String(e); res = null; }
     if (res && Array.isArray(res.rows)) {
       const byIdx = new Map();
       res.rows.forEach((r) => byIdx.set(r.i, r));
@@ -576,6 +597,7 @@ async function answerQuestions({ digest, questions, title, callJSON, model }) {
     } else {
       // the call failed, or the budget ran out — deterministic filing keeps
       // every question whole rather than leaving a ragged half-answer
+      counted += 1;
       questions.forEach((q, n) => {
         const seeded = assignBySeed(batch.map((i) => digest.entries[i].text), q.kinds);
         // filed by counting, not by reading: it has no reason to offer, and
@@ -584,7 +606,7 @@ async function answerQuestions({ digest, questions, title, callJSON, model }) {
       });
     }
   }
-  return { answers: out, why };
+  return { answers: out, why, batches, counted, trouble };
 }
 
 /* The words an existing key already uses. A proposed kind may not take one of
@@ -675,7 +697,13 @@ export async function enrichRows(opts) {
       };
     }).filter((q) => q.counts.length >= MIN_CATS);
     if (!questions.length) return { verdict: 'refused', reason: 'no question survived the counting' };
+    /* How much of this reading was actually read. When the model cannot be
+       reached the places are still filed, by matching words — and answers
+       reached that way carry no reason, so the map would show a judgement with
+       nothing under it and look exactly like a good reading. The count travels
+       with the answers so the person who asked for it is told. */
     return { verdict: 'questions', questions, withText: digest.withText,
+             batches: filed.batches, counted: filed.counted, trouble: filed.trouble || '',
              reading: ind.reading || '', facts: ind.facts || [] };
   }
 
@@ -821,7 +849,8 @@ export async function induceFamilies({ vocab, title, callJSON, model }) {
   ].filter(Boolean).join('\n');
 
   let out = null;
-  try { out = await callJSON(model, prompt, FAMILY_SCHEMA, { think: true }); } catch { return null; }
+  try { out = await callJSON(model, prompt, FAMILY_SCHEMA, { think: true }); }
+  catch (e) { modelFailed('group the labels', model, e); return null; }
   if (!out || (out.verdict !== 'families' && out.verdict !== 'no_clear_families')) return null;
   if (out.verdict === 'no_clear_families') {
     return { verdict: 'no_clear_families', note: String(out.note || '').slice(0, 200) };

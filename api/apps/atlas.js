@@ -1891,23 +1891,35 @@ async function geminiJSON(model, prompt, schema) {
 
    Thinking off, and room to answer in. A batch of 40 places across several
    questions, each with the words that justify it, runs about 3,000 tokens. */
-async function geminiJSONFile(model, prompt, schema) {
+async function fileOnce(model, prompt, schema, quiet) {
+  const cfg = {
+    responseMimeType: 'application/json',
+    responseSchema: schema,
+    maxOutputTokens: 24000,
+  };
+  // asking for no thinking, in the dialect the model speaks
+  if (quiet) cfg.thinkingConfig = quiet;
   const r = await fetch(
     'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent',
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseSchema: schema,
-          maxOutputTokens: 24000,
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-      }),
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: cfg }),
+      signal: AbortSignal.timeout(120000),
     },
   );
+  /* The HTTP status was never looked at. A model id that Google had retired
+     answered 404 with a body carrying no candidates, so this threw "no answer
+     from the model" — true, and useless. It cost days: the real message, right
+     there in the body, said the model no longer existed. */
+  if (!r.ok) {
+    let why = '';
+    try { const b = await r.json(); why = (b && b.error && b.error.message) || ''; } catch { /* body was not json */ }
+    const e = new Error('the model refused (' + r.status + ')' + (why ? ': ' + why.replace(/\s+/g, ' ').slice(0, 160) : ''));
+    e.status = r.status;
+    e.body = why;
+    throw e;
+  }
   const j = await r.json();
   const cand = j && j.candidates && j.candidates[0];
   if (!cand) throw new Error('no answer from the model');
@@ -1918,6 +1930,30 @@ async function geminiJSONFile(model, prompt, schema) {
   const text = cand.content && cand.content.parts && cand.content.parts[0] && cand.content.parts[0].text;
   if (!text) throw new Error('the model answered with nothing');
   return JSON.parse(text);
+}
+
+/* Filing places into kinds is not reasoning, so the model is asked not to spend
+   its allowance thinking. But HOW you ask changed between model generations:
+   the 2.5 family takes a budget of zero, and the 3 family refuses that field
+   outright and takes a named level instead. Measured on 3.5-flash-lite:
+   thinkingBudget:0 is a flat 400, while omitting the field altogether already
+   costs zero thinking tokens on this task.
+
+   Rather than keep a list of which model speaks which dialect — the kind of
+   list that goes stale exactly when a model is retired and nobody notices —
+   the ask is dropped when it is refused, and the call is made again without
+   it. One wasted round trip on a model generation we have not met before, and
+   never a filing call lost to a field name. */
+async function geminiJSONFile(model, prompt, schema) {
+  try {
+    return await fileOnce(model, prompt, schema, { thinkingBudget: 0 });
+  } catch (e) {
+    if (e && e.status === 400 && /thinking|invalid argument/i.test(e.body || e.message || '')) {
+      console.warn('[atlas] ' + model + ' will not take thinkingBudget — asking again without it');
+      return fileOnce(model, prompt, schema, null);
+    }
+    throw e;
+  }
 }
 
 /* Theme-finding's induce call only: the one call that must REASON over the
