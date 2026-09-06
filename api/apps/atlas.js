@@ -1638,6 +1638,8 @@ function requireDatasetEditor(req, res, datasetId) {
 }
 
 const MAX_ROWS = 5000, MAX_COLS = 40;
+// the viewer shows at most eight marks per key, so more kinds than that is noise
+const MAX_CATS_KEPT = 8;
 const geminiRate = new Map();
 /* One request used to buy a single token at the door and then spend it as often
    as it liked. The reading's filing step calls the model once per 40 rows, so a
@@ -2446,6 +2448,21 @@ async function ingestLayer(b, who) {
           .filter(([k, v]) => k && typeof v === 'string' && v.trim())
           .map(([k, v]) => [String(k).slice(0, 60), v.trim().slice(0, 40)]))
       : undefined,
+    /* The kinds each question offers, kept beside its wording. The wording
+       alone is not enough to ask the question again: without the kinds, a
+       later reading would have to invent them, and inventing them is exactly
+       what settling the questions is meant to stop. */
+    keyKinds: (b.keyKinds && typeof b.keyKinds === 'object')
+      ? Object.fromEntries(Object.entries(b.keyKinds)
+          .filter(([k, v]) => k && Array.isArray(v) && v.length)
+          .map(([k, v]) => [String(k).slice(0, 60), v.slice(0, MAX_CATS_KEPT)
+            .map((x) => ({
+              name: String((x && x.name) || '').trim().slice(0, 40),
+              definition: String((x && x.definition) || '').trim().slice(0, 160),
+            }))
+            .filter((x) => x.name)])
+          .filter(([, v]) => v.length))
+      : undefined,
     replacingLayerId: replacing ? replacing.id : undefined,
     replacingAddedBy: replacing ? replacing.addedBy : undefined,
     replacingAddedAt: replacing ? replacing.addedAt : undefined,
@@ -2663,11 +2680,39 @@ function wordColumnsOf(rows) {
   });
 }
 
+/* The questions a layer has already settled on, in the shape a reading wants
+   them back. A layer read before the kinds were kept has wording but no kinds,
+   and there is nothing to be done about that except read it afresh — so it is
+   treated as unasked rather than half-asked. */
+function questionsOn(layer, rows) {
+  const labels = (layer && layer.keyLabels) || {};
+  const kinds = (layer && layer.keyKinds) || {};
+  return Object.keys(labels)
+    .filter((col) => /^pattern_\d+$/.test(col))
+    .sort((a, b) => Number(a.split('_')[1]) - Number(b.split('_')[1]))
+    .map((col) => ({ question: labels[col], kinds: kinds[col] || kindsSeenIn(rows, col) }))
+    .filter((q) => q.question && q.kinds.length);
+}
+
+/* An atlas read before the kinds were kept has the wording and nothing else.
+   Rather than make it drift once more before it can settle, the kinds are
+   recovered from what the map is currently showing: the answers on the places
+   ARE the kinds. Only what a reader can already see becomes settled, which is
+   the right thing to freeze. */
+function kindsSeenIn(rows, col) {
+  const seen = [];
+  for (const r of rows || []) {
+    const v = String((r && r[col]) || '').trim();
+    if (v && v !== 'other' && !seen.includes(v)) seen.push(v);
+  }
+  return seen.slice(0, MAX_CATS_KEPT).map((name) => ({ name, definition: '' }));
+}
+
 /* A whole reading, start to finish, with no browser involved: find the layer,
    read its places, work out what they can be asked, answer it, and write the
    result. Returns what happened rather than throwing on a reading that simply
    had nothing to find — only a fault throws. */
-async function runReading(dataset, layerId) {
+async function runReading(dataset, layerId, afresh) {
   if (!ai) throw refuse(503, 'there is no model configured');
   // readManifest hands back the base, the org's overlay and the directory
   const m = imports.readManifest(dataset);
@@ -2685,10 +2730,16 @@ async function runReading(dataset, layerId) {
   const fields = wordColumnsOf(rows);
   if (!fields.length) throw refuse(400, 'none of those columns hold words to read');
 
+  /* The questions this layer already carries. Handed back so a second reading
+     answers them rather than inventing a new set — an atlas somebody has linked
+     to should not change its keys under them. `afresh` is the deliberate way to
+     ask for new ones, and it is not offered outside the operator's own route. */
+  const asked = afresh ? [] : questionsOn(layer, rows);
   const inst = reg.getInstance(dataset);
   const out = await enrich.enrichRows({
     rows, fields, title: (inst && inst.title) || dataset,
     mode: 'questions',
+    keepQuestions: asked,
     seedSet: keptCatSet(dataset),
     callJSON: aiCaller('server'),
     models: { flash: getFlashModel(), flashLite: getFlashLiteModel() },
@@ -2852,7 +2903,7 @@ router.post('/admin/reread', async (req, res) => {
   const b = req.body || {};
   const dataset = String(b.dataset || ''), layerId = String(b.layerId || '');
   try {
-    const out = await runReading(dataset, layerId);
+    const out = await runReading(dataset, layerId, b.afresh === true);
     if (cannotReach(out.verdict)) {
       const inst = reg.getInstance(dataset);
       owed.owe({ dataset, layerId, email: (inst && inst.email) || '',
@@ -2877,7 +2928,7 @@ router.post('/admin/reread', async (req, res) => {
    reading finished in front of somebody does — one path, one result, rather
    than a second implementation quietly drifting from the first. */
 async function writeReading({ dataset, layerId, rows, questions, label, source }) {
-  const labels = {};
+  const labels = {}, kinds = {};
   const out = rows.map((p) => {
     const o = Object.assign({}, p);
     delete o._category;                 // the engine's own, re-derived on build
@@ -2887,6 +2938,8 @@ async function writeReading({ dataset, layerId, rows, questions, label, source }
     const col = 'pattern_' + (n + 1);
     const whyCol = col + '_why';
     labels[col] = q.question;
+    // the kinds travel with the wording so this question can be asked again
+    kinds[col] = (q.counts || []).map((c) => ({ name: c.name, definition: c.definition || '' }));
     (q.categories || []).forEach((c, i) => {
       if (out[i]) out[i][col] = c === 'other' ? '' : (c || '');
     });
@@ -2905,7 +2958,7 @@ async function writeReading({ dataset, layerId, rows, questions, label, source }
       name: nm, type: (nm === 'latitude' || nm === 'longitude') ? 'number' : 'string',
     })),
     rows: out,
-    keyLabels: labels,
+    keyLabels: labels, keyKinds: kinds,
     meta: { sourceName: source, rowCount: out.length },
   }, 'server');
   if (!ing || !ing.importId) throw refuse(500, 'the layer could not be prepared');
@@ -3544,6 +3597,9 @@ function commitLayer({ importId, dataset }, who) {
       // merge, never replace: a layer may already carry a name for another key
       frag.stanza.keyLabels = Object.assign({}, frag.stanza.keyLabels || {}, session.keyLabels);
     }
+    if (session.keyKinds && Object.keys(session.keyKinds).length) {
+      frag.stanza.keyKinds = Object.assign({}, frag.stanza.keyKinds || {}, session.keyKinds);
+    }
     const out = imports.commitLayer(session.dataset, frag.stanza, frag.sourceFile,
       { type: 'FeatureCollection', features });
     imports.discardImport(session.id);
@@ -3755,6 +3811,8 @@ router.post('/layers/enrich', async (req, res) => {
   try {
     const out = await enrich.enrichRows({
       rows, fields, title,
+      // the questions this layer already settled on, if it has any
+      keepQuestions: Array.isArray(b.keepQuestions) ? b.keepQuestions : [],
       // questions mode asks what these places can be asked, rather than assuming
       // the one question the old reading always asked
       mode: b.mode === 'questions' ? 'questions' : undefined,

@@ -285,6 +285,11 @@
             var rows = (d.features || []).map(function (f) { return f.properties || {}; });
             return api("layers/enrich", { method: "POST", body: {
               dataset: SLUG, layerId: L.id, rows: rows, fields: cols, mode: "questions",
+              /* The questions this layer already settled on. Sent back so a
+                 reading after new places are added answers the same questions
+                 rather than inventing a fresh set — the keys on a map somebody
+                 has linked to should not move under them. */
+              keepQuestions: settledQuestions(L),
               title: (window.LokaAtlas.manifest && window.LokaAtlas.manifest.title) || "",
             } }).then(function (r) { return { r: r, rows: rows }; });
           })
@@ -357,8 +362,18 @@
       .catch(function () { /* not worth troubling anyone with — it retries next visit */ });
   }
 
+  // what this layer has already been asked, wording and kinds together
+  function settledQuestions(L) {
+    var labels = (L && L.keyLabels) || {}, kinds = (L && L.keyKinds) || {};
+    return Object.keys(labels)
+      .filter(function (c) { return /^pattern_\d+$/.test(c); })
+      .sort(function (a, b) { return Number(a.split("_")[1]) - Number(b.split("_")[1]); })
+      .map(function (c) { return { question: labels[c], kinds: kinds[c] || [] }; })
+      .filter(function (q) { return q.question && q.kinds.length; });
+  }
+
   function keepQuestions(L, rows, questions) {
-    var labels = {};
+    var labels = {}, kinds = {};
     var out = rows.map(function (p) {
       var o = Object.assign({}, p);
       delete o._category;                 // the engine's own, re-derived on build
@@ -368,6 +383,10 @@
       var col = "pattern_" + (n + 1);
       var whyCol = col + "_why";
       labels[col] = q.question;
+      // kept beside the wording so this question can be asked again unchanged
+      kinds[col] = (q.counts || []).map(function (c) {
+        return { name: c.name, definition: c.definition || "" };
+      });
       (q.categories || []).forEach(function (c, i) {
         if (out[i]) out[i][col] = c === "other" ? "" : (c || "");
       });
@@ -388,7 +407,7 @@
         return { name: nm, type: (nm === "latitude" || nm === "longitude") ? "number" : "string" };
       }),
       rows: out,
-      keyLabels: labels,
+      keyLabels: labels, keyKinds: kinds,
       meta: { sourceName: L.source, rowCount: out.length },
     } })
       .then(function (ing) {

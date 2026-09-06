@@ -692,18 +692,43 @@ export async function enrichRows(opts) {
      answer travels with it so the panel can say so. The name gate still runs
      per question, because a kind may not steal a word an existing key uses. */
   if (opts.mode === 'questions') {
-    const ind = await induceQuestions({ digest, fields, title, callJSON, model: models.flash });
-    if (!ind) return { verdict: 'unavailable', trouble: '' };
-    if (ind.verdict === 'unavailable') return { verdict: 'unavailable', trouble: ind.trouble || '' };
-    if (ind.verdict === 'no_clear_questions') return { verdict: 'no_clear_questions', note: ind.note };
+    /* An atlas that has already been read keeps the questions it was given.
 
-    const reserved = [...fields, ...keyKindsOf(rows, fields)];
-    const kept = [];
-    for (const q of ind.questions) {
-      const g = gateNames(q.kinds, { title, listLength: ind.listLength, reserved });
-      if (g.kept.length >= MIN_CATS) kept.push({ question: q.question, kinds: g.kept });
+       Asked afresh, the same places yield a different set every time — the
+       territory holds (what kind of place, what it is made of, what you can do
+       there) but the wording and the exact cut move, and a question sometimes
+       vanishes. Measured on the same 66 places, three readings in one day gave
+       three different sets. That is fine for a first look and no good at all
+       for a map somebody has linked to: the keys would change under them.
+
+       So questions are settled once. A later reading — because more places were
+       added, or because the first one could not finish — answers the questions
+       already on the layer rather than inventing new ones. Finding new
+       questions is possible but has to be asked for. */
+    const askedBefore = (opts.keepQuestions || [])
+      .map((q) => ({
+        question: String((q && q.question) || '').trim(),
+        kinds: ((q && q.kinds) || [])
+          .map((k) => ({ name: String((k && k.name) || '').trim(), definition: String((k && k.definition) || '') }))
+          .filter((k) => k.name),
+      }))
+      .filter((q) => q.question && q.kinds.length >= MIN_CATS);
+
+    let kept = askedBefore, ind = null;
+    if (!kept.length) {
+      ind = await induceQuestions({ digest, fields, title, callJSON, model: models.flash });
+      if (!ind) return { verdict: 'unavailable', trouble: '' };
+      if (ind.verdict === 'unavailable') return { verdict: 'unavailable', trouble: ind.trouble || '' };
+      if (ind.verdict === 'no_clear_questions') return { verdict: 'no_clear_questions', note: ind.note };
+
+      const reserved = [...fields, ...keyKindsOf(rows, fields)];
+      kept = [];
+      for (const q of ind.questions) {
+        const g = gateNames(q.kinds, { title, listLength: ind.listLength, reserved });
+        if (g.kept.length >= MIN_CATS) kept.push({ question: q.question, kinds: g.kept });
+      }
+      if (!kept.length) return { verdict: 'refused', reason: 'no question had enough kinds that fit' };
     }
-    if (!kept.length) return { verdict: 'refused', reason: 'no question had enough kinds that fit' };
 
     const filed = await answerQuestions({
       digest, questions: kept, title, callJSON, model: models.flashLite || models.flash,
@@ -738,12 +763,13 @@ export async function enrichRows(opts) {
         // panel shows beside its switch
         coverage: rows.length ? answered / rows.length : 0,
       };
-    }).filter((q) => q.counts.length >= MIN_CATS);
+    }).filter((q) => q.counts.length >= MIN_CATS || askedBefore.length);
     if (!questions.length) return { verdict: 'refused', reason: 'no question survived the counting' };
     // everything below here was read: the all-or-nothing gate is above
     return { verdict: 'questions', questions, withText: digest.withText,
-             batches: filed.batches,
-             reading: ind.reading || '', facts: ind.facts || [] };
+             batches: filed.batches, asked: kept,
+             // there is no fresh reading of the set when the questions were kept
+             reused: !ind, reading: (ind && ind.reading) || '', facts: (ind && ind.facts) || [] };
   }
 
   const ind = await induceThemes({ digest, title, callJSON, model: models.flash });
