@@ -492,8 +492,15 @@ async function induceQuestions({ digest, fields, title, callJSON, model }) {
 
   let out = null;
   try { out = await callJSON(model, prompt, QUESTIONS_SCHEMA, { think: true }); }
-  catch (e) { modelFailed('find questions', model, e); return null; }
-  if (!out) return null;
+  catch (e) {
+    modelFailed('find questions', model, e);
+    /* Carry the reason out. A reading that could not even be started looks the
+       same from outside as one that found nothing to ask, and they want
+       opposite things done about them — one is come back to, the other is
+       settled. The difference is only knowable here. */
+    return { verdict: 'unavailable', trouble: (e && e.message) || String(e) };
+  }
+  if (!out) return { verdict: 'unavailable', trouble: 'the model answered with nothing' };
   if (out.verdict === 'no_clear_questions') return { verdict: 'no_clear_questions', note: String(out.note || '') };
   const questions = (Array.isArray(out.questions) ? out.questions : [])
     .slice(0, MAX_QUESTIONS)
@@ -686,7 +693,8 @@ export async function enrichRows(opts) {
      per question, because a kind may not steal a word an existing key uses. */
   if (opts.mode === 'questions') {
     const ind = await induceQuestions({ digest, fields, title, callJSON, model: models.flash });
-    if (!ind) return { verdict: 'unavailable' };
+    if (!ind) return { verdict: 'unavailable', trouble: '' };
+    if (ind.verdict === 'unavailable') return { verdict: 'unavailable', trouble: ind.trouble || '' };
     if (ind.verdict === 'no_clear_questions') return { verdict: 'no_clear_questions', note: ind.note };
 
     const reserved = [...fields, ...keyKindsOf(rows, fields)];

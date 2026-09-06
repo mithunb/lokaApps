@@ -284,7 +284,7 @@
           .then(function (d) {
             var rows = (d.features || []).map(function (f) { return f.properties || {}; });
             return api("layers/enrich", { method: "POST", body: {
-              dataset: SLUG, rows: rows, fields: cols, mode: "questions",
+              dataset: SLUG, layerId: L.id, rows: rows, fields: cols, mode: "questions",
               title: (window.LokaAtlas.manifest && window.LokaAtlas.manifest.title) || "",
             } }).then(function (r) { return { r: r, rows: rows }; });
           })
@@ -295,17 +295,18 @@
                  "These places have nothing to be asked" is a finding. "The AI
                  could not be reached" is a fault on our side, and the person
                  should not be left thinking their data was the problem. */
-              /* When the retry lands, this line becomes a promise that something
-                 else keeps: tried again on its own, and an email when it is
-                 done. Until that exists it says only what is true today —
-                 a layer with no answers starts a reading when the atlas opens. */
+              /* The promise is kept by the waiting list on the server: the
+                 reading is written down, tried again on a backing-off timer,
+                 and whoever asked is written to when it lands or when it is
+                 given up on. So the line can say so again. */
               if (out.r.verdict === "unread") {
                 var read = out.r.read || 0, all = out.r.batches || 0;
                 say("The AI that reads your places could not be reached" +
                   (read && read < all
                     ? " part-way through, so nothing was kept — reading half a set would leave the rest looking like places with nothing to say."
                     : ", so nothing was added.") +
-                  " Your data is untouched. Opening this atlas again will start the reading afresh.", true);
+                  " Your data is untouched. This will be tried again on its own, and " +
+                  "you will get an email when it is done.", true);
                 return;
               }
               say(out.r.verdict === "no_clear_questions"

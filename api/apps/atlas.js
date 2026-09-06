@@ -16,6 +16,7 @@ import * as reg from '../lib/atlas/registry.js';
 import * as auth from '../lib/atlas/auth.js';
 import { sendMail } from '../lib/mailer.js';
 import { noteTrouble, noteOk, setTroubleNotifier, openTroubles } from '../lib/atlas/trouble.js';
+import * as owed from '../lib/atlas/owed.js';
 import {
   enqueueBuild, getJob, setJobDoneHook, setStrandedBuildHook, DATASETS_ROOT, PRIVATE_ROOT,
 } from '../lib/atlas/jobs.js';
@@ -959,7 +960,7 @@ router.get('/admin/models', (req, res) => {
   if (!auth.isAdmin(req) && !auth.isAdminSession(req)) {
     return res.status(404).json({ error: 'not found' });
   }
-  res.json({ models: getResolverStatus(), trouble: openTroubles() });
+  res.json({ models: getResolverStatus(), trouble: openTroubles(), owed: owed.all() });
 });
 
 router.get('/admin/instances', (req, res) => {
@@ -2671,7 +2672,8 @@ async function runReading(dataset, layerId) {
 
   if (out.verdict !== 'questions' || !(out.questions || []).length) {
     return { wrote: false, verdict: out.verdict, unread: out.unread || 0,
-             read: out.read, batches: out.batches, trouble: out.trouble || '' };
+             read: out.read, batches: out.batches, trouble: out.trouble || '',
+             note: out.note || '' };
   }
   await writeReading({
     dataset, layerId, rows, questions: out.questions,
@@ -2687,6 +2689,135 @@ async function runReading(dataset, layerId) {
   };
 }
 
+/* Coming back to a reading that could not be finished.
+
+   Once a minute, the oldest outstanding reading that is due gets one more go.
+   One at a time on purpose: a model that just came back from being overloaded
+   is the last thing to throw a queue at, and a reading is three calls.
+
+   Whoever asked hears once, at the end — when it lands, or when it is given up
+   on. Not on each attempt: they asked for a map, not for a progress report on
+   our weather. */
+/* Two verdicts mean "we could not reach the model" and everything else means
+   "we looked". The difference decides whether a reading is written down and
+   come back to, or simply over. The drill that found this had the model wholly
+   unreachable, so question-finding failed before answering ever began — and
+   the debt was being dropped because only the second failure had a name. */
+function cannotReach(verdict) { return verdict === 'unread' || verdict === 'unavailable'; }
+
+// a refused key or a withdrawn model will not clear by waiting; busy will
+function troubleKind(why) { return /\b(404|400|401|403)\b/.test(String(why || '')) ? 'gone' : 'busy'; }
+
+const RETRY_EVERY = 60 * 1000;
+let retrying = false;
+
+async function tellTheOwner(o, subject, lines) {
+  if (!o.email) return;
+  try {
+    await sendMail({ to: o.email, subject, text: lines.join('\n') + '\n' });
+  } catch (e) {
+    console.warn('[owed] could not write to ' + o.email + ' — ' + (e && e.message));
+  }
+}
+
+async function retryOne(o) {
+  const where = o.dataset + '/' + o.layerId;
+  let out;
+  try {
+    out = await runReading(o.dataset, o.layerId);
+  } catch (e) {
+    // the layer or the atlas is gone: the debt goes with it
+    if (e && (e.status === 404 || e.status === 400)) {
+      owed.settle(o.dataset, o.layerId);
+      console.log('[owed] dropped ' + where + ' — ' + e.message);
+      return;
+    }
+    owed.owe({ dataset: o.dataset, layerId: o.layerId, kind: 'busy', trouble: (e && e.message) || '' });
+    return;
+  }
+
+  if (out.wrote) {
+    owed.settle(o.dataset, o.layerId);
+    const waited = Math.max(1, Math.round((Date.now() - o.firstAt) / 60000));
+    console.log('[owed] finished ' + where + ' after ' + o.attempts + ' tries');
+    const inst = reg.getInstance(o.dataset);
+    await tellTheOwner(o, 'Your atlas has been read',
+      ['The AI could not be reached when you added this data, so nothing was written at the time.',
+       'It has been read now.',
+       '',
+       (inst && inst.title) || o.dataset,
+       ...out.questions.map((q) => '  ' + q.question + ' — answered for ' + q.answered + ' places'),
+       '',
+       'Each answer shows the words in your own data that led to it, so you can check any of them.',
+       '',
+       'Open your atlas: https://loka.place/apps/atlas/?dataset=' + encodeURIComponent(o.dataset),
+       '',
+       'It waited about ' + waited + ' minute' + (waited === 1 ? '' : 's') + '.']);
+    return;
+  }
+
+  if (cannotReach(out.verdict)) {
+    owed.owe({ dataset: o.dataset, layerId: o.layerId,
+      kind: troubleKind(out.trouble), trouble: out.trouble || '' });
+    return;
+  }
+
+  /* The reading ran and found nothing to ask. That is an answer, not a debt —
+     and the layer records it, so it will not be rediscovered on every visit. */
+  owed.settle(o.dataset, o.layerId);
+  console.log('[owed] ' + where + ' has nothing to be asked (' + out.verdict + ')');
+}
+
+async function sweepOwed() {
+  if (retrying) return;
+  retrying = true;
+  try {
+    for (const o of owed.expired()) {
+      owed.settle(o.dataset, o.layerId);
+      const days = Math.round(owed.GIVE_UP_MS / 86400000);
+      console.warn('[owed] giving up on ' + o.dataset + '/' + o.layerId + ' after ' + days + ' days');
+      await tellTheOwner(o, 'We could not read your atlas',
+        ['The AI that reads your places has not been reachable for ' + days + ' days, so this has been stopped.',
+         '',
+         'Nothing was written and your data is untouched — no places were guessed at.',
+         'Opening your atlas will start a fresh reading whenever you like:',
+         'https://loka.place/apps/atlas/?dataset=' + encodeURIComponent(o.dataset),
+         '',
+         'If you write to us about this, the useful bit is: ' + (o.trouble || 'nothing was recorded')]);
+      await sendMail({ to: ADMIN_EMAIL,
+        subject: '[LOKA Atlas] gave up reading ' + o.dataset + '/' + o.layerId,
+        text: 'Owed since ' + new Date(o.firstAt).toISOString() + ', ' + o.attempts +
+          ' attempts, last trouble: ' + (o.trouble || 'none recorded') + '\n' +
+          'The owner has been told. Nothing was written.\n' }).catch(() => {});
+    }
+    const list = owed.due();
+    if (list.length) await retryOne(list[0]);
+  } catch (e) {
+    console.warn('[owed] the sweep stumbled — ' + (e && e.message));
+  } finally {
+    retrying = false;
+  }
+}
+
+/* Called once, by the server, after this app is mounted. Two jobs: come back
+   to readings that are owed, and notice when the model chosen for a job
+   changes — a reading parked because a model was withdrawn is exactly the
+   reading that a new model unblocks. */
+export function startBackgroundWork() {
+  let lastFiling = getFlashLiteModel();
+  let lastReading = getFlashModel();
+  setInterval(() => {
+    const filing = getFlashLiteModel(), reading = getFlashModel();
+    if (filing !== lastFiling || reading !== lastReading) {
+      lastFiling = filing; lastReading = reading;
+      owed.wake('now reading on ' + reading + ' and answering on ' + filing);
+    }
+  }, 5 * 60 * 1000).unref();
+  setInterval(sweepOwed, RETRY_EVERY).unref();
+  const waiting = owed.all().length;
+  if (waiting) console.log('[owed] ' + waiting + ' reading' + (waiting === 1 ? '' : 's') + ' still owed');
+}
+
 /* The operator's way to start a reading by hand. It exists because the reading
    otherwise only begins when an owner opens their atlas signed in, which is no
    use for one that failed while nobody was there. */
@@ -2695,8 +2826,17 @@ router.post('/admin/reread', async (req, res) => {
     return res.status(404).json({ error: 'not found' });
   }
   const b = req.body || {};
+  const dataset = String(b.dataset || ''), layerId = String(b.layerId || '');
   try {
-    res.json(await runReading(String(b.dataset || ''), String(b.layerId || '')));
+    const out = await runReading(dataset, layerId);
+    if (cannotReach(out.verdict)) {
+      const inst = reg.getInstance(dataset);
+      owed.owe({ dataset, layerId, email: (inst && inst.email) || '',
+        kind: troubleKind(out.trouble), trouble: out.trouble || '' });
+    } else if (out.wrote) {
+      owed.settle(dataset, layerId);
+    }
+    res.json(out);
   } catch (e) {
     // an operator asked for this by hand; give them the whole fault, not a summary
     if (!e.status) console.error('[atlas] re-read failed:', e && e.stack);
@@ -3598,6 +3738,18 @@ router.post('/layers/enrich', async (req, res) => {
       callJSON,
       models: { flash: getFlashModel(), flashLite: getFlashLiteModel() },
     });
+    /* A reading that could not be finished is written down rather than shrugged
+       off. The browser is told, but the browser goes away — the list is what
+       brings somebody back to this layer once the model is answering again. */
+    if (out && cannotReach(out.verdict) && dataset && b.layerId) {
+      const asked = auth.sessionFromReq(req);
+      const inst = reg.getInstance(dataset);
+      owed.owe({
+        dataset, layerId: String(b.layerId),
+        email: (asked && asked.email) || (inst && inst.email) || '',
+        kind: troubleKind(out.trouble), trouble: out.trouble || '',
+      });
+    }
     res.json(out);
   } catch (e) {
     res.status(502).json({ error: 'theme-finding failed: ' + e.message });

@@ -60,6 +60,13 @@ const appFiles = fs.existsSync(appsDir)
       // App exports an express Router — mount it with full sub-path support.
       app.use(`/api/${name}`, mod.router);
       console.log(`mounted router at /api/${name}`);
+      // an app with background work of its own says so, and it starts once the
+      // app is actually mounted rather than merely imported
+      if (typeof mod.startBackgroundWork === 'function') {
+        try { mod.startBackgroundWork(); } catch (e) {
+          console.warn(`apps/${file}: background work would not start — ${e.message}`);
+        }
+      }
       continue;
     }
     if (typeof mod.default !== 'function') {
