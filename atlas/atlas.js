@@ -1533,9 +1533,8 @@
         r.setAttribute("role", "button");
         r.setAttribute("tabindex", "0");
         r.setAttribute("aria-expanded", "false");
-        var words = el("div", "leg-why");
+        var words = whyWordsEl(L, it.why);
         words.hidden = true;
-        it.why.forEach(function (w) { words.appendChild(el("span", "leg-why-w", esc(w))); });
         out.push(words);
         var flip = function () {
           words.hidden = !words.hidden;
@@ -1577,13 +1576,21 @@
            under every kind would bury the thing being glanced at. Tapping opens
            one — which is what the shelves used to be, now attached to the key
            that colours the map rather than standing beside it. */
+        /* Each word is evidence, and evidence came from somewhere. The place it
+           was quoted from is kept beside it so the word can be followed back to
+           the marker it belongs to — a word repeated by several places keeps
+           all of them. */
         var seen = {}, words = [];
         if (opt.isQuestion) {
           entries.forEach(function (e) {
             if (optValuesOf(L, opt, e.f).indexOf(kind) < 0) return;
             String((e.f.properties || {})[opt.col + "_why"] || "").split(",").forEach(function (w) {
               w = w.trim();
-              if (w && !seen[w.toLowerCase()]) { seen[w.toLowerCase()] = 1; words.push(w); }
+              if (!w) return;
+              var k = w.toLowerCase();
+              if (seen[k]) { seen[k].es.push(e); return; }
+              seen[k] = { w: w, es: [e] };
+              words.push(seen[k]);
             });
           });
         }
@@ -1898,6 +1905,49 @@
     hideHint();   // a pin can vanish from under the pointer; no mouseleave follows
     paintMarkerDisplay(L);
     scheduleClusterRefresh();
+  }
+
+/* Follow a word back to the place it came from.
+
+   The words under a kind are the atlas's evidence — "Golden trumpet tree"
+   under Botanic/Foliage is there because one place's own line says so. Reading
+   it and then hunting the map for which place that was is work the map should
+   do. One place: go to it and open it, the same as tapping its pin. Several:
+   frame them all, and let the person choose. */
+  function goToWord(L, es) {
+    if (!es || !es.length) return;
+    if (es.length === 1) {
+      var e = es[0];
+      var at = e.mk ? e.mk.getLngLat() : e.f.geometry.coordinates;
+      /* Close enough that the place stands on its own. Below this it can still
+         be folded into a numbered disc, and a popup would open over a disc
+         rather than over the place it belongs to. */
+      map.easeTo({ center: at, zoom: Math.max(map.getZoom(), 16), duration: 600 });
+      map.once("moveend", function () { spiderClick(L, e); });
+      return;
+    }
+    fitPoints(es.map(function (e) { return e.f.geometry.coordinates; }));
+  }
+
+  // the words under a kind, each one a way back to the places that said it
+  function whyWordsEl(L, why) {
+    var box = el("div", "leg-why");
+    (why || []).forEach(function (it) {
+      var w = typeof it === "string" ? { w: it, es: [] } : it;
+      var many = (w.es || []).length > 1;
+      var b = el("button", "leg-why-w", esc(w.w));
+      b.type = "button";
+      if (w.es && w.es.length) {
+        b.classList.add("leg-why-go");
+        b.title = many ? "Show the " + w.es.length + " places that say this" : "Show this place";
+        b.setAttribute("aria-label", b.title + ": " + w.w);
+        b.onclick = function (ev) { ev.stopPropagation(); goToWord(L, w.es); };
+      } else {
+        b.disabled = true;
+      }
+      box.appendChild(b);
+    });
+    return box;
   }
 
   function fitPoints(pts) {
@@ -3410,9 +3460,8 @@
           r.setAttribute("role", "button");
           r.setAttribute("tabindex", "0");
           r.setAttribute("aria-expanded", "false");
-          var words = el("div", "leg-why");
+          var words = whyWordsEl(L, it.why);
           words.hidden = true;
-          it.why.forEach(function (w) { words.appendChild(el("span", "leg-why-w", esc(w))); });
           leg.appendChild(words);
           var flip = function () {
             words.hidden = !words.hidden;
