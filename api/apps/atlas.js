@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import * as reg from '../lib/atlas/registry.js';
 import * as auth from '../lib/atlas/auth.js';
 import { sendMail } from '../lib/mailer.js';
+import { noteTrouble, noteOk, setTroubleNotifier, openTroubles } from '../lib/atlas/trouble.js';
 import {
   enqueueBuild, getJob, setJobDoneHook, setStrandedBuildHook, DATASETS_ROOT, PRIVATE_ROOT,
 } from '../lib/atlas/jobs.js';
@@ -29,6 +30,9 @@ const HARD_AREA_DEG2 = Number(process.env.ATLAS_HARD_AREA_DEG2) || 40; // beyond
 const MAX_INSTANCES = Number(process.env.ATLAS_MAX_INSTANCES) || 50;
 const PER_IP_PER_DAY = Number(process.env.ATLAS_PER_IP_PER_DAY) || 3;
 const ADMIN_EMAIL = process.env.ATLAS_ADMIN_EMAIL || 'mithun@socratus.org';
+
+// the trouble log knows when to write; this is who to write to
+setTroubleNotifier(({ subject, text }) => sendMail({ to: ADMIN_EMAIL, subject, text }));
 
 export const router = express.Router();
 // Data ingests carry whole tables; everything else stays small.
@@ -947,6 +951,17 @@ function page(title, body) {
 // never tokenHash, viewKeyHash, createdByIp or the build spec, the same
 // discipline as collabList() — and it grants no powers anywhere else: acting
 // on an atlas still goes through the owner/editor checks above.
+/* What the model is doing, for the operator. Read-only, and it names the two
+   things that were invisible during the outage: which model each job is
+   actually running on — first choice or fallen back — and any trouble still
+   open against one. */
+router.get('/admin/models', (req, res) => {
+  if (!auth.isAdmin(req) && !auth.isAdminSession(req)) {
+    return res.status(404).json({ error: 'not found' });
+  }
+  res.json({ models: getResolverStatus(), trouble: openTroubles() });
+});
+
 router.get('/admin/instances', (req, res) => {
   if (!auth.isAdmin(req) && !auth.isAdminSession(req)) {
     // 401 for the signed-out (signing in could fix it), 403 for anyone else
@@ -1543,7 +1558,7 @@ router.get('/datasets/:slug/:file', (req, res) => {
    to the manifest.local.json overlay. Gemini never writes manifest JSON.
 ================================================================== */
 import { GoogleGenAI, Type } from '@google/genai';
-import { getFlashModel, getFlashLiteModel, getEmbedModel } from '../lib/models.js';
+import { getFlashModel, getFlashLiteModel, getEmbedModel, getResolverStatus } from '../lib/models.js';
 import { profileColumns, bestNameColumn } from '../lib/tabular.js';
 import { norm, dice, joinByName, AUTO_ACCEPT } from '../lib/matching.js';
 import { PALETTES, PALETTE_ALIASES, MARKER_COLORS, buildFragment, sanitizeFeatures } from '../lib/fragment.js';
@@ -1871,7 +1886,35 @@ const REFINE_SCHEMA = {
    SDK (0.3.1) cannot turn thinking down, but it does report how the answer
    ended, and an answer that stopped early must never again read as a model that
    simply failed. */
-async function geminiJSON(model, prompt, schema) {
+/* Every call to the model passes through here, so that no failure is private.
+
+   The point is not the log line — that already exists. It is that a failure has
+   to reach a person. One retired model produced 404s for days and the only
+   trace was a caught exception, so the atlas went on filing places by
+   coincidence and nobody knew to look. The trouble log decides who hears and
+   how often; this only makes sure it is told. */
+async function watched(model, run) {
+  try {
+    const out = await run();
+    noteOk(model);
+    return out;
+  } catch (e) {
+    noteTrouble(model, e);
+    throw e;
+  }
+}
+
+function geminiJSON(model, prompt, schema) {
+  return watched(model, () => geminiJSONImpl(model, prompt, schema));
+}
+function geminiJSONFile(model, prompt, schema) {
+  return watched(model, () => geminiJSONFileImpl(model, prompt, schema));
+}
+function geminiJSONDeep(model, prompt, schema) {
+  return watched(model, () => geminiJSONDeepImpl(model, prompt, schema));
+}
+
+async function geminiJSONImpl(model, prompt, schema) {
   const response = await ai.models.generateContent({
     model, contents: prompt,
     config: { responseMimeType: 'application/json', responseSchema: schema, maxOutputTokens: 8192 },
@@ -1944,7 +1987,7 @@ async function fileOnce(model, prompt, schema, quiet) {
    the ask is dropped when it is refused, and the call is made again without
    it. One wasted round trip on a model generation we have not met before, and
    never a filing call lost to a field name. */
-async function geminiJSONFile(model, prompt, schema) {
+async function geminiJSONFileImpl(model, prompt, schema) {
   try {
     return await fileOnce(model, prompt, schema, { thinkingBudget: 0 });
   } catch (e) {
@@ -1963,7 +2006,7 @@ async function geminiJSONFile(model, prompt, schema) {
    step because on 2.5 models thought tokens count against it — without the
    headroom the JSON answer would truncate mid-object. */
 const INDUCE_THINK_BUDGET = 2048;
-async function geminiJSONDeep(model, prompt, schema) {
+async function geminiJSONDeepImpl(model, prompt, schema) {
   const r = await fetch(
     'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent',
     {
