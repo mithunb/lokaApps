@@ -295,13 +295,17 @@
                  "These places have nothing to be asked" is a finding. "The AI
                  could not be reached" is a fault on our side, and the person
                  should not be left thinking their data was the problem. */
+              /* When the retry lands, this line becomes a promise that something
+                 else keeps: tried again on its own, and an email when it is
+                 done. Until that exists it says only what is true today —
+                 a layer with no answers starts a reading when the atlas opens. */
               if (out.r.verdict === "unread") {
                 var read = out.r.read || 0, all = out.r.batches || 0;
                 say("The AI that reads your places could not be reached" +
                   (read && read < all
                     ? " part-way through, so nothing was kept — reading half a set would leave the rest looking like places with nothing to say."
                     : ", so nothing was added.") +
-                  " Your data is untouched. This will be tried again, and you will hear when it is done.", true);
+                  " Your data is untouched. Opening this atlas again will start the reading afresh.", true);
                 return;
               }
               say(out.r.verdict === "no_clear_questions"
