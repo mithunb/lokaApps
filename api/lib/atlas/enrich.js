@@ -541,7 +541,7 @@ async function answerQuestions({ digest, questions, title, callJSON, model }) {
   const why = questions.map(() => digest.entries.map(() => []));
   // a batch the model never answered is filed by counting words. That is a
   // worse answer, honestly reached, and the reading has to be able to say so.
-  let batches = 0, counted = 0, trouble = '';
+  let batches = 0, unread = 0, trouble = '';
   const asked = questions.map((q, n) =>
     'q' + n + ' — ' + q.question + '\n' +
     q.kinds.map((k) => '   ' + k.name + (k.definition ? ' — ' + k.definition : '')).join('\n'));
@@ -611,18 +611,23 @@ async function answerQuestions({ digest, questions, title, callJSON, model }) {
         }
       });
     } else {
-      // the call failed, or the budget ran out — deterministic filing keeps
-      // every question whole rather than leaving a ragged half-answer
-      counted += 1;
-      questions.forEach((q, n) => {
-        const seeded = assignBySeed(batch.map((i) => digest.entries[i].text), q.kinds);
-        // filed by counting, not by reading: it has no reason to offer, and
-        // inventing one here is exactly what the reason exists to prevent
-        batch.forEach((i, k) => { out[n][i] = seeded[k]; why[n][i] = []; });
-      });
+      /* The call failed. These places are simply not answered.
+
+         They used to be sorted by matching their words against the kind names —
+         and the kind names were invented by a model minutes earlier, in the same
+         reading, so it amounted to asking whether a description happened to
+         contain a word from a freshly made-up label. One shared word was enough.
+         It produced no reason, because a count has no reason to give, and yet on
+         the map it was indistinguishable from an answer that had been read: same
+         shape, same colour, same key. That is why a retired model went unnoticed
+         for days while 66 places sat on a live atlas, sorted by coincidence.
+
+         Nothing is written in their place. An unread batch stays unread, and the
+         caller is told how many. */
+      unread += 1;
     }
   }
-  return { answers: out, why, batches, counted, trouble };
+  return { answers: out, why, batches, unread, trouble };
 }
 
 /* The words an existing key already uses. A proposed kind may not take one of
@@ -695,6 +700,20 @@ export async function enrichRows(opts) {
     const filed = await answerQuestions({
       digest, questions: kept, title, callJSON, model: models.flashLite || models.flash,
     });
+
+    /* All of it, or none of it. If any batch went unread the reading is not
+       saved — not even the batches that did come back.
+
+       Saving the good half looks thrifty and is a trap: a reading only starts
+       when a layer has no answers on it, so a half-answered layer would sit
+       that way for good, and the places nobody read would be indistinguishable
+       from places a question genuinely could not speak for. Better to keep the
+       layer plainly empty, say what happened, and come back to it whole. */
+    if (filed.unread) {
+      return { verdict: 'unread', places: rows.length,
+               batches: filed.batches, unread: filed.unread,
+               read: filed.batches - filed.unread, trouble: filed.trouble || '' };
+    }
     const questions = kept.map((q, n) => {
       const cats = filed.answers[n];
       const tally = {}; let other = 0;
@@ -713,13 +732,9 @@ export async function enrichRows(opts) {
       };
     }).filter((q) => q.counts.length >= MIN_CATS);
     if (!questions.length) return { verdict: 'refused', reason: 'no question survived the counting' };
-    /* How much of this reading was actually read. When the model cannot be
-       reached the places are still filed, by matching words — and answers
-       reached that way carry no reason, so the map would show a judgement with
-       nothing under it and look exactly like a good reading. The count travels
-       with the answers so the person who asked for it is told. */
+    // everything below here was read: the all-or-nothing gate is above
     return { verdict: 'questions', questions, withText: digest.withText,
-             batches: filed.batches, counted: filed.counted, trouble: filed.trouble || '',
+             batches: filed.batches,
              reading: ind.reading || '', facts: ind.facts || [] };
   }
 

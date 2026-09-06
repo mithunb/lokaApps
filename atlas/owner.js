@@ -291,6 +291,19 @@
           .then(function (out) {
             var qs = out.r.questions || [];
             if (out.r.verdict !== "questions" || !qs.length) {
+              /* Three different answers, and they used to share one sentence.
+                 "These places have nothing to be asked" is a finding. "The AI
+                 could not be reached" is a fault on our side, and the person
+                 should not be left thinking their data was the problem. */
+              if (out.r.verdict === "unread") {
+                var read = out.r.read || 0, all = out.r.batches || 0;
+                say("The AI that reads your places could not be reached" +
+                  (read && read < all
+                    ? " part-way through, so nothing was kept — reading half a set would leave the rest looking like places with nothing to say."
+                    : ", so nothing was added.") +
+                  " Your data is untouched. This will be tried again, and you will hear when it is done.", true);
+                return;
+              }
               say(out.r.verdict === "no_clear_questions"
                 ? "These places do not clearly answer a question" +
                   (out.r.note ? ": " + out.r.note : ".") + " Nothing was added."
@@ -301,20 +314,9 @@
               return;
             }
             say("Adding " + qs.length + (qs.length === 1 ? " question" : " questions") + "…");
-            return keepQuestions(L, out.rows, qs).then(function () {
-              /* When the model cannot be reached the places are still sorted — by
-                 matching words rather than by being read. That is a rougher answer
-                 and it carries no reason, so it must not sit on the map looking
-                 like the real thing. It is said here, plainly, rather than left
-                 for somebody to notice. */
-              var short = out.r.counted || 0;
-              if (!short) return;
-              say((short >= (out.r.batches || 0)
-                    ? "None of these places could be read just now"
-                    : "Some of these places could not be read just now") +
-                " — they have been sorted by matching words instead, which is rougher " +
-                "and leaves no reason under each answer. Read again later for the full result.", true);
-            }).catch(function (e) {
+            // anything that arrives here was read whole; a short reading never
+            // reaches this point, it is refused above and nothing is written
+            return keepQuestions(L, out.rows, qs).catch(function (e) {
               say(errMsg(e), true);
             });
           })
