@@ -1601,9 +1601,17 @@ function pickPopupColumns(profiles, { title, image }) {
 
 // Every import route mutates disk (sessions, draft folders) — owner/editor only.
 // Datasets without a registry entry (hand-built ones like deoria) are admin-only.
-function requireDatasetEditor(req, res, datasetId) {
+/* Who may change this atlas. 'server' is the server finishing work an owner
+   already asked for — a retried reading — and is not a way in from outside:
+   nothing arriving over HTTP can present it. */
+function datasetRole(who, datasetId) {
+  if (who === 'server') return 'owner';
   const inst = reg.getInstance(datasetId);
-  const role = inst ? callerRole(req, inst) : (auth.isAdmin(req) ? 'owner' : null);
+  return inst ? callerRole(who, inst) : (auth.isAdmin(who) ? 'owner' : null);
+}
+
+function requireDatasetEditor(req, res, datasetId) {
+  const role = datasetRole(req, datasetId);
   if (!role) {
     res.status(403).json({ error: 'sign in as this atlas’s owner or a collaborator', needsAuth: true });
     return null;
@@ -1627,6 +1635,9 @@ const AI_CALLS_PER_HOUR_IP = 40;    // per address, when nobody is signed in
 const AI_CALLS_PER_READING = 24;    // one reading may not exceed this
 
 function aiWho(req) {
+  // work the server is finishing on an owner's behalf keeps its own allowance,
+  // so a retry neither eats their share nor runs without a limit
+  if (req === 'server') return { key: 'server', cap: AI_CALLS_PER_HOUR };
   const session = auth.sessionFromReq(req);
   if (session && session.email) return { key: 'acct:' + session.email, cap: AI_CALLS_PER_HOUR };
   return { key: 'ip:' + clientIp(req), cap: AI_CALLS_PER_HOUR_IP };
@@ -1643,10 +1654,11 @@ function aiTake(req) {
   return true;
 }
 
-/* A caller that pays its own way. Refusing by throwing is deliberate: every
-   place that uses it already treats a failed call as "no model for this batch"
-   and falls back to deterministic filing, so running out of budget degrades a
-   reading instead of breaking it, and never invents anything to fill the gap. */
+/* A caller that pays its own way. Refusing by throwing is deliberate: a reading
+   that runs out of budget is a reading that could not be finished, and since
+   questions mode stopped guessing at the places it could not read, that now
+   means the reading is simply not saved. Nothing is invented to fill the gap
+   and nothing half-done is kept. */
 function aiCaller(req, perReading) {
   const cap = perReading || AI_CALLS_PER_READING;
   let spent = 0;
@@ -2306,8 +2318,10 @@ router.get('/layers/options', (req, res) => {
 // Canonical-table ingest: the client sends typed rows + a column schema
 // (produced by atlas/ingest.js). Inference pre-fills roles/spec; NO draft is
 // written — the Place-on-map step iterates report-only, Preview writes drafts.
-router.post('/layers/ingest', async (req, res) => {
-  const b = req.body || {};
+/* Preparing a layer, like committing it, was only ever the body of a handler.
+   A retry needs it with no browser present, so it takes plain input and a
+   `who`, and refuses by throwing rather than by writing a response. */
+async function ingestLayer(b, who) {
   const dataset = String(b.dataset || '');
   // Two callers: the workbench working on a built atlas, and the setup wizard
   // setting data up BEFORE the atlas exists. The second has no dataset to read,
@@ -2322,22 +2336,24 @@ router.post('/layers/ingest', async (req, res) => {
   if (pendingRegion) {
     // no instance to authorise against yet — building requires a session, so
     // that (or the admin token) is the gate
-    if (!auth.sessionFromReq(req) && !auth.isAdmin(req)) {
-      return res.status(401).json({ error: 'sign in to set up your data', needsAuth: true });
+    if (who !== 'server' && !auth.sessionFromReq(who) && !auth.isAdmin(who)) {
+      throw refuse(401, 'sign in to set up your data', { needsAuth: true });
     }
     if (!/^[A-Z]{3}$/.test(pendingRegion.iso3) || !pendingRegion.shapeIDs.length) {
-      return res.status(400).json({ error: 'region iso3 and shapeIDs are required before the atlas exists' });
+      throw refuse(400, 'region iso3 and shapeIDs are required before the atlas exists');
     }
   } else {
-    if (!imports.datasetDir(dataset)) return res.status(404).json({ error: 'unknown dataset' });
-    if (!requireDatasetEditor(req, res, dataset)) return;
+    if (!imports.datasetDir(dataset)) throw refuse(404, 'unknown dataset');
+    if (!datasetRole(who, dataset)) {
+      throw refuse(403, 'sign in as this atlas’s owner or a collaborator', { needsAuth: true });
+    }
   }
   const schema = Array.isArray(b.schema) ? b.schema : null;
   if (!schema || !Array.isArray(b.rows) || !b.rows.length) {
-    return res.status(400).json({ error: 'schema and rows required' });
+    throw refuse(400, 'schema and rows required');
   }
   const columns = schema.map((c) => String((c && c.name) || '')).filter(Boolean).slice(0, MAX_COLS);
-  if (!columns.length) return res.status(400).json({ error: 'no usable columns' });
+  if (!columns.length) throw refuse(400, 'no usable columns');
   const rows = b.rows.slice(0, MAX_ROWS).map((r) => {
     const o = {};
     for (const c of columns) {
@@ -2380,12 +2396,16 @@ router.post('/layers/ingest', async (req, res) => {
   if (b.replaceLayerId && dataset) {
     const id = String(b.replaceLayerId);
     const prior = imports.mergedLayers(imports.readManifest(dataset)).find((L) => L.id === id);
-    if (!prior) return res.status(404).json({ error: 'there is no layer here called ' + id });
+    if (!prior) throw refuse(404, 'there is no layer here called ' + id);
     replacing = { id, addedBy: prior.addedBy || null, addedAt: prior.addedAt || null };
   }
 
   const session = imports.newImport({
     dataset, region: pendingRegion || undefined,
+    /* Who is adding this, recorded now while we still know. Commit used to ask
+       the request, which works only while somebody is holding the page open;
+       a reading retried an hour later still belongs to whoever asked for it. */
+    addedBy: (who !== 'server' && auth.sessionFromReq(who)) || undefined,
     filename: String(b.filename || '').slice(0, 120), meta,
     columnsRaw: columns, rows, profilesSummary: profiles.map((p) => ({ name: p.name, type: p.type })),
     geomIdx: geomIdx || undefined,
@@ -2440,9 +2460,9 @@ router.post('/layers/ingest', async (req, res) => {
       popupColumns: pickPopupColumns(profiles, { title: pickTitleColumn(profiles, columns), image: imgCol && imgCol.name }),
     };
     try {
-      return res.json(applyResult(session, false));
+      return applyResult(session, false);
     } catch (e) {
-      return res.status(400).json({ error: e.message, importId: session.id, columns: session.columns, strategy: session.strategy });
+      throw refuse(400, e.message, { importId: session.id, columns: session.columns, strategy: session.strategy });
     }
   }
 
@@ -2464,7 +2484,7 @@ router.post('/layers/ingest', async (req, res) => {
   session.boundaryOptions = allOptions.map((o) => ({ id: o.id, label: o.label, group: o.group || '', count: o.count, exampleNames: (o.exampleNames || []).slice(0, 5) }));
 
   let inference = null;
-  if (ai && !b.manual && geminiAllowed(req)) {
+  if (ai && !b.manual && geminiAllowed(who)) {
     try {
       const prompt = [
         'You are helping map a tabular dataset onto an interactive atlas. Infer its schema.',
@@ -2584,9 +2604,157 @@ router.post('/layers/ingest', async (req, res) => {
         console.warn('[atlas] adjudication failed:', e.message);
       }
     }
-    res.json(result);
+    return result;
   } catch (e) {
-    res.status(400).json({ error: e.message, importId: session.id, columns: session.columns, strategy: session.strategy });
+    if (e && e.status) throw e;
+    throw refuse(400, e.message, { importId: session.id, columns: session.columns, strategy: session.strategy });
+  }
+}
+
+/* Which of a layer's columns hold words worth reading. The same rules the
+   browser applies before it asks: never our own answers back in — a question's
+   column is an answer, not evidence — never coordinates, never links, and never
+   a column whose every entry differs and none has a space in it, which is an
+   identifier wearing a name. */
+function wordColumnsOf(rows) {
+  const first = rows[0] || {};
+  return Object.keys(first).filter((k) => {
+    if (k.charAt(0) === '_' || k === 'themes' || /^pattern_/.test(k)) return false;
+    if (/^(lat|latitude|lon|lng|long|longitude)$/i.test(k)) return false;
+    const seen = new Set();
+    let filled = 0, spaced = 0;
+    for (const r of rows) {
+      let v = r[k];
+      if (typeof v !== 'string') continue;
+      v = v.trim();
+      if (!v) continue;
+      if (/^https?:\/\//i.test(v)) return false;
+      filled += 1;
+      if (v.indexOf(' ') >= 0) spaced += 1;
+      seen.add(v);
+    }
+    if (!filled) return false;
+    return !(seen.size === filled && spaced === 0);
+  });
+}
+
+/* A whole reading, start to finish, with no browser involved: find the layer,
+   read its places, work out what they can be asked, answer it, and write the
+   result. Returns what happened rather than throwing on a reading that simply
+   had nothing to find — only a fault throws. */
+async function runReading(dataset, layerId) {
+  if (!ai) throw refuse(503, 'there is no model configured');
+  // readManifest hands back the base, the org's overlay and the directory
+  const m = imports.readManifest(dataset);
+  if (!m) throw refuse(404, 'unknown atlas');
+  const layer = imports.mergedLayers(m).find((L) => L.id === layerId);
+  if (!layer) throw refuse(404, 'there is no layer here called ' + layerId);
+  if (!layer.source) throw refuse(400, 'that layer has no places of its own');
+
+  const file = path.join(m.dir, layer.source);
+  if (!fs.existsSync(file)) throw refuse(404, 'the layer\'s places are missing');
+  const gj = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const feats = (gj && gj.features) || [];
+  if (!feats.length) throw refuse(400, 'that layer has no places');
+  const rows = feats.map((f) => f.properties || {});
+  const fields = wordColumnsOf(rows);
+  if (!fields.length) throw refuse(400, 'none of those columns hold words to read');
+
+  const inst = reg.getInstance(dataset);
+  const out = await enrich.enrichRows({
+    rows, fields, title: (inst && inst.title) || dataset,
+    mode: 'questions',
+    seedSet: keptCatSet(dataset),
+    callJSON: aiCaller('server'),
+    models: { flash: getFlashModel(), flashLite: getFlashLiteModel() },
+  });
+
+  if (out.verdict !== 'questions' || !(out.questions || []).length) {
+    return { wrote: false, verdict: out.verdict, unread: out.unread || 0,
+             read: out.read, batches: out.batches, trouble: out.trouble || '' };
+  }
+  await writeReading({
+    dataset, layerId, rows, questions: out.questions,
+    label: layer.label || layerId, source: layer.source,
+  });
+  return {
+    wrote: true, verdict: 'questions', places: rows.length,
+    questions: out.questions.map((q) => ({
+      question: q.question,
+      answered: (q.categories || []).filter((c) => c && c !== 'other').length,
+      withWords: (q.why || []).filter((w) => w && w.length).length,
+    })),
+  };
+}
+
+/* The operator's way to start a reading by hand. It exists because the reading
+   otherwise only begins when an owner opens their atlas signed in, which is no
+   use for one that failed while nobody was there. */
+router.post('/admin/reread', async (req, res) => {
+  if (!auth.isAdmin(req) && !auth.isAdminSession(req)) {
+    return res.status(404).json({ error: 'not found' });
+  }
+  const b = req.body || {};
+  try {
+    res.json(await runReading(String(b.dataset || ''), String(b.layerId || '')));
+  } catch (e) {
+    // an operator asked for this by hand; give them the whole fault, not a summary
+    if (!e.status) console.error('[atlas] re-read failed:', e && e.stack);
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+/* Write a finished reading onto a layer, with nobody watching.
+
+   This is what the browser has always done in keepQuestions: put each answer in
+   a column beside the place, put the words that justify it in a column beside
+   that, and hand the whole layer back to be written. It lives here now so that
+   a reading finished an hour late, by the server, lands exactly the same way a
+   reading finished in front of somebody does — one path, one result, rather
+   than a second implementation quietly drifting from the first. */
+async function writeReading({ dataset, layerId, rows, questions, label, source }) {
+  const labels = {};
+  const out = rows.map((p) => {
+    const o = Object.assign({}, p);
+    delete o._category;                 // the engine's own, re-derived on build
+    return o;
+  });
+  questions.forEach((q, n) => {
+    const col = 'pattern_' + (n + 1);
+    const whyCol = col + '_why';
+    labels[col] = q.question;
+    (q.categories || []).forEach((c, i) => {
+      if (out[i]) out[i][col] = c === 'other' ? '' : (c || '');
+    });
+    (q.why || []).forEach((w, i) => {
+      if (out[i]) out[i][whyCol] = (w || []).join(', ');
+    });
+    out.forEach((o) => {
+      if (o[col] === undefined) o[col] = '';
+      if (o[whyCol] === undefined) o[whyCol] = '';
+    });
+  });
+  const names = Object.keys(out[0] || {});
+  const ing = await ingestLayer({
+    dataset, replaceLayerId: layerId, filename: label || layerId,
+    schema: names.map((nm) => ({
+      name: nm, type: (nm === 'latitude' || nm === 'longitude') ? 'number' : 'string',
+    })),
+    rows: out,
+    keyLabels: labels,
+    meta: { sourceName: source, rowCount: out.length },
+  }, 'server');
+  if (!ing || !ing.importId) throw refuse(500, 'the layer could not be prepared');
+  return commitLayer({ importId: ing.importId, dataset }, 'server');
+}
+
+router.post('/layers/ingest', async (req, res) => {
+  try {
+    res.json(await ingestLayer(req.body || {}, req));
+  } catch (e) {
+    const extra = {};
+    for (const k of ['importId', 'columns', 'strategy', 'needsAuth']) if (e[k] !== undefined) extra[k] = e[k];
+    res.status(e.status || 400).json(Object.assign({ error: e.message }, extra));
   }
 });
 
@@ -3124,25 +3292,43 @@ router.post('/layers/search', async (req, res) => {
   res.json({ tags: tags.slice(0, SEARCH_MAX_TAGS), hits, matched, semantic, layers: built.layers.length, total });
 });
 
-router.post('/layers/commit', (req, res) => {
-  const b = req.body || {};
-  const session = imports.getImport(String(b.importId || ''));
-  if (!session) return res.status(404).json({ error: 'import expired or unknown' });
+/* Committing a layer used to exist only as the tail of an HTTP handler, so the
+   only way to finish a reading was to have a browser open with somebody signed
+   in and watching it. A reading retried an hour later has nobody there. The
+   work moves out of the route, and the route becomes what it should always
+   have been: a way in from the web, not the only way.
+
+   A refusal has to survive the move. Inside a handler it was res.status(403);
+   here it is thrown carrying the same number, and whoever called renders it —
+   the route as a response, the retry as a line in the log. */
+function refuse(status, message, extra) {
+  const e = new Error(message);
+  e.status = status;
+  if (extra) Object.assign(e, extra);
+  return e;
+}
+
+/* Write a prepared layer onto an atlas. `who` is the caller for the permission
+   check: the request, or the literal 'server' for work the server is finishing
+   on an owner's behalf — a retry of a reading it already accepted from them. */
+function commitLayer({ importId, dataset }, who) {
+  const session = imports.getImport(String(importId || ''));
+  if (!session) throw refuse(404, 'import expired or unknown');
 
   // A session set up before the atlas existed is bound to it here — the wizard
   // sends the slug it got back from the build.
-  if (!session.dataset && b.dataset) {
-    const slug = String(b.dataset);
-    if (!imports.datasetDir(slug)) return res.status(404).json({ error: 'unknown dataset' });
+  if (!session.dataset && dataset) {
+    const slug = String(dataset);
+    if (!imports.datasetDir(slug)) throw refuse(404, 'unknown dataset');
     session.dataset = slug;
     imports.saveImport(session);
   }
-  if (!session.dataset) return res.status(400).json({ error: 'which atlas should this layer go on?' });
+  if (!session.dataset) throw refuse(400, 'which atlas should this layer go on?');
 
   // auth: the atlas's signed-in owner, its edit token, or admin (e.g. the deoria dataset)
   const inst = reg.getInstance(session.dataset);
-  const ok = (inst && callerCanEdit(req, inst)) || auth.isAdmin(req);
-  if (!ok) return res.status(403).json({ error: 'sign in as this atlas’s owner to change it', needsAuth: true });
+  const ok = who === 'server' || (inst && callerCanEdit(who, inst)) || auth.isAdmin(who);
+  if (!ok) throw refuse(403, 'sign in as this atlas’s owner to change it', { needsAuth: true });
 
   try {
     const { frag, features } = (function () {
@@ -3157,19 +3343,20 @@ router.post('/layers/commit', (req, res) => {
     const hit = findLayerByContent(session.dataset, contentHash, frag.stanza.label,
       session.replacingLayerId || frag.stanza.id);
     if (hit && hit.exact) {
-      return res.status(409).json({
-        error: 'this data is already on the atlas as “' + (hit.layer.label || hit.layer.id) +
-          '” — remove that layer first if you want to add it again',
-        duplicate: true, layerId: hit.layer.id,
-      });
+      throw refuse(409, 'this data is already on the atlas as “' + (hit.layer.label || hit.layer.id) +
+        '” — remove that layer first if you want to add it again',
+        { duplicate: true, layerId: hit.layer.id });
     }
     frag.stanza.contentHash = contentHash;
     frag.stanza.spec = session.spec || undefined;   // so "edit this layer" can start from it
-    // credit the contributor: which org (and person) added this layer
-    const who = auth.sessionFromReq(req);
-    if (who) {
-      const acc = reg.getAccount(who.email);
-      frag.stanza.addedBy = { email: who.email, name: (acc && acc.name) || '', org: (acc && acc.org) || '' };
+    /* Credit the contributor: which org, and which person, added this layer.
+       The session is carried on the import rather than read from a request,
+       because the request may be long gone — a reading retried an hour later
+       still belongs to whoever asked for it, not to nobody. */
+    const by = session.addedBy || null;
+    if (by && by.email) {
+      const acc = reg.getAccount(by.email);
+      frag.stanza.addedBy = { email: by.email, name: (acc && acc.name) || '', org: (acc && acc.org) || '' };
       frag.stanza.addedAt = Date.now();
     }
     // Editing a committed layer replaces it in place: same id (so the atlas's
@@ -3196,11 +3383,22 @@ router.post('/layers/commit', (req, res) => {
     const out = imports.commitLayer(session.dataset, frag.stanza, frag.sourceFile,
       { type: 'FeatureCollection', features });
     imports.discardImport(session.id);
-    res.json({ ok: true, layerId: out.layerId, dataset: session.dataset });
     // embed this layer's tag vocabulary for semantic search (non-blocking)
     embedAndStoreVocab(session.dataset, out.layerId, frag.stanza, features).catch(() => {});
+    return { ok: true, layerId: out.layerId, dataset: session.dataset };
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    if (e && e.status) throw e;
+    throw refuse(400, e.message);
+  }
+}
+
+router.post('/layers/commit', (req, res) => {
+  const b = req.body || {};
+  try {
+    res.json(commitLayer({ importId: b.importId, dataset: b.dataset }, req));
+  } catch (e) {
+    res.status(e.status || 400).json(
+      Object.assign({ error: e.message }, e.needsAuth ? { needsAuth: true } : {}));
   }
 });
 
