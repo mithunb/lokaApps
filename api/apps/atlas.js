@@ -32,8 +32,25 @@ const MAX_INSTANCES = Number(process.env.ATLAS_MAX_INSTANCES) || 50;
 const PER_IP_PER_DAY = Number(process.env.ATLAS_PER_IP_PER_DAY) || 3;
 const ADMIN_EMAIL = process.env.ATLAS_ADMIN_EMAIL || 'mithun@socratus.org';
 
-// the trouble log knows when to write; this is who to write to
-setTroubleNotifier(({ subject, text }) => sendMail({ to: ADMIN_EMAIL, subject, text }));
+/* The trouble log knows when to write and what the fault is. It deliberately
+   knows nothing about models or waiting readings, so the two facts an operator
+   wants next — what is actually serving, and how much work is stacked up
+   behind this — are added here, where they are known. */
+setTroubleNotifier(({ subject, text }) => {
+  const m = getResolverStatus();
+  const waiting = owed.all().length;
+  const footer = [
+    '',
+    '--',
+    'Right now: reading on ' + m.reading + (m.readingIsFirstChoice ? '' : ' (fallback)') +
+      ', answering on ' + m.answering + (m.answeringIsFirstChoice ? '' : ' (fallback)') + '.',
+    waiting
+      ? waiting + ' reading' + (waiting === 1 ? '' : 's') + ' waiting to be finished; ' +
+        (waiting === 1 ? 'it' : 'they') + ' will be tried again on their own.'
+      : 'No readings are waiting.',
+  ].join('\n');
+  return sendMail({ to: ADMIN_EMAIL, subject, text: text + footer + '\n' });
+});
 
 export const router = express.Router();
 // Data ingests carry whole tables; everything else stays small.
@@ -2037,7 +2054,14 @@ async function geminiJSONDeepImpl(model, prompt, schema) {
       signal: AbortSignal.timeout(90000),
     },
   );
-  if (!r.ok) throw new Error('gemini ' + r.status);
+  if (!r.ok) {
+    let why = '';
+    try { why = (((await r.json()) || {}).error || {}).message || ''; } catch { /* body was not json */ }
+    const e = new Error('the model refused (' + r.status + ')' + (why ? ': ' + why.replace(/\s+/g, ' ').slice(0, 160) : ''));
+    e.status = r.status;
+    e.body = why;
+    throw e;
+  }
   const data = await r.json();
   const cand = data && data.candidates && data.candidates[0];
   if (!cand) throw new Error('no answer from the model');

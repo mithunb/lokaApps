@@ -31,6 +31,16 @@ let notify = null;        // set by whoever can send mail
 
 export function setTroubleNotifier(fn) { notify = fn; }
 
+/* "Gone" covers two problems that want different hands on them: a model Google
+   withdrew, and a key it will not accept. The subject line and the fix differ,
+   so the message has to know which — and it can, because Google says so. */
+export function faultOf(err) {
+  const t = String((err && err.body) || (err && err.message) || err || '').toLowerCase();
+  if (/api key|permission|unauthenti|unauthor|credential/.test(t)) return 'key';
+  if (/not found|no longer available|is not supported|deprecat/.test(t)) return 'model';
+  return 'other';
+}
+
 /* Google's own answer decides the kind. A refused request shape is filed with
    the withdrawals rather than the busy signals: a call that is malformed for
    this model will be just as malformed in an hour. */
@@ -52,7 +62,15 @@ function keyFor(model, kind) {
   return String(model || 'no model') + '|' + kind;
 }
 
-function firstLine(s) { return String(s || '').split('\n')[0].slice(0, 120); }
+function firstLine(s, cap) { return String(s || '').split('\n')[0].slice(0, cap || 120); }
+
+/* What to print under "Google says". The error carries two strings: our own
+   wrapper ("the model refused (404): ...") and, separately, the sentence Google
+   actually sent. Quoting the wrapper under that heading makes the message a
+   liar, so the raw sentence is preferred — and given room, because the useful
+   half of a withdrawal notice is the end of it, where the replacement model is
+   named. */
+function theirWords(t) { return firstLine(t.said || t.why, 220) || 'nothing useful'; }
 
 async function mail(t, closing, now) {
   if (!notify) return;
@@ -63,48 +81,78 @@ async function mail(t, closing, now) {
      fails, the cost is silence until tomorrow rather than a mailbox full of
      the same sentence; the warning below is the trace. */
   t.mailedAt = now || Date.now();
-  const started = new Date(t.firstSeen).toISOString().replace('T', ' ').slice(0, 19);
+  const started = new Date(t.firstSeen).toISOString().replace('T', ' ').slice(0, 16);
+  const calls = t.calls + ' call' + (t.calls === 1 ? '' : 's');
+
+  /* Written to the operator, not about them. The earlier version said "someone
+     has to change the model name or the key" — which someone, and which of the
+     two? It also headed Google's message "What Google says" and then printed
+     our own summary of it, "gemini 400", because the reasoning call was
+     dropping the body. Both are fixed: the fault is named, the words are
+     Google's, and the thing to do is addressed to the person reading it. */
+  const said = theirWords(t);
   const lines = closing
     ? [
-      `${t.model} is answering again.`,
+      t.model + ' is answering again.',
       '',
-      `It stopped at ${started} UTC and ${t.calls} call${t.calls === 1 ? '' : 's'} ran into it.`,
-      `What it had been saying: ${firstLine(t.why)}`,
+      'It stopped at ' + started + ' UTC and ' + calls + ' ran into it.',
+      'It had been saying: ' + said,
       '',
-      'Nothing needs doing. Readings that were refused during this were not saved,',
-      'and no places were guessed at.',
+      'Nothing needs doing. Readings refused during this were not saved, and no',
+      'places were guessed at — any that are waiting will be finished on their own.',
     ]
-    : t.kind === 'gone'
+    : t.kind === 'busy'
       ? [
-        `${t.model} will not answer, and waiting will not help.`,
+        t.model + ' has been failing for an hour.',
         '',
-        `What Google says: ${firstLine(t.why)}`,
+        'It says: ' + said,
+        'Since ' + started + ' UTC · ' + calls + ' affected.',
         '',
-        `First seen: ${started} UTC`,
-        `Calls refused so far: ${t.calls}`,
-        '',
-        'This is the withdrawn-model or refused-key shape. Someone has to change',
-        'the model name or the key; it will not come back on its own.',
-        'The reading falls back to the next name on its list, and if none answers,',
-        'no places are given answers at all — nothing is guessed.',
+        'This is the overloaded or rate-limited shape and it usually clears by',
+        'itself, so there is nothing to do yet. You will get one more message when',
+        'it clears. No places are being guessed at meanwhile.',
       ]
-      : [
-        `${t.model} has been failing for an hour.`,
-        '',
-        `What it says: ${firstLine(t.why)}`,
-        '',
-        `First seen: ${started} UTC`,
-        `Calls affected so far: ${t.calls}`,
-        '',
-        'This is the busy or rate-limited shape, which usually clears on its own.',
-        'You will get one more message when it does. No places are being guessed at',
-        'meanwhile — a reading that cannot finish is not saved.',
-      ];
+      : t.fault === 'key'
+        ? [
+          'The key is being refused, so no atlas can be read at all.',
+          '',
+          'Google says: ' + said,
+          'Tried on ' + t.model + ' · since ' + started + ' UTC · ' + calls + ' refused.',
+          '',
+          'To fix: check GEMINI_API_KEY in api/.env on the server, then restart.',
+          'Nothing else will help — every model is refused with the same key.',
+        ]
+        : t.fault === 'model'
+          ? [
+            t.model + ' has been withdrawn.',
+            '',
+            'Google says: ' + said,
+            'Since ' + started + ' UTC · ' + calls + ' refused.',
+            '',
+            'The job moves to the next name on its list on its own, so this is not',
+            'urgent. To stop it happening again, set the name Google suggests in',
+            'api/.env — GEMINI_MODEL for reading, GEMINI_LITE_MODEL for answering.',
+          ]
+          : [
+            t.model + ' is refusing calls, and waiting will not help.',
+            '',
+            'It says: ' + said,
+            'Since ' + started + ' UTC · ' + calls + ' refused.',
+            '',
+            'This is neither a withdrawn model nor a refused key, so it is worth a',
+            'look: /apps/atlas/api/admin/models shows what each job is running on.',
+          ];
   try {
     await notify({
       subject: closing
         ? `[LOKA Atlas] ${t.model} is answering again`
-        : `[LOKA Atlas] ${t.model} ${t.kind === 'gone' ? 'will not answer' : 'is failing'}`,
+        : t.kind === 'busy'
+          ? `[LOKA Atlas] ${t.model} is failing`
+          : t.fault === 'key'
+            ? '[LOKA Atlas] the key is being refused — no atlas can be read'
+            : t.fault === 'model'
+              ? `[LOKA Atlas] ${t.model} has been withdrawn`
+              : `[LOKA Atlas] ${t.model} is refusing calls`,
       text: lines.join('\n') + '\n',
     });
   } catch (e) {
@@ -123,12 +171,15 @@ export function noteTrouble(model, err, whenMs) {
     const now = whenMs || Date.now();
     let t = open.get(key);
     if (!t) {
-      t = { key, model: String(model || 'no model'), kind, why, firstSeen: now, calls: 0, mailedAt: 0 };
+      t = { key, model: String(model || 'no model'), kind, why, said: (err && err.body) || '',
+        fault: faultOf(err), firstSeen: now, calls: 0, mailedAt: 0 };
       open.set(key, t);
     }
     t.calls += 1;
     t.lastSeen = now;
     t.why = why;
+    if (err && err.body) t.said = err.body;
+    t.fault = faultOf(err);
 
     const ripe = kind === 'gone' || (now - t.firstSeen) >= BUSY_PATIENCE;
     const quiet = now - t.mailedAt >= DAY;
