@@ -1652,28 +1652,71 @@
          place is not a gap; it is an answer, and printing "left blank" under it
          reads as a fault. So the line simply does not appear. */
       if (!vals.length && opt.isQuestion) return;
-      var row = el("div", "key-row" + (vals.length ? "" : " blank"));
+      /* Why this place got that answer, in its own words. A question's answer is
+         a judgement; without the words behind it nobody can tell a good one from
+         a counter. Only where the reading actually quoted something — a filing
+         done by counting has no reason to give, and will not invent one. */
+      var why = props[opt.col + "_why"];
+      var hasWhy = !!(opt.isQuestion && vals.length && why && String(why).trim());
+
+      /* Folded by default, and only in the popup. A place answering four
+         questions spent three lines on each — question, answer, reason — and the
+         card came to 317px against a 317px ceiling, so it scrolled inside a box
+         most people do not realise scrolls. The reason is evidence, wanted when
+         an answer looks wrong and in the way the rest of the time.
+
+         The hover bubble gets no reasons at all: it cannot be clicked, so a fold
+         is no use there, and a glance does not want the evidence unfolded. */
+      var foldable = hasWhy && all;
+      var row = el(foldable ? "button" : "div",
+        "key-row" + (vals.length ? "" : " blank") + (foldable ? " key-row-open" : ""));
+      if (foldable) {
+        row.type = "button";
+        row.setAttribute("aria-expanded", "false");
+        row.setAttribute("data-fold", "why");
+      }
       // a key that is on wears its shape; one that is off gets a plain dot,
       // because there is no mark on the map for a shape to point at
       var mini = markEl(fi >= 0 ? ROW_SHAPES[fi] : "circle", "#6b6353");
       mini.setAttribute("class", "key-mark");
       row.appendChild(mini);
-      row.appendChild(el("span", "key-name", esc(opt.label)));
-      row.appendChild(el("span", "key-word", vals.length ? esc(vals.join(", ")) : "left blank"));
+      /* The question and the answer sit in one run of text rather than a line
+         each: compact when they fit, and the answer wraps to the next line when
+         it does not, so nothing is ever cut short. */
+      var line = el("span", "key-line");
+      line.appendChild(el("span", "key-name", esc(opt.label)));
+      line.appendChild(document.createTextNode(" "));
+      line.appendChild(el("span", "key-word", vals.length ? esc(vals.join(", ")) : "left blank"));
+      row.appendChild(line);
+      if (foldable) {
+        // its own column, so it can never be orphaned onto a line by itself
+        var chev = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        chev.setAttribute("class", "key-chev");
+        chev.setAttribute("viewBox", "0 0 10 6");
+        chev.setAttribute("aria-hidden", "true");
+        chev.innerHTML = '<path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" ' +
+          'stroke-width="1.4" stroke-linecap="round"/>';
+        row.appendChild(chev);
+      }
       box.appendChild(row);
-      /* Why this place got that answer, in its own words. A question's answer is
-         a judgement; without the words behind it nobody can tell a good one from
-         a counter. Only shown where the reading actually quoted something — a
-         filing done by counting has no reason to give, and will not invent one. */
-      var why = props[opt.col + "_why"];
-      if (opt.isQuestion && vals.length && why && String(why).trim()) {
+
+      if (hasWhy && all) {
         var b2 = el("div", "key-because");
+        b2.hidden = true;
         b2.appendChild(el("span", "key-because-lead", "because"));
+        // a flex gap is space on the screen and nothing in the text
+        b2.appendChild(document.createTextNode(" "));
         String(why).split(",").forEach(function (w) {
           w = w.trim();
           if (w) b2.appendChild(el("span", "key-because-w", esc(w)));
         });
         box.appendChild(b2);
+        /* No handler here on purpose. The popup is assembled by serialising
+           these rows to HTML (krows.outerHTML), and serialising throws every
+           event handler away — the chevron rendered and nothing listened. The
+           fold is worked by one delegated listener instead, the same way the
+           tag chips in a popup already are. */
+        row.setAttribute("aria-label", opt.label + ": " + vals.join(", ") + " — show why");
       }
     });
     return box;
@@ -2890,6 +2933,23 @@
     filterByTag(b.getAttribute("data-tag"), b.getAttribute("data-layer") || POPUP_LAYER);
   });
 
+  /* Every fold inside a popup, worked from one place.
+
+     Delegated for the same reason the chips above are: a popup's contents are
+     serialised to HTML on the way in, so anything wired to the element itself
+     is gone by the time it is on screen — the chevron drew and nothing
+     listened. What folds always sits immediately after the thing that folds it,
+     which is what makes this a sibling lookup rather than a search. */
+  document.addEventListener("click", function (e) {
+    var t = e.target && e.target.closest && e.target.closest("[data-fold]");
+    if (!t) return;
+    var body = t.nextElementSibling;
+    if (!body) return;
+    e.preventDefault();
+    body.hidden = !body.hidden;
+    t.setAttribute("aria-expanded", String(!body.hidden));
+  });
+
   function clearSearch() {
     searchTags = [];
     TAGFILTER = null;
@@ -3707,7 +3767,16 @@
         // Each tag is a button, not a label: tapping one shows the places that
         // share it (see filterByTag). A button so a keyboard reaches it, and so
         // it announces itself as something that does a thing.
-        h += '<div class="pop-field"><div class="pop-lbl">' + esc(fld.label) + '</div><div class="pop-tags">' +
+        /* Folded behind its count. Measured on a place with seven labels: the
+           chips ran to 144px of a 476px card — the largest thing on it, and
+           more than the answers, the address and the source together. They are
+           still one tap away, and the count says how many are waiting. */
+        h += '<div class="pop-field"><button type="button" class="pop-fold" data-fold="tags" ' +
+          'aria-expanded="false"><span class="pop-lbl">' + esc(fld.label) + '</span> ' +
+          '<span class="pop-fold-n">' + arr.length + '</span>' +
+          '<svg class="key-chev" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" ' +
+          'fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>' +
+          '</button><div class="pop-tags" hidden>' +
           arr.map(function (t) {
             return '<button type="button" class="pop-tag" data-tag="' + esc(t) +
               '" data-layer="' + esc(L.id) +
@@ -3728,11 +3797,14 @@
       } else if (fld.type === "cropProfile") {
         var cp = Array.isArray(v) ? v : safeArr(v);
         if (!cp.length) return;
-        h += '<div class="pop-field"><div class="pop-lbl">' + esc(fld.label) + '</div><div class="pop-tags">' +
+        h += '<div class="pop-field"><span class="pop-lbl">' + esc(fld.label) + '</span><div class="pop-tags">' +
           cp.map(function (c) { return '<span class="pop-tag">' + esc(c.crop) + ' <b>' + esc(c.blocks) + "</b></span>"; }).join("") + "</div></div>";
       } else {
-        h += '<div class="pop-field"><div class="pop-lbl">' + esc(fld.label) + '</div><div class="pop-val">' +
-          esc(v) + (fld.suffix || "") + "</div></div>";
+        /* Label and value in one run of text. Stacked, "Creator / Sharang"
+           spent two lines on one short word; inline it takes one and wraps only
+           when the value is long enough to need it. */
+        h += '<div class="pop-field pop-field-inline"><span class="pop-lbl">' + esc(fld.label) +
+          '</span> <span class="pop-val">' + esc(v) + (fld.suffix || "") + "</span></div>";
       }
     });
     /* Where this place came from, in words. The pin's ring used to hint at this

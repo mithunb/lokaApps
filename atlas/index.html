@@ -525,11 +525,35 @@
       border-radius:3px; padding:.02rem .26rem; min-width:0;
       overflow-wrap:anywhere; }
     .key-row.blank .key-word { color:var(--color-text-muted); font-weight:400; }
-    .pop .key-rows { margin:.55rem 0 .15rem; }
+    /* ---- the popup's answers, compact ----
+       A place answering four questions used to spend three lines on each one:
+       the question, the answer, and the words behind it. With two answers the
+       card measured 317px against a 317px ceiling and scrolled inside a box
+       most people do not know scrolls; with four it came to 646px. The reason
+       folds away, the question and answer share a run of text, and the same
+       four-answer place now measures 462px — the rest of it is the person's own
+       description, which is theirs to be long. */
+    .pop .key-rows { margin:.6rem 0 .1rem; gap:.24rem; }
+    /* three columns: the mark, the text, and the chevron. The chevron holds a
+       column of its own so it can never be orphaned onto a line by itself. */
+    .pop .key-row { grid-template-columns:14px 1fr 12px; align-items:start;
+      width:100%; text-align:left; background:none; border:0; padding:0;
+      font:inherit; color:inherit; }
+    .pop .key-row .key-line { grid-column:2; grid-row:1; min-width:0; }
     /* In the popup the answer is what someone opened the place to read, so it
-       is set at reading size and the question stays quieter above it. */
+       is set at reading size and the question stays quieter beside it. */
     .pop .key-name { font-size:var(--t-meta); }
     .pop .key-word { font-size:var(--t-ui); }
+    .pop .key-row .key-name, .pop .key-row .key-word { display:inline; }
+    .pop .key-row-open { cursor:pointer; }
+    .pop .key-row-open:focus-visible { outline:2px solid var(--color-moss); outline-offset:2px;
+      border-radius:3px; }
+    .pop .key-chev { grid-column:3; grid-row:1; width:10px; height:6px; margin-top:.42rem;
+      color:var(--color-text-muted); transition:transform .15s ease; }
+    .pop .key-row-open:hover .key-chev { color:var(--color-moss); }
+    .pop .key-row-open[aria-expanded="true"] .key-chev { transform:rotate(180deg); }
+    .pop .key-because { padding:.1rem 0 .05rem 1.5rem; }
+    @media (prefers-reduced-motion:reduce) { .pop .key-chev { transition:none; } }
 
     /* ---- popups ---- */
     .atlas-popup .maplibregl-popup-content { border-radius:var(--radius-md); padding:0; box-shadow:var(--shadow-md);
@@ -548,12 +572,42 @@
     .pop { padding:.85rem .95rem; max-height:min(44vh, 400px); overflow-y:auto; }
     .pop-title { font-family:'Figtree',sans-serif; font-weight:700; font-size:1.02rem; color:var(--color-text-primary); line-height:1.2; }
     .pop-sub { font-size:.78rem; text-transform:uppercase; letter-spacing:.08em; color:var(--color-moss); margin-top:.1rem; }
-    .pop-field { margin-top:.6rem; }
+    /* A group of facts is a group: tight between them, with air before the
+       group rather than repeated inside it. */
+    .pop-field { margin-top:.5rem; min-width:0; }
+    .pop-field + .pop-field { margin-top:.12rem; }
+    /* Label and value in one run of text, wrapping only when the value is long.
+       Stacked, "Creator / Sharang" spent two lines on one short word. */
+    /* the gap is a real space in the markup, so it is read aloud too; this only
+       widens what is already there */
+    .pop-field-inline .pop-lbl { margin-right:.2rem; }
+    .pop-field-inline .pop-val { display:inline; }
     /* Where this place came from — last, and quieter than the place itself. */
     .pop-src { margin-top:.7rem; padding-top:.5rem; border-top:1px solid var(--color-border);
       font-size:.72rem; color:var(--color-text-muted); }
     .pop-img { display:block; width:100%; max-height:180px; object-fit:cover; border-radius:4px; margin:.5rem 0 .1rem; }
-    .pop-lbl { font-size:var(--t-label); text-transform:uppercase; letter-spacing:.06em; color:var(--color-text-muted); }
+    .pop-lbl { font-size:var(--t-label); text-transform:uppercase; letter-spacing:.06em;
+      color:var(--color-text-muted); }
+    /* a label above a block of chips still gets its own line — chips wrap, and
+       a label sitting in the middle of a wrapped run reads as one of them */
+    .pop-field > .pop-lbl + .pop-tags { margin-top:.15rem; }
+    /* A list folded behind its count: the label, how many there are, and the
+       same chevron the answers use, so one gesture means one thing everywhere
+       on the card. */
+    .pop-fold { display:flex; align-items:center; gap:.3rem; width:100%;
+      background:none; border:0; padding:0; font:inherit; color:inherit;
+      cursor:pointer; text-align:left; }
+    .pop-fold .pop-fold-n { font-size:var(--t-label); color:var(--color-text-muted);
+      font-variant-numeric:tabular-nums; }
+    .pop-fold .key-chev { width:10px; height:6px; color:var(--color-text-muted);
+      transition:transform .15s ease; }
+    .pop-fold:hover .pop-lbl, .pop-fold:hover .pop-fold-n, .pop-fold:hover .key-chev {
+      color:var(--color-moss); }
+    .pop-fold[aria-expanded="true"] .key-chev { transform:rotate(180deg); }
+    .pop-fold:focus-visible { outline:2px solid var(--color-moss); outline-offset:2px;
+      border-radius:3px; }
+    .pop-fold + .pop-tags { margin-top:.25rem; }
+    @media (prefers-reduced-motion:reduce) { .pop-fold .key-chev { transition:none; } }
     .pop-val { font-size:.88rem; color:var(--color-text-primary); }
     /* ---------- the labels, shelved (FAMILIES OF MEANING) ---------- */
     .label-index { margin:.4rem 0 .1rem; }
