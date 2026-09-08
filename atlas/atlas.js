@@ -101,6 +101,9 @@
   var KEY_COLORS = ["#332288", "#999933", "#44AA99", "#AA4499", "#117733", "#882255", "#88CCEE", "#DDCC77"];
   var KEY_OTHER = "#7a756c";
   var KEY_MAX = 8;
+  // how many kinds a column may hold and still be offered as a key — see the
+  // note where it is used. Eight are drawn; the ninth and tenth become "other".
+  var KEY_CAP = 10;
   // the wizard's named single colours (fragment.js MARKER_COLORS), for "one colour"
   var ONE_COLORS = { rust: "#A6522F", moss: "#40573D", ochre: "#B0863A", sienna: "#9C5A34", slate: "#5f7f92" };
   var keyState = {};   // layer id -> { active: [column, ...], note: string|null }
@@ -1286,9 +1289,28 @@
       });
       if (!committed) {
         if (counts.length < 2) return;
-        // the counting caps: fewer than 10 kinds for a one-answer column,
-        // at most 12 first-tags for a list column
-        if (delim ? counts.length > 12 : counts.length > 9) return;
+        /* One cap, and it is the palette's eight plus room for a small tail.
+
+           Eight is not a preference — it is how many marks this atlas owns
+           (KEY_COLORS), chosen to stay apart for a colourblind reader. It was
+           nine for a plain column and twelve for a list one, and twelve
+           promised four more kinds than can be drawn: a reader was shown eight
+           and four were merged into "other" without being asked.
+
+           Ten rather than eight because a column just over the line is worth
+           keeping: "Categories" has exactly ten kinds and its top eight cover
+           95% of places, so "other" holds 5% — an ordinary honest class, not a
+           hidden merge. What keeps that tail small is the rule below, which
+           refuses a column whose top eight cannot reach 60%. That is the rule
+           doing the real work: measured on this layer it is what rejects the
+           address, the labels, the ids and the descriptions, and the cap only
+           saves it the arithmetic.
+
+           Cartography agrees about the ceiling rather than the exact number:
+           qualitative schemes are usually advised at five to seven classes,
+           ColorBrewer's longest run to twelve, and the colourblind-safe ones
+           are far shorter than that. */
+        if (counts.length > KEY_CAP) return;
       }
       counts.sort(function (a, b) { return b.n - a.n; });   // stable: ties keep first-seen order
       var kept;
