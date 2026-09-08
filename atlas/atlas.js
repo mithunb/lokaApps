@@ -1174,6 +1174,71 @@
     renderExtra(L);   // the switches exist only once the data has said which columns qualify
   }
 
+/* A column of dates.
+
+   Deliberately tight: an ISO-ish date and nothing else. A looser test would
+   swallow a house number or "2/3", and a column wrongly called a date would
+   lose its own values to bucketing. Nearly all of them have to match, not all —
+   real data has a stray. */
+  var DATEY = /^(\d{4})-(\d{2})(?:-(\d{2}))?(?:[T ].*)?$/;
+  function looksLikeDates(vals) {
+    var seen = 0, hit = 0;
+    for (var i = 0; i < vals.length; i++) {
+      var v = String(vals[i] || "").trim();
+      if (!v) continue;
+      seen++;
+      if (DATEY.test(v)) hit++;
+    }
+    return seen >= 3 && hit >= seen * 0.9;
+  }
+
+  var MONTHS = ["January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"];
+
+  /* A date read as a word, because a key's kinds have to read as words: the
+     value guard rejects anything with no letters in it, so "2026-03" would take
+     the whole key down with it. "March 2026" survives, and is what a person
+     would have written anyway. */
+  function dateBucket(v, grain) {
+    var m = DATEY.exec(String(v || "").trim());
+    if (!m) return null;
+    var mon = MONTHS[Number(m[2]) - 1] || m[2];
+    if (grain === "year") return m[1];
+    if (grain === "month") return mon + " " + m[1];
+    return m[3] ? Number(m[3]) + " " + mon + " " + m[1] : mon + " " + m[1];
+  }
+
+  /* Nineteen dates is not a key — it is nineteen colours. Grouped by month it is
+     seven, which is a key. So the grain is chosen rather than fixed: the finest
+     one that fits under the cap, because a day tells you more than a month and a
+     month more than a year, and an event that happened in one afternoon wants
+     the day. Measured on the Bengaluru layer: by day 19 buckets, by month 7, by
+     year 2 — so month. */
+  function dateGrain(vals, cap) {
+    var grains = ["day", "month", "year"];
+    for (var i = 0; i < grains.length; i++) {
+      var seen = {}, n = 0;
+      for (var j = 0; j < vals.length; j++) {
+        var b = dateBucket(vals[j], grains[i]);
+        if (b && !seen[b]) { seen[b] = 1; n++; }
+      }
+      if (n >= 2 && n <= cap) return grains[i];
+    }
+    return null;
+  }
+
+  /* How lopsided a key may be before it stops being one.
+
+     A key exists to tell places apart. When nine in ten wear the same mark it
+     tells a reader nothing, and it costs them a switch and a legend to find
+     that out. Measured on the live Bengaluru layer: "Creator" is offered today
+     and 89% of its places say "LOKA Finds".
+
+     Not applied to a question, whose spread is the honest answer to something
+     asked of these places, nor to the marker column an owner committed to —
+     both are somebody's decision rather than an accident of a column. */
+  var KEY_DOMINANCE = 0.85;
+
   function computeKeyOptions(L, feats) {
     var committedCol = null;
     if (L.markerBy) {
@@ -1202,10 +1267,19 @@
       [";", ","].forEach(function (d) {
         if (!delim && nonEmpty.filter(function (v) { return v.indexOf(d) >= 0; }).length >= nonEmpty.length * 0.4) delim = d;
       });
+      /* A column of dates arrives with one kind per date, which is no key at
+         all. It becomes one by grouping — see dateGrain. Only for a column that
+         is dates all the way down; anything else is counted as it comes. */
+      var grain = (!committed && !delim && looksLikeDates(nonEmpty))
+        ? dateGrain(nonEmpty, 9) : null;
       var counts = [], seen = {};
       nonEmpty.forEach(function (v) {
         if (delim) { var i = v.indexOf(delim); if (i >= 0) v = v.slice(0, i); }
-        v = v.trim().slice(0, 40);
+        if (grain) {
+          v = dateBucket(v, grain);
+          if (!v) return;
+        }
+        v = String(v).trim().slice(0, 40);
         if (!v) return;
         if (seen[v] == null) { seen[v] = counts.length; counts.push({ kind: v, n: 0 }); }
         counts[seen[v]].n++;
@@ -1237,12 +1311,18 @@
       if (/^pattern_\d+_why$/.test(col)) return;   // a reason is not a key
       var isQuestion = /^pattern_\d+$/.test(col);
       if (!committed && !isQuestion && named / feats.length < 0.6) return;
+      // and a key that does not tell places apart is not a key — see KEY_DOMINANCE
+      if (!committed && !isQuestion && counts.length &&
+          counts[0].n / feats.length > KEY_DOMINANCE) return;
       /* A name the owner gave this key wins over the column's own name. The
          column is called "themes", which says how it was made rather than what
          it holds — and the switch lowercased it while the popup capitalised it,
          so a reader could meet "themes" and "Themes" in one sitting. */
       var given = L.keyLabels && L.keyLabels[col];
-      opts.push({ col: col, label: given ? String(given) : prettyCol(col), delim: delim, committed: committed,
+      // "Created at · by month" says what the marks mean without a legend note
+      var shown = given ? String(given) : prettyCol(col);
+      if (grain) shown += " \u00b7 by " + grain;
+      opts.push({ col: col, label: shown, delim: delim, committed: committed, grain: grain,
         // what share of the places this key can actually speak for; shown beside
         // a discovered question, whose whole point is that it may not reach all
         reach: feats.length ? named / feats.length : 0, isQuestion: isQuestion,
@@ -1286,7 +1366,15 @@
     var parts = opt.delim ? String(v).split(opt.delim) : [String(v)];
     var out = [], seen = {};
     parts.forEach(function (s) {
-      s = s.trim().slice(0, 40);
+      /* A bucketed column has to be asked the same question its kinds were
+         built from. Without this the key would list "March 2026" and every
+         place would look for its own raw date among those names, match nothing,
+         and the map would come out entirely blank under a key that reads fine. */
+      if (opt.grain) {
+        s = dateBucket(s, opt.grain);
+        if (!s) return;
+      }
+      s = String(s).trim().slice(0, 40);
       if (!s || seen[s]) return;
       seen[s] = 1;
       out.push(s);

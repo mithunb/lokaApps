@@ -2664,7 +2664,7 @@ function wordColumnsOf(rows) {
     if (k.charAt(0) === '_' || k === 'themes' || /^pattern_/.test(k)) return false;
     if (/^(lat|latitude|lon|lng|long|longitude)$/i.test(k)) return false;
     const seen = new Set();
-    let filled = 0, spaced = 0;
+    let filled = 0, spaced = 0, datey = 0;
     for (const r of rows) {
       let v = r[k];
       if (typeof v !== 'string') continue;
@@ -2673,9 +2673,16 @@ function wordColumnsOf(rows) {
       if (/^https?:\/\//i.test(v)) return false;
       filled += 1;
       if (v.indexOf(' ') >= 0) spaced += 1;
+      if (/^\d{4}-\d{2}(-\d{2})?([T ].*)?$/.test(v)) datey += 1;
       seen.add(v);
     }
     if (!filled) return false;
+    /* A date is not a reason. Measured on a real reading: with a date column in
+       the mix the model answered "Cultural or historical" and offered "2025" as
+       the words that justified it — the answer restated, not evidence for it.
+       Time is worth asking about, but as a key built from the column itself,
+       where no justification is needed or possible. */
+    if (datey >= filled * 0.9) return false;
     return !(seen.size === filled && spaced === 0);
   });
 }

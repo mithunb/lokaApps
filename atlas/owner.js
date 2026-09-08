@@ -196,7 +196,7 @@
       // put words into the mouth of the next
       if (k.charAt(0) === "_" || k === "themes" || /^pattern_/.test(k)) return false;
       if (/^(lat|latitude|lon|lng|long|longitude)$/i.test(k)) return false;
-      var seen = {}, n = 0, spaced = 0, filled = 0;
+      var seen = {}, n = 0, spaced = 0, filled = 0, datey = 0;
       for (var i = 0; i < feats.length; i++) {
         var v = (feats[i].properties || {})[k];
         if (typeof v !== "string") continue;
@@ -205,9 +205,17 @@
         if (/^https?:\/\//i.test(v)) return false;      // a link, not words
         filled++;
         if (v.indexOf(" ") >= 0) spaced++;
+        if (/^\d{4}-\d{2}(-\d{2})?([T ].*)?$/.test(v)) datey++;
         if (!seen[v]) { seen[v] = 1; n++; }
       }
       if (!filled) return false;
+      /* A date is not a reason. Measured on a real reading: with a date column
+         in the mix the model answered "Cultural or historical" and offered
+         "2025" as the words that justified it — which is the answer restated,
+         not evidence for it. Time is worth asking about, but as a key built
+         from the column itself, where no justification is needed or possible.
+         Kept tight to ISO-ish dates so a house number is not mistaken for one. */
+      if (datey >= filled * 0.9) return false;
       return !(n === filled && spaced === 0);          // all different, none spaced -> an id
     });
   }
