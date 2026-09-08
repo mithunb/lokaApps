@@ -3729,6 +3729,91 @@
     return "";
   }
 
+/* Is this a layer that came out of the LOKA app?
+
+   The atlas is built to take any spreadsheet from anyone, and it guesses well
+   from the columns alone. But LOKA's own data is not a guess: we wrote the app
+   that produces it, so we know what every column means, which are worth reading
+   and which are only bookkeeping. Recognising it is worth doing because a guess
+   and a certainty deserve different treatment.
+
+   The signature is three columns together, one of which is unmistakable: a
+   tag_id that is a UUID. A spreadsheet might happen to have "labels" or
+   "description"; one that also stamps every row with a UUID under that name is
+   ours. Measured on the live Bengaluru layer: 66 of 66 rows, every id distinct
+   and every one a UUID. */
+  var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  function lokaShaped(feats) {
+    var p = (feats && feats[0] && feats[0].properties) || null;
+    if (!p) return false;
+    if (!("tag_id" in p) || !("labels" in p) || !("description" in p)) return false;
+    var seen = 0, uuid = 0;
+    for (var i = 0; i < feats.length && seen < 12; i++) {
+      var v = String(((feats[i].properties || {}).tag_id) || "").trim();
+      if (!v) continue;
+      seen++;
+      if (UUID_RE.test(v)) uuid++;
+    }
+    return seen > 0 && uuid === seen;
+  }
+
+  // worked out once per layer, when its places arrive
+  function isLoka(L) {
+    if (!L) return false;
+    if (L._loka === undefined) {
+      var gj = DATA[L.id];
+      L._loka = !!(gj && lokaShaped(gj.features || []));
+    }
+    return L._loka;
+  }
+
+  /* How a LOKA place reads, in the order it reads best.
+
+     A photo of the thing, then what the person wrote about it, then what the
+     atlas worked out, then the words they tagged it with, and last the
+     bookkeeping — where, when, by whom. The order the wizard produces is a
+     reasonable guess for a spreadsheet nobody has seen; for our own data it is
+     only a guess where we have an answer.
+
+     The description especially: for LOKA it is a sentence, sometimes with a
+     photo credit on the end, so heading a card with it made an eight-line
+     title. It is a caption. It belongs under the picture it captions. */
+  var LOKA_ORDER = ["image_urls", "description", "labels", "address", "created_at", "creator"];
+  function lokaFields(fields) {
+    var by = {}, rest = [];
+    (fields || []).forEach(function (f) {
+      if (LOKA_ORDER.indexOf(f.property) >= 0) by[f.property] = f;
+      else rest.push(f);
+    });
+    var out = [];
+    LOKA_ORDER.forEach(function (k) { if (by[k]) out.push(by[k]); });
+    // anything the app grows later still shows, after what we know about
+    return out.concat(rest);
+  }
+
+/* The opening of a LOKA card: every photo, then the caption, then the answers.
+
+   Every photo, not the first one. LOKA lets somebody attach more than one, and
+   9 of the 66 places on the live Bengaluru layer have two — the second was
+   being dropped on the floor, because a generic image column means one image. */
+  function lokaLead(L, props, caption, krows) {
+    var h = "";
+    var shots = String(props.image_urls || "")
+      .split(/[|;]/)
+      .map(function (u) { return u.trim(); })
+      .filter(function (u) { return /^https:\/\/\S+$/i.test(u); });
+    if (shots.length) {
+      h += '<div class="pop-shots' + (shots.length > 1 ? " many" : "") + '">' +
+        shots.slice(0, 4).map(function (u) {
+          return '<img class="pop-img" src="' + esc(u) + '" alt="" loading="lazy" ' +
+            'referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" />';
+        }).join("") + "</div>";
+    }
+    if (caption) h += '<p class="pop-caption">' + esc(String(caption).trim()) + "</p>";
+    if (krows) h += krows.outerHTML;
+    return h;
+  }
+
   function popupHTML(L, props) {
     POPUP_LAYER = L && L.id;   // the tag chips below belong to this layer
     var spec = L.popup;
@@ -3740,11 +3825,22 @@
     spec = spec || {};
     var title = popupTitleText(L, props);
     var sub = spec.subtitle || (spec.subtitleProperty ? props[spec.subtitleProperty] : "");
+    var loka = isLoka(L);
     var shell = '<div class="pop">';
     var h = shell;
-    if (title) h += '<div class="pop-title">' + esc(title) + "</div>";
-    if (sub) h += '<div class="pop-sub">' + esc(sub) + "</div>";
-    if (krows) h += krows.outerHTML;
+    /* On a LOKA place the description IS the title, and it is a sentence —
+       sometimes with a photo credit on the end — so heading the card with it
+       produced an eight-line title. It is a caption, and it belongs under the
+       picture it captions. So a LOKA card opens with the photo, then the
+       caption, then what the atlas worked out; the generic card keeps the
+       heading-first order that suits a spreadsheet nobody has seen. */
+    if (loka) {
+      h += lokaLead(L, props, title, krows);
+    } else {
+      if (title) h += '<div class="pop-title">' + esc(title) + "</div>";
+      if (sub) h += '<div class="pop-sub">' + esc(sub) + "</div>";
+      if (krows) h += krows.outerHTML;
+    }
     /* A layer's popup rows are generated from its columns when it is added, so
        every column a key later claims got said twice: once in the key rows above
        and again as a row of its own. Worse, a question's column arrived as a raw
@@ -3755,7 +3851,11 @@
     (L._keyOptions || []).forEach(function (o) { if (o.col) keyCols[o.col] = 1; });
     var srcLine = sourceLine(L);
 
-    (spec.fields || []).forEach(function (fld) {
+    /* Our own data is not a guess. The wizard's field order is a fair reading of
+       a spreadsheet nobody has seen; for a LOKA layer we know what each column
+       is for, so the card is composed rather than listed. */
+    var fields = loka ? lokaFields(spec.fields) : (spec.fields || []);
+    fields.forEach(function (fld) {
       var v = props[fld.property];
       if (v == null || v === "" || v === "[]") return;
       if (keyCols[fld.property]) return;                          // the key rows said it
@@ -3767,16 +3867,14 @@
         // Each tag is a button, not a label: tapping one shows the places that
         // share it (see filterByTag). A button so a keyboard reaches it, and so
         // it announces itself as something that does a thing.
-        /* Folded behind its count. Measured on a place with seven labels: the
-           chips ran to 144px of a 476px card — the largest thing on it, and
-           more than the answers, the address and the source together. They are
-           still one tap away, and the count says how many are waiting. */
-        h += '<div class="pop-field"><button type="button" class="pop-fold" data-fold="tags" ' +
-          'aria-expanded="false"><span class="pop-lbl">' + esc(fld.label) + '</span> ' +
+        /* Open. These were folded behind a count for a while, because on a
+           place with seven of them the chips ran to 144px of a 476px card —
+           the largest thing on it. But each one filters the map, and a control
+           you have to find first is a control most people never find. The
+           height is worth it; the count stays as a heading. */
+        h += '<div class="pop-field"><span class="pop-lbl">' + esc(fld.label) + '</span> ' +
           '<span class="pop-fold-n">' + arr.length + '</span>' +
-          '<svg class="key-chev" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" ' +
-          'fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>' +
-          '</button><div class="pop-tags" hidden>' +
+          '<div class="pop-tags">' +
           arr.map(function (t) {
             return '<button type="button" class="pop-tag" data-tag="' + esc(t) +
               '" data-layer="' + esc(L.id) +
@@ -3788,6 +3886,8 @@
         h += '<div class="pop-notes">' + notes.map(function (n) {
           return '<div class="pop-note"><b>' + esc(n.title) + "</b>" + (n.body ? "<span>" + esc(n.body) + "</span>" : "") + "</div>";
         }).join("") + "</div>";
+      } else if (loka && (fld.property === "description" || fld.property === "image_urls")) {
+        return;   // the photo and its caption already led the card
       } else if (fld.type === "image") {
         // photo column: https-only, lazy, silently hidden when the link is dead
         var u = String(v).trim();

@@ -586,6 +586,18 @@
     .pop-src { margin-top:.7rem; padding-top:.5rem; border-top:1px solid var(--color-border);
       font-size:.72rem; color:var(--color-text-muted); }
     .pop-img { display:block; width:100%; max-height:180px; object-fit:cover; border-radius:4px; margin:.5rem 0 .1rem; }
+    /* A LOKA place can carry more than one photo, and nine of the sixty-six on
+       the Bengaluru layer do. One fills the width; two or more share it, so a
+       second picture costs no height at all. */
+    .pop-shots { display:grid; gap:.25rem; margin:.1rem 0 .1rem; }
+    .pop-shots.many { grid-template-columns:1fr 1fr; }
+    .pop-shots .pop-img { margin:0; }
+    .pop-shots.many .pop-img { max-height:120px; }
+    /* The description, set as what it is: the person's own sentence about the
+       place, under the picture of it. Heading the card with it made an
+       eight-line title. */
+    .pop-caption { margin:.45rem 0 .1rem; font-size:.92rem; line-height:1.4;
+      color:var(--color-text-primary); text-wrap:pretty; }
     .pop-lbl { font-size:var(--t-label); text-transform:uppercase; letter-spacing:.06em;
       color:var(--color-text-muted); }
     /* a label above a block of chips still gets its own line — chips wrap, and
