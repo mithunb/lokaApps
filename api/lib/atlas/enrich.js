@@ -21,6 +21,20 @@ const MAX_CATS = 7;              // named themes; + "other" = 8 = the palette
                                  // (fragment.js MAX_CATEGORIES, tabular.js <= 8)
 const MIN_TEXT_ROWS = 8;         // fewer described places → "too_thin"
 const DIGEST_MAX = 400;          // whole set below this; even-stride sample above
+/* The share at which the viewer refuses a key outright: one answer on 85 of
+   every 100 places is not a sorting. Kept here as well because the same truth
+   decides what is worth telling the question-finder about — a word on that many
+   places cannot become a kind, so it is not offered as one. The viewer holds
+   its own copy in atlas/atlas.js, where it governs drawing rather than asking. */
+const KEY_DOMINANCE = 0.85;
+/* Three counts taken AFTER the model has answered, because that is the only
+   place they can be taken. The prompt asks for kinds that fit at least three
+   places and for two of them to carry the question; whether it obliged is not
+   something any wording can promise. So it is checked here, against the real
+   answers, and the reading is trimmed to what the counting supports. */
+const KIND_FLOOR = 3;            // a kind holding fewer places than this is not a kind
+const FLAT_SHARE = 0.6;          // one answer holding this much of a question is barely a sorting
+const HOMELESS_SHARE = 0.15;     // a word on this many places ought to have found a home
 const CLIP = 280;                // description characters per digest line
 
 // the quality gate's thresholds
@@ -84,13 +98,68 @@ export function assignBySeed(texts, seedSet) {
    says how the text was produced (trailing "Photo: …" credits) is stripped,
    because shared voice reads as a theme signal and is not one. */
 
+/* A list is ORDERED when its last piece is nearly always the same one. That is
+   what an address is: pieces narrowing to a place everything shares, so the
+   last of them repeats on almost every line. Tags are unordered, so their last
+   piece varies — measured on a real atlas, the last piece of the categories
+   column was the same on 21 places in 100 and of the labels column on 3, while
+   the last piece of the address column was "india" on 86.
+
+   It matters because a split address is counted as recurring words, and the
+   commonest recurring words then become the city and the country. On sixty-six
+   places in Bengaluru the list handed to the question-finder began "bengaluru
+   (67), india (57)" and 25 of its 40 entries were street names and postcodes.
+   The rule that the kinds must leave a home for the common ones was being
+   applied to that, which is an invitation to ask which locality a place is in.
+   The address is still read — it stays on the place's line as writing. It is
+   only not chopped into things that look like tags. */
+/* Two signals, because the first alone is not enough. A column holding only
+   "hot, dry" and "cold, dry" also ends the same way every time, and it is
+   plainly a pair of tags. What separates them is the vocabulary: tags are
+   SHARED — a handful of words used over and over — while the other pieces of an
+   address are a street and a house number, nearly unique to each place. So the
+   test is both at once: the list ends the same way, and its pieces are mostly
+   not shared.
+
+   Measured on real and made-up columns:
+
+     address           tail 86%   pieces 235% of places   -> a place
+     one city, no numbers   100%             107%         -> a place
+     categories               21%              15%        -> tags
+     labels                    3%             508%        -> tags
+     "hot, dry"/"cold, dry"  100%              10%        -> tags
+     three colour-and-shape pairs  65%         20%        -> tags
+
+   The two cases that need the pair are the last two of the tags and the second
+   of the places: one ends the same way with a tiny vocabulary, the other is an
+   address with no digits in it at all. */
+const ADDRESS_TAIL = 0.6;      // the last piece is this often the same one
+const ADDRESS_UNIQUE = 0.5;    // and the pieces are this far from a shared few
+function looksLikeAPlace(filled, delim) {
+  const last = new Map();
+  const pieces = new Set();
+  let counted = 0;
+  for (const v of filled) {
+    const parts = v.split(delim).map((p) => p.trim().toLowerCase()).filter(Boolean);
+    if (!parts.length) continue;
+    const tail = parts[parts.length - 1];
+    last.set(tail, (last.get(tail) || 0) + 1);
+    for (const p of parts) pieces.add(p);
+    counted++;
+  }
+  if (!counted) return false;
+  const endsTheSameWay = Math.max(...last.values()) / counted >= ADDRESS_TAIL;
+  const notASharedFew = pieces.size / counted >= ADDRESS_UNIQUE;
+  return endsTheSameWay && notASharedFew;
+}
+
 // a column is read as tags when its values are short delimited tokens;
 // ';' wins over ',' (commas live inside prose), matching fragment.js
 function tagDelimiter(values) {
   const filled = values.filter((v) => v.trim());
   if (!filled.length) return null;
   const share = (d) => filled.filter((v) => v.includes(d)).length / filled.length;
-  if (share(';') >= 0.4) return ';';
+  if (share(';') >= 0.4) return looksLikeAPlace(filled, ';') ? null : ';';
   if (share(',') >= 0.4) {
     let len = 0, words = 0, n = 0;
     filled.forEach((v) => v.split(',').forEach((t) => {
@@ -98,7 +167,7 @@ function tagDelimiter(values) {
       if (t) { len += t.length; words += t.split(/\s+/).length; n++; }
     }));
     // tags are short, few-word tokens; prose clauses are neither
-    if (n && len / n <= 24 && words / n <= 3) return ',';
+    if (n && len / n <= 24 && words / n <= 3) return looksLikeAPlace(filled, ',') ? null : ',';
   }
   return null;
 }
@@ -109,6 +178,19 @@ function stripCredit(text) {
     lines.pop();
   }
   return lines.join(' ');
+}
+
+/* A question is capped at 40 characters so it fits the key's own row, and the
+   model is told so. When it went over anyway the cap was a blunt cut, which
+   took the tail AND the question mark with it — leaving a key labelled with
+   half a sentence and no sign it was ever a question. Cut at a word instead,
+   and give the mark back. */
+function clipQuestion(raw) {
+  const q = String(raw || '').trim();
+  if (q.length <= 40) return q;
+  const cut = q.slice(0, 40);
+  const sp = cut.lastIndexOf(' ');
+  return (sp > 20 ? cut.slice(0, sp) : cut).replace(/[\s?.,;:]+$/, '') + '?';
 }
 
 function clipAtWord(s, n) {
@@ -162,7 +244,11 @@ export function buildDigest(rows, fields) {
     });
     const desc = clipAtWord(prose.join(' · '), CLIP);
     const text = desc + (tags.length ? (desc ? ' — tags: ' : 'tags: ') + tags.join(', ') : '');
-    return { text };
+    /* The words this one place said, kept beside its line. tagCounts says how
+       often a word occurs across the whole set but not WHERE, and the question
+       worth asking afterwards is whether the places saying a common word found
+       anywhere to go. */
+    return { text, tags: tags.map((t) => t.toLowerCase()) };
   });
   return { entries, withText: entries.filter((e) => e.text).length, tagCounts };
 }
@@ -221,8 +307,16 @@ function inducePlaces(digest) {
 
      Counting is free and already done. Whoever is choosing the questions should
      see it. */
+  /* And a word that is true of nearly every place is left out of it. The
+     viewer already refuses a key whose commonest answer takes 85 of every 100
+     places, because a colouring that gives almost everything one colour does
+     not sort anything. A word on that many places is the same thing said
+     earlier: it cannot become a kind, so naming it as one the kinds must make
+     room for asks for a question that cannot be answered usefully. */
+  const tooCommon = texted.length * KEY_DOMINANCE;
   const repeated = [...digest.tagCounts.entries()]
-    .filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).slice(0, 40);
+    .filter(([, n]) => n > 1 && n < tooCommon)
+    .sort((a, b) => b[1] - a[1]).slice(0, 40);
   const summary = repeated.length
     ? 'Recurring words across all ' + texted.length + ' places, commonest first: ' +
       repeated.map(([t, n]) => t + ' (' + n + ')').join(', ') + '\n'
@@ -465,10 +559,11 @@ const QUESTIONS_SCHEMA = {
   },
 };
 
-async function induceQuestions({ digest, fields, title, callJSON, model }) {
+async function induceQuestions({ digest, fields, title, callJSON, model, alreadyKeyed = [] }) {
   const places = inducePlaces(digest);
   const mapPhrase = title ? 'a map called "' + title + '"' : 'a map';
   const colNames = (fields || []).map((f) => String(f)).filter(Boolean);
+  const keyed = (alreadyKeyed || []).filter((k) => k && k.column && (k.words || []).length);
   const prompt = [
     'You are helping the owner of ' + mapPhrase + '. It shows ' + places.total +
       ' places. Each numbered line below is one of them, in the words its own data gives. Maps like this carry all sorts of records — spots people described, wells surveyed, fields, buildings, whatever was collected — so read what these ARE from the lines, never from habit.',
@@ -479,24 +574,36 @@ async function induceQuestions({ digest, fields, title, callJSON, model }) {
     '',
     'SECOND, the facts field: list the sorts of facts the lines state. A sort of fact is anything many lines each give their own value of — whatever that turns out to be in THIS data. Name each sort in a few plain words. List every sort you can see, even the dull ones; a fact stated by many lines is this map\'s own vocabulary.',
     '',
-    'THIRD, the questions: turn each sort of fact into the question a reader of this map would ask about ONE place, in the reader\'s own everyday words — the fact is that question\'s answer. On one map, lines saying "granite, hand-carved" answered "What is it made of?"; on another, a line saying "dry since 2019" answered "Is it working?". Those are other maps\' questions: yours must come from the facts you just listed, and from nowhere else.',
+    'THIRD, the questions: turn each sort of fact into the question a reader of this map would ask about ONE place, in the reader\'s own everyday words. The fact IS the answer; the question is what somebody would have had to ask to be told it. Take them from the facts you listed in the step above and from nowhere else — no examples are given here on purpose, because an example of a question is the fastest way to end up with somebody else\'s.',
+    '',
+    'What becomes of a question: each one turns into a switch beside the map. Turn it on and every place takes a colour and a shape by its own answer, at most eight of them drawn at once, and under each answer sit one to three words copied from that place\'s own line so a reader can check the answer rather than trust it. A question is good when a reader can turn it on and immediately see the map divide into groups worth looking at — and when each place\'s own words really do support where it landed.',
     '',
     'Rules:',
     '- Make one question for every sort of fact that passes these rules, up to ' + MAX_QUESTIONS + '. Do not stop early: returning one question from lines that state three sorts of fact is the failure this reading exists to end. And never pad: if the lines honestly support only one question, return one.',
     '- A question is asked of one place at a time, and a place answers it in a word or a few — so the answers can gather into between ' + MIN_CATS + ' and ' + MAX_CATS + ' kinds. A fact that is different on every line — a name, an exact measurement — makes a poor question, unless its values gather naturally into a few plain kinds a stranger could learn.',
     '- Each question must be a real question in everyday words, at most 40 characters, ending in a question mark.',
     '- Give each question between ' + MIN_CATS + ' and ' + MAX_CATS + ' kinds of answer. Name each kind in 1 to 3 everyday words, taken from how the lines themselves speak.',
-    '- A kind must fit at least 3 of the places below, and no kind may fit more than about half of them.',
+    '- A kind must fit at least 3 of the places below. No kind may take nearly all of them — that is not a sorting. If one group is very large, split it into narrower kinds that a stranger could tell apart; do not leave part of it out to keep the kinds even.',
     '- A question is worth keeping even if it can only speak for some of the places. One that answers a fifth of them is a true answer about that fifth, and the map says so. Drop a question for being unsupported, never for being narrow.',
+    '- Here is the test for whether a question is worth asking at all, and it is the only one: at least two of its kinds must each fit three or more of the places below. A question whose places nearly all fall into one kind sorts nothing, and a question carried by kinds of one or two places is not carried. Use this test in place of judging how many questions feel like the right number.',
     '- Two questions must not be the same question in different words: if two sorts of fact would sort the places the same way, they are one question.',
     /* The rule this data needed and did not have. Kinds were proposed for five
        of the commonest groups and none for the second and third, so a third of
        the places had nowhere honest to go and were filed somewhere wrong. */
     '- If a question sorts places by something the recurring words above already name, its kinds must leave a home for the common ones. Where a word appears on many places and no kind would take them, either add a kind that does or ask a different question. Do not offer a question whose kinds have nowhere to put a large group.',
-    '- Judge only by what the lines actually say — not by what such places usually are, and not by these instructions\' own examples.',
+    '- Judge only by what the lines actually say, and not by what such places usually are. There are no examples above to borrow from, which is deliberate.',
     '- Never use "other" as a kind name; places that fit nothing are handled separately.',
     colNames.length
       ? '- The words on each line were read from columns named: ' + colNames.join(', ') + '. A column\'s name can tell you what its words mean. It is context only — never itself a question, and never a kind\'s name.'
+      : null,
+    /* Told plainly, at last. These words were already refused after the fact —
+       a kind that took one was deleted, and a question that lost kinds that way
+       fell below two and disappeared without a word. */
+    keyed.length
+      ? '- This map ALREADY sorts places by ' +
+        keyed.map((k) => 'its ' + k.column + ' (' + k.words.slice(0, 14).join(', ') +
+          (k.words.length > 14 ? ', …' : '') + ')').join(', and by ') +
+        '. Those questions are answered on this map already. Do not ask one of them again in other words, and do not give a kind one of those words as its name — a kind named after one of them is thrown out, and a question that loses its kinds that way is lost with them. If the only honest question about a sort of fact is one of these, leave it out and say so in the facts field.'
       : null,
     '',
     'If the lines state no sort of fact whose answers gather into kinds, set verdict to "no_clear_questions" and say why in one plain sentence. That is a correct and welcome answer, not a failure.',
@@ -526,7 +633,7 @@ async function induceQuestions({ digest, fields, title, callJSON, model }) {
   const questions = (Array.isArray(out.questions) ? out.questions : [])
     .slice(0, MAX_QUESTIONS)
     .map((q) => ({
-      question: String(q.question || '').trim().slice(0, 40),
+      question: clipQuestion(q.question),
       kinds: (Array.isArray(q.kinds) ? q.kinds : []).map((k) => ({
         name: String(k.name || '').trim().slice(0, 40),
         definition: String(k.definition || '').trim(),
@@ -703,20 +810,34 @@ async function answerQuestions({ digest, questions, title, callJSON, model }) {
    them: a kind called "Nature" while a categories key already colours the map by
    Nature is two keys wearing one word over two different splits, which is the
    worst way for these to collide. */
-function keyKindsOf(rows, fields) {
+/* Grouped by the key that uses them, because that is what the question-finder
+   has to be told: not a bare list of forbidden words, but "this map already
+   colours places by categories, and here is how". A kind that takes one of
+   these words is thrown out afterwards either way — the model was simply never
+   told, so it spent kinds on them and questions fell below the two kinds they
+   need and vanished. That was invisible from the outside and looked like the
+   model being fickle. */
+function keyKindsByColumn(rows, fields) {
   const out = [];
   for (const f of keyShapedColumns(rows, fields)) {
-    const seen = new Set();
+    const seen = new Set(), words = [];
     for (const r of (rows || [])) {
       const raw = r && r[f];
       if (raw === undefined || raw === null || raw === '') continue;
       const str = Array.isArray(raw) ? String(raw[0] || '') : String(raw);
       for (const part of str.split(/[;,]/)) {
         const t = part.trim().slice(0, 40);
-        if (t && !seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); out.push(t); }
+        if (t && !seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); words.push(t); }
       }
     }
+    if (words.length) out.push({ column: f, words });
   }
+  return out;
+}
+
+function keyKindsOf(rows, fields) {
+  const out = [];
+  for (const k of keyKindsByColumn(rows, fields)) out.push(...k.words);
   return out;
 }
 
@@ -778,12 +899,16 @@ export async function enrichRows(opts) {
 
     let kept = askedBefore, ind = null;
     if (!kept.length) {
-      ind = await induceQuestions({ digest, fields, title, callJSON, model: models.flash });
+      /* Worked out before the call now, not after it: these are the questions
+         the map can already answer, and the finder needs to know so it does not
+         propose one of them again in other words. */
+      const alreadyKeyed = keyKindsByColumn(rows, fields);
+      ind = await induceQuestions({ digest, fields, title, callJSON, model: models.flash, alreadyKeyed });
       if (!ind) return { verdict: 'unavailable', trouble: '' };
       if (ind.verdict === 'unavailable') return { verdict: 'unavailable', trouble: ind.trouble || '' };
       if (ind.verdict === 'no_clear_questions') return { verdict: 'no_clear_questions', note: ind.note };
 
-      const reserved = [...fields, ...keyKindsOf(rows, fields)];
+      const reserved = [...fields, ...alreadyKeyed.flatMap((k) => k.words)];
       kept = [];
       for (const q of ind.questions) {
         const g = gateNames(q.kinds, { title, listLength: ind.listLength, reserved });
@@ -809,6 +934,72 @@ export async function enrichRows(opts) {
                batches: filed.batches, unread: filed.unread,
                read: filed.batches - filed.unread, trouble: filed.trouble || '' };
     }
+    /* A place's answer is taken away here and there, so the words that stood
+       behind it go at the same time. An answer with no words under it is a
+       judgement nobody can check, and words with no answer above them are
+       left over from one. */
+    const unanswer = (n, i) => { filed.answers[n][i] = ''; filed.why[n][i] = []; };
+    const tallyOf = (n) => {
+      const t = new Map();
+      filed.answers[n].forEach((c) => {
+        if (!c || c === 'other') return;
+        t.set(c, (t.get(c) || 0) + 1);
+      });
+      return t;
+    };
+
+    /* ONE. A kind that took one or two places did not earn a colour.
+       The map draws at most eight kinds and gives each its own shape, so a kind
+       of one place spends a shape on a single marker and makes the key longer to
+       read for nothing. Themes have always been folded this way; questions were
+       exempt, which is why a question came back carrying two kinds of two
+       places. Those places become unanswered, which is honest — the question
+       genuinely cannot speak for them — and the share beside the switch drops
+       to say so. A question the layer has already settled on is left alone: its
+       keys are on a map somebody may have linked to. */
+    const folded = [];
+    if (!askedBefore.length) {
+      kept.forEach((q, n) => {
+        const t = tallyOf(n);
+        const tooFew = new Set([...t.entries()].filter(([, c]) => c < KIND_FLOOR).map(([k]) => k));
+        if (!tooFew.size) return;
+        for (let i = 0; i < filed.answers[n].length; i++) {
+          if (tooFew.has(filed.answers[n][i])) unanswer(n, i);
+        }
+        for (const k of tooFew) folded.push({ question: q.question, kind: k, count: t.get(k) });
+      });
+    }
+
+    /* TWO. One name cannot mean two things on one map.
+       "Natural / Green" was a kind under "What is its main purpose?" and under
+       "What is it made of or like?" at the same time — one label worn by two
+       shapes over two different splits, and a popup showing it twice meaning
+       different things. Renaming it would invent words nobody wrote, so it is
+       settled by counting: the name stays where it holds more places and is
+       taken away where it holds fewer. */
+    const renamedAway = [];
+    if (!askedBefore.length) {
+      const holders = new Map();          // lower-cased name -> [{n, count}]
+      kept.forEach((q, n) => {
+        for (const [name, count] of tallyOf(n)) {
+          const key = name.toLowerCase();
+          if (!holders.has(key)) holders.set(key, []);
+          holders.get(key).push({ n, name, count });
+        }
+      });
+      for (const [, where] of holders) {
+        if (where.length < 2) continue;
+        where.sort((x, y) => y.count - x.count);
+        for (const loser of where.slice(1)) {
+          for (let i = 0; i < filed.answers[loser.n].length; i++) {
+            if (filed.answers[loser.n][i] === loser.name) unanswer(loser.n, i);
+          }
+          renamedAway.push({ question: kept[loser.n].question, kind: loser.name,
+                             count: loser.count, keptUnder: kept[where[0].n].question });
+        }
+      }
+    }
+
     const questions = kept.map((q, n) => {
       const cats = filed.answers[n];
       const tally = {}; let other = 0;
@@ -816,6 +1007,13 @@ export async function enrichRows(opts) {
       const counts = q.kinds.map((k) => ({ name: k.name, definition: k.definition || '', count: tally[k.name] || 0 }))
         .filter((c) => c.count > 0).sort((a2, b2) => b2.count - a2.count);
       const answered = counts.reduce((t, c) => t + c.count, 0);
+      /* THREE. Whether this question actually sorts anything.
+         Not a reason to throw it away — a question that reaches two thirds of a
+         map and splits them well is a good key, and one that reaches the same
+         two thirds and paints them nearly all one colour is not, and the reader
+         should be able to tell which is which before spending a click. So the
+         count travels with the question and the panel says it in words. */
+      const biggest = counts.length ? counts[0].count : 0;
       return {
         question: q.question, counts, other, categories: cats,
         // one short list per place: the words that put it where it is
@@ -824,11 +1022,54 @@ export async function enrichRows(opts) {
         // the share of ALL places this question can speak for, which is what the
         // panel shows beside its switch
         coverage: rows.length ? answered / rows.length : 0,
+        // and the share of its OWN answers the commonest one takes
+        lopsided: answered ? biggest / answered : 0,
+        flat: Boolean(answered && biggest / answered >= FLAT_SHARE),
+        biggest: counts.length ? counts[0].name : '',
+        biggestCount: biggest,
       };
     }).filter((q) => q.counts.length >= MIN_CATS || askedBefore.length);
     if (!questions.length) return { verdict: 'refused', reason: 'no question survived the counting' };
+
+    /* And a note on what found nowhere to go.
+
+       This is the shape of the failure that started all of it: twenty of
+       sixty-six places said "nature", the kinds on offer had no home for any of
+       them, and all twenty were filed somewhere wrong. Under the counting above
+       they would come out unanswered instead of wrong, which is better and still
+       not good — a fifth of the map saying one thing and no question able to
+       speak about it means the questions missed something.
+
+       So the test is not whether the WORD was quoted — a good reading may sort
+       parks under "Natural Feature" and quote "garden" — but whether the PLACES
+       that said it got an answer. For each common word, the best any one question
+       manages for its places; if even the best leaves most of them blank, that
+       word has no home. Reported, not acted on: whether it is worth asking again
+       is the caller's to decide. */
+    const homeless = [];
+    {
+      const carriers = new Map();        // word -> place indexes that said it
+      digest.entries.forEach((e, i) => {
+        for (const w of new Set(e.tags || [])) {
+          if (!carriers.has(w)) carriers.set(w, []);
+          carriers.get(w).push(i);
+        }
+      });
+      for (const [word, who] of carriers) {
+        if (who.length < rows.length * HOMELESS_SHARE) continue;
+        let best = 0, bestQ = '';
+        for (const q of questions) {
+          const answered = who.filter((i) => q.categories[i] && q.categories[i] !== 'other').length;
+          if (answered / who.length > best) { best = answered / who.length; bestQ = q.question; }
+        }
+        if (best >= 0.5) continue;
+        homeless.push({ word, places: who.length, bestShare: best, bestQuestion: bestQ });
+      }
+      homeless.sort((x, y) => y.places - x.places);
+    }
     // everything below here was read: the all-or-nothing gate is above
     return { verdict: 'questions', questions, withText: digest.withText,
+             folded, renamedAway, homeless,
              batches: filed.batches, asked: kept,
              // there is no fresh reading of the set when the questions were kept
              reused: !ind, reading: (ind && ind.reading) || '', facts: (ind && ind.facts) || [] };

@@ -2051,6 +2051,19 @@ async function geminiJSONFileImpl(model, prompt, schema) {
    step because on 2.5 models thought tokens count against it — without the
    headroom the JSON answer would truncate mid-object. */
 const INDUCE_THINK_BUDGET = 2048;
+/* Left unset, this call ran at the default of 1.0 — and 1.0 is what produced
+   four different sets of questions from the same sixty-six places in one day,
+   same model, same data. The territory was stable (what a place is, what it is
+   made of, what you can do there kept reappearing) but the wording, the cut and
+   the number of questions moved every time, and the keys on a map somebody has
+   linked to should not move under them.
+
+   Low, not zero. Finding what a set of places can honestly be asked is a
+   reading, and it does need to range over the possibilities; what it does not
+   need is to reach a different answer each time it is asked. It does not make
+   the reading correct — a set that came back missing a whole kind was missing
+   an input, not short of certainty — it only stops the wording wandering. */
+const INDUCE_TEMPERATURE = 0.2;
 async function geminiJSONDeepImpl(model, prompt, schema) {
   const r = await fetch(
     'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent',
@@ -2063,6 +2076,7 @@ async function geminiJSONDeepImpl(model, prompt, schema) {
           responseMimeType: 'application/json',
           responseSchema: schema,
           maxOutputTokens: 8192,
+          temperature: INDUCE_TEMPERATURE,
           thinkingConfig: { thinkingBudget: INDUCE_THINK_BUDGET },
         },
       }),
