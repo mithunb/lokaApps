@@ -2454,7 +2454,8 @@ async function ingestLayer(b, who) {
     const prior = imports.mergedLayers(imports.readManifest(dataset)).find((L) => L.id === id);
     if (!prior) throw refuse(404, 'there is no layer here called ' + id);
     replacing = { id, addedBy: prior.addedBy || null, addedAt: prior.addedAt || null,
-      label: prior.label || '', uploadedAs: prior.uploadedAs || '' };
+      label: prior.label || '', uploadedAs: prior.uploadedAs || '',
+      spec: (prior.spec && typeof prior.spec === 'object') ? prior.spec : null };
   }
 
   const session = imports.newImport({
@@ -2496,6 +2497,7 @@ async function ingestLayer(b, who) {
     replacingLayerId: replacing ? replacing.id : undefined,
     replacingLabel: replacing ? replacing.label : undefined,
     replacingUploadedAs: replacing ? replacing.uploadedAs : undefined,
+    replacingSpec: replacing ? replacing.spec : undefined,
     replacingAddedBy: replacing ? replacing.addedBy : undefined,
     replacingAddedAt: replacing ? replacing.addedAt : undefined,
   });
@@ -2604,21 +2606,29 @@ async function ingestLayer(b, who) {
         .map((c) => [c.name, c.role === 'ignore' ? 'text' : c.role]),
     );
     session.columns = columns.map((name) => ({ name, role: inferred.get(name) || 'text' }));
-    /* The model may propose how a layer is drawn. It may not RENAME one that
-       already exists.
+    /* The model may propose how a NEW layer is drawn. It may not re-decide one
+       that already exists.
 
-       This line handed over the whole spec, the model's own invented label
-       included — and the label is what an owner sees in the panel and a reader
-       sees over the key. Reading a layer comes through here, so every reading
-       renamed it. Watched across three readings of one layer on the live atlas:
-       "LOKA Finds" became "LOKA Finds Locations" became "Local Discoveries",
-       nobody having asked for any of it. It is the same fault as the questions
-       moving between readings — something a person chose should not change
-       under them because the atlas was read again.
+       This line took the model's whole answer, and reading a layer comes
+       through here, so every reading handed the model the layer again and let
+       it choose afresh. Watched on the live atlas: three readings, three names
+       — "LOKA Finds", then "LOKA Finds Locations", then "Local Discoveries".
+       Fixing only the name was too narrow; the next reading kept the name and
+       changed the card instead, dropping the categories line and putting up
+       "Tag id", which is a UUID, in its place. It was never a naming bug. It
+       was the model being asked to re-decide a settled layer, and answering
+       differently each time because that is what a fresh reading of the same
+       rows does.
 
-       A first upload has no name to keep, and there a proposed one is a
-       kindness. So the name is kept only where there is one to keep. */
-    session.spec = inference.layer;
+       So on a replace the layer's own choices win, key by key, and the model
+       only fills what the layer has no answer for — a column that did not exist
+       before this upload, say. A first upload has nothing to keep and there the
+       model's whole answer stands, which is where it earns its place. An owner
+       changing something deliberately sends a spec of their own, and that is
+       applied after this and still wins. */
+    session.spec = session.replacingSpec
+      ? Object.assign({}, inference.layer, session.replacingSpec)
+      : inference.layer;
     if (session.replacingLabel) session.spec.label = session.replacingLabel;
   } else {
     // heuristic pre-fill (also the no-Gemini path)
