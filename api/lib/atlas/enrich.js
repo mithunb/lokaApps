@@ -559,7 +559,7 @@ const QUESTIONS_SCHEMA = {
   },
 };
 
-async function induceQuestions({ digest, fields, title, callJSON, model, alreadyKeyed = [] }) {
+async function induceQuestions({ digest, fields, title, callJSON, model, alreadyKeyed = [], missed = [] }) {
   const places = inducePlaces(digest);
   const mapPhrase = title ? 'a map called "' + title + '"' : 'a map';
   const colNames = (fields || []).map((f) => String(f)).filter(Boolean);
@@ -604,6 +604,18 @@ async function induceQuestions({ digest, fields, title, callJSON, model, already
         keyed.map((k) => 'its ' + k.column + ' (' + k.words.slice(0, 14).join(', ') +
           (k.words.length > 14 ? ', …' : '') + ')').join(', and by ') +
         '. Those questions are answered on this map already. Do not ask one of them again in other words, and do not give a kind one of those words as its name — a kind named after one of them is thrown out, and a question that loses its kinds that way is lost with them. If the only honest question about a sort of fact is one of these, leave it out and say so in the facts field.'
+      : null,
+    '',
+    /* Asked once more, and told exactly what went wrong. Not a vague "try
+      harder": the names of the words whose places found nowhere to go, and how
+      many said each. This is the only retry, and it happens only when the
+      counting after the first attempt says a real part of the map was left
+      unspoken for. */
+    missed.length
+      ? '- IMPORTANT, this is a second attempt. The questions proposed last time left whole groups of places with no answer at all: ' +
+        missed.map((m) => '"' + m.word + '" is on ' + m.places + ' of these places and the best question reached only ' +
+          Math.round((m.bestShare || 0) * 100) + '% of them').join('; ') +
+        '. Those places are not unusual or marginal — they are a real part of this map. Either give a question kinds that take them, or ask a different question that can. Do not return the same set again.'
       : null,
     '',
     'If the lines state no sort of fact whose answers gather into kinds, set verdict to "no_clear_questions" and say why in one plain sentence. That is a correct and welcome answer, not a failure.',
@@ -903,7 +915,8 @@ export async function enrichRows(opts) {
          the map can already answer, and the finder needs to know so it does not
          propose one of them again in other words. */
       const alreadyKeyed = keyKindsByColumn(rows, fields);
-      ind = await induceQuestions({ digest, fields, title, callJSON, model: models.flash, alreadyKeyed });
+      ind = await induceQuestions({ digest, fields, title, callJSON, model: models.flash,
+        alreadyKeyed, missed: opts.missed || [] });
       if (!ind) return { verdict: 'unavailable', trouble: '' };
       if (ind.verdict === 'unavailable') return { verdict: 'unavailable', trouble: ind.trouble || '' };
       if (ind.verdict === 'no_clear_questions') return { verdict: 'no_clear_questions', note: ind.note };

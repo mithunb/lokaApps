@@ -1265,6 +1265,25 @@
      asked of these places, nor to the marker column an owner committed to —
      both are somebody's decision rather than an accident of a column. */
   var KEY_DOMINANCE = 0.85;
+  /* Reach and shape are two different things, and a question can be fine on one
+     and useless on the other. Measured on one live map: two questions reached
+     the same 42 of 66 places, and one split them 20/7/7/4/4 while the other
+     painted 25 of them a single colour. The first is a good key about two thirds
+     of a map. The second teaches a reader nothing they could not already see,
+     and costs them a click to find that out.
+
+     The test is that ONE ANSWER OUTWEIGHS ALL THE OTHERS PUT TOGETHER, and there
+     are at least three answers for that to mean anything. A share would have
+     been easier to write and wrong: at six-tenths, the question that started
+     this — 25 of 42 — sits at 59.5% and slips under, while a plain yes/no
+     splitting 55 to 45 is a perfectly good key and would be caught. Weighing
+     the commonest against the rest handles both, and it is the same sentence a
+     reader is shown, so the rule and the wording cannot drift apart.
+
+     A question that fails it is still offered. It is honest, and somebody may
+     want exactly the thing most of the map has in common. It only says so on
+     its own row, and waits at the bottom. */
+  var KEY_LOPSIDED_MIN_KINDS = 3;
 
   function computeKeyOptions(L, feats) {
     var committedCol = null;
@@ -1380,14 +1399,35 @@
       // "Created at · by month" says what the marks mean without a legend note
       var shown = given ? String(given) : prettyCol(col);
       if (grain) shown += " \u00b7 by " + grain;
+      // the commonest answer, and how much of this key's own answers it takes
+      var top = null;
+      counts.forEach(function (c) {
+        if (kept.indexOf(c.kind) >= 0 && (!top || c.n > top.n)) top = c;
+      });
+      var lopsided = (named && top) ? top.n / named : 0;
+      // does the commonest answer outweigh everything else the question answered?
+      var outweighs = Boolean(top && top.n > (named - top.n));
+      var kindsHere = 0;
+      counts.forEach(function (c) { if (kept.indexOf(c.kind) >= 0 && c.n > 0) kindsHere += 1; });
       opts.push({ col: col, label: shown, delim: delim, committed: committed, grain: grain,
         // what share of the places this key can actually speak for; shown beside
         // a discovered question, whose whole point is that it may not reach all
         reach: feats.length ? named / feats.length : 0, isQuestion: isQuestion,
+        // and how lopsided it is, which is a different thing from how far it reaches
+        lopsided: lopsided, biggest: top ? top.kind : "", biggestN: top ? top.n : 0,
+        answered: named,
+        flat: Boolean(isQuestion && !committed && named && outweighs &&
+                      kindsHere >= KEY_LOPSIDED_MIN_KINDS),
                   kept: kept, hasOther: named < feats.length });
     });
-    // committed key first; the rest keep the order the data carries them in
-    opts.sort(function (a, b) { return (b.committed ? 1 : 0) - (a.committed ? 1 : 0); });
+    /* Committed key first, then anything that sorts, then the questions that
+       barely do. A flat question is not hidden — a reader may want exactly the
+       thing that is true of most of the map — but it should not be the first
+       switch a newcomer reaches for. */
+    opts.sort(function (a, b) {
+      return (b.committed ? 1 : 0) - (a.committed ? 1 : 0)
+          || (a.flat ? 1 : 0) - (b.flat ? 1 : 0);
+    });
     return opts;
   }
 
@@ -1979,6 +2019,9 @@
     note.hidden = !st.note;
     if (st.note) note.textContent = st.note;
     L._keyOptions.forEach(function (opt) {
+      /* A flat question needs two lines, not one, so it gets a wrapper. Every
+         other key keeps the single row it always had. */
+      var host = opt.flat ? el("div", "key-flatwrap") : null;
       var lab = el("label", "ctl-toggle key-toggle");
       var cb = el("input"); cb.type = "checkbox";
       cb.checked = st.active.indexOf(opt.col) >= 0;
@@ -1996,6 +2039,23 @@
         reach.title = "Has an answer for " + pct + " of every 100 places";
         reach.setAttribute("aria-label", reach.title);
         lab.appendChild(reach);
+      }
+      /* And, for a question that barely sorts anything, why. Said in the
+         panel's quietest voice, under the name, in the plainest words there
+         are: most of what it answers says the same thing. A reader can then
+         decide whether that is what they came for, instead of spending a
+         click to find out. */
+      if (host) {
+        host.appendChild(lab);
+        /* The kind is deliberately not named here. Measured in a 320px panel:
+           naming it runs the note onto a second line, and the name is on the
+           legend the moment the switch goes on, so saying it twice costs a line
+           of the panel to tell a reader something they are about to see. */
+        var why = el("div", "key-flat",
+          "Mostly one answer — " + opt.biggestN + " of its " + opt.answered + " say the same");
+        why.title = "Its commonest answer is “" + opt.biggest + "”, on " + opt.biggestN +
+          " of the " + opt.answered + " places it can speak for";
+        host.appendChild(why);
       }
       cb.onchange = function () {
         var i = st.active.indexOf(opt.col);
@@ -2024,7 +2084,7 @@
         st._focus = opt.col;   // the rebuild below must hand the keyboard back
         applyLayerKeys(L);
       };
-      list.appendChild(lab);
+      list.appendChild(host || lab);
       /* This key's kinds, directly beneath the switch that turns them on. They
          used to pool into one block below every switch, so flipping a switch put
          its result somewhere further down, past everything else — and knowing

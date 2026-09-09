@@ -303,6 +303,13 @@
     .key-reach { margin-left:auto; font-size:var(--t-label); color:var(--color-text-muted);
       font-variant-numeric:tabular-nums; }
     .key-note { font-size:var(--t-label); font-weight:400; color:var(--color-text-muted); line-height:1.45; margin:.3rem 0 .05rem; }
+    /* A question that barely sorts anything is still offered, and says why in
+       the panels quietest voice: the label rung, muted ink, indented to the
+       switch it belongs to so it reads as a note on that row rather than a new
+       one. No colour, no icon — it is a caveat, not a warning. */
+    .key-flatwrap { display:block; }
+    .key-flat { font-size:var(--t-label); color:var(--color-text-muted); line-height:1.4;
+      padding-left:2.125rem; margin:-.05rem 0 .25rem; }
     /* where the folded places went — kept current by updateFoldNote */
     .key-fold { font-size:var(--t-label); font-weight:400; color:var(--color-text-muted); line-height:1.45; margin:.3rem 0 .05rem; }
     /* keys wear rows: each switched-on key is one row of small marks beside
@@ -801,6 +808,8 @@
       /* key switches keep their lower rank at thumb sizes too (the whole
          44px row is the tap target, so the pill can stay small) */
       .ctl-switch.small { width:30px; height:18px; }
+      /* the switch grows here, so the note under it moves to stay aligned */
+      .key-flat { padding-left:2.375rem; }
       .ctl-switch.small::after { width:14px; height:14px; }
       .ctl-toggle input:checked + .ctl-switch.small::after { transform:translateX(12px); }
       .key-tname { font-size:var(--t-ui); }

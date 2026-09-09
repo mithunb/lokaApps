@@ -1981,11 +1981,23 @@ async function geminiJSONImpl(model, prompt, schema) {
 
    Thinking off, and room to answer in. A batch of 40 places across several
    questions, each with the words that justify it, runs about 3,000 tokens. */
+/* Filing is not a reading. The questions and their kinds are already settled
+   by the time this runs; every place is being put into one of a fixed set of
+   boxes, using words from its own line. There is no judgement to range over,
+   so there is nothing for warmth to buy.
+
+   Measured before setting it: the same three questions, answered four times
+   over the same sixty-six places, reached 64/60/62/59, then 65/64/51/50, then
+   56/58/59/59. The middle one moved by fifteen places between two runs that
+   differed in nothing at all. A reader watching a key lose a fifth of its
+   places overnight has no way to know nothing changed. */
+const FILE_TEMPERATURE = 0;
 async function fileOnce(model, prompt, schema, quiet) {
   const cfg = {
     responseMimeType: 'application/json',
     responseSchema: schema,
     maxOutputTokens: 24000,
+    temperature: FILE_TEMPERATURE,
   };
   // asking for no thinking, in the dialect the model speaks
   if (quiet) cfg.thinkingConfig = quiet;
@@ -2474,6 +2486,12 @@ async function ingestLayer(b, who) {
        asked again on every visit by every editor: a layer that genuinely answers
        no question would otherwise pay for that discovery for ever. */
     patternsNone: b.patternsNone ? true : undefined,
+    /* The reading's own account of the set: one line on what these records are,
+       and the sorts of fact it found. Travels the same road as the key names. */
+    reading: typeof b.reading === 'string' && b.reading.trim()
+      ? b.reading.trim().slice(0, 200) : undefined,
+    facts: Array.isArray(b.facts) && b.facts.length
+      ? b.facts.slice(0, 12).map((f) => String(f).slice(0, 80)) : undefined,
     keyLabels: (b.keyLabels && typeof b.keyLabels === 'object')
       ? Object.fromEntries(Object.entries(b.keyLabels)
           .filter(([k, v]) => k && typeof v === 'string' && v.trim())
@@ -2752,14 +2770,51 @@ async function runReading(dataset, layerId, afresh) {
      ask for new ones, and it is not offered outside the operator's own route. */
   const asked = afresh ? [] : questionsOn(layer, rows);
   const inst = reg.getInstance(dataset);
-  const out = await enrich.enrichRows({
+  const ask = (missed) => enrich.enrichRows({
     rows, fields, title: (inst && inst.title) || dataset,
     mode: 'questions',
     keepQuestions: asked,
     seedSet: keptCatSet(dataset),
     callJSON: aiCaller('server'),
     models: { flash: getFlashModel(), flashLite: getFlashLiteModel() },
+    missed,
   });
+  let out = await ask([]);
+
+  /* One more attempt, and only one, and only for the fault that counting can
+     see: a word a good part of the map says whose places found nowhere to go.
+     That is the failure this whole line of work started from — twenty of
+     sixty-six places said "nature", the kinds on offer had no home for any of
+     them, and all twenty were filed somewhere wrong.
+
+     Not best-of-two. That would answer every place twice on every atlas to
+     catch a fault most readings do not have, and would then need something to
+     judge between the two sets. This costs a second reading only when the
+     first one demonstrably left part of the map unspoken for, and the second
+     is told exactly which part.
+
+     Only where the questions were freshly found. When a layer is answering
+     questions it settled on earlier, the questions are not this reading's to
+     change, so a miss is not something asking again could fix. */
+  let triedAgain = false, missedFirst = [];
+  if (!asked.length && out.verdict === 'questions' && (out.homeless || []).length) {
+    missedFirst = out.homeless.slice(0, 4);
+    console.log('[atlas] ' + dataset + '/' + layerId + ' — asking again: ' +
+      missedFirst.map((m) => m.word + ' on ' + m.places + ' places, best question reached ' +
+        Math.round((m.bestShare || 0) * 100) + '%').join('; '));
+    const second = await ask(missedFirst);
+    triedAgain = true;
+    /* Kept only if it is actually better. A second attempt that leaves as many
+       places unspoken for as the first is not an improvement, and the first at
+       least did not cost an extra call to arrive at. */
+    if (second.verdict === 'questions' && (second.homeless || []).length < missedFirst.length) {
+      console.log('[atlas] the second set left ' + (second.homeless || []).length +
+        ' of ' + missedFirst.length + ' unaccounted for — keeping it');
+      out = second;
+    } else {
+      console.log('[atlas] the second set was no better — keeping the first');
+    }
+  }
 
   if (out.verdict !== 'questions' || !(out.questions || []).length) {
     return { wrote: false, verdict: out.verdict, unread: out.unread || 0,
@@ -2769,6 +2824,11 @@ async function runReading(dataset, layerId, afresh) {
   await writeReading({
     dataset, layerId, rows, questions: out.questions,
     label: layer.label || layerId, source: layer.source,
+    /* What the model made of this set before it asked anything — one line on
+       what these records are, and the sorts of fact it found in them. It was
+       produced on every reading and thrown away every time, which left nobody
+       able to see WHY a particular set of questions was asked. */
+    reading: out.reading || '', facts: out.facts || [],
   });
   return {
     wrote: true, verdict: 'questions', places: rows.length,
@@ -2943,7 +3003,7 @@ router.post('/admin/reread', async (req, res) => {
    a reading finished an hour late, by the server, lands exactly the same way a
    reading finished in front of somebody does — one path, one result, rather
    than a second implementation quietly drifting from the first. */
-async function writeReading({ dataset, layerId, rows, questions, label, source }) {
+async function writeReading({ dataset, layerId, rows, questions, label, source, reading, facts }) {
   /* The shaping is the shared rule's — one column per question, its words
      beside it, every previous answer cleared first. What is left here is the
      saving, which is the one thing this side and the browser genuinely do
@@ -2955,6 +3015,8 @@ async function writeReading({ dataset, layerId, rows, questions, label, source }
     schema: shaped.schema,
     rows: out,
     keyLabels: labels, keyKinds: kinds,
+    reading: reading || undefined,
+    facts: (facts || []).length ? facts : undefined,
     meta: { sourceName: source, rowCount: out.length },
   }, 'server');
   if (!ing || !ing.importId) throw refuse(500, 'the layer could not be prepared');
@@ -3623,6 +3685,8 @@ function commitLayer({ importId, dataset }, who) {
     if (session.keyKinds && Object.keys(session.keyKinds).length) {
       frag.stanza.keyKinds = dropStale(frag.stanza.keyKinds, session.keyKinds);
     }
+    if (session.reading) frag.stanza.reading = session.reading;
+    if (session.facts) frag.stanza.facts = session.facts;
     const out = imports.commitLayer(session.dataset, frag.stanza, frag.sourceFile,
       { type: 'FeatureCollection', features });
     imports.discardImport(session.id);
