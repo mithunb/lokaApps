@@ -44,22 +44,38 @@
   // and only its hash is kept, so no page can look it up later.
   var VIA_API = !!KEY || QS.get("via") === "api";
   var BASE = VIA_API ? "./api/datasets/" + DATASET + "/" : "./datasets/" + DATASET + "/";
-  /* A layer's file keeps its name when its contents change — adding a question
-     rewrites user-<layer>.geojson in place. So re-reading it after a change
-     fetched the browser's cached copy, the new columns were not in it, and the
-     new keys could not appear until someone reloaded by hand. DATA_V is bumped
-     whenever the data underneath is known to have changed, which makes the next
-     read a different address and therefore a real one. */
+  /* A layer's file keeps its name when its contents change — reading it rewrites
+     user-<layer>.geojson in place — so its address has to change when its
+     contents do, or a browser answers the next request out of its own cache.
+
+     DATA_V covers the case where THIS page caused the change: the owner asks
+     for a reading, it lands, and the next fetch is a different address. It
+     cannot cover the other two, because they happen when this page is not
+     running: a reading done on the server, and any visitor arriving later.
+     Measured after a server-side re-read of a live atlas: the manifest came back
+     fresh with three new question names while the places came out of cache
+     still carrying the old answers, so the map wore new labels over old
+     colours — the same halves-out-of-step fault as a key called "Pattern 4",
+     arrived at from the other direction.
+
+     So a layer's own file is asked for by its CONTENTS. The manifest already
+     records a hash of each layer's rows, and the manifest is what the page has
+     just fetched, so the address changes exactly when the rows do and never
+     otherwise. DATA_V still wins when it is set: it means something changed a
+     moment ago, which is fresher than anything the manifest can know. */
   var DATA_V = "";
   function bumpDataVersion() { DATA_V = String(Date.now()); }
-  function dataUrl(file) {
+  function dataUrl(file, ver) {
     var url = BASE + file;
     var q = [];
     if (KEY) q.push("key=" + encodeURIComponent(KEY));
-    if (DATA_V) q.push("v=" + DATA_V);
+    var v = DATA_V || ver;
+    if (v) q.push("v=" + encodeURIComponent(v));
     if (!q.length) return url;
     return url + (url.indexOf("?") < 0 ? "?" : "&") + q.join("&");
   }
+  // a layer's file, asked for by what is in it
+  function layerUrl(L) { return dataUrl(L.source, L && L.contentHash); }
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
   var el = function (tag, cls, html) {
     var e = document.createElement(tag);
@@ -725,7 +741,7 @@
       // One unreachable layer file must not take the atlas down — skip that
       // layer and say so in the console (silently empty layers are worse to
       // debug than a named miss).
-      return fetch(dataUrl(L.source))
+      return fetch(layerUrl(L))
         .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
         .then(function (d) { DATA[L.id] = d; })
         .catch(function (e) {
@@ -4157,7 +4173,12 @@
        the address has to come from whoever already knows, not be guessed a
        second time. After a reboot this answers for the draft, which is exactly
        what the preview needs. */
-    fileUrl: function (name) { return dataUrl(name); },
+    /* Takes either a plain file name or a layer, so a caller that has the
+       layer gets the contents-addressed URL and does not have to know how. */
+    fileUrl: function (nameOrLayer) {
+      if (nameOrLayer && typeof nameOrLayer === "object") return layerUrl(nameOrLayer);
+      return dataUrl(nameOrLayer);
+    },
     // the owner's tools need a layer's loaded places to know what it already
     // carries — without this the door would have to fetch the file twice
     dataFor: function (id) { return DATA[id] || null; },

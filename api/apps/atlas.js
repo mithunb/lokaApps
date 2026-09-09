@@ -1621,6 +1621,8 @@ function pickTitleColumn(profiles, columns) {
 function pickPopupColumns(profiles, { title, image }) {
   const ok = profiles.filter((p) => {
     if (p.name === title || p.name === image) return false;
+    // a question a reading answered is shown by its key, not as a popup line
+    if (/^pattern_/.test(String(p.name))) return false;
     if (p.looksLikeLat || p.looksLikeLng || p.maybeLatIndia || p.maybeLngIndia) return false;
     if (p.looksLikeImage) return false;
     if (p.type === 'string' && p.distinct === p.filled && p.filled > 20 && !p.multiValue) return false; // id-like

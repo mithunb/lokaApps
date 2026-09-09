@@ -309,7 +309,7 @@
 
     (function () {
         say("Reading every place…");
-        fetch(window.LokaAtlas.fileUrl(L.source))
+        fetch(window.LokaAtlas.fileUrl(L))
           .then(function (r) { return r.json(); })
           .then(function (d) {
             var rows = (d.features || []).map(function (f) { return f.properties || {}; });
@@ -931,7 +931,7 @@
     // per-kind counts, tallied from the layer's own rows
     if (ED.cur.colourBy && ED.cur.colourBy !== "one" && ED.stanza.source) {
       var lid = ED.layerId;
-      tallyFile(window.LokaAtlas.fileUrl(ED.stanza.source), ED.cur.colourBy).then(function (t) {
+      tallyFile(window.LokaAtlas.fileUrl(ED.stanza), ED.cur.colourBy).then(function (t) {
         if (!ED || ED.layerId !== lid || !t || edDirty()) return;
         ED.restTally = t;
         renderKey(ED.restRows, t, ED.features);

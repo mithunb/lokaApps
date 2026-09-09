@@ -162,7 +162,7 @@ export function buildFragment(spec, feats, existingIds) {
   if (hasCol(spec.popupTitleColumn)) popup.title = String(spec.popupTitleColumn);
   // a photo column renders as an image at the top of the popup
   if (spec.imageColumn) popup.fields.push({ label: prettify(spec.imageColumn), property: String(spec.imageColumn), type: 'image' });
-  for (const c of (spec.popupColumns || []).slice(0, 6)) {
+  for (const c of (spec.popupColumns || []).filter((c) => !isAnswerColumn(c)).slice(0, 6)) {
     if (c === popup.title || c === spec.imageColumn) continue;
     if (!hasCol(c)) continue;   // a field the data no longer carries says nothing
     const fld = { label: prettify(c), property: String(c) };
@@ -178,6 +178,8 @@ export function buildFragment(spec, feats, existingIds) {
     const looksNumeric = (vals) => vals.length > 0 && vals.every((v) => v !== '' && !Number.isNaN(Number(v)));
     const candidates = colsAboard.filter((c) => {
       if (c.startsWith('_')) return false;
+      // an answer to a question is shown by the key, never as a plain line
+      if (isAnswerColumn(c)) return false;
       if (/^(lat|latitude|lng|lon|long|longitude|x|y)$/i.test(c)) return false;
       const vals = sampleVals(c);
       if (!vals.length) return false;
@@ -386,6 +388,19 @@ export function buildFragment(spec, feats, existingIds) {
   if (spec.subgroup) stanza.subgroup = String(spec.subgroup).slice(0, 30);
   return { stanza, sourceFile, kindUsed: stanza.type, derivedKeys };
 }
+
+/* A question's answer is not a popup line.
+   Reading a layer adds a column per question — pattern_1, pattern_2 … — with
+   the question's own wording kept separately as the key's name, so the popup
+   renders those answers properly: the question, the answer, and the words from
+   the place's own line underneath. Left in the ordinary run of popup lines as
+   well, the same answer appears a second time under its raw column name, and
+   a reader is shown "Pattern 1: Art or Object" — which is the map calling a key
+   "Pattern 4" all over again, in the card instead of the panel.
+
+   Judged by the column's shape, not by a list of names, so this holds for a
+   layer read before the naming settled as much as for one read tomorrow. */
+function isAnswerColumn(col) { return /^pattern_/.test(String(col)); }
 
 function prettify(col) {
   return String(col).replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
