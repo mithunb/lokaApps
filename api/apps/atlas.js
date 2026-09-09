@@ -2046,16 +2046,50 @@ async function fileOnce(model, prompt, schema, quiet) {
    the ask is dropped when it is refused, and the call is made again without
    it. One wasted round trip on a model generation we have not met before, and
    never a filing call lost to a field name. */
+/* Two dialects for the same request, and dropping the ask was not good enough.
+
+   Measured against gemini-3.5-flash-lite, which is what filing runs on:
+
+     thinkingBudget: 0        400, invalid argument
+     thinkingLevel: "low"     200
+     temperature: 0           200
+
+   So every filing call was spending a refused round trip and then asking again
+   with NO thinking control at all — which left thinking on, at the model's own
+   default, on the one call that has no thinking to do. That is why setting the
+   temperature did not steady the answers: temperature was arriving, and thinking
+   was doing the wandering. Two readings of the same settled questions, minutes
+   apart and after temperature was set: 60/62/57, then 63/63/48.
+
+   So the fallback asks in the other dialect rather than giving up, and what
+   worked is remembered per model, because the refusal was being paid on every
+   batch of every reading rather than once. */
+const thinkDialect = new Map();     // model -> the thinkingConfig it accepts
+const QUIET_DIALECTS = [{ thinkingBudget: 0 }, { thinkingLevel: 'low' }, null];
+
 async function geminiJSONFileImpl(model, prompt, schema) {
-  try {
-    return await fileOnce(model, prompt, schema, { thinkingBudget: 0 });
-  } catch (e) {
-    if (e && e.status === 400 && /thinking|invalid argument/i.test(e.body || e.message || '')) {
-      console.warn('[atlas] ' + model + ' will not take thinkingBudget — asking again without it');
-      return fileOnce(model, prompt, schema, null);
+  const known = thinkDialect.get(model);
+  const tries = known !== undefined ? [known] : QUIET_DIALECTS;
+  let last = null;
+  for (const quiet of tries) {
+    try {
+      const out = await fileOnce(model, prompt, schema, quiet);
+      if (known === undefined) {
+        thinkDialect.set(model, quiet);
+        console.log('[atlas] ' + model + ' takes ' +
+          (quiet ? JSON.stringify(quiet) : 'no thinking setting at all') + ' — remembered');
+      }
+      return out;
+    } catch (e) {
+      last = e;
+      const refusedTheField = e && e.status === 400 &&
+        /thinking|invalid argument/i.test(e.body || e.message || '');
+      if (!refusedTheField) throw e;
+      // a dialect we already trusted has stopped working; find one again
+      if (known !== undefined) { thinkDialect.delete(model); return geminiJSONFileImpl(model, prompt, schema); }
     }
-    throw e;
   }
+  throw last;
 }
 
 /* Theme-finding's induce call only: the one call that must REASON over the
@@ -2467,7 +2501,14 @@ async function ingestLayer(b, who) {
     if (!prior) throw refuse(404, 'there is no layer here called ' + id);
     replacing = { id, addedBy: prior.addedBy || null, addedAt: prior.addedAt || null,
       label: prior.label || '', uploadedAs: prior.uploadedAs || '',
-      spec: (prior.spec && typeof prior.spec === 'object') ? prior.spec : null };
+      spec: (prior.spec && typeof prior.spec === 'object') ? prior.spec : null,
+      /* Written only when questions are freshly FOUND, and a layer is read many
+         times after that answering the ones it settled on. Each of those builds
+         a new stanza, so without carrying it the account would be written once
+         and lost on the very next reading. Same for the questions an owner has
+         taken off the map. */
+      reading: prior.reading || '', facts: prior.facts || null,
+      hiddenKeys: prior.hiddenKeys || null };
   }
 
   const session = imports.newImport({
@@ -2516,6 +2557,9 @@ async function ingestLayer(b, who) {
     replacingLabel: replacing ? replacing.label : undefined,
     replacingUploadedAs: replacing ? replacing.uploadedAs : undefined,
     replacingSpec: replacing ? replacing.spec : undefined,
+    replacingReading: replacing ? replacing.reading : undefined,
+    replacingFacts: replacing ? replacing.facts : undefined,
+    replacingHidden: replacing ? replacing.hiddenKeys : undefined,
     replacingAddedBy: replacing ? replacing.addedBy : undefined,
     replacingAddedAt: replacing ? replacing.addedAt : undefined,
   });
@@ -3685,8 +3729,14 @@ function commitLayer({ importId, dataset }, who) {
     if (session.keyKinds && Object.keys(session.keyKinds).length) {
       frag.stanza.keyKinds = dropStale(frag.stanza.keyKinds, session.keyKinds);
     }
-    if (session.reading) frag.stanza.reading = session.reading;
-    if (session.facts) frag.stanza.facts = session.facts;
+    // this reading's account if it made one, otherwise the one already there
+    const account = session.reading || session.replacingReading;
+    const sorts = (session.facts && session.facts.length) ? session.facts : session.replacingFacts;
+    if (account) frag.stanza.reading = account;
+    if (sorts && sorts.length) frag.stanza.facts = sorts;
+    if (session.replacingHidden && session.replacingHidden.length) {
+      frag.stanza.hiddenKeys = session.replacingHidden;
+    }
     const out = imports.commitLayer(session.dataset, frag.stanza, frag.sourceFile,
       { type: 'FeatureCollection', features });
     imports.discardImport(session.id);
