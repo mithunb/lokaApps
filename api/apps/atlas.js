@@ -2453,7 +2453,8 @@ async function ingestLayer(b, who) {
     const id = String(b.replaceLayerId);
     const prior = imports.mergedLayers(imports.readManifest(dataset)).find((L) => L.id === id);
     if (!prior) throw refuse(404, 'there is no layer here called ' + id);
-    replacing = { id, addedBy: prior.addedBy || null, addedAt: prior.addedAt || null };
+    replacing = { id, addedBy: prior.addedBy || null, addedAt: prior.addedAt || null,
+      label: prior.label || '' };
   }
 
   const session = imports.newImport({
@@ -2493,6 +2494,7 @@ async function ingestLayer(b, who) {
           .filter(([, v]) => v.length))
       : undefined,
     replacingLayerId: replacing ? replacing.id : undefined,
+    replacingLabel: replacing ? replacing.label : undefined,
     replacingAddedBy: replacing ? replacing.addedBy : undefined,
     replacingAddedAt: replacing ? replacing.addedAt : undefined,
   });
@@ -2601,7 +2603,22 @@ async function ingestLayer(b, who) {
         .map((c) => [c.name, c.role === 'ignore' ? 'text' : c.role]),
     );
     session.columns = columns.map((name) => ({ name, role: inferred.get(name) || 'text' }));
+    /* The model may propose how a layer is drawn. It may not RENAME one that
+       already exists.
+
+       This line handed over the whole spec, the model's own invented label
+       included — and the label is what an owner sees in the panel and a reader
+       sees over the key. Reading a layer comes through here, so every reading
+       renamed it. Watched across three readings of one layer on the live atlas:
+       "LOKA Finds" became "LOKA Finds Locations" became "Local Discoveries",
+       nobody having asked for any of it. It is the same fault as the questions
+       moving between readings — something a person chose should not change
+       under them because the atlas was read again.
+
+       A first upload has no name to keep, and there a proposed one is a
+       kindness. So the name is kept only where there is one to keep. */
     session.spec = inference.layer;
+    if (session.replacingLabel) session.spec.label = session.replacingLabel;
   } else {
     // heuristic pre-fill (also the no-Gemini path)
     const lat = profiles.find((p) => p.looksLikeLat || p.maybeLatIndia);
