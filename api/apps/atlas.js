@@ -2939,6 +2939,12 @@ async function writeReading({ dataset, layerId, rows, questions, label, source }
   const out = rows.map((p) => {
     const o = Object.assign({}, p);
     delete o._category;                 // the engine's own, re-derived on build
+    /* Every previous answer goes before the new ones are written. The browser's
+       copy of this learned that and this one did not, so a re-read that found
+       three questions left the fourth one's column on all 66 places — its name
+       correctly dropped, which only made it worse: the key fell back to the raw
+       column and called itself "Pattern 4" on the map. */
+    for (const k of Object.keys(o)) if (/^pattern_/.test(k)) delete o[k];
     return o;
   });
   questions.forEach((q, n) => {

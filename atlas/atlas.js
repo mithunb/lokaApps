@@ -1332,6 +1332,18 @@
          so it is offered with the share it can speak for written beside it. */
       if (/^pattern_\d+_why$/.test(col)) return;   // a reason is not a key
       var isQuestion = /^pattern_\d+$/.test(col);
+      /* A question with no name is not a question, it is a leftover column.
+
+         "pattern_4" is the machinery's own name for the fourth question a
+         reading found; a reader should never meet it. Its real name lives in
+         the layer's keyLabels, and when a later reading finds fewer questions
+         the surplus names are dropped. If the column outlives its name — as one
+         did here, when only one of the two places that write a reading learned
+         to clear the old columns — the fallback dressed it up as "Pattern 4"
+         and put it on the map as a key.
+
+         There is no sensible name to give it, so it is not offered. */
+      if (isQuestion && !(L.keyLabels && L.keyLabels[col])) return;
       if (!committed && !isQuestion && named / feats.length < 0.6) return;
       // and a key that does not tell places apart is not a key — see KEY_DOMINANCE
       if (!committed && !isQuestion && counts.length &&
