@@ -73,41 +73,33 @@
   padding-left:2.6rem; margin-top:-.1rem;
 }
 
-/* ---------- one layer's card, in the panel, beside the viewer's controls ----------
+/* ---------- one layer's fold, under the row it belongs to ----------
 
-   The card stands exactly where #atlas-controls stands, so it has to behave
-   exactly like it. The panel is a flex column with overflow:hidden and a
-   max-height; the SCROLLER is the child, and the child carries the insets. Miss
-   that and a layer with ten kinds is simply cut off at the panel's edge with no
-   way to reach the rest.
+   This replaced a card that took over the whole panel. Three controls is not a
+   place to go, it is a thing to open where you already are — so it opens under
+   the row, indented to the layer's own name like the credit line above it, and
+   the real map key is still a little further down where it always was.
 
-   The save bar is the one part that must not scroll away: it is the footer, so
-   the body above it scrolls and the bar stays put. */
+   No panel, no scroller, no footer, no save bar: each control writes itself on
+   the way out, so there is never a half-made change for a bar to be about. */
+.own-fold {
+  display:flex; flex-direction:column; gap:.5rem;
+  padding:.55rem 0 .3rem 2.6rem;
+  border-top:1px solid var(--color-divider);
+  margin-top:.35rem;
+}
+.own-fold .own-remove { margin-top:.15rem; }
 
-#own-edit {
-  flex:0 1 auto; min-height:0; overflow:hidden;
-  display:flex; flex-direction:column;
-}
-.own-ev-body {
-  flex:1 1 auto; min-height:0; overflow-y:auto; scrollbar-width:thin;
-  padding:.6rem .8rem .8rem;          /* the same insets #atlas-controls uses */
-  display:flex; flex-direction:column; gap:.55rem;
-}
+/* the questions, one switch each — the same switch the map's own keys use, so
+   turning one off here reads as the same gesture as turning a key off there */
+.own-qs { display:flex; flex-direction:column; gap:.15rem; margin-top:.1rem; }
+.own-q { gap:.5rem; padding:.1rem 0; min-height:24px; }
+.own-q-name { font-size:var(--t-meta); color:var(--color-text-primary); min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.own-q input:not(:checked) ~ .own-q-name { color:var(--color-text-muted); }
 
-.own-back {
-  align-self:flex-start; font:inherit; font-size:var(--t-meta); font-weight:600;
-  color:var(--color-moss); background:none; border:0; cursor:pointer; padding:.1rem 0;
-}
-.own-back:hover { color:var(--color-canopy); text-decoration:underline; }
 
-.own-ev-title {
-  margin:0; font-family:'Figtree',sans-serif; font-size:var(--t-body); font-weight:600;
-  color:var(--color-text-primary);
-}
-.own-ev-title:focus { outline:2px solid var(--color-moss); outline-offset:2px; }
-.own-ev-sub, .own-ev-loading {
-  margin:0; font-size:var(--t-meta); color:var(--color-text-muted);
-}
+
 
 .own-fld {
   display:flex; flex-direction:column; gap:.25rem;
@@ -128,36 +120,9 @@
 .own-note.warnish { color:var(--color-rust-deep); }
 .own-err { font-size:var(--t-meta); color:var(--color-rust-deep); margin:0; }
 
-.own-ramp { display:flex; height:.5rem; border-radius:var(--radius-pill); overflow:hidden; }
-.own-ramp i { flex:1; background:var(--c); }
 
-.own-swatches { display:flex; gap:.35rem; }
-.own-sw {
-  width:1.5rem; height:1.5rem; padding:0; cursor:pointer;
-  border:1px solid var(--color-border); border-radius:50%;
-  background:var(--color-surface); display:grid; place-items:center;
-}
-.own-sw i { width:1rem; height:1rem; border-radius:50%; background:var(--c); display:block; }
-.own-sw[aria-pressed="true"] { border-color:var(--color-text-primary); border-width:2px; }
 
-.own-key-head { display:flex; align-items:baseline; justify-content:space-between; gap:.5rem; }
-.own-group {
-  font-size:var(--t-label); font-weight:600; letter-spacing:.08em; text-transform:uppercase;
-  color:var(--color-text-muted);
-}
-.own-key-note { font-size:var(--t-label); color:var(--color-text-muted); }
 
-.own-key { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.2rem; }
-.own-key li { display:flex; align-items:center; gap:.4rem; font-size:var(--t-meta); }
-.own-k-label { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.own-k-count { font-variant-numeric:tabular-nums; color:var(--color-text-muted); font-size:var(--t-meta); }
-.own-k-ramp { flex-direction:column; align-items:stretch; gap:.2rem; }
-.own-k-bar { display:flex; height:.5rem; border-radius:var(--radius-pill); overflow:hidden; }
-.own-k-bar i { flex:1; background:var(--c); }
-.own-k-ends {
-  display:flex; justify-content:space-between; gap:.5rem;
-  font-size:var(--t-label); color:var(--color-text-muted);
-}
 
 .own-remove { margin-top:.3rem; padding-top:.5rem; border-top:1px solid var(--color-divider); }
 .own-linkish {
@@ -184,20 +149,7 @@
 /* the save bar only exists once something changed, and slides rather than jumps.
    It is the card's footer: pinned below the scrolling body, so the way to save
    is never something you have to scroll to find. */
-.own-save {
-  flex:0 0 auto;
-  padding:.6rem .8rem .8rem; border-top:1px solid var(--color-divider);
-  display:flex; flex-direction:column; gap:.4rem;
-  opacity:0; transform:translateY(.35rem);
-  transition:opacity .18s cubic-bezier(.22,1,.36,1), transform .18s cubic-bezier(.22,1,.36,1);
-}
-.own-save.on { opacity:1; transform:none; }
-.own-save-note { margin:0; font-size:var(--t-meta); color:var(--color-text-muted); }
-.own-save-note.warn { color:var(--color-rust-deep); font-weight:600; }
 
-@media (prefers-reduced-motion: reduce) {
-  .own-save { transition:none; }
-}
 
 /* ---------- Settings, as a sheet ---------- */
 
@@ -301,11 +253,11 @@
    the pointer is coarse — on a desk a small target beside a cursor is fine, and
    an inflated one would push the row apart for no reason. */
 @media (pointer:coarse) {
-  .own-inv-x::after, .own-x::after, .own-change::after, .own-sw::after {
+  .own-inv-x::after, .own-x::after, .own-change::after {
     content:""; position:absolute; left:50%; top:50%;
     width:44px; height:44px; transform:translate(-50%,-50%);
   }
-  .own-inv-x, .own-x, .own-change, .own-sw { position:relative; }
+  .own-inv-x, .own-x, .own-change { position:relative; }
 }
 .own-inv-x:hover { color:var(--color-rust-deep); }
 .own-inv-add { display:flex; gap:.4rem; margin-top:.4rem; }
@@ -327,32 +279,3 @@
   box-shadow:0 4px 18px rgba(42,36,26,.28);
 }
 
-/* ---------- the panel's own two behaviours, which name their child by hand ----------
-   #atlas-controls is written into these rules directly, so the card has to be
-   written in beside it: on a narrow screen the panel is a bottom sheet you pull
-   up, and pulling it shut has to shut whichever of the two is showing. */
-
-@media (max-width: 720px) {
-  .atlas-panel #own-edit { flex:1 1 auto; min-height:0; }
-  .atlas-panel.collapsed #own-edit { display:none; }
-}
-
-/* ---------- Find themes, on the layer you are looking at ----------
-   Themes moved here from the setup wizard: a theme is a claim about what these
-   places ARE, and it can only honestly be judged against the map it colours. */
-
-.own-themes {
-  margin-top:.5rem; padding-top:.6rem;
-  border-top:1px solid var(--color-divider);
-}
-.own-themes .own-note { margin:.2rem 0 .45rem; }
-.own-th-chips { display:flex; flex-wrap:wrap; gap:.3rem; margin:.15rem 0 .5rem; }
-.own-th-chip {
-  font-size:var(--t-label); padding:.15rem .5rem; border-radius:var(--radius-md); font-weight:500;
-  background:var(--color-moss-tint); color:var(--color-canopy);
-}
-/* the leftovers are a fact, not a theme — said quietly and in the ink of a caveat */
-.own-th-chip.other {
-  background:var(--color-bg-alt); color:var(--color-text-muted); font-weight:400;
-}
-.own-th-chip b { font-weight:600; opacity:.65; margin-left:.2rem; }

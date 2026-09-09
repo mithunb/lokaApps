@@ -3808,6 +3808,38 @@ router.get('/layers/list', (req, res) => {
 });
 
 // Remove a contributed layer — owner: any; editor: only their own.
+/* Setting a name and choosing which column names each place. Small on purpose:
+   the reading decides how a layer is drawn now, so these two are all that is
+   left of "change this layer", and putting them through a draft build was
+   costing an upload, a preview and a commit to write two strings. */
+router.post('/layers/relabel', (req, res) => {
+  const b = req.body || {};
+  const dataset = String(b.dataset || '');
+  const layerId = String(b.layerId || '');
+  const inst = reg.getInstance(dataset);
+  const role = inst ? callerRole(req, inst) : (auth.isAdmin(req) ? 'owner' : null);
+  if (!role) return res.status(403).json({ error: 'sign in as this atlas’s owner or a collaborator', needsAuth: true });
+  let m = null;
+  try { m = imports.readManifest(dataset); } catch { /* dataset dir missing */ }
+  const layer = ((m && m.local && m.local.layers) || []).find((l) => l.id === layerId);
+  if (!layer) return res.status(404).json({ error: 'layer not found' });
+  // the same rule the removal route applies: a collaborator may change what
+  // their own organisation contributed, an owner may change anything here
+  if (role !== 'owner') {
+    const who = auth.sessionFromReq(req);
+    if (!who || !layer.addedBy || layer.addedBy.email !== who.email) {
+      return res.status(403).json({ error: 'you can only change layers your organisation added' });
+    }
+  }
+  const out = imports.relabelLayer(dataset, layerId, {
+    label: typeof b.label === 'string' ? b.label : undefined,
+    titleColumn: typeof b.titleColumn === 'string' ? b.titleColumn : undefined,
+    hiddenKeys: Array.isArray(b.hiddenKeys) ? b.hiddenKeys : undefined,
+  });
+  if (!out) return res.status(404).json({ error: 'layer not found' });
+  res.json(Object.assign({ ok: true }, out));
+});
+
 router.post('/layers/remove', (req, res) => {
   const b = req.body || {};
   const dataset = String(b.dataset || '');

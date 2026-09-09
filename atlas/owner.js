@@ -157,12 +157,19 @@
   document.addEventListener("keydown", function (e) {
     if (e.key !== "Escape") return;
     if (dialogStack.length) { closeDialog(); return; }
-    // in a layer's own card, Escape means "back to all layers" — same guard,
-    // same one-liner when there are unsaved changes; an open inline confirm
-    // folds first, like any other transient
-    if (ED) {
-      if (!$("#own-rm-confirm").hidden) { hideRemoveConfirm(); return; }
-      evBack();
+    /* In an open layer fold, Escape closes it — and an open remove-confirm
+       folds first, like any other transient. There is nothing to warn about on
+       the way out any more: a name is saved when you leave the box, so there is
+       no such thing as a half-made change to lose. */
+    if (FOLD) {
+      var conf = FOLD.host && FOLD.host.querySelector(".own-confirm");
+      if (conf && !conf.hidden) {
+        conf.hidden = true;
+        var link = FOLD.host.querySelector(".own-linkish");
+        if (link) { link.hidden = false; link.focus(); }
+        return;
+      }
+      closeFold(true);
     }
   });
 
@@ -436,7 +443,6 @@
     INST = inst;
     SLUG = window.LokaAtlas.dataset;
     buildBar();
-    buildEditCard();
     // the panel is the viewer's and gets rebuilt on every draft preview, so the
     // owner's additions to it are re-applied each time rather than once
     window.LokaAtlas.onControlsBuilt(augmentPanel);
@@ -624,7 +630,7 @@
     btn.onclick = function (e) {
       e.preventDefault();
       e.stopPropagation();
-      openLayer(L, m);
+      toggleFold(L, m);
     };
     var head = row.querySelector(".ctl-toggle") || row;
     var info = head.querySelector(".ctl-info");
@@ -701,751 +707,321 @@
   // title is missing or points at a column the data does not have
   var NAMEISH = /^(name|title|label|place|description|desc|site|spot)s?$/i;
 
-  var ED = null;   // the open layer's working state; null = the panel's own list
+  /* ================= one layer's own fold =================
 
-  function buildEditCard() {
-    var host = $("#atlas-panel");
-    if (!host || $("#own-edit")) return;
-    var card = document.createElement("div");
-    card.id = "own-edit";
-    card.hidden = true;
-    card.innerHTML =
-      '<div class="own-ev-body">' +
-        '<button class="own-back" id="own-back" type="button">‹ All layers</button>' +
-        '<h3 class="own-ev-title" id="own-ev-title" tabindex="-1"></h3>' +
-        '<p class="own-ev-sub" id="own-ev-sub"></p>' +
-        '<p class="own-ev-loading" id="own-ev-loading" hidden>Opening this layer…</p>' +
-        '<p class="own-err" id="own-ev-err" role="alert" hidden></p>' +
-        '<div id="own-ev-form" hidden>' +
-          '<label class="own-fld" for="own-f-name">Layer name' +
-            '<input type="text" id="own-f-name" maxlength="60" autocomplete="off" />' +
-            '<span class="own-err" id="own-name-err" role="alert" hidden>The layer needs a name.</span>' +
-          "</label>" +
-          '<label class="own-fld" for="own-f-colour" id="own-w-colour" hidden>' +
-            '<span id="own-lbl-colour"></span>' +
-            '<select id="own-f-colour"></select>' +
-            '<span class="own-note warnish" id="own-multi-note" hidden></span>' +
-          "</label>" +
-          '<label class="own-fld" for="own-f-palette" id="own-w-palette" hidden>Colour ramp' +
-            '<select id="own-f-palette"></select>' +
-            '<span class="own-ramp" id="own-ramp" aria-hidden="true"></span>' +
-          "</label>" +
-          '<div class="own-fld" id="own-one-colour" hidden>' +
-            '<span id="own-one-lbl">Which colour</span>' +
-            '<div class="own-swatches" role="group" aria-labelledby="own-one-lbl" id="own-swatches"></div>' +
-          "</div>" +
-          '<div class="own-key-head"><span class="own-group">Map key</span>' +
-            '<span class="own-key-note" id="own-key-note"></span></div>' +
-          '<ul class="own-key" id="own-ev-key"></ul>' +
-          '<label class="own-fld" for="own-f-title" id="own-w-title" hidden>Call each place by' +
-            '<select id="own-f-title"></select>' +
-            '<span class="own-note">The name shown when someone points at or opens a place.</span>' +
-          "</label>" +
-          '<div class="own-remove">' +
-            '<button class="own-linkish" id="own-rm-link" type="button">Remove this layer from the atlas…</button>' +
-            '<div class="own-confirm" id="own-rm-confirm" hidden>' +
-              '<p id="own-rm-text"></p>' +
-              '<p class="own-err" id="own-rm-err" role="alert" hidden></p>' +
-              '<div class="own-row">' +
-                '<button class="share-btn danger" id="own-rm-yes" type="button">Remove the layer</button>' +
-                '<button class="share-btn" id="own-rm-no" type="button">Keep it</button>' +
-              "</div>" +
-            "</div>" +
-          "</div>" +
-        "</div>" +
-      "</div>" +
-      '<div class="own-save" id="own-save-bar" hidden>' +
-        '<p class="own-save-note" id="own-save-note" role="status">' + NOTE_DEFAULT + "</p>" +
-        '<div class="own-row">' +
-          '<button class="share-btn primary" id="own-save-btn" type="button">Save changes</button>' +
-          '<button class="share-btn" id="own-discard-btn" type="button">Discard changes</button>' +
-        "</div>" +
-      "</div>";
-    host.appendChild(card);
-    wireEditCard();
-  }
+     This was a card that replaced the whole panel: a name, a colour question, a
+     colour ramp, which colour, a preview of the map key, what to call each
+     place, and a remove. Eight hundred lines, and a draft copy of the atlas
+     opened, previewed and committed behind every keystroke.
 
-  function profileOf(name) {
-    if (!ED || !name) return null;
-    return ED.profiles.filter(function (p) { return p.name === name; })[0] || null;
-  }
-  function colName(x) { return x && profileOf(x) ? x : null; }
-  function snap(c) {
-    return { name: c.name, colourBy: c.colourBy, valueBy: c.valueBy,
-             palette: c.palette, markerColor: c.markerColor, titleBy: c.titleBy };
-  }
-  function whoLine(ed) {
-    var by = (ed.meta && ed.meta.addedBy) || ed.stanza.addedBy || null;
-    var who = by && (by.org || by.name || by.email);
-    var bits = [];
-    if (ed.features != null) bits.push(ed.features + (ed.features === 1 ? " place" : " places"));
-    if (who) bits.push("added by " + who);
-    return bits.join(" · ");
-  }
+     The reading took most of its job. Colour is decided by the questions now, so
+     for a layer of places three of its seven controls were already hidden and a
+     fourth — the map key — was a read-only picture of something the panel showed
+     properly one level up. What was left was a name, a title column and a
+     remove, sitting in a container named for changing things that mostly could
+     not change anything.
 
-  /* Point the map at a dataset. While a change is unsaved that is the DRAFT
-     copy the server built; on save, discard or leaving it is the real atlas
-     again. Nothing here draws the map itself — the viewer does, from the folder
-     it is told to read. */
+     Fable's verdict, and the reason it is a fold and not a smaller panel: the
+     owner controls that WORK in this product sit next to the thing they change —
+     Change on the layer's row, "Ask different questions" under the keys, the
+     region under the base-map switch. The one that sat in its own panel is the
+     one that became a stub. So the three that are left open under the row they
+     belong to, with the real map key already beneath them, and nothing is
+     previewed because nothing here needs previewing: a name is a name.
+
+     Two strings and a removal, through two small routes, with no draft copy of
+     the atlas involved. */
+
+  var FOLD = null;          // { lid, host, row } — at most one open
+
   function preview(dataset) {
     return window.LokaAtlas.reboot(dataset);
   }
 
-  function openLayer(L, meta) {
-    if (ED && ED.busy) return;
-    ED = {
-      layerId: L.id, stanza: L, meta: meta || {},
-      importId: null, spec: null, fragment: null, profiles: [],
-      catCols: [], numCols: [], titleCols: [], colourable: false,
-      features: null, cur: null, base: null, mode: null,
-      ready: false, busy: false, applySeq: 0, applyTimer: null,
-      restRows: [], restTally: null,
-    };
-    $("#atlas-controls").hidden = true;
-    $("#own-edit").hidden = false;
-    setPanelHead(L.label || L.id);
-    $("#own-ev-title").textContent = L.label || L.id;
-    $("#own-ev-sub").textContent = whoLine(ED);
-    $("#own-ev-loading").hidden = false;
-    $("#own-ev-err").hidden = true;
-    $("#own-ev-form").hidden = true;
-    var bar = $("#own-save-bar");
-    bar.hidden = true; bar.classList.remove("on");
-    hideRemoveConfirm(true);
-    $("#own-ev-title").focus();
-    api("layers/reopen", { method: "POST", body: { dataset: SLUG, layerId: L.id } })
-      .then(function (r) { if (ED && ED.layerId === L.id) hydrate(r, false); })
-      .catch(function (err) {
-        if (!ED || ED.layerId !== L.id) return;
-        toast(errMsg(err));
-        closeEdit(L.id);
+  /* Columns that could name a place. A title wants nearly the opposite of what
+     a reading wants: a reading throws out a column whose every entry differs,
+     because it cannot group anything; a name is supposed to differ. So this is
+     its own small rule — words, mostly distinct, short enough to sit in a
+     heading, and none of the machinery's own columns. */
+  function titleColumns(L) {
+    var gj = window.LokaAtlas.dataFor && window.LokaAtlas.dataFor(L.id);
+    var feats = (gj && gj.features) || [];
+    /* Without the places in hand there is nothing to judge a column by, but the
+       manifest still knows which columns this layer has — it lists them as the
+       lines on a card. Offering those is worse than judging the real thing and
+       far better than offering nothing: caught with the fold open on a map whose
+       layer had not finished loading, where the control simply was not there and
+       nothing said why. */
+    if (!feats.length) {
+      var known = [];
+      ((L.popup && L.popup.fields) || []).forEach(function (f) {
+        if (f && f.property && f.type !== "image") known.push(f.property);
       });
-  }
-
-  // the panel says what it is showing: all the layers, or the one being changed
-  var PANEL_HEAD = null;
-  function setPanelHead(text) {
-    var h = document.querySelector("#atlas-panel .panel-head strong");
-    if (!h) return;
-    if (PANEL_HEAD == null) PANEL_HEAD = h.textContent;
-    h.textContent = text == null ? PANEL_HEAD : text;
-  }
-
-  /* Older layers can have lost WHICH column their categories came from (the
-     stanza only says the derived "_category"). The map still shows the rule, so
-     recover it: the multi-value colourable column whose kind count reproduces
-     the key the map is drawing. 8 = the server's top-8 fold. */
-  function inferColourColumn() {
-    var by = ED.stanza.markerBy;
-    if (by && by !== "_category") return colName(by);
-    if (by !== "_category") return null;
-    var legLen = Array.isArray(ED.stanza.legend) ? ED.stanza.legend.length : 0;
-    var mv = ED.catCols.filter(function (p) { return p.multiValue; });
-    var fit = mv.filter(function (p) {
-      return Math.min(p.kinds, 8) + (p.kinds > 8 ? 1 : 0) === legLen;
-    })[0] || mv[0] || null;
-    return fit && fit.name;
-  }
-
-  function guessTitle() {
-    var byName = ED.titleCols.filter(function (n) { return NAMEISH.test(n.trim()); })[0];
-    if (byName) return byName;
-    var nameish = ED.profiles.filter(function (p) {
-      return p.type === "string" && p.looksLikeName && !p.looksLikeImage && p.name.charAt(0) !== "_";
-    })[0];
-    return (nameish && nameish.name) || ED.titleCols[0] || null;
-  }
-
-  // silent=true re-baselines after a save without moving focus or resetting what
-  // the person is looking at (the controls already hold the saved state)
-  function hydrate(r, silent) {
-    ED.importId = r.importId;
-    ED.spec = r.spec || {};
-    ED.profiles = r.profiles || [];
-    ED.fragment = r.fragment || null;
-    if (r.stats && r.stats.features != null) ED.features = r.stats.features;
-    if (silent) {
-      var again = (window.LokaAtlas.manifest.layers || [])
-        .filter(function (l) { return l.id === ED.layerId; })[0];
-      if (again) ED.stanza = again;
-    }
-    var kind = ED.spec.kind;
-    ED.mode = COLOUR_MODES[kind] || null;
-    ED.catCols = ED.profiles.filter(function (p) {
-      return p.categorical && p.name.charAt(0) !== "_";
-    });
-    // lat/lng are numbers, but shading a map by its own latitude is noise, and
-    // the server keeps them out of the spec anyway
-    ED.numCols = ED.profiles.filter(function (p) {
-      return p.type === "number" && p.name.charAt(0) !== "_" &&
-        !/^(lat|latitude|lon|lng|long|longitude)$/i.test(p.name);
-    });
-    ED.colourable = !!(ED.mode && ED.mode.by);
-    var colourBy = null, valueBy = null;
-    if (kind === "category") {
-      colourBy = colName(ED.spec.categoryColumn) || inferColourColumn();
-      if (!colourBy) ED.colourable = false;   // nothing safe to offer
-    } else if (kind === "markers") {
-      colourBy = "one";
-    } else if (ED.mode && ED.mode.by === "num") {
-      valueBy = colName(ED.spec.valueColumn) || (ED.numCols[0] && ED.numCols[0].name) || null;
-      if (!valueBy) ED.colourable = false;
-    }
-    ED.titleCols = ED.profiles.filter(function (p) {
-      return p.type === "string" && !p.looksLikeImage && p.name.charAt(0) !== "_";
-    }).map(function (p) { return p.name; });
-    var titleBy = colName(ED.spec.popupTitleColumn) ||
-      colName(ED.stanza.popup && ED.stanza.popup.title) || guessTitle();
-    // a line's colour lives in lineColor, a polygon's in fillColor; all three
-    // draw from the same five names, so one control serves whichever applies
-    var flat = ED.spec.markerColor;
-    if (kind === "line") flat = ED.spec.lineColor || "slate";
-    else if (kind === "polygon") flat = ED.spec.fillColor || "moss";
-    ED.cur = {
-      name: ED.spec.label || ED.stanza.label || ED.layerId,
-      colourBy: colourBy,
-      valueBy: valueBy,
-      palette: PALETTES[ED.spec.palette] ? ED.spec.palette : "greens",
-      markerColor: MARKER_COLORS[flat] ? flat : "rust",
-      titleBy: titleBy,
-    };
-    ED.base = snap(ED.cur);
-    // at rest the map is the committed layer, so the key mirrors ITS legend;
-    // reopen's rebuilt fragment only takes over once something changes. A shaded
-    // layer's legend is a ramp object, not a list of rows — keep it whole rather
-    // than letting the array test drop it on the floor.
-    var sl = ED.stanza.legend;
-    var haveStanza = Array.isArray(sl) ? sl.length > 0 : !!(sl && sl.ramp);
-    ED.restRows = haveStanza ? sl : ((ED.fragment && ED.fragment.legend) || []);
-    ED.restTally = null;
-    renderControls();
-    renderKey(ED.restRows, null, ED.features);
-    syncMultiNote(null);
-    $("#own-ev-title").textContent = ED.cur.name;
-    setPanelHead(ED.cur.name);
-    $("#own-ev-sub").textContent = whoLine(ED);
-    $("#own-ev-loading").hidden = true;
-    $("#own-ev-form").hidden = false;
-    ED.ready = true;
-    syncSaveBar();
-    // per-kind counts, tallied from the layer's own rows
-    if (ED.cur.colourBy && ED.cur.colourBy !== "one" && ED.stanza.source) {
-      var lid = ED.layerId;
-      tallyFile(window.LokaAtlas.fileUrl(ED.stanza), ED.cur.colourBy).then(function (t) {
-        if (!ED || ED.layerId !== lid || !t || edDirty()) return;
-        ED.restTally = t;
-        renderKey(ED.restRows, t, ED.features);
-        syncMultiNote(t);
+      ((L.spec && L.spec.popupColumns) || []).forEach(function (c) {
+        if (c && known.indexOf(c) < 0) known.push(c);
       });
+      var now = (L.popup && L.popup.title) || (L.spec && L.spec.popupTitleColumn);
+      if (now && known.indexOf(now) < 0) known.unshift(now);
+      return known.filter(function (k) { return k.charAt(0) !== "_" && !/^pattern_/.test(k); });
     }
-  }
-
-  function fillSelect(sel, opts, value) {
-    sel.innerHTML = "";
-    opts.forEach(function (o) {
-      var el = document.createElement("option");
-      el.value = o.value;
-      el.textContent = o.label;
-      sel.appendChild(el);
-    });
-    sel.value = value;
-  }
-
-  function renderControls() {
-    $("#own-f-name").value = ED.cur.name;
-    $("#own-name-err").hidden = true;
-    var wc = $("#own-w-colour"), mode = ED.mode || {};
-    /* A layer of places has no colour question left. Every pin wears the one
-       standard marker, and which column colours the map is the reader's own
-       choice through the key switches — the owner's pick only ever decided
-       which key came first. Shaded maps and drawn shapes keep their colour,
-       because there the colour is the content. */
-    if (mode.by === "cat") { wc.hidden = true; } else
-    if (ED.colourable && mode.by === "cat") {
-      $("#own-lbl-colour").textContent = mode.label;
-      var opts = ED.catCols.map(function (p) {
-        return { value: p.name, label: p.name + " — " + p.kinds + " kinds" };
-      });
-      if (ED.cur.colourBy && ED.cur.colourBy !== "one" &&
-          !opts.some(function (o) { return o.value === ED.cur.colourBy; })) {
-        opts.unshift({ value: ED.cur.colourBy, label: ED.cur.colourBy });
+    var names = Object.keys(feats[0].properties || {});
+    return names.filter(function (k) {
+      if (k.charAt(0) === "_" || /^pattern_/.test(k)) return false;
+      if (/^(lat|latitude|lon|lng|long|longitude)$/i.test(k)) return false;
+      if (/(^|_)(id|uuid|guid)$/i.test(k)) return false;
+      var filled = 0, distinct = {}, n = 0, long = 0;
+      for (var i = 0; i < feats.length; i++) {
+        var v = (feats[i].properties || {})[k];
+        if (typeof v !== "string") continue;
+        v = v.trim();
+        if (!v) continue;
+        if (/^https?:\/\//i.test(v)) return false;
+        filled++;
+        if (v.length > 80) long++;
+        if (!distinct[v]) { distinct[v] = 1; n++; }
       }
-      opts.push({ value: "one", label: "One colour for every place" });
-      fillSelect($("#own-f-colour"), opts, ED.cur.colourBy || "one");
-      wc.hidden = false;
-    } else if (ED.colourable && mode.by === "num") {
-      // shaded areas and bubbles are driven by a number, not a class
-      $("#own-lbl-colour").textContent = mode.label;
-      var nopts = ED.numCols.map(function (p) { return { value: p.name, label: p.name }; });
-      if (ED.cur.valueBy && !nopts.some(function (o) { return o.value === ED.cur.valueBy; })) {
-        nopts.unshift({ value: ED.cur.valueBy, label: ED.cur.valueBy });
-      }
-      fillSelect($("#own-f-colour"), nopts, ED.cur.valueBy);
-      wc.hidden = false;
-    } else {
-      wc.hidden = true;
-    }
-    renderPalette();
-    renderSwatches();
-    syncOneColour();
-    var wt = $("#own-w-title");
-    if (ED.titleCols.length && ED.cur.titleBy) {
-      var topts = ED.titleCols.map(function (n) { return { value: n, label: n }; });
-      if (!ED.titleCols.some(function (n) { return n === ED.cur.titleBy; })) {
-        topts.unshift({ value: ED.cur.titleBy, label: ED.cur.titleBy });
-      }
-      fillSelect($("#own-f-title"), topts, ED.cur.titleBy);
-      wt.hidden = false;
-    } else {
-      wt.hidden = true;
-    }
+      if (filled < feats.length * 0.5) return false;   // half the places unnamed is not a name
+      if (long > filled * 0.3) return false;           // paragraphs are not names
+      return n >= filled * 0.5;                        // a name mostly differs
+    }).concat(
+      /* whatever is naming places right now, whether or not the rule above
+         would have chosen it. A menu that cannot show the current setting is
+         worse than one with an odd entry in it. */
+      (function () {
+        var now = (L.popup && L.popup.title) || "";
+        return (now && names.indexOf(now) >= 0) ? [now] : [];
+      })()
+    ).filter(function (c, i, all) { return all.indexOf(c) === i; });
   }
 
-  function renderPalette() {
-    var w = $("#own-w-palette");
-    if (!ED.colourable || !(ED.mode && ED.mode.ramp)) { w.hidden = true; return; }
-    fillSelect($("#own-f-palette"), Object.keys(PALETTES).map(function (k) {
-      return { value: k, label: PALETTE_NAMES[k] || k };
-    }), ED.cur.palette);
-    paintRamp();
-    w.hidden = false;
-  }
-
-  function paintRamp() {
-    var ramp = PALETTES[ED.cur.palette] || [];
-    $("#own-ramp").innerHTML = ramp.map(function (c) {
-      return '<i style="--c:' + esc(c) + '"></i>';
-    }).join("");
-  }
-
-  function renderSwatches() {
-    var host = $("#own-swatches");
-    host.innerHTML = "";
-    Object.keys(MARKER_COLORS).forEach(function (k) {
-      var b = document.createElement("button");
-      b.type = "button";
-      b.className = "own-sw";
-      b.setAttribute("aria-pressed", String(ED.cur.markerColor === k));
-      b.setAttribute("aria-label", MARKER_NAMES[k]);
-      b.title = MARKER_NAMES[k];
-      b.innerHTML = '<i style="--c:' + MARKER_COLORS[k] + '"></i>';
-      b.onclick = function () {
-        if (!ED || !ED.ready) return;
-        ED.cur.markerColor = k;
-        host.querySelectorAll(".own-sw").forEach(function (x) { x.setAttribute("aria-pressed", "false"); });
-        b.setAttribute("aria-pressed", "true");
-        syncSaveBar();
-        scheduleApply();
-      };
-      host.appendChild(b);
-    });
-  }
-
-  /* The flat-colour chips serve three cases: a points layer set to one colour,
-     a bubble layer's circles, and a line or fill that has nothing else to
-     choose. The label says which, because "Which colour" beside a polygon layer
-     tells you nothing. */
-  function syncOneColour() {
-    if (!ED || !ED.cur) return;
-    var mode = ED.mode || {};
-    /* The five swatches painted a 2px ring on a white circle and one dot in the
-       key — and from town height the ring vanished entirely, because a group of
-       pins folds into a disc that ignores it. A place now wears the one standard
-       marker. Drawn shapes keep their swatch: for a river or a boundary it is the
-       only dial there is, and it means something. */
-    var show = !!mode.swatch;
-    $("#own-one-colour").hidden = !show;
-    if (show) $("#own-one-lbl").textContent = mode.swatch || "Which colour";
-  }
-
-  // one swatch, one code path: the viewer's rows and this key must draw the same
-  // mark for the same class or one of them is lying
-  var LEG_SHAPES = { box: 1, dot: 1, line: 1, dashed: 1, triangle: 1, diamond: 1 };
-  function swatchFor(it) {
-    var row = it;
-    if (it.shape && !LEG_SHAPES[it.shape]) row = Object.assign({}, it, { shape: "box" });
-    return LokaIcons.swatchHTML(row, esc);
-  }
-
-  /* The key is output, not a control: rows come from the server's legend (the
-     stanza at rest, the draft's fragment while editing). The counts are the one
-     author-only annotation — the public key has none. */
-  function renderKey(rows, tally, total) {
-    /* A sequential scale reads as one graduated bar with its endpoints, not as
-       a row per step — the same shape the viewer's own key uses, so the author
-       sees what the reader will. */
-    if (rows && !Array.isArray(rows) && rows.ramp) {
-      $("#own-ev-key").innerHTML =
-        '<li class="own-k-ramp"><span class="own-k-bar">' +
-        rows.ramp.map(function (c) { return '<i style="--c:' + esc(c) + '"></i>'; }).join("") +
-        '</span><span class="own-k-ends"><span>' + esc(rows.min) + "</span>" +
-        (rows.unit ? "<span>" + esc(rows.unit) + "</span>" : "") +
-        "<span>" + esc(rows.max) + "</span></span></li>";
-      $("#own-key-note").textContent = total != null
-        ? total + (total === 1 ? " area" : " areas") : "";
-      return;
-    }
-    rows = Array.isArray(rows) ? rows : [];
-    var single = rows.length === 1 && !rows[0].categorical;
-    var counted = tally && tally.matched > 0 ? tally : null;
-    var keptSum = 0;
-    if (counted) {
-      rows.forEach(function (it) {
-        if (it.categorical && it.label !== "other" && counted.counts[it.label]) {
-          keptSum += counted.counts[it.label];
-        }
-      });
-    }
-    $("#own-ev-key").innerHTML = rows.map(function (it) {
-      var n = null;
-      if (single && total != null) n = total;
-      else if (counted && it.categorical) {
-        n = it.label === "other" ? Math.max(0, counted.total - keptSum) : counted.counts[it.label];
-      }
-      return "<li>" + swatchFor(it) + '<span class="own-k-label">' + esc(it.label) + "</span>" +
-        (n != null ? '<span class="own-k-count">' + n + "</span>" : "") + "</li>";
-    }).join("");
-    var kinds = rows.filter(function (it) { return it.categorical; }).length;
-    $("#own-key-note").textContent =
-      (kinds >= 2 ? kinds + " kinds" + (total != null ? " · " : "") : "") +
-      (total != null ? total + (total === 1 ? " place" : " places") : "");
-  }
-
-  /* Count each kind from the layer's own rows. For a multi-value column the
-     server derives the primary tag onto "_category" (fragment.js) — counting
-     THAT property counts exactly what the map colours by; for single-value
-     columns the entry itself is the kind (trimmed to the legend's 40 chars). */
-  function tallyFile(url, col) {
-    var p = profileOf(col);
-    var derived = !!(p && p.multiValue);
-    return fetch(url + (url.indexOf("?") < 0 ? "?v=" : "&v=") + Date.now())
-      .then(function (r) { if (!r.ok) throw 0; return r.json(); })
-      .then(function (g) {
-        var feats = (g && g.features) || [];
-        var counts = {}, multi = 0, matched = 0;
-        feats.forEach(function (f) {
-          var pr = f.properties || {};
-          var raw = pr[col];
-          var key = derived ? pr._category : (raw == null ? "" : String(raw).slice(0, 40));
-          if (key != null && key !== "") { counts[key] = (counts[key] || 0) + 1; matched++; }
-          if (derived && raw != null) {
-            var s = String(raw).trim();
-            if (s && s.slice(0, 40) !== pr._category) multi++;
-          }
-        });
-        return { counts: counts, multi: multi, total: feats.length, matched: matched };
-      })
-      .catch(function () { return null; });
-  }
-
-  // said once, only when a multi-value column is chosen, with the count computed
-  // from the data — the first tag decides the colour (fragment.js)
-  function syncMultiNote(tally) {
-    var note = $("#own-multi-note");
-    var col = ED && ED.cur && ED.cur.colourBy;
-    var p = col && col !== "one" ? profileOf(col) : null;
-    if (!p || !p.multiValue || !tally || !tally.multi) { note.hidden = true; return; }
-    note.hidden = false;
-    note.textContent = (tally.multi === 1
-      ? "1 place carries two or more " + col
-      : tally.multi + " places carry two or more " + col) +
-      " — the first one decides the colour.";
-  }
-
-  function controlsSpec() {
-    var s = Object.assign({}, ED.spec);
-    var name = $("#own-f-name").value.trim();
-    s.label = (name || s.label || ED.layerId).slice(0, 60);
-    if (ED.cur.titleBy) s.popupTitleColumn = ED.cur.titleBy;
-    var mode = ED.mode || {};
-    if (ED.colourable && mode.by === "cat") {
-      if (ED.cur.colourBy === "one") {
-        s.kind = "markers";
-        s.markerColor = ED.cur.markerColor;
-        delete s.categoryColumn;
-      } else if (ED.cur.colourBy) {
-        s.kind = "category";
-        s.categoryColumn = ED.cur.colourBy;
-      }
-    } else if (ED.colourable && mode.by === "num" && ED.cur.valueBy) {
-      s.valueColumn = ED.cur.valueBy;
-      if (mode.ramp) s.palette = ED.cur.palette;
-      else s.markerColor = ED.cur.markerColor;
-    }
-    // a flat line or fill names its colour in its own field
-    if (s.kind === "line") s.lineColor = ED.cur.markerColor;
-    else if (s.kind === "polygon") s.fillColor = ED.cur.markerColor;
-    return s;
-  }
-
-  function edDirty() {
-    if (!ED || !ED.ready) return false;
-    var c = ED.cur, b = ED.base, mode = ED.mode || {};
-    var flat = (c.colourBy === "one") || !!mode.swatch;
-    return $("#own-f-name").value.trim() !== b.name.trim() ||
-      c.colourBy !== b.colourBy ||
-      c.valueBy !== b.valueBy ||
-      (mode.ramp && c.palette !== b.palette) ||
-      (flat && c.markerColor !== b.markerColor) ||
-      c.titleBy !== b.titleBy;
-  }
-
-  function setNote(text, warn) {
-    var n = $("#own-save-note");
-    n.textContent = text;
-    n.classList.toggle("warn", !!warn);
-  }
-
-  // the save bar does not exist until something changed
-  function syncSaveBar() {
-    if (!ED || !ED.ready) return;
-    var bar = $("#own-save-bar");
-    if (edDirty()) {
-      if (bar.hidden) {
-        bar.hidden = false;
-        setNote(NOTE_DEFAULT, false);
-        void bar.offsetHeight;   // commit the hidden->shown layout, then slide
-      }
-      bar.classList.add("on");
-    } else {
-      bar.classList.remove("on");
-      bar.hidden = true;
-      setNote(NOTE_DEFAULT, false);
-    }
-    var named = !!$("#own-f-name").value.trim();
-    $("#own-name-err").hidden = named;
-    $("#own-save-btn").disabled = !named || ED.busy;
-    $("#own-discard-btn").disabled = ED.busy;
-  }
-
-  function scheduleApply() {
-    if (!ED || !ED.ready) return;
-    clearTimeout(ED.applyTimer);
-    ED.applyTimer = setTimeout(function () { applyNow().catch(function () {}); }, 350);
-  }
-
-  // one apply per settled change; stale responses (an older apply landing after
-  // a newer one) are dropped by the sequence check
-  function applyNow() {
-    if (!ED || !ED.importId) return Promise.reject({ error: "this layer is not open" });
-    clearTimeout(ED.applyTimer);
-    var mine = ++ED.applySeq, lid = ED.layerId;
-    return api("layers/apply", { method: "POST", body: { importId: ED.importId, spec: controlsSpec() } })
-      .then(function (r) {
-        if (!ED || ED.layerId !== lid || mine !== ED.applySeq) return r;
-        ED.spec = r.spec || ED.spec;
-        ED.fragment = r.fragment || ED.fragment;
-        if (r.stats && r.stats.features != null) ED.features = r.stats.features;
-        setNote(NOTE_DEFAULT, false);
-        var rows = (ED.fragment && ED.fragment.legend) || [];
-        if (edDirty()) {
-          renderKey(rows, null, ED.features);
-          syncMultiNote(null);
-          if (r.draftDataset) {
-            var src = ED.fragment && ED.fragment.source;
-            preview(r.draftDataset).then(function () {
-              if (!ED || ED.layerId !== lid || mine !== ED.applySeq) return;
-              if (!src || !ED.cur.colourBy || ED.cur.colourBy === "one") return;
-              // the draft is what the map is reading now, so ask the viewer
-              // where its files are rather than assembling a path here
-              tallyFile(window.LokaAtlas.fileUrl(src), ED.cur.colourBy).then(function (t) {
-                if (!ED || ED.layerId !== lid || mine !== ED.applySeq || !t) return;
-                renderKey(rows, t, ED.features);
-                syncMultiNote(t);
-              });
-            });
-          }
-        } else {
-          // changed and changed back before the debounce settled — show the
-          // saved truth, not a draft that happens to look the same
-          renderKey(ED.restRows, ED.restTally, ED.features);
-          syncMultiNote(ED.restTally);
-          if (window.LokaAtlas.dataset !== SLUG) preview(SLUG);
-        }
-        return r;
-      }, function (e) {
-        if (ED && ED.layerId === lid && mine === ED.applySeq) setNote(errMsg(e), true);
-        throw e;
-      });
-  }
-
-  function saveChanges() {
-    if (!ED || !ED.ready || ED.busy) return;
-    var name = $("#own-f-name").value.trim();
-    if (!name) { $("#own-name-err").hidden = false; $("#own-f-name").focus(); return; }
-    ED.busy = true;
-    syncSaveBar();
-    var lid = ED.layerId, committed = false;
-    applyNow().then(function () {
-      return api("layers/commit", { method: "POST", body: { importId: ED.importId } });
-    }).then(function () {
-      committed = true;
-      if (!ED || ED.layerId !== lid) return;
-      ED.cur.name = name;
-      ED.base = snap(ED.cur);
-      toast("Saved — the atlas shows the new look.");
-      return preview(SLUG).then(refreshLayers).then(function () {
-        // commit closed the import session; reopen so editing can continue
-        return api("layers/reopen", { method: "POST", body: { dataset: SLUG, layerId: lid } });
-      }).then(function (r2) {
-        if (!ED || ED.layerId !== lid) return;
-        ED.busy = false;
-        hydrate(r2, true);
-        $("#own-ev-title").focus();
-      });
-    }).catch(function (e) {
-      if (!ED || ED.layerId !== lid) return;
-      ED.busy = false;
-      if (committed) {
-        // the save itself landed; only the follow-up reopen failed
-        toast("Saved — open the layer again to keep editing.");
-        closeEdit(lid);
-        return;
-      }
-      setNote(errMsg(e), true);
-      syncSaveBar();
-    });
-  }
-
-  function discardChanges() {
-    if (!ED || !ED.ready || ED.busy) return;
-    ED.applySeq++;                    // orphan any in-flight apply
-    clearTimeout(ED.applyTimer);
-    ED.cur = snap(ED.base);
-    renderControls();
-    renderKey(ED.restRows, ED.restTally, ED.features);
-    syncMultiNote(ED.restTally);
-    if (window.LokaAtlas.dataset !== SLUG) preview(SLUG);   // the map snaps back to what is saved
-    syncSaveBar();
-    toast("Put back the way it was.");
-    $("#own-ev-title").focus();
-  }
-
-  /* --- remove: the other thing you do to an existing layer --- */
-  function hideRemoveConfirm(skipFocus) {
-    $("#own-rm-confirm").hidden = true;
-    $("#own-rm-err").hidden = true;
-    $("#own-rm-link").hidden = false;
-    if (!skipFocus) $("#own-rm-link").focus();
-  }
-
-  /* --- leaving the card: one way out, and it names its destination --- */
-  function evBack() {
-    if (!ED || ED.busy) return;
-    if (edDirty()) {
-      syncSaveBar();
-      setNote("Unsaved changes — save them or discard them below.", true);
-      $("#own-save-btn").focus();
-      return;
-    }
-    if (ED.importId) {
-      api("layers/discard", { method: "POST", body: { importId: ED.importId } }).catch(function () {});
-    }
-    closeEdit(ED.layerId);
-  }
-  function closeEdit(focusLid) {
-    var wasDraft = window.LokaAtlas.dataset !== SLUG;
-    ED = null;
-    $("#own-edit").hidden = true;
-    $("#atlas-controls").hidden = false;
-    setPanelHead(null);
-    var back = function () {
-      if (!focusLid) return;
-      var btn = document.querySelector('.own-change[data-lid="' + focusLid + '"]');
+  function closeFold(focusBack) {
+    if (!FOLD) return;
+    var lid = FOLD.lid;
+    if (FOLD.host && FOLD.host.parentNode) FOLD.host.parentNode.removeChild(FOLD.host);
+    FOLD = null;
+    if (focusBack) {
+      var btn = document.querySelector('.own-change[data-lid="' + cssEsc(lid) + '"]');
       if (btn) btn.focus();
-    };
-    if (wasDraft) preview(SLUG).then(back);
-    else back();
+    }
   }
 
-  function wireEditCard() {
-    $("#own-back").onclick = evBack;
-    $("#own-f-name").addEventListener("input", function () {
-      if (!ED || !ED.ready) return;
-      ED.cur.name = this.value;
-      // the name never redraws the map — it appears only in this card and, on
-      // any single-row key (one colour, a line, a fill), as that row's label:
-      // patch it in place. A key with many rows names classes, not the layer.
-      var labels = document.querySelectorAll("#own-ev-key .own-k-label");
-      if (labels.length === 1) {
-        labels[0].textContent = this.value.trim().slice(0, 40) || ED.base.name;
-      }
-      syncSaveBar();
-    });
-    // one select, two meanings: a class column for points, a number for shaded
-    // areas and bubbles — the mode decides which field it writes
-    $("#own-f-colour").addEventListener("change", function () {
-      if (!ED || !ED.ready) return;
-      if (ED.mode && ED.mode.by === "num") ED.cur.valueBy = this.value;
-      else ED.cur.colourBy = this.value;
-      syncOneColour();
-      syncSaveBar();
-      scheduleApply();
-    });
-    $("#own-f-palette").addEventListener("change", function () {
-      if (!ED || !ED.ready) return;
-      ED.cur.palette = this.value;
-      paintRamp();
-      syncSaveBar();
-      scheduleApply();
-    });
-    $("#own-f-title").addEventListener("change", function () {
-      if (!ED || !ED.ready) return;
-      ED.cur.titleBy = this.value;
-      syncSaveBar();
-      scheduleApply();
-    });
-    $("#own-save-btn").onclick = saveChanges;
-    $("#own-discard-btn").onclick = discardChanges;
+  // an id is ours and slug-shaped, but a selector is not the place to trust that
+  function cssEsc(s) { return String(s).replace(/["\\]/g, "\\$&"); }
 
+  function toggleFold(L, meta) {
+    if (FOLD && FOLD.lid === L.id) { closeFold(true); return; }
+    closeFold(false);
+    buildFold(L, meta);
+  }
 
+  function buildFold(L, meta) {
+    var row = L._row;
+    if (!row) return;
+    var host = el("div", "own-fold");
+    host.setAttribute("data-lid", L.id);
 
-    $("#own-rm-link").onclick = function () {
-      if (!ED || !ED.ready) return;
-      var n = ED.features;
-      $("#own-rm-text").textContent = "Remove “" + ED.base.name + "”? " +
-        (n != null ? "Its " + n + (n === 1 ? " place comes" : " places come") : "Its places come") +
-        " off the map and the public atlas. Your original file stays with you.";
-      $("#own-rm-link").hidden = true;
-      $("#own-rm-confirm").hidden = false;
-      $("#own-rm-no").focus();
-    };
-    $("#own-rm-no").onclick = function () { hideRemoveConfirm(); };
-    $("#own-rm-yes").onclick = function () {
-      if (!ED || !ED.ready || ED.busy) return;
-      ED.busy = true;
-      var lid = ED.layerId, name = ED.base.name, importId = ED.importId;
-      var yes = this;
-      yes.disabled = true;
-      $("#own-rm-no").disabled = true;
-      api("layers/remove", { method: "POST", body: { dataset: SLUG, layerId: lid } })
+    var name = el("label", "own-fld");
+    name.appendChild(document.createTextNode("Layer name"));
+    var nameIn = document.createElement("input");
+    nameIn.type = "text";
+    nameIn.maxLength = 60;
+    nameIn.autocomplete = "off";
+    nameIn.value = L.label || L.id;
+    name.appendChild(nameIn);
+    host.appendChild(name);
+
+    var cols = titleColumns(L);
+    var titleIn = null;
+    if (cols.length > 1) {
+      var title = el("label", "own-fld");
+      title.appendChild(document.createTextNode("Call each place by"));
+      titleIn = document.createElement("select");
+      var now = (L.popup && L.popup.title) || "";
+      cols.forEach(function (c) {
+        var o = document.createElement("option");
+        o.value = c;
+        o.textContent = prettyish(c);
+        if (c === now) o.selected = true;
+        titleIn.appendChild(o);
+      });
+      title.appendChild(titleIn);
+      title.appendChild(el("span", "own-note",
+        "The name shown when someone points at or opens a place."));
+      host.appendChild(title);
+    }
+
+    var err = el("p", "own-err");
+    err.setAttribute("role", "alert");
+    err.hidden = true;
+    host.appendChild(err);
+
+    /* Which questions this atlas offers.
+
+       The questions settle at the first reading and stay, so that a map somebody
+       has linked to does not change its keys under them. That is right, and it
+       makes a bad question permanent — and until now the only way out was to
+       throw away the whole set and let the model find another, which is a great
+       deal to risk to be rid of one. So each one can be taken off the map here.
+
+       Nothing is deleted: the question was asked, every place still carries its
+       answer and the words behind it, and turning it back on puts it straight
+       back. This is the one place a hidden question is still visible, which is
+       why it lists them all rather than only the ones still showing. */
+    var qs = questionsOf(L);
+    if (qs.length) {
+      var box = el("div", "own-fld");
+      box.appendChild(document.createTextNode("Questions this atlas offers"));
+      var list = el("div", "own-qs");
+      qs.forEach(function (q) {
+        // ctl-toggle so this IS the viewer's switch rather than a second one
+        // built to look like it — the checked state lives in that rule
+        var row = el("label", "ctl-toggle own-q");
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = !q.hidden;
+        row.appendChild(cb);
+        row.appendChild(el("span", "ctl-switch small"));
+        row.appendChild(el("span", "own-q-name", q.label));
+        cb.onchange = function () {
+          var now = (L.hiddenKeys || []).slice();
+          var at = now.indexOf(q.col);
+          if (cb.checked) { if (at >= 0) now.splice(at, 1); }
+          else if (at < 0) now.push(q.col);
+          save({ hiddenKeys: now });
+        };
+        list.appendChild(row);
+      });
+      box.appendChild(list);
+      box.appendChild(el("span", "own-note",
+        "Turning one off takes its switch off the map. The answers stay on every place."));
+      host.appendChild(box);
+    }
+
+    /* Saved on the way out of a control rather than behind a Save button. There
+       is nothing here to preview and nothing to get half-done: two strings, each
+       written on its own. */
+    var saving = false;
+    function save(patch, then) {
+      if (saving) return;
+      saving = true;
+      err.hidden = true;
+      api("layers/relabel", { method: "POST", body: Object.assign(
+        { dataset: SLUG, layerId: L.id }, patch) })
         .then(function () {
-          if (importId) api("layers/discard", { method: "POST", body: { importId: importId } }).catch(function () {});
-          toast("“" + name + "” removed from the atlas.");
-          ED = null;
-          $("#own-edit").hidden = true;
-          $("#atlas-controls").hidden = false;
-          setPanelHead(null);
+          saving = false;
+          /* The map is rebuilt from the changed manifest, which takes the panel
+             and this fold with it — so it is opened again on the same layer.
+             Without that, setting a name and then choosing what to call each
+             place is two trips, and the second one is not obviously still
+             available: the fold just vanishes as you finish typing. */
           return preview(SLUG).then(refreshLayers).then(function () {
-            var first = document.querySelector(".own-change") || $("#add-data-btn");
-            if (first) first.focus();
+            var again = (window.LokaAtlas.manifest.layers || []).filter(
+              function (x) { return x.id === L.id; })[0];
+            if (again && again._row) buildFold(again, meta);
+            if (then) then();
           });
         })
         .catch(function (e) {
-          if (!ED || ED.layerId !== lid) return;
-          ED.busy = false;
+          saving = false;
+          err.textContent = errMsg(e);
+          err.hidden = false;
+        });
+    }
+    nameIn.onchange = function () {
+      var v = nameIn.value.trim();
+      if (!v) { err.textContent = "The layer needs a name."; err.hidden = false; nameIn.focus(); return; }
+      if (v === (L.label || L.id)) return;
+      save({ label: v });
+    };
+    if (titleIn) {
+      titleIn.onchange = function () { save({ titleColumn: titleIn.value }); };
+    }
+
+    /* The remove, with the wording it already had — the same sentence in the
+       same order, because it is the one place here that cannot be taken back and
+       the words had been thought about. */
+    var rm = el("div", "own-remove");
+    var rmLink = el("button", "own-linkish");
+    rmLink.type = "button";
+    rmLink.textContent = "Remove this layer from the atlas…";
+    var confirm = el("div", "own-confirm");
+    confirm.hidden = true;
+    var n = countPlaces(L);
+    confirm.appendChild(el("p", null, "Remove “" + (L.label || L.id) + "”? " +
+      (n != null ? "Its " + n + (n === 1 ? " place comes" : " places come") : "Its places come") +
+      " off the map and the public atlas. Your original file stays with you."));
+    var rmErr = el("p", "own-err");
+    rmErr.setAttribute("role", "alert");
+    rmErr.hidden = true;
+    confirm.appendChild(rmErr);
+    var buttons = el("div", "own-row");
+    var yes = el("button", "share-btn danger");
+    yes.type = "button";
+    yes.textContent = "Remove the layer";
+    var no = el("button", "share-btn");
+    no.type = "button";
+    no.textContent = "Keep it";
+    buttons.appendChild(yes);
+    buttons.appendChild(no);
+    confirm.appendChild(buttons);
+    rmLink.onclick = function () {
+      rmLink.hidden = true;
+      confirm.hidden = false;
+      no.focus();
+    };
+    no.onclick = function () {
+      confirm.hidden = true;
+      rmLink.hidden = false;
+      rmLink.focus();
+    };
+    yes.onclick = function () {
+      yes.disabled = true;
+      rmErr.hidden = true;
+      api("layers/remove", { method: "POST", body: { dataset: SLUG, layerId: L.id } })
+        .then(function () {
+          closeFold(false);
+          toast("“" + (L.label || L.id) + "” is off the map.");
+          return preview(SLUG).then(refreshLayers);
+        })
+        .catch(function (e) {
           yes.disabled = false;
-          $("#own-rm-no").disabled = false;
-          var el = $("#own-rm-err");
-          el.textContent = errMsg(e);
-          el.hidden = false;
+          rmErr.textContent = errMsg(e);
+          rmErr.hidden = false;
         });
     };
+    rm.appendChild(rmLink);
+    rm.appendChild(confirm);
+    host.appendChild(rm);
 
-    // closing the tab with unsaved changes gets the browser's own one-liner
-    window.addEventListener("beforeunload", function (e) {
-      if (edDirty()) { e.preventDefault(); e.returnValue = ""; }
-    });
+    row.appendChild(host);
+    FOLD = { lid: L.id, host: host, row: row };
+    nameIn.focus();
+    nameIn.select();
+  }
+
+  // "created_at" is not a thing to show somebody in a menu
+  function prettyish(col) {
+    var s = String(col).replace(/[_-]+/g, " ").trim();
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  /* Every question this layer carries, showing or not. The viewer's own list
+     leaves the hidden ones out — which is its job, and the reason this reads the
+     layer's stanza instead. */
+  function questionsOf(L) {
+    var labels = (L && L.keyLabels) || {};
+    var hidden = (L && L.hiddenKeys) || [];
+    return Object.keys(labels)
+      .filter(function (c) { return /^pattern_\d+$/.test(c); })
+      .sort(function (a, b) { return Number(a.split("_")[1]) - Number(b.split("_")[1]); })
+      .map(function (c) {
+        return { col: c, label: labels[c], hidden: hidden.indexOf(c) >= 0 };
+      });
+  }
+
+  function countPlaces(L) {
+    var gj = window.LokaAtlas.dataFor && window.LokaAtlas.dataFor(L.id);
+    return (gj && gj.features) ? gj.features.length : null;
   }
 
   /* ================= Settings =================

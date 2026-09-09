@@ -299,6 +299,59 @@ export function dropSearchIndex(datasetId, layerId) {
   }
 }
 
+/* The two things about a layer an owner can change without rebuilding it: what
+   it is called, and which column names each place. Everything else in a layer's
+   look is decided by the reading now, so editing used to mean a whole draft
+   copy, a preview and a commit — which is a great deal of machinery for setting
+   a name. This writes the two strings and stops.
+
+   The name is written in the three places a layer keeps it, because they had
+   already drifted apart once: the stanza's own label, the spec the next build
+   starts from, and the single-entry legend a marker layer carries. */
+export function relabelLayer(datasetId, layerId, { label, titleColumn, hiddenKeys } = {}) {
+  const m = readManifest(datasetId);
+  if (!m || !m.local) return null;
+  const layer = (m.local.layers || []).find((l) => l.id === layerId);
+  if (!layer) return null;
+
+  if (typeof label === 'string' && label.trim()) {
+    const name = label.trim().slice(0, 60);
+    layer.label = name;
+    if (layer.spec && typeof layer.spec === 'object') layer.spec.label = name;
+    // a marker layer's legend is one row, and that row is the layer's name
+    if (Array.isArray(layer.legend) && layer.legend.length === 1) layer.legend[0].label = name;
+  }
+  if (typeof titleColumn === 'string' && titleColumn.trim()) {
+    const col = titleColumn.trim().slice(0, 60);
+    layer.popup = layer.popup || {};
+    layer.popup.title = col;
+    if (layer.spec && typeof layer.spec === 'object') layer.spec.popupTitleColumn = col;
+    /* A column cannot both name a place and be a line on its card — it would
+       be printed twice, once as the heading and once beneath it. */
+    if (layer.popup.fields) {
+      layer.popup.fields = layer.popup.fields.filter((f) => f && f.property !== col);
+    }
+  }
+
+  /* Questions the owner has taken off the map. The reading still asked them and
+     the answers are still on every place — this only decides whether the switch
+     is offered. Settling questions once makes a bad one permanent otherwise, and
+     asking for a whole new set to be rid of one is a poor trade. An empty list
+     is written as nothing at all, so a layer nobody has hidden anything on stays
+     as plain as it was. */
+  if (Array.isArray(hiddenKeys)) {
+    const clean = hiddenKeys
+      .map((k) => String(k || '').trim())
+      .filter((k) => /^pattern_\d+$/.test(k));
+    if (clean.length) layer.hiddenKeys = [...new Set(clean)].slice(0, 12);
+    else delete layer.hiddenKeys;
+  }
+
+  fs.writeFileSync(path.join(m.dir, 'manifest.local.json'), JSON.stringify(m.local, null, 1));
+  return { label: layer.label, titleColumn: (layer.popup && layer.popup.title) || '',
+    hiddenKeys: layer.hiddenKeys || [] };
+}
+
 export function removeLayer(datasetId, layerId) {
   const m = readManifest(datasetId);
   if (!m || !m.local) return false;

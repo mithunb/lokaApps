@@ -1387,6 +1387,11 @@
 
          There is no sensible name to give it, so it is not offered. */
       if (isQuestion && !(L.keyLabels && L.keyLabels[col])) return;
+      /* A question the owner has taken off the map. It was asked, and every
+         place still carries its answer — this only says the switch is not
+         offered. The owner puts it back from the layer's own fold, which is the
+         only place it is still visible. */
+      if (isQuestion && (L.hiddenKeys || []).indexOf(col) >= 0) return;
       if (!committed && !isQuestion && named / feats.length < 0.6) return;
       // and a key that does not tell places apart is not a key — see KEY_DOMINANCE
       if (!committed && !isQuestion && counts.length &&
