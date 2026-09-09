@@ -26,6 +26,12 @@
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var API = "./api/";
 
+  /* The rules a reading obeys live in one file that the server reads too, so
+     that a rule the browser learns cannot go on being wrong on the server —
+     which is exactly how a key came to be called "Pattern 4". Loaded by a tag
+     in index.html, before atlas.js fetches this. */
+  var RULES = window.LokaReadingRules;
+
   var SLUG = "";
   var INST = null;         // the instance record: title, status, region, collaborators
   var MINE = [];           // GET /layers/list — the authority on which layers exist
@@ -179,45 +185,13 @@
      new column and commits it in place. The column is the point — once it is
      in the data the viewer offers it as a key of its own accord. */
 
-  // the columns worth reading: words people wrote, not ids, links or coordinates
-  /* Which columns hold words worth reading. Judged by counting, not by name, so
-     it works on data whose columns are called anything.
-
-     A column is thrown out when every place's entry is different AND none of
-     them contains a space: that is an identifier or a timestamp, not writing.
-     It cannot group anything and it cannot be read for meaning, yet it used to
-     be sent and paid for — a place's text arrived at the model beginning with
-     its own id string. Pictures go for the same reason: a link is not words. */
+  /* Which columns hold words worth reading — reading-rules.js has the rule and
+     the reasons. The viewer holds places as features, so this hands their
+     properties over; that adapting is all this is. */
   function wordColumns(feats) {
-    var props = (feats[0] && feats[0].properties) || {};
-    return Object.keys(props).filter(function (k) {
-      // never read our own answers back in: a question's column is an answer,
-      // not evidence, and feeding it to the next reading would let one reading
-      // put words into the mouth of the next
-      if (k.charAt(0) === "_" || k === "themes" || /^pattern_/.test(k)) return false;
-      if (/^(lat|latitude|lon|lng|long|longitude)$/i.test(k)) return false;
-      var seen = {}, n = 0, spaced = 0, filled = 0, datey = 0;
-      for (var i = 0; i < feats.length; i++) {
-        var v = (feats[i].properties || {})[k];
-        if (typeof v !== "string") continue;
-        v = v.trim();
-        if (!v) continue;
-        if (/^https?:\/\//i.test(v)) return false;      // a link, not words
-        filled++;
-        if (v.indexOf(" ") >= 0) spaced++;
-        if (/^\d{4}-\d{2}(-\d{2})?([T ].*)?$/.test(v)) datey++;
-        if (!seen[v]) { seen[v] = 1; n++; }
-      }
-      if (!filled) return false;
-      /* A date is not a reason. Measured on a real reading: with a date column
-         in the mix the model answered "Cultural or historical" and offered
-         "2025" as the words that justified it — which is the answer restated,
-         not evidence for it. Time is worth asking about, but as a key built
-         from the column itself, where no justification is needed or possible.
-         Kept tight to ISO-ish dates so a house number is not mistaken for one. */
-      if (datey >= filled * 0.9) return false;
-      return !(n === filled && spaced === 0);          // all different, none spaced -> an id
-    });
+    return RULES.wordColumns((feats || []).map(function (f) {
+      return (f && f.properties) || {};
+    }));
   }
 
   function patternsDoor(L, box) {
@@ -345,7 +319,7 @@
                  reading after new places are added answers the same questions
                  rather than inventing a fresh set — the keys on a map somebody
                  has linked to should not move under them. */
-              keepQuestions: afresh ? [] : settledQuestions(L),
+              keepQuestions: afresh ? [] : settledQuestions(L, rows),
               title: (window.LokaAtlas.manifest && window.LokaAtlas.manifest.title) || "",
             } }).then(function (r) { return { r: r, rows: rows }; });
           })
@@ -401,14 +375,15 @@
   /* Writes the layer back unchanged but for one mark on it: asked, nothing
      found. One reading's cost once, instead of a small cost for ever. */
   function rememberNothingHere(L, rows) {
-    var out = rows.map(function (p) { var o = Object.assign({}, p); delete o._category; return o; });
-    var names = Object.keys(out[0] || {});
+    /* Cleared through the shared rule, which also drops any previous answer.
+       This used to clear only the engine's own column, so a layer that had once
+       been read and now reads as nothing would have kept its old answers —
+       the same omission that produced "Pattern 4", one path over. */
+    var out = RULES.withoutAnswers(rows);
     return api("layers/ingest", { method: "POST", body: {
       dataset: SLUG, replaceLayerId: L.id, filename: L.label || L.id,
       patternsNone: true,
-      schema: names.map(function (nm) {
-        return { name: nm, type: (nm === "latitude" || nm === "longitude") ? "number" : "string" };
-      }),
+      schema: RULES.schemaFor(out),
       rows: out,
       meta: { sourceName: L.source, rowCount: out.length },
     } })
@@ -419,54 +394,20 @@
   }
 
   // what this layer has already been asked, wording and kinds together
-  function settledQuestions(L) {
-    var labels = (L && L.keyLabels) || {}, kinds = (L && L.keyKinds) || {};
-    return Object.keys(labels)
-      .filter(function (c) { return /^pattern_\d+$/.test(c); })
-      .sort(function (a, b) { return Number(a.split("_")[1]) - Number(b.split("_")[1]); })
-      .map(function (c) { return { question: labels[c], kinds: kinds[c] || [] }; })
-      .filter(function (q) { return q.question && q.kinds.length; });
+  function settledQuestions(L, rows) {
+    return RULES.settledQuestions(L, rows || []);
   }
 
   function keepQuestions(L, rows, questions) {
-    var labels = {}, kinds = {};
-    var out = rows.map(function (p) {
-      var o = Object.assign({}, p);
-      delete o._category;                 // the engine's own, re-derived on build
-      /* Every previous answer goes before the new ones are written. Without
-         this, a fresh set with fewer questions would leave the old fourth
-         question's column sitting on every place, answering a question nobody
-         is asking any more. */
-      Object.keys(o).forEach(function (k) { if (/^pattern_/.test(k)) delete o[k]; });
-      return o;
-    });
-    questions.forEach(function (q, n) {
-      var col = "pattern_" + (n + 1);
-      var whyCol = col + "_why";
-      labels[col] = q.question;
-      // kept beside the wording so this question can be asked again unchanged
-      kinds[col] = (q.counts || []).map(function (c) {
-        return { name: c.name, definition: c.definition || "" };
-      });
-      (q.categories || []).forEach(function (c, i) {
-        if (out[i]) out[i][col] = c === "other" ? "" : (c || "");
-      });
-      /* The words that put each place where it is, kept beside the answer. An
-         answer with nothing under it is a judgement nobody can check. */
-      (q.why || []).forEach(function (w, i) {
-        if (out[i]) out[i][whyCol] = (w || []).join(", ");
-      });
-      out.forEach(function (o) {
-        if (o[col] === undefined) o[col] = "";
-        if (o[whyCol] === undefined) o[whyCol] = "";
-      });
-    });
-    var names = Object.keys(out[0] || {});
+    /* The shaping is the shared rule's — one column per question, its words
+       beside it, every previous answer cleared first. All that is left here is
+       sending it, which is the one thing the browser and the server genuinely
+       do differently. */
+    var shaped = RULES.shapeReading(rows, questions);
+    var out = shaped.rows, labels = shaped.keyLabels, kinds = shaped.keyKinds;
     return api("layers/ingest", { method: "POST", body: {
       dataset: SLUG, replaceLayerId: L.id, filename: L.label || L.id,
-      schema: names.map(function (nm) {
-        return { name: nm, type: (nm === "latitude" || nm === "longitude") ? "number" : "string" };
-      }),
+      schema: shaped.schema,
       rows: out,
       keyLabels: labels, keyKinds: kinds,
       meta: { sourceName: L.source, rowCount: out.length },

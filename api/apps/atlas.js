@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import * as reg from '../lib/atlas/registry.js';
 import * as auth from '../lib/atlas/auth.js';
 import { sendMail } from '../lib/mailer.js';
@@ -23,6 +24,18 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, '..', '..');
+
+/* The rules a reading obeys, shared with the browser. It lives under atlas/
+   because that is where the browser can fetch it with a plain tag and no build
+   step; there is no package.json above atlas/, so Node reads it as an ordinary
+   script and createRequire is how an ES module asks for one.
+
+   It is one file on purpose. These rules were written twice, and the two copies
+   drifted: the browser's learned to clear the previous answers before writing
+   new ones and this side did not, so a re-read that found three questions left
+   the fourth one's column on every place and the map called a key "Pattern 4". */
+const requireScript = createRequire(import.meta.url);
+const RULES = requireScript(path.join(REPO_ROOT, 'atlas', 'reading-rules.js'));
 const CATALOG_FILE = path.join(REPO_ROOT, 'atlas', 'setup', 'catalog.json');
 const GEOCACHE_DIR = path.join(reg.DATA_DIR, 'geocache');
 
@@ -2658,62 +2671,14 @@ async function ingestLayer(b, who) {
    column is an answer, not evidence — never coordinates, never links, and never
    a column whose every entry differs and none has a space in it, which is an
    identifier wearing a name. */
-function wordColumnsOf(rows) {
-  const first = rows[0] || {};
-  return Object.keys(first).filter((k) => {
-    if (k.charAt(0) === '_' || k === 'themes' || /^pattern_/.test(k)) return false;
-    if (/^(lat|latitude|lon|lng|long|longitude)$/i.test(k)) return false;
-    const seen = new Set();
-    let filled = 0, spaced = 0, datey = 0;
-    for (const r of rows) {
-      let v = r[k];
-      if (typeof v !== 'string') continue;
-      v = v.trim();
-      if (!v) continue;
-      if (/^https?:\/\//i.test(v)) return false;
-      filled += 1;
-      if (v.indexOf(' ') >= 0) spaced += 1;
-      if (/^\d{4}-\d{2}(-\d{2})?([T ].*)?$/.test(v)) datey += 1;
-      seen.add(v);
-    }
-    if (!filled) return false;
-    /* A date is not a reason. Measured on a real reading: with a date column in
-       the mix the model answered "Cultural or historical" and offered "2025" as
-       the words that justified it — the answer restated, not evidence for it.
-       Time is worth asking about, but as a key built from the column itself,
-       where no justification is needed or possible. */
-    if (datey >= filled * 0.9) return false;
-    return !(seen.size === filled && spaced === 0);
-  });
-}
+/* Which columns hold words worth reading — reading-rules.js has the rule and
+   the reasons for it. */
+const wordColumnsOf = (rows) => RULES.wordColumns(rows);
 
-/* The questions a layer has already settled on, in the shape a reading wants
-   them back. A layer read before the kinds were kept has wording but no kinds,
-   and there is nothing to be done about that except read it afresh — so it is
-   treated as unasked rather than half-asked. */
-function questionsOn(layer, rows) {
-  const labels = (layer && layer.keyLabels) || {};
-  const kinds = (layer && layer.keyKinds) || {};
-  return Object.keys(labels)
-    .filter((col) => /^pattern_\d+$/.test(col))
-    .sort((a, b) => Number(a.split('_')[1]) - Number(b.split('_')[1]))
-    .map((col) => ({ question: labels[col], kinds: kinds[col] || kindsSeenIn(rows, col) }))
-    .filter((q) => q.question && q.kinds.length);
-}
-
-/* An atlas read before the kinds were kept has the wording and nothing else.
-   Rather than make it drift once more before it can settle, the kinds are
-   recovered from what the map is currently showing: the answers on the places
-   ARE the kinds. Only what a reader can already see becomes settled, which is
-   the right thing to freeze. */
-function kindsSeenIn(rows, col) {
-  const seen = [];
-  for (const r of rows || []) {
-    const v = String((r && r[col]) || '').trim();
-    if (v && v !== 'other' && !seen.includes(v)) seen.push(v);
-  }
-  return seen.slice(0, MAX_CATS_KEPT).map((name) => ({ name, definition: '' }));
-}
+/* What a layer has already settled on, and — for one read before the kinds were
+   kept — the kinds recovered from the answers a reader can already see. Both are
+   in reading-rules.js, with the reasoning. */
+const questionsOn = (layer, rows) => RULES.settledQuestions(layer, rows);
 
 /* A whole reading, start to finish, with no browser involved: find the layer,
    read its places, work out what they can be asked, answer it, and write the
@@ -2935,41 +2900,15 @@ router.post('/admin/reread', async (req, res) => {
    reading finished in front of somebody does — one path, one result, rather
    than a second implementation quietly drifting from the first. */
 async function writeReading({ dataset, layerId, rows, questions, label, source }) {
-  const labels = {}, kinds = {};
-  const out = rows.map((p) => {
-    const o = Object.assign({}, p);
-    delete o._category;                 // the engine's own, re-derived on build
-    /* Every previous answer goes before the new ones are written. The browser's
-       copy of this learned that and this one did not, so a re-read that found
-       three questions left the fourth one's column on all 66 places — its name
-       correctly dropped, which only made it worse: the key fell back to the raw
-       column and called itself "Pattern 4" on the map. */
-    for (const k of Object.keys(o)) if (/^pattern_/.test(k)) delete o[k];
-    return o;
-  });
-  questions.forEach((q, n) => {
-    const col = 'pattern_' + (n + 1);
-    const whyCol = col + '_why';
-    labels[col] = q.question;
-    // the kinds travel with the wording so this question can be asked again
-    kinds[col] = (q.counts || []).map((c) => ({ name: c.name, definition: c.definition || '' }));
-    (q.categories || []).forEach((c, i) => {
-      if (out[i]) out[i][col] = c === 'other' ? '' : (c || '');
-    });
-    (q.why || []).forEach((w, i) => {
-      if (out[i]) out[i][whyCol] = (w || []).join(', ');
-    });
-    out.forEach((o) => {
-      if (o[col] === undefined) o[col] = '';
-      if (o[whyCol] === undefined) o[whyCol] = '';
-    });
-  });
-  const names = Object.keys(out[0] || {});
+  /* The shaping is the shared rule's — one column per question, its words
+     beside it, every previous answer cleared first. What is left here is the
+     saving, which is the one thing this side and the browser genuinely do
+     differently: it calls ingest directly where the browser posts to it. */
+  const shaped = RULES.shapeReading(rows, questions);
+  const out = shaped.rows, labels = shaped.keyLabels, kinds = shaped.keyKinds;
   const ing = await ingestLayer({
     dataset, replaceLayerId: layerId, filename: label || layerId,
-    schema: names.map((nm) => ({
-      name: nm, type: (nm === 'latitude' || nm === 'longitude') ? 'number' : 'string',
-    })),
+    schema: shaped.schema,
     rows: out,
     keyLabels: labels, keyKinds: kinds,
     meta: { sourceName: source, rowCount: out.length },

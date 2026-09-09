@@ -1044,6 +1044,9 @@
        deploy that changes atlas.js reaches nobody until the token moves. Bump
        it (all pages share one) whenever a local .js or .css changes. Vendored
        libraries are left alone — their filenames change when they do. -->
+  <!-- the rules a reading obeys, shared with the server so one rule cannot be
+       two rules; must load before atlas.js, which fetches owner.js -->
+  <script src="./reading-rules.js?v=dev"></script>
   <script src="./iconkit.js?v=dev"></script>
   <script src="./share.js?v=dev"></script>
   <script src="./atlas.js?v=dev"></script>
