@@ -260,6 +260,14 @@
             var by = "Added by " + (L.addedBy.org || L.addedBy.name);
             L.info = L.info ? L.info + " — " + by : by;
           }
+          /* And the file it came from, where one was recorded. A layer's name
+             is written for reading and can be changed; this says which upload
+             it actually is, which is the thing you want when two layers look
+             alike or when you are trying to remember what you sent. */
+          if (L.uploadedAs) {
+            var from = "From " + L.uploadedAs;
+            L.info = L.info ? L.info + " — " + from : from;
+          }
           manifest.layers.push(L);
         });
         (local.groups || []).forEach(function (g) {

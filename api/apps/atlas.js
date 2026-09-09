@@ -2454,7 +2454,7 @@ async function ingestLayer(b, who) {
     const prior = imports.mergedLayers(imports.readManifest(dataset)).find((L) => L.id === id);
     if (!prior) throw refuse(404, 'there is no layer here called ' + id);
     replacing = { id, addedBy: prior.addedBy || null, addedAt: prior.addedAt || null,
-      label: prior.label || '' };
+      label: prior.label || '', uploadedAs: prior.uploadedAs || '' };
   }
 
   const session = imports.newImport({
@@ -2495,6 +2495,7 @@ async function ingestLayer(b, who) {
       : undefined,
     replacingLayerId: replacing ? replacing.id : undefined,
     replacingLabel: replacing ? replacing.label : undefined,
+    replacingUploadedAs: replacing ? replacing.uploadedAs : undefined,
     replacingAddedBy: replacing ? replacing.addedBy : undefined,
     replacingAddedAt: replacing ? replacing.addedAt : undefined,
   });
@@ -3551,6 +3552,25 @@ function commitLayer({ importId, dataset }, who) {
     }
     frag.stanza.contentHash = contentHash;
     frag.stanza.spec = session.spec || undefined;   // so "edit this layer" can start from it
+    /* The file somebody actually sent. Nothing recorded it before, and the gap
+       showed the day a layer's name went wrong: the name is derived from the
+       rows by the model, the derivation ran again on every reading, and when it
+       drifted there was nothing left saying where the data had come from.
+
+       A name and a provenance are different things and were being asked to be
+       one. The name is for reading; this is for knowing which upload you are
+       looking at — telling two similar layers apart, recognising your own file
+       a month later, and having something true to fall back on.
+
+       Only a real file name is kept. A reading replaces a layer by handing back
+       its own label as the "filename", which is not one, so the extension is
+       what tells them apart. Once set it travels with the layer; it describes
+       the upload, and a re-reading is not a new upload. */
+    const sentAs = String(session.filename || '').trim();
+    const wasAFile = /\.[A-Za-z0-9]{1,8}$/.test(sentAs);
+    const keptFile = session.replacingUploadedAs || '';
+    if (wasAFile) frag.stanza.uploadedAs = sentAs.slice(0, 120);
+    else if (keptFile) frag.stanza.uploadedAs = keptFile;
     /* Credit the contributor: which org, and which person, added this layer.
        The session is carried on the import rather than read from a request,
        because the request may be long gone — a reading retried an hour later
