@@ -59,7 +59,7 @@
       <!-- layers already contributed to this atlas, for context while adding.
            Changing or removing one happens on the atlas itself. -->
       <div id="added-layers" hidden>
-        <h2 style="font-size:1rem; margin:1.4rem 0 .2rem">Layers added to this atlas</h2>
+        <h2 style="font-size:var(--t-body); margin:1.4rem 0 .2rem">Layers added to this atlas</h2>
         <p class="hint" style="margin:0 0 .4rem">To change or remove one, go back to the atlas and open the layer there.</p>
         <div id="added-layers-list"></div>
       </div>
@@ -161,7 +161,7 @@
       </div>
 
       <div id="card-fixes" hidden style="border-top:1px solid var(--color-divider); margin-top:.6rem; padding-top:.8rem">
-        <h2 style="font-size:.95rem">Needs your eye <span class="hint" id="fix-count"></span></h2>
+        <h2 style="font-size:var(--t-control)">Needs your eye <span class="hint" id="fix-count"></span></h2>
         <p class="hint">Rows we couldn't confidently match. Pick the right boundary or skip the row.</p>
         <div id="fix-list"></div>
       </div>
@@ -487,7 +487,7 @@
       // (the editor's layer view), so there is exactly one place that does it
       r.layers.forEach(function (l) {
         var row = document.createElement("div");
-        row.style.cssText = "display:flex; align-items:center; gap:.6rem; padding:.45rem 0; border-top:1px solid var(--color-divider); font-size:.9rem";
+        row.style.cssText = "display:flex; align-items:center; gap:.6rem; padding:.45rem 0; border-top:1px solid var(--color-divider); font-size:var(--t-ui)";
         var credit = l.addedBy ? (l.addedBy.org || l.addedBy.name || l.addedBy.email) : "";
         row.innerHTML = '<span style="flex:1 1 auto; min-width:0"><b>' + esc(l.label) + "</b>" +
           (credit ? ' <span class="hint">— added by ' + esc(credit) + "</span>" : "") + "</span>";

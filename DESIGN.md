@@ -67,9 +67,11 @@ typography:
     fontSize: "0.75rem"
     lineHeight: 1.5
 rounded:
-  sm: "4px"
-  md: "6px"
+  xs: "2px"
+  md: "4px"
+  lg: "6px"
   pill: "999px"
+  note: "These are the names the pages actually define — --radius-xs / -md / -lg / -pill. xs is only for a solid shape under 16px, where 4px reads as a circle; pill is for a bar a few pixels tall, where the ends should be round rather than cornered. A circle is 50% and not on this scale."
 spacing:
   xs: "0.35rem"
   sm: "0.6rem"

@@ -132,7 +132,7 @@
 
     // embed snippet (public only)
     if (!isPrivate) {
-      var snippet = '<iframe src="' + url + '" width="100%" height="620" style="border:1px solid #F1E7CC;border-radius:6px" title="' + title.replace(/"/g, "&quot;") + '" loading="lazy"></iframe>';
+      var snippet = '<iframe src="' + url + '" width="100%" height="620" style="border:1px solid #F1E7CC;border-radius:var(--radius-lg)" title="' + title.replace(/"/g, "&quot;") + '" loading="lazy"></iframe>';
       var embed = el("div", "shr-embed");
       embed.appendChild(el("b", null, "Embed on your website"));
       var pre = el("textarea", "shr-code");
@@ -151,25 +151,25 @@
     if (styleInjected) return;
     styleInjected = true;
     var css = [
-      ".shr{display:flex;flex-direction:column;gap:.9rem;font-size:.9rem}",
+      ".shr{display:flex;flex-direction:column;gap:.9rem;font-size:var(--t-ui)}",
       ".shr-row{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}",
-      ".shr-link{flex:1 1 14rem;font:inherit;font-size:.85rem;padding:.5rem .6rem;border:1px solid rgba(42,36,26,.16);border-radius:4px;background:#FFFFFF;color:#2A241A;min-width:0}",
-      ".shr-btn{display:inline-flex;align-items:center;gap:.4rem;font:inherit;font-size:.85rem;font-weight:600;padding:.5rem .8rem;border:1px solid rgba(42,36,26,.16);border-radius:4px;background:#FAF2DC;color:#2A241A;cursor:pointer;text-decoration:none}",
+      ".shr-link{flex:1 1 14rem;font:inherit;font-size:var(--t-ui);padding:.5rem .6rem;border:1px solid rgba(42,36,26,.16);border-radius:var(--radius-md);background:#FFFFFF;color:#2A241A;min-width:0}",
+      ".shr-btn{display:inline-flex;align-items:center;gap:.4rem;font:inherit;font-size:var(--t-ui);font-weight:600;padding:.5rem .8rem;border:1px solid rgba(42,36,26,.16);border-radius:var(--radius-md);background:#FAF2DC;color:#2A241A;cursor:pointer;text-decoration:none}",
       ".shr-btn:hover{border-color:#4A5A33;color:#384526;text-decoration:none}",
       ".shr-btn svg{width:15px;height:15px}",
       ".shr-note{margin:0;color:#564E3C}",
-      ".shr-warn{padding:.6rem .8rem;border-radius:4px;background:rgba(174,80,40,.10);color:#7C3616}",
+      ".shr-warn{padding:.6rem .8rem;border-radius:var(--radius-md);background:rgba(174,80,40,.10);color:#7C3616}",
       ".shr-warn b{color:#7C3616}",
       ".shr-qr{display:flex;gap:1rem;align-items:center;flex-wrap:wrap}",
-      ".shr-qr canvas{border:1px solid rgba(42,36,26,.16);border-radius:4px;width:132px;height:132px;image-rendering:pixelated}",
+      ".shr-qr canvas{border:1px solid rgba(42,36,26,.16);border-radius:var(--radius-md);width:132px;height:132px;image-rendering:pixelated}",
       ".shr-qr-col{display:flex;flex-direction:column;gap:.35rem;max-width:20rem}",
-      ".shr-qr-col span{color:#564E3C;font-size:.85rem}",
+      ".shr-qr-col span{color:#564E3C;font-size:var(--t-ui)}",
       ".shr-embed{display:flex;flex-direction:column;gap:.4rem;align-items:flex-start}",
-      ".shr-code{width:100%;font:12px/1.45 ui-monospace,Menlo,monospace;padding:.5rem .6rem;border:1px solid rgba(42,36,26,.16);border-radius:4px;background:#FFFFFF;color:#2A241A;resize:vertical;box-sizing:border-box}",
-      ".shr-dialog{border:1px solid rgba(42,36,26,.2);border-radius:6px;padding:1.25rem 1.35rem;max-width:30rem;width:calc(100vw - 2.5rem);background:#FAF2DC;color:#2A241A;font-family:'DM Sans',system-ui,sans-serif}",
+      ".shr-code{width:100%;font:var(--t-meta)/1.45 ui-monospace,Menlo,monospace;padding:.5rem .6rem;border:1px solid rgba(42,36,26,.16);border-radius:var(--radius-md);background:#FFFFFF;color:#2A241A;resize:vertical;box-sizing:border-box}",
+      ".shr-dialog{border:1px solid rgba(42,36,26,.2);border-radius:var(--radius-lg);padding:1.25rem 1.35rem;max-width:30rem;width:calc(100vw - 2.5rem);background:#FAF2DC;color:#2A241A;font-family:'DM Sans',system-ui,sans-serif}",
       ".shr-dialog::backdrop{background:rgba(42,36,26,.35)}",
-      ".shr-dialog h3{margin:0 0 .9rem;font-family:Figtree,sans-serif;font-size:1.05rem}",
-      ".shr-dialog .shr-close{position:absolute;top:.6rem;right:.6rem;border:none;background:none;font-size:1.2rem;cursor:pointer;color:#6B6350;padding:.2rem .45rem}",
+      ".shr-dialog h3{margin:0 0 .9rem;font-family:Figtree,sans-serif;font-size:var(--t-section)}",
+      ".shr-dialog .shr-close{position:absolute;top:.6rem;right:.6rem;border:none;background:none;font-size:var(--t-section);cursor:pointer;color:#6B6350;padding:.2rem .45rem}",
     ].join("\n");
     var s = document.createElement("style");
     s.textContent = css;

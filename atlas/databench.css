@@ -34,7 +34,7 @@
     .drop b { display:block; font-family:'Figtree',sans-serif; color:var(--color-text-primary); margin-bottom:.25rem; }
     .drop input { display:none; }
     details.paste { margin-top:.8rem; }
-    details.paste summary { cursor:pointer; font-size:.85rem; color:var(--color-text-secondary); }
+    details.paste summary { cursor:pointer; font-size:var(--t-ui); color:var(--color-text-secondary); }
 
     /* sign-in strip (step 1) */
     .signin { border-top:1px solid var(--color-divider); margin-top:1rem; padding-top:1rem; }
@@ -47,7 +47,7 @@
     .sheet-list button { display:flex; justify-content:space-between; gap:1rem; text-align:left; font:inherit;
       padding:.65rem .9rem; border:1px solid var(--color-border); border-radius:var(--radius-md); background:#fff; cursor:pointer; }
     .sheet-list button:hover { border-color:var(--color-moss); background:var(--color-moss-tint); }
-    .sheet-list .dim { color:var(--color-text-muted); font-size:.85rem; white-space:nowrap; }
+    .sheet-list .dim { color:var(--color-text-muted); font-size:var(--t-ui); white-space:nowrap; }
 
     /* choose-the-fields step */
     .enrich-panel { border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-moss-tint); padding:.8rem 1rem; margin:0 0 1rem; }
@@ -57,15 +57,15 @@
     .enrich-row label.f { flex:1 1 16rem; max-width:24rem; }
     /* the advanced fold: which columns theme-finding reads */
     .enrich-read { margin:.5rem 0 0; }
-    .enrich-read summary { cursor:pointer; font-size:.85rem; color:var(--color-text-secondary); }
+    .enrich-read summary { cursor:pointer; font-size:var(--t-ui); color:var(--color-text-secondary); }
     .enrich-cols { display:flex; gap:.35rem .9rem; flex-wrap:wrap; }
-    .enrich-cols label { display:inline-flex; align-items:center; gap:.35rem; font-size:.85rem; cursor:pointer; }
+    .enrich-cols label { display:inline-flex; align-items:center; gap:.35rem; font-size:var(--t-ui); cursor:pointer; }
     .enrich-cols input { width:auto; margin:0; }
     /* the suggestion: theme chips with real counts, then Keep / Discard */
     .theme-offer { margin-top:.7rem; border-top:1px solid var(--color-divider); padding-top:.7rem; }
-    .theme-lede { margin:0 0 .5rem; font-size:.9rem; }
+    .theme-lede { margin:0 0 .5rem; font-size:var(--t-ui); }
     .theme-chips { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.7rem; }
-    .theme-chip { font-size:.82rem; padding:.28rem .65rem; border-radius:var(--radius-md);
+    .theme-chip { font-size:var(--t-meta); padding:.28rem .65rem; border-radius:var(--radius-md);
       background:var(--color-surface); border:1px solid var(--color-border); }
     .theme-chip b { font-weight:600; margin-left:.15rem; }
     .theme-chip.is-other { background:transparent; border-style:dashed; color:var(--color-text-muted); }
@@ -76,19 +76,19 @@
     @media (prefers-reduced-motion: reduce){ .spin { animation-duration:1.6s; } }
 
     .ck-notices { display:flex; flex-direction:column; gap:.4rem; margin-bottom:.7rem; }
-    .ck-notice { background:var(--color-ochre-tint); color:var(--color-text-secondary); border-radius:4px; padding:.5rem .75rem; font-size:.85rem; }
+    .ck-notice { background:var(--color-ochre-tint); color:var(--color-text-secondary); border-radius:var(--radius-md); padding:.5rem .75rem; font-size:var(--t-ui); }
     .ck-notice.ck-err { background:var(--color-rust-tint); color:var(--color-rust-deep); }
     /* the design system keeps pills for the toggle track, so chips and the two
        segmented controls below sit at the 4px container radius instead */
     .ck-chips { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.7rem; }
-    .ck-chip { font-size:.78rem; padding:.25rem .6rem; border-radius:var(--radius-md); background:var(--color-rust-tint); color:var(--color-rust-deep); border:none; }
-    .ck-chip.ck-act { cursor:pointer; font:inherit; font-size:.78rem; border:1px solid var(--color-rust); }
+    .ck-chip { font-size:var(--t-meta); padding:.25rem .6rem; border-radius:var(--radius-md); background:var(--color-rust-tint); color:var(--color-rust-deep); border:none; }
+    .ck-chip.ck-act { cursor:pointer; font:inherit; font-size:var(--t-meta); border:1px solid var(--color-rust); }
 
     /* view toggle: Fields (cards) vs Preview rows (table). Selected is a moss
        wash and weight — green means you can act on it — not a raised pill. */
     .ck-viewtabs { display:inline-flex; gap:.25rem; padding:.2rem; margin:0 0 .8rem; background:var(--color-bg-alt);
       border:1px solid var(--color-border); border-radius:var(--radius-md); }
-    .ck-viewtab { font:inherit; font-size:.82rem; padding:.32rem .85rem; border:none; border-radius:var(--radius-md); background:transparent; color:var(--color-text-secondary); cursor:pointer; }
+    .ck-viewtab { font:inherit; font-size:var(--t-meta); padding:.32rem .85rem; border:none; border-radius:var(--radius-md); background:transparent; color:var(--color-text-secondary); cursor:pointer; }
     .ck-viewtab.on { background:var(--color-moss-tint); color:var(--color-canopy); font-weight:600; }
 
     /* field cards — the primary overview */
@@ -98,14 +98,14 @@
     .ck-field.off .ck-fname, .ck-field.off .ck-samples { opacity:.5; }
     .ck-field-top { display:flex; align-items:center; gap:.45rem; }
     .ck-inc { flex:0 0 auto; cursor:pointer; }   /* its box is drawn in the touch-target block below */
-    .ck-fname { flex:1 1 auto; font-family:'Figtree',sans-serif; font-weight:600; font-size:.9rem; color:var(--color-text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ck-fname { flex:1 1 auto; font-family:'Figtree',sans-serif; font-weight:600; font-size:var(--t-ui); color:var(--color-text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     /* 11px is the floor for anything meant to be read — this badge was 9.9px */
-    .ck-gen { flex:0 0 auto; font-size:.7rem; letter-spacing:.06em; text-transform:uppercase; padding:.1rem .35rem; border-radius:3px; background:var(--color-moss-tint); color:var(--color-canopy); }
-    .ck-edit-btn { flex:0 0 auto; font:inherit; font-size:.8rem; line-height:1; padding:.25rem .4rem; border:1px solid transparent; border-radius:5px; background:none; color:var(--color-text-muted); cursor:pointer; }
+    .ck-gen { flex:0 0 auto; font-size:var(--t-label); letter-spacing:.06em; text-transform:uppercase; padding:.1rem .35rem; border-radius:var(--radius-md); background:var(--color-moss-tint); color:var(--color-canopy); }
+    .ck-edit-btn { flex:0 0 auto; font:inherit; font-size:var(--t-meta); line-height:1; padding:.25rem .4rem; border:1px solid transparent; border-radius:var(--radius-lg); background:none; color:var(--color-text-muted); cursor:pointer; }
     .ck-edit-btn:hover, .ck-edit-btn.on { border-color:var(--color-border); color:var(--color-canopy); background:var(--color-bg-alt); }
     .ck-meta { display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; }
-    .ck-type-badge { font-size:.72rem; color:var(--color-text-muted); }
-    .ck-role { font-size:.72rem; padding:.12rem .5rem; border-radius:var(--radius-md); font-weight:600; }
+    .ck-type-badge { font-size:var(--t-label); color:var(--color-text-muted); }
+    .ck-role { font-size:var(--t-label); padding:.12rem .5rem; border-radius:var(--radius-md); font-weight:600; }
     .ck-role-location { background:var(--color-moss-tint); color:var(--color-canopy); }
     .ck-role-colour   { background:var(--color-rust-tint); color:var(--color-rust-deep); }
     /* sienna, not the purple this used to carry: the palette is moss, rust,
@@ -114,23 +114,23 @@
     .ck-role-value    { background:var(--color-ochre-tint); color:#6d5013; }
     .ck-role-text     { background:var(--color-bg-alt); color:var(--color-text-secondary); }
     .ck-role-off      { background:transparent; color:var(--color-text-muted); border:1px dashed var(--color-border); }
-    .ck-samples { font-size:.78rem; color:var(--color-text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .ck-issue { font-size:.76rem; color:var(--color-rust-deep); }
+    .ck-samples { font-size:var(--t-meta); color:var(--color-text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ck-issue { font-size:var(--t-meta); color:var(--color-rust-deep); }
     .ck-edit { display:flex; flex-direction:column; gap:.4rem; padding-top:.5rem; margin-top:.1rem; border-top:1px solid var(--color-divider); }
-    .ck-edit-row { display:flex; align-items:center; gap:.45rem; font-size:.78rem; color:var(--color-text-secondary); }
-    .ck-edit-row input, .ck-edit-row select { flex:1 1 auto; font:inherit; font-size:.8rem; padding:.28rem .4rem; }
-    .ck-mini, .ck-mini2 { font:inherit; font-size:.75rem; padding:.28rem .55rem; border:1px solid var(--color-border); border-radius:5px; background:var(--color-surface); color:var(--color-text-secondary); cursor:pointer; align-self:flex-start; }
+    .ck-edit-row { display:flex; align-items:center; gap:.45rem; font-size:var(--t-meta); color:var(--color-text-secondary); }
+    .ck-edit-row input, .ck-edit-row select { flex:1 1 auto; font:inherit; font-size:var(--t-meta); padding:.28rem .4rem; }
+    .ck-mini, .ck-mini2 { font:inherit; font-size:var(--t-meta); padding:.28rem .55rem; border:1px solid var(--color-border); border-radius:var(--radius-lg); background:var(--color-surface); color:var(--color-text-secondary); cursor:pointer; align-self:flex-start; }
     .ck-mini:hover { border-color:var(--color-moss); color:var(--color-canopy); }
 
     /* preview rows — the secondary, editable table */
     .ck-scroll { overflow-x:auto; border:1px solid var(--color-border); border-radius:var(--radius-md); background:#fff; }
-    .ck-table { border-collapse:collapse; font-size:.84rem; min-width:100%; }
+    .ck-table { border-collapse:collapse; font-size:var(--t-ui); min-width:100%; }
     .ck-table th { position:sticky; top:0; background:var(--color-surface); border-bottom:2px solid var(--color-border);
       padding:.45rem .6rem; text-align:left; min-width:8rem; white-space:nowrap; font-family:'Figtree',sans-serif; }
-    .ck-th-type { font-family:'DM Sans',sans-serif; font-weight:400; font-size:.72rem; color:var(--color-text-muted); }
+    .ck-th-type { font-family:'DM Sans',sans-serif; font-weight:400; font-size:var(--t-label); color:var(--color-text-muted); }
     .ck-table td { border-bottom:1px solid var(--color-divider); padding:.32rem .55rem; white-space:nowrap; max-width:16rem; overflow:hidden; text-overflow:ellipsis; }
     .ck-cell { cursor:text; }
-    .ck-cell:focus { outline:2px solid var(--color-moss); outline-offset:-2px; background:#fff; overflow:visible; text-overflow:clip; border-radius:3px; }
+    .ck-cell:focus { outline:2px solid var(--color-moss); outline-offset:-2px; background:#fff; overflow:visible; text-overflow:clip; border-radius:var(--radius-md); }
     /* Four whole columns used to be washed in four tints — moss, sienna, ochre,
        rust — and the badge at the head of each column already names what it
        holds. The wash said the same thing over ten times the area, and made a
@@ -156,24 +156,24 @@
        rather than drawing a card of its own. */
     .db-ask { margin:.6rem 0 0; padding:.75rem .85rem; border-radius:var(--radius-md);
       background:var(--color-ochre-tint); }
-    .db-ask p { margin:0 0 .5rem; font-size:.85rem; color:var(--color-text-secondary); }
+    .db-ask p { margin:0 0 .5rem; font-size:var(--t-ui); color:var(--color-text-secondary); }
     .db-ask p b { color:var(--color-text-primary); }
     .db-ask .step-nav { margin:0; }
 
-    .ck-foot { font-size:.8rem; color:var(--color-text-muted); margin:.5rem 0 0; }
+    .ck-foot { font-size:var(--t-meta); color:var(--color-text-muted); margin:.5rem 0 0; }
     .ck-derive { margin-top:.9rem; }
-    .ck-derive summary { cursor:pointer; font-size:.85rem; color:var(--color-text-secondary); }
-    .ck-derive-cols { display:flex; gap:.8rem; flex-wrap:wrap; font-size:.85rem; margin:.5rem 0; }
+    .ck-derive summary { cursor:pointer; font-size:var(--t-ui); color:var(--color-text-secondary); }
+    .ck-derive-cols { display:flex; gap:.8rem; flex-wrap:wrap; font-size:var(--t-ui); margin:.5rem 0; }
     .ck-derive-row { display:flex; gap:.5rem; align-items:center; max-width:22rem; }
 
     /* place-on-map + style cards */
     .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:.35rem .8rem; }
     @media (max-width:700px){ .grid2 { grid-template-columns:1fr; } }
-    .infer-note { font-size:.88rem; color:var(--color-text-secondary); background:var(--color-moss-tint); border-radius:4px; padding:.6rem .75rem; margin:.4rem 0 .9rem; }
+    .infer-note { font-size:var(--t-ui); color:var(--color-text-secondary); background:var(--color-moss-tint); border-radius:var(--radius-md); padding:.6rem .75rem; margin:.4rem 0 .9rem; }
 
     /* the single "where are these located?" answer + its confirm/change control */
     .place-summary { display:flex; align-items:center; gap:.6rem; padding:.7rem .9rem; margin:.2rem 0 .6rem; border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface); max-width:44rem; }
-    .ps-text { flex:1 1 auto; font-size:.92rem; color:var(--color-text-primary); }
+    .ps-text { flex:1 1 auto; font-size:var(--t-ui); color:var(--color-text-primary); }
     .ps-text b { font-weight:600; }
     .ps-text .warn { color:var(--color-rust-deep); }
     /* both hosts define .btn after this file, so a size set here never lands —
@@ -181,19 +181,19 @@
     .ps-change { flex:0 0 auto; }
     .place-details { max-width:44rem; margin:0 0 .8rem; padding:.85rem .9rem; border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-bg-alt); }
     .pd-seg { display:inline-flex; gap:.25rem; padding:.2rem; margin-bottom:.8rem; background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md); }
-    .pd-opt { font:inherit; font-size:.82rem; padding:.34rem .9rem; border:none; border-radius:var(--radius-md); background:transparent; color:var(--color-text-secondary); cursor:pointer; }
+    .pd-opt { font:inherit; font-size:var(--t-meta); padding:.34rem .9rem; border:none; border-radius:var(--radius-md); background:transparent; color:var(--color-text-secondary); cursor:pointer; }
     .pd-opt.on { background:var(--color-moss); color:#fff; font-weight:600; }
     .pd-fields { display:grid; grid-template-columns:1fr 1fr; gap:.35rem .8rem; }
     .pd-fields label.f { grid-column:1 / -1; margin-bottom:.4rem; }
     .pd-fields label.f:first-child, #pd-coord-fields label.f { grid-column:auto; }
     @media (max-width:640px){ .pd-fields { grid-template-columns:1fr; } .pd-fields label.f { grid-column:auto; } }
-    .stat { font-size:.88rem; color:var(--color-text-secondary); }
+    .stat { font-size:var(--t-ui); color:var(--color-text-secondary); }
     .stat b { color:var(--color-text-primary); }
-    .fix-row { display:flex; align-items:center; gap:.5rem; padding:.4rem 0; border-top:1px solid var(--color-divider); font-size:.88rem; flex-wrap:wrap; }
+    .fix-row { display:flex; align-items:center; gap:.5rem; padding:.4rem 0; border-top:1px solid var(--color-divider); font-size:var(--t-ui); flex-wrap:wrap; }
     .fix-row b { flex:0 0 9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .fix-row select { flex:1; min-width:8rem; width:auto; }
-    .fix-row button { font-size:.75rem; padding:.3rem .55rem; }
-    .radio-row { display:flex; gap:1rem; flex-wrap:wrap; font-size:.88rem; color:var(--color-text-secondary); }
+    .fix-row button { font-size:var(--t-meta); padding:.3rem .55rem; }
+    .radio-row { display:flex; gap:1rem; flex-wrap:wrap; font-size:var(--t-ui); color:var(--color-text-secondary); }
     .radio-row label { display:flex; gap:.35rem; align-items:center; font-weight:400; }
 
     /* preview bench: the questions sit BESIDE the live map on wide screens —
@@ -210,12 +210,12 @@
     footer.site { margin-top:3rem; border-top:1px solid var(--color-divider); background:var(--color-bg-alt); }
 
     /* notes under a question — the edit screen's own quiet line */
-    .step label.f > .note { flex:1 0 100%; font-weight:400; font-size:.78rem;
+    .step label.f > .note { flex:1 0 100%; font-weight:400; font-size:var(--t-meta);
       color:var(--color-text-muted); margin-top:.3rem; max-width:46ch; text-wrap:pretty; }
     .step label.f > .note.warnish { color:var(--color-text-secondary); }
     /* why a tag column is not offered for colour — its own line, so it stays
        said even when the colour question itself has nothing to ask */
-    .tag-note { font-size:.78rem; color:var(--color-text-muted); margin:-.4rem 0 .9rem;
+    .tag-note { font-size:var(--t-meta); color:var(--color-text-muted); margin:-.4rem 0 .9rem;
       max-width:46ch; text-wrap:pretty; }
 
     /* the five named colours, picked by eye rather than by name */
@@ -230,52 +230,52 @@
     /* the live map key: output, not a control — the edit screen's metrics,
        drawn by the same swatch code (iconkit) as the atlas itself */
     .key-head { display:flex; align-items:baseline; gap:.6rem; margin:.2rem 0 .2rem; }
-    .key-stamp { flex:1 1 auto; font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:700;
+    .key-stamp { flex:1 1 auto; font-family:'Figtree',sans-serif; font-size:var(--t-label); font-weight:700;
       letter-spacing:.12em; text-transform:uppercase; color:var(--color-text-muted); }
-    .key-note { font-size:.78rem; color:var(--color-text-muted); font-variant-numeric:tabular-nums; }
+    .key-note { font-size:var(--t-meta); color:var(--color-text-muted); font-variant-numeric:tabular-nums; }
     .key-block { padding:.55rem .65rem .6rem; border:1px solid var(--color-divider);
       border-radius:var(--radius-md); background:var(--color-bg); margin-bottom:1rem; }
     .key { list-style:none; margin:.15rem 0 0; padding:0; display:flex; flex-direction:column; gap:.28rem; }
-    .key li { display:flex; align-items:center; gap:.45rem; font-size:.78rem; color:var(--color-text-secondary); }
+    .key li { display:flex; align-items:center; gap:.45rem; font-size:var(--t-meta); color:var(--color-text-secondary); }
     .k-label { flex:1 1 auto; line-height:1.2; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .k-count { flex:0 0 auto; color:var(--color-text-muted); font-variant-numeric:tabular-nums; }
     .key .leg-icon { flex:0 0 auto; width:15px; height:15px; color:var(--c,#7a756c);
       display:inline-flex; align-items:center; justify-content:center; }
     .key .leg-icon svg { width:15px; height:15px; }
     .key .leg-badge { flex:0 0 auto; width:15px; height:15px; border-radius:50%; background:var(--c,#7a756c);
-      color:#fff; font-size:8px; font-weight:700; display:inline-flex; align-items:center;
+      color:#fff; font-size:var(--t-label); font-weight:700; display:inline-flex; align-items:center;
       justify-content:center; letter-spacing:.02em; }
     .key .leg-badge.pale { color:var(--color-text-primary); }
-    .key .leg-swatch { flex:0 0 auto; width:12px; height:12px; background:var(--c,#7a756c); border-radius:2px; }
+    .key .leg-swatch { flex:0 0 auto; width:12px; height:12px; background:var(--c,#7a756c); border-radius:var(--radius-xs); }
     .key .leg-swatch.dot { width:11px; height:11px; border-radius:50%; margin:0 1px; }
-    .key .leg-swatch.line { height:4px; border-radius:2px; }
+    .key .leg-swatch.line { height:4px; border-radius:var(--radius-pill); }
     .key .leg-swatch.dashed { height:4px; border-radius:0;
       background:repeating-linear-gradient(90deg, var(--c,#7a756c) 0 3px, transparent 3px 5px); }
     .k-ramp { display:block; }
-    .k-ramp-bar { display:flex; height:.8rem; border-radius:2px; overflow:hidden; }
+    .k-ramp-bar { display:flex; height:.8rem; border-radius:var(--radius-pill); overflow:hidden; }
     .k-ramp-bar i { flex:1 1 0; background:var(--c); display:block; }
     .k-ramp-ends { display:flex; justify-content:space-between; gap:.5rem; margin-top:.25rem;
-      font-size:.78rem; color:var(--color-text-muted); }
+      font-size:var(--t-meta); color:var(--color-text-muted); }
 
     /* the card's foot: one reassurance, then the verbs */
     .s4-foot { border-top:1px solid var(--color-divider); background:var(--color-bg);
       margin:1.1rem -1.2rem -1.1rem; padding:.85rem 1.2rem 1rem;
       border-radius:0 0 var(--radius-lg) var(--radius-lg); }
-    .s4-foot .assure { margin:0 0 .6rem; font-size:.78rem; color:var(--color-text-secondary);
+    .s4-foot .assure { margin:0 0 .6rem; font-size:var(--t-meta); color:var(--color-text-secondary);
       max-width:46ch; text-wrap:pretty; }
     .s4-foot .step-nav { margin-top:0; }
 
     /* the location answer, stated before anything about styling */
-    .loc-first { font-size:.9rem; padding:.6rem .8rem; border-radius:4px; margin:0 0 .9rem; }
+    .loc-first { font-size:var(--t-ui); padding:.6rem .8rem; border-radius:var(--radius-md); margin:0 0 .9rem; }
     .loc-first.ok { background:var(--color-moss-tint); color:var(--color-canopy); }
     .loc-first.warn { background:var(--color-rust-tint); color:var(--color-rust-deep); }
     .loc-first b { font-weight:600; }
 
     /* styling step */
     .style-more { margin-top:.6rem; margin-bottom:.9rem; }
-    .style-more > summary { cursor:pointer; font-size:.85rem; color:var(--color-text-secondary); }
+    .style-more > summary { cursor:pointer; font-size:var(--t-ui); color:var(--color-text-secondary); }
     /* steering, not blocking: a nudge when the chosen shading misleads */
-    .kind-steer { font-size:.82rem; padding:.45rem .7rem; border-radius:4px; margin:-.2rem 0 .7rem;
+    .kind-steer { font-size:var(--t-meta); padding:.45rem .7rem; border-radius:var(--radius-md); margin:-.2rem 0 .7rem;
       background:var(--color-ochre-tint); color:var(--color-text-primary); }
     /* a closed <details> stops hiding a child that sets its own display (our
        .grid2), so make the collapse explicit */
@@ -305,9 +305,9 @@
     .ck-inc { appearance:none; -webkit-appearance:none; position:relative;
       width:44px; height:44px; margin:-14px; padding:0; border:0; background:none; }
     .ck-inc::before { content:""; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-      width:1rem; height:1rem; border:1px solid var(--color-text-muted); border-radius:3px; background:var(--color-surface); }
+      width:1rem; height:1rem; border:1px solid var(--color-text-muted); border-radius:var(--radius-md); background:var(--color-surface); }
     .ck-inc:checked::before { background:var(--color-moss); border-color:var(--color-moss); }
     .ck-inc:checked::after { content:"✓"; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-      color:#fff; font-size:.72rem; line-height:1; }
+      color:#fff; font-size:var(--t-label); line-height:1; }
     .ck-inc:focus-visible { outline:none; }
     .ck-inc:focus-visible::before { outline:2px solid var(--color-moss); outline-offset:2px; }

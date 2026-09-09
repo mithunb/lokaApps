@@ -26,8 +26,10 @@
          reads as the map still loading, not as a grey fault */
       --color-map-ground:#FBF8F3;
       --color-moss-tint:rgba(74,90,51,.10); --color-rust-tint:rgba(174,80,40,.10);
-      --radius-md:.25rem; --radius-lg:.375rem;
+      /* corners: xs is for a shape under 16px, where md would read as a circle */
+      --radius-xs:.125rem; --radius-md:.25rem; --radius-lg:.375rem; --radius-pill:999px;
       /* type roles, by the job they do — the ramp documented in DESIGN.md */
+      --t-display:clamp(1.6rem,4vw,2.4rem);
       --t-section:1.15rem; --t-body:1rem; --t-control:.95rem; --t-ui:.875rem;
       --t-meta:.78rem; --t-label:.72rem;
       --shadow-sm:none;
@@ -37,36 +39,36 @@
     }
     * { box-sizing:border-box; }
     body { margin:0; background:var(--color-bg); color:var(--color-text-primary);
-      font-family:'DM Sans',system-ui,-apple-system,sans-serif; font-size:1rem; line-height:1.6;
+      font-family:'DM Sans',system-ui,-apple-system,sans-serif; font-size:var(--t-body); line-height:1.6;
       -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
       min-height:100dvh; display:flex; flex-direction:column; }
     body > * { width:100%; }
     footer.site { margin-top:auto; }
     h1,h2,h3 { font-family:'Figtree',sans-serif; letter-spacing:-.01em; margin:0 0 .5rem; }
-    h1 { font-size:clamp(1.6rem,4vw,2.4rem); font-weight:700; line-height:1.12; text-wrap:balance; }
+    h1 { font-size:var(--t-display); font-weight:700; line-height:1.12; text-wrap:balance; }
     .lead, #atlas-about { text-wrap:pretty; }
     p { color:var(--color-text-secondary); margin:0 0 1rem; }
     a { color:var(--color-moss); text-decoration:none; }
     a:hover { color:var(--color-canopy); text-decoration:underline; }
-    :focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:4px; }
+    :focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:var(--radius-md); }
     .lead { font-size:var(--t-body); color:var(--color-text-secondary); max-width:72ch; }
 
     header.site { border-bottom:1px solid var(--color-divider); background:var(--color-bg); position:relative; z-index:2; }
     .nav { width:var(--container); margin:0 auto; padding:1rem 0; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
-    .brand { font-family:'Figtree',sans-serif; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--color-text-primary); font-size:.875rem; }
+    .brand { font-family:'Figtree',sans-serif; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--color-text-primary); font-size:var(--t-ui); }
     .brand:hover { color:var(--color-text-primary); text-decoration:none; }
     .nav .links { display:flex; gap:1.25rem; align-items:center; flex-wrap:wrap; }
-    .nav .links a, .nav .links button { color:var(--color-text-secondary); font-size:.9rem;
+    .nav .links a, .nav .links button { color:var(--color-text-secondary); font-size:var(--t-ui);
       background:none; border:none; font-family:inherit; cursor:pointer; padding:0; }
     .nav .links button:hover { color:var(--color-canopy); text-decoration:underline; }
-    #nav-user { color:var(--color-text-primary); font-size:.9rem; font-weight:600; }
+    #nav-user { color:var(--color-text-primary); font-size:var(--t-ui); font-weight:600; }
 
     .atlas-hero { width:var(--container); margin:0 auto; padding:2rem 0 1.25rem; }
-    #atlas-about { max-width:72ch; font-size:.95rem; color:var(--color-text-secondary); margin:.35rem 0 0; }
+    #atlas-about { max-width:72ch; font-size:var(--t-control); color:var(--color-text-secondary); margin:.35rem 0 0; }
     .hero-top { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
     .hero-actions { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
     #add-data-btn { text-decoration:none; }
-    .share-btn { display:inline-flex; align-items:center; gap:.4rem; font:inherit; font-size:.85rem; font-weight:600;
+    .share-btn { display:inline-flex; align-items:center; gap:.4rem; font:inherit; font-size:var(--t-ui); font-weight:600;
       padding:.45rem .85rem; border:1px solid var(--color-border); border-radius:var(--radius-md);
       background:var(--color-surface); color:var(--color-text-primary); cursor:pointer; }
     /* the hidden attribute must always win, whatever display a class sets */
@@ -74,14 +76,14 @@
     .share-btn:hover { border-color:var(--color-moss); color:var(--color-canopy); }
     .share-btn svg { width:15px; height:15px; }
     .org-brand-line { display:inline-flex; align-items:center; gap:.5rem; margin-top:.4rem;
-      font-size:.9rem; color:var(--color-text-secondary); }
+      font-size:var(--t-ui); color:var(--color-text-secondary); }
     .org-brand-line b { color:var(--color-text-primary); font-weight:600; }
     .org-brand-logo { height:26px; width:auto; max-width:140px; object-fit:contain; display:block; }
     #org-branding a { text-decoration:none; }
     #org-branding a:hover .org-brand-line b { color:var(--color-moss); }
     .org-credit-logo { height:30px; width:auto; max-width:160px; object-fit:contain; display:block; margin-bottom:.4rem; }
     .org-credit-name { font-family:'Figtree',sans-serif; font-weight:600; }
-    .org-credit-line { font-size:.85rem; color:var(--color-text-secondary); margin-bottom:.9rem; }
+    .org-credit-line { font-size:var(--t-ui); color:var(--color-text-secondary); margin-bottom:.9rem; }
     #org-credit:not(:empty) { padding-bottom:.9rem; margin-bottom:.9rem; border-bottom:1px solid var(--color-divider); }
 
     /* ---- map stage ---- */
@@ -91,7 +93,7 @@
     #atlas-map { position:absolute; inset:0; }
     /* basemap attribution rendered below the map, not overlaying it */
     .map-attrib { width:var(--container); margin:0 auto 1.5rem; text-align:right;
-      font-size:.7rem; line-height:1.4; color:var(--color-text-muted); }
+      font-size:var(--t-label); line-height:1.4; color:var(--color-text-muted); }
     .map-attrib:empty { display:none; }
     .map-attrib a { color:inherit; text-decoration:underline; }
     .atlas-error { position:absolute; inset:0; display:flex; flex-direction:column; gap:.5rem;
@@ -140,14 +142,14 @@
     }
     .panel-head { display:flex; align-items:center; gap:.45rem;
       padding:.7rem .9rem; border-bottom:1px solid var(--color-divider); flex:0 0 auto; }
-    .panel-head strong { font-family:'Figtree',sans-serif; font-size:.7rem; letter-spacing:.14em; text-transform:uppercase; color:var(--color-text-secondary); }
-    .panel-count { font-size:.7rem; color:var(--color-text-muted); white-space:nowrap; }
+    .panel-head strong { font-family:'Figtree',sans-serif; font-size:var(--t-label); letter-spacing:.14em; text-transform:uppercase; color:var(--color-text-secondary); }
+    .panel-count { font-size:var(--t-label); color:var(--color-text-muted); white-space:nowrap; }
     .panel-count:empty { display:none; }
     /* the count describes the layer list; while the owner's edit card stands
        in for the list, the head names the layer instead and the count would
        be describing something no longer shown */
     .atlas-panel:has(#atlas-controls[hidden]) .panel-count { display:none; }
-    .panel-collapse { margin-left:auto; border:none; background:none; cursor:pointer; color:var(--color-text-muted); padding:.2rem .4rem; border-radius:4px; display:none; align-items:center; justify-content:center; }
+    .panel-collapse { margin-left:auto; border:none; background:none; cursor:pointer; color:var(--color-text-muted); padding:.2rem .4rem; border-radius:var(--radius-md); display:none; align-items:center; justify-content:center; }
     .panel-collapse svg { width:18px; height:18px; display:block; }
     #atlas-controls { overflow-y:auto; padding:.35rem .8rem .9rem; scrollbar-width:thin; }
     /* Desktop: the panel folds to a compact "Map layers" pill, freeing the whole
@@ -164,8 +166,8 @@
     .ctl-basemaps { display:flex; gap:.35rem; }
     /* on phones the pair lives at the top of the bottom sheet, as before */
     #atlas-controls .ctl-basemaps { margin-bottom:.7rem; }
-    .bm-btn { flex:1; padding:.4rem .5rem; font:inherit; font-size:.8rem; font-weight:500; cursor:pointer;
-      background:var(--color-bg-alt); color:var(--color-text-secondary); border:1px solid transparent; border-radius:4px; }
+    .bm-btn { flex:1; padding:.4rem .5rem; font:inherit; font-size:var(--t-meta); font-weight:500; cursor:pointer;
+      background:var(--color-bg-alt); color:var(--color-text-secondary); border:1px solid transparent; border-radius:var(--radius-md); }
     .bm-btn.active { background:var(--color-moss); color:#fff; }
 
     /* ---- search: lives in the strip ----
@@ -179,12 +181,12 @@
     .ctl-search-box svg { flex:0 0 auto; width:16px; height:16px; color:var(--color-text-muted); }
     .ctl-search-box:focus-within { border-color:var(--color-moss); outline:2px solid var(--color-moss); outline-offset:-1px; }
     .ctl-search-box:focus-within svg { color:var(--color-moss); }
-    .ctl-search-input { flex:1 1 auto; min-width:0; font:inherit; font-size:.9rem; padding:.42rem .3rem .42rem .1rem;
+    .ctl-search-input { flex:1 1 auto; min-width:0; font:inherit; font-size:var(--t-ui); padding:.42rem .3rem .42rem .1rem;
       border:none; background:none; color:var(--color-text-primary); }
     .ctl-search-input:focus { outline:none; }
     .ctl-search-count { position:absolute; top:calc(100% + .95rem); left:50%; transform:translateX(-50%);
       width:max-content; max-width:min(24rem, calc(100vw - 2rem)); text-align:center;
-      padding:.2rem .6rem; font-size:.76rem; color:var(--color-text-secondary);
+      padding:.2rem .6rem; font-size:var(--t-meta); color:var(--color-text-secondary);
       background:rgba(255,255,255,.95); border:1px solid var(--color-border);
       border-radius:var(--radius-md); box-shadow:var(--shadow-md); }
     .ctl-search-go { font:inherit; font-weight:600; border:none; background:none; padding:0;
@@ -226,7 +228,7 @@
        contrast instead, at 3.28:1. An INSET SHADOW rather than a border, so the
        switch does not change size by a pixel and the knob keeps its geometry.
        The on state is moss, which clears 3:1 on its own, so it drops the ring. */
-    .ctl-switch { flex:0 0 auto; width:32px; height:18px; border-radius:999px; background:#cfd6cf;
+    .ctl-switch { flex:0 0 auto; width:32px; height:18px; border-radius:var(--radius-pill); background:#cfd6cf;
       box-shadow:inset 0 0 0 1px #82907f; position:relative;
       transition:background .2s cubic-bezier(.25,1,.5,1), box-shadow .2s ease; }
     .ctl-switch::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#FFFFFF; box-shadow:0 1px 2px rgba(42,36,26,.25); transition:transform .2s cubic-bezier(.25,1,.5,1); }
@@ -264,10 +266,10 @@
     .ctl-sub-body { padding-left:.85rem; }
 
     .crop-chips { display:flex; flex-wrap:wrap; gap:.3rem; margin:.4rem 0 .1rem; }
-    .crop-chip { font:inherit; font-size:.72rem; padding:.2rem .5rem; border-radius:4px; cursor:pointer;
+    .crop-chip { font:inherit; font-size:var(--t-label); padding:.2rem .5rem; border-radius:var(--radius-md); cursor:pointer;
       border:1px solid var(--color-border); background:#FFFFFF; color:var(--color-text-secondary); display:inline-flex; align-items:center; gap:.3rem;
       transition:background .15s ease, border-color .15s ease, color .15s ease, transform .1s cubic-bezier(.25,1,.5,1); }
-    .crop-chip::before { content:''; width:8px; height:8px; border-radius:2px; background:var(--c,#888); transition:transform .15s cubic-bezier(.25,1,.5,1); }
+    .crop-chip::before { content:''; width:8px; height:8px; border-radius:var(--radius-xs); background:var(--c,#888); transition:transform .15s cubic-bezier(.25,1,.5,1); }
     .crop-chip.diversity::before { background:linear-gradient(90deg,#cdd3b4,#39502f); }
     .crop-chip.on { border-color:var(--color-moss); background:var(--color-moss-tint); color:var(--color-text-primary); font-weight:600; }
     .crop-chip.on::before { transform:scale(1.25); }
@@ -295,10 +297,10 @@
     .ctl-toggle input:checked + .ctl-switch.small::after { transform:translateX(11px); }
     /* a key's name is a thing you can act on — it keeps its ink and weight
        whichever way its switch points; the switch alone says the state */
-    .key-tname { font-size:.8rem; font-weight:600; line-height:1.25; color:var(--color-text-primary); }
+    .key-tname { font-size:var(--t-meta); font-weight:600; line-height:1.25; color:var(--color-text-primary); }
     /* the share of places a discovered question can answer — quiet, because it
        is a caveat on the switch beside it, not a number to read first */
-    .key-reach { margin-left:auto; font-size:.68rem; color:var(--color-text-muted);
+    .key-reach { margin-left:auto; font-size:var(--t-label); color:var(--color-text-muted);
       font-variant-numeric:tabular-nums; }
     .key-note { font-size:var(--t-label); font-weight:400; color:var(--color-text-muted); line-height:1.45; margin:.3rem 0 .05rem; }
     /* where the folded places went — kept current by updateFoldNote */
@@ -326,19 +328,19 @@
     }
     /* keyed legend: kinds grouped under a header per key, each row wearing
        the key's own shape at the panel's size */
-    .leg-head { font-size:.72rem; font-weight:600; color:var(--color-text-muted); margin:.3rem 0 .05rem; }
+    .leg-head { font-size:var(--t-label); font-weight:600; color:var(--color-text-muted); margin:.3rem 0 .05rem; }
     .leg-sat { flex:0 0 auto; width:18px; height:18px; display:block; }
 
     .ctl-opacity { display:flex; align-items:center; gap:.5rem; margin:.45rem 0 .1rem; }
-    .ctl-opacity-lbl { font-size:.72rem; color:var(--color-text-muted); }
+    .ctl-opacity-lbl { font-size:var(--t-label); color:var(--color-text-muted); }
     .ctl-opacity input { flex:1; accent-color:var(--color-moss); }
 
     .ctl-legend { margin:.4rem 0 .2rem; display:flex; flex-direction:column; }
     .leg-item { display:flex; align-items:center; gap:.5rem; min-height:24px; padding:.1rem 0;
-      font-size:.8rem; color:var(--color-text-secondary); }
+      font-size:var(--t-meta); color:var(--color-text-secondary); }
     .leg-item.faint { opacity:.7; }
     /* how many places wear this mark — the name leads, the count sits in ink */
-    .leg-n { margin-left:auto; flex:0 0 auto; padding-left:.5rem; font-size:.75rem; font-weight:700; color:var(--color-text-primary); font-variant-numeric:tabular-nums; }
+    .leg-n { margin-left:auto; flex:0 0 auto; padding-left:.5rem; font-size:var(--t-meta); font-weight:700; color:var(--color-text-primary); font-variant-numeric:tabular-nums; }
     /* a kind you can open, and the words it opens into */
     /* a kind sitting under its own switch, indented to belong to it */
     .key-kind { padding-left:1.55rem; }
@@ -349,7 +351,7 @@
     .key-list .leg-why + .key-toggle {
       margin-top:.6rem; padding-top:.45rem; border-top:1px solid var(--color-divider);
     }
-    .leg-openable { cursor:pointer; border-radius:4px; }
+    .leg-openable { cursor:pointer; border-radius:var(--radius-md); }
     .leg-openable:hover { background:var(--color-bg-alt); }
     .leg-openable[aria-expanded="true"] { background:var(--color-bg-alt); }
     .leg-why { display:flex; flex-wrap:wrap; gap:.2rem; padding:.1rem 0 .35rem 1.5rem; }
@@ -358,7 +360,7 @@
        should not shout like a control — and only declares itself on hover and
        on focus, where a person is already asking what it does. */
     .leg-why-w { font:inherit; font-size:var(--t-label); font-family:inherit;
-      background:var(--color-ochre-tint); border:0; border-radius:3px;
+      background:var(--color-ochre-tint); border:0; border-radius:var(--radius-md);
       padding:.05rem .25rem; color:var(--color-text-secondary); text-align:left; }
     .leg-why-w.leg-why-go { cursor:pointer; }
     .leg-why-w.leg-why-go:hover { background:var(--color-moss-tint); color:var(--color-canopy); }
@@ -369,20 +371,25 @@
       .leg-why-w.leg-why-go { padding:.3rem .4rem; }
     }
     /* sequential scale: one graduated bar, endpoints labelled */
-    .leg-ramp { display:flex; height:9px; border-radius:3px; overflow:hidden; margin:.15rem 0 .25rem; box-shadow:inset 0 0 0 1px rgba(42,36,26,.08); }
+    .leg-ramp { display:flex; height:9px; border-radius:var(--radius-pill); overflow:hidden; margin:.15rem 0 .25rem; box-shadow:inset 0 0 0 1px rgba(42,36,26,.08); }
     .leg-ramp-seg { flex:1 1 0; }
     .leg-ramp-labels { display:flex; justify-content:space-between; align-items:baseline; gap:.5rem; }
-    .leg-ramp-end { font-size:.72rem; color:var(--color-text-secondary); font-variant-numeric:tabular-nums; }
+    .leg-ramp-end { font-size:var(--t-label); color:var(--color-text-secondary); font-variant-numeric:tabular-nums; }
     .leg-ramp-unit { font-size:var(--t-meta); color:var(--color-text-muted); }
     .leg-label { line-height:1.2; }
     .leg-swatch { flex:0 0 auto; width:14px; height:14px; }
     .leg-icon { flex:0 0 auto; width:15px; height:15px; color:var(--c); display:inline-flex; align-items:center; justify-content:center; }
     .leg-icon svg { width:15px; height:15px; }
+    /* .leg-badge and .atlas-pin.badge are left over from the numbered-marker
+       shape: nothing in the viewer builds either any more (checked across
+       atlas/ — only the styles remain). They are on the ramp so a grep for a
+       stray size stays clean, but t-label is bigger than the 12px pin they
+       were drawn for, so reviving either means picking a real size first. */
     .leg-badge { flex:0 0 auto; width:15px; height:15px; border-radius:50%; background:var(--c); color:#fff;
-      font-size:8px; font-weight:700; line-height:1; display:inline-flex; align-items:center; justify-content:center; }
-    .leg-swatch.box { background:var(--c); border-radius:2px; }
+      font-size:var(--t-label); font-weight:700; line-height:1; display:inline-flex; align-items:center; justify-content:center; }
+    .leg-swatch.box { background:var(--c); border-radius:var(--radius-xs); }
     .leg-swatch.dot { background:var(--c); border-radius:50%; width:11px; height:11px; margin:0 1.5px; }
-    .leg-swatch.line { height:0; border-top:3px solid var(--c); border-radius:2px; align-self:center; }
+    .leg-swatch.line { height:0; border-top:3px solid var(--c); border-radius:var(--radius-xs); align-self:center; }
     .leg-swatch.dashed { height:0; border-top:3px dashed var(--c); }
     .leg-swatch.triangle { width:0; height:0; border-left:7px solid transparent; border-right:7px solid transparent; border-bottom:12px solid var(--c); }
     .leg-swatch.diamond { width:11px; height:11px; background:var(--c); transform:rotate(45deg); margin:0 1.5px; }
@@ -391,7 +398,7 @@
     .leg-size-item { display:flex; flex-direction:column; align-items:center; gap:.2rem; }
     .leg-size-circle { flex:0 0 auto; border-radius:50%; background:var(--c); opacity:.78;
       border:1.2px solid #fff; box-shadow:0 0 0 1px rgba(42,36,26,.10); box-sizing:border-box; }
-    .leg-size-val { font-size:.7rem; color:var(--color-text-secondary); font-variant-numeric:tabular-nums; line-height:1; }
+    .leg-size-val { font-size:var(--t-label); color:var(--color-text-secondary); font-variant-numeric:tabular-nums; line-height:1; }
 
     /* ---- DOM markers ---- */
     .atlas-marker { display:flex; flex-direction:column; align-items:center; cursor:pointer; }
@@ -431,7 +438,7 @@
         filter:drop-shadow(0 3px 6px rgba(42,36,26,.5));
       }
     }
-    .atlas-pin.badge { background:var(--pin,#AE5028); color:#fff; font-size:9px; font-weight:700; }
+    .atlas-pin.badge { background:var(--pin,#AE5028); color:#fff; font-size:var(--t-label); font-weight:700; }
     .atlas-pin.badge.pale, .leg-badge.pale { color:#2A241A; }   /* dark ink on pale fills */
     .atlas-pin svg { width:12px; height:12px; display:block; }
     /* lift the pin (a child) on hover — never the marker element itself; MapLibre owns its transform */
@@ -439,13 +446,13 @@
 
     /* numbered cluster badge (stands in for a tight group at overview zoom) */
     .atlas-cluster { display:flex; align-items:center; gap:.4rem; cursor:pointer;
-      background:var(--color-surface); border:1.5px solid var(--color-rust); border-radius:4px;
+      background:var(--color-surface); border:1.5px solid var(--color-rust); border-radius:var(--radius-md);
       padding:.2rem .5rem .2rem .3rem; box-shadow:0 1px 5px rgba(42,36,26,.22);
       font-family:'Figtree',sans-serif; transition:transform .15s cubic-bezier(.25,1,.5,1), box-shadow .15s; }
     .atlas-cluster:hover { transform:scale(1.04); box-shadow:0 2px 8px rgba(42,36,26,.28); }
     .atlas-cluster .cl-count { display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:20px;
-      padding:0 4px; background:var(--color-rust); color:#fff; border-radius:3px; font-size:12px; font-weight:700; }
-    .atlas-cluster .cl-label { font-size:12px; font-weight:600; color:var(--color-rust-deep); white-space:nowrap; }
+      padding:0 4px; background:var(--color-rust); color:#fff; border-radius:var(--radius-md); font-size:var(--t-meta); font-weight:700; }
+    .atlas-cluster .cl-label { font-size:var(--t-meta); font-weight:600; color:var(--color-rust-deep); white-space:nowrap; }
     /* ---- cluster fan veil ---- */
     /* Cluster discs are GL layers now (see CLUSTERS in atlas.js) — no DOM to
        style. While a fan is open, a translucent paper wash sits between the
@@ -487,10 +494,10 @@
        it inside the map. The global prefers-reduced-motion rule below flattens
        the fade to nothing. */
     .atlas-hint { position:absolute; top:0; left:0; z-index:4; pointer-events:none;
-      max-width:16rem; padding:.18rem .45rem; border-radius:4px;
+      max-width:16rem; padding:.18rem .45rem; border-radius:var(--radius-md);
       background:rgba(255,255,255,.97); border:1px solid var(--color-border);
       box-shadow:0 1px 4px rgba(42,36,26,.2);
-      font-family:'DM Sans',sans-serif; font-size:.78rem; font-weight:500; line-height:1.3;
+      font-family:'DM Sans',sans-serif; font-size:var(--t-meta); font-weight:500; line-height:1.3;
       color:var(--color-text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
       opacity:0; visibility:hidden; transition:opacity .12s ease; }
     .atlas-hint.on { opacity:1; visibility:visible; }
@@ -509,7 +516,7 @@
       align-items:start; min-width:0; }
     .key-row .key-mark { grid-column:1; grid-row:1; width:14px; height:14px; display:block;
       margin-top:.15rem; }
-    .key-row .key-name { grid-column:2; font-size:.76rem; line-height:1.35;
+    .key-row .key-name { grid-column:2; font-size:var(--t-meta); line-height:1.35;
       color:var(--color-text-muted); }
     .key-row .key-word { grid-column:2; min-width:0; font-weight:600;
       overflow-wrap:anywhere; }
@@ -522,7 +529,7 @@
       padding:.05rem 0 .34rem 1.5rem; min-width:0; }
     .key-because-lead { flex:0 0 auto; font-size:var(--t-label); color:var(--color-text-muted); }
     .key-because-w { font-size:var(--t-label); background:var(--color-ochre-tint);
-      border-radius:3px; padding:.02rem .26rem; min-width:0;
+      border-radius:var(--radius-md); padding:.02rem .26rem; min-width:0;
       overflow-wrap:anywhere; }
     .key-row.blank .key-word { color:var(--color-text-muted); font-weight:400; }
     /* ---- the popup's answers, compact ----
@@ -547,7 +554,7 @@
     .pop .key-row .key-name, .pop .key-row .key-word { display:inline; }
     .pop .key-row-open { cursor:pointer; }
     .pop .key-row-open:focus-visible { outline:2px solid var(--color-moss); outline-offset:2px;
-      border-radius:3px; }
+      border-radius:var(--radius-md); }
     .pop .key-chev { grid-column:3; grid-row:1; width:10px; height:6px; margin-top:.42rem;
       color:var(--color-text-muted); transition:transform .15s ease; }
     .pop .key-row-open:hover .key-chev { color:var(--color-moss); }
@@ -570,8 +577,8 @@
        the edge — measured at 1280×720, 101px of a 432px box. Room for four
        questions and their reasons, and no taller than the stage. */
     .pop { padding:.85rem .95rem; max-height:min(44vh, 400px); overflow-y:auto; }
-    .pop-title { font-family:'Figtree',sans-serif; font-weight:700; font-size:1.02rem; color:var(--color-text-primary); line-height:1.2; }
-    .pop-sub { font-size:.78rem; text-transform:uppercase; letter-spacing:.08em; color:var(--color-moss); margin-top:.1rem; }
+    .pop-title { font-family:'Figtree',sans-serif; font-weight:700; font-size:var(--t-body); color:var(--color-text-primary); line-height:1.2; }
+    .pop-sub { font-size:var(--t-meta); text-transform:uppercase; letter-spacing:.08em; color:var(--color-moss); margin-top:.1rem; }
     /* A group of facts is a group: tight between them, with air before the
        group rather than repeated inside it. */
     .pop-field { margin-top:.5rem; min-width:0; }
@@ -584,8 +591,8 @@
     .pop-field-inline .pop-val { display:inline; }
     /* Where this place came from — last, and quieter than the place itself. */
     .pop-src { margin-top:.7rem; padding-top:.5rem; border-top:1px solid var(--color-border);
-      font-size:.72rem; color:var(--color-text-muted); }
-    .pop-img { display:block; width:100%; max-height:180px; object-fit:cover; border-radius:4px; margin:.5rem 0 .1rem; }
+      font-size:var(--t-label); color:var(--color-text-muted); }
+    .pop-img { display:block; width:100%; max-height:180px; object-fit:cover; border-radius:var(--radius-md); margin:.5rem 0 .1rem; }
     /* A LOKA place can carry more than one photo, and nine of the sixty-six on
        the Bengaluru layer do. One fills the width; two or more share it, so a
        second picture costs no height at all. */
@@ -596,7 +603,7 @@
     /* The description, set as what it is: the person's own sentence about the
        place, under the picture of it. Heading the card with it made an
        eight-line title. */
-    .pop-caption { margin:.45rem 0 .1rem; font-size:.92rem; line-height:1.4;
+    .pop-caption { margin:.45rem 0 .1rem; font-size:var(--t-ui); line-height:1.4;
       color:var(--color-text-primary); text-wrap:pretty; }
     .pop-lbl { font-size:var(--t-label); text-transform:uppercase; letter-spacing:.06em;
       color:var(--color-text-muted); }
@@ -617,23 +624,23 @@
       color:var(--color-moss); }
     .pop-fold[aria-expanded="true"] .key-chev { transform:rotate(180deg); }
     .pop-fold:focus-visible { outline:2px solid var(--color-moss); outline-offset:2px;
-      border-radius:3px; }
+      border-radius:var(--radius-md); }
     .pop-fold + .pop-tags { margin-top:.25rem; }
     @media (prefers-reduced-motion:reduce) { .pop-fold .key-chev { transition:none; } }
-    .pop-val { font-size:.88rem; color:var(--color-text-primary); }
+    .pop-val { font-size:var(--t-ui); color:var(--color-text-primary); }
     /* ---------- the labels, shelved (FAMILIES OF MEANING) ---------- */
     .label-index { margin:.4rem 0 .1rem; }
-    .label-index-go { font:inherit; font-size:.75rem; font-weight:600; color:var(--color-moss);
+    .label-index-go { font:inherit; font-size:var(--t-meta); font-weight:600; color:var(--color-moss);
       background:none; border:0; padding:0; cursor:pointer; text-align:left; }
     .label-index-go:hover { color:var(--color-canopy); text-decoration:underline; }
 
     /* The owner's door on a layer's own row, beside the labels door. It reads as
        the same kind of thing because it is: a way into what the places say. */
     .own-door { margin:.35rem 0 .1rem; }
-    .own-door-said { display:block; font-size:.72rem; color:var(--color-text-muted); }
+    .own-door-said { display:block; font-size:var(--t-label); color:var(--color-text-muted); }
     .own-door-body { margin:.45rem 0 .2rem; padding:.55rem .6rem; border-radius:var(--radius-md);
       background:var(--color-bg-alt); display:flex; flex-direction:column; gap:.45rem; }
-    .own-door-body .own-note { margin:0; font-size:.73rem; line-height:1.45; }
+    .own-door-body .own-note { margin:0; font-size:var(--t-label); line-height:1.45; }
     /* what it costs, said before the button rather than after */
     .own-door-cost { color:var(--color-text-muted); font-variant-numeric:tabular-nums; }
     .own-door-offer { display:flex; flex-direction:column; gap:.45rem; }
@@ -643,19 +650,19 @@
     .lx-sheet { width:min(40rem,100%); background:var(--color-surface);
       border-radius:var(--radius-lg); box-shadow:0 8px 30px rgba(42,36,26,.22); padding:1rem 1.25rem 1.5rem; }
     .lx-head { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
-    .lx-head h2 { margin:0; font-family:'Figtree',sans-serif; font-size:1.05rem; color:var(--color-text-primary); }
-    .lx-x { font:inherit; font-size:1rem; line-height:1; color:var(--color-text-muted);
+    .lx-head h2 { margin:0; font-family:'Figtree',sans-serif; font-size:var(--t-section); color:var(--color-text-primary); }
+    .lx-x { font:inherit; font-size:var(--t-body); line-height:1; color:var(--color-text-muted);
       background:none; border:0; cursor:pointer; padding:.2rem .3rem; }
     .lx-x:hover { color:var(--color-text-primary); }
-    .lx-sub { margin:.3rem 0 .9rem; font-size:.82rem; color:var(--color-text-secondary); }
+    .lx-sub { margin:.3rem 0 .9rem; font-size:var(--t-meta); color:var(--color-text-secondary); }
     .lx-family { margin-bottom:1rem; }
-    .lx-family h3 { margin:0 0 .35rem; font-family:'Figtree',sans-serif; font-size:.9rem;
+    .lx-family h3 { margin:0 0 .35rem; font-family:'Figtree',sans-serif; font-size:var(--t-ui);
       color:var(--color-text-primary); }
-    .lx-count { font-family:'DM Sans',sans-serif; font-weight:400; font-size:.72rem; color:var(--color-text-muted); }
+    .lx-count { font-family:'DM Sans',sans-serif; font-weight:400; font-size:var(--t-label); color:var(--color-text-muted); }
     .lx-tags { display:flex; flex-wrap:wrap; gap:.3rem; }
     /* the same chip the popups use, so a label looks the same wherever it is read */
-    .lx-tag { font:inherit; font-size:.74rem; padding:.15rem .5rem; background:var(--color-moss-tint);
-      color:var(--color-canopy); border-radius:4px; font-weight:500; border:1px solid transparent;
+    .lx-tag { font:inherit; font-size:var(--t-label); padding:.15rem .5rem; background:var(--color-moss-tint);
+      color:var(--color-canopy); border-radius:var(--radius-md); font-weight:500; border:1px solid transparent;
       cursor:pointer; transition:background .15s ease, border-color .15s ease; }
     .lx-tag:hover { border-color:var(--color-moss); }
     .lx-tag b { font-weight:600; opacity:.6; margin-left:.15rem; }
@@ -666,8 +673,8 @@
        the same quiet look it had as a label, because it is still first of all a
        thing to read; the pointer and the hover say it can be pressed, and the
        lit state says which one is doing the showing. */
-    .pop-tag { font:inherit; font-size:.74rem; padding:.15rem .5rem; background:var(--color-moss-tint);
-      color:var(--color-canopy); border-radius:4px; font-weight:500; border:1px solid transparent;
+    .pop-tag { font:inherit; font-size:var(--t-label); padding:.15rem .5rem; background:var(--color-moss-tint);
+      color:var(--color-canopy); border-radius:var(--radius-md); font-weight:500; border:1px solid transparent;
       cursor:pointer; transition:background .15s ease, border-color .15s ease; }
     .pop-tag:hover { border-color:var(--color-moss); }
     .pop-tag.on { background:var(--color-moss); color:#fff; border-color:var(--color-moss); }
@@ -681,7 +688,7 @@
     .atlas-tooltip .maplibregl-popup-tip { display:none; }
     .tt-name { font-family:'Figtree',sans-serif; font-weight:700; font-size:var(--t-ui); color:var(--color-text-primary); margin-bottom:.3rem; }
     .tt-crops { display:flex; flex-wrap:wrap; gap:.25rem; max-width:15rem; }
-    .tt-crop { font-size:.72rem; font-weight:500; padding:.1rem .4rem; border-radius:4px; color:#fff;
+    .tt-crop { font-size:var(--t-label); font-weight:500; padding:.1rem .4rem; border-radius:var(--radius-md); color:#fff;
       background:var(--c,#8a8f7a); white-space:nowrap; }
     .pop-note b { display:block; color:var(--color-canopy); font-family:'Figtree',sans-serif; }
     .pop-note span { color:var(--color-text-secondary); }
@@ -694,35 +701,35 @@
       background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg);
       padding:1.6rem 1.75rem; box-shadow:var(--shadow-sm); }
     @media (max-width:720px){ .credits-grid{ grid-template-columns:1fr; gap:1.5rem; } }
-    .credits-col h2 { display:flex; align-items:center; gap:.5rem; font-family:'Figtree',sans-serif; font-size:.72rem;
+    .credits-col h2 { display:flex; align-items:center; gap:.5rem; font-family:'Figtree',sans-serif; font-size:var(--t-label);
       font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--color-text-muted); margin:0 0 .8rem; }
     .credits-col h2 svg { width:15px; height:15px; color:var(--color-moss); }
     .loka-wordmark-link { display:inline-block; margin:0 0 .85rem; transition:opacity .15s ease; }
     .loka-wordmark-link:hover { opacity:.78; }
     .loka-wordmark { display:block; height:28px; width:auto; }
-    .cr-lede { font-size:.85rem; color:var(--color-text-secondary); margin:0 0 1.1rem; max-width:36ch; }
+    .cr-lede { font-size:var(--t-ui); color:var(--color-text-secondary); margin:0 0 1.1rem; max-width:36ch; }
     .cr-lede b { color:var(--color-text-primary); font-weight:600; }
     .cr-orgs { display:flex; flex-direction:column; gap:.9rem; }
     .cr-org { display:flex; align-items:center; gap:.7rem; }
-    .cr-org .cr-icon { width:34px; height:34px; border-radius:5px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; background:var(--color-moss-tint); color:var(--color-moss); }
+    .cr-org .cr-icon { width:34px; height:34px; border-radius:var(--radius-lg); flex:0 0 auto; display:flex; align-items:center; justify-content:center; background:var(--color-moss-tint); color:var(--color-moss); }
     .cr-org .cr-icon svg { width:18px; height:18px; }
-    .cr-org b { font-family:'Figtree',sans-serif; font-size:.92rem; color:var(--color-text-primary); font-weight:600; display:block; line-height:1.2; }
+    .cr-org b { font-family:'Figtree',sans-serif; font-size:var(--t-control); color:var(--color-text-primary); font-weight:600; display:block; line-height:1.2; }
     .cr-org span { font-size:var(--t-meta); color:var(--color-text-secondary); }
     #data-credits { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:.55rem .9rem; }
     @media (max-width:520px){ #data-credits{ grid-template-columns:1fr; } }
-    #data-credits li { display:flex; flex-direction:column; font-size:.8rem; line-height:1.3; }
+    #data-credits li { display:flex; flex-direction:column; font-size:var(--t-meta); line-height:1.3; }
     #data-credits .cr-name { font-weight:600; color:var(--color-text-primary); }
-    #data-credits .cr-note { color:var(--color-text-secondary); font-size:.75rem; }
+    #data-credits .cr-note { color:var(--color-text-secondary); font-size:var(--t-label); }
     #data-credits .cr-lic { color:var(--color-text-muted); font-size:var(--t-meta); letter-spacing:.02em; }
     /* layers contributed by collaborating orgs */
     #contrib-credits { margin-top:1.1rem; }
     .contrib-head { font-family:'Figtree',sans-serif; font-size:var(--t-label); font-weight:600; letter-spacing:.1em;
       text-transform:uppercase; color:var(--color-text-muted); margin:0 0 .5rem; }
     #contrib-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.4rem; }
-    #contrib-list li { font-size:.8rem; line-height:1.35; }
+    #contrib-list li { font-size:var(--t-meta); line-height:1.35; }
     #contrib-list .cr-name { font-weight:600; color:var(--color-text-primary); }
     #contrib-list .cr-by { color:var(--color-text-secondary); }
-    .credits-foot { margin-top:1rem; font-size:.78rem; color:var(--color-text-muted); display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+    .credits-foot { margin-top:1rem; font-size:var(--t-meta); color:var(--color-text-muted); display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
 
     /* ---- app home: instance gallery ---- */
     .atlas-home { width:var(--container); margin:0 auto 2.5rem; }
@@ -743,11 +750,11 @@
     .home-row h2 { grid-column:1; margin:0; font-size:var(--t-section); font-weight:600; line-height:1.25;
       transition:color .15s ease; }
     a.home-row:hover h2 { color:var(--color-canopy); }
-    .home-row p { grid-column:1; margin:0; font-size:.9rem; color:var(--color-text-secondary); max-width:62ch; }
+    .home-row p { grid-column:1; margin:0; font-size:var(--t-ui); color:var(--color-text-secondary); max-width:62ch; }
     .home-row .feat { margin-left:.6rem; font-family:'Figtree',sans-serif; font-size:var(--t-label);
       font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--color-rust-deep);
       vertical-align:.12em; white-space:nowrap; }
-    .home-row .go { grid-column:2; grid-row:1 / span 2; align-self:center; font-size:1.15rem;
+    .home-row .go { grid-column:2; grid-row:1 / span 2; align-self:center; font-size:var(--t-section);
       color:var(--color-text-muted); transition:transform .15s ease, color .15s ease; }
     a.home-row:hover .go { color:var(--color-moss); transform:translateX(3px); }
     @media (prefers-reduced-motion:reduce) {
@@ -761,13 +768,13 @@
       background:var(--color-moss-tint); border:1px solid var(--color-border); border-radius:var(--radius-lg);
       padding:1.15rem 1.4rem; }
     .cta-inner b { display:block; font-family:'Figtree',sans-serif; font-weight:600; color:var(--color-text-primary); }
-    .cta-inner span { font-size:.9rem; color:var(--color-text-secondary); }
+    .cta-inner span { font-size:var(--t-ui); color:var(--color-text-secondary); }
     .cta-btn { flex:0 0 auto; display:inline-block; padding:.55rem 1.1rem; border-radius:var(--radius-md);
-      background:var(--color-moss); color:#fff; font-weight:600; font-size:.9rem; }
+      background:var(--color-moss); color:#fff; font-weight:600; font-size:var(--t-ui); }
     .cta-btn:hover { background:var(--color-canopy); color:#fff; text-decoration:none; }
 
     footer.site { border-top:1px solid var(--color-divider); background:var(--color-bg-alt); }
-    .foot-inner { width:var(--container); margin:0 auto; padding:1.5rem 0; color:var(--color-text-secondary); font-size:.875rem; }
+    .foot-inner { width:var(--container); margin:0 auto; padding:1.5rem 0; color:var(--color-text-secondary); font-size:var(--t-ui); }
 
     /* ?embed=1 — the atlas inside someone else's frame (the wizard's preview).
        Its own identity and map stay; loka.place's furniture goes. */
@@ -796,12 +803,12 @@
       .ctl-switch.small { width:30px; height:18px; }
       .ctl-switch.small::after { width:14px; height:14px; }
       .ctl-toggle input:checked + .ctl-switch.small::after { transform:translateX(12px); }
-      .key-tname { font-size:.85rem; }
+      .key-tname { font-size:var(--t-ui); }
       .ctl-sub-chev { min-width:40px; min-height:40px; align-items:center; justify-content:center; }
       .ctl-group-head { padding:.75rem .1rem; }
       .ctl-search-box { min-height:44px; }
       .bm-btn { padding:.6rem .5rem; }
-      .crop-chip { padding:.4rem .6rem; font-size:.78rem; }
+      .crop-chip { padding:.4rem .6rem; font-size:var(--t-meta); }
       .panel-collapse { min-width:40px; min-height:40px; }
     }
 
@@ -840,14 +847,14 @@
          a layer only scrolls the sheet — the map container never resizes → no map "move". */
       .atlas-panel {
         position:relative; inset:auto; width:auto; max-width:none;
-        flex:0 0 46%; max-height:46%; min-height:0; border-radius:6px 6px 0 0;
+        flex:0 0 46%; max-height:46%; min-height:0; border-radius:var(--radius-lg) var(--radius-lg) 0 0;
         box-shadow:0 -2px 12px rgba(42,36,26,.14);
         padding-bottom:env(safe-area-inset-bottom);
       }
       .atlas-panel #atlas-controls { flex:1 1 auto; min-height:0; }
       .panel-head { position:relative; cursor:pointer; padding-top:1.05rem; }
       .panel-head::before { content:''; position:absolute; top:7px; left:50%; transform:translateX(-50%);
-        width:34px; height:4px; border-radius:2px; background:var(--color-border); }
+        width:34px; height:4px; border-radius:var(--radius-pill); background:var(--color-border); }
       .panel-collapse { display:inline-flex; transition:transform .2s cubic-bezier(.25,1,.5,1); }
       .atlas-panel.collapsed { flex:0 0 auto; max-height:none; }
       .atlas-panel.collapsed #atlas-controls { display:none; }

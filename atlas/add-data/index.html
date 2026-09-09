@@ -37,7 +37,8 @@
       --t-ui:.875rem; --t-meta:.78rem; --t-label:.72rem;
       --shadow-md:0 1px 4px rgba(42,36,26,.10);
       --shadow-lg:0 2px 12px rgba(42,36,26,.12);
-      --radius-md:.25rem; --radius-lg:.375rem;
+      /* corners: xs is for a shape under 16px, where md would read as a circle */
+      --radius-xs:.125rem; --radius-md:.25rem; --radius-lg:.375rem; --radius-pill:999px;
     }
     * { box-sizing:border-box; }
     body { margin:0; background:var(--color-bg); color:var(--color-text-primary);
@@ -46,7 +47,7 @@
     h1,h2,h3 { font-family:'Figtree',sans-serif; letter-spacing:-.01em; margin:0; text-wrap:balance; }
     button { font:inherit; }
     [hidden] { display:none !important; }
-    :focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:4px; }
+    :focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:var(--radius-md); }
     a { color:var(--color-canopy); }
 
     /* the bar names the atlas being changed, and is the way back to it */
@@ -80,7 +81,7 @@
     label.f > input, label.f > select, label.f > textarea,
     .f > input, .f > select, .f > textarea { flex:1 0 100%; margin-top:.2rem; }
     input, select, textarea { font:inherit; font-size:var(--t-body); font-weight:400;
-      padding:.6rem .7rem; border:1px solid var(--color-border); border-radius:4px;
+      padding:.6rem .7rem; border:1px solid var(--color-border); border-radius:var(--radius-md);
       background:var(--color-surface); color:var(--color-text-primary); width:100%; min-height:2.75rem; }
     .msg { margin-top:.9rem; padding:.6rem .8rem; border-radius:var(--radius-md); font-size:var(--t-ui); }
     .msg.err { background:var(--color-rust-tint); color:var(--color-rust-deep); }
