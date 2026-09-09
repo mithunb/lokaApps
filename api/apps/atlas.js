@@ -3600,12 +3600,20 @@ function commitLayer({ importId, dataset }, who) {
         ? (session.replacingAddedAt || Date.now()) : undefined;
     }
     if (session.patternsNone) frag.stanza.patternsNone = true;
+    /* Merge, so a name an owner gave some other key survives — but a question's
+       own labels are replaced wholesale, not merged. A fresh set with fewer
+       questions would otherwise leave the old fourth question's name on the
+       layer, naming a key that no longer exists. */
+    const dropStale = (was, now) => {
+      const keep = {};
+      for (const k of Object.keys(was || {})) if (!/^pattern_\d+$/.test(k)) keep[k] = was[k];
+      return Object.assign(keep, now);
+    };
     if (session.keyLabels && Object.keys(session.keyLabels).length) {
-      // merge, never replace: a layer may already carry a name for another key
-      frag.stanza.keyLabels = Object.assign({}, frag.stanza.keyLabels || {}, session.keyLabels);
+      frag.stanza.keyLabels = dropStale(frag.stanza.keyLabels, session.keyLabels);
     }
     if (session.keyKinds && Object.keys(session.keyKinds).length) {
-      frag.stanza.keyKinds = Object.assign({}, frag.stanza.keyKinds || {}, session.keyKinds);
+      frag.stanza.keyKinds = dropStale(frag.stanza.keyKinds, session.keyKinds);
     }
     const out = imports.commitLayer(session.dataset, frag.stanza, frag.sourceFile,
       { type: 'FeatureCollection', features });

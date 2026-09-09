@@ -198,18 +198,35 @@ const FENCE_SHUT = '----- END PLACES -----';
 function inducePlaces(digest) {
   const texted = [];
   digest.entries.forEach((e) => { if (e.text) texted.push(e.text); });
-  let sample = texted, summary = '';
+  let sample = texted;
   if (texted.length > DIGEST_MAX) {
     sample = [];
     const stride = texted.length / DIGEST_MAX;
     for (let k = 0; k < DIGEST_MAX; k++) sample.push(texted[Math.floor(k * stride)]);
-    const repeated = [...digest.tagCounts.entries()]
-      .filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).slice(0, 40);
-    if (repeated.length) {
-      summary = 'Tags used more than once across all ' + texted.length + ' places: ' +
-        repeated.map(([t, n]) => t + ' (' + n + ')').join(', ') + '\n';
-    }
   }
+
+  /* What recurs, always — not only when the list had to be trimmed.
+
+     This summary existed to make up for sampling, so it was built only for a
+     set too big to show whole. The effect was backwards: a small atlas was told
+     LESS about itself than a large one, and had to notice what was common by
+     reading every line.
+
+     It cost a real question. Sixty-six places, and "nature" was on twenty of
+     them and "heritage" on fourteen — the second and third commonest things in
+     the data. The questions came back with kinds for culture, activities,
+     market, learning and civic, and no home at all for a park. A third of the
+     places were then filed somewhere wrong, one of them answering "Culture
+     Spot" and quoting the word "Nature" as its reason.
+
+     Counting is free and already done. Whoever is choosing the questions should
+     see it. */
+  const repeated = [...digest.tagCounts.entries()]
+    .filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).slice(0, 40);
+  const summary = repeated.length
+    ? 'Recurring words across all ' + texted.length + ' places, commonest first: ' +
+      repeated.map(([t, n]) => t + ' (' + n + ')').join(', ') + '\n'
+    : '';
   const lines = sample.map((t, k) => (k + 1) + '. ' + t).join('\n');
   return { text: summary + lines, listLength: sample.length, total: texted.length };
 }
@@ -472,6 +489,10 @@ async function induceQuestions({ digest, fields, title, callJSON, model }) {
     '- A kind must fit at least 3 of the places below, and no kind may fit more than about half of them.',
     '- A question is worth keeping even if it can only speak for some of the places. One that answers a fifth of them is a true answer about that fifth, and the map says so. Drop a question for being unsupported, never for being narrow.',
     '- Two questions must not be the same question in different words: if two sorts of fact would sort the places the same way, they are one question.',
+    /* The rule this data needed and did not have. Kinds were proposed for five
+       of the commonest groups and none for the second and third, so a third of
+       the places had nowhere honest to go and were filed somewhere wrong. */
+    '- If a question sorts places by something the recurring words above already name, its kinds must leave a home for the common ones. Where a word appears on many places and no kind would take them, either add a kind that does or ask a different question. Do not offer a question whose kinds have nowhere to put a large group.',
     '- Judge only by what the lines actually say — not by what such places usually are, and not by these instructions\' own examples.',
     '- Never use "other" as a kind name; places that fit nothing are handled separately.',
     colNames.length
@@ -634,6 +655,47 @@ async function answerQuestions({ digest, questions, title, callJSON, model }) {
       unread += 1;
     }
   }
+  /* A word cannot be the reason for two different answers to one question.
+
+     The check up to here proves a quoted word is really in the place's own
+     line. It cannot tell whether the word SUPPORTS the answer, and that gap let
+     a park be filed as "Culture Spot" quoting the word "Nature" — a real word,
+     on that place, arguing for something else entirely.
+
+     There is no way to judge aptness without asking the model again. But there
+     is one contradiction that counting alone can see: if the same word is
+     offered as the reason for two different kinds of the same question, it is
+     not evidence for either, whichever place it appears on. Those are dropped
+     everywhere, and an answer left with nothing behind it stops being an
+     answer — the same rule that already applies when no word survives.
+
+     Narrow on purpose. It catches a word used contradictorily, not a word used
+     wrongly once. Measured on the live Bengaluru layer: three such words across
+     four questions, "nature" among them. */
+  questions.forEach((q, n) => {
+    const kindsOf = new Map();
+    for (let i = 0; i < why[n].length; i++) {
+      const ans = out[n][i];
+      if (!ans || ans === 'other') continue;
+      for (const w of why[n][i]) {
+        const k = w.toLowerCase();
+        if (!kindsOf.has(k)) kindsOf.set(k, new Set());
+        kindsOf.get(k).add(ans);
+      }
+    }
+    const twoFaced = new Set();
+    for (const [w, kinds] of kindsOf) if (kinds.size > 1) twoFaced.add(w);
+    if (!twoFaced.size) return;
+    for (let i = 0; i < why[n].length; i++) {
+      if (!why[n][i].length) continue;
+      const left = why[n][i].filter((w) => !twoFaced.has(w.toLowerCase()));
+      if (left.length === why[n][i].length) continue;
+      why[n][i] = left;
+      // an answer nothing stands behind is not an answer, however it got there
+      if (!left.length && out[n][i] && out[n][i] !== 'other') out[n][i] = '';
+    }
+  });
+
   return { answers: out, why, batches, unread, trouble };
 }
 

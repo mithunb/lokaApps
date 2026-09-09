@@ -167,6 +167,11 @@
 .own-linkish:hover { color:var(--color-rust-deep); text-decoration:underline; }
 .own-linkish.danger { color:var(--color-rust-deep); }
 
+/* Asking for a different set of questions. Quiet, and below the sentence that
+   says what the current ones are — it is a way back, not an invitation. */
+.own-again { display:block; margin-top:.35rem; font-size:var(--t-meta); }
+.own-again:hover { color:var(--color-rust-deep); }
+
 .own-confirm {
   margin-top:.5rem; padding:.6rem; border-radius:var(--radius-md);
   background:var(--color-rust-tint);

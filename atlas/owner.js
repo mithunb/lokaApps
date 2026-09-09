@@ -250,11 +250,59 @@
         "Patterns found once \u2014 " + done.length +
         (done.length === 1 ? " question this data answers, now a key above."
                            : " questions this data answers, each now a key above.")));
+      /* A way back, for when the questions are wrong.
+
+         Settling the questions was right: an atlas somebody has linked to
+         should not change its keys under them, and adding places should not
+         reshuffle the map. But settling made a bad set permanent from inside
+         the product — one of these atlases asked "what kind of place is it?"
+         with no kind for a park, and a third of its places went somewhere
+         wrong with no way for their owner to say so.
+
+         Deliberate, and it says what it will cost: the keys change, and
+         anybody holding a link sees different ones. */
+      var again = el("button", "own-linkish own-again", "Ask different questions\u2026");
+      again.type = "button";
+      var sure = el("div", "own-confirm");
+      sure.hidden = true;
+      sure.appendChild(el("p", null,
+        "This reads your places again and looks for a fresh set of questions. " +
+        "The keys on this map will change, and anyone you have shared the link with " +
+        "will see the new ones. Your places and their words are untouched."));
+      var row = el("div", "own-row");
+      var no = el("button", "share-btn", "Keep these");
+      no.type = "button";
+      var yes = el("button", "share-btn danger", "Ask again");
+      yes.type = "button";
+      row.appendChild(no); row.appendChild(yes);
+      sure.appendChild(row);
+      again.onclick = function () { sure.hidden = false; again.hidden = true; no.focus(); };
+      no.onclick = function () { sure.hidden = true; again.hidden = false; };
+      yes.onclick = function () {
+        yes.disabled = no.disabled = true;
+        sure.replaceChildren(el("p", null, "Reading every place again\u2026"));
+        askQuestions(L, feats, true);
+      };
+      wrap.appendChild(again);
+      wrap.appendChild(sure);
       return;
     }
 
     var cols = wordColumns(feats);
     if (!cols.length) return;            // nothing written here to read
+    askQuestions(L, feats, false, wrap);
+  }
+
+  /* Read these places and put the answers on the layer.
+
+     `afresh` decides the one thing that matters here: whether the questions
+     this layer already settled on are handed back to be answered again, or
+     thrown away so a new set can be found. Everything else is the same either
+     way, which is why it is one function and not two. */
+  function askQuestions(L, feats, afresh, host) {
+    var cols = wordColumns(feats);
+    if (!cols.length) return;
+    var wrap = host || document.createElement("div");
 
     /* No press. The questions a place can answer are the same questions
        everywhere, so asking permission to ask them was ceremony — the reading
@@ -297,7 +345,7 @@
                  reading after new places are added answers the same questions
                  rather than inventing a fresh set — the keys on a map somebody
                  has linked to should not move under them. */
-              keepQuestions: settledQuestions(L),
+              keepQuestions: afresh ? [] : settledQuestions(L),
               title: (window.LokaAtlas.manifest && window.LokaAtlas.manifest.title) || "",
             } }).then(function (r) { return { r: r, rows: rows }; });
           })
@@ -385,6 +433,11 @@
     var out = rows.map(function (p) {
       var o = Object.assign({}, p);
       delete o._category;                 // the engine's own, re-derived on build
+      /* Every previous answer goes before the new ones are written. Without
+         this, a fresh set with fewer questions would leave the old fourth
+         question's column sitting on every place, answering a question nobody
+         is asking any more. */
+      Object.keys(o).forEach(function (k) { if (/^pattern_/.test(k)) delete o[k]; });
       return o;
     });
     questions.forEach(function (q, n) {
