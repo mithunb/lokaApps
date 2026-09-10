@@ -232,8 +232,21 @@
       box-shadow:inset 0 0 0 1px #82907f; position:relative;
       transition:background .2s cubic-bezier(.25,1,.5,1), box-shadow .2s ease; }
     .ctl-switch::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#FFFFFF; box-shadow:0 1px 2px rgba(42,36,26,.25); transition:transform .2s cubic-bezier(.25,1,.5,1); }
-    .ctl-toggle input:checked + .ctl-switch { background:var(--color-moss); box-shadow:none; }
-    .ctl-toggle input:checked + .ctl-switch::after { transform:translateX(14px); }
+    /* A subgroup's master switch is a switch. It had rules for being part-on
+       and for being focused but none at all for being ON, so a subgroup whose
+       layers were all showing sat there grey — the state underneath was right
+       the whole time, and only the paint was missing. Reported as "I toggle
+       Health facilities and the parent doesn't toggle", which is exactly what
+       it looks like from outside.
+
+       Named here rather than given its own copy, so the two switches cannot
+       drift again. The part-on rule below still wins where both apply: a
+       part-on master is checked AND indeterminate at once, and that rule comes
+       later at the same weight. */
+    .ctl-toggle input:checked + .ctl-switch,
+    .ctl-sub-toggle input:checked + .ctl-switch { background:var(--color-moss); box-shadow:none; }
+    .ctl-toggle input:checked + .ctl-switch::after,
+    .ctl-sub-toggle input:checked + .ctl-switch::after { transform:translateX(14px); }
     .ctl-toggle input:focus-visible + .ctl-switch { outline:2px solid var(--color-moss); outline-offset:2px; }
     .ctl-name { font-size:var(--t-ui); font-weight:600; line-height:1.25; }
     .ctl-info { margin-left:auto; flex:0 0 auto; width:16px; height:16px; color:var(--color-text-muted);
@@ -803,7 +816,8 @@
       .ctl-toggle, .ctl-sub-toggle { min-height:44px; }
       .ctl-switch { width:38px; height:22px; }
       .ctl-switch::after { width:18px; height:18px; }
-      .ctl-toggle input:checked + .ctl-switch::after { transform:translateX(16px); }
+      .ctl-toggle input:checked + .ctl-switch::after,
+      .ctl-sub-toggle input:checked + .ctl-switch::after { transform:translateX(16px); }
       .ctl-sub-toggle input:indeterminate + .ctl-switch::after { transform:translateX(8px); }
       /* key switches keep their lower rank at thumb sizes too (the whole
          44px row is the tap target, so the pill can stay small) */
