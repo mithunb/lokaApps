@@ -90,6 +90,56 @@
 }
 .own-fold .own-remove { margin-top:.15rem; }
 
+/* ---------- renaming, where the name is ----------
+   The pencil is quiet until the row is under a pointer, because a visitor's eye
+   should meet a name and a switch, not a tool. Its touch area grows to the
+   RIGHT of the glyph and never back over the name: the name is the visibility
+   switch's own label, and eating part of it would make the switch unreliable. */
+.own-pencil {
+  flex:0 0 auto; margin-left:.3rem; padding:.15rem; border:0; background:none;
+  cursor:pointer; color:var(--color-text-muted); display:inline-flex;
+  opacity:0; transition:opacity .12s;
+}
+.ctl-row:hover .own-pencil, .own-pencil:focus-visible { opacity:1; }
+.own-pencil:hover { color:var(--color-canopy); }
+.own-pencil:focus-visible { outline:2px solid var(--color-moss); outline-offset:1px; }
+.own-rename {
+  flex:1 1 auto; min-width:0; font:inherit; font-size:var(--t-ui);
+  color:var(--color-text-primary); padding:.1rem .3rem;
+  border:1px solid var(--color-moss); border-radius:var(--radius-md);
+  background:var(--color-surface);
+}
+.own-rename:focus { outline:2px solid var(--color-moss); outline-offset:1px; }
+
+/* ---------- what a place's card says ----------
+   Ticks, not switches. A switch in this column already means two things — show
+   this layer, colour it by this — and a third meaning in the same shape is how
+   a reader stops trusting any of them. A tick is a list you are choosing from. */
+.own-cards { display:flex; flex-direction:column; gap:.1rem; margin-top:.15rem; }
+.own-card { gap:.5rem; padding:.2rem 0; min-height:32px; align-items:flex-start; }
+.own-card-tick {
+  flex:0 0 auto; width:15px; height:15px; margin-top:.1rem;
+  border:1px solid var(--color-border); border-radius:var(--radius-xs);
+  background:var(--color-surface); position:relative;
+}
+.own-card input:checked + .own-card-tick {
+  background:var(--color-moss); border-color:var(--color-moss);
+}
+.own-card input:checked + .own-card-tick::after {
+  content:''; position:absolute; left:4px; top:1px; width:5px; height:9px;
+  border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg);
+}
+.own-card input:focus-visible + .own-card-tick {
+  outline:2px solid var(--color-moss); outline-offset:2px;
+}
+.own-card-t { min-width:0; display:flex; flex-direction:column; }
+.own-card-n { font-size:var(--t-meta); color:var(--color-text-primary); }
+/* one real entry, so a person chooses between things and not between names */
+.own-card-eg {
+  font-size:var(--t-label); color:var(--color-text-muted);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+
 /* the questions, one switch each — the same switch the map's own keys use, so
    turning one off here reads as the same gesture as turning a key off there */
 .own-qs { display:flex; flex-direction:column; gap:.15rem; margin-top:.1rem; }

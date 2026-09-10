@@ -201,18 +201,26 @@
        Rule in DESIGN.md. */
     .ctl-group { margin-top:1.05rem; }
     .ctl-group:first-of-type { margin-top:.45rem; }
-    .ctl-group-head { width:100%; display:flex; align-items:baseline; gap:.4rem; text-align:left;
-      background:none; border:none; border-bottom:1px solid var(--color-divider); cursor:pointer;
-      padding:.15rem .1rem .3rem; margin-bottom:.15rem; font-family:'Figtree',sans-serif;
-      font-size:var(--t-label); font-weight:700; letter-spacing:.08em; color:var(--color-text-secondary); text-transform:uppercase; }
-    .ctl-group-head .gcount { font-family:'DM Sans',sans-serif; font-size:var(--t-label); font-weight:400;
-      letter-spacing:0; color:var(--color-text-muted); font-variant-numeric:tabular-nums; }
-    .ctl-group-head .chev { margin-left:auto; align-self:center; display:inline-flex;
-      transition:transform .18s cubic-bezier(.25,1,.5,1); color:var(--color-text-muted); }
-    .ctl-group-head .chev svg { width:16px; height:16px; }
-    .ctl-group.collapsed .chev { transform:rotate(-90deg); }
-    .ctl-group.collapsed .ctl-group-body { display:none; }
-    .ctl-group-body { padding-bottom:.35rem; }
+    /* A heading over rows that never hide. It had a chevron and a count when the
+       group could shut; both are gone with the fold, and what is left is one
+       stamp doing one job.
+
+       It also stops competing with the other two. Three uppercase stamps used to
+       sit in this panel at the same size in the same ink, separated only by
+       letter-spacing — the panel's own head, this, and a subgroup's name — which
+       is three levels of nesting signalled by tracking alone. The head keeps the
+       stamp; this is a title in sentence case at the rung above it, so the two
+       read as different KINDS of thing rather than as two settings of one.
+
+       It sticks as the list scrolls, so a reader who has scrolled into a long
+       group can still see which one they are in. */
+    .ctl-group-head { margin:0 0 .375rem; padding:0 .1rem .25rem;
+      border-bottom:1px solid var(--color-divider);
+      position:sticky; top:0; z-index:1; background:var(--color-surface);
+      font-family:'Figtree',sans-serif; font-size:var(--t-meta); font-weight:600;
+      letter-spacing:0; text-transform:none; color:var(--color-text-primary); }
+    .ctl-group + .ctl-group .ctl-group-head { margin-top:1rem; }
+    .ctl-group-body { padding-bottom:.375rem; }
 
     /* Rows: one skeleton — switch, name, anything else pushed to the row's
        end. Rank and state each move two of size, weight and colour at once
@@ -320,6 +328,35 @@
        the panels quietest voice: the label rung, muted ink, indented to the
        switch it belongs to so it reads as a note on that row rather than a new
        one. No colour, no icon — it is a caveat, not a warning. */
+    /* A key is a tick. The layer above it is a switch, and the two must not be
+       one shape doing two jobs: a switch is a thing on or off by itself, a tick
+       is a thing chosen from a list — and five can be ticked at once.
+
+       It lives here and not in owner.css because owner.css is fetched only once
+       the API has confirmed somebody may edit. A visitor never downloads a byte
+       of it, and a visitor is who these ticks are for.
+
+       The ring is #82907f rather than the ink-at-14% the owner's own tick list
+       uses: that comes out near 1.3 against white, which is a hint rather than a
+       control. This is 3.36, which is what a thing you can click should be. */
+    .key-toggle { display:flex; align-items:center; gap:.5rem; cursor:pointer;
+      padding:.1rem 0; min-height:24px; }
+    .key-toggle input { position:absolute; opacity:0; width:0; height:0; }
+    .key-tick { flex:0 0 auto; width:16px; height:16px; position:relative;
+      border:1px solid #82907f; border-radius:var(--radius-xs);
+      background:var(--color-surface); transition:background .2s, border-color .2s; }
+    .key-toggle input:checked + .key-tick {
+      background:var(--color-moss); border-color:var(--color-moss); }
+    .key-toggle input:checked + .key-tick::after {
+      content:''; position:absolute; left:5px; top:1px; width:4px; height:9px;
+      border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg); }
+    .key-toggle input:focus-visible + .key-tick {
+      outline:2px solid var(--color-moss); outline-offset:2px; }
+    .key-toggle:hover .key-tick { border-color:var(--color-moss); }
+    /* ticked, on a layer nobody is showing: the choice holds, the voice drops */
+    .key-toggle.key-held .key-tname { color:var(--color-text-muted); font-weight:400; }
+    @media (prefers-reduced-motion:reduce) { .key-tick { transition:none; } }
+
     .key-flatwrap { display:block; }
     .key-flat { font-size:var(--t-label); color:var(--color-text-muted); line-height:1.4;
       padding-left:2.125rem; margin:-.05rem 0 .25rem; }
@@ -371,6 +408,15 @@
     .key-list .leg-why + .key-toggle {
       margin-top:.6rem; padding-top:.45rem; border-top:1px solid var(--color-divider);
     }
+    /* The kinds of the key that is on, two to a row where the names allow it.
+       A plain column of them is 96px longer on this atlas (MEASURED in the
+       drawing), and listing every key at rest already spends height — so the
+       legend earns some of it back. Two columns only: at three the names clip,
+       and a legend that truncates a kind cannot decode the map.
+
+       The switch is what decides, not a breakpoint: js measures the two longest
+       names and adds .leg-two only when both fit. */
+    .leg-grid.leg-two { display:grid; grid-template-columns:1fr 1fr; column-gap:.5rem; }
     .leg-openable { cursor:pointer; border-radius:var(--radius-md); }
     .leg-openable:hover { background:var(--color-bg-alt); }
     .leg-openable[aria-expanded="true"] { background:var(--color-bg-alt); }

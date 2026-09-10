@@ -3885,6 +3885,7 @@ router.post('/layers/relabel', (req, res) => {
     label: typeof b.label === 'string' ? b.label : undefined,
     titleColumn: typeof b.titleColumn === 'string' ? b.titleColumn : undefined,
     hiddenKeys: Array.isArray(b.hiddenKeys) ? b.hiddenKeys : undefined,
+    cardColumns: Array.isArray(b.cardColumns) ? b.cardColumns : undefined,
   });
   if (!out) return res.status(404).json({ error: 'layer not found' });
   res.json(Object.assign({ ok: true }, out));

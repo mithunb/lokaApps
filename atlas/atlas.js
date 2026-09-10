@@ -1581,7 +1581,7 @@
     // under ("Show key"). It says "keys" for that reason, not "colourings":
     // colour is not what tells two keys apart — each key wears its own shape,
     // and colours repeat between them.
-    var KEY_STACK_NOTE = "The map can show five keys at once, and all five are on. Turn one off to add {name}.";
+    var KEY_STACK_NOTE = "The map can mark places by five things at once, and five are ticked. Untick one to add {name}.";
   var SVG_NS = "http://www.w3.org/2000/svg";
   function markPathD(shape, cx, cy) {
     if (shape === "square") { var s = 10.6 / 2; return "M" + (cx - s) + " " + (cy - s) + "h" + (2 * s) + "v" + (2 * s) + "h" + (-2 * s) + "z"; }
@@ -1980,7 +1980,7 @@
     var box = L._foldEl;
     if (!box || !box.isConnected) return;
     var st = keyState[L.id];
-    var n = (st && st.active.length && L._visible !== false) ? foldedCount(L) : 0;
+    var n = (st && st.active.length && L._visible !== false) ? foldedCount(L) : 0;   // no pins, nothing to say
     if (!n) { box.hidden = true; box.textContent = ""; return; }
     box.textContent = n === 1
       ? "1 place here sits inside a numbered disc — zoom in to see it."
@@ -2006,8 +2006,11 @@
     // (circles, squares, triangles…), and colours repeat between keys, so a
     // heading promising colour described the wrong half of the system. The
     // legend below already names both — "categories — circles".
-    wrap.setAttribute("aria-label", "Show key");
-    wrap.appendChild(el("span", "key-chips-lbl", "Show key"));
+    /* The caption had to change with the control. "Show key" described a switch
+       that revealed something; these are a list you mark places by, and up to
+       five can be marked at once. */
+    wrap.setAttribute("aria-label", "Mark each place by");
+    wrap.appendChild(el("span", "key-chips-lbl", "Mark each place by"));
     /* Two ways of finding things live side by side in this panel, and until now
        neither said which it was. A key COLOURS the map; a word you tap NARROWS
        it. One sentence, said once per layer, so a reader meeting "Culture" as a
@@ -2027,12 +2030,25 @@
       /* A flat question needs two lines, not one, so it gets a wrapper. Every
          other key keeps the single row it always had. */
       var host = opt.flat ? el("div", "key-flatwrap") : null;
-      var lab = el("label", "ctl-toggle key-toggle");
+      /* A tick, not a switch, and the difference is the point.
+
+         A switch is the mark of a thing that is on or off by itself: show these
+         places, or hide them. A tick is the mark of a thing CHOSEN FROM A LIST —
+         mark each place by this, and by up to four others at once. Wearing one
+         shape for both meanings, a switch above and switches indented under it,
+         asked a reader to learn from context that the indented ones meant
+         something else entirely. A 16px square beside a 32×18 pill says it
+         without a word.
+
+         Not the key's own shape, tempting as that was: a key is given its shape
+         by its place among the keys that are ON (see ROW_SHAPES over
+         activeKeyOptions), so a key nobody has ticked has no shape to wear. */
+      var lab = el("label", "key-toggle");
       var cb = el("input"); cb.type = "checkbox";
       cb.checked = st.active.indexOf(opt.col) >= 0;
       cb._col = opt.col;
       lab.appendChild(cb);
-      lab.appendChild(el("span", "ctl-switch small"));
+      lab.appendChild(el("span", "key-tick"));
       lab.appendChild(el("span", "key-tname", esc(opt.label)));
       /* A question says what share of the places it can answer. Without it a
          reader turns on "How old is it?" and meets a map that is mostly grey,
@@ -2063,6 +2079,18 @@
         host.appendChild(why);
       }
       cb.onchange = function () {
+        /* Turning a colouring on turns its layer on with it. The keys are listed
+           while the layer is off, so a reader can reach one from cold — and
+           asking them to find the layer's own switch first would make the listing
+           pointless: they would still need two acts, and the second one is the
+           one nobody thinks of. Turning a key OFF leaves the layer alone; it is
+           not a way of hiding places. */
+        if (cb.checked && L._visible === false) {
+          setLayerVisible(L, true);
+          if (L._cb) L._cb.checked = true;
+          if (L._row) L._row.classList.remove("off");
+          if (L._onVisible) L._onVisible();
+        }
         var i = st.active.indexOf(opt.col);
         if (cb.checked && i < 0) {
           if (st.active.length >= KEY_STACK_CAP) {
@@ -2096,9 +2124,20 @@
          what a switch had just added meant hunting for its header. The header is
          gone with the move: the switch already carries that name, and every kind
          row already wears the key's shape. */
-      if (cb.checked) {
+      /* A ticked key on a layer nobody is showing keeps its tick and loses its
+         legend. Listing the keys while the layer is off — which is the whole of
+         this panel — meant the kinds came with them, so hiding a layer left a
+         legend on screen decoding marks that were not on the map. A legend for
+         nothing is worse than no legend: it is a lie about what you are seeing.
+
+         The choice survives, because it is a choice and not a picture, and the
+         name drops to the off voice so the row reads "chosen, not showing"
+         rather than "on". Two channels, the same two the layer's own row uses
+         when it is off. */
+      if (cb.checked && L._visible !== false) {
         keyKindRows(L, opt).forEach(function (r) { list.appendChild(r); });
       }
+      if (cb.checked && L._visible === false) lab.classList.add("key-held");
     });
     wrap.appendChild(list);
     wrap.appendChild(note);
@@ -3421,6 +3460,12 @@
         groupList.push({ id: gid, label: GROUP_LABELS[gid] || gid.charAt(0).toUpperCase() + gid.slice(1).replace(/[-_]/g, " ") });
       }
     });
+    /* Contributed data leads the list. It is why somebody opened this atlas —
+       the base map is context, and a reader who has to scroll past two groups of
+       context to reach the places is being shown the furniture first. */
+    groupList.sort(function (a, b) {
+      return (b.id === "userdata" ? 1 : 0) - (a.id === "userdata" ? 1 : 0);
+    });
     var groupsShown = 0, layersShown = 0;
     groupList.forEach(function (g) {
       var layers = MANIFEST.layers.filter(function (L) {
@@ -3428,27 +3473,18 @@
       });
       if (!layers.length) return;
       groupsShown++; layersShown += layers.length;
-      // Base is expanded on load, and so is any group holding data somebody
-      // contributed — that is the whole reason they opened this atlas, and its
-      // colour keys live inside that layer's row. Folding it away by default hid
-      // the keys completely: they were built, correct, and behind a shut fold.
-      // Everything else still collapses so the panel isn't overwhelming. The
-      // engine owns this — a manifest's per-group `open` flag is ignored here.
-      var mine = layers.some(function (L) { return L.userLayer; });
-      var open = g.id === "base" || mine;
-      var sec = el("section", "ctl-group" + (open ? "" : " collapsed"));
-      var head = el("button", "ctl-group-head");
-      // the count stays on the head, so a closed group still says how much it holds
-      head.innerHTML = '<span>' + esc(g.label) + '</span>' +
-        '<span class="gcount">· ' + layers.length + '</span>' +
-        '<span class="chev">' + ICONS.chevron + '</span>';
-      head.setAttribute("aria-label",
-        g.label + " — " + layers.length + (layers.length === 1 ? " layer" : " layers"));
-      head.setAttribute("aria-expanded", String(open));
-      head.onclick = function () {
-        var closed = sec.classList.toggle("collapsed");
-        head.setAttribute("aria-expanded", String(!closed));
-      };
+      /* A heading over rows that never hide has nothing to fold and nothing to
+         summarise, so it is a heading and not a button.
+
+         Groups used to shut, and the rule for which ones stayed open had already
+         been patched once: folding a contributed group away hid its colour keys
+         completely — built, correct, and behind a shut fold. Nothing folds now,
+         which is the whole of D: a visitor never has to act on a control to
+         discover that a control exists. The count goes with the chevron, because
+         its only job was to tell you what a shut group held. */
+      var sec = el("section", "ctl-group");
+      var head = el("h3", "ctl-group-head");
+      head.textContent = g.label;
       sec.appendChild(head);
       var body = el("div", "ctl-group-body");
 
@@ -3462,8 +3498,16 @@
           order.push({ layer: L });
         }
       });
+      /* A subgroup around ONE layer is two switches for one thing. On this atlas
+         that is "Facilities" holding "Health facilities" and nothing else, and it
+         cost a real confusion: the master switch was reported as broken when it
+         was only unpainted. A master over a single row decides nothing, so the
+         layer is drawn on its own and the subgroup's name is not said twice. */
       order.forEach(function (o) {
-        body.appendChild(o.layer ? layerRow(o.layer) : subGroupSection(subMap[o.sub]));
+        if (o.layer) { body.appendChild(layerRow(o.layer)); return; }
+        var sg = subMap[o.sub];
+        if (sg.layers.length < 2) { body.appendChild(layerRow(sg.layers[0])); return; }
+        body.appendChild(subGroupSection(sg));
       });
 
       sec.appendChild(body);
@@ -3493,6 +3537,7 @@
     var head = el("div", "ctl-sub-head");
     var lab = el("label", "ctl-sub-toggle");
     var master = el("input"); master.type = "checkbox";
+    master.setAttribute("role", "switch");   // the same order of control as a layer's own
     var sw = el("span", "ctl-switch");
     var name = el("span", "ctl-sub-name", esc(sg.name));
     lab.appendChild(master); lab.appendChild(sw); lab.appendChild(name);
@@ -3532,6 +3577,11 @@
     var row = el("div", "ctl-row");
     var top = el("label", "ctl-toggle");
     var cb = el("input"); cb.type = "checkbox"; cb.checked = on(L);
+    /* In speech the two controls were still one: everything here is a checkbox
+       to the browser, so somebody listening heard "checkbox" for the layer and
+       "checkbox" for each key — the very sameness the tick was drawn to end.
+       The layer says what it is. */
+    cb.setAttribute("role", "switch");
     var sw = el("span", "ctl-switch");
     var name = el("span", "ctl-name", esc(L.label));
     top.appendChild(cb); top.appendChild(sw); top.appendChild(name);
@@ -3546,6 +3596,10 @@
     row.appendChild(extra);
     L._extra = extra;
     L._cb = cb; L._row = row;
+    /* A subgroup master watches its children through this. A key switch can now
+       turn this layer on from under it, so the master has to hear about that too
+       or it goes back to showing the wrong thing. */
+    L._onVisible = onChange || null;
 
     cb.onchange = function () {
       setLayerVisible(L, cb.checked);
@@ -3609,7 +3663,23 @@
   function renderExtra(L) {
     var box = L._extra; if (!box) return;
     box.innerHTML = "";
+
+    /* The keys are listed even while the layer is off, and this is the whole of
+       D. They used to exist only under a layer that was showing, which meant a
+       visitor could not find out that colouring was ON OFFER until they had
+       already turned something on — the options were hidden behind the very act
+       of exploring. Listing them costs height at rest and buys the thing back:
+       every choice a reader might want is on the first level, and the only thing
+       left behind a second act is the words that gathered a kind.
+
+       A key switch turns its layer on with it (see buildKeyToggles), so flipping
+       one from cold is a single act rather than two. */
+    if (L._keyOptions && keyState[L.id]) {
+      box.appendChild(buildKeyToggles(L));
+      updateFoldNote(L);
+    }
     if (!L._visible) return;
+
 
     // crop selector
     if (L.type === "categories") {
@@ -3631,11 +3701,6 @@
       box.appendChild(chips);
     }
 
-    // colour keys for contributed marker layers (see MORE THAN ONE KEY)
-    if (L._keyOptions && keyState[L.id]) {
-      box.appendChild(buildKeyToggles(L));
-      updateFoldNote(L);   // the block is attached now — say straight away what is folded
-    }
 
     // the way into this layer's labels, when it has more of them than a key
     // could ever show (see FAMILIES OF MEANING)

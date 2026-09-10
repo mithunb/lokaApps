@@ -15,6 +15,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { DATA_DIR } from './registry.js';
 import { DATASETS_ROOT, PRIVATE_ROOT } from './jobs.js';
+import { detectDelimiter } from '../fragment.js';
 
 const IMPORTS_DIR = path.join(DATA_DIR, 'imports');
 const TTL_MS = 24 * 3600 * 1000;
@@ -308,7 +309,21 @@ export function dropSearchIndex(datasetId, layerId) {
    The name is written in the three places a layer keeps it, because they had
    already drifted apart once: the stanza's own label, the spec the next build
    starts from, and the single-entry legend a marker layer carries. */
-export function relabelLayer(datasetId, layerId, { label, titleColumn, hiddenKeys } = {}) {
+/* What a column is called on a card, and how it is drawn. The same two rules
+   buildFragment applies when it first makes a layer — a name with its
+   underscores opened out, and a ';'-separated column drawn as chips rather than
+   as a line of text. Kept here rather than imported because fragment's version
+   is not exported, and kept SHORT for the same reason: two rules, both visible. */
+function cardFieldFor(col, values, imageColumn) {
+  const label = String(col).replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
+    .replace(/^\w/, (c) => c.toUpperCase()).slice(0, 40);
+  const f = { label, property: String(col) };
+  if (col === imageColumn) f.type = 'image';
+  else if (detectDelimiter(values) === ';') f.type = 'tags';
+  return f;
+}
+
+export function relabelLayer(datasetId, layerId, { label, titleColumn, hiddenKeys, cardColumns } = {}) {
   const m = readManifest(datasetId);
   if (!m || !m.local) return null;
   const layer = (m.local.layers || []).find((l) => l.id === layerId);
@@ -333,6 +348,40 @@ export function relabelLayer(datasetId, layerId, { label, titleColumn, hiddenKey
     }
   }
 
+  /* Which of a place's columns show on its card, chosen deliberately rather
+     than guessed at. The builder picks five when a layer is first made; this is
+     an owner saying which five, or three, or eight.
+
+     Read from the layer's own places rather than trusted from the request: a
+     column that is not there cannot be shown, and how a column is DRAWN — chips
+     or a line or a picture — is a fact about its contents, not something a
+     browser should get to assert. A question's own answers stay out, as they
+     are everywhere else: they belong to the key. */
+  if (Array.isArray(cardColumns)) {
+    let rows = [];
+    try {
+      const gj = JSON.parse(fs.readFileSync(path.join(m.dir, layer.source), 'utf8'));
+      rows = (gj.features || []).map((f) => f.properties || {});
+    } catch { /* the file is unreadable; fall through and change nothing */ }
+    if (rows.length) {
+      const has = new Set(Object.keys(rows[0]));
+      const imageColumn = (layer.spec && layer.spec.imageColumn) || '';
+      const title = (layer.popup && layer.popup.title) || '';
+      const wanted = cardColumns
+        .map((c) => String(c || '').trim())
+        .filter((c) => c && has.has(c) && c !== title &&
+          c.charAt(0) !== '_' && !/^pattern_/.test(c))
+        .slice(0, 40);
+      const seen = new Set();
+      layer.popup = layer.popup || {};
+      layer.popup.fields = wanted.filter((c) => (seen.has(c) ? false : seen.add(c)))
+        .map((c) => cardFieldFor(c, rows.map((r) => String(r[c] == null ? '' : r[c])), imageColumn));
+      if (layer.spec && typeof layer.spec === 'object') {
+        layer.spec.popupColumns = layer.popup.fields.map((f) => f.property);
+      }
+    }
+  }
+
   /* Questions the owner has taken off the map. The reading still asked them and
      the answers are still on every place — this only decides whether the switch
      is offered. Settling questions once makes a bad one permanent otherwise, and
@@ -349,7 +398,8 @@ export function relabelLayer(datasetId, layerId, { label, titleColumn, hiddenKey
 
   fs.writeFileSync(path.join(m.dir, 'manifest.local.json'), JSON.stringify(m.local, null, 1));
   return { label: layer.label, titleColumn: (layer.popup && layer.popup.title) || '',
-    hiddenKeys: layer.hiddenKeys || [] };
+    hiddenKeys: layer.hiddenKeys || [],
+    cardColumns: ((layer.popup && layer.popup.fields) || []).map((f) => f.property) };
 }
 
 export function removeLayer(datasetId, layerId) {

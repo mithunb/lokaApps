@@ -636,6 +636,7 @@
     var info = head.querySelector(".ctl-info");
     if (info) head.insertBefore(btn, info);
     else head.appendChild(btn);
+    addRenamePencil(L, head, btn);
     // who contributed it — an owner's question, not a reader's, so it is added
     // here rather than built into the viewer's row
     var by = m.addedBy || L.addedBy || null;
@@ -732,66 +733,89 @@
      Two strings and a removal, through two small routes, with no draft copy of
      the atlas involved. */
 
+  /* Renaming happens where the name is.
+
+     It used to be a box inside a panel you opened to get to — which is a long
+     way to go to change a word, and it put the name you were editing out of
+     sight of the map that shows it. The pencil sits after the name; the name
+     becomes a box in place; the pencil becomes a tick. Enter or the tick saves,
+     Escape puts back what was there, and leaving the box saves as any field in
+     this product does.
+
+     The hit area grows to the RIGHT of the glyph, never back over the name —
+     the name is the visibility switch's own label, and a rename control that
+     swallowed part of it would make the switch unreliable to tap. */
+  function addRenamePencil(L, head, changeBtn) {
+    if (head.querySelector(".own-pencil")) return;
+    var nameEl = head.querySelector(".ctl-name");
+    if (!nameEl) return;
+    var pen = el("button", "own-pencil", ICON_PENCIL);
+    pen.type = "button";
+    pen.title = "Rename this layer";
+    pen.setAttribute("aria-label", "Rename " + (L.label || L.id));
+    pen.onclick = function (e) {
+      e.preventDefault(); e.stopPropagation();
+      startRename(L, head, nameEl, pen, changeBtn);
+    };
+    nameEl.insertAdjacentElement("afterend", pen);
+  }
+
+  var ICON_PENCIL =
+    '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" ' +
+    'stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M11.5 2.5l2 2L6 12l-2.5.5L4 10z"/></svg>';
+  var ICON_TICK =
+    '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" ' +
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M3 8.5l3.5 3.5L13 4.5"/></svg>';
+
+  function startRename(L, head, nameEl, pen, changeBtn) {
+    if (head.querySelector(".own-rename")) return;
+    var was = L.label || L.id;
+    var box = document.createElement("input");
+    box.type = "text";
+    box.className = "own-rename";
+    box.maxLength = 60;
+    box.value = was;
+    box.setAttribute("aria-label", "Layer name");
+    nameEl.hidden = true;
+    // a box, a tick and Change do not fit in 312px; Change waits its turn
+    if (changeBtn) changeBtn.hidden = true;
+    nameEl.insertAdjacentElement("beforebegin", box);
+    pen.innerHTML = ICON_TICK;
+    pen.title = "Save this name";
+    var done = false;
+    function finish(save) {
+      if (done) return;
+      done = true;
+      var v = box.value.trim();
+      box.remove();
+      nameEl.hidden = false;
+      if (changeBtn) changeBtn.hidden = false;
+      pen.innerHTML = ICON_PENCIL;
+      pen.title = "Rename this layer";
+      pen.focus();
+      if (!save || !v || v === was) return;
+      nameEl.textContent = v;      // say it at once; the reload confirms it
+      api("layers/relabel", { method: "POST", body: { dataset: SLUG, layerId: L.id, label: v } })
+        .then(function () { return preview(SLUG).then(refreshLayers); })
+        .catch(function (e) { nameEl.textContent = was; toast(errMsg(e)); });
+    }
+    box.onkeydown = function (e) {
+      if (e.key === "Enter") { e.preventDefault(); finish(true); }
+      else if (e.key === "Escape") { e.preventDefault(); finish(false); }
+      e.stopPropagation();
+    };
+    box.onblur = function () { finish(true); };
+    pen.onclick = function (e) { e.preventDefault(); e.stopPropagation(); finish(true); };
+    box.focus();
+    box.select();
+  }
+
   var FOLD = null;          // { lid, host, row } — at most one open
 
   function preview(dataset) {
     return window.LokaAtlas.reboot(dataset);
-  }
-
-  /* Columns that could name a place. A title wants nearly the opposite of what
-     a reading wants: a reading throws out a column whose every entry differs,
-     because it cannot group anything; a name is supposed to differ. So this is
-     its own small rule — words, mostly distinct, short enough to sit in a
-     heading, and none of the machinery's own columns. */
-  function titleColumns(L) {
-    var gj = window.LokaAtlas.dataFor && window.LokaAtlas.dataFor(L.id);
-    var feats = (gj && gj.features) || [];
-    /* Without the places in hand there is nothing to judge a column by, but the
-       manifest still knows which columns this layer has — it lists them as the
-       lines on a card. Offering those is worse than judging the real thing and
-       far better than offering nothing: caught with the fold open on a map whose
-       layer had not finished loading, where the control simply was not there and
-       nothing said why. */
-    if (!feats.length) {
-      var known = [];
-      ((L.popup && L.popup.fields) || []).forEach(function (f) {
-        if (f && f.property && f.type !== "image") known.push(f.property);
-      });
-      ((L.spec && L.spec.popupColumns) || []).forEach(function (c) {
-        if (c && known.indexOf(c) < 0) known.push(c);
-      });
-      var now = (L.popup && L.popup.title) || (L.spec && L.spec.popupTitleColumn);
-      if (now && known.indexOf(now) < 0) known.unshift(now);
-      return known.filter(function (k) { return k.charAt(0) !== "_" && !/^pattern_/.test(k); });
-    }
-    var names = Object.keys(feats[0].properties || {});
-    return names.filter(function (k) {
-      if (k.charAt(0) === "_" || /^pattern_/.test(k)) return false;
-      if (/^(lat|latitude|lon|lng|long|longitude)$/i.test(k)) return false;
-      if (/(^|_)(id|uuid|guid)$/i.test(k)) return false;
-      var filled = 0, distinct = {}, n = 0, long = 0;
-      for (var i = 0; i < feats.length; i++) {
-        var v = (feats[i].properties || {})[k];
-        if (typeof v !== "string") continue;
-        v = v.trim();
-        if (!v) continue;
-        if (/^https?:\/\//i.test(v)) return false;
-        filled++;
-        if (v.length > 80) long++;
-        if (!distinct[v]) { distinct[v] = 1; n++; }
-      }
-      if (filled < feats.length * 0.5) return false;   // half the places unnamed is not a name
-      if (long > filled * 0.3) return false;           // paragraphs are not names
-      return n >= filled * 0.5;                        // a name mostly differs
-    }).concat(
-      /* whatever is naming places right now, whether or not the rule above
-         would have chosen it. A menu that cannot show the current setting is
-         worse than one with an odd entry in it. */
-      (function () {
-        var now = (L.popup && L.popup.title) || "";
-        return (now && names.indexOf(now) >= 0) ? [now] : [];
-      })()
-    ).filter(function (c, i, all) { return all.indexOf(c) === i; });
   }
 
   function closeFold(focusBack) {
@@ -820,35 +844,44 @@
     var host = el("div", "own-fold");
     host.setAttribute("data-lid", L.id);
 
-    var name = el("label", "own-fld");
-    name.appendChild(document.createTextNode("Layer name"));
-    var nameIn = document.createElement("input");
-    nameIn.type = "text";
-    nameIn.maxLength = 60;
-    nameIn.autocomplete = "off";
-    nameIn.value = L.label || L.id;
-    name.appendChild(nameIn);
-    host.appendChild(name);
-
-    var cols = titleColumns(L);
-    var titleIn = null;
-    if (cols.length > 1) {
-      var title = el("label", "own-fld");
-      title.appendChild(document.createTextNode("Call each place by"));
-      titleIn = document.createElement("select");
-      var now = (L.popup && L.popup.title) || "";
-      cols.forEach(function (c) {
-        var o = document.createElement("option");
-        o.value = c;
-        o.textContent = prettyish(c);
-        if (c === now) o.selected = true;
-        titleIn.appendChild(o);
-      });
-      title.appendChild(titleIn);
-      title.appendChild(el("span", "own-note",
-        "The name shown when someone points at or opens a place."));
-      host.appendChild(title);
+    /* The name is not here any more — it is edited from the row, where it is.
+       What is here is what a place's card says, which is the thing you cannot
+       do from anywhere else and which needs more than one tap. */
+    var cardBox = el("div", "own-fld");
+    cardBox.appendChild(document.createTextNode("On every place's card"));
+    var list = el("div", "own-cards");
+    var chosen = cardColumnsNow(L);
+    var offer = cardColumnCandidates(L);
+    var boxes = [];
+    if (!offer.length) {
+      list.appendChild(el("p", "own-note", "This layer has nothing else to show on a card."));
     }
+    offer.forEach(function (c) {
+      var row = el("label", "ctl-toggle own-card");
+      var cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = chosen.indexOf(c.col) >= 0;
+      cb._col = c.col;
+      boxes.push(cb);
+      row.appendChild(cb);
+      row.appendChild(el("span", "own-card-tick"));
+      var text = el("span", "own-card-t");
+      text.appendChild(el("span", "own-card-n", prettyish(c.col)));
+      // a real entry from these places, so nobody has to guess what a column holds
+      if (c.sample) text.appendChild(el("span", "own-card-eg", c.sample));
+      row.appendChild(text);
+      cb.onchange = function () {
+        save({ cardColumns: boxes.filter(function (b) { return b.checked; })
+          .map(function (b) { return b._col; }) });
+      };
+      list.appendChild(row);
+    });
+    cardBox.appendChild(list);
+    if (offer.length) {
+      cardBox.appendChild(el("span", "own-note",
+        "Answers to your questions are shown by their keys, so they are not listed here."));
+    }
+    host.appendChild(cardBox);
 
     var err = el("p", "own-err");
     err.setAttribute("role", "alert");
@@ -927,15 +960,6 @@
           err.hidden = false;
         });
     }
-    nameIn.onchange = function () {
-      var v = nameIn.value.trim();
-      if (!v) { err.textContent = "The layer needs a name."; err.hidden = false; nameIn.focus(); return; }
-      if (v === (L.label || L.id)) return;
-      save({ label: v });
-    };
-    if (titleIn) {
-      titleIn.onchange = function () { save({ titleColumn: titleIn.value }); };
-    }
 
     /* The remove, with the wording it already had — the same sentence in the
        same order, because it is the one place here that cannot be taken back and
@@ -995,8 +1019,48 @@
 
     row.appendChild(host);
     FOLD = { lid: L.id, host: host, row: row };
-    nameIn.focus();
-    nameIn.select();
+    // the first thing you can act on, so a keyboard lands somewhere useful
+    var first = host.querySelector("input, button");
+    if (first) first.focus();
+  }
+
+  /* What is on a card now. The stanza is the truth — the browser holds the
+     manifest it loaded, and that is what the fold must agree with. */
+  function cardColumnsNow(L) {
+    return ((L.popup && L.popup.fields) || []).map(function (f) { return f.property; });
+  }
+
+  /* Which columns are worth offering, and one real entry from each so a person
+     is choosing between things rather than between names. A column the reading
+     answered is left out — its answers belong to the key, and putting one on a
+     card as a plain line is the "Pattern 1" fault we shipped and fixed. */
+  function cardColumnCandidates(L) {
+    var gj = window.LokaAtlas.dataFor && window.LokaAtlas.dataFor(L.id);
+    var feats = (gj && gj.features) || [];
+    var title = (L.popup && L.popup.title) || "";
+    var names = feats.length ? Object.keys(feats[0].properties || {})
+      : cardColumnsNow(L);
+    return names.filter(function (k) {
+      if (k.charAt(0) === "_" || /^pattern_/.test(k)) return false;
+      if (k === title) return false;
+      if (/^(lat|latitude|lon|lng|long|longitude)$/i.test(k)) return false;
+      if (/(^|_)(id|uuid|guid)$/i.test(k)) return false;
+      if (!feats.length) return true;
+      // a column no place has anything in cannot be shown
+      return feats.some(function (f) {
+        var v = (f.properties || {})[k];
+        return typeof v === "string" ? v.trim() : v != null;
+      });
+    }).map(function (k) {
+      var eg = "";
+      for (var i = 0; i < feats.length && !eg; i++) {
+        var v = (feats[i].properties || {})[k];
+        if (typeof v === "string" && v.trim()) eg = v.trim();
+        else if (typeof v === "number") eg = String(v);
+      }
+      if (/^https?:\/\//i.test(eg)) eg = "a picture";
+      return { col: k, sample: eg ? eg.replace(/\s+/g, " ").slice(0, 44) : "" };
+    });
   }
 
   // "created_at" is not a thing to show somebody in a menu
