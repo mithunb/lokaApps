@@ -2888,8 +2888,10 @@ async function runReading(dataset, layerId, afresh) {
     const strongIn = (r) => (r.questions || []).filter((q) => q.coverage >= 0.6).length;
     const unspokenIn = (r) => rows.filter((_, i) =>
       !(r.questions || []).some((q) => q.categories[i] && q.categories[i] !== 'other')).length;
-    const describe = (r) => strongIn(r) + ' questions speaking for most of the map, ' +
-      unspokenIn(r) + ' places with no answer';
+    const many = (n, one, more) => n + ' ' + (n === 1 ? one : more);
+    const describe = (r) => many(strongIn(r), 'question', 'questions') +
+      ' speaking for most of the map, ' +
+      many(unspokenIn(r), 'place', 'places') + ' with no answer';
     let better = false;
     if (second.verdict === 'questions' && (second.questions || []).length) {
       better = strongIn(second) !== strongIn(out)
