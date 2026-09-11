@@ -417,6 +417,21 @@
        The switch is what decides, not a breakpoint: js measures the two longest
        names and adds .leg-two only when both fit. */
     .leg-grid.leg-two { display:grid; grid-template-columns:1fr 1fr; column-gap:.5rem; }
+    /* The places a question has nothing to say about, opened from its own row.
+       Indented to the legend's words, quiet as a caveat, and each place a way
+       back to its pin rather than a label. */
+    .leg-silent { display:flex; flex-direction:column; gap:.1rem; padding:.1rem 0 .35rem 1.5rem; }
+    .leg-silent-p { font:inherit; font-size:var(--t-label); font-family:inherit; text-align:left;
+      background:none; border:0; padding:.1rem 0; cursor:pointer; color:var(--color-text-secondary);
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .leg-silent-p:hover { color:var(--color-canopy); text-decoration:underline; }
+    .leg-silent-p:focus-visible { outline:2px solid var(--color-moss); outline-offset:1px;
+      border-radius:var(--radius-xs); }
+    .leg-silent-more { font-size:var(--t-label); color:var(--color-text-muted); padding:.1rem 0; }
+    /* the one line that turns eight grey pins into a fact about the question */
+    .leg-silent-why { font-size:var(--t-label); color:var(--color-text-muted); line-height:1.4;
+      margin-top:.2rem; }
+
     .leg-openable { cursor:pointer; border-radius:var(--radius-md); }
     .leg-openable:hover { background:var(--color-bg-alt); }
     .leg-openable[aria-expanded="true"] { background:var(--color-bg-alt); }

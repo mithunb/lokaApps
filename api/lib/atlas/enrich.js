@@ -34,7 +34,7 @@ const KEY_DOMINANCE = 0.85;
    answers, and the reading is trimmed to what the counting supports. */
 const KIND_FLOOR = 3;            // a kind holding fewer places than this is not a kind
 const FLAT_SHARE = 0.6;          // one answer holding this much of a question is barely a sorting
-const HOMELESS_SHARE = 0.15;     // a word on this many places ought to have found a home
+const SAME_QUESTION = 0.8;       // agreement at which a question IS a column already on the map
 const CLIP = 280;                // description characters per digest line
 
 // the quality gate's thresholds
@@ -222,6 +222,16 @@ export function buildDigest(rows, fields) {
     values: rows.map((r) => String((r && r[f]) != null ? r[f] : '')),
   }));
   byCol.forEach((c) => { c.delim = tagDelimiter(c.values); });
+  /* Which columns hold a CLOSED list — a small set of words somebody chose
+     once, that every place draws from — and which hold an open one, where a
+     place may say anything. The finder was shown both as one undifferentiated
+     heap of recurring words, so it could see that "civic" was on ten places
+     without being able to see that civic was one of exactly ten groups this
+     data is already sorted into. That difference is the whole of what it needs
+     to know: a closed list already answers "what sort of thing is this", and
+     the questions worth finding live in the open words beside it. */
+  const closed = keyShapedColumns(rows, cols);
+  byCol.forEach((c) => { c.closed = closed.has(c.name); });
 
   const tagCounts = new Map();
   const entries = rows.map((_, i) => {
@@ -250,7 +260,20 @@ export function buildDigest(rows, fields) {
        anywhere to go. */
     return { text, tags: tags.map((t) => t.toLowerCase()) };
   });
-  return { entries, withText: entries.filter((e) => e.text).length, tagCounts };
+  /* The closed lists, each with its whole vocabulary and how many places carry
+     each word — not a sample, the lot, because the point is that it IS the lot. */
+  const lists = byCol.filter((c) => c.closed && c.delim).map((c) => {
+    const seen = new Map();
+    c.values.forEach((v) => {
+      for (const part of String(v).split(c.delim)) {
+        const t = part.trim();
+        if (t) seen.set(t, (seen.get(t) || 0) + 1);
+      }
+    });
+    return { column: c.name,
+      words: [...seen.entries()].sort((a, b) => b[1] - a[1]).map(([w, n]) => ({ word: w, places: n })) };
+  });
+  return { entries, withText: entries.filter((e) => e.text).length, tagCounts, lists };
 }
 
 /* ---------------- the induce prompt and its gate ---------------- */
@@ -314,13 +337,43 @@ function inducePlaces(digest) {
      earlier: it cannot become a kind, so naming it as one the kinds must make
      room for asks for a question that cannot be answered usefully. */
   const tooCommon = texted.length * KEY_DOMINANCE;
+
+  /* The closed lists first, said as closed lists.
+
+     A word from one of these is not just a word that recurs — it is one of a
+     small set somebody chose once, that every place is already sorted into. The
+     finder could see "civic (10)" in an undivided heap of recurring words and
+     had no way to tell that civic was one of exactly ten groups covering the
+     whole map. So it wrote questions that were this list again in synonyms, and
+     the groups whose synonym was awkward — civic, heritage — were quietly
+     dropped rather than named. Measured on sixty-six places: the reading that
+     covered civic was every time the one that had invented a civic-shaped kind,
+     and the readings that did not cover it had none.
+
+     Told plainly, a finder can do the two things it could not before: leave
+     none of the groups homeless, and stop re-asking a question the map already
+     answers. */
+  const lists = (digest.lists || []).filter((l) => l.words.length);
+  const closedWords = new Set();
+  const closedLines = lists.map((l) => {
+    l.words.forEach((w) => closedWords.add(w.word.toLowerCase()));
+    return 'The ' + l.column + ' column is a CLOSED list of ' + l.words.length +
+      ' — every place carries one or more, and between them they cover the whole map: ' +
+      l.words.map((w) => w.word + ' (' + w.places + ')').join(', ');
+  });
+
+  /* And the open words, with the closed ones taken out so the two are not
+     counted twice. These are where a question the map does NOT already answer
+     is going to come from. */
   const repeated = [...digest.tagCounts.entries()]
-    .filter(([, n]) => n > 1 && n < tooCommon)
+    .filter(([t, n]) => n > 1 && n < tooCommon && !closedWords.has(String(t).toLowerCase()))
     .sort((a, b) => b[1] - a[1]).slice(0, 40);
-  const summary = repeated.length
-    ? 'Recurring words across all ' + texted.length + ' places, commonest first: ' +
-      repeated.map(([t, n]) => t + ' (' + n + ')').join(', ') + '\n'
+  const openLine = repeated.length
+    ? 'Words the places chose freely, commonest first — an OPEN list, anyone may say anything: ' +
+      repeated.map(([t, n]) => t + ' (' + n + ')').join(', ')
     : '';
+  const summary = [...closedLines, openLine].filter(Boolean).join('\n') +
+    (closedLines.length || openLine ? '\n' : '');
   const lines = sample.map((t, k) => (k + 1) + '. ' + t).join('\n');
   return { text: summary + lines, listLength: sample.length, total: texted.length };
 }
@@ -590,7 +643,8 @@ async function induceQuestions({ digest, fields, title, callJSON, model, already
     /* The rule this data needed and did not have. Kinds were proposed for five
        of the commonest groups and none for the second and third, so a third of
        the places had nowhere honest to go and were filed somewhere wrong. */
-    '- If a question sorts places by something the recurring words above already name, its kinds must leave a home for the common ones. Where a word appears on many places and no kind would take them, either add a kind that does or ask a different question. Do not offer a question whose kinds have nowhere to put a large group.',
+    '- If a question sorts places by something the words above already name, its kinds must leave a home for the common ones. Where a word appears on many places and no kind would take them, either add a kind that does or ask a different question. Do not offer a question whose kinds have nowhere to put a large group.',
+    '- A CLOSED list is the whole map already sorted. So: do not ask a question that is that list again under other names — if your kinds would map one-to-one onto its words, the map answers that question already and your question adds nothing. But if a question DOES sort by something a closed list names, every one of its groups must have somewhere to go, including the awkward ones. A group you cannot find a comfortable name for is exactly the group that ends up with no answer at all, and the places in it are no less real for being hard to name.',
     '- Judge only by what the lines actually say, and not by what such places usually are. There are no examples above to borrow from, which is deliberate.',
     '- Never use "other" as a kind name; places that fit nothing are handled separately.',
     colNames.length
@@ -612,10 +666,12 @@ async function induceQuestions({ digest, fields, title, callJSON, model, already
       counting after the first attempt says a real part of the map was left
       unspoken for. */
     missed.length
-      ? '- IMPORTANT, this is a second attempt. The questions proposed last time left whole groups of places with no answer at all: ' +
-        missed.map((m) => '"' + m.word + '" is on ' + m.places + ' of these places and the best question reached only ' +
-          Math.round((m.bestShare || 0) * 100) + '% of them').join('; ') +
-        '. Those places are not unusual or marginal — they are a real part of this map. Either give a question kinds that take them, or ask a different question that can. Do not return the same set again.'
+      ? '- IMPORTANT, this is a second attempt. The questions proposed last time left whole groups of places with NO ANSWER AT ALL, and here is exactly where: ' +
+        missed.map((m) => m.under
+          ? '"' + m.under + '" had no kind for the ' + m.places + ' places that say "' + m.word + '"'
+          : m.places + ' places say "' + m.word + '" and not one question asked about them')
+          .join('; ') +
+        '. Those places are not unusual or marginal — they are a real part of this map, and a group that is awkward to name is still a group. Give a question a kind that takes them, or ask a question that can. Do not return the same set again.'
       : null,
     '',
     'If the lines state no sort of fact whose answers gather into kinds, set verdict to "no_clear_questions" and say why in one plain sentence. That is a correct and welcome answer, not a failure.',
@@ -1103,6 +1159,55 @@ export async function enrichRows(opts) {
       }
     }
 
+    /* A question judged by what it SORTS, not by what it is called.
+
+       The prompt asks the finder not to re-ask a question the map already
+       answers, and the gate afterwards refuses a kind named after a word an
+       existing key uses. Both are about names, and a name is the easy thing to
+       change: "What kind of place is it?" came back with Green Space, Commercial
+       Spot, Learning Hub and Creative Space — which is the categories column
+       (Nature, Market, Learning, Culture) in synonyms, passing both tests.
+
+       So this asks the only question that matters: give me each kind's places,
+       and the commonest word those places carry in the closed list. If every
+       kind maps to a different word and the agreement is high, the question and
+       the column are the same sorting, and the column already does it — with
+       the owner's own wording rather than the model's guess at it.
+
+       A question that cuts FINER survives, because two of its kinds land on one
+       word and the mapping is not one-to-one. That is the honest case and the
+       common one: three kinds inside Culture is a real question. */
+    const sameAsAColumn = (q, cats) => {
+      for (const list of (digest.lists || [])) {
+        const words = new Set(list.words.map((w) => w.word.toLowerCase()));
+        const perKind = new Map();
+        cats.forEach((c, i) => {
+          if (!c || c === 'other') return;
+          const mine = (digest.entries[i].tags || []).filter((t) => words.has(t));
+          if (!mine.length) return;
+          if (!perKind.has(c)) perKind.set(c, new Map());
+          const t = perKind.get(c);
+          mine.forEach((w) => t.set(w, (t.get(w) || 0) + 1));
+        });
+        if (perKind.size < MIN_CATS) continue;
+        const claimed = new Map();      // word -> the kind that claims it
+        let agree = 0, total = 0;
+        for (const [kind, tally] of perKind) {
+          const top = [...tally.entries()].sort((a, b) => b[1] - a[1])[0];
+          const mine = cats.filter((c) => c === kind).length;
+          total += mine;
+          agree += top[1];
+          if (claimed.has(top[0])) return null;      // two kinds, one word: finer, so keep
+          claimed.set(top[0], kind);
+        }
+        if (total && agree / total >= SAME_QUESTION) {
+          return { column: list.column, agreement: Math.round(agree / total * 100) };
+        }
+      }
+      return null;
+    };
+
+    const echoed = [];
     const questions = kept.map((q, n) => {
       const cats = filed.answers[n];
       const tally = {}; let other = 0;
@@ -1131,48 +1236,70 @@ export async function enrichRows(opts) {
         biggest: counts.length ? counts[0].name : '',
         biggestCount: biggest,
       };
-    }).filter((q) => q.counts.length >= MIN_CATS || askedBefore.length);
+    }).filter((q) => q.counts.length >= MIN_CATS || askedBefore.length)
+      /* Dropped before anything is written. A settled question is exempt: it is
+         already on a map somebody may have linked to, and taking a key away is
+         a bigger harm than a key that says the same as another. */
+      .filter((q, n) => {
+        if (askedBefore.length) return true;
+        const same = sameAsAColumn(q, q.categories);
+        if (!same) return true;
+        echoed.push({ question: q.question, column: same.column, agreement: same.agreement });
+        return false;
+      });
     if (!questions.length) return { verdict: 'refused', reason: 'no question survived the counting' };
 
-    /* And a note on what found nowhere to go.
+    /* What found nowhere to go — asked of the PLACES, not of the words.
 
-       This is the shape of the failure that started all of it: twenty of
-       sixty-six places said "nature", the kinds on offer had no home for any of
-       them, and all twenty were filed somewhere wrong. Under the counting above
-       they would come out unanswered instead of wrong, which is better and still
-       not good — a fifth of the map saying one thing and no question able to
-       speak about it means the questions missed something.
+       The old test asked whether a word on a good share of the map had its
+       places answered by the best single question, and it could not fire here:
+       civic sits on 10 of 66, a whisker over its 15% bar, and the best question
+       reached 70% of them, comfortably over its 50% floor. Meanwhile four of the
+       eight places with no answer at all said Civic and three said Heritage.
 
-       So the test is not whether the WORD was quoted — a good reading may sort
-       parks under "Natural Feature" and quote "garden" — but whether the PLACES
-       that said it got an answer. For each common word, the best any one question
-       manages for its places; if even the best leaves most of them blank, that
-       word has no home. Reported, not acted on: whether it is worth asking again
-       is the caller's to decide. */
-    const homeless = [];
-    {
-      const carriers = new Map();        // word -> place indexes that said it
-      digest.entries.forEach((e, i) => {
-        for (const w of new Set(e.tags || [])) {
-          if (!carriers.has(w)) carriers.set(w, []);
-          carriers.get(w).push(i);
-        }
+       The fault was asking about words in the aggregate. A word can be well
+       served overall and still name exactly the places one question cannot
+       speak for. So the question is asked where the hole is: under each
+       question, look only at the places it left blank, and see what THEY have
+       in common. Three sharing a word is enough, because three is already this
+       product's definition of enough to be a kind — no share to tune, and the
+       same number everywhere.
+
+       A place blank under every question is a different miss: not a kind that
+       is absent from one question but a question that was never asked. */
+    const gaps = [];
+    questions.forEach((q) => {
+      const blanks = [];
+      q.categories.forEach((c, i) => { if (!c || c === 'other') blanks.push(i); });
+      if (blanks.length < KIND_FLOOR) return;
+      const shared = new Map();
+      blanks.forEach((i) => {
+        for (const t of new Set(digest.entries[i].tags || [])) shared.set(t, (shared.get(t) || 0) + 1);
       });
-      for (const [word, who] of carriers) {
-        if (who.length < rows.length * HOMELESS_SHARE) continue;
-        let best = 0, bestQ = '';
-        for (const q of questions) {
-          const answered = who.filter((i) => q.categories[i] && q.categories[i] !== 'other').length;
-          if (answered / who.length > best) { best = answered / who.length; bestQ = q.question; }
-        }
-        if (best >= 0.5) continue;
-        homeless.push({ word, places: who.length, bestShare: best, bestQuestion: bestQ });
+      const missing = [...shared.entries()]
+        .filter(([, n]) => n >= KIND_FLOOR)
+        .sort((x, y) => y[1] - x[1]).slice(0, 2)
+        .map(([word, n]) => ({ word, places: n }));
+      if (missing.length) gaps.push({ question: q.question, blank: blanks.length, missing });
+    });
+
+    const spokenFor = rows.map((_, i) => questions.some((q) => q.categories[i] && q.categories[i] !== 'other'));
+    const unspoken = [];
+    spokenFor.forEach((ok, i) => { if (!ok) unspoken.push(i); });
+    const nobodyAsked = [];
+    if (unspoken.length >= KIND_FLOOR) {
+      const shared = new Map();
+      unspoken.forEach((i) => {
+        for (const t of new Set(digest.entries[i].tags || [])) shared.set(t, (shared.get(t) || 0) + 1);
+      });
+      for (const [word, n] of [...shared.entries()].sort((x, y) => y[1] - x[1])) {
+        if (n >= KIND_FLOOR) nobodyAsked.push({ word, places: n });
+        if (nobodyAsked.length >= 2) break;
       }
-      homeless.sort((x, y) => y.places - x.places);
     }
-    // everything below here was read: the all-or-nothing gate is above
+
     return { verdict: 'questions', questions, withText: digest.withText,
-             folded, renamedAway, homeless,
+             folded, renamedAway, echoed, gaps, nobodyAsked,
              batches: filed.batches, asked: kept,
              // there is no fresh reading of the set when the questions were kept
              reused: !ind, reading: (ind && ind.reading) || '', facts: (ind && ind.facts) || [] };

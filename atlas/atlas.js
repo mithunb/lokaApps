@@ -1719,6 +1719,23 @@
       r.appendChild(el("span", "leg-label", esc(it.label)));
       if (it.n != null) r.appendChild(el("span", "leg-n", String(it.n)));
       out.push(r);
+      if (it.silentOf) {
+        r.classList.add("leg-openable");
+        r.setAttribute("role", "button");
+        r.setAttribute("tabindex", "0");
+        r.setAttribute("aria-expanded", "false");
+        var who = silentPlacesEl(L, it.silentOf);
+        who.hidden = true;
+        out.push(who);
+        var flipSilent = function () {
+          who.hidden = !who.hidden;
+          r.setAttribute("aria-expanded", String(!who.hidden));
+        };
+        r.onclick = flipSilent;
+        r.onkeydown = function (ev) {
+          if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); flipSilent(); }
+        };
+      }
       if (it.why && it.why.length) {
         r.classList.add("leg-openable");
         r.setAttribute("role", "button");
@@ -1800,8 +1817,14 @@
         opt.kept.forEach(function (k) { answered += (tally[k] || 0); });
         var silent = entries.length - answered;
         if (silent > 0) {
+          /* The places this question has nothing to say about, and who they are.
+             The row used to be a number and nothing else — "no answer · 8" —
+             which tells a reader that something fell through and not what, so
+             the only way to find out was to hunt the map for grey pins. It opens
+             now, the same way a kind opens into its words, and says which places
+             and what they have in common. */
           rows.push({ color: KEY_OTHER, label: "no answer", categorical: true, family: ROW_SHAPES[fi],
-                      n: silent, faint: true });
+                      n: silent, faint: true, silentOf: opt.col });
         }
       } else if (opt.hasOther) {
         rows.push({ color: KEY_OTHER, label: "other", categorical: true, family: ROW_SHAPES[fi],
@@ -2223,6 +2246,83 @@
   }
 
   // the words under a kind, each one a way back to the places that said it
+  /* Who fell through, and what they have in common.
+
+     A place with no answer is not a failure to classify — the question has
+     nothing to say about it, which is a different thing. But eight of them is a
+     pattern, and the pattern is usually one word: on this map, four of the eight
+     the place-question could not answer say Civic and three say Heritage. That
+     is worth saying out loud, because it is the difference between "this map has
+     odd corners" and "this question has no kind for civic places".
+
+     Each place leads back to its own pin, so the row is a way INTO the map
+     rather than a report about it. */
+  function silentPlacesEl(L, col) {
+    var gj = DATA[L.id];
+    var feats = (gj && gj.features) || [];
+    var box = el("div", "leg-silent");
+    var mine = [];
+    feats.forEach(function (f, i) {
+      var v = String((f.properties || {})[col] || "").trim();
+      if (!v) mine.push({ f: f, i: i });
+    });
+    // what they share, counted the way the reading counts it
+    var shared = {};
+    mine.forEach(function (m) {
+      var p = m.f.properties || {};
+      var tags = {};
+      String(p.categories || "").split(";").concat(String(p.labels || "").split(";"))
+        .forEach(function (t) { t = t.trim(); if (t) tags[t.toLowerCase()] = t; });
+      Object.keys(tags).forEach(function (k) {
+        shared[k] = shared[k] || { word: tags[k], n: 0 };
+        shared[k].n++;
+      });
+    });
+    var common = Object.keys(shared).map(function (k) { return shared[k]; })
+      .filter(function (x) { return x.n >= 3; })
+      .sort(function (a, b) { return b.n - a.n; }).slice(0, 2);
+
+    mine.slice(0, 12).forEach(function (m) {
+      var p = m.f.properties || {};
+      /* What to call it. The layer's own title column first — but a title
+         column is not always a name: this one can be a list of tags, and
+         "Culture; Heritage" tells a reader nothing about which place they are
+         looking at. A list is not a name, so fall through to something that is. */
+      var own = {};
+      String(p.categories || "").split(";").concat(String(p.labels || "").split(";"))
+        .forEach(function (t) { t = t.trim().toLowerCase(); if (t) own[t] = 1; });
+      var pick = function (v) {
+        v = String(v || "").trim();
+        if (!v || v.indexOf(";") >= 0) return "";       // a list is not a name
+        if (own[v.toLowerCase()]) return "";            // nor is one of its own tags
+        return v;
+      };
+      var name = pick(p[(L.popup && L.popup.title) || "description"]) ||
+        pick(p.description) || pick(p.name) || pick(p.title) || "a place";
+      var b = el("button", "leg-silent-p", esc(name.slice(0, 60)));
+      b.type = "button";
+      /* The same road the words under a kind take. goToWord knows the thing this
+         nearly got wrong: at low zoom a place can be folded inside a numbered
+         disc, and flying to its coordinates would open a popup over the disc
+         rather than over the place. */
+      b.onclick = function (e) {
+        e.preventDefault(); e.stopPropagation();
+        var entry = (markersByLayer[L.id] || []).filter(function (x) { return x.f === m.f; })[0];
+        if (entry) goToWord(L, [entry]);
+      };
+      box.appendChild(b);
+    });
+    if (mine.length > 12) {
+      box.appendChild(el("div", "leg-silent-more", "and " + (mine.length - 12) + " more"));
+    }
+    if (common.length) {
+      box.appendChild(el("div", "leg-silent-why",
+        common.map(function (c) { return c.n + " of these say “" + c.word + "”"; }).join(", and ") +
+        ". This question has no answer that takes them."));
+    }
+    return box;
+  }
+
   function whyWordsEl(L, why) {
     var box = el("div", "leg-why");
     (why || []).forEach(function (it) {

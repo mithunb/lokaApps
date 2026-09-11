@@ -2840,19 +2840,35 @@ async function runReading(dataset, layerId, afresh) {
      Only where the questions were freshly found. When a layer is answering
      questions it settled on earlier, the questions are not this reading's to
      change, so a miss is not something asking again could fix. */
+  /* A second attempt, told what the first one left blank.
+
+     The miss is now named in places rather than in words: which question left
+     which places with no answer, and what those places have in common. A word
+     can be well served across the map and still name exactly the places one
+     question cannot speak for, which is how the old test — a word's overall
+     coverage against a floor — missed a hole that four of eight blank places
+     were sitting in.
+
+     Both kinds of miss are worth a retry: a question missing a kind, and a
+     group of places no question asked about at all. */
   let triedAgain = false, missedFirst = [];
-  if (!asked.length && out.verdict === 'questions' && (out.homeless || []).length) {
-    missedFirst = out.homeless.slice(0, 4);
+  const holesIn = (r) => [
+    ...((r.gaps || []).flatMap((g) => g.missing.map((m) =>
+      ({ word: m.word, places: m.places, under: g.question })))),
+    ...((r.nobodyAsked || []).map((m) => ({ word: m.word, places: m.places, under: '' }))),
+  ];
+  if (!asked.length && out.verdict === 'questions' && holesIn(out).length) {
+    missedFirst = holesIn(out).slice(0, 4);
     console.log('[atlas] ' + dataset + '/' + layerId + ' — asking again: ' +
-      missedFirst.map((m) => m.word + ' on ' + m.places + ' places, best question reached ' +
-        Math.round((m.bestShare || 0) * 100) + '%').join('; '));
+      missedFirst.map((m) => m.word + ' on ' + m.places + ' places' +
+        (m.under ? ' left blank by "' + m.under + '"' : ' asked about by nothing')).join('; '));
     const second = await ask(missedFirst);
     triedAgain = true;
     /* Kept only if it is actually better. A second attempt that leaves as many
        places unspoken for as the first is not an improvement, and the first at
        least did not cost an extra call to arrive at. */
-    if (second.verdict === 'questions' && (second.homeless || []).length < missedFirst.length) {
-      console.log('[atlas] the second set left ' + (second.homeless || []).length +
+    if (second.verdict === 'questions' && holesIn(second).length < missedFirst.length) {
+      console.log('[atlas] the second set left ' + holesIn(second).length +
         ' of ' + missedFirst.length + ' unaccounted for — keeping it');
       out = second;
     } else {
