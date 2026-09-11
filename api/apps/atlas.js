@@ -3862,6 +3862,161 @@ router.get('/layers/list', (req, res) => {
    the reading decides how a layer is drawn now, so these two are all that is
    left of "change this layer", and putting them through a draft build was
    costing an upload, a preview and a commit to write two strings. */
+/* Asking a question of your own.
+
+   The reading finds what a set of places can honestly be asked, and settles on
+   it. That is right, and it leaves no room for the one thing an owner knows that
+   the model cannot: what THEY want to know about their own places. So this adds
+   one question to a layer without disturbing the ones already there.
+
+   Three steps, because the middle one takes half a minute and nobody should
+   spend it not knowing what they will get:
+
+     kinds   the model reads the places and proposes what the answers look like.
+             Seconds. The owner edits them; they are the map's colours.
+     try     the first forty places are actually answered — real answers, not a
+             sample — and handed back with the share they reached. This IS the
+             preview: the work is kept, not thrown away, and it doubles as the
+             progress a person watches.
+     keep    the rest are answered and the column is written alongside the
+             others. Nothing already on the layer is touched.
+
+   A sample of twenty would have been faster to show and would have cost an extra
+   call, been discarded, and been wrong by about a fifth at that size. The first
+   batch is bigger, free, and kept. */
+/* As many questions as the map can wear at once: past this the key rows hang
+   further below a pin than the folding rule keeps pins apart, which is the
+   viewer's own KEY_STACK_CAP. Asking for a sixth would be asking for one that
+   could never be switched on beside the others. */
+const MAX_QUESTIONS_ON_A_LAYER = 5;
+const ASKING = new Map();          // token -> a half-answered question, briefly
+const ASK_TTL = 30 * 60 * 1000;
+
+function sweepAsking(now) {
+  for (const [k, v] of [...ASKING.entries()]) if (now - v.at > ASK_TTL) ASKING.delete(k);
+}
+
+/* The questions a layer already carries, with the answers already on its places.
+   Read back rather than re-asked: they are settled, and answering them again
+   would be paying for a reading nobody asked for and risking a different one. */
+function questionsAsAnswered(layer, rows) {
+  return questionsOn(layer, rows).map((q, n) => {
+    const col = 'pattern_' + (n + 1);
+    const whyCol = col + '_why';
+    const categories = rows.map((r) => String((r && r[col]) || ''));
+    const tally = new Map();
+    categories.forEach((c) => { if (c) tally.set(c, (tally.get(c) || 0) + 1); });
+    return {
+      question: q.question,
+      counts: q.kinds.map((k) => ({ name: k.name, definition: k.definition || '',
+        count: tally.get(k.name) || 0 })).filter((c) => c.count > 0),
+      categories,
+      why: rows.map((r) => String((r && r[whyCol]) || '').split(',').map((w) => w.trim()).filter(Boolean)),
+    };
+  });
+}
+
+router.post('/layers/ask', async (req, res) => {
+  const b = req.body || {};
+  const dataset = String(b.dataset || ''), layerId = String(b.layerId || '');
+  const phase = String(b.phase || '');
+  const inst = reg.getInstance(dataset);
+  const role = inst ? callerRole(req, inst) : (auth.isAdmin(req) ? 'owner' : null);
+  if (!role) return res.status(403).json({ error: 'sign in as this atlas’s owner or a collaborator', needsAuth: true });
+  if (!ai) return res.status(503).json({ error: 'there is no model configured' });
+  sweepAsking(Date.now());
+
+  try {
+    const m = imports.readManifest(dataset);
+    const layer = m && imports.mergedLayers(m).find((L) => L.id === layerId);
+    if (!layer || !layer.source) return res.status(404).json({ error: 'layer not found' });
+    const file = path.join(m.dir, layer.source);
+    const gj = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const rows = (gj.features || []).map((f) => f.properties || {});
+    if (!rows.length) return res.status(400).json({ error: 'that layer has no places' });
+    const fields = wordColumnsOf(rows);
+    if (!fields.length) return res.status(400).json({ error: 'none of those columns hold words to read' });
+    const title = (inst && inst.title) || dataset;
+    const question = String(b.question || '').trim().slice(0, 120);
+
+    if (phase === 'kinds') {
+      if (!question) return res.status(400).json({ error: 'ask a question first' });
+      const settled = questionsOn(layer, rows);
+      if (settled.length >= MAX_QUESTIONS_ON_A_LAYER) {
+        return res.status(400).json({ error: 'this layer already carries ' + settled.length +
+          ' questions, which is as many as a map can wear' });
+      }
+      const out = await enrich.proposeKinds({
+        digest: enrich.buildDigest(rows, fields), question, title,
+        callJSON: aiCaller('server'), model: getFlashModel(),
+        alreadyKeyed: keyKindsByColumn(rows, fields),
+      });
+      return res.json(out);
+    }
+
+    if (phase === 'try' || phase === 'keep') {
+      const kinds = (Array.isArray(b.kinds) ? b.kinds : [])
+        .map((k) => ({ name: String((k && k.name) || '').trim().slice(0, 40),
+          definition: String((k && k.definition) || '').slice(0, 200) }))
+        .filter((k) => k.name);
+      if (!question || kinds.length < 2) {
+        return res.status(400).json({ error: 'a question needs at least two kinds of answer' });
+      }
+      /* Answered through the same path every reading uses, with the question
+         handed in as settled — so the counting after it (a kind under three
+         places folded away, a name shared with another question resolved, a
+         word arguing two ways dropped) applies here exactly as it does there. */
+      const out = await enrich.enrichRows({
+        rows, fields, title, mode: 'questions',
+        keepQuestions: [{ question, kinds }],
+        seedSet: keptCatSet(dataset),
+        callJSON: aiCaller('server'),
+        models: { flash: getFlashModel(), flashLite: getFlashLiteModel() },
+      });
+      if (out.verdict !== 'questions' || !(out.questions || []).length) {
+        return res.json({ verdict: out.verdict, note: out.note || '', trouble: out.trouble || '',
+          unread: out.unread || 0 });
+      }
+      const q = out.questions[0];
+      const answered = (q.categories || []).filter((c) => c && c !== 'other').length;
+      const preview = {
+        verdict: 'answered', question: q.question,
+        answered, places: rows.length,
+        kinds: (q.counts || []).map((c) => ({ name: c.name, count: c.count })),
+        // a handful of real ones, so the number has faces behind it
+        examples: (q.categories || []).map((c, i) => ({
+          place: String(rows[i].description || rows[i].name || '').slice(0, 60),
+          answer: c, words: (q.why[i] || []).join(', '),
+        })).filter((e) => e.answer && e.place).slice(0, 6),
+      };
+
+      if (phase === 'try') {
+        const token = crypto.randomBytes(8).toString('hex');
+        ASKING.set(token, { at: Date.now(), dataset, layerId, question: q.question, q });
+        return res.json(Object.assign({ token }, preview));
+      }
+
+      /* Kept. The layer's own questions are read back with the answers already
+         on its places, the new one is added at the end, and all of them are
+         written together — so nothing that was there is re-asked or lost. */
+      const held = b.token && ASKING.get(String(b.token));
+      const fresh = (held && held.dataset === dataset && held.layerId === layerId) ? held.q : q;
+      if (b.token) ASKING.delete(String(b.token));
+      const all = questionsAsAnswered(layer, rows).concat([fresh]);
+      await writeReading({
+        dataset, layerId, rows, questions: all,
+        label: layer.label || layerId, source: layer.source,
+      });
+      return res.json(Object.assign({ wrote: true, questionsNow: all.length }, preview));
+    }
+
+    return res.status(400).json({ error: 'unknown step' });
+  } catch (e) {
+    if (!e.status) console.error('[atlas] asking a question failed:', e && e.stack);
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
 router.post('/layers/relabel', (req, res) => {
   const b = req.body || {};
   const dataset = String(b.dataset || '');

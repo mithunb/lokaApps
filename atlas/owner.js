@@ -558,6 +558,7 @@
   function augmentPanel() {
     var LA = window.LokaAtlas;
     if (!LA || !LA.manifest) return;
+    addShelves();
     addRegionRow();
     (LA.manifest.layers || []).forEach(addChangeButton);
     // a reboot rebuilds the viewer's Share wiring too — restate what only
@@ -733,6 +734,261 @@
      Two strings and a removal, through two small routes, with no draft copy of
      the atlas involved. */
 
+  /* ================= two shelves, for an owner only =================
+
+     A visitor has one list and no reason to know there is another, so they keep
+     the head this panel has always had: a shelf with one tab is a stamp
+     pretending to be a choice.
+
+     An owner has two orders of thing to attend to. Layers is the map as anyone
+     sees it. Questions is about the reading — which of them this atlas offers,
+     and asking one of your own — and it belongs beside the list rather than
+     inside a layer's fold, because it is about the atlas and not about a row.
+     Hiding a question used to live in that fold, three levels down, which is
+     where it was hard to find and easy to leave switched wrong. */
+  var SHELF = "layers";
+
+  function keyedLayers() {
+    return ((window.LokaAtlas.manifest || {}).layers || []).filter(function (L) {
+      var m = mineFor(L.id);
+      return m && m.canRemove && L.keyLabels && Object.keys(L.keyLabels).some(function (c) {
+        return /^pattern_\d+$/.test(c);
+      });
+    });
+  }
+
+  function addShelves() {
+    var head = $("#atlas-panel .panel-head");
+    var body = $("#atlas-controls");
+    if (!head || !body || head.querySelector(".own-shelves")) return;
+    if (!keyedLayers().length) return;      // nothing to put on a second shelf
+
+    var strong = head.querySelector("strong");
+    var tabs = el("div", "own-shelves");
+    tabs.setAttribute("role", "tablist");
+    var made = {};
+    [["layers", "Layers"], ["questions", "Questions"]].forEach(function (pair) {
+      var t = el("button", "own-shelf" + (SHELF === pair[0] ? " on" : ""), pair[1]);
+      t.type = "button";
+      t.setAttribute("role", "tab");
+      t.setAttribute("aria-selected", String(SHELF === pair[0]));
+      t.onclick = function (e) {
+        e.preventDefault(); e.stopPropagation();
+        SHELF = pair[0];
+        showShelf();
+      };
+      made[pair[0]] = t;
+      tabs.appendChild(t);
+    });
+    if (strong) strong.replaceWith(tabs); else head.insertBefore(tabs, head.firstChild);
+
+    var qs = el("div", "own-qshelf");
+    qs.id = "own-qshelf";
+    body.parentNode.insertBefore(qs, body.nextSibling);
+
+    function showShelf() {
+      var onQ = SHELF === "questions";
+      body.hidden = onQ;
+      qs.hidden = !onQ;
+      made.layers.classList.toggle("on", !onQ);
+      made.questions.classList.toggle("on", onQ);
+      made.layers.setAttribute("aria-selected", String(!onQ));
+      made.questions.setAttribute("aria-selected", String(onQ));
+      if (onQ) drawQuestionShelf(qs);
+    }
+    showShelf();
+  }
+
+  /* What this atlas asks of its places, and how to ask one more.
+
+     Each question with a switch, the share it reaches said in words rather than
+     as a bare percentage, and its kinds in a muted line so somebody can see what
+     it actually sorts into before deciding whether to keep offering it. */
+  function drawQuestionShelf(host) {
+    host.innerHTML = "";
+    keyedLayers().forEach(function (L) {
+      var rows = placesOf(L);
+      var block = el("div", "own-qblock");
+      if (keyedLayers().length > 1) block.appendChild(el("h4", "own-qlayer", L.label || L.id));
+      questionsOf(L).forEach(function (q) {
+        var line = el("div", "own-q-row");
+        var lab = el("label", "ctl-toggle own-q");
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.setAttribute("role", "switch");
+        cb.checked = !q.hidden;
+        lab.appendChild(cb);
+        lab.appendChild(el("span", "ctl-switch small"));
+        lab.appendChild(el("span", "own-q-name", q.label));
+        cb.onchange = function () {
+          var now = (L.hiddenKeys || []).slice();
+          var at = now.indexOf(q.col);
+          if (cb.checked) { if (at >= 0) now.splice(at, 1); }
+          else if (at < 0) now.push(q.col);
+          saveLayer(L, { hiddenKeys: now });
+        };
+        line.appendChild(lab);
+        var tally = tallyOf(rows, q.col);
+        line.appendChild(el("div", "own-q-reach",
+          tally.answered + " of " + rows.length + " places answer it"));
+        if (tally.kinds.length) {
+          line.appendChild(el("div", "own-q-kinds", tally.kinds.join(" · ")));
+        }
+        block.appendChild(line);
+      });
+      /* The one thing somebody needs to know before turning a question off:
+         it is not being deleted. The reading asked it, every place still carries
+         its answer and the words behind it, and turning it back on puts it
+         straight back. Said once under the list rather than on every row. */
+      if (questionsOf(L).length) {
+        block.appendChild(el("p", "own-note",
+          "Turning one off takes its switch off the map. The answers stay on every place, " +
+          "so turning it back on puts it straight back."));
+      }
+      block.appendChild(askBox(L));
+      host.appendChild(block);
+    });
+  }
+
+  function placesOf(L) {
+    var gj = window.LokaAtlas.dataFor && window.LokaAtlas.dataFor(L.id);
+    return (gj && gj.features) ? gj.features.map(function (f) { return f.properties || {}; }) : [];
+  }
+
+  function tallyOf(rows, col) {
+    var t = {}, answered = 0;
+    rows.forEach(function (r) {
+      var v = String((r && r[col]) || "").trim();
+      if (!v) return;
+      answered++; t[v] = (t[v] || 0) + 1;
+    });
+    var kinds = Object.keys(t).sort(function (a, b) { return t[b] - t[a]; })
+      .map(function (k) { return k + " " + t[k]; });
+    return { answered: answered, kinds: kinds };
+  }
+
+  function saveLayer(L, patch) {
+    return api("layers/relabel", { method: "POST",
+      body: Object.assign({ dataset: SLUG, layerId: L.id }, patch) })
+      .then(function () { return preview(SLUG).then(refreshLayers); })
+      .catch(function (e) { toast(errMsg(e)); });
+  }
+
+  /* Asking one of your own.
+
+     Three steps and each one says what it is waiting for, because the middle one
+     takes half a minute: the model works out what the answers look like, you
+     correct them, and then the first forty places are really answered and handed
+     back before anything is written. That preview is not a sample — it is the
+     first of the work, kept if you keep it. */
+  function askBox(L) {
+    var wrap = el("div", "own-ask");
+    var open = el("button", "own-linkish", "Ask a question of your own…");
+    open.type = "button";
+    var form = el("div", "own-ask-form");
+    form.hidden = true;
+    open.onclick = function () { open.hidden = true; form.hidden = false; form.querySelector("input").focus(); };
+    wrap.appendChild(open);
+
+    var fld = el("label", "own-fld");
+    fld.appendChild(document.createTextNode("What do you want to know about each place?"));
+    var box = document.createElement("input");
+    box.type = "text";
+    box.maxLength = 120;
+    box.placeholder = "Is it free to visit?";
+    fld.appendChild(box);
+    form.appendChild(fld);
+
+    var say = el("p", "own-note");
+    var err = el("p", "own-err"); err.hidden = true; err.setAttribute("role", "alert");
+    var kindsBox = el("div", "own-ask-kinds"); kindsBox.hidden = true;
+    var row = el("div", "own-row");
+    var go = el("button", "share-btn primary", "Work out the answers");
+    go.type = "button";
+    var cancel = el("button", "share-btn", "Cancel");
+    cancel.type = "button";
+    cancel.onclick = function () { form.hidden = true; open.hidden = false; reset(); open.focus(); };
+    row.appendChild(go); row.appendChild(cancel);
+    form.appendChild(say); form.appendChild(kindsBox); form.appendChild(err); form.appendChild(row);
+    wrap.appendChild(form);
+
+    var kinds = null, token = null;
+    function reset() {
+      kinds = null; token = null;
+      box.value = ""; say.textContent = ""; err.hidden = true;
+      kindsBox.hidden = true; kindsBox.innerHTML = "";
+      go.textContent = "Work out the answers"; go.disabled = false;
+    }
+    function fail(e) { err.textContent = errMsg(e); err.hidden = false; go.disabled = false; }
+    function ask(phase, body) {
+      return api("layers/ask", { method: "POST", body: Object.assign(
+        { dataset: SLUG, layerId: L.id, phase: phase, question: box.value.trim() }, body) });
+    }
+
+    go.onclick = function () {
+      err.hidden = true;
+      if (!box.value.trim()) { box.focus(); return; }
+      go.disabled = true;
+
+      if (!kinds) {
+        say.textContent = "Reading your places to see what the answers look like…";
+        ask("kinds").then(function (r) {
+          go.disabled = false;
+          if (r.verdict === "cannot_answer") {
+            say.textContent = "";
+            err.textContent = r.note || "These places cannot answer that.";
+            err.hidden = false;
+            return;
+          }
+          if (r.verdict !== "kinds") { fail(new Error(r.trouble || "the model could not answer")); return; }
+          kinds = r.kinds;
+          say.textContent = "These are the answers it found. Change any of them, then try it on the first forty places.";
+          kindsBox.hidden = false;
+          kindsBox.innerHTML = "";
+          kinds.forEach(function (k, i) {
+            var ki = document.createElement("input");
+            ki.type = "text"; ki.className = "own-ask-kind"; ki.value = k.name; ki.maxLength = 40;
+            ki.setAttribute("aria-label", "Answer " + (i + 1));
+            ki.onchange = function () { kinds[i].name = ki.value.trim(); };
+            kindsBox.appendChild(ki);
+          });
+          go.textContent = "Try it on forty places";
+        }).catch(fail);
+        return;
+      }
+
+      if (!token) {
+        say.textContent = "Answering the first forty places… about half a minute.";
+        ask("try", { kinds: kinds }).then(function (r) {
+          go.disabled = false;
+          if (r.verdict !== "answered") { fail(new Error(r.note || r.trouble || "nothing came back")); return; }
+          token = r.token;
+          say.textContent = r.answered + " of the first " + r.places + " answered — " +
+            r.kinds.map(function (k) { return k.name + " " + k.count; }).join(" · ");
+          kindsBox.innerHTML = "";
+          (r.examples || []).forEach(function (e) {
+            var line = el("div", "own-ask-eg");
+            line.appendChild(el("span", "own-ask-eg-p", e.place));
+            line.appendChild(el("span", "own-ask-eg-a", e.answer));
+            if (e.words) line.appendChild(el("span", "own-ask-eg-w", "because " + e.words));
+            kindsBox.appendChild(line);
+          });
+          go.textContent = "Keep this question";
+        }).catch(fail);
+        return;
+      }
+
+      say.textContent = "Answering the rest and adding it to the map…";
+      ask("keep", { kinds: kinds, token: token }).then(function (r) {
+        if (!r.wrote) { fail(new Error(r.note || r.trouble || "it could not be saved")); return; }
+        toast("“" + (r.question || box.value.trim()) + "” is on the map.");
+        form.hidden = true; open.hidden = false; reset();
+        return preview(SLUG).then(refreshLayers);
+      }).catch(fail);
+    };
+    return wrap;
+  }
+
   /* Renaming happens where the name is.
 
      It used to be a box inside a panel you opened to get to — which is a long
@@ -888,47 +1144,9 @@
     err.hidden = true;
     host.appendChild(err);
 
-    /* Which questions this atlas offers.
-
-       The questions settle at the first reading and stay, so that a map somebody
-       has linked to does not change its keys under them. That is right, and it
-       makes a bad question permanent — and until now the only way out was to
-       throw away the whole set and let the model find another, which is a great
-       deal to risk to be rid of one. So each one can be taken off the map here.
-
-       Nothing is deleted: the question was asked, every place still carries its
-       answer and the words behind it, and turning it back on puts it straight
-       back. This is the one place a hidden question is still visible, which is
-       why it lists them all rather than only the ones still showing. */
-    var qs = questionsOf(L);
-    if (qs.length) {
-      var box = el("div", "own-fld");
-      box.appendChild(document.createTextNode("Questions this atlas offers"));
-      var list = el("div", "own-qs");
-      qs.forEach(function (q) {
-        // ctl-toggle so this IS the viewer's switch rather than a second one
-        // built to look like it — the checked state lives in that rule
-        var row = el("label", "ctl-toggle own-q");
-        var cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.checked = !q.hidden;
-        row.appendChild(cb);
-        row.appendChild(el("span", "ctl-switch small"));
-        row.appendChild(el("span", "own-q-name", q.label));
-        cb.onchange = function () {
-          var now = (L.hiddenKeys || []).slice();
-          var at = now.indexOf(q.col);
-          if (cb.checked) { if (at >= 0) now.splice(at, 1); }
-          else if (at < 0) now.push(q.col);
-          save({ hiddenKeys: now });
-        };
-        list.appendChild(row);
-      });
-      box.appendChild(list);
-      box.appendChild(el("span", "own-note",
-        "Turning one off takes its switch off the map. The answers stay on every place."));
-      host.appendChild(box);
-    }
+    /* The questions used to be listed here. They are about the atlas rather
+       than about this layer's row, and three levels down was where they were
+       hard to find — so they have their own shelf beside the list now. */
 
     /* Saved on the way out of a control rather than behind a Save button. There
        is nothing here to preview and nothing to get half-done: two strings, each
