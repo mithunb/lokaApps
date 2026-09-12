@@ -1592,7 +1592,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { getFlashModel, getFlashLiteModel, getEmbedModel, getResolverStatus } from '../lib/models.js';
 import { profileColumns, bestNameColumn } from '../lib/tabular.js';
 import { norm, dice, joinByName, AUTO_ACCEPT } from '../lib/matching.js';
-import { PALETTES, PALETTE_ALIASES, MARKER_COLORS, buildFragment, sanitizeFeatures } from '../lib/fragment.js';
+import { PALETTES, PALETTE_ALIASES, MARKER_COLORS, buildFragment, sanitizeFeatures, justTheLinks } from '../lib/fragment.js';
 import * as imports from '../lib/atlas/imports.js';
 import * as enrich from '../lib/atlas/enrich.js';
 
@@ -2291,6 +2291,28 @@ function transform(session) {
   const frag = buildFragment(spec, feats, existingIds);
   // derived properties (e.g. the primary-tag category key) must survive the whitelist
   (frag.derivedKeys || []).forEach((k) => keep.add(k));
+  /* The picture column, kept as plain addresses before anything is cut.
+
+     Every value is trimmed to five hundred characters on its way onto a map.
+     A place whose photographs arrive wrapped — a list of little records, each
+     with an id beside the address it carries — spends most of that length on
+     the wrapping, so the trim fell through the middle of an address and the
+     map was left holding a fragment that loads nothing. A Cubbon Park place
+     had four photographs and showed three, the fourth cut in half.
+
+     Keeping the addresses alone, before the trim, means the trim falls between
+     whole addresses if it falls at all. A column that holds no addresses is
+     left exactly as it was. */
+  var pictureCol = String((spec && spec.imageColumn) || '');
+  if (pictureCol) {
+    feats = feats.map((f) => {
+      const had = f && f.properties ? f.properties[pictureCol] : undefined;
+      if (had === undefined || had === null || had === '') return f;
+      const links = justTheLinks(had);
+      if (!links || links === String(had)) return f;
+      return { ...f, properties: { ...f.properties, [pictureCol]: links } };
+    });
+  }
   const clean = sanitizeFeatures(feats, [...keep], sessionBounds(session), spec.outsideAction);
   report.outside = clean.outside;
   if (spec.outsideAction === 'drop' && clean.outside) report.outsideDropped = true;

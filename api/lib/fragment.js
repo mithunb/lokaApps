@@ -412,6 +412,60 @@ function prettify(col) {
 const MAX_FEATURES = 5000;
 const MAX_STR = 500;
 
+/* The web addresses in a value, and nothing else.
+
+   A picture column can arrive holding its addresses wrapped — a list of little
+   records, each with an id beside the address it carries. That is far longer
+   than the addresses themselves, and every value is cut at MAX_STR on its way
+   onto a map, so a place with three or four photographs was cut through the
+   middle of an address: the list stopped being readable, and the map was left
+   holding a fragment that loads nothing.
+
+   Kept as the addresses alone, separated the way this product separates
+   several of anything, the cut falls between whole addresses instead of
+   through one — and far fewer of them reach it at all, because the wrapping
+   was most of the length. Measured on a real place: 500 characters held three
+   addresses and part of a fourth; the same place as plain addresses is 213,
+   and all four survive. */
+export function justTheLinks(v, limit) {
+  const cap = limit || MAX_STR;
+  const out = [];
+  const seen = new Set();
+  (function take(x, depth) {
+    if (x == null || depth > 5) return;
+    if (Array.isArray(x)) { x.forEach((y) => take(y, depth + 1)); return; }
+    if (typeof x === 'object') {
+      for (const k of Object.keys(x)) take(x[k], depth + 1);
+      return;
+    }
+    const str = String(x).trim();
+    if (!str) return;
+    if (str.charAt(0) === '[' || str.charAt(0) === '{') {
+      let parsed = null;
+      try { parsed = JSON.parse(str); } catch { parsed = null; }
+      if (parsed) { take(parsed, depth + 1); return; }
+    }
+    // the separators this product puts between several are not part of one
+    const found = str.match(/https:\/\/[^\s"'<>\\|;,]+/gi);
+    if (found) {
+      for (const u of found) {
+        const clean = u.replace(/[)\]},.;:'"]+$/, '');
+        if (clean && !seen.has(clean)) { seen.add(clean); out.push(clean); }
+      }
+    }
+  })(v, 0);
+  if (!out.length) return null;               // nothing to say: leave the value alone
+  /* Whole addresses only. If they will not all fit, the ones that do are kept
+     and the rest are dropped cleanly, rather than the last one being halved. */
+  let joined = '';
+  for (const u of out) {
+    const next = joined ? joined + '; ' + u : u;
+    if (next.length > cap) break;
+    joined = next;
+  }
+  return joined || null;
+}
+
 /** Whitelist-copy properties onto null-prototype objects; validate coords.
     outsideAction 'drop' removes points beyond the padded atlas bounds instead
     of only counting them — a visible Check-step decision, not a silent one. */
