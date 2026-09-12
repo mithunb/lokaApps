@@ -494,32 +494,33 @@
     btn.onclick = function () { window.AtlasShare.open(btn.__shareOpts); };
   }
 
-  // Frame the data within the map area that's actually visible — i.e. to the right of the
-  // control widget when it floats over the map (desktop), full width when it's docked below (mobile).
-  // Draft previews set MANIFEST.focusLayer — frame the proposed layer, not the
-  // whole atlas, so the user lands on their own data.
-  function focusFit(animate) {
-    var d = MANIFEST.focusLayer && DATA[MANIFEST.focusLayer];
-    if (!d || !d.features || !d.features.length) return false;
-    var w = 180, s = 90, e = -180, n = -90;
-    d.features.forEach(function (f) {
-      (function walk(c) {
-        if (!Array.isArray(c)) return;
-        if (typeof c[0] === "number") {
-          if (c[0] < w) w = c[0]; if (c[0] > e) e = c[0];
-          if (c[1] < s) s = c[1]; if (c[1] > n) n = c[1];
-        } else c.forEach(walk);
-      })((f.geometry && f.geometry.coordinates) || []);
-    });
-    if (e < w || n < s) return false;
-    if (e - w < 0.01) { w -= 0.02; e += 0.02; }   // single point: give it room
-    if (n - s < 0.01) { s -= 0.02; n += 0.02; }
-    map.fitBounds([[w, s], [e, n]], { padding: 60, duration: animate ? 350 : 0, maxZoom: 13 });
-    return true;
+  /* Where the map opens.
+
+     An atlas opens on the places it holds. Somebody who tagged thirty-three
+     things in Cubbon Park picked Bengaluru as the region — because that is
+     where Cubbon Park is — and the map opened on all sixty-six kilometres of
+     it, with their tags a speck in the middle. The region says what the map is
+     OF; it should not decide what you see first.
+
+     So: frame the layers the owner added themselves, and fall back to the
+     region when there are none. That needs no rule about which atlases are
+     which, because it settles itself — when somebody's places cover the whole
+     region, framing them IS the region view. Measured on the three real
+     atlases: Deoria has no layers of its own and is untouched; Bengaluru's
+     finds span 21km of a 66km region, so it tightens a little; Cubbon Park's
+     tags span 0.87km, and that is the one this is for. */
+  function framedLayers() {
+    // a draft preview asks for one particular layer, and still gets it
+    if (MANIFEST.focusLayer) return [MANIFEST.focusLayer];
+    return (MANIFEST.layers || [])
+      .filter(function (L) { return L.userLayer && L.default !== false; })
+      .map(function (L) { return L.id; });
   }
 
-  function fitToData(animate) {
-    if (!MANIFEST.bounds || !map) return;
+  /* Room for the panel that floats over the map, so framed places do not open
+     underneath it. Shared with fitToData, which had this to itself while
+     focusFit used a flat sixty on every side. */
+  function viewPadding() {
     var pad = { top: 40, right: 40, bottom: 40, left: 40 };
     try {
       var mr = map.getContainer().getBoundingClientRect();
@@ -534,7 +535,50 @@
         }
       }
     } catch (e) {}
-    map.fitBounds(MANIFEST.bounds, { padding: pad, duration: animate ? 350 : 0 });
+    return pad;
+  }
+
+  // Frame the data within the map area that's actually visible — i.e. to the right of the
+  // control widget when it floats over the map (desktop), full width when it's docked below (mobile).
+  function focusFit(animate) {
+    var ids = framedLayers();
+    if (!ids.length) return false;
+    var w = 180, s = 90, e = -180, n = -90, seen = 0;
+    ids.forEach(function (id) {
+      var d = DATA[id];
+      if (!d || !d.features || !d.features.length) return;
+      d.features.forEach(function (f) {
+        (function walk(c) {
+          if (!Array.isArray(c)) return;
+          if (typeof c[0] === "number") {
+            seen++;
+            if (c[0] < w) w = c[0]; if (c[0] > e) e = c[0];
+            if (c[1] < s) s = c[1]; if (c[1] > n) n = c[1];
+          } else c.forEach(walk);
+        })((f.geometry && f.geometry.coordinates) || []);
+      });
+    });
+    if (!seen || e < w || n < s) return false;
+    /* One place, or several stacked on the same spot, has no width to frame, so
+       it is given some. It used to be given a great deal: anything narrower
+       than 0.01 degrees was pushed out by 0.02 either way, and 0.01 degrees is
+       over a kilometre — so a park's worth of tags was inflated to about five
+       kilometres and then capped wider still. The room is now only for the case
+       that genuinely has none, and it is a few streets rather than a city. */
+    var NOTHING = 1e-7, ROOM = 0.002;          // about 220 metres
+    if (e - w < NOTHING) { w -= ROOM; e += ROOM; }
+    if (n - s < NOTHING) { s -= ROOM; n += ROOM; }
+    /* Thirteen is about a five-kilometre view: enough to cap a single point,
+       and also enough to hold a small park at arm's length however tightly it
+       was framed. Sixteen still stops one tag zooming to its rooftop. */
+    map.fitBounds([[w, s], [e, n]],
+      { padding: viewPadding(), duration: animate ? 350 : 0, maxZoom: 16 });
+    return true;
+  }
+
+  function fitToData(animate) {
+    if (!MANIFEST.bounds || !map) return;
+    map.fitBounds(MANIFEST.bounds, { padding: viewPadding(), duration: animate ? 350 : 0 });
   }
 
   /* ---- base style (glyphs + background + basemaps) ---- */
