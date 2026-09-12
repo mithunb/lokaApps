@@ -4308,8 +4308,13 @@
         h += '<div class="pop-notes">' + notes.map(function (n) {
           return '<div class="pop-note"><b>' + esc(n.title) + "</b>" + (n.body ? "<span>" + esc(n.body) + "</span>" : "") + "</div>";
         }).join("") + "</div>";
-      } else if (loka && (fld.property === "description" || fld.property === "image_urls")) {
-        return;   // the photo and its caption already led the card
+      } else if (loka && (fld.property === "description" || fld.property === "image_urls" ||
+                          fld.property === ((spec && spec.imageColumn) || ""))) {
+        /* the photo and its caption already led the card. Whichever column
+           holds the pictures is the one to skip, not only the one LOKA names:
+           a layer whose photographs live in "media" drew every one of them
+           twice, once at the top of the card and once again below it. */
+        return;
       } else if (fld.type === "image") {
         /* photo column: https-only, lazy, silently hidden when the link is dead.
            The addresses are looked for inside the value rather than demanded of
