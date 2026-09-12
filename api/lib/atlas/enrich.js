@@ -975,7 +975,7 @@ async function answerQuestions({ digest, questions, title, callJSON, model }) {
    told, so it spent kinds on them and questions fell below the two kinds they
    need and vanished. That was invisible from the outside and looked like the
    model being fickle. */
-function keyKindsByColumn(rows, fields) {
+export function keyKindsByColumn(rows, fields) {
   const out = [];
   for (const f of keyShapedColumns(rows, fields)) {
     const seen = new Set(), words = [];

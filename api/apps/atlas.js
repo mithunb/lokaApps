@@ -4023,7 +4023,7 @@ router.post('/layers/ask', async (req, res) => {
       const out = await enrich.proposeKinds({
         digest: enrich.buildDigest(rows, fields), question, title,
         callJSON: aiCaller('server'), model: getFlashModel(),
-        alreadyKeyed: keyKindsByColumn(rows, fields),
+        alreadyKeyed: enrich.keyKindsByColumn(rows, fields),
       });
       return res.json(out);
     }
