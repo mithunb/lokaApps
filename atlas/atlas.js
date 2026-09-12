@@ -4391,9 +4391,18 @@
         try { parsed = JSON.parse(str); } catch (e) { parsed = null; }
         if (parsed) { take(parsed, depth + 1); return; }
       }
-      str.split(/[|;,\s]+/).forEach(function (piece) {
-        if (/^https:\/\/\S+$/i.test(piece)) out.push(piece);
-      });
+      /* Look for addresses inside the words rather than asking the words to be
+         one. They arrive wrapped in quotes and brackets, and — the reason this
+         matters — a value is cut at five hundred characters on its way onto the
+         map, so a place with several photographs ends mid-address and the whole
+         thing stops being readable as a list. Searching still finds the ones
+         that survived the cut. A cut-off address loads nothing and hides
+         itself, which is the same as it always did. */
+      // the separators this product uses between several are not part of one
+      var found = str.match(/https:\/\/[^\s"'<>\\|;,]+/gi);
+      if (found) {
+        found.forEach(function (u) { out.push(u.replace(/[)\]},.;:'"]+$/, "")); });
+      }
     })(v, 0);
     var seen = {};
     return out.filter(function (u) { return seen[u] ? false : (seen[u] = true); });
