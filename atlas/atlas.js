@@ -4218,10 +4218,12 @@
    being dropped on the floor, because a generic image column means one image. */
   function lokaLead(L, props, caption, krows) {
     var h = "";
-    var shots = String(props.image_urls || "")
-      .split(/[|;]/)
-      .map(function (u) { return u.trim(); })
-      .filter(function (u) { return /^https:\/\/\S+$/i.test(u); });
+    /* The lead photograph. Looked for in the column LOKA sends and in whatever
+       column this layer was told holds its pictures, because the name differs:
+       a tag exported one way carries image_urls, another carries media. */
+    var imgCol = (L && L.spec && L.spec.imageColumn) || "";
+    var shots = linksIn(props.image_urls);
+    if (!shots.length && imgCol) shots = linksIn(props[imgCol]);
     if (shots.length) {
       h += '<div class="pop-shots' + (shots.length > 1 ? " many" : "") + '">' +
         shots.slice(0, 4).map(function (u) {
@@ -4309,10 +4311,17 @@
       } else if (loka && (fld.property === "description" || fld.property === "image_urls")) {
         return;   // the photo and its caption already led the card
       } else if (fld.type === "image") {
-        // photo column: https-only, lazy, silently hidden when the link is dead
-        var u = String(v).trim();
-        if (/^https:\/\/\S+$/i.test(u)) {
-          h += '<img class="pop-img" src="' + esc(u) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" />';
+        /* photo column: https-only, lazy, silently hidden when the link is dead.
+           The addresses are looked for inside the value rather than demanded of
+           it, so a place carrying several — or carrying them wrapped, which is
+           how they arrive from LOKA — shows its photographs instead of nothing. */
+        var shots = linksIn(v);
+        if (shots.length) {
+          h += '<div class="pop-shots' + (shots.length > 1 ? " many" : "") + '">' +
+            shots.slice(0, 4).map(function (u) {
+              return '<img class="pop-img" src="' + esc(u) + '" alt="" loading="lazy" ' +
+                'referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" />';
+            }).join("") + "</div>";
         }
       } else if (fld.type === "cropProfile") {
         var cp = Array.isArray(v) ? v : safeArr(v);
@@ -4341,6 +4350,54 @@
     return h + "</div>";
   }
   function safeArr(v) { try { return JSON.parse(v); } catch (e) { return []; } }
+
+  /* The pictures in a value, however that value arrived.
+
+     A place can carry its photographs in more shapes than one, because the
+     shape depends on whoever sent them. A single web address. Several
+     separated by semicolons. A list written as text. And — this is the one
+     that was showing nobody anything — a list of wrappers, each holding its
+     address in a part of its own:
+
+       [{"id": "a7a42…", "image_url": "https://…/1789129598955_lib0_….jpg"}]
+
+     Every one of the thirty-three places on a Cubbon Park atlas stored its
+     photograph that way. The card knew the column was pictures and asked for
+     one, the test was "does this whole value begin with https", the value
+     began with a square bracket, and nothing was drawn — no broken image, no
+     message, just a card with no photograph on it.
+
+     So rather than test the value, look inside it for web addresses, however
+     deep they are wrapped. This heals what is already stored, which matters:
+     those thirty-three places are on a map somebody has shared, and asking
+     them to add their photographs again would be asking them to pay for our
+     mistake. */
+  function linksIn(v) {
+    var out = [];
+    (function take(x, depth) {
+      if (x == null || depth > 5) return;
+      if (Array.isArray(x)) { x.forEach(function (y) { take(y, depth + 1); }); return; }
+      if (typeof x === "object") {
+        for (var k in x) {
+          if (Object.prototype.hasOwnProperty.call(x, k)) take(x[k], depth + 1);
+        }
+        return;
+      }
+      var str = String(x).trim();
+      if (!str) return;
+      // written as a list or a wrapper: read it as one before reading it as words
+      if (str.charAt(0) === "[" || str.charAt(0) === "{") {
+        var parsed = null;
+        try { parsed = JSON.parse(str); } catch (e) { parsed = null; }
+        if (parsed) { take(parsed, depth + 1); return; }
+      }
+      str.split(/[|;,\s]+/).forEach(function (piece) {
+        if (/^https:\/\/\S+$/i.test(piece)) out.push(piece);
+      });
+    })(v, 0);
+    var seen = {};
+    return out.filter(function (u) { return seen[u] ? false : (seen[u] = true); });
+  }
   // tag chips from either a JSON array or a "a; b, c"-delimited string
   function tagArr(v) {
     if (Array.isArray(v)) return v;
