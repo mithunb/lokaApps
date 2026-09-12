@@ -231,41 +231,27 @@
         "Patterns found once \u2014 " + done.length +
         (done.length === 1 ? " question this data answers, now a key above."
                            : " questions this data answers, each now a key above.")));
-      /* A way back, for when the questions are wrong.
+      /* There used to be a way back here: "Ask different questions", which
+         threw every question on the map away and read the places again from
+         nothing.
 
-         Settling the questions was right: an atlas somebody has linked to
-         should not change its keys under them, and adding places should not
-         reshuffle the map. But settling made a bad set permanent from inside
-         the product — one of these atlases asked "what kind of place is it?"
-         with no kind for a park, and a third of its places went somewhere
-         wrong with no way for their owner to say so.
+         It was put here because settling made a bad set permanent — one of
+         these atlases asked "what kind of place is it?" with no kind for a
+         park, and a third of its places went somewhere wrong with no way for
+         their owner to say so. That was a real problem and it needed a door.
 
-         Deliberate, and it says what it will cost: the keys change, and
-         anybody holding a link sees different ones. */
-      var again = el("button", "own-linkish own-again", "Ask different questions\u2026");
-      again.type = "button";
-      var sure = el("div", "own-confirm");
-      sure.hidden = true;
-      sure.appendChild(el("p", null,
-        "This reads your places again and looks for a fresh set of questions. " +
-        "The keys on this map will change, and anyone you have shared the link with " +
-        "will see the new ones. Your places and their words are untouched."));
-      var row = el("div", "own-row");
-      var no = el("button", "share-btn", "Keep these");
-      no.type = "button";
-      var yes = el("button", "share-btn danger", "Ask again");
-      yes.type = "button";
-      row.appendChild(no); row.appendChild(yes);
-      sure.appendChild(row);
-      again.onclick = function () { sure.hidden = false; again.hidden = true; no.focus(); };
-      no.onclick = function () { sure.hidden = true; again.hidden = false; };
-      yes.onclick = function () {
-        yes.disabled = no.disabled = true;
-        sure.replaceChildren(el("p", null, "Reading every place again\u2026"));
-        askQuestions(L, feats, true);
-      };
-      wrap.appendChild(again);
-      wrap.appendChild(sure);
+         It was a poor door. Measured over ninety readings on three maps, a
+         freshly found set comes out good about two times in five, so the way
+         out of a bad set was a throw of the dice that was more likely to make
+         things worse — and it took the questions that WERE right with it. On
+         the live map it turned 88, 83 and 74 into 94 and 26 in one press, with
+         nothing to put it back.
+
+         A question can now be put right where it sits: its wording changed, an
+         answer dropped, an answer the reading missed added, tried on the
+         places and kept or thrown away. That answers the park exactly, changes
+         only the question that is wrong, and has no dice in it. So the door is
+         gone, and nothing here can lose work any more. */
       return;
     }
 
@@ -279,7 +265,12 @@
      `afresh` decides the one thing that matters here: whether the questions
      this layer already settled on are handed back to be answered again, or
      thrown away so a new set can be found. Everything else is the same either
-     way, which is why it is one function and not two. */
+     way, which is why it is one function and not two.
+
+     Nothing here passes it true any more. Throwing a settled set away was a
+     door an owner could open, and it is closed — a question is put right where
+     it sits instead. The operator's own route can still ask for a fresh set,
+     for an atlas that needs one, and that is the only way in now. */
   function askQuestions(L, feats, afresh, host) {
     var cols = wordColumns(feats);
     if (!cols.length) return;
