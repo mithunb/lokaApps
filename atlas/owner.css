@@ -110,11 +110,22 @@
 .own-qblock { display:flex; flex-direction:column; gap:.5rem; }
 .own-qlayer { margin:0; font-family:'Figtree',sans-serif; font-size:var(--t-meta);
   font-weight:600; color:var(--color-text-primary); }
-.own-q-row { display:flex; flex-direction:column; gap:.1rem; }
+/* Everything under a question lines up with the question's own name.
+
+   The name begins after the switch and the gap beside it, so the indent is
+   written as those two measurements rather than as a round number near them.
+   It used to be 2.6rem against a name starting at 34.8px — about seven pixels
+   adrift, enough that the lines looked attached to nothing in particular. The
+   switch grows on a touch screen, and the indent follows it there, the same way
+   .key-flat already does. */
+.own-q-row { display:flex; flex-direction:column; gap:.1rem;
+  --q-indent:calc(26px + .55rem); }
+@media (pointer:coarse) { .own-q-row { --q-indent:calc(30px + .55rem); } }
 /* the share said in words: a bare number beside a switch is a riddle */
-.own-q-reach { font-size:var(--t-label); color:var(--color-text-secondary); padding-left:2.6rem; }
-.own-q-kinds { font-size:var(--t-label); color:var(--color-text-muted); padding-left:2.6rem;
-  line-height:1.4; }
+.own-q-reach { font-size:var(--t-label); color:var(--color-text-secondary);
+  padding-left:var(--q-indent); }
+.own-q-kinds { font-size:var(--t-label); color:var(--color-text-muted);
+  padding-left:var(--q-indent); line-height:1.4; }
 
 /* ---------- asking one of your own ---------- */
 .own-ask { display:flex; flex-direction:column; gap:.4rem; padding-top:.3rem;
@@ -135,6 +146,35 @@
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .own-ask-eg-a { font-size:var(--t-label); color:var(--color-canopy); font-weight:600; }
 .own-ask-eg-w { font-size:var(--t-label); color:var(--color-text-muted); }
+/* what this place used to answer, beside what it answers now. quiet, because
+   the new answer is the news and this is only how to recognise a change. */
+.own-ask-eg-was { font-size:var(--t-label); color:var(--color-text-muted); }
+
+/* ---------- an answer you can drop, and one you can add ----------
+   Adding an answer is the whole of a repair. "You have missed parks" is the
+   smallest true thing somebody can say about a reading, and there was nowhere
+   to say it: the answers could be reworded but not added to, so a question with
+   no home for a park could only be turned off whole or asked again from
+   nothing. */
+.own-ask-kindrow { display:flex; align-items:center; gap:.3rem; }
+.own-ask-kindrow .own-ask-kind { flex:1 1 auto; }
+.own-ask-drop {
+  flex:0 0 auto; width:1.6rem; height:1.6rem; line-height:1;
+  display:flex; align-items:center; justify-content:center;
+  font:inherit; font-size:var(--t-meta); color:var(--color-text-muted);
+  background:none; border:1px solid transparent; border-radius:var(--radius-md);
+  cursor:pointer; padding:0;
+}
+.own-ask-drop:hover { color:var(--color-text-primary); border-color:var(--color-border); }
+.own-ask-drop:focus-visible { outline:2px solid var(--color-moss); outline-offset:1px; }
+.own-ask-add { align-self:flex-start; font-size:var(--t-label); }
+
+/* ---------- putting one question right ----------
+   This sits under the question it belongs to rather than under the whole list,
+   so it indents to the question's name like everything else in the row, and it
+   takes no rule above it — the row is already its boundary. */
+.own-fix { padding-top:.15rem; padding-left:var(--q-indent); border-top:none; }
+.own-fix .own-linkish { font-size:var(--t-label); }
 
 /* ---------- renaming, where the name is ----------
    The pencil is quiet until the row is under a pointer, because a visitor's eye

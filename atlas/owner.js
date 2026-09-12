@@ -834,6 +834,12 @@
         if (tally.kinds.length) {
           line.appendChild(el("div", "own-q-kinds", tally.kinds.join(" · ")));
         }
+        /* A way to put this one question right, under the question itself.
+           A reading can be wrong in a way no number shows — a question can
+           answer every place on the map and still have sent a third of them
+           somewhere wrong, because the answer they belonged in was never
+           offered. This is where somebody says so. */
+        if (q.kinds.length) line.appendChild(askBox(L, q));
         block.appendChild(line);
       });
       /* The one thing somebody needs to know before turning a question off:
@@ -881,17 +887,37 @@
      correct them, and then the first forty places are really answered and handed
      back before anything is written. That preview is not a sample — it is the
      first of the work, kept if you keep it. */
-  function askBox(L) {
-    var wrap = el("div", "own-ask");
-    var open = el("button", "own-linkish", "Ask a question of your own…");
+  /* Asking a question of your own — and putting a wrong one right.
+
+     One form does both, because they are the same three steps: settle on the
+     answers, try them on the places, keep what comes back. The only difference
+     is where the answers start. A new question asks the model for a first set.
+     A repair starts from the answers the question already has, because those
+     are the thing that is wrong.
+
+     Repair exists because settling was one-way. A map that asked "what kind of
+     place is it?" with no answer for a park had thirteen parks filed under
+     heritage — and the question read 66 of 66, which is perfect by every number
+     this product shows, and still wrong. Turning it off threw away the
+     fifty-three it had right. The only other way out was to throw away every
+     question on the map and read it again, which lands well about two times in
+     five. This changes the one question that is wrong and leaves the rest
+     standing. */
+  function askBox(L, fix) {
+    var places = placesOf(L).length;
+    var allPlaces = places === 1 ? "the 1 place" : "all " + places + " places";
+    var wrap = el("div", fix ? "own-ask own-fix" : "own-ask");
+    var open = el("button", "own-linkish",
+      fix ? "Fix the answers under this…" : "Ask a question of your own…");
     open.type = "button";
     var form = el("div", "own-ask-form");
     form.hidden = true;
-    open.onclick = function () { open.hidden = true; form.hidden = false; form.querySelector("input").focus(); };
     wrap.appendChild(open);
 
     var fld = el("label", "own-fld");
-    fld.appendChild(document.createTextNode("What do you want to know about each place?"));
+    fld.appendChild(document.createTextNode(fix
+      ? "What is this question really asking?"
+      : "What do you want to know about each place?"));
     var box = document.createElement("input");
     box.type = "text";
     box.maxLength = 120;
@@ -905,7 +931,7 @@
     var row = el("div", "own-row");
     var go = el("button", "share-btn primary", "Work out the answers");
     go.type = "button";
-    var cancel = el("button", "share-btn", "Cancel");
+    var cancel = el("button", "share-btn", fix ? "Throw this away" : "Cancel");
     cancel.type = "button";
     cancel.onclick = function () { form.hidden = true; open.hidden = false; reset(); open.focus(); };
     row.appendChild(go); row.appendChild(cancel);
@@ -913,6 +939,26 @@
     wrap.appendChild(form);
 
     var kinds = null, token = null;
+
+    open.onclick = function () {
+      open.hidden = true; form.hidden = false;
+      if (fix) {
+        /* A repair opens with the question as it stands — its wording, and every
+           answer it was given, including any no place is using at the moment.
+           There is nothing to ask the model for yet: what is on the map is
+           exactly what needs changing. */
+        box.value = fix.label || "";
+        kinds = (fix.kinds || []).map(function (k) {
+          return { name: k.name, definition: k.definition || "" };
+        });
+        drawKinds();
+        say.textContent = "Change the wording, or add an answer the reading missed. " +
+          "Nothing changes on your map until you keep it.";
+        go.textContent = "Try it on " + allPlaces;
+      }
+      box.focus();
+    };
+
     function reset() {
       kinds = null; token = null;
       box.value = ""; say.textContent = ""; err.hidden = true;
@@ -922,7 +968,47 @@
     function fail(e) { err.textContent = errMsg(e); err.hidden = false; go.disabled = false; }
     function ask(phase, body) {
       return api("layers/ask", { method: "POST", body: Object.assign(
-        { dataset: SLUG, layerId: L.id, phase: phase, question: box.value.trim() }, body) });
+        { dataset: SLUG, layerId: L.id, phase: phase, question: box.value.trim() },
+        fix ? { replacing: fix.col } : null, body) });
+    }
+
+    /* The answers, as boxes you can change, drop, or add to.
+
+       Being able to add one is the whole of the repair. Every other way out of a
+       wrong question either throws away the parts that were right or asks the
+       map to be read again from nothing. "You have missed parks" is the smallest
+       true thing somebody can say about a reading, and until now there was
+       nowhere to say it. */
+    function drawKinds() {
+      kindsBox.hidden = false;
+      kindsBox.innerHTML = "";
+      kinds.forEach(function (k, i) {
+        var line = el("div", "own-ask-kindrow");
+        var ki = document.createElement("input");
+        ki.type = "text"; ki.className = "own-ask-kind"; ki.value = k.name; ki.maxLength = 40;
+        ki.setAttribute("aria-label", "Answer " + (i + 1));
+        ki.oninput = function () { kinds[i].name = ki.value.trim(); };
+        line.appendChild(ki);
+        var drop = el("button", "own-ask-drop", "×");
+        drop.type = "button";
+        drop.setAttribute("aria-label", "Take away the answer " + (k.name || ("number " + (i + 1))));
+        drop.onclick = function () { kinds.splice(i, 1); drawKinds(); };
+        line.appendChild(drop);
+        kindsBox.appendChild(line);
+      });
+      var add = el("button", "own-linkish own-ask-add", "+ Add an answer");
+      add.type = "button";
+      add.onclick = function () {
+        kinds.push({ name: "", definition: "" });
+        drawKinds();
+        var boxes = kindsBox.querySelectorAll(".own-ask-kind");
+        if (boxes.length) boxes[boxes.length - 1].focus();
+      };
+      kindsBox.appendChild(add);
+    }
+
+    function named() {
+      return (kinds || []).filter(function (k) { return k.name && k.name.trim(); });
     }
 
     go.onclick = function () {
@@ -942,46 +1028,64 @@
           }
           if (r.verdict !== "kinds") { fail(new Error(r.trouble || "the model could not answer")); return; }
           kinds = r.kinds;
-          say.textContent = "These are the answers it found. Change any of them, then try it on the first forty places.";
-          kindsBox.hidden = false;
-          kindsBox.innerHTML = "";
-          kinds.forEach(function (k, i) {
-            var ki = document.createElement("input");
-            ki.type = "text"; ki.className = "own-ask-kind"; ki.value = k.name; ki.maxLength = 40;
-            ki.setAttribute("aria-label", "Answer " + (i + 1));
-            ki.onchange = function () { kinds[i].name = ki.value.trim(); };
-            kindsBox.appendChild(ki);
-          });
-          go.textContent = "Try it on forty places";
+          say.textContent = "These are the answers it found. Change any of them, drop one, " +
+            "or add one it missed, then try it on your places.";
+          drawKinds();
+          go.textContent = "Try it on " + allPlaces;
         }).catch(fail);
         return;
       }
 
       if (!token) {
-        say.textContent = "Answering the first forty places… about half a minute.";
-        ask("try", { kinds: kinds }).then(function (r) {
+        /* Two is the floor: one answer sorts nothing, and the server says so
+           anyway. Caught here so somebody who has just dropped an answer hears
+           it straight away rather than after a wait. */
+        if (named().length < 2) {
+          go.disabled = false;
+          err.textContent = "A question needs at least two answers to sort places by.";
+          err.hidden = false;
+          return;
+        }
+        say.textContent = "Answering " + allPlaces + "… about half a minute.";
+        ask("try", { kinds: named() }).then(function (r) {
           go.disabled = false;
           if (r.verdict !== "answered") { fail(new Error(r.note || r.trouble || "nothing came back")); return; }
           token = r.token;
-          say.textContent = r.answered + " of the first " + r.places + " answered — " +
-            r.kinds.map(function (k) { return k.name + " " + k.count; }).join(" · ");
+          say.textContent = r.answered + " of " + r.places + " answered" +
+            (r.moved ? " — " + r.moved + (r.moved === 1 ? " place moves" : " places move") : "") +
+            " — " + r.kinds.map(function (k) { return k.name + " " + k.count; }).join(" · ");
           kindsBox.innerHTML = "";
           (r.examples || []).forEach(function (e) {
             var line = el("div", "own-ask-eg");
-            line.appendChild(el("span", "own-ask-eg-p", e.place));
-            line.appendChild(el("span", "own-ask-eg-a", e.answer));
-            if (e.words) line.appendChild(el("span", "own-ask-eg-w", "because " + e.words));
+            var p = el("span", "own-ask-eg-p"); p.textContent = e.place;
+            var a = el("span", "own-ask-eg-a"); a.textContent = e.answer;
+            line.appendChild(p); line.appendChild(a);
+            /* What this place used to answer, kept beside what it answers now.
+               A repair that moves places should show which ones moved, or the
+               only way to find out is to keep it and go looking. */
+            if (e.was) {
+              var w = el("span", "own-ask-eg-was"); w.textContent = "was: " + e.was;
+              line.appendChild(w);
+            }
+            if (e.words) {
+              var b = el("span", "own-ask-eg-w"); b.textContent = "because " + e.words;
+              line.appendChild(b);
+            }
             kindsBox.appendChild(line);
           });
+          kindsBox.appendChild(el("p", "own-note", fix
+            ? "Nothing has changed on your map yet. Throw this away and the question stays exactly as it is now."
+            : "Nothing has changed on your map yet."));
           go.textContent = "Keep this question";
         }).catch(fail);
         return;
       }
 
-      say.textContent = "Answering the rest and adding it to the map…";
-      ask("keep", { kinds: kinds, token: token }).then(function (r) {
+      say.textContent = fix ? "Putting it right on the map…" : "Adding it to the map…";
+      ask("keep", { kinds: named(), token: token }).then(function (r) {
         if (!r.wrote) { fail(new Error(r.note || r.trouble || "it could not be saved")); return; }
-        toast("“" + (r.question || box.value.trim()) + "” is on the map.");
+        var name = r.question || box.value.trim();
+        toast(fix ? "“" + name + "” was read again." : "“" + name + "” is on the map.");
         form.hidden = true; open.hidden = false; reset();
         return preview(SLUG).then(refreshLayers);
       }).catch(fail);
@@ -1297,7 +1401,11 @@
       .filter(function (c) { return /^pattern_\d+$/.test(c); })
       .sort(function (a, b) { return Number(a.split("_")[1]) - Number(b.split("_")[1]); })
       .map(function (c) {
-        return { col: c, label: labels[c], hidden: hidden.indexOf(c) >= 0 };
+        /* The answers travel with the wording. The repair form opens on them,
+           so it has to be able to reach them without asking the server — what
+           is already on the map is exactly what needs changing. */
+        return { col: c, label: labels[c], hidden: hidden.indexOf(c) >= 0,
+                 kinds: ((L && L.keyKinds) || {})[c] || [] };
       });
   }
 

@@ -3956,8 +3956,20 @@ function questionsAsAnswered(layer, rows) {
     categories.forEach((c) => { if (c) tally.set(c, (tally.get(c) || 0) + 1); });
     return {
       question: q.question,
+      /* Every answer this question was given, including the ones no place is
+         using at the moment.
+
+         These counts become the question's remembered answers, and dropping the
+         empty ones meant a question quietly forgot them: keep anything on a
+         layer and every OTHER question on it came back missing whichever of its
+         answers happened to match nobody that day. A later reading was then
+         handed a shorter list than the question actually has, and places that
+         belonged in the forgotten answer had nowhere to go — the same way a map
+         with no answer for a park files its parks under heritage. An answer
+         with no places is not a mistake; it is a place for something that has
+         not been added yet. */
       counts: q.kinds.map((k) => ({ name: k.name, definition: k.definition || '',
-        count: tally.get(k.name) || 0 })).filter((c) => c.count > 0),
+        count: tally.get(k.name) || 0 })),
       categories,
       why: rows.map((r) => String((r && r[whyCol]) || '').split(',').map((w) => w.trim()).filter(Boolean)),
     };
@@ -3987,10 +3999,24 @@ router.post('/layers/ask', async (req, res) => {
     const title = (inst && inst.title) || dataset;
     const question = String(b.question || '').trim().slice(0, 120);
 
+    /* Putting an existing question right, rather than adding another one.
+
+       The column says which: pattern_2 is the layer's second question. Repair
+       is the answer to a question that came out wrong — a map that asked "what
+       kind of place is it?" and offered no answer for a park had thirteen parks
+       filed under heritage, and until now the only way out was to throw away
+       every question on the map and read it again. This changes the one that is
+       wrong and leaves the rest alone. */
+    const settled = questionsOn(layer, rows);
+    const putRight = RULES.isQuestionColumn(String(b.replacing || ''))
+      ? Number(String(b.replacing).split('_')[1]) - 1
+      : -1;
+    const repairing = putRight >= 0 && putRight < settled.length;
+
     if (phase === 'kinds') {
       if (!question) return res.status(400).json({ error: 'ask a question first' });
-      const settled = questionsOn(layer, rows);
-      if (settled.length >= MAX_QUESTIONS_ON_A_LAYER) {
+      // a repair takes no new place on the map, so the cap does not apply to it
+      if (!repairing && settled.length >= MAX_QUESTIONS_ON_A_LAYER) {
         return res.status(400).json({ error: 'this layer already carries ' + settled.length +
           ' questions, which is as many as a map can wear' });
       }
@@ -4031,11 +4057,28 @@ router.post('/layers/ask', async (req, res) => {
         verdict: 'answered', question: q.question,
         answered, places: rows.length,
         kinds: (q.counts || []).map((c) => ({ name: c.name, count: c.count })),
-        // a handful of real ones, so the number has faces behind it
-        examples: (q.categories || []).map((c, i) => ({
-          place: String(rows[i].description || rows[i].name || '').slice(0, 60),
-          answer: c, words: (q.why[i] || []).join(', '),
-        })).filter((e) => e.answer && e.place).slice(0, 6),
+        /* A handful of real ones, so the number has faces behind it.
+
+           When a question is being put right, `was` carries what the place used
+           to answer, and the places that moved are shown first — those are the
+           whole point of the repair, and a preview that happened to show six
+           places that did not move would look like nothing had happened. */
+        examples: (q.categories || []).map((c, i) => {
+          const before = repairing ? String(rows[i]['pattern_' + (putRight + 1)] || '') : '';
+          return {
+            place: String(rows[i].description || rows[i].name || '').slice(0, 60),
+            answer: c, words: (q.why[i] || []).join(', '),
+            was: (before && before !== c) ? before : '',
+          };
+        }).filter((e) => e.answer && e.place)
+          .sort((a, b) => (b.was ? 1 : 0) - (a.was ? 1 : 0))
+          .slice(0, 6),
+        moved: repairing
+          ? (q.categories || []).filter((c, i) => {
+            const before = String(rows[i]['pattern_' + (putRight + 1)] || '');
+            return c && before && before !== c;
+          }).length
+          : 0,
       };
 
       if (phase === 'try') {
@@ -4045,12 +4088,17 @@ router.post('/layers/ask', async (req, res) => {
       }
 
       /* Kept. The layer's own questions are read back with the answers already
-         on its places, the new one is added at the end, and all of them are
-         written together — so nothing that was there is re-asked or lost. */
+         on its places, this one takes its place among them, and all of them are
+         written together — so nothing that was there is re-asked or lost.
+
+         A new question goes on the end. A repaired one goes back exactly where
+         it was, so the keys on the map keep their order and anybody holding a
+         link sees the same question in the same place, put right. */
       const held = b.token && ASKING.get(String(b.token));
       const fresh = (held && held.dataset === dataset && held.layerId === layerId) ? held.q : q;
       if (b.token) ASKING.delete(String(b.token));
-      const all = questionsAsAnswered(layer, rows).concat([fresh]);
+      const all = questionsAsAnswered(layer, rows);
+      if (repairing) all[putRight] = fresh; else all.push(fresh);
       await writeReading({
         dataset, layerId, rows, questions: all,
         label: layer.label || layerId, source: layer.source,
