@@ -4309,7 +4309,7 @@
           return '<div class="pop-note"><b>' + esc(n.title) + "</b>" + (n.body ? "<span>" + esc(n.body) + "</span>" : "") + "</div>";
         }).join("") + "</div>";
       } else if (loka && (fld.property === "description" || fld.property === "image_urls" ||
-                          fld.property === ((spec && spec.imageColumn) || ""))) {
+                          fld.property === ((L.spec && L.spec.imageColumn) || ""))) {
         /* the photo and its caption already led the card. Whichever column
            holds the pictures is the one to skip, not only the one LOKA names:
            a layer whose photographs live in "media" drew every one of them
