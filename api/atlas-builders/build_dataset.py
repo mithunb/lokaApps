@@ -140,6 +140,35 @@ def save_logo(spec, out_dir):
         return None
 
 
+def max_zoom_for(bounds, center):
+    """How far in an atlas will let somebody go.
+
+    One number used to serve every atlas: fifteen, whether it covered three
+    districts or a single park. Fifteen is about a kilometre across a screen,
+    which is a fair ceiling for a bioregion and far too low for somebody who
+    tagged thirty-three things in Cubbon Park and wants to see which bench they
+    meant.
+
+    The ceiling now follows the region, because a wide region is usually read at
+    a wide scale and the layers drawn over it are coarser — thirty-metre forest
+    cover cannot repay close inspection whatever the ceiling says. But it never
+    drops below seventeen, because the places somebody adds are points, and a
+    point is worth looking at closely no matter how big the region around it is.
+    That floor is the part that matters: a park-sized atlas usually sits inside
+    a city-sized region, so the region alone would have kept it shut out.
+
+    The basemaps go to nineteen, so nothing here asks for more than they have.
+    """
+    span_km = (bounds[2] - bounds[0]) * 111 * math.cos(math.radians(center[1]))
+    if span_km <= 10:
+        return 19
+    if span_km <= 50:
+        return 18
+    if span_km <= 200:
+        return 17
+    return 16
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--jobspec", required=True)
@@ -240,7 +269,7 @@ def main():
         "zoom": zoom,
         "bounds": [[final_bounds[0], final_bounds[1]], [final_bounds[2], final_bounds[3]]],
         "minzoom": max(4, zoom - 2.2),
-        "maxzoom": 15,
+        "maxzoom": max_zoom_for(final_bounds, center),
         "glyphs": "https://tiles.basemaps.cartocdn.com/fonts/{fontstack}/{range}.pbf",
         "basemaps": BASEMAPS,
         "groups": groups_present,
