@@ -39,6 +39,28 @@
   function isAnswerColumn(k) { return /^pattern_/.test(k); }
   function isQuestionColumn(k) { return /^pattern_\d+$/.test(k); }
 
+  /* What a cell says, when it might be holding several things.
+
+     Places usually arrive through the browser, which already turns a list into
+     the product's own way of saying several — the things separated by
+     semicolons. But a layer can also be written straight to disk, and then a
+     column of lists arrives here as lists. Left alone they are not strings, so
+     every one of them is passed over, the column looks empty, and a column of
+     real words is dropped from the reading without anybody being told.
+
+     Joining them the same way the browser does means such a column is judged on
+     what it actually says — and the link test below still sees each web address
+     on its own, rather than one long run of them. */
+  function cellText(v) {
+    if (v == null) return "";
+    if (Array.isArray(v)) {
+      return v.map(function (x) { return x == null ? "" : String(x); })
+        .filter(function (s) { return s.trim() !== ""; })
+        .join("; ");
+    }
+    return typeof v === "string" ? v : "";
+  }
+
   /* Which columns hold words worth reading.
      Given the places as plain rows — the browser holds them as features, so it
      passes their properties. */
@@ -52,8 +74,8 @@
       if (/^(lat|latitude|lon|lng|long|longitude)$/i.test(k)) return false;
       var seen = {}, distinct = 0, spaced = 0, filled = 0, datey = 0;
       for (var i = 0; i < rows.length; i++) {
-        var v = (rows[i] || {})[k];
-        if (typeof v !== "string") continue;
+        var v = cellText((rows[i] || {})[k]);
+        if (!v) continue;
         v = v.trim();
         if (!v) continue;
         if (/^https?:\/\//i.test(v)) return false;      // a link, not words

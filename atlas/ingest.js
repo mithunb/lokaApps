@@ -13,6 +13,38 @@
 (function () {
   "use strict";
 
+  /* A cell as text, when the cell holds more than one thing.
+
+     A place can arrive carrying several of something — three photographs, four
+     labels, two people who look after it. The rest of the product already has a
+     way of saying that: the things separated by semicolons. The map's keys split
+     on it, the popup splits on it, and a reading treats each piece as its own
+     word rather than as one long one.
+
+     What used to happen instead was JSON: a place with two photographs stored
+     the text ["a.jpg","b.jpg"], which is not something anybody can read and
+     which defeats every later step. The popup looks for something starting with
+     https and finds a square bracket, so it shows no photograph at all — not
+     one of the two, none. And a reading, looking for columns of words, sees a
+     column that is not a plain link any more and hands the model a row of web
+     addresses as though they were evidence.
+
+     So a list becomes the product's own way of saying several. Anything else
+     that is not a plain value keeps its JSON, which at least loses nothing. */
+  function cellText(v) {
+    if (v == null) return "";
+    if (Array.isArray(v)) {
+      return v
+        .map(function (x) {
+          if (x == null) return "";
+          return typeof x === "object" ? JSON.stringify(x) : String(x);
+        })
+        .filter(function (s) { return s.trim() !== ""; })
+        .join("; ");
+    }
+    return typeof v === "object" ? JSON.stringify(v) : v;
+  }
+
   var MAX_FILE_BYTES = 25 * 1024 * 1024;
   var MAX_ROWS = 5000, MAX_COLS = 40;
   // How big a map we have actually panned and timed, as opposed to how big a file
@@ -421,7 +453,7 @@
       var row = {};
       Object.keys(it.props).forEach(function (k) {
         var v = it.props[k];
-        row[k] = v != null && typeof v === "object" ? JSON.stringify(v) : (v == null ? "" : v);
+        row[k] = cellText(v);
       });
       rows.push(row);
       geoms.push(g);
@@ -605,7 +637,7 @@
       var r = {};
       names.forEach(function (k) {
         var v = o ? o[k] : undefined;
-        r[k] = v == null ? "" : (typeof v === "object" ? JSON.stringify(v) : v);
+        r[k] = cellText(v);
       });
       return r;
     });
