@@ -132,14 +132,32 @@
       border-radius:var(--radius-md); box-shadow:var(--shadow-md); }
 
     /* ---- control widget ---- */
-    .atlas-panel { position:absolute; top:1rem; left:1rem; z-index:5; width:19.5rem; max-width:calc(100% - 2rem);
-      max-height:calc(100% - 2rem); display:flex; flex-direction:column;
-      background:rgba(255,255,255,.95); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
-      border:1px solid var(--color-border); border-radius:var(--radius-md); box-shadow:var(--shadow-md); overflow:hidden; }
+    /* The panel is a rail, docked to the edge of the map.
+
+       It used to float: an inch in from the corner, rounded, blurred, on a
+       shadow. Floating buys one thing — the map continues underneath, so you
+       can drag what you want out from behind it — and costs the same three
+       hundred pixels either way. Docked, the edge of the map IS the edge of the
+       panel, there is no shadow to read past and no corner of map trapped
+       behind glass, and the rail folds away entirely when the map is what you
+       want. That fold is what makes docking pay.
+
+       The edge against the map is drawn at #767060 rather than --border: this
+       map draws white roads, and --border over white is 1.32:1, so the one line
+       telling you where the panel ends disappears exactly where a road runs
+       under it. */
+    .atlas-panel { position:absolute; top:0; left:0; bottom:0; z-index:5; width:19.5rem; max-width:calc(100% - 3rem);
+      max-height:none; display:flex; flex-direction:column;
+      background:var(--color-surface);
+      border:0; border-right:1px solid #767060; border-radius:0; box-shadow:none; overflow:hidden; }
     @media (min-width:721px){
-      .atlas-stage.has-strip .atlas-panel { top:calc(var(--strip-h,48px) + .75rem);
-        max-height:calc(100% - var(--strip-h,48px) - 1.5rem); }
+      /* the owner's strip sits above the map, so the rail starts below it */
+      .atlas-stage.has-strip .atlas-panel { top:var(--strip-h,48px); }
     }
+    /* The bar is the phone's form of the panel. On a wide screen the rail is
+       the panel, and the bar is not merely invisible — it is not there, so it
+       takes no space and nothing can tab into it. */
+    .atlas-bar { display:none; }
     .panel-head { display:flex; align-items:center; gap:.45rem;
       padding:.7rem .9rem; border-bottom:1px solid var(--color-divider); flex:0 0 auto; }
     .panel-head strong { font-family:'Figtree',sans-serif; font-size:var(--t-label); letter-spacing:.14em; text-transform:uppercase; color:var(--color-text-secondary); }
@@ -954,26 +972,67 @@
       .atlas-panel #atlas-controls { padding-top:0; }
       .atlas-hero { padding:1.15rem 0 .8rem; }
       #atlas-about { display:none; }        /* keep the mobile hero compact so the map + sheet fit */
-      /* Map on top, sheet docked below — the sheet never covers the map; the map shrinks to fit. */
-      .atlas-stage { height:58dvh; min-height:380px; display:flex; flex-direction:column; }
-      #atlas-map { position:relative; inset:auto; flex:1 1 auto; min-height:150px; }
-      /* Expanded sheet is a FIXED fraction of the stage (not content-driven), so toggling
-         a layer only scrolls the sheet — the map container never resizes → no map "move". */
-      .atlas-panel {
-        position:relative; inset:auto; width:auto; max-width:none;
-        flex:0 0 46%; max-height:46%; min-height:0; border-radius:var(--radius-lg) var(--radius-lg) 0 0;
-        box-shadow:0 -2px 12px rgba(42,36,26,.14);
-        padding-bottom:env(safe-area-inset-bottom);
+      /* On a phone the shortcuts run along the bottom, where a thumb is.
+
+         The map keeps the whole stage now. It used to be cut to 58% so a sheet
+         could sit under it, which spent height — the thing a phone map has
+         least of — on a list that is shut most of the time. The bar costs the
+         strip at the bottom that a swipe already belongs to the phone, and it
+         hands the rest back.
+
+         The bar never gets covered. Whichever mark you came in by stays lit and
+         stays under your thumb, so the way out is the way you came and there is
+         no close button to hunt for. */
+      .atlas-stage { height:64dvh; min-height:420px; }
+      #atlas-map { position:absolute; inset:0; }
+
+      .atlas-bar:not([hidden]) {
+        position:absolute; left:0; right:0; bottom:0; z-index:7;
+        display:flex; align-items:stretch; gap:.1rem;
+        background:var(--color-surface); border-top:1px solid #767060;
+        padding:.2rem .25rem calc(.2rem + env(safe-area-inset-bottom));
       }
-      .atlas-panel #atlas-controls { flex:1 1 auto; min-height:0; }
+      .atlas-mark {
+        flex:1 1 0; min-width:0; border:0; background:none; cursor:pointer; font:inherit;
+        display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.12rem;
+        padding:.3rem .1rem; border-radius:var(--radius-md); color:var(--color-text-muted);
+        position:relative; min-height:46px;
+      }
+      .atlas-mark .mk-lb {
+        font-family:'Figtree',sans-serif; font-size:.58rem; font-weight:700; letter-spacing:.03em;
+        text-transform:uppercase; line-height:1; max-width:100%;
+        overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+      }
+      .atlas-mark svg { width:19px; height:19px; }
+      .atlas-mark[aria-expanded="true"] { background:var(--color-moss-tint); color:var(--color-canopy); }
+      .atlas-mark:focus-visible { outline:2px solid var(--color-moss); outline-offset:-2px; }
+      .mk-on {
+        position:absolute; top:2px; right:calc(50% - 20px); min-width:15px; height:15px; padding:0 3px;
+        border-radius:var(--radius-pill); background:var(--color-moss); color:#fff;
+        font-size:.58rem; font-weight:700; line-height:15px; text-align:center;
+        font-variant-numeric:tabular-nums;
+      }
+
+      /* the tray rises to meet the bar, and never past half the screen */
+      .atlas-panel {
+        position:absolute; left:0; right:0; top:auto; z-index:6;
+        bottom:calc(46px + .4rem + env(safe-area-inset-bottom));
+        width:auto; max-width:none; max-height:50%; min-height:0;
+        border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+        border-right:0; border-top:1px solid #767060;
+        box-shadow:0 -2px 14px rgba(42,36,26,.16);
+        transform:translateY(calc(100% + 60px)); visibility:hidden;
+        transition:transform .28s cubic-bezier(.22,1,.36,1), visibility .28s;
+      }
+      .atlas-stage.tray-open .atlas-panel { transform:none; visibility:visible; }
+      .atlas-panel #atlas-controls { flex:1 1 auto; min-height:0; overflow-y:auto; }
+      /* one group at a time: the bar is the fold */
+      .atlas-stage.tray-open #atlas-controls .ctl-group[data-group]{ display:none; }
+      .atlas-stage.tray-open #atlas-controls .ctl-group.on-show{ display:block; }
       .panel-head { position:relative; cursor:pointer; padding-top:1.05rem; }
       .panel-head::before { content:''; position:absolute; top:7px; left:50%; transform:translateX(-50%);
         width:34px; height:4px; border-radius:var(--radius-pill); background:var(--color-border); }
       .panel-collapse { display:inline-flex; transition:transform .2s cubic-bezier(.25,1,.5,1); }
-      .atlas-panel.collapsed { flex:0 0 auto; max-height:none; }
-      .atlas-panel.collapsed #atlas-controls { display:none; }
-      .atlas-panel.collapsed .panel-head { border-bottom:none; }
-      .atlas-panel.collapsed .panel-collapse { transform:rotate(180deg); }
       .credits-grid { padding:1.35rem 1.25rem; }
     }
 
@@ -1039,6 +1098,7 @@
       </div>
       <div id="atlas-controls"></div>
     </aside>
+    <nav class="atlas-bar" id="atlas-bar" aria-label="Map layers" hidden></nav>
   </div>
   <div class="map-attrib" id="map-attrib" aria-label="Map data attribution"></div>
 

@@ -3686,6 +3686,11 @@
          discover that a control exists. The count goes with the chevron, because
          its only job was to tell you what a shut group held. */
       var sec = el("section", "ctl-group");
+      /* Named on the outside so the phone's bar can find it. The bar shows one
+         group at a time, which is the one place a group still folds — on a tall
+         rail there is room to show them all, and on a phone there is not. */
+      sec.setAttribute("data-group", g.id);
+      sec.setAttribute("data-group-label", g.label);
       var head = el("h3", "ctl-group-head");
       head.textContent = g.label;
       sec.appendChild(head);
@@ -3731,6 +3736,20 @@
     // across the 720px flip and the owner's late arrival
     wireStripPlacement();
     placeStripPieces();
+
+    /* The phone's bar, last, so it reads the panel as it finally stands —
+       including whatever the owner's tools just added to it. */
+    buildBar();
+    /* A mark carries how many of its layers are on, so it has to hear about a
+       switch moving. One listener on the panel rather than one per switch, and
+       it survives the panel being rebuilt because the panel is what it is on. */
+    var controls = document.getElementById("atlas-controls");
+    if (controls && !controls._barWired) {
+      controls._barWired = true;
+      controls.addEventListener("change", function (e) {
+        if (e.target && e.target.type === "checkbox") buildBar();
+      });
+    }
   }
 
   // sub-group: a master (tri-state) toggle over related layers + a collapse chevron,
@@ -4589,12 +4608,126 @@
      the three "wired" guards below all protect map listeners, which die with
      the map — leaving them set would silently kill fanning and clustering
      for the rest of the visit. */
+  /* The phone's bar, built from the groups the panel just drew.
+
+     It reads the rendered panel rather than the manifest, so it can never
+     disagree with the list it opens — a group that was not drawn gets no mark,
+     and the count on a mark is the switches actually on in that group.
+
+     Four marks fit across a phone. Past that the rest go behind More, one tap
+     deeper, because a bar cannot grow sideways the way a rail grows downward.
+     The first marks keep their places: the order is the owner's, and a mark
+     that moves under a thumb is worse than one tap. */
+  var BAR_SLOTS = 4;
+  var BAR_ICON = {
+    userdata: '<path d="M12 21s-7-4.6-7-10a7 7 0 0 1 14 0c0 5.4-7 10-7 10z"/><circle cx="12" cy="11" r="2.4"/>',
+    base: '<path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/>',
+    more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
+    other: '<path d="M3 18l6-9 4 6 3-4 5 7z"/>',
+  };
+  function barMarkSvg(d) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" ' +
+      'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + "</svg>";
+  }
+  function shortLabel(s) {
+    /* The first word, whole. Cutting it to a fixed nine characters turned
+       "Ecological" into "ECOLOGICA", which reads as a misspelling rather than
+       as a word that ran out of room. The label is already told to ellipsis
+       when it does not fit, and an ellipsis is how a reader knows there is
+       more. */
+    return String(s || "").split(/[\s,&\/]+/)[0];
+  }
+  var TRAY = null;              // which group the tray is showing, if any
+
+  function buildBar() {
+    var bar = document.getElementById("atlas-bar");
+    var stage = document.querySelector(".atlas-stage");
+    if (!bar || !stage) return;
+    var secs = [].slice.call(document.querySelectorAll("#atlas-controls .ctl-group[data-group]"));
+    bar.innerHTML = "";
+    if (!secs.length) { bar.hidden = true; return; }
+    bar.hidden = false;
+
+    var shown = secs.slice(0, BAR_SLOTS);
+    var rest = secs.slice(BAR_SLOTS);
+
+    function onIn(sec) {
+      return sec.querySelectorAll('.ctl-toggle input[type="checkbox"]:checked').length;
+    }
+    function mark(id, label, icon, count, open) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "atlas-mark";
+      b.setAttribute("data-mark", id);
+      b.setAttribute("aria-expanded", String(!!open));
+      b.setAttribute("aria-label", label + (count ? ", " + count + " on" : ""));
+      b.innerHTML = barMarkSvg(icon);
+      var lb = document.createElement("span");
+      lb.className = "mk-lb";
+      lb.textContent = shortLabel(label);
+      b.appendChild(lb);
+      if (count) {
+        var c = document.createElement("span");
+        c.className = "mk-on"; c.textContent = String(count);
+        b.appendChild(c);
+      }
+      return b;
+    }
+
+    shown.forEach(function (sec) {
+      var id = sec.getAttribute("data-group");
+      var label = sec.getAttribute("data-group-label") || id;
+      var b = mark(id, label, BAR_ICON[id] || BAR_ICON.other, onIn(sec), TRAY === id);
+      b.onclick = function () { openTray(TRAY === id ? null : id); };
+      bar.appendChild(b);
+    });
+    if (rest.length) {
+      var n = rest.reduce(function (a, sec) { return a + onIn(sec); }, 0);
+      var mb = mark("__more", "More", BAR_ICON.more, n, TRAY === "__more");
+      mb.onclick = function () { openTray(TRAY === "__more" ? null : "__more"); };
+      bar.appendChild(mb);
+    }
+  }
+
+  function openTray(which) {
+    var stage = document.querySelector(".atlas-stage");
+    var panel = document.getElementById("atlas-panel");
+    if (!stage || !panel) return;
+    TRAY = which;
+    stage.classList.toggle("tray-open", !!which);
+    var secs = [].slice.call(document.querySelectorAll("#atlas-controls .ctl-group[data-group]"));
+    secs.forEach(function (sec, i) {
+      var mine = which === "__more" ? i >= BAR_SLOTS : sec.getAttribute("data-group") === which;
+      sec.classList.toggle("on-show", !!mine);
+    });
+    buildBar();
+    if (which) {
+      var head = panel.querySelector("#atlas-controls .ctl-group.on-show .ctl-group-head");
+      if (head) { head.setAttribute("tabindex", "-1"); head.focus(); }
+    } else {
+      var back = document.querySelector('.atlas-mark[data-mark="' + (which || "") + '"]');
+      if (back) back.focus();
+    }
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && TRAY) {
+      var was = TRAY;
+      openTray(null);
+      var m = document.querySelector('.atlas-mark[data-mark="' + was + '"]');
+      if (m) m.focus();
+    }
+  });
+
   function reboot(dataset) {
     Object.keys(markersByLayer).forEach(function (id) {
       (markersByLayer[id] || []).forEach(function (mk) { try { mk.remove(); } catch (e) {} });
     });
     if (map) { try { map.remove(); } catch (e) {} map = null; }
     MANIFEST = null; activeBasemap = null;
+    TRAY = null;                  // the tray cannot outlive the groups it was showing
+    var stageEl = document.querySelector(".atlas-stage");
+    if (stageEl) stageEl.classList.remove("tray-open");
     DATA = {}; markersByLayer = {}; cropState = {}; keyState = {}; pmSources = {};
     SPIDER = { items: null, anchor: null, svg: null, pop: null, cid: null };
     CLUSTER = { ready: false, off: false, wired: false, radiusNow: CLUSTER_RADIUS,
