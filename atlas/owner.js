@@ -227,10 +227,15 @@
     var done = Object.keys(feats[0].properties || {})
       .filter(function (k) { return /^pattern_\d+$/.test(k); });
     if (done.length) {
-      wrap.appendChild(el("span", "own-door-said",
-        "Patterns found once \u2014 " + done.length +
-        (done.length === 1 ? " question this data answers, now a key above."
-                           : " questions this data answers, each now a key above.")));
+      /* Nothing is said here any more.
+
+         It used to say "Patterns found once — five questions this data answers,
+         each now a key above", which is a sentence explaining a thing the
+         reader can already see: the questions are listed on the shelf beside
+         this one, each with a switch and the share it reaches. A caption that
+         narrates the interface is a caption nobody needed, and it was the first
+         thing an owner met when they opened their own atlas. The list is the
+         message. */
       /* There used to be a way back here: "Ask different questions", which
          threw every question on the map away and read the places again from
          nothing.
@@ -616,9 +621,18 @@
     var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "own-change";
-    btn.textContent = "Change";
+    /* "Change" said nothing about what it opened and never said whether it was
+       open. It is a fold, and a fold that keeps the same word whether it is
+       shut or showing is a control you have to poke to understand.
+
+       It also described itself wrongly: "Change how it looks" opens what a
+       place's card says AND the way to take the layer off the map, and neither
+       of those is how anything looks. */
+    btn.textContent = "Settings";
     btn.setAttribute("data-lid", L.id);
-    btn.setAttribute("aria-label", "Change how " + (L.label || L.id) + " looks");
+    btn.setAttribute("aria-expanded", "false");
+    btn.setAttribute("aria-label", "Settings for " + (L.label || L.id) +
+      " — what its cards show, and taking it off the map");
     btn.onclick = function (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -1197,6 +1211,7 @@
   function closeFold(focusBack) {
     if (!FOLD) return;
     var lid = FOLD.lid;
+    saidOpen(lid, false);
     if (FOLD.host && FOLD.host.parentNode) FOLD.host.parentNode.removeChild(FOLD.host);
     FOLD = null;
     if (focusBack) {
@@ -1208,10 +1223,16 @@
   // an id is ours and slug-shaped, but a selector is not the place to trust that
   function cssEsc(s) { return String(s).replace(/["\\]/g, "\\$&"); }
 
+  function saidOpen(lid, open) {
+    var b = document.querySelector('.own-change[data-lid="' + cssEsc(lid) + '"]');
+    if (b) b.setAttribute("aria-expanded", String(!!open));
+  }
+
   function toggleFold(L, meta) {
     if (FOLD && FOLD.lid === L.id) { closeFold(true); return; }
     closeFold(false);
     buildFold(L, meta);
+    saidOpen(L.id, true);
   }
 
   function buildFold(L, meta) {
