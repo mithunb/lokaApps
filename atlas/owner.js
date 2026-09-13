@@ -742,7 +742,12 @@
   function keyedLayers() {
     return ((window.LokaAtlas.manifest || {}).layers || []).filter(function (L) {
       var m = mineFor(L.id);
-      return m && m.canRemove && L.keyLabels && Object.keys(L.keyLabels).some(function (c) {
+      /* Asking, not removing. These are different rights now: somebody invited
+         to an atlas may ask questions of any layer on it, while taking a layer
+         off the map stays with whoever put it there. Reading canRemove here is
+         what hid the Questions tab from everybody invited to somebody else's
+         atlas. */
+      return m && m.canAsk && L.keyLabels && Object.keys(L.keyLabels).some(function (c) {
         return /^pattern_\d+$/.test(c);
       });
     });

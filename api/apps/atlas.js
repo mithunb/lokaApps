@@ -3930,8 +3930,19 @@ router.get('/layers/list', (req, res) => {
     id: l.id, label: l.label || l.id,
     addedBy: l.addedBy ? { email: l.addedBy.email, name: l.addedBy.name || '', org: l.addedBy.org || '' } : null,
     addedAt: l.addedAt || null,
-    // owner removes any layer; an editor only the ones they added themselves
+    /* Two different questions, which were one flag for too long.
+
+       Removing a layer takes somebody's data off the map and cannot be undone,
+       so it stays with whoever contributed it, or with an owner of the atlas.
+
+       Asking a question of a layer adds a column to its places and a key to the
+       map. It is additive, it can be turned off, and a question that came out
+       wrong can be put right where it sits. It is also the entire point of
+       being invited to an atlas. Deciding it by canRemove meant somebody
+       invited to an atlas full of another person's places got no Questions tab
+       at all — an invitation to work on data they could not ask anything of. */
     canRemove: role === 'owner' || !!(who && l.addedBy && l.addedBy.email === who.email),
+    canAsk: !!role,
   }));
   res.json({ layers, role });
 });
@@ -4155,9 +4166,22 @@ router.post('/layers/relabel', (req, res) => {
   try { m = imports.readManifest(dataset); } catch { /* dataset dir missing */ }
   const layer = ((m && m.local && m.local.layers) || []).find((l) => l.id === layerId);
   if (!layer) return res.status(404).json({ error: 'layer not found' });
-  // the same rule the removal route applies: a collaborator may change what
-  // their own organisation contributed, an owner may change anything here
-  if (role !== 'owner') {
+  /* What a layer is CALLED, which column names its places and what its cards
+     show are about whose layer it is, so they keep the rule the removal route
+     applies: a collaborator may change what their own organisation contributed,
+     an owner may change anything here.
+
+     Which questions are switched off is not about whose layer it is. It is
+     about what this map shows the people who open it, every one of them sees
+     the same thing, and turning one back on costs nothing. Anybody trusted to
+     edit the atlas may do that — otherwise somebody can ask a question and then
+     be unable to take it down again, which is a worse place to leave them than
+     never having asked. */
+  const onlyHiding = Array.isArray(b.hiddenKeys)
+    && typeof b.label !== 'string'
+    && typeof b.titleColumn !== 'string'
+    && !Array.isArray(b.cardColumns);
+  if (role !== 'owner' && !onlyHiding) {
     const who = auth.sessionFromReq(req);
     if (!who || !layer.addedBy || layer.addedBy.email !== who.email) {
       return res.status(403).json({ error: 'you can only change layers your organisation added' });
