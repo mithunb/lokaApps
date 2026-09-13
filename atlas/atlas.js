@@ -3112,9 +3112,39 @@
     if (L.markerBy && out.indexOf(L.markerBy) < 0) out.push(L.markerBy);
     return out;
   }
+  /* A cell that arrived as a database's own idea of a list.
+
+     LOKA keeps categories and labels in Postgres, and Postgres writes an array
+     as {a,b,c}. That shape travelled all the way to the map unopened: a place
+     whose categories were {Activities,Nature} showed two tags, "{Activities"
+     and "Nature}", and a key wore its brace in its name. Every categories and
+     labels value on the Cubbon Park atlas is written this way.
+
+     The braces are the list, not part of the first and last word in it, so they
+     come off before the words are separated. A quoted piece — Postgres quotes
+     anything holding a comma or a space — loses its quotes with them.
+
+     Only a brace-wrapped value that is not readable as JSON is treated this
+     way, so a cell genuinely holding a record is left alone. */
+  function unbrace(v) {
+    var s = String(v == null ? "" : v).trim();
+    if (s.charAt(0) !== "{" || s.charAt(s.length - 1) !== "}") return s;
+    try { JSON.parse(s); return s; } catch (e) { /* not a record; it is a list */ }
+    return s.slice(1, -1);
+  }
+  function unquotePiece(s) {
+    var t = String(s == null ? "" : s).trim();
+    if (t.length > 1 && t.charAt(0) === '"' && t.charAt(t.length - 1) === '"') {
+      t = t.slice(1, -1).replace(/\\"/g, '"');
+    }
+    return t.trim();
+  }
+
   function splitTags(v) {
     if (v == null) return [];
-    return String(v).split(/[;,]/).map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+    return unbrace(v).split(/[;,]/)
+      .map(function (s) { return unquotePiece(s).toLowerCase(); })
+      .filter(Boolean);
   }
   function featureTagSet(L, f) { var s = {}; tagFieldsOf(L).forEach(function (p) { splitTags(f.properties[p]).forEach(function (t) { s[t] = 1; }); }); return s; }
   // Ids, urls, coordinates, colours and timestamps are noise in a search box —
@@ -4474,7 +4504,7 @@
     if (Array.isArray(v)) return v;
     var j = safeArr(v);
     if (j.length) return j;
-    return String(v).split(/[;,]/).map(function (t) { return t.trim(); }).filter(Boolean);
+    return unbrace(v).split(/[;,]/).map(unquotePiece).filter(Boolean);
   }
 
   /* ==================================================================

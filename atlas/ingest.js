@@ -42,6 +42,31 @@
         .filter(function (s) { return s.trim() !== ""; })
         .join("; ");
     }
+    /* A database's own idea of a list. Postgres writes an array as {a,b,c}, and
+       that is how LOKA's categories and labels arrive. Stored unopened it
+       reaches the map with its braces on, so a place shows a tag called
+       "{Activities" — and every step after this one splits on commas and
+       semicolons, none of which know about braces. Opened here, the rest of the
+       product sees the same "a; b" it sees from everywhere else.
+
+       A brace-wrapped value that IS readable as JSON is a record, not a list,
+       and keeps its shape. */
+    if (typeof v === "string") {
+      var s = v.trim();
+      if (s.length > 1 && s.charAt(0) === "{" && s.charAt(s.length - 1) === "}") {
+        var record = false;
+        try { JSON.parse(s); record = true; } catch (e) { record = false; }
+        if (!record) {
+          return s.slice(1, -1).split(",").map(function (p) {
+            var t = p.trim();
+            if (t.length > 1 && t.charAt(0) === '"' && t.charAt(t.length - 1) === '"') {
+              t = t.slice(1, -1).replace(/\\"/g, '"');
+            }
+            return t.trim();
+          }).filter(Boolean).join("; ");
+        }
+      }
+    }
     return typeof v === "object" ? JSON.stringify(v) : v;
   }
 
