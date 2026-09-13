@@ -4371,8 +4371,16 @@
         /* Label and value in one run of text. Stacked, "Creator / Sharang"
            spent two lines on one short word; inline it takes one and wraps only
            when the value is long enough to need it. */
+        /* A value the wizard typed as plain words can still be a database's
+           list — the braces are what stopped it looking like one when it was
+           profiled. Shown as words either way, so a card never prints
+           {dense-shade,surface-roots} at somebody. */
+        var shown = unbrace(v);
+        if (shown !== String(v)) {
+          shown = shown.split(",").map(unquotePiece).filter(Boolean).join(", ");
+        }
         h += '<div class="pop-field pop-field-inline"><span class="pop-lbl">' + esc(fld.label) +
-          '</span> <span class="pop-val">' + esc(v) + (fld.suffix || "") + "</span></div>";
+          '</span> <span class="pop-val">' + esc(shown) + (fld.suffix || "") + "</span></div>";
       }
     });
     /* Where this place came from, in words. The pin's ring used to hint at this
