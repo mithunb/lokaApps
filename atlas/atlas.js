@@ -1000,7 +1000,21 @@
     if (!meta) return;
     L._imageMeta = meta;
     map.addSource(srcId(L), { type: "image", url: dataUrl(meta.image), coordinates: meta.coordinates });
-    map.addLayer({ id: L.id + "-img", type: "raster", source: srcId(L), layout: { visibility: vis(L) }, paint: { "raster-opacity": L.opacity != null ? L.opacity : 0.8, "raster-fade-duration": 0 } });
+    /* Drawn crisp, not smoothed.
+
+       These overlays are one picture stretched over the whole region, and they
+       are banded: forest cover is three classes, elevation is five. Their
+       pixels are the data. Smoothing between them — which is what a raster
+       layer does by default when you zoom past its resolution — blends bands
+       that mean different things into colours that mean nothing, and the map
+       looks broken rather than coarse.
+
+       The forest picture is 2042 pixels across 55 kilometres: about 27 metres
+       to a pixel, which is the resolution of the source (Hansen/UMD at 30 m).
+       Nothing can make it sharper, because the detail was never recorded. Drawn
+       crisp it reads as what it is — thirty-metre data, honestly blocky —
+       instead of a smear that looks like a rendering fault. */
+    map.addLayer({ id: L.id + "-img", type: "raster", source: srcId(L), layout: { visibility: vis(L) }, paint: { "raster-opacity": L.opacity != null ? L.opacity : 0.8, "raster-fade-duration": 0, "raster-resampling": "nearest" } });
     L._ids = [L.id + "-img"];
     if (L.legendFrom === "source" && meta.legend) L._legend = meta.legend.map(function (c) { return { color: c.color, label: c.label + (c.pct != null ? " · " + c.pct + "%" : "") }; });
     refreshLegend(L);
@@ -4224,13 +4238,7 @@
     var imgCol = (L && L.spec && L.spec.imageColumn) || "";
     var shots = linksIn(props.image_urls);
     if (!shots.length && imgCol) shots = linksIn(props[imgCol]);
-    if (shots.length) {
-      h += '<div class="pop-shots' + (shots.length > 1 ? " many" : "") + '">' +
-        shots.slice(0, 4).map(function (u) {
-          return '<img class="pop-img" src="' + esc(u) + '" alt="" loading="lazy" ' +
-            'referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" />';
-        }).join("") + "</div>";
-    }
+    h += shotsHTML(shots);
     if (caption) h += '<p class="pop-caption">' + esc(String(caption).trim()) + "</p>";
     if (krows) h += krows.outerHTML;
     return h;
@@ -4320,14 +4328,7 @@
            The addresses are looked for inside the value rather than demanded of
            it, so a place carrying several — or carrying them wrapped, which is
            how they arrive from LOKA — shows its photographs instead of nothing. */
-        var shots = linksIn(v);
-        if (shots.length) {
-          h += '<div class="pop-shots' + (shots.length > 1 ? " many" : "") + '">' +
-            shots.slice(0, 4).map(function (u) {
-              return '<img class="pop-img" src="' + esc(u) + '" alt="" loading="lazy" ' +
-                'referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" />';
-            }).join("") + "</div>";
-        }
+        h += shotsHTML(linksIn(v));
       } else if (fld.type === "cropProfile") {
         var cp = Array.isArray(v) ? v : safeArr(v);
         if (!cp.length) return;
@@ -4377,6 +4378,62 @@
      those thirty-three places are on a map somebody has shared, and asking
      them to add their photographs again would be asking them to pay for our
      mistake. */
+  /* The photographs on a card.
+
+     One photograph fills the card's width. Several become a carousel rather
+     than a grid: two side by side were 120px tall each, which is a thumbnail of
+     a place somebody went and stood in. One at a time gets the full width and
+     the full height, and the others are a swipe away.
+
+     It is a scroll strip that snaps, so a finger or a trackpad moves it with no
+     script at all — the arrows are for a mouse and a keyboard, and they are the
+     only part that needs wiring. A card with one photograph gets no arrows and
+     no counter, because there is nothing to move between. */
+  var SHOTS_MAX = 12;
+  function shotsHTML(urls) {
+    var shots = (urls || []).slice(0, SHOTS_MAX);
+    if (!shots.length) return "";
+    var imgs = shots.map(function (u) {
+      return '<img class="pop-img" src="' + esc(u) + '" alt="" loading="lazy" ' +
+        'referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" />';
+    }).join("");
+    if (shots.length === 1) return '<div class="pop-shots">' + imgs + "</div>";
+    return '<div class="pop-shots many" data-n="' + shots.length + '">' +
+      '<div class="pop-strip">' + imgs + "</div>" +
+      '<button class="pop-shot-go back" type="button" data-dir="-1" aria-label="Previous photograph">\u2039</button>' +
+      '<button class="pop-shot-go on" type="button" data-dir="1" aria-label="Next photograph">\u203a</button>' +
+      '<span class="pop-shot-at" aria-live="polite">1 / ' + shots.length + "</span>" +
+      "</div>";
+  }
+
+  /* The arrows, wired once for every card there will ever be. A popup is built
+     fresh each time one is opened, so listening on the page rather than on the
+     card is what keeps this to one listener instead of one per photograph. */
+  document.addEventListener("click", function (e) {
+    var go = e.target.closest && e.target.closest(".pop-shot-go");
+    if (!go) return;
+    var box = go.closest(".pop-shots");
+    var strip = box && box.querySelector(".pop-strip");
+    if (!strip) return;
+    strip.scrollBy({ left: Number(go.getAttribute("data-dir")) * strip.clientWidth,
+                     behavior: reducedMotion() ? "auto" : "smooth" });
+  });
+  document.addEventListener("scroll", function (e) {
+    var strip = e.target;
+    if (!strip.classList || !strip.classList.contains("pop-strip")) return;
+    var box = strip.closest(".pop-shots");
+    var at = box && box.querySelector(".pop-shot-at");
+    if (!at || !strip.clientWidth) return;
+    var n = Number(box.getAttribute("data-n")) || 1;
+    var i = Math.min(n, Math.max(1, Math.round(strip.scrollLeft / strip.clientWidth) + 1));
+    var said = i + " / " + n;
+    if (at.textContent !== said) at.textContent = said;
+  }, true);
+  function reducedMotion() {
+    try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
+    catch (e) { return false; }
+  }
+
   function linksIn(v) {
     var out = [];
     (function take(x, depth) {
