@@ -1077,7 +1077,13 @@ function callerRole(req, inst) {
   const session = auth.sessionFromReq(req);
   if (session) {
     if (inst.ownerAccount && session.email === inst.ownerAccount) return 'owner';
-    if (reg.isCollaborator(inst, session.email)) return 'editor';
+    /* An atlas can have more than one owner. Some are invited to one atlas and
+       wear the owner role there; some own every atlas on this installation,
+       which is how the operator reaches their own tools from a browser instead
+       of from a token. See standingOwners in auth.js for what that costs. */
+    if (auth.isStandingOwner(session.email)) return 'owner';
+    const asked = reg.collaboratorRole(inst, session.email);
+    if (asked) return asked;
   }
   return null;
 }
@@ -1411,6 +1417,8 @@ const MAX_COLLABORATORS = 20;
 function collabList(inst) {
   return (inst.collaborators || []).map((c) => ({
     email: c.email, invitedAt: c.invitedAt, acceptedAt: c.acceptedAt || null,
+    // what they were invited AS, so a list of people says what each may do
+    role: c.role === 'owner' ? 'owner' : 'editor',
   }));
 }
 
@@ -1424,7 +1432,8 @@ router.post('/instances/:slug/collaborators', async (req, res) => {
   if ((inst.collaborators || []).length >= MAX_COLLABORATORS) {
     return res.status(400).json({ error: `collaborator limit reached (${MAX_COLLABORATORS})` });
   }
-  const c = reg.addCollaborator(inst.slug, email);
+  const want = req.body && req.body.role === 'owner' ? 'owner' : 'editor';
+  const c = reg.addCollaborator(inst.slug, email, want);
   const invitedBy = inst.ownerAccount || inst.email || 'the atlas owner';
   const result = await sendMail({
     to: email,

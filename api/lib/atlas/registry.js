@@ -214,17 +214,40 @@ export function unlinkInstance(email, slug) {
   persist();
 }
 
-/* ---------- collaborators (invited by the owner; role: editor) ---------- */
+/* ---------- collaborators ----------
 
-export function addCollaborator(slug, email) {
+   An atlas has one account that made it, and any number of people invited to
+   work on it. An invitation used to mean one thing: editor, which is allowed to
+   add its own layers and change the ones it added. It can now mean owner
+   instead, which is allowed everything the account that made the atlas is —
+   publishing it, asking questions of any layer on it, removing it.
+
+   An atlas can therefore have several owners. The one that made it keeps its
+   place in ownerAccount, because that is who the atlas is listed under and who
+   an invitation says it came from; the others are collaborators wearing the
+   owner role. Nobody is ever demoted by being invited again: asking for editor
+   where owner already stands leaves owner alone. */
+export function collaboratorRole(inst, email) {
+  const key = normEmail(email);
+  const c = (inst && (inst.collaborators || []).find((x) => x.email === key));
+  if (!c) return null;
+  return c.role === 'owner' ? 'owner' : 'editor';
+}
+
+export function addCollaborator(slug, email, role) {
   const inst = db.instances[slug];
   if (!inst) return null;
   const key = normEmail(email);
+  const want = role === 'owner' ? 'owner' : 'editor';
   inst.collaborators = inst.collaborators || [];
   let c = inst.collaborators.find((x) => x.email === key);
   if (!c) {
-    c = { email: key, invitedAt: Date.now(), acceptedAt: null };
+    c = { email: key, invitedAt: Date.now(), acceptedAt: null, role: want };
     inst.collaborators.push(c);
+  } else if (want === 'owner') {
+    c.role = 'owner';                 // raised; never lowered by a second invite
+  } else if (!c.role) {
+    c.role = 'editor';
   }
   linkInstance(key, slug);
   persist();

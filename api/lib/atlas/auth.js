@@ -194,6 +194,36 @@ export function isAdmin(req) {
 // Kept separate from isAdmin on purpose: every isAdmin call site grants owner
 // powers (delete, publish, rebuild, edit), and this check must only ever guard
 // READ-ONLY surfaces — today, the admin dashboard's listing.
+/* Accounts that own every atlas on this installation.
+
+   Separate from isAdminSession below, and deliberately so. That one answers
+   "is this the operator?" and has only ever been allowed to guard things you
+   can look at. This one answers "does this account own this atlas?", and owning
+   one means being able to publish it, rebuild it, ask questions of it and
+   delete it.
+
+   It is not a new power. Whoever holds ATLAS_ADMIN_TOKEN already has all of it
+   on every atlas — isAdmin returns owner at every call site. What changes is
+   where it can be reached from: a token is presented deliberately on one
+   request, and a signed-in session is ambient. So an account listed here
+   carries owner rights on somebody else's atlas for as long as it is signed in,
+   on whatever machine it is signed in on. That is the trade, and it is worth
+   knowing rather than discovering.
+
+   Read from ATLAS_OWNER_EMAILS, comma separated, falling back to the
+   operator's own address so an installation that sets nothing behaves the way
+   this one was asked to. */
+export function standingOwners() {
+  const raw = process.env.ATLAS_OWNER_EMAILS
+    || process.env.ATLAS_ADMIN_EMAIL
+    || 'mithun@socratus.org';
+  return String(raw).split(',').map((s) => normEmail(s)).filter(Boolean);
+}
+export function isStandingOwner(email) {
+  if (!email) return false;
+  return standingOwners().indexOf(normEmail(email)) >= 0;
+}
+
 export function isAdminSession(req) {
   const admin = normEmail(process.env.ATLAS_ADMIN_EMAIL || 'mithun@socratus.org');
   const session = sessionFromReq(req);
