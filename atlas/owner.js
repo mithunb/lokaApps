@@ -1125,30 +1125,32 @@
      the name is the visibility switch's own label, and a rename control that
      swallowed part of it would make the switch unreliable to tap. */
   function addRenamePencil(L, head, changeBtn) {
-    if (head.querySelector(".own-pencil")) return;
     var nameEl = head.querySelector(".ctl-name");
-    if (!nameEl) return;
-    var pen = el("button", "own-pencil", ICON_PENCIL);
-    pen.type = "button";
-    pen.title = "Rename this layer";
-    pen.setAttribute("aria-label", "Rename " + (L.label || L.id));
-    pen.onclick = function (e) {
+    if (!nameEl || nameEl.tagName === "BUTTON") return;
+    var btn = el("button", "ctl-name own-nameable", null);
+    btn.type = "button";
+    btn.textContent = L.label || L.id;
+    btn.title = "Click to rename";
+    btn.setAttribute("aria-label", "Rename " + (L.label || L.id));
+    btn.onclick = function (e) {
       e.preventDefault(); e.stopPropagation();
-      startRename(L, head, nameEl, pen, changeBtn);
+      startRename(L, head, btn, changeBtn);
     };
-    nameEl.insertAdjacentElement("afterend", pen);
+    nameEl.replaceWith(btn);
   }
 
-  var ICON_PENCIL =
-    '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" ' +
-    'stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
-    '<path d="M11.5 2.5l2 2L6 12l-2.5.5L4 10z"/></svg>';
-  var ICON_TICK =
-    '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" ' +
-    'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-    '<path d="M3 8.5l3.5 3.5L13 4.5"/></svg>';
+  /* The pencil and the tick were drawn here. Neither is needed: the name is
+     the control now, and there is nothing for a tick to confirm. */
 
-  function startRename(L, head, nameEl, pen, changeBtn) {
+  /* The name becomes a box in place, and goes back to being a name.
+
+     There is no tick. A tick was a second control that had to appear, be
+     understood, and hand back what it had taken over when it left — and it
+     failed at the last of those, which is how renaming came to work once per
+     page. Enter saves, Escape puts back what was there, and clicking away
+     saves, the way any name you edit in place behaves. Nothing is taken over,
+     so there is nothing to give back. */
+  function startRename(L, head, nameBtn, changeBtn) {
     if (head.querySelector(".own-rename")) return;
     var was = L.label || L.id;
     var box = document.createElement("input");
@@ -1157,39 +1159,29 @@
     box.maxLength = 60;
     box.value = was;
     box.setAttribute("aria-label", "Layer name");
-    nameEl.hidden = true;
-    // a box, a tick and Change do not fit in 312px; Change waits its turn
+    nameBtn.hidden = true;
+    // a box and Settings do not both fit in the width; Settings waits its turn
     if (changeBtn) changeBtn.hidden = true;
-    nameEl.insertAdjacentElement("beforebegin", box);
-    pen.innerHTML = ICON_TICK;
-    pen.title = "Save this name";
+    nameBtn.insertAdjacentElement("beforebegin", box);
     var done = false;
     function finish(save) {
       if (done) return;
       done = true;
       var v = box.value.trim();
       box.remove();
-      nameEl.hidden = false;
+      nameBtn.hidden = false;
       if (changeBtn) changeBtn.hidden = false;
-      pen.innerHTML = ICON_PENCIL;
-      pen.title = "Rename this layer";
-      /* And it is a pencil again, not a spent tick.
-
-         While a name is being edited the pencil becomes the tick that saves it,
-         which means taking over what it does when clicked. Handing that back was
-         missing, so after one rename the pencil still pointed at "save the edit
-         you are in the middle of" — and there was no edit, so every click after
-         the first did nothing at all. The control worked once per page load. */
-      pen.onclick = function (ev) {
-        ev.preventDefault(); ev.stopPropagation();
-        startRename(L, head, nameEl, pen, changeBtn);
-      };
-      pen.focus();
+      nameBtn.focus();
       if (!save || !v || v === was) return;
-      nameEl.textContent = v;      // say it at once; the reload confirms it
+      nameBtn.textContent = v;     // say it at once; the reload confirms it
+      nameBtn.setAttribute("aria-label", "Rename " + v);
       api("layers/relabel", { method: "POST", body: { dataset: SLUG, layerId: L.id, label: v } })
         .then(function () { return preview(SLUG).then(refreshLayers); })
-        .catch(function (e) { nameEl.textContent = was; toast(errMsg(e)); });
+        .catch(function (e) {
+          nameBtn.textContent = was;
+          nameBtn.setAttribute("aria-label", "Rename " + was);
+          toast(errMsg(e));
+        });
     }
     box.onkeydown = function (e) {
       if (e.key === "Enter") { e.preventDefault(); finish(true); }
@@ -1197,10 +1189,10 @@
       e.stopPropagation();
     };
     box.onblur = function () { finish(true); };
-    pen.onclick = function (e) { e.preventDefault(); e.stopPropagation(); finish(true); };
     box.focus();
     box.select();
   }
+
 
   var FOLD = null;          // { lid, host, row } — at most one open
 

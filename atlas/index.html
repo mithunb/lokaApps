@@ -246,6 +246,20 @@
        .875rem/600/ink; off drops weight AND colour together. */
     .ctl-row { padding:.12rem 0; }
     .ctl-row.off .ctl-name { font-weight:400; color:var(--color-text-muted); }
+    /* One strip down the left of the panel holds the controls, and every word
+       in the panel starts where it ends — a layer's name, a subgroup's name, a
+       key, a legend, the share a question reaches. Whatever its depth.
+
+       The panel used to push each level right: a subgroup's children by .85rem,
+       a layer's keys by .6rem behind a hairline, its kinds by 1.55rem. Four
+       different left edges on one list, and the deeper a thing sat the less
+       room its words had. The strip is the parentage now: a thing whose words
+       line up under a switch belongs to that switch, and it reads as one
+       straight edge rather than a staircase.
+
+       It is the switch plus the gap beside it, written as those two
+       measurements so it cannot drift from the thing it is measuring. */
+    :root { --panel-strip: calc(32px + .55rem); }
     .ctl-toggle { display:flex; align-items:center; gap:.55rem; cursor:pointer; min-height:32px; }
     .ctl-toggle input { position:absolute; opacity:0; width:0; height:0; }
     /* The off track was #cfd6cf on a near-white panel — 1.44:1, about half the
@@ -283,8 +297,9 @@
        opacity — hangs behind one moss rule, so wherever the sheet is
        scrolled the branch visibly belongs to something above it. (The rule
        used to sit on the key block alone; it now holds the whole branch.) */
-    .ctl-extra { margin:.05rem 0 .35rem; padding-left:.6rem;
-      border-left:2px solid rgba(74,90,51,.30); }
+    /* No hairline and no step: the words line up under the switch they belong
+       to, which says the same thing without spending width on saying it. */
+    .ctl-extra { margin:.05rem 0 .35rem; padding-left:var(--panel-strip); border-left:0; }
     .ctl-extra:empty { display:none; }
 
     /* related-layer sub-group: master toggle + collapsible children */
@@ -302,7 +317,9 @@
     .ctl-sub-chev .chev svg { width:15px; height:15px; }
     .ctl-sub.collapsed .ctl-sub-chev .chev { transform:rotate(-90deg); }
     .ctl-sub.collapsed .ctl-sub-body { display:none; }
-    .ctl-sub-body { padding-left:.85rem; }
+    /* A child is not pushed right. It sits under the same strip as everything
+       else, and its own switch is what tells you it is a thing of its own. */
+    .ctl-sub-body { padding-left:0; }
 
     .crop-chips { display:flex; flex-wrap:wrap; gap:.3rem; margin:.4rem 0 .1rem; }
     .crop-chip { font:inherit; font-size:var(--t-label); padding:.2rem .5rem; border-radius:var(--radius-md); cursor:pointer;
@@ -377,7 +394,7 @@
 
     .key-flatwrap { display:block; }
     .key-flat { font-size:var(--t-label); color:var(--color-text-muted); line-height:1.4;
-      padding-left:2.125rem; margin:-.05rem 0 .25rem; }
+      padding-left:var(--panel-strip); margin:-.05rem 0 .25rem; }
     /* where the folded places went — kept current by updateFoldNote */
     .key-fold { font-size:var(--t-label); font-weight:400; color:var(--color-text-muted); line-height:1.45; margin:.3rem 0 .05rem; }
     /* keys wear rows: each switched-on key is one row of small marks beside
@@ -418,7 +435,8 @@
     .leg-n { margin-left:auto; flex:0 0 auto; padding-left:.5rem; font-size:var(--t-meta); font-weight:700; color:var(--color-text-primary); font-variant-numeric:tabular-nums; }
     /* a kind you can open, and the words it opens into */
     /* a kind sitting under its own switch, indented to belong to it */
-    .key-kind { padding-left:1.55rem; }
+    /* a kind sits under its key's own name, which is the strip again */
+    .key-kind { padding-left:var(--panel-strip); }
     /* Air between one key and the next. With four keys on, twenty-two rows read
        as a single list — the switch that starts each key has to be findable
        without counting shapes. */
@@ -932,7 +950,8 @@
          44px row is the tap target, so the pill can stay small) */
       .ctl-switch.small { width:30px; height:18px; }
       /* the switch grows here, so the note under it moves to stay aligned */
-      .key-flat { padding-left:2.375rem; }
+      /* the switch grows to 38px on a touch screen, so the strip grows with it */
+      :root { --panel-strip: calc(38px + .55rem); }
       .ctl-switch.small::after { width:14px; height:14px; }
       .ctl-toggle input:checked + .ctl-switch.small::after { transform:translateX(12px); }
       .key-tname { font-size:var(--t-ui); }

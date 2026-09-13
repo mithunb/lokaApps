@@ -176,6 +176,23 @@
 .own-fix { padding-top:.15rem; padding-left:var(--q-indent); border-top:none; }
 .own-fix .own-linkish { font-size:var(--t-label); }
 
+/* A name you can change looks like a name until you reach for it.
+
+   It is a button carrying the layer's own name, sitting inside the visibility
+   switch's label — safe there, because a click aimed at a button inside a label
+   does not reach the label. At rest it is indistinguishable from a name you
+   cannot change, which is the point: the panel is read far more often than it
+   is edited. Hover or focus gives it a dotted underline, the way an editable
+   name behaves anywhere else. */
+.own-nameable {
+  font:inherit; font-size:inherit; color:inherit; background:none; border:0;
+  padding:0; margin:0; text-align:left; cursor:text;
+  border-bottom:1px dashed transparent; border-radius:2px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%;
+}
+.own-nameable:hover { border-bottom-color:var(--color-border); }
+.own-nameable:focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; }
+
 /* ---------- renaming, where the name is ----------
    The pencil is quiet until the row is under a pointer, because a visitor's eye
    should meet a name and a switch, not a tool. Its touch area grows to the
