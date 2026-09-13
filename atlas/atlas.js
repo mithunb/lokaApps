@@ -1363,7 +1363,8 @@
       var nonEmpty = [];
       feats.forEach(function (f) {
         var v = f.properties ? f.properties[col] : undefined;
-        if (v !== undefined && v !== null && v !== "") nonEmpty.push(String(v));
+        // unwrapped here so a key's kinds are words, not "{Nature}"
+        if (v !== undefined && v !== null && v !== "") nonEmpty.push(unbrace(v));
       });
       if (!nonEmpty.length) return;
       // multi-value cells: the same rule the server uses (fragment.js detectDelimiter)
@@ -1383,7 +1384,7 @@
           v = dateBucket(v, grain);
           if (!v) return;
         }
-        v = String(v).trim().slice(0, 40);
+        v = unquotePiece(v).slice(0, 40);
         if (!v) return;
         if (seen[v] == null) { seen[v] = counts.length; counts.push({ kind: v, n: 0 }); }
         counts[seen[v]].n++;
@@ -1524,7 +1525,9 @@
     var v = p[opt.col];
     if ((v === undefined || v === null || v === "") && opt.committed && L.markerBy) v = p[L.markerBy];
     if (v === undefined || v === null || v === "") return [];
-    var parts = opt.delim ? String(v).split(opt.delim) : [String(v)];
+    // a database's braces are the list, not part of the first and last word in it
+    var text = unbrace(v);
+    var parts = opt.delim ? text.split(opt.delim) : [text];
     var out = [], seen = {};
     parts.forEach(function (s) {
       /* A bucketed column has to be asked the same question its kinds were
@@ -1535,7 +1538,7 @@
         s = dateBucket(s, opt.grain);
         if (!s) return;
       }
-      s = String(s).trim().slice(0, 40);
+      s = unquotePiece(s).slice(0, 40);
       if (!s || seen[s]) return;
       seen[s] = 1;
       out.push(s);
