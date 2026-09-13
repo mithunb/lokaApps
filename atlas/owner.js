@@ -753,10 +753,18 @@
     });
   }
 
+  /* Set when the shelves are built, so anything that changes the questions can
+     ask for them to be drawn again. Keeping a question used to write it to the
+     layer, rebuild the map, and then leave the shelf exactly as it was — the
+     question was there, and the only place you would look for it said it was
+     not. */
+  var SHOW_SHELF = null;
+
   function addShelves() {
     var head = $("#atlas-panel .panel-head");
     var body = $("#atlas-controls");
-    if (!head || !body || head.querySelector(".own-shelves")) return;
+    if (!head || !body) return;
+    if (head.querySelector(".own-shelves")) { if (SHOW_SHELF) SHOW_SHELF(); return; }
     if (!keyedLayers().length) return;      // nothing to put on a second shelf
 
     var strong = head.querySelector("strong");
@@ -792,6 +800,7 @@
       made.questions.setAttribute("aria-selected", String(onQ));
       if (onQ) drawQuestionShelf(qs);
     }
+    SHOW_SHELF = showShelf;
     showShelf();
   }
 
@@ -1150,6 +1159,17 @@
       if (changeBtn) changeBtn.hidden = false;
       pen.innerHTML = ICON_PENCIL;
       pen.title = "Rename this layer";
+      /* And it is a pencil again, not a spent tick.
+
+         While a name is being edited the pencil becomes the tick that saves it,
+         which means taking over what it does when clicked. Handing that back was
+         missing, so after one rename the pencil still pointed at "save the edit
+         you are in the middle of" — and there was no edit, so every click after
+         the first did nothing at all. The control worked once per page load. */
+      pen.onclick = function (ev) {
+        ev.preventDefault(); ev.stopPropagation();
+        startRename(L, head, nameEl, pen, changeBtn);
+      };
       pen.focus();
       if (!save || !v || v === was) return;
       nameEl.textContent = v;      // say it at once; the reload confirms it

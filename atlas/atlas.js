@@ -249,7 +249,19 @@
   // Org-added layers live in a gitignored overlay (manifest.local.json + user-*.geojson)
   // so a `git pull` on the server never conflicts with them.
   function mergeLocalOverlay(manifest) {
-    return fetch(dataUrl("manifest.local.json"))
+    /* Asked for fresh every time, not from the cache.
+
+       Everything else this product serves is stamped with the version it was
+       deployed at, which is right for files that change when we ship. This one
+       changes when an OWNER changes something — keeping a question, hiding one,
+       renaming a layer — and the stamp knows nothing about that. So a question
+       somebody had just kept was written to the layer, the map was rebuilt, and
+       the browser handed back the copy it already had: the question existed
+       everywhere except the one place its owner would look for it.
+
+       It is a few kilobytes, and it decides what every key on the map is
+       called. Worth asking for properly. */
+    return fetch(dataUrl("manifest.local.json"), { cache: "no-store" })
       .then(function (r) { return r.ok ? r.json() : null; })
       .catch(function () { return null; })
       .then(function (local) {

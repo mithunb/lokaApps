@@ -3978,7 +3978,6 @@ router.get('/layers/list', (req, res) => {
    further below a pin than the folding rule keeps pins apart, which is the
    viewer's own KEY_STACK_CAP. Asking for a sixth would be asking for one that
    could never be switched on beside the others. */
-const MAX_QUESTIONS_ON_A_LAYER = 5;
 const ASKING = new Map();          // token -> a half-answered question, briefly
 const ASK_TTL = 30 * 60 * 1000;
 
@@ -4057,11 +4056,14 @@ router.post('/layers/ask', async (req, res) => {
 
     if (phase === 'kinds') {
       if (!question) return res.status(400).json({ error: 'ask a question first' });
-      // a repair takes no new place on the map, so the cap does not apply to it
-      if (!repairing && settled.length >= MAX_QUESTIONS_ON_A_LAYER) {
-        return res.status(400).json({ error: 'this layer already carries ' + settled.length +
-          ' questions, which is as many as a map can wear' });
-      }
+      /* There used to be a cap of five. It was a guess about how many keys a
+         map can wear before the panel stops being readable, made before anybody
+         had five — and the first person to reach it was stopped from asking a
+         sixth thing about their own places, which is a strange way to treat
+         somebody doing exactly what the product is for. How many questions are
+         too many is something whoever made the map can see for themselves:
+         every one has a switch, and a question nobody wants can be turned off
+         or put right. */
       const out = await enrich.proposeKinds({
         digest: enrich.buildDigest(rows, fields), question, title,
         callJSON: aiCaller('server'), model: getFlashModel(),
