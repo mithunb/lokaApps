@@ -1662,6 +1662,9 @@ function requireDatasetEditor(req, res, datasetId) {
 }
 
 const MAX_ROWS = 5000, MAX_COLS = 40;
+/* How long a question may be. Read where one is asked and where one is stored,
+   because those two disagreeing is how a question came to be sawn in half. */
+const MAX_QUESTION_CHARS = 120;
 // the viewer shows at most eight marks per key, so more kinds than that is noise
 const MAX_CATS_KEPT = 8;
 const geminiRate = new Map();
@@ -2564,10 +2567,20 @@ async function ingestLayer(b, who) {
       ? b.reading.trim().slice(0, 200) : undefined,
     facts: Array.isArray(b.facts) && b.facts.length
       ? b.facts.slice(0, 12).map((f) => String(f).slice(0, 80)) : undefined,
+    /* A question's own wording, kept whole.
+
+       It was cut to forty characters here, which is a fair length for a name
+       and far too short for a sentence — and asking one allows a hundred and
+       twenty. So a question longer than forty was accepted, answered, and then
+       stored with its end sawn off: "what locations are human-friendly and wh"
+       is what a real one came out as, and the map wore that as its key.
+
+       One number now says how long a question may be, and both ends read it,
+       so they cannot drift apart again. */
     keyLabels: (b.keyLabels && typeof b.keyLabels === 'object')
       ? Object.fromEntries(Object.entries(b.keyLabels)
           .filter(([k, v]) => k && typeof v === 'string' && v.trim())
-          .map(([k, v]) => [String(k).slice(0, 60), v.trim().slice(0, 40)]))
+          .map(([k, v]) => [String(k).slice(0, 60), v.trim().slice(0, MAX_QUESTION_CHARS)]))
       : undefined,
     /* The kinds each question offers, kept beside its wording. The wording
        alone is not enough to ask the question again: without the kinds, a
@@ -4038,7 +4051,7 @@ router.post('/layers/ask', async (req, res) => {
     const fields = wordColumnsOf(rows);
     if (!fields.length) return res.status(400).json({ error: 'none of those columns hold words to read' });
     const title = (inst && inst.title) || dataset;
-    const question = String(b.question || '').trim().slice(0, 120);
+    const question = String(b.question || '').trim().slice(0, MAX_QUESTION_CHARS);
 
     /* Putting an existing question right, rather than adding another one.
 
