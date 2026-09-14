@@ -67,6 +67,10 @@
   padding:0 .15rem; border-radius:var(--radius-md);
 }
 .own-change:hover { color:var(--color-canopy); text-decoration:underline; }
+/* the one control here that ends something wears the colour this product keeps
+   for that, so it is never mistaken for its neighbour at a glance */
+.own-change-danger { color:var(--color-rust-deep); }
+.own-change-danger:hover { color:var(--color-rust-deep); }
 .own-change:focus-visible { outline:2px solid var(--color-moss); outline-offset:1px; }
 /* on the panel's own strip, like every other word in it */
 .own-by {

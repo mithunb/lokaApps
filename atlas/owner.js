@@ -628,20 +628,35 @@
        It also described itself wrongly: "Change how it looks" opens what a
        place's card says AND the way to take the layer off the map, and neither
        of those is how anything looks. */
-    btn.textContent = "Settings";
+    btn.textContent = "Card";
     btn.setAttribute("data-lid", L.id);
+    btn.setAttribute("data-fold", "card");
     btn.setAttribute("aria-expanded", "false");
-    btn.setAttribute("aria-label", "Settings for " + (L.label || L.id) +
-      " — what its cards show, and taking it off the map");
+    btn.setAttribute("aria-label", "Choose what a place's card shows on " + (L.label || L.id));
     btn.onclick = function (e) {
       e.preventDefault();
       e.stopPropagation();
-      toggleFold(L, m);
+      toggleFold(L, m, "card");
+    };
+    /* And its own control for the one thing here that cannot be taken back,
+       wearing the colour this product keeps for that. */
+    var del = document.createElement("button");
+    del.type = "button";
+    del.className = "own-change own-change-danger";
+    del.textContent = "Remove";
+    del.setAttribute("data-lid", L.id);
+    del.setAttribute("data-fold", "remove");
+    del.setAttribute("aria-expanded", "false");
+    del.setAttribute("aria-label", "Take " + (L.label || L.id) + " off the map");
+    del.onclick = function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleFold(L, m, "remove");
     };
     var head = row.querySelector(".ctl-toggle") || row;
     var info = head.querySelector(".ctl-info");
-    if (info) head.insertBefore(btn, info);
-    else head.appendChild(btn);
+    if (info) { head.insertBefore(btn, info); head.insertBefore(del, info); }
+    else { head.appendChild(btn); head.appendChild(del); }
     addRenamePencil(L, head, btn);
     // who contributed it — an owner's question, not a reader's, so it is added
     // here rather than built into the viewer's row
@@ -1203,7 +1218,7 @@
   function closeFold(focusBack) {
     if (!FOLD) return;
     var lid = FOLD.lid;
-    saidOpen(lid, false);
+    saidOpen(lid, null);
     if (FOLD.host && FOLD.host.parentNode) FOLD.host.parentNode.removeChild(FOLD.host);
     FOLD = null;
     if (focusBack) {
@@ -1215,28 +1230,46 @@
   // an id is ours and slug-shaped, but a selector is not the place to trust that
   function cssEsc(s) { return String(s).replace(/["\\]/g, "\\$&"); }
 
-  function saidOpen(lid, open) {
-    var b = document.querySelector('.own-change[data-lid="' + cssEsc(lid) + '"]');
-    if (b) b.setAttribute("aria-expanded", String(!!open));
+  function saidOpen(lid, kind) {
+    var all = document.querySelectorAll('.own-change[data-lid="' + cssEsc(lid) + '"]');
+    [].forEach.call(all, function (b) {
+      b.setAttribute("aria-expanded", String(b.getAttribute("data-fold") === kind));
+    });
   }
 
-  function toggleFold(L, meta) {
-    if (FOLD && FOLD.lid === L.id) { closeFold(true); return; }
+  function toggleFold(L, meta, which) {
+    var kind = which === "remove" ? "remove" : "card";
+    // pressing the one that is already open shuts it; pressing the other swaps
+    if (FOLD && FOLD.lid === L.id && FOLD.kind === kind) { closeFold(true); return; }
     closeFold(false);
-    buildFold(L, meta);
-    saidOpen(L.id, true);
+    buildFold(L, meta, kind);
+    saidOpen(L.id, kind);
   }
 
-  function buildFold(L, meta) {
+  /* One fold, two things it can hold — and never both.
+
+     "Change" opened what a place's card shows AND the way to take the layer off
+     the map. Those are not siblings: one is how a thing is presented and the
+     other ends it. Under one word they were also unlabelled, so you had to open
+     it to learn what it did, and the word never changed to say it was open.
+
+     Each has its own control on the row now, saying its own name. Removing is
+     still two deliberate acts — the button opens the sentence that says what
+     will happen, and the sentence has its own button — but the first act now
+     says what it is before you take it. */
+  function buildFold(L, meta, which) {
     var row = L._row;
     if (!row) return;
+    var showCard = which !== "remove";
     var host = el("div", "own-fold");
     host.setAttribute("data-lid", L.id);
+    host.setAttribute("data-fold-kind", showCard ? "card" : "remove");
 
     /* The name is not here any more — it is edited from the row, where it is.
        What is here is what a place's card says, which is the thing you cannot
        do from anywhere else and which needs more than one tap. */
     var cardBox = el("div", "own-fld");
+    cardBox.hidden = !showCard;
     cardBox.appendChild(document.createTextNode("On every place's card"));
     var list = el("div", "own-cards");
     var chosen = cardColumnsNow(L);
@@ -1301,7 +1334,7 @@
           return preview(SLUG).then(refreshLayers).then(function () {
             var again = (window.LokaAtlas.manifest.layers || []).filter(
               function (x) { return x.id === L.id; })[0];
-            if (again && again._row) buildFold(again, meta);
+            if (again && again._row) buildFold(again, meta, which);
             if (then) then();
           });
         })
@@ -1316,11 +1349,13 @@
        same order, because it is the one place here that cannot be taken back and
        the words had been thought about. */
     var rm = el("div", "own-remove");
-    var rmLink = el("button", "own-linkish");
-    rmLink.type = "button";
-    rmLink.textContent = "Remove this layer from the atlas…";
+    rm.hidden = showCard;
     var confirm = el("div", "own-confirm");
-    confirm.hidden = true;
+    /* Not hidden behind a link any more: the control on the row that opened
+       this fold already said "Remove", so making you press a second thing that
+       also says "Remove" before you are told what it does is a step that
+       teaches nothing. The sentence is what this fold is for. */
+    confirm.hidden = false;
     var n = countPlaces(L);
     confirm.appendChild(el("p", null, "Remove “" + (L.label || L.id) + "”? " +
       (n != null ? "Its " + n + (n === 1 ? " place comes" : " places come") : "Its places come") +
@@ -1339,16 +1374,8 @@
     buttons.appendChild(yes);
     buttons.appendChild(no);
     confirm.appendChild(buttons);
-    rmLink.onclick = function () {
-      rmLink.hidden = true;
-      confirm.hidden = false;
-      no.focus();
-    };
-    no.onclick = function () {
-      confirm.hidden = true;
-      rmLink.hidden = false;
-      rmLink.focus();
-    };
+    // "Keep it" shuts the whole fold, because the fold IS the question
+    no.onclick = function () { closeFold(true); };
     yes.onclick = function () {
       yes.disabled = true;
       rmErr.hidden = true;
@@ -1364,14 +1391,15 @@
           rmErr.hidden = false;
         });
     };
-    rm.appendChild(rmLink);
     rm.appendChild(confirm);
     host.appendChild(rm);
 
     row.appendChild(host);
-    FOLD = { lid: L.id, host: host, row: row };
-    // the first thing you can act on, so a keyboard lands somewhere useful
-    var first = host.querySelector("input, button");
+    FOLD = { lid: L.id, host: host, row: row, kind: showCard ? "card" : "remove" };
+    /* A keyboard lands on the first thing it can act on — except when the fold
+       is asking whether to delete something, where the first thing is "Remove
+       the layer". It lands on "Keep it" there. */
+    var first = showCard ? host.querySelector("input, button") : no;
     if (first) first.focus();
   }
 

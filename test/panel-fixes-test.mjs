@@ -50,11 +50,14 @@ check('the caption explaining the questions is gone',
   /Patterns found once/.test(ownerCode), false);
 
 console.log('\n  a fold says what it opens and whether it is open');
-check('it is named for what is behind it', /btn\.textContent = "Settings";/.test(owner), true);
+check('each control is named for its own half',
+  /btn\.textContent = "Card";/.test(owner) && /del\.textContent = "Remove";/.test(owner), true);
+check('and the one that ends something is coloured as such',
+  /own-change own-change-danger/.test(owner), true);
 check('it starts shut and says so', /btn\.setAttribute\("aria-expanded", "false"\)/.test(owner), true);
-check('opening it says so', /buildFold\(L, meta\);\s*saidOpen\(L\.id, true\);/.test(owner), true);
-check('and so does shutting it, however it was shut',
-  /var lid = FOLD\.lid;\s*saidOpen\(lid, false\);/.test(owner), true);
+check('opening one says which one is open',
+  /buildFold\(L, meta, kind\);\s*saidOpen\(L\.id, kind\);/.test(owner), true);
+check('and shutting says neither is', /var lid = FOLD\.lid;\s*saidOpen\(lid, null\);/.test(owner), true);
 check('its label no longer claims to be about how a layer looks',
   /Change how " \+ \(L\.label/.test(owner), false);
 

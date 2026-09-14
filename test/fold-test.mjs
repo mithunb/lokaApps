@@ -83,20 +83,28 @@ check('and are not built a second time',
   (viewer3.match(/box\.appendChild\(buildKeyToggles\(L\)\)/g) || []).length, 1);
 
 console.log('\n  what opens instead');
-check('Change opens a fold', /function buildFold\(L, meta\)/.test(owner), true);
+check('a fold opens under the row', /function buildFold\(L, meta, which\)/.test(owner), true);
+/* One fold, holding one thing or the other — what a place's card shows, or the
+   question of taking the layer off the map. Never both under one word. */
+check('and holds one thing at a time', /var showCard = which !== "remove";/.test(owner), true);
 check('under the layer\'s own row', /row\.appendChild\(host\)/.test(owner), true);
 check('holding the layer\'s name', /Layer name/.test(owner), true);
 /* "Call each place by" is gone by design: an owner now chooses WHICH columns a
    card shows, not merely which one names the place. */
 check('a card\'s columns are chosen instead', /On every place's card/.test(owner), true);
 check('and the old title-only control is gone', /Call each place by/.test(owner), false);
-check('and the remove, worded as before',
-  /Remove this layer from the atlas…/.test(owner) &&
+/* The link that used to sit in front of the sentence is gone: the control on
+   the row already says Remove, so a second thing also saying Remove before you
+   are told what happens teaches nothing. The sentence itself is unchanged. */
+check('the remove is still worded as it was',
   /off the map and the public atlas\. Your original file stays with you\./.test(owner), true);
+check('and the sentence is what the fold shows', /confirm\.hidden = false;/.test(owner), true);
+check('with the keyboard on the answer that keeps it',
+  /var first = showCard \? host\.querySelector\("input, button"\) : no;/.test(owner), true);
 check('one fold at a time', /closeFold\(false\);\s*\n\s*buildFold/.test(owner), true);
 check('Escape closes it', /if \(FOLD\) \{/.test(owner), true);
-check('and it comes back after a save so a second change is possible',
-  /if \(again && again\._row\) buildFold\(again, meta\)/.test(owner), true);
+check('and it comes back after a save, on the same half',
+  /if \(again && again\._row\) buildFold\(again, meta, which\)/.test(owner), true);
 
 console.log('\n  saving, without a draft copy of the atlas');
 check('there is a route for it', /router\.post\('\/layers\/relabel'/.test(server), true);
