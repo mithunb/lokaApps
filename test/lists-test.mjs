@@ -50,7 +50,7 @@ check('a list of nothing does not make a column',
 
 console.log('\n  nothing moves on the places we actually have');
 const real = JSON.parse(fs.readFileSync(
-  ROOT + '/atlas/datasets/blr-finds-test/user-blr-full.geojson',
+  new URL('./fixtures/blr.geojson', import.meta.url),
   'utf8')).features.map((f) => f.properties);
 check('the Bengaluru columns are unchanged', R.wordColumns(real),
   ['description', 'categories', 'labels', 'address', 'creator']);
