@@ -289,10 +289,19 @@
     .ctl-sub-toggle input:checked + .ctl-switch::after { transform:translateX(14px); }
     .ctl-toggle input:focus-visible + .ctl-switch { outline:2px solid var(--color-moss); outline-offset:2px; }
     .ctl-name { font-size:var(--t-ui); font-weight:600; line-height:1.25; }
-    .ctl-info { margin-left:auto; flex:0 0 auto; width:16px; height:16px; color:var(--color-text-muted);
-      display:inline-flex; align-items:center; justify-content:center; cursor:help; }
+    /* A button, not a span carrying a title: it can be pressed, focused and
+       read out. The mark stays 15px; the padding around it is the part you
+       can hit, which a 16px square never was. */
+    .ctl-info { margin-left:auto; flex:0 0 auto; color:var(--color-text-muted);
+      display:inline-flex; align-items:center; justify-content:center;
+      background:none; border:0; padding:5px; cursor:pointer; }
     .ctl-info svg { width:15px; height:15px; }
     .ctl-info:hover { color:var(--color-moss); }
+    .ctl-info:focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:var(--radius-md); }
+    .ctl-info[aria-expanded="true"] { color:var(--color-moss); }
+    /* what the layer is, in its own words — on the panel's strip like everything else */
+    .ctl-said { margin:.1rem 0 .35rem; padding-left:var(--panel-strip);
+      font-size:var(--t-label); line-height:1.45; color:var(--color-text-secondary); }
     /* Everything a layer owns — keys, legend, fold note, browse link,
        opacity — hangs behind one moss rule, so wherever the sheet is
        scrolled the branch visibly belongs to something above it. (The rule
@@ -876,6 +885,10 @@
     #contrib-list li { font-size:var(--t-meta); line-height:1.35; }
     #contrib-list .cr-name { font-weight:600; color:var(--color-text-primary); }
     #contrib-list .cr-by { color:var(--color-text-secondary); }
+    /* the people who walked the ground and tagged it */
+    #walk-credits { margin-top:1.1rem; }
+    #walk-list { margin:0; font-size:var(--t-meta); line-height:1.6; color:var(--color-text-secondary); }
+    #walk-list .walk-name { color:var(--color-text-primary); font-weight:600; white-space:nowrap; }
     .credits-foot { margin-top:1rem; font-size:var(--t-meta); color:var(--color-text-muted); display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
 
     /* ---- app home: instance gallery ---- */
@@ -941,6 +954,7 @@
     /* Coarse pointer (touch): comfortable 44px targets regardless of screen size */
     @media (pointer:coarse){
       .ctl-toggle, .ctl-sub-toggle { min-height:44px; }
+      .ctl-info { padding:8px; }
       .ctl-switch { width:38px; height:22px; }
       .ctl-switch::after { width:18px; height:18px; }
       .ctl-toggle input:checked + .ctl-switch::after,
@@ -1145,6 +1159,10 @@
         <div id="contrib-credits" hidden>
           <h3 class="contrib-head">Contributed data</h3>
           <ul id="contrib-list"></ul>
+        </div>
+        <div id="walk-credits" hidden>
+          <h3 class="contrib-head" id="walk-head">Tagged on foot by</h3>
+          <p id="walk-list"></p>
         </div>
         <div class="credits-foot">
           Built with <a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre GL</a>, the open-source map engine. Open data, openly credited.

@@ -286,6 +286,8 @@
           if (!manifest.groups.some(function (x) { return x.id === g.id; })) manifest.groups.push(g);
         });
         (local.attributions || []).forEach(function (a) { manifest.attributions.push(a); });
+        // the people who tagged the places, when the owner has recorded them
+        if (local.taggedBy) manifest.taggedBy = local.taggedBy;
         return manifest;
       });
   }
@@ -3804,15 +3806,47 @@
        "checkbox" for each key — the very sameness the tick was drawn to end.
        The layer says what it is. */
     cb.setAttribute("role", "switch");
+    /* And it is named by the layer, not by everything sitting on the row.
+       A label wraps the whole row, so the switch borrowed its name from all
+       the text inside it — which, once an owner is signed in, is the layer's
+       name plus Edit card plus Remove plus About. Named here, it says the one
+       thing it is. */
+    cb.setAttribute("aria-label", L.label || L.id);
     var sw = el("span", "ctl-switch");
     var name = el("span", "ctl-name", esc(L.label));
     top.appendChild(cb); top.appendChild(sw); top.appendChild(name);
+    var said = null;
     if (L.info) {
-      var info = el("span", "ctl-info", ICONS.info);
-      info.title = L.info;
+      /* A real button, and it does something.
+
+         This was a span carrying a title. Two faults followed from that. A span
+         is not interactive content, so a press on it reached the label around
+         it and flipped the layer off — reported as "the info icon toggles the
+         layer", which is exactly what it did. And a title only appears on hover
+         with a mouse: on a phone, and for anybody moving by keyboard, the words
+         behind it were simply unreachable.
+
+         What it holds is worth reaching: where a layer's data came from, what
+         it counts, what year it is. So pressing it shows that under the row,
+         and pressing it again puts it away. */
+      var info = el("button", "ctl-info", ICONS.info);
+      info.type = "button";
+      info.setAttribute("aria-expanded", "false");
+      info.setAttribute("aria-label", "About " + (L.label || L.id));
+      said = el("p", "ctl-said", esc(L.info));
+      said.hidden = true;
+      info.onclick = function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var show = said.hidden;
+        said.hidden = !show;
+        info.setAttribute("aria-expanded", String(show));
+      };
       top.appendChild(info);
     }
     row.appendChild(top);
+    // under the row, not inside the label — a label holds the switch and its name
+    if (said) row.appendChild(said);
 
     var extra = el("div", "ctl-extra");
     row.appendChild(extra);
@@ -4554,13 +4588,14 @@
   ================================================================== */
   function buildCredits() {
     var box = $("#data-credits");
-    if (!box || !MANIFEST.attributions) return;
-    box.innerHTML = MANIFEST.attributions.map(function (a) {
-      var name = a.url ? '<a href="' + esc(a.url) + '" target="_blank" rel="noopener">' + esc(a.name) + "</a>" : esc(a.name);
-      return '<li><span class="cr-name">' + name + "</span>" +
-        (a.note ? '<span class="cr-note">' + esc(a.note) + "</span>" : "") +
-        (a.license ? '<span class="cr-lic">' + esc(a.license) + "</span>" : "") + "</li>";
-    }).join("");
+    if (box && MANIFEST.attributions) {
+      box.innerHTML = MANIFEST.attributions.map(function (a) {
+        var name = a.url ? '<a href="' + esc(a.url) + '" target="_blank" rel="noopener">' + esc(a.name) + "</a>" : esc(a.name);
+        return '<li><span class="cr-name">' + name + "</span>" +
+          (a.note ? '<span class="cr-note">' + esc(a.note) + "</span>" : "") +
+          (a.license ? '<span class="cr-lic">' + esc(a.license) + "</span>" : "") + "</li>";
+      }).join("");
+    }
 
     // layers contributed by collaborating orgs — credit them by name
     var contrib = (MANIFEST.layers || []).filter(function (L) {
@@ -4576,6 +4611,28 @@
         return '<li><span class="cr-name">' + esc(L.label || L.id) + "</span> " +
           '<span class="cr-by">— added by ' + esc(by) + "</span></li>";
       }).join("");
+    }
+
+    /* The people who walked the ground.
+
+       A source of data gets a line under "Data & sources". The people who
+       stood in the place and tagged it are not a source, and six names in
+       that list would read like six databases, each wanting a licence. They
+       get a line of their own.
+
+       The order is left exactly as the manifest sets it. Whoever wrote the
+       list chose that order — alphabetical, or who walked furthest — and a
+       page that quietly re-sorts names has taken a decision that was not
+       its own to take. */
+    var walk = MANIFEST.taggedBy;
+    var people = Array.isArray(walk) ? walk : ((walk && walk.people) || []);
+    var wbox = $("#walk-credits"), wline = $("#walk-list"), whead = $("#walk-head");
+    if (wbox && wline && people.length) {
+      wbox.hidden = false;
+      if (whead && walk && walk.heading) whead.textContent = walk.heading;
+      wline.innerHTML = people.map(function (n) {
+        return '<span class="walk-name">' + esc(n) + "</span>";
+      }).join(", ");
     }
   }
 

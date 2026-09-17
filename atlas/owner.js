@@ -522,7 +522,10 @@
     var act = $("#own-live");
     // only the owner decides whether an atlas is on the air
     act.hidden = INST.role !== "owner" || INST.status === "building";
-    act.textContent = live ? "Take it off" : "Make it live";
+    /* "Take it off" said what was being taken away rather than what you would
+       have afterwards, and left it open where the atlas went. Its opposite is
+       "Make it live", so the pair now reads as the two states it moves between. */
+    act.textContent = live ? "Make it private" : "Make it live";
     act.classList.toggle("primary", !live);
     // the Share panel must say when a link and QR will only work for the
     // owner — a printed poster of a not-live atlas is a dead poster
@@ -537,7 +540,7 @@
       .then(function () {
         INST.status = live ? "built" : "published";
         paintStatus();
-        toast(live ? "Taken off — only you can see it now"
+        toast(live ? "Private now — only you can see it"
                    : "Live — anyone with the link can open it");
       })
       .catch(function (e) { toast(errMsg(e)); })
@@ -628,11 +631,13 @@
        It also described itself wrongly: "Change how it looks" opens what a
        place's card says AND the way to take the layer off the map, and neither
        of those is how anything looks. */
-    btn.textContent = "Card";
+    /* "Card" named the thing without saying you could do anything to it — it
+       read as a label for something, not as a way in. */
+    btn.textContent = "Edit card";
     btn.setAttribute("data-lid", L.id);
     btn.setAttribute("data-fold", "card");
     btn.setAttribute("aria-expanded", "false");
-    btn.setAttribute("aria-label", "Choose what a place's card shows on " + (L.label || L.id));
+    btn.setAttribute("aria-label", "Change what a place's card shows on " + (L.label || L.id));
     btn.onclick = function (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -643,11 +648,14 @@
     var del = document.createElement("button");
     del.type = "button";
     del.className = "own-change own-change-danger";
-    del.textContent = "Remove";
+    /* The ellipsis is the whole point: it says this opens a question rather
+       than doing the thing. Nothing is removed by pressing it — you get a
+       sentence saying what would happen, and the keyboard lands on "Keep it". */
+    del.textContent = "Remove…";
     del.setAttribute("data-lid", L.id);
     del.setAttribute("data-fold", "remove");
     del.setAttribute("aria-expanded", "false");
-    del.setAttribute("aria-label", "Take " + (L.label || L.id) + " off the map");
+    del.setAttribute("aria-label", "Remove " + (L.label || L.id) + " from the map — asks first");
     del.onclick = function (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -667,13 +675,21 @@
       note.className = "own-by";
       note.textContent = "added by " + who;
       row.appendChild(note);
-      // the viewer's info tooltip carries the same credit for readers — with
-      // the visible note here, saying it twice on one row is noise
-      var info = row.querySelector(".ctl-info");
-      if (info && info.title) {
-        var trimmed = info.title.replace(/(\s*—\s*)?Added by [^—]*$/, "").trim();
-        if (trimmed) info.title = trimmed;
-        else info.parentNode.removeChild(info);
+      /* The viewer's info note carries the same credit for readers, and with
+         the visible note here, saying it twice on one row is noise.
+
+         It used to read the icon's title. The icon stopped being a span with
+         a title and became a button that opens a note under the row, so the
+         credit to strip now lives in that note. */
+      var said = row.querySelector(".ctl-said");
+      if (said) {
+        var trimmed = said.textContent.replace(/(\s*—\s*)?Added by [^—]*$/, "").trim();
+        if (trimmed) said.textContent = trimmed;
+        else {
+          var mark = row.querySelector(".ctl-info");
+          if (mark) mark.parentNode.removeChild(mark);
+          said.parentNode.removeChild(said);
+        }
       }
     }
   }

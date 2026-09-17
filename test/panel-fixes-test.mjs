@@ -50,8 +50,10 @@ check('the caption explaining the questions is gone',
   /Patterns found once/.test(ownerCode), false);
 
 console.log('\n  a fold says what it opens and whether it is open');
+/* Both were later renamed for what pressing them does — the wording itself is
+   checked in plain-controls; here the point is only that there are two. */
 check('each control is named for its own half',
-  /btn\.textContent = "Card";/.test(owner) && /del\.textContent = "Remove";/.test(owner), true);
+  /btn\.textContent = "Edit card";/.test(owner) && /del\.textContent = "Remove\u2026";/.test(owner), true);
 check('and the one that ends something is coloured as such',
   /own-change own-change-danger/.test(owner), true);
 check('it starts shut and says so', /btn\.setAttribute\("aria-expanded", "false"\)/.test(owner), true);
