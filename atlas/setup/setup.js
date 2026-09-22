@@ -532,37 +532,71 @@
     return pts.length ? pts : null;
   }
 
-  // The column most likely to hold place names: one that is named like a place
-  // first, otherwise the text column that reads as short labels rather than prose.
-  function namesFrom(c) {
+  /* The columns that might hold place names, best first.
+
+     This used to take the FIRST column whose heading contained any of fourteen
+     words. A form export's first such column is "Name" — the person who filled
+     the form in — so twelve people's names were sent to the boundary data,
+     nothing came back, and the page said no places were found while the answers
+     to "which geographic areas do you work in?" sat five columns to the right.
+
+     Three changes. The words are matched as WORDS, so "Instagram" stops reading
+     as "gram", a village. "Name" on its own no longer counts as geographic at
+     all — "Village name" still does, through "village". And a heading now only
+     buys a place in the ORDER: which column is actually used is settled by the
+     boundary data, which is asked about each of them in turn. */
+  var READS_GEOGRAPHIC = /\b(where|location|located|locality|place|places|region|regions|area|areas|address|geograph\w*|district|districts|state|states|province|country|village|villages|town|towns|city|cities|taluk\w*|tehsil|mandal|panchayat|ward|block|pin ?code|postcode|zip)\b/i;
+  var READS_PERSONAL = /\b(e-?mail|phone|mobile|contact|handle|handles|instagram|linkedin|facebook|twitter|whatsapp|website|url|link|links|timestamp|consent|credited|organisation|organization|institution|company)\b/i;
+  var MAX_NAME_COLUMNS = 4;
+  /* One request carries every candidate column, and the endpoint takes 2 MB.
+     The best-named column always goes; the rest join it while there is room.
+     Sending a SAMPLE of a column instead would mean the answer "8 of 12 rows"
+     was measured on something other than the file. */
+  var COLUMNS_BUDGET = 1400000;
+
+  function nameColumns(c) {
     var text = (c.schema || []).filter(function (s) { return s.type === "string"; });
     if (!text.length) return null;
-    var named = text.filter(function (s) {
-      return /(name|village|town|city|district|block|place|ward|panchayat|taluk|tehsil|mandal|gram)/i.test(s.name);
-    })[0];
-    var pick = named;
-    if (!pick) {
-      var best = null;
-      text.forEach(function (s) {
-        var vals = (c.rows || []).map(function (r) { return String(r[s.name] == null ? "" : r[s.name]).trim(); })
-          .filter(Boolean);
-        if (!vals.length) return;
-        var chars = 0, words = 0;
-        vals.forEach(function (v) { chars += v.length; words += v.split(/\s+/).length; });
-        chars /= vals.length; words /= vals.length;
-        if (chars > 40 || words > 4) return;              // prose, not a label
-        var score = vals.length / (chars + words);
-        if (!best || score > best.score) best = { s: s, score: score };
-      });
-      pick = best && best.s;
-    }
-    if (!pick) return null;
-    var out = [];
-    (c.rows || []).forEach(function (r) {
-      var v = String(r[pick.name] == null ? "" : r[pick.name]).trim();
-      if (v) out.push(v);
+    var cands = [];
+    text.forEach(function (s, at) {
+      var vals = (c.rows || []).map(function (r) { return String(r[s.name] == null ? "" : r[s.name]).trim(); })
+        .filter(Boolean);
+      if (!vals.length) return;
+      var chars = 0, words = 0;
+      vals.forEach(function (v) { chars += v.length; words += v.split(/\s+/).length; });
+      chars /= vals.length; words /= vals.length;
+      /* A contact column is never a place, and it wins over every other signal
+         here: "Email address" carries the word address and would otherwise
+         read as geographic. */
+      if (READS_PERSONAL.test(s.name)) return;
+      var score = 0;
+      if (READS_GEOGRAPHIC.test(s.name)) score += 3;
+      if (chars <= 40 && words <= 4) score += 1;          // reads like a label
+      if (chars > 200) score -= 1;                        // reads like an essay
+      cands.push({ col: s.name, names: vals, score: score, at: at });
     });
-    return out.length ? { col: pick.name, names: out } : null;
+    if (!cands.length) return null;
+    cands.sort(function (a, b) { return (b.score - a.score) || (a.at - b.at); });
+    var out = [], spent = 0;
+    cands.forEach(function (x) {
+      if (out.length >= MAX_NAME_COLUMNS) return;
+      var size = 0;
+      x.names.forEach(function (v) { size += v.length + 3; });
+      if (out.length && spent + size > COLUMNS_BUDGET) return;
+      spent += size;
+      out.push({ col: x.col, names: x.names });
+    });
+    return out;
+  }
+
+  /* A form's question becomes the column's heading, and a question can run to
+     two hundred characters. Say enough of it to know which column is meant:
+     the question itself, where there is one, and never more than one line. */
+  function shortCol(name) {
+    var t = String(name || "").trim();
+    var cut = t.search(/[?(]/);
+    if (cut > 8 && cut < 70) t = t.slice(0, t.charAt(cut) === "?" ? cut + 1 : cut).trim();
+    return t.length > 64 ? t.slice(0, 62).trim() + "\u2026" : t;
   }
 
   /* One block for one act. Dropping a file used to produce two separate things —
@@ -669,8 +703,8 @@
     var rows = (c.rows || []).length;
     GEO.file = file; GEO.canonical = c; GEO.rows = rows;
     var pts = pointsFrom(c);
-    var nm = pts ? null : namesFrom(c);
-    if (!pts && !nm) {
+    var cols = pts ? null : nameColumns(c);
+    if (!pts && !cols) {
       msg(2, "This file has no coordinates and no column that reads like place names, so it can’t " +
         "say where it belongs. Search for the place above instead.");
       showFileCard(file.name, rows + " rows · couldn’t find places");
@@ -685,20 +719,27 @@
     }
     showFileCard(file.name, rows + " rows" + (part ? " · " + part : "") + " · finding places…");
     msg(2, "Reading all " + rows.toLocaleString() + " rows to find the places…", "ok");
-    var body = pts ? { iso3: S.iso3, points: pts } : { iso3: S.iso3, names: nm.names };
+    // several columns may read like places; the boundary data settles which
+    var body = pts ? { iso3: S.iso3, points: pts } : { iso3: S.iso3, columns: cols };
     api("geo/infer", { method: "POST", body: body })
-      .then(function (d) { applyInferred(d, file, rows, pts ? "coordinates" : "the “" + nm.col + "” column"); })
+      .then(function (d) { applyInferred(d, file, rows, !!pts); })
       .catch(function (e) {
         msg(2, e && e.needsCountry ? "Choose the country above, then drop the file again." : errMsg(e));
         showFileCard(file.name, rows + " rows");
       });
   }
 
-  function applyInferred(d, file, rows, how) {
+  function applyInferred(d, file, rows, fromPoints) {
+    /* Which column was read is part of the answer, and when nothing is found it
+       is the WHOLE answer: "no places found" sent somebody hunting for a fault
+       in their data when the page had simply read the wrong column. */
+    var how = fromPoints ? "coordinates"
+      : (d && d.column ? "the “" + shortCol(d.column) + "” column"
+                       : "the place names in your file");
     var units = (d && d.units) || [];
     if (!units.length) {
-      msg(2, "We couldn’t match these rows to any place we know. Search for the place above instead — " +
-        "your data will still go on the atlas afterwards.");
+      msg(2, "We read " + how + " and couldn’t match any of it to a place we know. " +
+        "Search for the place above instead — your data will still go on the atlas afterwards.");
       showFileCard(file.name, rows + " rows · no places found");
       return;
     }

@@ -403,6 +403,66 @@ router.get('/geo/search', async (req, res) => {
   }
 });
 
+/* Every name this country has, at any level, normalised.
+
+   The cheap sieve for choosing WHICH column holds the places. It comes off the
+   search index, which is already kept for the life of the process and carries
+   no geometry — all of India is about 2 MB — so screening three columns costs
+   lookups, not another parse of a 34 MB boundary file. */
+const knownNamesCache = new Map();               // iso3 -> Set of normalised names
+async function knownNames(iso3, avail) {
+  const hit = knownNamesCache.get(iso3);
+  if (hit) return hit;
+  const set = new Set();
+  for (const L of avail) {
+    const idx = await searchLevelIndex(iso3, L);
+    if (idx) for (const e of idx.entries) set.add(e.n);
+  }
+  knownNamesCache.set(iso3, set);
+  return set;
+}
+
+const MAX_NAME_COLUMNS = 4;      // more than this and we are guessing, not choosing
+const SCREEN_ROWS = 400;         // a sample is enough to tell two columns apart
+const ONE_PLACE = [true];        // stands in for "yes, something is named here"
+
+// How much of a column reads like places — the whole cell being a name, or a
+// name sitting inside the sentence.
+function columnHitRate(names, known) {
+  const seen = names.slice(0, SCREEN_ROWS);
+  if (!seen.length) return 0;
+  const lookup = (k) => (known.has(k) ? ONE_PLACE : null);
+  let hit = 0;
+  for (const raw of seen) {
+    const nm = String(raw == null ? '' : raw).trim();
+    if (!nm) continue;
+    let ok = false;
+    for (const sp of aliasSpellings(nm)) if (known.has(sp)) { ok = true; break; }
+    if (!ok && /\s/.test(nm)) ok = namesInside(nm, lookup).length > 0;
+    if (ok) hit++;
+  }
+  return hit / seen.length;
+}
+
+/* Which of several candidate columns is the one holding places.
+
+   The page ranks them by what their headings say, which is a guess: a form
+   export's first column called "Name" is the person who filled the form, and
+   asking a boundary file about Gijs Spoor and Sutanu Satpathy finds nothing.
+   So the headings only decide the ORDER; what decides the answer is which
+   column actually names places this country has. Ties keep the earlier one,
+   which is the one whose heading read best. */
+async function pickNameColumn(iso3, columns, avail) {
+  if (columns.length < 2) return { col: columns[0].col, names: columns[0].names, rate: null };
+  const known = await knownNames(iso3, avail);
+  let best = null;
+  for (const c of columns) {
+    const rate = columnHitRate(c.names, known);
+    if (!best || rate > best.rate) best = { col: c.col, names: c.names, rate };
+  }
+  return best;
+}
+
 // Work out WHICH REGION a file is about, so someone who does not know the places
 // in their own data can still answer "where is it?". Every row is read (bounded
 // by the same 5,000-row ceiling as an upload) — a sample could not report an
@@ -417,9 +477,19 @@ router.post('/geo/infer', async (req, res) => {
     .map((p) => [Number(p && p[0]), Number(p && p[1])])
     .filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]) && Math.abs(p[1]) <= 90 && Math.abs(p[0]) <= 180)
     .slice(0, MAX_ROWS) : [];
-  const names = Array.isArray(b.names)
-    ? b.names.map((n) => String(n == null ? '' : n).trim()).filter(Boolean).slice(0, MAX_ROWS) : [];
-  if (!points.length && !names.length) return res.status(400).json({ error: 'points or names required' });
+  /* One column, or several to choose between. A page that knows which column
+     holds the places sends that one; a page looking at a form export sends its
+     best few and lets the boundary data settle it. `names` stays for anything
+     still sending one unnamed column. */
+  const cleanNames = (a) => (Array.isArray(a)
+    ? a.map((n) => String(n == null ? '' : n).trim()).filter(Boolean).slice(0, MAX_ROWS) : []);
+  const columns = (Array.isArray(b.columns) ? b.columns : [])
+    .map((c) => ({ col: String((c && c.col) || ''), names: cleanNames(c && c.names) }))
+    .filter((c) => c.names.length)
+    .slice(0, MAX_NAME_COLUMNS);
+  const names = cleanNames(b.names);
+  if (names.length && !columns.length) columns.push({ col: '', names });
+  if (!points.length && !columns.length) return res.status(400).json({ error: 'points or names required' });
   try {
     // no country given: coordinates can resolve it; bare place names cannot
     if (!/^[A-Z]{3}$/.test(iso3)) {
@@ -434,12 +504,20 @@ router.post('/geo/infer', async (req, res) => {
     let avail;
     try { avail = JSON.parse(fs.readFileSync(path.join(GEOCACHE_DIR, `${iso3}-levels.json`), 'utf8')).levels; }
     catch { avail = [1, 2, 3, 4]; }
-    let r = null, mode = null;
+    let r = null, mode = null, chosen = null;
     if (points.length) { r = await inferRegionFromPoints(iso3, points, avail); mode = 'points'; }
-    else { r = await inferRegionFromNames(iso3, names, avail); mode = 'names'; }
+    else {
+      chosen = await pickNameColumn(iso3, columns, avail);
+      r = await inferRegionFromNames(iso3, chosen.names, avail);
+      mode = 'names';
+    }
+    // which column was read is part of the answer: when nothing is found, it is
+    // the one thing that explains why
+    const column = chosen ? chosen.col : '';
     if (!r || !r.units.length) {
-      return res.json({ iso3, mode, level: null, units: [], bbox: null, coverage: 0,
-                        rows: (r && r.rows) || points.length || names.length, matchedRows: 0,
+      return res.json({ iso3, mode, column, level: null, units: [], bbox: null, coverage: 0,
+                        rows: (r && r.rows) || points.length || (chosen && chosen.names.length) || 0,
+                        matchedRows: 0,
                         unreadRows: (r && r.unreadRows) || 0, parents: [], ancestors: [] });
     }
     const parents = await parentUnitsOf(iso3, r.level, r.units);
@@ -447,7 +525,7 @@ router.post('/geo/infer', async (req, res) => {
     // geometry rides along for the confirmation map, but a huge covering set
     // (data spread across dozens of units) would bloat the response — drop it then
     const units = r.units.length <= 60 ? r.units : r.units.map(({ geometry, ...u }) => u);
-    res.json({ iso3, mode, level: r.level, units, bbox: r.bbox,
+    res.json({ iso3, mode, column, level: r.level, units, bbox: r.bbox,
                coverage: Number(r.coverage.toFixed(3)),
                rows: r.rows, matchedRows: r.matchedRows, unreadRows: r.unreadRows,
                sharedRows: r.sharedRows || 0,
@@ -555,6 +633,83 @@ function anchorFromSpread(deferred) {
   }
   return bestC;
 }
+/* Words that name a real place SOMEWHERE in the country and are almost never
+   the place somebody means when they write one inside a sentence.
+
+   Measured on a survey export: "East vidarbha maharashtra" put a respondent in
+   East district, Delhi; "I work with industrial clients" found an ADM3 called
+   Industrial; "Jeevan Bhima Nagar" found an ADM3 called Nagar. Each is a real
+   entry in the boundary data and each was the wrong answer.
+
+   The list only ever silences a word standing ALONE. "East Godavari", "New
+   Delhi" and "Nagar Haveli" are two words and match as they always did, and a
+   column whose every row simply says "East" still matches whole, because that
+   is somebody answering the question rather than talking. */
+const LOOSE_IN_A_SENTENCE = new Set([
+  'east', 'west', 'north', 'south', 'central', 'new', 'old', 'upper', 'lower',
+  'greater', 'district', 'districts', 'division', 'subdivision', 'block',
+  'taluk', 'taluka', 'tehsil', 'mandal', 'circle', 'ward', 'zone', 'region',
+  'state', 'city', 'town', 'village', 'villages', 'rural', 'urban', 'colony',
+  'sector', 'phase', 'extension', 'layout', 'nagar', 'pura', 'puram', 'gaon',
+  'industrial', 'port', 'station', 'market', 'hill', 'hills', 'valley',
+  'island', 'islands', 'forest', 'park', 'reserve', 'sanctuary', 'national',
+  'india', 'bharat', 'country', 'area', 'areas', 'place', 'places',
+]);
+
+// A sentence longer than this is somebody's life story, not an answer to
+// "where do you work?" — and every extra word is another lookup on every level.
+const SCAN_MAX_WORDS = 80;
+// One answer naming more places than this has stopped being an answer.
+const SCAN_MAX_HITS = 12;
+// "Goa" is a state; three letters is the floor, below it is noise.
+const SCAN_MIN_CHARS = 3;
+
+/* The places a sentence NAMES, when the sentence is not itself a name.
+
+   A survey asks "which geographic areas do you work in?" and gets back
+   "BRT Tiger Reserve, Chamarajanagar district, Karnataka, India" — a district
+   and a state, wrapped in words. Reading only whole cells finds neither.
+
+   Three rules keep this from inventing places. Only OUTRIGHT matches count:
+   the phrase is a name this country has, or a former spelling of one, and
+   nothing is guessed at — a loose run of the same scan put the Western Ghats
+   in West Delhi and Pan India in Panna. The longest phrase wins and takes its
+   words with it, so "Arunachal Pradesh" is never also read as "Pradesh". And a
+   single word that is loose in a sentence is skipped (see above).
+
+   lookup(normalisedName) returns the places with that name, or nothing. */
+function namesInside(text, lookup) {
+  const out = [];
+  const runs = String(text == null ? '' : text)
+    .split(/[,.;:()[\]{}\n\/|"']+|\s+[-\u2013\u2014]\s+|\s{2,}/);
+  let seen = 0;
+  for (const run of runs) {
+    const w = run.trim().split(/\s+/).filter(Boolean);
+    if (!w.length) continue;
+    seen += w.length;
+    if (seen > SCAN_MAX_WORDS) break;
+    const taken = new Array(w.length).fill(false);
+    for (let n = 3; n >= 1; n--) {
+      for (let i = 0; i + n <= w.length; i++) {
+        if (out.length >= SCAN_MAX_HITS) return out;
+        let free = true;
+        for (let j = i; j < i + n; j++) if (taken[j]) { free = false; break; }
+        if (!free) continue;
+        const phrase = w.slice(i, i + n).join(' ');
+        const k = norm(phrase);
+        if (k.length < SCAN_MIN_CHARS) continue;
+        if (n === 1 && LOOSE_IN_A_SENTENCE.has(k)) continue;
+        let cands = null;
+        for (const sp of aliasSpellings(phrase)) { cands = lookup(sp); if (cands) break; }
+        if (!cands) continue;
+        for (let j = i; j < i + n; j++) taken[j] = true;
+        out.push({ phrase, cands });
+      }
+    }
+  }
+  return out;
+}
+
 async function inferRegionFromNames(iso3, names, avail) {
   const order = [2, 3, 4, 1].filter((l) => avail.includes(l));
   const tally = new Map();                       // spelling -> how many rows carry it
@@ -578,27 +733,50 @@ async function inferRegionFromNames(iso3, names, avail) {
     const unknown = [];                          // [spelling, rows]
 
     // 1) the names that can only mean one place — these anchor everything else
+    const lookup = (k) => byName.get(k) || null;
     let ax = 0, ay = 0, aw = 0;
-    for (const [nm, n] of tally) {
-      const cands = byName.get(norm(nm));
-      if (!cands) { unknown.push([nm, n]); continue; }
-      if (cands.length > 1) { deferred.push([nm, n, cands]); continue; }
-      const f = cands[0];
-      matchedRows += n;
+    const keep = (f, n) => {
       hitU.set(f.properties.id, (hitU.get(f.properties.id) || 0) + n);
       const c = bboxCentre(f.bbox);
       if (c) { ax += c[0] * n; ay += c[1] * n; aw += n; }
+    };
+    for (const [nm, n] of tally) {
+      // the cell as written, and under any name this place used to go by —
+      // an atlas of Bengaluru should not miss boundary data that says Bangalore
+      let cands = null;
+      for (const sp of aliasSpellings(nm)) { cands = byName.get(sp); if (cands) break; }
+      if (!cands) {
+        /* Not a name. It may still CONTAIN one: people answering a question
+           write sentences, and the place is inside the sentence. A single word
+           has already been looked up as itself, so only sentences come here. */
+        const inside = /\s/.test(String(nm).trim()) ? namesInside(nm, lookup) : [];
+        if (!inside.length) { unknown.push([nm, n]); continue; }
+        matchedRows += n;                       // the ROW is answered, once
+        // and counted as sharing a name once, however many it names
+        if (inside.some((h) => h.cands.length > 1)) sharedRows += n;
+        for (const h of inside) {
+          // 'true': this row is already counted, so settling the shared name
+          // later must not count it again
+          if (h.cands.length > 1) { deferred.push([h.phrase, n, h.cands, true]); continue; }
+          keep(h.cands[0], n);
+        }
+        continue;
+      }
+      if (cands.length > 1) { deferred.push([nm, n, cands, false]); continue; }
+      matchedRows += n;
+      keep(cands[0], n);
     }
 
     // 2) AT THE END: every shared name goes to its candidate nearest the anchor
     const anchor = aw ? [ax / aw, ay / aw] : anchorFromSpread(deferred);
-    for (const [, n, cands] of deferred) {
+    for (const [, n, cands, counted] of deferred) {
       let pick = cands[0], bestD = Infinity;
       for (const f of cands) {
         const d = farness(bboxCentre(f.bbox), anchor);
         if (d < bestD) { bestD = d; pick = f; }
       }
-      matchedRows += n; sharedRows += n;
+      // a name found inside a sentence already answered and counted its row
+      if (!counted) { matchedRows += n; sharedRows += n; }
       hitU.set(pick.properties.id, (hitU.get(pick.properties.id) || 0) + n);
     }
 
