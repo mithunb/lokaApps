@@ -518,7 +518,11 @@ router.post('/geo/infer', async (req, res) => {
       return res.json({ iso3, mode, column, level: null, units: [], bbox: null, coverage: 0,
                         rows: (r && r.rows) || points.length || (chosen && chosen.names.length) || 0,
                         matchedRows: 0,
-                        unreadRows: (r && r.unreadRows) || 0, parents: [], ancestors: [] });
+                        unreadRows: (r && r.unreadRows) || 0,
+                        countryRows: (r && r.countryRows) || 0,
+                        outsideRows: (r && r.outsideRows) || 0,
+                        outsideNames: (r && r.outsideNames) || [],
+                        parents: [], ancestors: [] });
     }
     const parents = await parentUnitsOf(iso3, r.level, r.units);
     const ancestors = await ancestorChainOf(iso3, r.level, r.units);
@@ -529,6 +533,8 @@ router.post('/geo/infer', async (req, res) => {
                coverage: Number(r.coverage.toFixed(3)),
                rows: r.rows, matchedRows: r.matchedRows, unreadRows: r.unreadRows,
                sharedRows: r.sharedRows || 0,
+               countryRows: r.countryRows || 0,
+               outsideRows: r.outsideRows || 0, outsideNames: r.outsideNames || [],
                parents, ancestors });
   } catch (e) {
     console.warn('[atlas] geo/infer failed:', e.message);
@@ -633,6 +639,51 @@ function anchorFromSpread(deferred) {
   }
   return bestC;
 }
+/* A country's name is not a place inside that country.
+
+   Measured live before this existed: a row reading "India" was placed in
+   **Indi**, a taluk in Vijayapura district five hundred kilometres from
+   Bengaluru, and "Bhutan" in **Bhuta**, a village in Uttar Pradesh. Nothing was
+   broken — dice("india","indi") is 0.86 and dice("bhutan","bhuta") is 0.89,
+   both over the 0.85 the fuzzy fallback accepts. The fallback is there for
+   typos and spelling drift, and a country's name sits a hair above its
+   threshold against a real unit inside that country.
+
+   A file where every row said India put every row in Indi. A file with a few
+   real states in it escaped, because those rows outvoted the guess at the
+   level that won.
+
+   So the guesser is gated, and only the guesser: this runs AFTER the exact
+   lookup and the sentence scan have both failed. A village genuinely called
+   Nepal still matches as that village, because its exact match happens first
+   and never reaches here. */
+const COUNTRY_BY_NAME = (() => {
+  const m = {};
+  for (const [iso3, name] of Object.entries(COUNTRY_NAMES)) m[norm(name)] = iso3;
+  return m;
+})();
+// names people write that the official list does not carry
+const COUNTRY_ALSO_CALLED = { bharat: 'IND', hindustan: 'IND', uk: 'GBR', usa: 'USA', uae: 'ARE' };
+// and the ways of saying "the whole of it" without naming it
+const WHOLE_COUNTRY = new Set(['nationwide', 'countrywide', 'national', 'wholecountry',
+  'entirecountry', 'acrossthecountry', 'allthecountry', 'everywhere', 'allover']);
+
+/* Which country a cell names, if it names one: "India", "Bharat", "Pan India",
+   "all over India", "nationwide". Returns an iso3, or ''.
+
+   The leading words are stripped only to see whether what remains is a country,
+   so Panama keeps its pan and Allahabad keeps its all. */
+function countryNamed(nm, iso3) {
+  const k = norm(nm);
+  if (!k) return '';
+  if (WHOLE_COUNTRY.has(k)) return iso3;         // "nationwide" means the one we are in
+  const named = (x) => COUNTRY_BY_NAME[x] || COUNTRY_ALSO_CALLED[x] || '';
+  const self = named(k);
+  if (self) return self;
+  const bare = k.replace(/^(?:panacross|allover|pan|all|across|throughout|within|whole|entire|the)+/, '');
+  return (bare && bare !== k) ? named(bare) : '';
+}
+
 /* Words that name a real place SOMEWHERE in the country and are almost never
    the place somebody means when they write one inside a sentence.
 
@@ -729,6 +780,9 @@ async function inferRegionFromNames(iso3, names, avail) {
 
     const hitU = new Map();
     let matchedRows = 0, unreadRows = 0, sharedRows = 0;
+    // rows that name a whole country rather than a place inside one
+    let countryRows = 0, outsideRows = 0;
+    const outsideNames = new Set();
     const deferred = [];                         // [spelling, rows, candidates]
     const unknown = [];                          // [spelling, rows]
 
@@ -750,7 +804,16 @@ async function inferRegionFromNames(iso3, names, avail) {
            write sentences, and the place is inside the sentence. A single word
            has already been looked up as itself, so only sentences come here. */
         const inside = /\s/.test(String(nm).trim()) ? namesInside(nm, lookup) : [];
-        if (!inside.length) { unknown.push([nm, n]); continue; }
+        if (!inside.length) {
+          /* Nothing exact, nothing inside it. Before guessing at the spelling,
+             ask whether this is a country — because that is the one answer the
+             guesser gets confidently wrong. */
+          const c = countryNamed(nm, iso3);
+          if (c === iso3) { countryRows += n; continue; }        // the whole of this one
+          if (c) { outsideRows += n; outsideNames.add(String(nm).trim()); continue; }
+          unknown.push([nm, n]);
+          continue;
+        }
         matchedRows += n;                       // the ROW is answered, once
         // and counted as sharing a name once, however many it names
         if (inside.some((h) => h.cands.length > 1)) sharedRows += n;
@@ -805,7 +868,8 @@ async function inferRegionFromNames(iso3, names, avail) {
       return { id, name: f.properties.name, bbox: f.bbox, geometry: f.geometry };
     });
     const cand = { level: L, coverage, units, bbox: unionBboxOf(units),
-                   rows, matchedRows, unreadRows, sharedRows };
+                   rows, matchedRows, unreadRows, sharedRows,
+                   countryRows, outsideRows, outsideNames: [...outsideNames].slice(0, 6) };
     if (coverage >= INFER_MIN_COVERAGE && units.length) return cand;
     if (!best || coverage > best.coverage) best = cand;
   }

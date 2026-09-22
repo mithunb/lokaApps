@@ -782,6 +782,27 @@
       });
   }
 
+  /* Rows that name a whole country, said plainly instead of guessed at.
+
+     "India" used to be placed in Indi, a taluk five hundred kilometres from
+     Bengaluru, because the two spellings are close enough for the spelling
+     guesser. Neither a country nor a phrase like "Pan India" has a single
+     place on a map, so the honest answer is to count them and say so — not to
+     find them somewhere. */
+  function wholeCountryNote(d) {
+    var out = "";
+    if (d && d.countryRows) {
+      out += " " + d.countryRows.toLocaleString() + " row" + (d.countryRows > 1 ? "s cover" : " covers") +
+        " the whole country, so there is no one place to put " + (d.countryRows > 1 ? "them" : "it") + ".";
+    }
+    if (d && d.outsideRows) {
+      var names = (d.outsideNames || []).join(", ");
+      out += " " + d.outsideRows.toLocaleString() + " name" + (d.outsideRows > 1 ? "" : "s") +
+        " somewhere outside this country" + (names ? " (" + names + ")" : "") + ".";
+    }
+    return out;
+  }
+
   function applyInferred(d, file, rows, fromPoints) {
     /* Which column was read is part of the answer, and when nothing is found it
        is the WHOLE answer: "no places found" sent somebody hunting for a fault
@@ -791,8 +812,9 @@
                        : "the place names in your file");
     var units = (d && d.units) || [];
     if (!units.length) {
-      msg(2, "We read " + how + " and couldn’t match any of it to a place we know. " +
-        "Search for the place above instead — your data will still go on the atlas afterwards.");
+      msg(2, "We read " + how + " and couldn’t match any of it to a place we know." +
+        wholeCountryNote(d) +
+        " Search for the place above instead — your data will still go on the atlas afterwards.");
       showFileCard(file.name, rows + " rows · no places found");
       return;
     }
@@ -817,6 +839,7 @@
     if (d.unreadRows) {
       said += " " + d.unreadRows.toLocaleString() + " row" + (d.unreadRows > 1 ? "s" : "") + " we couldn’t read.";
     }
+    said += wholeCountryNote(d);
     said += " Take any out, or search to add more.";
     msg(2, said, "ok");
     /* The card used to count only the places this file ADDED to the selection,
