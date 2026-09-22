@@ -14,6 +14,7 @@
       "recipe": "admin",
       "estSeconds": 30,
       "cost": "free",
+      "fixedCost": true,
       "required": true,
       "default": true,
       "attribution": { "global": "geoBoundaries (gbOpen), CC-BY 4.0", "india": "Local Government Directory via Bharatlas, CC0" }
@@ -120,6 +121,7 @@
       "recipe": "labels_esri",
       "estSeconds": 1,
       "cost": "free",
+      "fixedCost": true,
       "default": true,
       "attribution": { "global": "Labels © Esri / © CARTO" }
     },
@@ -318,6 +320,7 @@
       "recipe": "buildings_pmtiles",
       "estSeconds": 1,
       "cost": "free",
+      "fixedCost": true,
       "attribution": { "global": "© OpenStreetMap contributors, © Protomaps, ODbL" }
     },
     {
@@ -329,6 +332,7 @@
       "recipe": "roads_pmtiles",
       "estSeconds": 1,
       "cost": "free",
+      "fixedCost": true,
       "attribution": { "global": "© OpenStreetMap contributors, © Protomaps, ODbL" }
     }
   ]

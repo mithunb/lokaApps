@@ -172,9 +172,21 @@ an unpublished atlas is still reachable by direct link while its record stays pr
   Safari's collapsing URL bar was never seen.
 - **One atlas is published** (`cubbon-park-is-this-space-taken`, 33 tags in Cubbon Park). Treat
   Atlas as working software with one live tenant, not a populated platform.
-- **The region step cannot express a whole country.** Levels run 1 to 4 — states down to
-  localities — with nothing above. You pick a country, then places inside it; there is no single
-  choice meaning "all of India". A national atlas would mean adding all 36 states by hand, and a
-  build of open-data base layers at that scale has never been attempted here.
+- **How wide a region may be depends on what is being built in it.** The base layers are clipped
+  to the BOUNDING BOX of the units picked, not to the units themselves — so ten states scattered
+  from Punjab to Kerala to Arunachal cost what 618 square degrees costs, which is 77% of India,
+  even though the states themselves are 29% of its land.
+
+  Above **40 square degrees** any layer whose work grows with the area is refused, and the
+  refusal names it. Four layers are exempt because their cost is the same however wide the region
+  is — boundaries, labels, buildings, roads — and boundaries is the only compulsory one. **So a
+  map of outlines and your own places can be as wide as it needs, including a whole country;
+  anything with terrain, forest cover or land use on it cannot.** Above 6 square degrees a build
+  waits for the operator's approval whatever it is made of.
+
+  Two things follow that are easy to get wrong. A single large state can exceed the ceiling on its
+  own — Rajasthan's box is 63 square degrees, Maharashtra's 53 — so "one state" is not a safe
+  assumption. And the region step has no notion of a whole country: levels run 1 to 4, states down
+  to localities, with nothing above, so a country-wide map means picking its states.
 - Deployment is manual: someone runs `deploy/deploy.sh`, which fast-forwards the server and
   restarts it. The live site can lag this commit.

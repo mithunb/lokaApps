@@ -114,6 +114,42 @@ router.get('/catalog', (req, res) => {
   res.json({ tier, layers: layersForTier(tier) });
 });
 
+/* How wide a region may be, asked of the layers actually chosen.
+
+   The ceiling used to be applied to the region alone, eleven lines before the
+   layer list was even read — so an atlas of India carrying nothing but
+   boundaries and somebody's own places was refused on exactly the same grounds
+   as one carrying terrain, forest change and land use. The first costs almost
+   nothing: the basemap is somebody else's tiles, streamed, and the compulsory
+   layer picks its districts out of one national file that is already cached.
+   The second reads imagery over every square degree.
+
+   So the gate asks what is being built. A layer is gated unless the catalogue
+   marks it `fixedCost` — that way round on purpose: a layer added later is
+   gated until somebody shows it should not be, which is the safe direction to
+   be wrong in. Four are marked today, and one of them is the only compulsory
+   layer, so a map of boundaries and your own places can be as wide as it needs.
+
+   The approval step is untouched. A wide region is worth an operator hearing
+   about whatever it is made of; this only stops the outright refusal.
+
+   Returns the sentence to refuse with, or '' to let it through. */
+function regionTooWide(areaDeg2, layerIds, allowed) {
+  if (areaDeg2 <= HARD_AREA_DEG2) return '';
+  // a layer nobody recognises is gated too — the whole point is that not
+  // knowing means gated
+  const grows = layerIds.filter((id) => !(allowed.get(id) || {}).fixedCost);
+  if (!grows.length) return '';
+  const named = grows.map((id) => ((allowed.get(id) || {}).label || id).toLowerCase());
+  const list = named.length > 2
+    ? named.slice(0, 2).join(', ') + ' and ' + (named.length - 2) + ' more'
+    : named.join(' and ');
+  return 'That region is too wide for ' + list + ' \u2014 ' +
+    (grows.length > 1 ? 'those are' : 'that is') + ' built for the area you pick, and the work ' +
+    'grows with it. Pick smaller areas inside it, or leave ' + (grows.length > 1 ? 'them' : 'it') +
+    ' out: boundaries and your own places have no such limit.';
+}
+
 router.get('/config', (_req, res) => {
   res.json({ freeAreaDeg2: FREE_AREA_DEG2, hardAreaDeg2: HARD_AREA_DEG2 });
 });
@@ -1050,23 +1086,20 @@ router.post('/instances', async (req, res) => {
     e = Math.max(e, f.bbox[2]); n = Math.max(n, f.bbox[3]);
   }
   const areaDeg2 = (e - w) * (n - s);
-  if (areaDeg2 > HARD_AREA_DEG2) {
-    return res.status(400).json({
-      error: 'That region is larger than a single atlas can cover right now — open a unit on the map and pick smaller areas inside it.',
-      tooLarge: true,
-    });
-  }
-  // Bigger than the free tier → same approval pipeline as heavy layers.
-  const largeRegion = areaDeg2 > FREE_AREA_DEG2;
   const shapeNames = picked.map((f) => f.properties.name);
   const regionLabel = shapeNames.slice(0, 3).join(' · ') + (shapeNames.length > 3 ? ` +${shapeNames.length - 3}` : '');
 
-  // tier + layers
+  // tier + layers — resolved BEFORE the size gate, because the gate depends on them
   const tier = tierOf(iso3);
   const allowed = new Map(layersForTier(tier).map((l) => [l.id, l]));
   let layerIds = (Array.isArray(b.layers) ? b.layers.map(String) : []).filter((id) => allowed.has(id));
   for (const l of allowed.values()) if (l.required && !layerIds.includes(l.id)) layerIds.unshift(l.id);
   if (!layerIds.length) return res.status(400).json({ error: 'no valid layers chosen' });
+
+  const tooWide = regionTooWide(areaDeg2, layerIds, allowed);
+  if (tooWide) return res.status(400).json({ error: tooWide, tooLarge: true });
+  // Bigger than the free tier → same approval pipeline as heavy layers.
+  const largeRegion = areaDeg2 > FREE_AREA_DEG2;
 
   // Slug: derived from the title, never asked for. Uniqueness is the server's
   // job — two atlases may legitimately share a title, so a taken address gets a
@@ -1555,13 +1588,15 @@ router.post('/instances/:slug/rebuild', async (req, res) => {
   for (const f of picked) { w = Math.min(w, f.bbox[0]); s = Math.min(s, f.bbox[1]); e = Math.max(e, f.bbox[2]); n = Math.max(n, f.bbox[3]); }
   const bbox = [w, s, e, n];
   const areaDeg2 = (e - w) * (n - s);
-  if (areaDeg2 > HARD_AREA_DEG2) return res.status(400).json({ error: 'That region is larger than a single atlas can cover.', tooLarge: true });
 
   const tier = tierOf(useR.iso3);
   const allowed = new Map(layersForTier(tier).map((l) => [l.id, l]));
   let layerIds = (Array.isArray(b.layers) ? b.layers.map(String) : inst.layers).filter((id) => allowed.has(id));
   for (const l of allowed.values()) if (l.required && !layerIds.includes(l.id)) layerIds.unshift(l.id);
   if (!layerIds.length) return res.status(400).json({ error: 'pick at least one layer' });
+  // the same gate as a first build, and for the same reason
+  const tooWide = regionTooWide(areaDeg2, layerIds, allowed);
+  if (tooWide) return res.status(400).json({ error: tooWide, tooLarge: true });
 
   // A rebuild that crosses into approval territory used to be refused outright
   // with "email us" — a dead end for the case that most needs it: widening an
