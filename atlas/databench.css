@@ -193,6 +193,16 @@
     .fix-row b { flex:0 0 9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .fix-row select { flex:1; min-width:8rem; width:auto; }
     .fix-row button { font-size:var(--t-meta); padding:.3rem .55rem; }
+    /* what an address lookup found, one row each, ticked or not */
+    .addr-go { display:flex; align-items:center; gap:.6rem; margin-top:.5rem; flex-wrap:wrap; }
+    .addr-row { display:grid; grid-template-columns:auto 12rem 1fr auto; align-items:baseline; gap:.5rem;
+      padding:.4rem 0; border-top:1px solid var(--color-divider); font-size:var(--t-ui); font-weight:400; cursor:pointer; }
+    .addr-row input { justify-self:start; align-self:center; }
+    .addr-q { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .addr-a { color:var(--color-text-secondary); }
+    /* the reason it is not ticked, in the colour this product keeps for care */
+    .addr-c { font-size:var(--t-label); color:var(--color-rust-deep); white-space:nowrap; }
+    @media (max-width:640px){ .addr-row { grid-template-columns:auto 1fr; } .addr-a, .addr-c { grid-column:2; } }
     .radio-row { display:flex; gap:1rem; flex-wrap:wrap; font-size:var(--t-ui); color:var(--color-text-secondary); }
     .radio-row label { display:flex; gap:.35rem; align-items:center; font-weight:400; }
 

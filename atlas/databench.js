@@ -139,6 +139,7 @@
         <div class="pd-seg" id="pd-seg" role="radiogroup" aria-label="How to place the rows">
           <button type="button" class="pd-opt" data-strat="adminJoin">By place name</button>
           <button type="button" class="pd-opt" data-strat="coordinates">By latitude &amp; longitude</button>
+          <button type="button" class="pd-opt" data-strat="address">By address</button>
         </div>
         <div class="pd-fields" id="pd-name-fields">
           <label class="f">Place-name column<select id="s-name"></select></label>
@@ -148,6 +149,26 @@
         <div class="pd-fields" id="pd-coord-fields" hidden>
           <label class="f">Latitude column<select id="s-lat"></select></label>
           <label class="f">Longitude column<select id="s-lng"></select></label>
+        </div>
+        <!-- For places no boundary holds: a neighbourhood, a reserve, a street.
+             Looked up one at a time and shown before anything moves. -->
+        <div class="pd-fields" id="pd-addr-fields" hidden>
+          <label class="f">Address column<select id="s-addr"></select></label>
+          <div class="addr-go">
+            <button class="btn secondary" type="button" id="addr-find">Look them up</button>
+            <span class="hint" id="addr-progress"></span>
+          </div>
+        </div>
+      </div>
+      <div id="card-addr" hidden style="border-top:1px solid var(--color-divider); margin-top:.6rem; padding-top:.8rem">
+        <h2 style="font-size:var(--t-control)">What the lookup found <span class="hint" id="addr-count"></span></h2>
+        <p class="hint">Tick the ones that are right. A lookup answers confidently when it is
+          wrong, so nothing goes on the map until you say so. Anything it was unsure of
+          starts unticked.</p>
+        <div id="addr-list"></div>
+        <div class="addr-go">
+          <button class="btn" type="button" id="addr-keep">Use the ticked ones</button>
+          <span class="hint" id="addr-kept"></span>
         </div>
       </div>
 
@@ -975,6 +996,9 @@
     return S.sending;
   }
   $("#to-place").onclick = function () { sendRows().catch(function () {}); };
+  $("#addr-find").onclick = addrFind;
+  $("#addr-keep").onclick = addrKeep;
+  $("#s-addr").addEventListener("change", function () { addrReset(); updatePlaceSummary(); });
 
   // What the host needs to render a per-file verdict, and to know whether the
   // user still has to look at something.
@@ -1053,6 +1077,10 @@
     fillSelect("#s-parent", S.names, role(result, "adminParent"), true);
     fillSelect("#s-lat", S.names, role(result, "latitude"), true);
     fillSelect("#s-lng", S.names, role(result, "longitude"), true);
+    // the address is usually the same column the name match was tried on
+    fillSelect("#s-addr", S.names, role(result, "placeName"), true);
+    PLACE_MODE = "";
+    addrReset();
     // collapse the controls when we confidently detected a placement; open them
     // automatically only when the user still has to choose
     var detected = result.strategy === "coordinates"
@@ -1087,12 +1115,20 @@
     return ((rep.unmatched || []).length > 0) || ((rep.ambiguous || []).length > 0);
   }
 
+  /* Two of the three segments ARE the server's strategy. "By address" is not:
+     it is a way of GETTING coordinates, and once it has them the layer is an
+     ordinary coordinates layer. So the mode is held here and the strategy is
+     left alone until somebody keeps what the lookup found. */
+  var PLACE_MODE = "";
+  function placeMode() { return PLACE_MODE || $("#s-strategy").value; }
   function syncPlaceVisibility() {
-    var strat = $("#s-strategy").value;
-    $("#pd-name-fields").hidden = strat !== "adminJoin";
-    $("#pd-coord-fields").hidden = strat !== "coordinates";
+    var mode = placeMode();
+    $("#pd-name-fields").hidden = mode !== "adminJoin";
+    $("#pd-coord-fields").hidden = mode !== "coordinates";
+    $("#pd-addr-fields").hidden = mode !== "address";
+    $("#card-addr").hidden = mode !== "address" || !(ADDR && ADDR.results.length);
     root.querySelectorAll("#pd-seg .pd-opt").forEach(function (b) {
-      b.classList.toggle("on", b.dataset.strat === strat);
+      b.classList.toggle("on", b.dataset.strat === mode);
     });
     updatePlaceSummary();
   }
@@ -1103,8 +1139,15 @@
        for an icon. The product draws its own marks everywhere else, and the
        sentence already says which way the places were placed — a glyph
        borrowed from the operating system was neither. */
-    var strat = $("#s-strategy").value, line = $("#ps-line");
+    var strat = placeMode(), line = $("#ps-line");
     if (!line) return;
+    if (strat === "address") {
+      var ac = $("#s-addr").value;
+      line.innerHTML = ac
+        ? "Looked up by address \u2014 <b>" + esc(ac) + "</b>."
+        : '<span class="warn">Pick the column that holds the address.</span>';
+      return;
+    }
     if (strat === "coordinates") {
       var la = $("#s-lat").value, ln = $("#s-lng").value;
       line.innerHTML = la && ln
@@ -1118,6 +1161,118 @@
         ? "Matched by name — <b>" + esc(nm) + "</b> → <b>" + esc(joLabel) + "</b>" + (pa ? ", within <b>" + esc(pa) + "</b>" : "") + "."
         : '<span class="warn">Pick the column that holds the place names.</span>';
     }
+  }
+
+  /* ---------- looking places up by address ----------
+
+     The page asks for twenty at a time and asks again, because the providers
+     are asked one a second and a single request that waited for five hundred
+     of them would be a request that timed out. Rows already looked up cost
+     nothing on the next round. */
+  var ADDR = { results: [], keep: {}, running: false, column: "" };
+
+  function addrReset() {
+    ADDR = { results: [], keep: {}, running: false, column: "" };
+    $("#addr-list").innerHTML = "";
+    $("#addr-progress").textContent = "";
+    $("#addr-kept").textContent = "";
+    $("#card-addr").hidden = true;
+  }
+
+  function addrFind() {
+    var col = $("#s-addr").value;
+    if (!col) { msg("#msg-place", "Pick the column that holds the address.", "err"); return; }
+    if (!S.result || !S.result.importId) { msg("#msg-place", "Send the table first.", "err"); return; }
+    if (ADDR.column !== col) addrReset();
+    ADDR.column = col;
+    ADDR.running = true;
+    $("#addr-find").disabled = true;
+    msg("#msg-place", "");
+    (function round() {
+      $("#addr-progress").textContent = ADDR.results.length
+        ? "looked up " + ADDR.results.length + "\u2026" : "looking them up\u2026";
+      api("layers/locate", { method: "POST", body: { importId: S.result.importId, column: col } })
+        .then(function (d) {
+          ADDR.results = d.results || [];
+          drawAddr();
+          if (d.more > 0 && ADDR.running) return round();
+          ADDR.running = false;
+          $("#addr-find").disabled = false;
+          var got = ADDR.results.filter(function (r) { return r.lat != null; }).length;
+          $("#addr-progress").textContent = got + " of " + d.total + " found";
+        })
+        .catch(function (e) {
+          ADDR.running = false;
+          $("#addr-find").disabled = false;
+          $("#addr-progress").textContent = "";
+          msg("#msg-place", esc(errMsg(e)), "err");
+        });
+    })();
+  }
+
+  /* Ticked to begin with only when what came back is NAMED after what was
+     asked for, and it did not land on the same point as another row.
+
+     Not the provider's own grade. "Exact" means it knows the doorway to the
+     metre, not that it is the right doorway: asked for "Pan India" it returned
+     a bistro in JP Nagar and called that exact. Asked for a tiger reserve it
+     returned a banknote printing press eighty kilometres away and called that
+     approximate — the same grade it gave an answer that was right. */
+  function addrSure(r) { return r.lat != null && r.agrees && !r.collided; }
+
+  function drawAddr() {
+    var found = ADDR.results.filter(function (r) { return r.lat != null; });
+    $("#card-addr").hidden = !ADDR.results.length;
+    $("#addr-count").textContent = found.length ? "\u00b7 " + found.length : "";
+    var list = $("#addr-list");
+    list.innerHTML = "";
+    ADDR.results.slice(0, 200).forEach(function (r) {
+      if (r.lat == null) return;
+      if (ADDR.keep[r.row] === undefined) ADDR.keep[r.row] = addrSure(r);
+      var row = document.createElement("label");
+      row.className = "addr-row";
+      var why = r.collided ? "several rows landed here"
+        : !r.agrees ? "not called what you asked for"
+        : r.confidence === "exact" ? "" : "roughly";
+      row.innerHTML = '<input type="checkbox"' + (ADDR.keep[r.row] ? " checked" : "") + " />" +
+        "<span class=\"addr-q\">" + esc(r.query) + "</span>" +
+        '<span class="addr-a">' + esc(r.label || "") + "</span>" +
+        '<span class="addr-c">' + esc(why) + "</span>";
+      row.querySelector("input").onchange = function () { ADDR.keep[r.row] = this.checked; };
+      list.appendChild(row);
+    });
+    var missed = ADDR.results.filter(function (r) { return r.lat == null && r.reason !== "empty"; });
+    if (missed.length) {
+      var note = document.createElement("p");
+      note.className = "hint";
+      note.textContent = missed.length + " could not be found at all: " +
+        missed.slice(0, 4).map(function (r) { return r.query; }).join(", ") +
+        (missed.length > 4 ? "\u2026" : "");
+      list.appendChild(note);
+    }
+  }
+
+  function addrKeep() {
+    var rows = Object.keys(ADDR.keep).filter(function (k) { return ADDR.keep[k]; }).map(Number);
+    if (!rows.length) { msg("#msg-place", "Tick at least one before using them.", "err"); return; }
+    $("#addr-keep").disabled = true;
+    api("layers/locate/keep", { method: "POST", body: { importId: S.result.importId, rows: rows } })
+      .then(function (d) {
+        // the coordinates are real columns now, so this is an ordinary
+        // coordinates layer and everything after here is the path it knows
+        [d.latColumn, d.lngColumn].forEach(function (n) {
+          if (S.names.indexOf(n) < 0) S.names.push(n);
+        });
+        fillSelect("#s-lat", S.names, d.latColumn, true);
+        fillSelect("#s-lng", S.names, d.lngColumn, true);
+        $("#s-strategy").value = "coordinates";
+        PLACE_MODE = "";
+        $("#addr-kept").textContent = d.placed + " of " + d.of + " placed";
+        syncPlaceVisibility();
+        scheduleApply(applyPlace, 100);
+      })
+      .catch(function (e) { msg("#msg-place", esc(errMsg(e)), "err"); })
+      .then(function () { $("#addr-keep").disabled = false; });
   }
 
   function outsideChoice() {
@@ -1373,8 +1528,12 @@
   // segmented "By place name / By coordinates" drives the hidden strategy select
   root.querySelectorAll("#pd-seg .pd-opt").forEach(function (b) {
     b.addEventListener("click", function () {
-      $("#s-strategy").value = b.dataset.strat;
+      PLACE_MODE = b.dataset.strat;
+      // "By address" has placed nothing yet, so there is nothing to apply and
+      // the layer must keep the placement it already had
+      if (PLACE_MODE !== "address") { $("#s-strategy").value = PLACE_MODE; PLACE_MODE = ""; }
       syncPlaceVisibility();
+      if (!$("#pd-addr-fields").hidden) return;
       scheduleApply(applyPlace, 100);
     });
   });

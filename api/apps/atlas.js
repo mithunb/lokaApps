@@ -1782,6 +1782,7 @@ import { norm, dice, joinByName, AUTO_ACCEPT } from '../lib/matching.js';
 import { PALETTES, PALETTE_ALIASES, MARKER_COLORS, buildFragment, sanitizeFeatures, justTheLinks } from '../lib/fragment.js';
 import * as imports from '../lib/atlas/imports.js';
 import * as enrich from '../lib/atlas/enrich.js';
+import { geocodeOne, markCollisions } from '../lib/atlas/geocode.js';
 
 const ai = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) : null;
 imports.sweepImports();
@@ -3345,6 +3346,188 @@ router.post('/layers/ingest', async (req, res) => {
     for (const k of ['importId', 'columns', 'strategy', 'needsAuth']) if (e[k] !== undefined) extra[k] = e[k];
     res.status(e.status || 400).json(Object.assign({ error: e.message }, extra));
   }
+});
+
+/* ================= finding a place by its address =================
+
+   An atlas can place a row two ways: the row carries coordinates, or its name
+   is a boundary the atlas holds. Neither reaches a neighbourhood or a reserve.
+   "Jeevan Bhima Nagar, Bengaluru" is a real place and no administrative unit at
+   any level — India's finest level here is 7,143 units for some six hundred
+   thousand villages, and Bengaluru's whole urban area is four of them.
+
+   So, a third way: ask a geocoder. This one has been sitting complete and
+   uncalled in the repository since August; what follows is the caller, and it
+   is deliberately narrow, because a geocoder answers confidently when it is
+   wrong. Asked for "BRT Tiger Reserve, Chamarajanagar district, Karnataka" it
+   returned a banknote printing press eighty kilometres away and graded the
+   answer "approximate" — the same grade it gave the answer that was right.
+
+   A grade cannot separate those. A person can. So nothing here places
+   anything: it looks addresses up, says what it found in the provider's own
+   words, and stops. Writing the coordinates onto the rows is a second request,
+   naming the rows somebody has actually looked at. */
+
+// Fresh lookups per request. The providers are asked one a second — their
+// terms, not a tunable — so this is about twenty seconds of waiting, and the
+// page asks again for the next twenty. Cached rows cost nothing and are not
+// counted.
+const LOCATE_BATCH = 20;
+// A shared public service is not a bulk pipeline. Five hundred rows is already
+// eight minutes of somebody else's machine.
+const LOCATE_MAX_ROWS = 500;
+
+// [west, south, east, north] — the shape resolveBias wants, from whichever of
+// the two kinds of import session this is.
+function locateBias(session) {
+  const r = session.region || {};
+  if (r.iso3 || r.bbox) return { country: r.iso3 || undefined, bbox: r.bbox || undefined };
+  if (!session.dataset) return {};
+  let m; try { m = imports.readManifest(session.dataset); } catch { return {}; }
+  const bounds = m && m.bounds;
+  const flat = Array.isArray(bounds) && bounds.length === 2 && Array.isArray(bounds[0])
+    ? [bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1]] : null;
+  return { country: (m && m.region && m.region.iso3) || undefined, bbox: flat || undefined };
+}
+
+function locateGate(req, res, session) {
+  if (session.dataset) return requireDatasetEditor(req, res, session.dataset);
+  if (!auth.sessionFromReq(req) && !auth.isAdmin(req)) {
+    res.status(401).json({ error: 'sign in to set up your data', needsAuth: true });
+    return false;
+  }
+  return true;
+}
+
+/* Does what came back call itself what was asked for?
+
+   This decides which rows arrive already ticked, and it exists because the
+   provider's own grade will not do it. "Exact" is a statement about PRECISION,
+   not about correctness: asked for "Pan India" the provider returned "24th Main
+   Pan Indian Bistro, 12th Cross Road, JP Nagar" and graded it exact, because it
+   knows that bistro's doorway to the metre. Pre-ticking on the grade would have
+   put a restaurant on the map as a respondent's whole working region.
+
+   So the test is the plainer one: the thing it found is named after the thing
+   you asked for. Compare the first part of each — what somebody writes before
+   the first comma is the place; what follows is the address around it. */
+function locateAgrees(query, label) {
+  const head = (v) => norm(String(v || '').split(',')[0]);
+  const q = head(query), l = head(label);
+  if (q.length < 4 || !l) return false;
+  return l.startsWith(q) || q.startsWith(l);
+}
+
+// Every row looked at so far, in the shape the page renders.
+function locateSoFar(session) {
+  const held = (session.located && session.located.byRow) || {};
+  const out = Object.keys(held).map((k) => ({ row: Number(k), ...held[k] }));
+  out.sort((a, b) => a.row - b.row);
+  for (const r of out) r.agrees = r.lat != null && locateAgrees(r.query, r.label);
+  /* Different addresses landing on the SAME point is the give-away that the
+     provider answered "somewhere in <area>" for all of them. One result can be
+     graded wrongly; the pile-up cannot hide. */
+  markCollisions(out);
+  return out;
+}
+
+router.post('/layers/locate', async (req, res) => {
+  const b = req.body || {};
+  const session = imports.getImport(String(b.importId || ''));
+  if (!session) return res.status(404).json({ error: 'import expired or unknown' });
+  if (!locateGate(req, res, session)) return;
+
+  const col = String(b.column || '');
+  if (!col || !(session.columnsRaw || []).includes(col)) {
+    return res.status(400).json({ error: 'which column holds the address?' });
+  }
+  const rows = session.rows || [];
+  if (rows.length > LOCATE_MAX_ROWS) {
+    return res.status(400).json({ error: 'looking up ' + rows.length + ' addresses one at a time would take ' +
+      Math.round(rows.length / 60) + ' minutes or more — the limit is ' + LOCATE_MAX_ROWS + ' rows. ' +
+      'Split the file, or give it latitude and longitude columns.' });
+  }
+  // a different column means a different question: start the answers again
+  if (!session.located || session.located.column !== col) session.located = { column: col, byRow: {} };
+  const held = session.located.byRow;
+
+  /* Bias the lookup to the atlas's own patch of the world. An import made
+     before the atlas exists carries its region; one added to a built atlas
+     takes the atlas's own bounds.
+
+     Measured, so as not to claim more for it than it does: a tight box helps
+     and a loose one does not. "BRT Tiger Reserve, Chamarajanagar district,
+     Karnataka" returned the same wrong printing press with no bias and with a
+     Karnataka-sized box; boxed to Chamarajanagar it returned nothing, which is
+     at least honest. The bias is worth having and it is not the safeguard —
+     the safeguard is that a person reads the answers. */
+  const opts = locateBias(session);
+  let fresh = 0, looked = 0;
+  try {
+    for (let i = 0; i < rows.length && fresh < LOCATE_BATCH; i++) {
+      if (held[i]) continue;
+      const query = String(rows[i][col] == null ? '' : rows[i][col]).trim();
+      if (!query) { held[i] = { query: '', lat: null, lng: null, reason: 'empty' }; continue; }
+      const r = await geocodeOne(query, opts);
+      if (!r.cached) fresh++;
+      looked++;
+      held[i] = { query: query, lat: r.lat, lng: r.lng, label: r.label || '',
+                  confidence: r.confidence, provider: r.provider, reason: r.reason };
+    }
+  } catch (e) {
+    console.warn('[atlas] layers/locate failed:', e.message);
+    return res.status(502).json({ error: 'the address lookup could not be reached: ' + e.message });
+  }
+  // A session lives on disk and is re-read on every request, so what was found
+  // has to be written down before the next one asks for the rest of it.
+  imports.saveImport(session);
+  const done = Object.keys(held).length;
+  res.json({ column: col, total: rows.length, done, more: Math.max(0, rows.length - done),
+             looked, results: locateSoFar(session) });
+});
+
+/* The second request: these rows, the ones somebody looked at and kept.
+
+   The coordinates are written onto the rows as two ordinary columns and the
+   layer becomes a coordinates layer — so everything after this point is the
+   path a file with latitude and longitude has always taken, and none of it had
+   to learn about geocoding. */
+router.post('/layers/locate/keep', (req, res) => {
+  const b = req.body || {};
+  const session = imports.getImport(String(b.importId || ''));
+  if (!session) return res.status(404).json({ error: 'import expired or unknown' });
+  if (!locateGate(req, res, session)) return;
+  const held = (session.located && session.located.byRow) || null;
+  if (!held) return res.status(400).json({ error: 'nothing has been looked up yet' });
+
+  const wanted = new Set((Array.isArray(b.rows) ? b.rows : []).map(Number).filter(Number.isFinite));
+  const rows = session.rows || [];
+  const free = (base) => {
+    let n = base, k = 2;
+    while ((session.columnsRaw || []).includes(n)) n = base + ' ' + (k++);
+    return n;
+  };
+  if (!session.locatedCols) {
+    session.locatedCols = [free('latitude'), free('longitude')];
+    session.columnsRaw = (session.columnsRaw || []).concat(session.locatedCols);
+  }
+  const [latName, lngName] = session.locatedCols;
+
+  // pressing Use these twice must not leave last time's answers behind
+  let placed = 0;
+  rows.forEach((r, i) => {
+    delete r[latName]; delete r[lngName];
+    const p = held[i];
+    if (!wanted.has(i) || !p || p.lat == null) return;
+    r[latName] = p.lat; r[lngName] = p.lng;
+    placed++;
+  });
+  session.columns = (session.columns || [])
+    .filter((c) => c.name !== latName && c.name !== lngName)
+    .concat([{ name: latName, role: 'latitude' }, { name: lngName, role: 'longitude' }]);
+  session.strategy = 'coordinates';
+  imports.saveImport(session);
+  res.json({ latColumn: latName, lngColumn: lngName, placed, of: rows.length });
 });
 
 router.post('/layers/apply', (req, res) => {

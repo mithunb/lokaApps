@@ -610,7 +610,7 @@
      no layer at all — that is every atlas built from open data — so places you
      typed yourself keep their own chips and their own ✕, and this button never
      touches them. */
-  var FILE_STATE = { name: "", note: "" };
+  var FILE_STATE = { name: "", note: "", pick: null };
 
   function showFileCard(name, note) {
     FILE_STATE.name = name || "";
@@ -631,6 +631,21 @@
     head.className = "filecard-head";
     head.textContent = FILE_STATE.name + (FILE_STATE.note ? " · " + FILE_STATE.note : "");
     box.appendChild(head);
+
+    // waiting on which part of the file to read
+    if (FILE_STATE.pick) {
+      var ask = document.createElement("div");
+      ask.className = "filecard-parts";
+      FILE_STATE.pick.entries.forEach(function (en) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "part-opt";
+        b.innerHTML = "<b>" + esc(en.label) + "</b><span>" + esc(en.note) + "</span>";
+        b.onclick = function () { takePart(GEO.file || { name: FILE_STATE.name }, en); };
+        ask.appendChild(b);
+      });
+      box.appendChild(ask);
+    }
 
     // the places this file found, named — so the button's reach is visible
     var ids = GEO.addedIds || [];
@@ -663,7 +678,7 @@
         S.chosen = S.chosen.filter(function (c) { return GEO.addedIds.indexOf(c.id) < 0; });
         if (S.chosen.length) S.level = Math.max.apply(null, S.chosen.map(function (c) { return c.level || 2; }));
       }
-      FILE_STATE.name = ""; FILE_STATE.note = "";
+      FILE_STATE.name = ""; FILE_STATE.note = ""; FILE_STATE.pick = null;
       msg(2, "");
       GEO.file = null; GEO.canonical = null; GEO.rows = 0; GEO.addedIds = [];
       if (BENCH) { BENCH.destroy(); BENCH = null; BENCH_KEY = ""; }
@@ -677,25 +692,63 @@
   function placesFromFile(file) {
     if (!window.LokaIngest) { msg(2, "The file reader didn’t load — reload the page and try again."); return; }
     msg(2, "Reading " + file.name + "…", "ok");
+    GEO.file = file;               // a part may be chosen after this returns
+    FILE_STATE.pick = null;
     showFileCard(file.name, "reading…");
     LokaIngest.fromFile(file, function (err, res) {
       if (err) { msg(2, "That file couldn’t be read: " + err.message); showFileCard(null); return; }
       if (res.kind === "unsupported") { msg(2, res.message); showFileCard(null); return; }
-      // a workbook or a mixed shapes file: take the first, and say which
+      /* A workbook, or a file mixing shape types: ask which part to read.
+
+         This used to take the first and carry on. A workbook's first sheet is
+         usually the right one and sometimes emphatically is not — a form's
+         responses sat in front of four other sheets holding a timeline, a
+         contact list, a list of programmes and a grant, and there was no way
+         to reach any of them. The data step has asked this question since it
+         was written; this step simply never did. */
       if (res.kind === "sheets") {
-        return res.pick(res.sheets[0].name, function (e2, r2) {
-          if (e2 || !r2 || r2.kind !== "table") { msg(2, "That workbook couldn’t be read."); showFileCard(null); return; }
-          useCanonical(r2.canonical, file, "sheet “" + res.sheets[0].name + "”");
-        });
+        return askWhichPart(file, "That workbook has several sheets — which one holds the places?",
+          res.sheets.map(function (sh) {
+            return { name: sh.name, label: sh.name,
+                     note: sh.rows.toLocaleString() + " rows × " + sh.cols + " columns",
+                     part: "sheet “" + sh.name + "”",
+                     pick: function (cb) { res.pick(sh.name, cb); } };
+          }));
       }
       if (res.kind === "classes") {
-        return res.pick(res.classes[0].cls, function (e2, r2) {
-          if (e2 || !r2 || r2.kind !== "table") { msg(2, "That file couldn’t be read."); showFileCard(null); return; }
-          useCanonical(r2.canonical, file, res.classes[0].label);
-        });
+        return askWhichPart(file, "That file mixes shapes — which of them should the atlas read?",
+          res.classes.map(function (c) {
+            return { name: c.cls, label: c.label, note: c.count.toLocaleString() + " shapes",
+                     part: c.label,
+                     pick: function (cb) { res.pick(c.cls, cb); } };
+          }));
       }
       if (res.kind !== "table") { msg(2, "That file couldn’t be read."); showFileCard(null); return; }
       useCanonical(res.canonical, file, "");
+    });
+  }
+
+  /* One part of a file, chosen rather than assumed.
+
+     One entry means there is nothing to ask, so it is taken straight away —
+     asking a question with a single answer is not a choice, it is a delay. */
+  function askWhichPart(file, question, entries) {
+    if (entries.length === 1) return takePart(file, entries[0]);
+    FILE_STATE.pick = { question: question, entries: entries };
+    showFileCard(file.name, entries.length + " sheets");
+    msg(2, question, "ok");
+  }
+
+  function takePart(file, en) {
+    FILE_STATE.pick = null;
+    showFileCard(file.name, "reading “" + en.label + "”…");
+    en.pick(function (err, out) {
+      if (err || !out || out.kind !== "table") {
+        msg(2, (out && out.message) || "That part couldn’t be read.");
+        showFileCard(null);
+        return;
+      }
+      useCanonical(out.canonical, file, en.part);
     });
   }
 
