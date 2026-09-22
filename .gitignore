@@ -16,6 +16,9 @@ api/data/
 api/atlas-builders/.venv/
 __pycache__/
 .claude/
+# design-critique reports the impeccable skill writes as it runs — working
+# notes about one page at one moment, not a record anyone reads later
+.impeccable/
 
 # Design study pages. These are scratch: they carry working measurements, open
 # bugs and internal argument, and a `git add -A atlas/` swept sixteen of them
