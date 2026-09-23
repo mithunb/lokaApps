@@ -2516,11 +2516,60 @@ function transform(session) {
     // bubble) collapse it to its centroid — one symbol per admin unit
     const joinKind = session.spec && session.spec.kind;
     const wantAreas = joinKind === 'choropleth' || joinKind === 'polygon';
+
+    /* A cell that is not a place name may still CONTAIN one.
+
+       Choosing an atlas's REGION has read sentences for a while: somebody
+       answering "which geographic areas do you work in?" writes "BRT Tiger
+       Reserve, Chamarajanagar district, Karnataka, India", and the district is
+       in there. Placing a LAYER'S ROWS did not, and the two paths reading the
+       same column differently is how a survey placed its region across ten
+       states and then put four pins on the map.
+
+       Same scanner, same rules: outright matches only, longest phrase first, a
+       single word that is loose in a sentence skipped. Runs are read left to
+       right, so the first name found is the most specific one mentioned —
+       which is the order people write in. */
+    const byTargetName = new Map();
+    for (const t of bt.targets) {
+      const k = norm(t.name);
+      if (!k) continue;
+      if (!byTargetName.has(k)) byTargetName.set(k, []);
+      byTargetName.get(k).push(t);
+    }
+    const insideTargets = (k) => byTargetName.get(k) || null;
+    const placeOn = (target, rowIdx) => {
+      const props = { ...rows[rowIdx], name: target.name };
+      feats.push({
+        type: 'Feature', properties: props,
+        geometry: wantAreas ? target.geometry : { type: 'Point', coordinates: centroidOf(target.geometry) },
+      });
+      report.matched++;
+    };
+
     results.forEach((res) => {
       const manual = session.matchState[res.row];
       const code = manual === 'skip' ? null : (manual || res.match);
       if (manual === 'skip') return;
       if (!code) {
+        // a single word has already been looked up as itself; only sentences here
+        const inside = /\s/.test(String(res.name == null ? '' : res.name).trim())
+          ? namesInside(res.name, insideTargets) : [];
+        const first = inside[0];
+        if (first && first.cands.length === 1) {
+          placeOn(first.cands[0], res.row);
+          report.inSentence = (report.inSentence || 0) + 1;
+          return;
+        }
+        if (first) {
+          // the name it mentions is several places — the same question the
+          // fix list already asks, asked about the name rather than the cell
+          report.ambiguous.push({
+            row: res.row, name: res.name,
+            candidates: first.cands.map((t) => ({ code: t.code, name: t.name, parent: t.parent, score: 1 })),
+          });
+          return;
+        }
         (res.candidates.length ? report.ambiguous : report.unmatched).push({
           row: res.row, name: res.name, candidates: res.candidates,
         });
@@ -2528,13 +2577,7 @@ function transform(session) {
       }
       const target = bt.targets[Number(code)];
       if (!target) return;
-      const r = rows[res.row];
-      const props = { ...r, name: target.name };
-      feats.push({
-        type: 'Feature', properties: props,
-        geometry: wantAreas ? target.geometry : { type: 'Point', coordinates: centroidOf(target.geometry) },
-      });
-      report.matched++;
+      placeOn(target, res.row);
     });
   }
 

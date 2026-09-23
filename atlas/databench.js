@@ -1402,6 +1402,8 @@
       bits.push("joined to <b>" + esc(rep.joinLabel || rep.joinLayer || "boundaries") + "</b>");
       if (rep.ambiguous && rep.ambiguous.length) bits.push('<b style="color:var(--color-rust-deep)">' + rep.ambiguous.length + " need attention</b>");
       if (rep.unmatched && rep.unmatched.length) bits.push(rep.unmatched.length + " unmatched");
+      // rows whose cell was a sentence with a place inside it, not a place name
+      if (rep.inSentence) bits.push(rep.inSentence + " found inside a longer answer");
     }
     if (rep.note) bits.push(esc(rep.note));
     // a column that was kept, held something, and still did not make it onto the
