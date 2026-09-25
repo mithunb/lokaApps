@@ -69,6 +69,18 @@ export function joinByName(rows, nameCol, parentCol, targets) {
   const byCompound = new Map();  // canon(parent)|canon(name) -> targets[]
   const byLetters = new Map();   // lettersOnly(name) -> targets[], digit-free names only
   for (const t of targets) {
+    /* A target may go by more than one name. Districts do not; ranges and
+       reserves do, and the alternatives come from the source rather than
+       being guessed here — "BRT Tiger Reserve" is how everybody writes the
+       sanctuary whose official name is four words longer. Each alias is an
+       EXACT key like the name itself, so this adds reach without adding
+       fuzziness. */
+    for (const alt of [t.name, ...(Array.isArray(t.aliases) ? t.aliases : [])]) {
+      const ak = canon(alt);
+      if (!ak || ak === canon(t.name)) continue;
+      if (!byKey.has(ak)) byKey.set(ak, []);
+      if (!byKey.get(ak).includes(t)) byKey.get(ak).push(t);
+    }
     const k = canon(t.name);
     if (!byKey.has(k)) byKey.set(k, []);
     byKey.get(k).push(t);

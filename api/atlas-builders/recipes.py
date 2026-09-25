@@ -1371,7 +1371,40 @@ def nfhs_cleanfuel(ctx): return _nfhs_choropleth(ctx, "cleanfuel")
 def nfhs_stunting(ctx): return _nfhs_choropleth(ctx, "stunting")
 
 
+def places_named(ctx):
+    """Ranges, reserves and wards the atlas's own box reaches.
+
+    One layer for every kind of named place that is not an administrative unit,
+    because they share a problem: a row saying "Western Ghats" or "BRT Tiger
+    Reserve" has had nothing to join to. They arrive here as ordinary polygons
+    with names, so the row-join treats them exactly like district boundaries —
+    and their aliases ride along, which is what lets "B.R.T. Wildlife
+    Sanctuary" find the same shape.
+    """
+    import places
+    feats = places.collect(ctx["bbox"], ctx["cache"])
+    if not feats:
+        return []
+    write_geojson(ctx["out"], "places.geojson", feats)
+    kinds = sorted({f["properties"]["kind"] for f in feats})
+    progress("places", 95, f"{len(feats)} named places")
+    credits = sorted({f["properties"].get("credit") for f in feats if f["properties"].get("credit")})
+    return [{
+        "id": "places", "group": "base", "type": "fill", "source": "places.geojson",
+        "label": "Named places", "default": True,
+        "paint": {"fillColor": "#6E7F5C", "fillOpacity": 0.16,
+                  "outlineColor": "#4E6B3A", "outlineWidth": 1.6},
+        "label_text": {"property": "name", "size": 12, "color": "#33402B",
+                       "haloColor": "#ffffff", "haloWidth": 2, "minzoom": 6},
+        "legend": [{"color": "#6E7F5C", "label": "Named place"}],
+        "info": "Mountain ranges, reserves and wards in this area \u2014 " + ", ".join(kinds) +
+                ". " + "; ".join(credits),
+        "attribution": "; ".join(credits),
+    }]
+
+
 RECIPES = {
+    "places": places_named,
     "admin": admin,
     "subadmin": subadmin,
     "water_osm": water_osm,

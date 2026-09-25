@@ -1,0 +1,100 @@
+{
+  "comment": "Named places that are not administrative units, and where to get their shape. THE SHAPES ARE NOT HERE — only names, aliases and an id, which is a few bytes each. A build fetches the geometry for the entries an atlas actually mentions, by id, and caches it. Fetching by NAME is what puts Jeevan Bhima Nagar in Chennai and BRT in Periyar; fetching by id is deterministic. Every id below was looked up and confirmed before being written down. bbox is [w,s,e,n] and exists so a build can decide what it needs WITHOUT fetching anything.",
+  "sources": {
+    "osm": {
+      "label": "OpenStreetMap",
+      "fetch": "https://nominatim.openstreetmap.org/lookup?osm_ids={id}&format=json&polygon_geojson=1",
+      "credit": "© OpenStreetMap contributors",
+      "licence": "ODbL 1.0",
+      "note": "one request a second, per their policy; the result is cached"
+    },
+    "file": {
+      "label": "shipped with the atlas",
+      "fetch": "api/atlas-builders/places/{id}",
+      "credit": "see each entry",
+      "licence": "see each entry"
+    },
+    "ramsar": {
+      "label": "Ramsar Sites Information Service",
+      "fetch": "https://rsis.ramsar.org/geoserver/wfs?service=WFS&version=1.1.0&request=GetFeature&typeName=ramsar_sdi:features_bnd&outputFormat=application/json&CQL_FILTER=ramsarid={id}",
+      "credit": "Ramsar Sites Information Service",
+      "licence": "open access (rsis.ramsar.org/about)"
+    }
+  },
+  "places": [
+    {
+      "name": "Western Ghats",
+      "aliases": ["Sahyadri", "Sahyadri Range", "Sahyadris", "Western Ghat"],
+      "kind": "mountain range", "state": null,
+      "source": "file", "id": "ranges-IND.geojson", "feature": "Western Ghats",
+      "bbox": [72.6, 8.1, 78.0, 21.3],
+      "credit": "GMBA Mountain Inventory v2.0", "licence": "CC BY 4.0"
+    },
+    {
+      "name": "Eastern Ghats",
+      "aliases": ["Eastern Ghat", "Purva Ghat"],
+      "kind": "mountain range", "state": null,
+      "source": "file", "id": "ranges-IND.geojson", "feature": "Eastern Ghats",
+      "bbox": [76.5, 10.9, 86.5, 22.2],
+      "credit": "GMBA Mountain Inventory v2.0", "licence": "CC BY 4.0"
+    },
+    {
+      "name": "BRT Tiger Reserve",
+      "aliases": ["Biligiri Ranganatha Swamy Temple Wildlife Sanctuary", "Biligiri Rangaswamy Temple Tiger Reserve",
+                  "BRT Wildlife Sanctuary", "B.R.T. Wildlife Sanctuary", "Biligiriranga Swamy Temple Wildlife Sanctuary"],
+      "kind": "tiger reserve", "state": "Karnataka",
+      "source": "osm", "id": "W378131783",
+      "bbox": [77.0, 11.7, 77.4, 12.2],
+      "credit": "© OpenStreetMap contributors", "licence": "ODbL 1.0"
+    },
+    {
+      "name": "Tadoba Andhari Tiger Reserve",
+      "aliases": ["Tadoba National Park", "Tadoba Andhari National Park", "Tadoba Tiger Reserve"],
+      "kind": "tiger reserve", "state": "Maharashtra",
+      "source": "osm", "id": "W679249389",
+      "bbox": [79.2, 20.1, 79.5, 20.4],
+      "credit": "© OpenStreetMap contributors", "licence": "ODbL 1.0"
+    },
+    {
+      "name": "Pench Tiger Reserve",
+      "aliases": ["Pench National Park"],
+      "kind": "tiger reserve", "state": "Maharashtra",
+      "source": "osm", "id": "W155466998",
+      "bbox": [79.1, 21.5, 79.4, 21.8],
+      "credit": "© OpenStreetMap contributors", "licence": "ODbL 1.0"
+    },
+    {
+      "name": "Bor Tiger Reserve",
+      "aliases": ["Bor Wildlife Sanctuary"],
+      "kind": "tiger reserve", "state": "Maharashtra",
+      "source": "osm", "id": "R9473198",
+      "bbox": [78.5, 20.7, 78.9, 21.1],
+      "credit": "© OpenStreetMap contributors", "licence": "ODbL 1.0"
+    },
+    {
+      "name": "Nawegaon-Nagzira Tiger Reserve",
+      "aliases": ["Navegaon Nagzira Tiger Reserve", "Nagzira Wildlife Sanctuary", "Navegaon National Park", "Nawegaon National Park"],
+      "kind": "tiger reserve", "state": "Maharashtra",
+      "source": "osm", "id": "R9472154",
+      "bbox": [79.8, 20.8, 80.3, 21.4],
+      "credit": "© OpenStreetMap contributors", "licence": "ODbL 1.0"
+    },
+    {
+      "name": "Jeevan Bhima Nagar",
+      "aliases": ["Jeevan Bhimanagar", "Jeevanbhima Nagar", "Jeevan Bheema Nagar"],
+      "kind": "ward", "state": "Karnataka",
+      "source": "osm", "id": "R19883328",
+      "bbox": [77.64, 12.95, 77.68, 12.98],
+      "credit": "© OpenStreetMap contributors", "licence": "ODbL 1.0",
+      "note": "a ward of Bengaluru, which is the nearest published boundary to the neighbourhood"
+    },
+    {
+      "name": "Beas Conservation Reserve",
+      "aliases": ["Beas River Conservation Reserve"],
+      "kind": "conservation reserve", "state": "Punjab",
+      "source": "ramsar", "id": "2408",
+      "bbox": [74.9, 31.2, 75.6, 31.9],
+      "credit": "Ramsar Sites Information Service", "licence": "open access"
+    }
+  ]
+}

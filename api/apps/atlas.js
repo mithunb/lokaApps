@@ -2232,6 +2232,15 @@ function boundaryTargets(session, optionId) {
     code: String(i),
     name: String(f.properties[opt.nameProp] ?? ''),
     parent: opt.parentProp ? String(f.properties[opt.parentProp] ?? '') : '',
+    /* Other names the same shape goes by, carried on the feature itself.
+
+       A boundary file of districts needs none: a district has one name. A file
+       of ranges and reserves needs them badly — the reserve whose official name
+       is "Biligiri Ranganatha Swamy Temple Wildlife Sanctuary" is written
+       "BRT Tiger Reserve" by everybody, and a row saying so had nothing to join
+       to. The aliases come from the source at build time, never invented at
+       match time, which is what keeps this from becoming fuzzy matching. */
+    aliases: Array.isArray(f.properties.aliases) ? f.properties.aliases.map(String) : [],
     geometry: f.geometry,
   }));
   return { opt, targets };
@@ -2701,10 +2710,12 @@ function transform(session) {
        which is the order people write in. */
     const byTargetName = new Map();
     for (const t of bt.targets) {
-      const k = norm(t.name);
-      if (!k) continue;
-      if (!byTargetName.has(k)) byTargetName.set(k, []);
-      byTargetName.get(k).push(t);
+      for (const nm of [t.name, ...(t.aliases || [])]) {
+        const k = norm(nm);
+        if (!k) continue;
+        if (!byTargetName.has(k)) byTargetName.set(k, []);
+        if (!byTargetName.get(k).includes(t)) byTargetName.get(k).push(t);
+      }
     }
     const insideTargets = (k) => byTargetName.get(k) || null;
     const placeOn = (target, rowIdx) => {

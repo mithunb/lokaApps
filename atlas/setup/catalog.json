@@ -113,6 +113,19 @@
       "attribution": { "global": "ESA WorldCover 2021 (Copernicus), CC-BY 4.0" }
     },
     {
+      "id": "places",
+      "label": "Named places (ranges, reserves, wards)",
+      "info": "Mountain ranges, tiger and conservation reserves and city wards in your region \u2014 the places a boundary file does not hold. Rows naming one of them are drawn as that shape.",
+      "tiers": ["india"],
+      "group": "base",
+      "recipe": "places",
+      "estSeconds": 20,
+      "cost": "free",
+      "fixedCost": true,
+      "default": true,
+      "attribution": "GMBA Mountain Inventory v2.0 (CC BY 4.0); \u00a9 OpenStreetMap contributors (ODbL); Ramsar Sites Information Service"
+    },
+    {
       "id": "labels",
       "label": "Place names",
       "info": "Town, village and river names on the basemap — on by default, switchable off in the layer widget.",
