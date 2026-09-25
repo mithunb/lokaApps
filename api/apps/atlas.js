@@ -1816,9 +1816,16 @@ router.get('/auth/verify', (req, res) => {
     `Return to the <b>LOKA Atlas</b> tab you were using — your atlas is still there and will continue automatically. You can close this tab.`));
 });
 
+/* Who is looking. Every page asks this once as it loads.
+
+   "Nobody is signed in" used to answer 401, so a signed-out visitor — which
+   is most of them — logged a failed request on every page, and a console with
+   a permanent error in it is a console nobody reads. Not being signed in is
+   an ANSWER to this question, and the commonest one. It is 200 now, and says
+   so in a word the callers can read. */
 router.get('/auth/me', (req, res) => {
   const session = auth.sessionFromReq(req);
-  if (!session) return res.status(401).json({ error: 'not signed in' });
+  if (!session) return res.json({ signedIn: false });
   const acc = reg.getAccount(session.email);
   const instances = (acc ? acc.instances : [])
     .map((slug) => reg.getInstance(slug))
@@ -1828,6 +1835,7 @@ router.get('/auth/me', (req, res) => {
       role: i.ownerAccount === session.email ? 'owner' : 'editor',
     }));
   res.json({
+    signedIn: true,
     email: session.email,
     verifiedAt: acc ? acc.verifiedAt : null,
     name: (acc && acc.name) || '',

@@ -63,6 +63,9 @@
 
   function boot() {
     api("auth/me").then(function (me) {
+      // a signed-out visitor now gets a 200 saying so, where the request used
+      // to fail; the gate below is what should still happen
+      if (!me || !me.email) throw new Error("not signed in");
       S.me = me;
       $("#who").textContent = me.email;
       $("#signout").hidden = false;

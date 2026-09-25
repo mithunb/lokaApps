@@ -57,5 +57,32 @@ check('and it says whose fault it is not', /that its sprite does not have/.test(
 check('the map’s own errors are untouched',
   /map\.on\("error", function \(e\) \{ console\.error\("Atlas map error:"/.test(viewer), true);
 
+console.log('\n  and "nobody is signed in" is an answer, not a failure');
+const setup = fs.readFileSync(ROOT + '/atlas/setup/setup.js', 'utf8');
+const bench = fs.readFileSync(ROOT + '/atlas/databench.js', 'utf8');
+const admin = fs.readFileSync(ROOT + '/atlas/admin/index.html', 'utf8');
+/* Most visitors are signed out, so this fired on almost every page load. */
+check('the route says so plainly', /if \(!session\) return res\.json\(\{ signedIn: false \}\);/.test(server), true);
+/* Scoped to this route: POST /auth/profile still refuses with 401, and should
+   — a refusal is not the same as an answer to "who is looking". */
+const meRoute = server.slice(server.indexOf("router.get('/auth/me'"),
+  server.indexOf('router.', server.indexOf("router.get('/auth/me'") + 10));
+check('and this route no longer refuses',
+  /res\.status\(401\)/.test(meRoute), false);
+check('but a route that really needs a session still does',
+  /router\.post\('\/auth\/profile'[\s\S]{0,200}?res\.status\(401\)\.json\(\{ error: 'not signed in' \}\)/.test(server), true);
+check('a signed-in answer says which it is', /res\.json\(\{\n    signedIn: true,\n    email: session\.email,/.test(server), true);
+
+/* THE RISK IN THIS CHANGE: two callers drove their signed-out screen from the
+   rejection. A 200 would have run their signed-in branch on an empty answer. */
+check('the wizard turns the new answer back into its gate',
+  /api\("auth\/me"\)\.then\(function \(me\) \{[\s\S]{0,240}?if \(!me \|\| !me\.email\) throw new Error\("not signed in"\);/.test(setup), true);
+check('and so does the data bench',
+  /api\("auth\/me"\)\.then\(function \(me\) \{[\s\S]{0,260}?if \(!me \|\| !me\.email\) throw new Error\("not signed in"\);/.test(bench), true);
+check('the viewer already read the answer rather than the status',
+  /if \(!me \|\| !me\.email\) return; \/\/ stays: "sign in" link/.test(viewer), true);
+check('and the admin page already caught it',
+  /api\("auth\/me"\)\.catch\(function \(\) \{ return null; \}\)/.test(admin), true);
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

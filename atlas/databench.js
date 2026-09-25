@@ -447,6 +447,10 @@
   function refreshAuth() {
     var nav = document.getElementById("nav-user");
     return api("auth/me").then(function (me) {
+      // "nobody is signed in" is a 200 with an answer now, not a rejection —
+      // so it is turned back into one, and the signed-out path below is
+      // reached whether the session is missing or the request failed
+      if (!me || !me.email) throw new Error("not signed in");
       S.me = me;
       var who = me.org || me.name ? " (" + esc(me.org || me.name) + ")" : "";
       // identity belongs in the header; the sign-in card steps out of the way
