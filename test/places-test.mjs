@@ -108,5 +108,28 @@ check('the join indexes aliases as exact keys', /for \(const alt of \[t\.name, \
 check('the sentence scan sees them too', /for \(const nm of \[t\.name, \.\.\.\(t\.aliases \|\| \[\]\)\]\)/.test(server), true);
 check('and targets carry them off the feature', /aliases: Array\.isArray\(f\.properties\.aliases\)/.test(server), true);
 
+console.log('\n  a row finds the most specific boundary that knows its name');
+/* One survey, measured: ten state outlines placed 8 of 12, two hundred named
+   places placed 5 of 12, and they were not the same rows. Joining to one
+   layer loses whichever half you did not pick. */
+check('every boundary layer goes on the ladder', /for \(const opt of \(boundaryOptions\(session\.dataset\)\.options \|\| \[\]\)\)/.test(server), true);
+check('ordered by how small its shapes are', /ladder\.sort\(\(a, b\) => a\._size - b\._size\);/.test(server), true);
+check('a layer somebody chose by hand still leads', /if \(session\.joinLayerExplicit\) \{/.test(server), true);
+check('and choosing one is recorded as a choice', /session\.joinLayerExplicit = true;/.test(server), true);
+check('a miss falls to the next layer', /const other = elsewhere\(res\.name\);/.test(server), true);
+/* a name meaning several places on a rung is a question, not an answer */
+check('but only when that layer is sure', /const c = rungs\[i\]\.index\.get\(sp\);\s*\n\s*if \(c && c\.length === 1\)/.test(server), true);
+check('and it is counted and named', /report\.fromOtherLayer = \(report\.fromOtherLayer \|\| 0\) \+ 1;/.test(server), true);
+
+console.log('\n  and OpenStreetMap boundaries say what licence they carry');
+const viewer = fs.readFileSync(ROOT + '/atlas/atlas.js', 'utf8');
+const html = fs.readFileSync(ROOT + '/atlas/index.html', 'utf8');
+/* ODbL is share-alike: attribution alone does not satisfy it. */
+check('the notice exists', /Open Database Licence/.test(viewer), true);
+check('it says the files are covered too', /as are the files it is served from/.test(viewer), true);
+check('shown only on an atlas that carries such a layer',
+  /\/openstreetmap\/i\.test\(String\(L\.attribution \|\| ""\)\)/.test(viewer), true);
+check('and it has somewhere to go', /id="odbl-note"/.test(html), true);
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -4637,6 +4637,25 @@
       }).join("");
     }
 
+    /* Boundaries that came from OpenStreetMap carry a licence with a condition
+       attribution alone does not satisfy.
+
+       ODbL is share-alike: a database derived from OpenStreetMap has to be
+       offered under ODbL too, and the boundary file this atlas serves IS such
+       a database. Saying so, and pointing at the file, is what the licence
+       asks and costs one line. Nothing is said on an atlas that has no such
+       layer, because a notice about data you do not carry is noise. */
+    var osmLayers = (MANIFEST.layers || []).filter(function (L) {
+      return /openstreetmap/i.test(String(L.attribution || ""));
+    });
+    var odbl = $("#odbl-note");
+    if (odbl && osmLayers.length) {
+      odbl.hidden = false;
+      odbl.innerHTML = "Boundary data from OpenStreetMap on this map is available under the " +
+        '<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">' +
+        "Open Database Licence</a>, as are the files it is served from.";
+    }
+
     /* The people who walked the ground.
 
        A source of data gets a line under "Data & sources". The people who

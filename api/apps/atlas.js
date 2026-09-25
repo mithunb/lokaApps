@@ -2171,6 +2171,22 @@ function geminiAllowed(req) { return aiTake(req); }
 
 /* ---------- boundary discovery: joinable polygon layers in the dataset ---------- */
 
+// The box round a shape, for "which of these is the smaller thing".
+function bboxOfGeom(g) {
+  let w = 180, so = 90, e = -180, n = -90, any = false;
+  const walk = (c) => {
+    if (typeof c[0] === 'number') {
+      any = true;
+      w = Math.min(w, c[0]); e = Math.max(e, c[0]);
+      so = Math.min(so, c[1]); n = Math.max(n, c[1]);
+      return;
+    }
+    for (const x of c) walk(x);
+  };
+  try { if (g && g.coordinates) walk(g.coordinates); } catch { return null; }
+  return any ? [w, so, e, n] : null;
+}
+
 function boundaryOptions(datasetId) {
   const m = imports.readManifest(datasetId);
   if (!m) return { options: [], manifest: null };
@@ -2681,14 +2697,55 @@ function transform(session) {
       report.matched++;
     });
   } else {
+    /* Every boundary layer this atlas has, the most specific first.
+
+       A layer used to join against ONE of them, and a survey answered at mixed
+       depths cannot be placed that way: "BRT Tiger Reserve, Chamarajanagar
+       district, Karnataka" wants the reserve, "Karnataka" wants the state, and
+       whichever single layer you pick loses one of them. Measured on one
+       survey: ten state outlines placed 8 of 12, two hundred named places
+       placed 5 of 12, and they were not the same rows.
+
+       So each layer is tried in turn and the first hit wins, ordered by how
+       small its shapes are. Smallest means most specific: BRT is 540 square
+       kilometres and Karnataka is 191,791, so a row naming both gets the
+       reserve. A row naming only a state falls through to the state. */
     const bt = boundaryTargets(session, session.joinLayer);
     if (!bt) throw new Error('no joinable boundary layer in this dataset');
-    session.joinLayer = bt.opt.id;
-    report.joinLayer = bt.opt.id;
-    report.joinLabel = bt.opt.label;
     const nameCol = roles.placeName;
     if (!nameCol) throw new Error('place-name column not set');
-    const results = joinByName(rows, nameCol, roles.adminParent || null, bt.targets);
+    /* Ordered by how small its shapes typically are. Smallest is most
+       specific, and most specific should win: a row naming both a reserve and
+       the state it sits in means the reserve.
+
+       Unless somebody chose a layer by hand, in which case theirs leads — a
+       person who picks "match against districts" has said what they want, and
+       a default pick is not the same thing. */
+    const spread = (t) => {
+      const b = t && t.geometry && bboxOfGeom(t.geometry);
+      return b ? (b[2] - b[0]) * (b[3] - b[1]) : Infinity;
+    };
+    const ladder = [];
+    for (const opt of (boundaryOptions(session.dataset).options || [])) {
+      const o = (opt.id === bt.opt.id) ? bt : boundaryTargets(session, opt.id);
+      if (!o || !o.targets.length) continue;
+      const sample = o.targets.slice(0, 40).map(spread).filter(Number.isFinite).sort((a, b) => a - b);
+      o._size = sample.length ? sample[Math.floor(sample.length / 2)] : Infinity;
+      ladder.push(o);
+    }
+    if (!ladder.length) ladder.push(bt);
+    ladder.sort((a, b) => a._size - b._size);
+    if (session.joinLayerExplicit) {
+      const i = ladder.findIndex((x) => x.opt.id === bt.opt.id);
+      if (i > 0) ladder.unshift(ladder.splice(i, 1)[0]);
+    }
+    const lead = ladder[0];
+    session.joinLayer = lead.opt.id;
+    report.joinLayer = lead.opt.id;
+    report.joinLabel = lead.opt.label;
+    report.joinLadder = ladder.map((x) => x.opt.label);
+
+    const results = joinByName(rows, nameCol, roles.adminParent || null, lead.targets);
     session.matchState = session.matchState || {};   // row -> code | 'skip' (manual fixes)
     // area kinds keep the joined polygon; point kinds (markers / category /
     // bubble) collapse it to its centroid — one symbol per admin unit
@@ -2708,16 +2765,45 @@ function transform(session) {
        single word that is loose in a sentence skipped. Runs are read left to
        right, so the first name found is the most specific one mentioned —
        which is the order people write in. */
-    const byTargetName = new Map();
-    for (const t of bt.targets) {
-      for (const nm of [t.name, ...(t.aliases || [])]) {
-        const k = norm(nm);
-        if (!k) continue;
-        if (!byTargetName.has(k)) byTargetName.set(k, []);
-        if (!byTargetName.get(k).includes(t)) byTargetName.get(k).push(t);
+    // one name index per layer on the ladder, so a miss can fall to the next
+    const indexOf = (targets) => {
+      const m = new Map();
+      for (const t of targets) {
+        for (const nm of [t.name, ...(t.aliases || [])]) {
+          const k = norm(nm);
+          if (!k) continue;
+          if (!m.has(k)) m.set(k, []);
+          if (!m.get(k).includes(t)) m.get(k).push(t);
+        }
       }
-    }
+      return m;
+    };
+    const rungs = ladder.map((x) => ({ opt: x.opt, targets: x.targets, index: indexOf(x.targets) }));
+    const byTargetName = rungs[0].index;
     const insideTargets = (k) => byTargetName.get(k) || null;
+
+    /* The same row, asked of every other layer, most specific first. Returns
+       the single shape that layer is sure of, or nothing — a name that means
+       several places on a rung is not an answer, it is the question the fix
+       list already asks, and it is left for the rung that can answer it. */
+    function elsewhere(cell) {
+      const text = String(cell == null ? '' : cell);
+      for (let i = 1; i < rungs.length; i++) {
+        const look = (k) => rungs[i].index.get(k) || null;
+        let hit = null;
+        for (const sp of aliasSpellings(text)) {
+          const c = rungs[i].index.get(sp);
+          if (c && c.length === 1) { hit = c[0]; break; }
+        }
+        if (!hit && /\s/.test(text.trim())) {
+          const found = namesInside(text, look);
+          const one = found.find((f) => f.cands.length === 1);
+          if (one) hit = one.cands[0];
+        }
+        if (hit) return { target: hit, opt: rungs[i].opt };
+      }
+      return null;
+    }
     const placeOn = (target, rowIdx) => {
       const props = { ...rows[rowIdx], name: target.name };
       feats.push({
@@ -2750,12 +2836,23 @@ function transform(session) {
           });
           return;
         }
+        /* Nothing on the layer we started from. Before giving up, ask the
+           other layers this atlas has — a row naming a reserve has no answer
+           among states, and a row naming a state has none among reserves. */
+        const other = elsewhere(res.name);
+        if (other) {
+          placeOn(other.target, res.row);
+          report.fromOtherLayer = (report.fromOtherLayer || 0) + 1;
+          (report.alsoJoined = report.alsoJoined || {})[other.opt.label] =
+            ((report.alsoJoined || {})[other.opt.label] || 0) + 1;
+          return;
+        }
         (res.candidates.length ? report.ambiguous : report.unmatched).push({
           row: res.row, name: res.name, candidates: res.candidates,
         });
         return;
       }
-      const target = bt.targets[Number(code)];
+      const target = lead.targets[Number(code)];
       if (!target) return;
       placeOn(target, res.row);
     });
@@ -3872,7 +3969,7 @@ router.post('/layers/apply', (req, res) => {
   }
   if (b.spec && typeof b.spec === 'object') session.spec = b.spec;
   if (b.strategy && ['coordinates', 'adminJoin'].includes(b.strategy)) session.strategy = b.strategy;
-  if (b.joinLayer) session.joinLayer = String(b.joinLayer);
+  if (b.joinLayer) { session.joinLayer = String(b.joinLayer); session.joinLayerExplicit = true; }
   if (Array.isArray(b.columns)) {
     session.columns = b.columns
       .filter((c) => c && session.columnsRaw.includes(c.name))

@@ -889,6 +889,8 @@
     #walk-credits { margin-top:1.1rem; }
     #walk-list { margin:0; font-size:var(--t-meta); line-height:1.6; color:var(--color-text-secondary); }
     #walk-list .walk-name { color:var(--color-text-primary); font-weight:600; white-space:nowrap; }
+    /* the one licence on this page that asks for more than a credit line */
+    .cr-odbl { margin:.9rem 0 0; font-size:var(--t-label); line-height:1.45; color:var(--color-text-secondary); }
     .credits-foot { margin-top:1rem; font-size:var(--t-meta); color:var(--color-text-muted); display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
 
     /* ---- app home: instance gallery ---- */
@@ -1164,6 +1166,7 @@
           <h3 class="contrib-head" id="walk-head">Tagged on foot by</h3>
           <p id="walk-list"></p>
         </div>
+        <p id="odbl-note" class="cr-odbl" hidden></p>
         <div class="credits-foot">
           Built with <a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre GL</a>, the open-source map engine. Open data, openly credited.
         </div>
