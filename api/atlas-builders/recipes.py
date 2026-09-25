@@ -1382,7 +1382,21 @@ def places_named(ctx):
     Sanctuary" find the same shape.
     """
     import places
+    from shapely.geometry import shape as _shape
+    # The BOX around ten scattered states is most of India, and filtering on it
+    # pulled in 694 reserves for a map about twelve people. The selection itself
+    # is the honest filter: what is actually inside the ground this atlas covers.
     feats = places.collect(ctx["bbox"], ctx["cache"])
+    sel = ctx.get("sel")
+    if sel is not None and not sel.is_empty:
+        kept = []
+        for f in feats:
+            try:
+                if _shape(f["geometry"]).intersects(sel):
+                    kept.append(f)
+            except Exception:
+                pass
+        feats = kept
     if not feats:
         return []
     write_geojson(ctx["out"], "places.geojson", feats)
@@ -1391,7 +1405,11 @@ def places_named(ctx):
     credits = sorted({f["properties"].get("credit") for f in feats if f["properties"].get("credit")})
     return [{
         "id": "places", "group": "base", "type": "fill", "source": "places.geojson",
-        "label": "Named places", "default": True,
+        # Off unless somebody turns it on. Its real job is to be something a ROW
+        # can join to — a row saying "Western Ghats" gets that shape drawn in
+        # its own layer. Drawing every reserve in the region as well is a
+        # different map, and one nobody asked for.
+        "label": "Named places", "default": False,
         "paint": {"fillColor": "#6E7F5C", "fillOpacity": 0.16,
                   "outlineColor": "#4E6B3A", "outlineWidth": 1.6},
         "label_text": {"property": "name", "size": 12, "color": "#33402B",
