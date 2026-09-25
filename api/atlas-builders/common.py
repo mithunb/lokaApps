@@ -81,12 +81,24 @@ def fetch_cached(url, cache_dir, name=None, step="fetch"):
     return dest
 
 
+# An atlas of the whole world, for data that is not in one country. Web maps
+# stop at about 85 degrees because Mercator runs to infinity at the poles.
+WORLD_BBOX = [-180.0, -85.0, 180.0, 85.0]
+
+
 def load_selection(spec):
     """Union geometry + bbox of the admin units the org picked in the wizard.
 
     Reads the geoBoundaries geocache doc Node passed via spec.region.simplifiedFile.
+
+    An atlas can also have no region at all — a record of sightings does not
+    belong to a country, and asking which one it is in has no answer. Then the
+    selection is the world, nothing is clipped out of anything, and the viewer
+    frames the data itself when the map opens.
     """
     r = spec["region"]
+    if r.get("worldwide"):
+        return box(*WORLD_BBOX), list(WORLD_BBOX), []
     doc = json.load(open(r["simplifiedFile"]))
     want = set(r["shapeIDs"])
     feats = [f for f in doc["features"] if f["properties"]["id"] in want]

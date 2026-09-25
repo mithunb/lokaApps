@@ -1113,41 +1113,62 @@ router.post('/instances', async (req, res) => {
   const iso3 = String(r.iso3 || '').toUpperCase();
   const level = Number(r.level) || 1;
   const shapeIDs = Array.isArray(r.shapeIDs) ? r.shapeIDs.map(String) : [];
-  if (!/^[A-Z]{3}$/.test(iso3) || !shapeIDs.length) {
+  /* An atlas with no region at all.
+
+     Every atlas until now was a country and some units inside it, because
+     every atlas until now was of one landscape. A record of where something
+     was sighted is not: it belongs to wherever it was seen, which may be four
+     countries, and "which country is this atlas in" has no answer. Asking it
+     anyway is what made such a map unbuildable.
+
+     So: no units, no country, bounds the world, and the viewer frames the data
+     itself when the map opens — it already does that for an owner's own layers.
+     Boundaries are not forced on, because there is no region to outline. */
+  const worldwide = !!r.worldwide;
+  if (!worldwide && (!/^[A-Z]{3}$/.test(iso3) || !shapeIDs.length)) {
     return res.status(400).json({ error: 'region (iso3 + shapeIDs) is required' });
   }
-  const tooMany = tooManyUnits(shapeIDs);
+  const tooMany = worldwide ? '' : tooManyUnits(shapeIDs);
   if (tooMany) return res.status(400).json({ error: tooMany, tooManyUnits: shapeIDs.length });
-  let regionDoc;
-  try {
-    regionDoc = await loadAdmin(iso3, level);
-  } catch (e) {
-    return res.status(502).json({ error: 'boundary source unavailable: ' + e.message });
+  let regionDoc = null, picked = [];
+  if (!worldwide) {
+    try {
+      regionDoc = await loadAdmin(iso3, level);
+    } catch (e) {
+      return res.status(502).json({ error: 'boundary source unavailable: ' + e.message });
+    }
+    picked = regionDoc.features.filter((f) => shapeIDs.includes(f.properties.id));
+    if (!picked.length) return res.status(400).json({ error: 'no matching boundary units' });
   }
-  const picked = regionDoc.features.filter((f) => shapeIDs.includes(f.properties.id));
-  if (!picked.length) return res.status(400).json({ error: 'no matching boundary units' });
   let w = 180, s = 90, e = -180, n = -90;
+  if (worldwide) { w = -180; s = -85; e = 180; n = 85; }
   for (const f of picked) {
     w = Math.min(w, f.bbox[0]); s = Math.min(s, f.bbox[1]);
     e = Math.max(e, f.bbox[2]); n = Math.max(n, f.bbox[3]);
   }
   const areaDeg2 = (e - w) * (n - s);
   const shapeNames = picked.map((f) => f.properties.name);
-  const regionLabel = shapeNames.slice(0, 3).join(' · ') + (shapeNames.length > 3 ? ` +${shapeNames.length - 3}` : '');
+  const regionLabel = worldwide ? 'Worldwide'
+    : shapeNames.slice(0, 3).join(' · ') + (shapeNames.length > 3 ? ` +${shapeNames.length - 3}` : '');
 
   // tier + layers — resolved BEFORE the size gate, because the gate depends on them
   const tier = tierOf(iso3);
   const allowed = new Map(layersForTier(tier).map((l) => [l.id, l]));
   let layerIds = (Array.isArray(b.layers) ? b.layers.map(String) : []).filter((id) => allowed.has(id));
-  for (const l of allowed.values()) if (l.required && !layerIds.includes(l.id)) layerIds.unshift(l.id);
-  if (!layerIds.length) return res.status(400).json({ error: 'no valid layers chosen' });
+  /* Boundaries are compulsory because an atlas of a region should show that
+     region. An atlas with no region has nothing to outline, and forcing the
+     layer on would ask the builder to draw a selection that does not exist. */
+  if (!worldwide) {
+    for (const l of allowed.values()) if (l.required && !layerIds.includes(l.id)) layerIds.unshift(l.id);
+  }
+  if (!layerIds.length && !worldwide) return res.status(400).json({ error: 'no valid layers chosen' });
 
   /* Nothing is refused for being wide. What cannot be built across a region
      this size is dropped from the build and named in the answer, so an atlas
      of markers can be as wide as the markers are. */
   const fit = feasibleLayers(layerIds, allowed, areaDeg2);
   layerIds = fit.keep;
-  if (!layerIds.length) {
+  if (!layerIds.length && !worldwide) {
     return res.status(400).json({
       error: 'Nothing can be built across a region this wide except boundaries, and they were not asked for.',
       droppedLayers: fit.droppedLabels });
@@ -1205,9 +1226,9 @@ router.post('/instances', async (req, res) => {
   const spec = {
     slug, visibility, tier, title, subtitle, about, branding,
     region: {
-      iso3, level, shapeIDs, shapeNames, bbox: [w, s, e, n],
-      simplifiedFile: path.join(GEOCACHE_DIR, `${iso3}-ADM${level}.json`),
-      fullResUrl: regionDoc.fullResUrl,
+      iso3, level, shapeIDs, shapeNames, bbox: [w, s, e, n], worldwide,
+      simplifiedFile: worldwide ? null : path.join(GEOCACHE_DIR, `${iso3}-ADM${level}.json`),
+      fullResUrl: regionDoc ? regionDoc.fullResUrl : null,
     },
     layers: layerIds,
   };
@@ -1215,7 +1236,7 @@ router.post('/instances', async (req, res) => {
   reg.createInstance({
     slug, title, subtitle, about, org, email: email || null, branding: { ...branding, logoData: undefined, hasLogo: !!branding.logoData },
     ownerAccount: session ? session.email : null,
-    tier, region: { iso3, level, shapeIDs, shapeNames, bbox: [w, s, e, n], areaDeg2 }, regionLabel,
+    tier, region: { iso3, level, shapeIDs, shapeNames, bbox: [w, s, e, n], areaDeg2, worldwide }, regionLabel,
     layers: layerIds, visibility,
     tokenHash: reg.hashToken(editToken),
     viewKeyHash: viewKey ? reg.hashToken(viewKey) : null,

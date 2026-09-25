@@ -22,7 +22,11 @@ import recipes as recipe_mod
 def zoom_for(bbox):
     span = max(bbox[2] - bbox[0], bbox[3] - bbox[1], 0.05)
     z = math.log2(360.0 / span) + 0.25
-    return round(max(5.5, min(11.0, z)), 1)
+    # The floor of 5.5 is right for a region somebody picked — an atlas of one
+    # district should not open showing half a country. A worldwide atlas has no
+    # region, and clamping it to 5.5 would open it zoomed into the Atlantic.
+    floor = 1.0 if span > 180 else 5.5
+    return round(max(floor, min(11.0, z)), 1)
 
 
 GROUP_DEFS = {
@@ -223,14 +227,23 @@ def main():
             warn(f"{entry['label']}: nothing found for this region — layer omitted")
         layers.extend(stanzas)
 
-    if not layers:
+    # An atlas of a region with no layers is a failure: the region was asked
+    # for and nothing could be drawn of it. An atlas with NO region and no
+    # layers is the thing somebody asked for — a basemap and their own places
+    # on top, which is what a record of sightings across four countries is.
+    if not layers and not spec["region"].get("worldwide"):
         emit({"event": "error", "msg": "no layers could be built for this region"})
         sys.exit(1)
 
     set_window(95.0, 5.0, "Finishing up", 0, 0)
     progress("manifest", 40, "assembling your atlas")
     # region may have been sharpened by the admin recipe (LGD polygons)
+    # Padding a region gives it a little air. Padding the WORLD pushes it past
+    # the ends of the world — 8% of 360 degrees put the edge at 208 east, which
+    # is not a place — so the result is held inside what a web map can show.
     final_bounds = pad_bbox(list(ctx["sel"].bounds), 0.08)
+    final_bounds = [max(-180.0, final_bounds[0]), max(-85.0, final_bounds[1]),
+                    min(180.0, final_bounds[2]), min(85.0, final_bounds[3])]
     center = [round((final_bounds[0] + final_bounds[2]) / 2, 4),
               round((final_bounds[1] + final_bounds[3]) / 2, 4)]
     zoom = zoom_for(final_bounds)
@@ -268,7 +281,7 @@ def main():
         "center": center,
         "zoom": zoom,
         "bounds": [[final_bounds[0], final_bounds[1]], [final_bounds[2], final_bounds[3]]],
-        "minzoom": max(4, zoom - 2.2),
+        "minzoom": max(1 if zoom < 4 else 4, zoom - 2.2),
         "maxzoom": max_zoom_for(final_bounds, center),
         "glyphs": "https://tiles.basemaps.cartocdn.com/fonts/{fontstack}/{range}.pbf",
         "basemaps": BASEMAPS,
@@ -276,7 +289,8 @@ def main():
         "layers": layers,
         "attributions": attributions,
         "generator": "LOKA Atlas wizard",
-        "region": {"iso3": spec["region"]["iso3"], "names": spec["region"]["shapeNames"]},
+        "region": {"iso3": spec["region"]["iso3"], "names": spec["region"]["shapeNames"],
+                   **({"worldwide": True} if spec["region"].get("worldwide") else {})},
     }
     if branding:
         manifest["branding"] = branding

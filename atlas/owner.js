@@ -1784,7 +1784,19 @@
                           shapeIDs: chosen.map(function (c) { return c.id; }) } },
       }).then(function (r) {
         closeDialog(scrim);
-        toast("Rebuilding — this takes a few minutes. The atlas stays up meanwhile.");
+        /* The same unchecked field as the wizard's: past the free tier the API
+           answers pendingApproval with no job, and saying "rebuilding" then is
+           a promise nothing is keeping. */
+        if (r && r.pendingApproval) {
+          toast("Sent for approval — a region this size is checked first. " +
+                "The atlas keeps serving its current map meanwhile.");
+          return;
+        }
+        var lost = (r && r.droppedLayers) || [];
+        toast(lost.length
+          ? "Rebuilding without " + lost.join(", ") + " — too wide an area for " +
+            (lost.length > 1 ? "those" : "that") + ". The atlas stays up meanwhile."
+          : "Rebuilding — this takes a few minutes. The atlas stays up meanwhile.");
         if (r.jobId) watchRebuild(r.jobId);
       }).catch(function (e) {
         btn.disabled = false;

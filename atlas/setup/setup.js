@@ -1159,6 +1159,14 @@
           ", so " + (r.droppedLayers.length > 1 ? "those are" : "that is") +
           " left out. Everything else is being built.", "ok");
       }
+      /* A build past the free tier waits for an operator, and the API says so
+         by answering with a status and no job to watch. Reading a missing job
+         as success told somebody "Your atlas is ready" about an atlas that did
+         not exist, then sent them to it — where the viewer said there was no
+         atlas at that address — and, if they had attached a file, told them it
+         "couldn't be added automatically". Three wrong things from one
+         unchecked field. */
+      if (r.status === "pending-approval") { waitForApproval(); return; }
       if (!r.jobId) { finish(); return; }
       poll();
     }).catch(function (e) {
@@ -1195,6 +1203,49 @@
   }
 
   var lastStep = "";
+  /* Waiting for a person, not a machine. There is no job to poll, so this
+     watches the atlas itself: the moment it is approved the build starts and
+     a job id appears, and from there it is an ordinary build.
+
+     The page keeps asking while it is open, because the file the person
+     uploaded lives in a session on the server and this page is what hands it
+     over. If they close the tab the atlas still builds — the mail says so —
+     but the file will have to be added again, and that is said rather than
+     discovered. */
+  function waitForApproval() {
+    $("#fill").style.transform = "scaleX(0.15)";
+    $("#build-title").textContent = "Waiting to be approved";
+    var sub = $("#build-sub");
+    if (sub) {
+      sub.hidden = false;
+      sub.textContent = "A region this size is checked by the LOKA team first. " +
+        "They have been emailed, and you will be too once it is built.";
+    }
+    $("#prog-msg").textContent = GEO.canonical
+      ? "Keep this page open and your file goes on as soon as it is approved."
+      : "You can safely close this page.";
+    $("#done-row").hidden = true;
+    (function again() {
+      api("instances/" + encodeURIComponent(S.slug)).then(function (inst) {
+        if (inst && inst.status === "failed") {
+          $("#build-title").textContent = "The build stopped";
+          msg(4, "Something failed after approval. Nothing was published.");
+          $("#failed-row").hidden = false;
+          $("#build-go").disabled = false;
+          return;
+        }
+        if (inst && inst.jobId) {           // approved: an ordinary build from here
+          S.jobId = inst.jobId;
+          $("#build-title").textContent = "Building your atlas…";
+          if (sub) sub.textContent = "Approved — building from open data now.";
+          poll();
+          return;
+        }
+        setTimeout(again, 15000);
+      }).catch(function () { setTimeout(again, 30000); });
+    })();
+  }
+
   function poll() {
     api("jobs/" + encodeURIComponent(S.jobId)).then(function (j) {
       var pct = Math.max(0, Math.min(100, Number(j.pct) || 0));

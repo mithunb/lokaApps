@@ -28,7 +28,9 @@ check('there is one named limit instead', /const MAX_REGION_UNITS = 100;/.test(s
 check('and it refuses with the number the person picked',
   /'That is ' \+ ids\.length \+ ' places, and an atlas can cover ' \+ MAX_REGION_UNITS/.test(server), true);
 check('it says what to do about it', /pick a coarser level/.test(server), true);
-const guards = (server.match(/const tooMany\w* = tooManyUnits\(/g) || []).length;
+/* create (where a worldwide atlas has no units to count), rebuild, and a file
+   sent before the atlas exists */
+const guards = (server.match(/tooManyUnits\(/g) || []).length - 1;   // less the definition
 check('all three routes ask: create, rebuild, and a file sent before the atlas exists', guards, 3);
 check('the count rides along so a page can use it', /tooManyUnits: \w+\.(length|shapeIDs\.length)/.test(server), true);
 
