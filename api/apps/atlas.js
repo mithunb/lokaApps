@@ -3696,11 +3696,17 @@ function locateBias(session) {
   const r = session.region || {};
   if (r.iso3 || r.bbox) return { country: r.iso3 || undefined, bbox: r.bbox || undefined };
   if (!session.dataset) return {};
+  /* readManifest answers { manifest, local, dir } — not the manifest. Reading
+     m.bounds off the wrapper gave undefined every time, so every lookup on an
+     existing atlas ran with NO bias at all. That is what asked the world for
+     "Eastern and Western Ghats" and was told Hong Kong: boxed to India the
+     same query is honestly not found. */
   let m; try { m = imports.readManifest(session.dataset); } catch { return {}; }
-  const bounds = m && m.bounds;
+  const mf = (m && m.manifest) || null;
+  const bounds = mf && mf.bounds;
   const flat = Array.isArray(bounds) && bounds.length === 2 && Array.isArray(bounds[0])
     ? [bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1]] : null;
-  return { country: (m && m.region && m.region.iso3) || undefined, bbox: flat || undefined };
+  return { country: (mf && mf.region && mf.region.iso3) || undefined, bbox: flat || undefined };
 }
 
 function locateGate(req, res, session) {

@@ -129,9 +129,41 @@ def _admin_lgd(ctx):
         feats.append({"type": "Feature", "properties": {
             "name": name, "kind": "admin", "dist_lgd": p.get("dist_lgd"),
             "state": str(p.get("stname") or "").strip().title()}, "geometry": mapping(g)})
-    progress("admin", 90, f"{len(feats)} districts")
     if not feats:
         raise RuntimeError("no LGD districts matched the selection")
+
+    # A region picked at STATE depth is drawn as states.
+    #
+    # Everywhere except India the builder already draws the level that was
+    # picked; India alone always drops to districts, because the official list
+    # it reads is a district list. Over one state that is what you want. Over
+    # ten it is 228 outlines and 228 uppercase names fighting each other from
+    # zoom 7, when the honest picture is ten shapes.
+    #
+    # So when the pick was states, the districts are dissolved back into the
+    # states they belong to. Their own names come along, which is what the
+    # row-join matches on — a row saying "Karnataka" has something to join to
+    # for the first time.
+    picked_level = int(ctx["spec"]["region"].get("level") or 2)
+    states = {f["properties"]["state"] for f in feats if f["properties"].get("state")}
+    dissolved = picked_level == 1 and len(states) > 0 and len(feats) > len(states)
+    if dissolved:
+        by_state = {}
+        for f in feats:
+            by_state.setdefault(f["properties"]["state"], []).append(shape(f["geometry"]))
+        feats = []
+        for name, parts in sorted(by_state.items()):
+            if not name:
+                continue
+            g = unary_union(parts).buffer(0).simplify(tol, preserve_topology=True)
+            if g.is_empty:
+                continue
+            feats.append({"type": "Feature",
+                          "properties": {"name": name, "kind": "admin", "state": name},
+                          "geometry": mapping(g)})
+
+
+    progress("admin", 90, f"{len(feats)} {'states' if dissolved else 'districts'}")
     write_geojson(ctx["out"], "admin.geojson", feats)
     # the LGD polygons ARE the region now — sharpen the selection for later recipes
     ctx["sel"] = unary_union([shape(f["geometry"]) for f in feats])
