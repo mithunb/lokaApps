@@ -1403,6 +1403,25 @@ def places_named(ctx):
     kinds = sorted({f["properties"]["kind"] for f in feats})
     progress("places", 95, f"{len(feats)} named places")
     credits = sorted({f["properties"].get("credit") for f in feats if f["properties"].get("credit")})
+    # The same names again as rows, not one run-on line. A reader is owed the
+    # source, its licence and somewhere to go and look — a semicolon-joined
+    # string gives the first and hides the other two. Only the sources whose
+    # shapes actually came through are listed: crediting a tiger-reserve
+    # register on a map with no reserve on it is noise, not honesty.
+    src_defs = places.load_index().get("sources", {})
+    used, credit_rows = set(), []
+    for f in feats:
+        nm = f["properties"].get("credit")
+        if not nm or nm in used:
+            continue
+        used.add(nm)
+        sd = src_defs.get(f["properties"].get("source")) or {}
+        credit_rows.append({k: v for k, v in (
+            ("name", nm),
+            ("url", sd.get("home")),
+            ("note", "Named places on this map"),
+            ("license", f["properties"].get("licence")),
+        ) if v})
     return [{
         "id": "places", "group": "base", "type": "fill", "source": "places.geojson",
         # Off unless somebody turns it on. Its real job is to be something a ROW
@@ -1418,6 +1437,7 @@ def places_named(ctx):
         "info": "Mountain ranges, reserves and wards in this area \u2014 " + ", ".join(kinds) +
                 ". " + "; ".join(credits),
         "attribution": "; ".join(credits),
+        "credits": credit_rows,
     }]
 
 

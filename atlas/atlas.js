@@ -4611,9 +4611,32 @@
      CREDITS (data sources from manifest)
   ================================================================== */
   function buildCredits() {
+    /* Everything this map owes a credit to, in one list.
+
+       Two things feed it. The atlas's own sources are settled when it is built
+       and arrive in the manifest. A layer's are not: a layer made by joining
+       rows to borrowed shapes only knows whose shapes it borrowed once the join
+       has happened, and a layer added later has no build step at all to record
+       it. So a layer may carry its own credits, and they are folded in here.
+
+       Deduplicated by name, first mention wins, because the same register can
+       reach the page twice — once as a source the atlas was built from and
+       again as the origin of a shape somebody's data joined to. */
+    var sources = (MANIFEST.attributions || []).slice();
+    var already = {};
+    sources.forEach(function (a) { already[String(a.name).toLowerCase()] = true; });
+    (MANIFEST.layers || []).forEach(function (L) {
+      (L.credits || []).forEach(function (a) {
+        var k = String(a && a.name || "").toLowerCase();
+        if (!k || already[k]) return;
+        already[k] = true;
+        sources.push(a);
+      });
+    });
+
     var box = $("#data-credits");
-    if (box && MANIFEST.attributions) {
-      box.innerHTML = MANIFEST.attributions.map(function (a) {
+    if (box && sources.length) {
+      box.innerHTML = sources.map(function (a) {
         var name = a.url ? '<a href="' + esc(a.url) + '" target="_blank" rel="noopener">' + esc(a.name) + "</a>" : esc(a.name);
         return '<li><span class="cr-name">' + name + "</span>" +
           (a.note ? '<span class="cr-note">' + esc(a.note) + "</span>" : "") +
@@ -4645,11 +4668,21 @@
        a database. Saying so, and pointing at the file, is what the licence
        asks and costs one line. Nothing is said on an atlas that has no such
        layer, because a notice about data you do not carry is noise. */
-    var osmLayers = (MANIFEST.layers || []).filter(function (L) {
-      return /openstreetmap/i.test(String(L.attribution || ""));
+    /* Layers only — never the merged list. The basemap is OpenStreetMap too,
+       and it is in that list on every atlas ever built. But showing somebody
+       else's map underneath yours is not redistributing their database, and a
+       notice that appears on every map regardless of what it carries tells a
+       reader nothing. What triggers this is a layer whose SHAPES came from
+       OpenStreetMap: a boundary file built from it, or somebody's own data
+       joined to an outline borrowed from it. */
+    var usesOsm = (MANIFEST.layers || []).some(function (L) {
+      if (/openstreetmap/i.test(String(L.attribution || ""))) return true;
+      return (L.credits || []).some(function (a) {
+        return /openstreetmap/i.test(String(a && a.name || ""));
+      });
     });
     var odbl = $("#odbl-note");
-    if (odbl && osmLayers.length) {
+    if (odbl && usesOsm) {
       odbl.hidden = false;
       odbl.innerHTML = "Boundary data from OpenStreetMap on this map is available under the " +
         '<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">' +

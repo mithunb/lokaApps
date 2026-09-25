@@ -57,8 +57,21 @@ def _from_file(entry):
     path = os.path.join(SHIPPED, entry["id"])
     with open(path, encoding="utf-8") as fh:
         doc = json.load(fh)
+    feats = doc.get("features", [])
     want = entry.get("feature") or entry["name"]
-    for f in doc.get("features", []):
+    # Where in the file it sits, when the list knows. Four names in the reserve
+    # register belong to more than one place — two national parks called Rajiv
+    # Gandhi, a sanctuary listed once per state it runs through — so searching
+    # by name alone always returned the first and the others could never be
+    # drawn. The position is checked against the name before it is trusted, so
+    # a list written against an older copy of the file falls back to searching
+    # rather than fetching the wrong shape.
+    at = entry.get("at")
+    if isinstance(at, int) and 0 <= at < len(feats):
+        f = feats[at]
+        if str(f.get("properties", {}).get("name", "")).strip() == want:
+            return f.get("geometry")
+    for f in feats:
         if str(f.get("properties", {}).get("name", "")).strip() == want:
             return f.get("geometry")
     return None
@@ -132,6 +145,10 @@ def collect(bbox, cache_dir):
             "aliases": entry.get("aliases") or [],
             "kind": entry.get("kind") or "place",
             "state": entry.get("state"),
+            # Who to credit, under what licence, and which source row says so.
+            # The first two are what a reader has to be shown; the third is how
+            # the recipe finds the source's link without guessing at the name.
+            "source": entry.get("source"),
             "credit": entry.get("credit"),
             "licence": entry.get("licence"),
         }, "geometry": g})

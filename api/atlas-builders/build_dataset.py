@@ -264,6 +264,18 @@ def main():
                 continue
             seen.add(nm)
             attributions.append({"name": nm, **SOURCE_ATTRIBUTIONS.get(nm, {})})
+    # A recipe whose sources are not fixed in advance reports what it used, and
+    # those rows join the list. Named places is the case: which registers it
+    # draws on depends on what happens to lie inside this particular region, so
+    # no static table could know. Until this ran, the shapes were on the map and
+    # the people who published them appeared nowhere on the page.
+    for lyr in layers:
+        for row in (lyr.get("credits") or []):
+            nm = row.get("name")
+            if not nm or nm in seen:
+                continue
+            seen.add(nm)
+            attributions.append(row)
     attributions.extend(BASE_ATTRIBUTIONS)
 
     branding = dict(spec.get("branding") or {})

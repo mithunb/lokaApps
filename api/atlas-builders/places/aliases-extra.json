@@ -2,22 +2,57 @@
   "comment": "Names a rule cannot derive. Generated aliases cover what a designation earns — 'Bor' + Sanctuary gives 'Bor Wildlife Sanctuary', 'Bor WLS'. They cannot invent an abbreviation nobody could guess from the stem, or the spelling a different agency uses. Those are written here by hand, keyed on the official name. Deliberately NOT bare initialisms: 'BRT' on its own is also bus rapid transit, and a three-letter token loose in a sentence is exactly how the fuzzy matching this replaces went wrong.",
   "aliases": {
     "Biligiri Rangaswami Temple Wildlife Sanctuary": [
-      "BRT Tiger Reserve", "BRT Wildlife Sanctuary", "B.R.T. Wildlife Sanctuary",
+      "BRT Tiger Reserve",
+      "BRT Wildlife Sanctuary",
+      "B.R.T. Wildlife Sanctuary",
       "Biligiri Ranganatha Swamy Temple Wildlife Sanctuary",
       "Biligiriranga Swamy Temple Wildlife Sanctuary",
       "Biligiri Rangaswamy Temple Wildlife Sanctuary"
     ],
     "Nagzira Wildlife Sanctuary": [
-      "Nawegaon-Nagzira Tiger Reserve", "Navegaon Nagzira Tiger Reserve", "Nagzira Tiger Reserve"
+      "Nawegaon-Nagzira Tiger Reserve",
+      "Navegaon Nagzira Tiger Reserve",
+      "Nagzira Tiger Reserve"
     ],
     "Tadoba National Park": [
-      "Tadoba Andhari Tiger Reserve", "Tadoba Andhari National Park", "Tadoba-Andhari Tiger Reserve"
+      "Tadoba Andhari Tiger Reserve",
+      "Tadoba Andhari National Park",
+      "Tadoba-Andhari Tiger Reserve"
     ],
-    "Corbett National Park": ["Jim Corbett National Park", "Corbett Tiger Reserve"],
-    "Nagarahole National Park": ["Nagarhole National Park", "Rajiv Gandhi National Park", "Nagarhole Tiger Reserve"],
-    "Kanha National Park": ["Kanha Tiger Reserve", "Kanha-Kisli National Park"],
-    "Periyar Wildlife Sanctuary": ["Periyar Tiger Reserve", "Periyar National Park"],
-    "Bandipur National Park": ["Bandipur Tiger Reserve"],
-    "Mudumalai National Park": ["Mudumalai Tiger Reserve", "Mudumalai Wildlife Sanctuary"]
+    "Corbett National Park": [
+      "Jim Corbett National Park",
+      "Corbett Tiger Reserve"
+    ],
+    "Kanha National Park": [
+      "Kanha Tiger Reserve",
+      "Kanha-Kisli National Park"
+    ],
+    "Periyar Wildlife Sanctuary": [
+      "Periyar Tiger Reserve",
+      "Periyar National Park"
+    ],
+    "Bandipur National Park": [
+      "Bandipur Tiger Reserve"
+    ],
+    "Mudumalai National Park": [
+      "Mudumalai Tiger Reserve",
+      "Mudumalai Wildlife Sanctuary"
+    ],
+    "Eastern Ghats": [
+      "Eastern Ghat",
+      "Purva Ghat"
+    ],
+    "Western Ghats": [
+      "Sahyadri",
+      "Sahyadri Range",
+      "Sahyadris",
+      "Western Ghat"
+    ],
+    "Rajiv Gandhi National Park (Karnataka)": [
+      "Nagarahole National Park",
+      "Nagarhole National Park",
+      "Nagarahole Tiger Reserve",
+      "Nagarhole Tiger Reserve"
+    ]
   }
 }

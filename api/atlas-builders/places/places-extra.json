@@ -1,0 +1,24 @@
+{
+  "comment": "Places that are in none of the shipped files, written by hand. Each names a source in build_places_index.py's SOURCES table and an id that source understands, and its shape is fetched one at a time when a build asks for it. Keep this short: a place that belongs to a published register belongs in that register's file, not here.",
+  "places": [
+    {
+      "name": "Jeevan Bhima Nagar",
+      "aliases": ["Jeevan Bhimanagar", "Jeevanbhima Nagar", "Jeevan Bheema Nagar"],
+      "kind": "ward",
+      "state": "Karnataka",
+      "source": "osm",
+      "id": "R19883328",
+      "bbox": [77.64, 12.95, 77.68, 12.98],
+      "note": "a ward of Bengaluru, which is the nearest published boundary to the neighbourhood"
+    },
+    {
+      "name": "Beas Conservation Reserve",
+      "aliases": ["Beas River Conservation Reserve"],
+      "kind": "conservation reserve",
+      "state": "Punjab",
+      "source": "ramsar",
+      "id": "2408",
+      "bbox": [74.9, 31.2, 75.6, 31.9]
+    }
+  ]
+}

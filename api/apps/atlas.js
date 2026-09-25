@@ -2257,6 +2257,15 @@ function boundaryTargets(session, optionId) {
        to. The aliases come from the source at build time, never invented at
        match time, which is what keeps this from becoming fuzzy matching. */
     aliases: Array.isArray(f.properties.aliases) ? f.properties.aliases.map(String) : [],
+    /* Who published this shape, and on what terms. A row that borrows the
+       Western Ghats outline is drawing somebody else's work, and the layer it
+       lands in has to be able to say whose. Boundary files built from one
+       source carry nothing here and need nothing: the atlas already credits
+       that source once. It is the mixed file — ranges from one register,
+       reserves from another, a ward from a third — where the shape is the only
+       thing that knows. */
+    credit: f.properties.credit ? String(f.properties.credit) : '',
+    licence: f.properties.licence ? String(f.properties.licence) : '',
     geometry: f.geometry,
   }));
   return { opt, targets };
@@ -2662,6 +2671,10 @@ function transform(session) {
   const roles = rolesMap(session.columns);
   const report = { strategy, matched: 0, unmatched: [], ambiguous: [], outside: 0, total: rows.length };
   let feats = [];
+  // Sources whose shapes ended up in this layer, in the order they were first
+  // used. Only the ones actually drawn: a register that was searched and had
+  // nothing to offer is not owed a line on the page.
+  const borrowedFrom = new Map();
 
   if (strategy === 'geometry') {
     // spatial track: shapes came with the upload, side-file holds them
@@ -2806,6 +2819,9 @@ function transform(session) {
     }
     const placeOn = (target, rowIdx) => {
       const props = { ...rows[rowIdx], name: target.name };
+      if (target.credit && !borrowedFrom.has(target.credit)) {
+        borrowedFrom.set(target.credit, target.licence || '');
+      }
       feats.push({
         type: 'Feature', properties: props,
         geometry: wantAreas ? target.geometry : { type: 'Point', coordinates: centroidOf(target.geometry) },
@@ -2899,6 +2915,21 @@ function transform(session) {
       ? { ...f, geometry: { type: 'Point', coordinates: centroidOf(f.geometry) } } : f));
   }
   const frag = buildFragment(spec, feats, existingIds);
+  /* Pass the credit on to the layer itself.
+
+     A layer built by joining rows to borrowed shapes IS a use of those shapes,
+     and the page that shows it has to say so. Nothing did: the outline of the
+     Western Ghats was drawn from a mountain inventory and the inventory was
+     named nowhere a reader could see it. Worse for the OpenStreetMap case,
+     where the licence asks for more than a thank-you — the notice about it is
+     raised by finding OpenStreetMap among the credits, so a layer that kept
+     quiet about where its shapes came from suppressed the notice as well. */
+  if (borrowedFrom.size) {
+    frag.stanza.credits = [...borrowedFrom].map(([name, license]) => (
+      license ? { name, note: 'Shapes joined to this layer', license }
+              : { name, note: 'Shapes joined to this layer' }));
+    frag.stanza.attribution = [...borrowedFrom.keys()].join('; ');
+  }
   // derived properties (e.g. the primary-tag category key) must survive the whitelist
   (frag.derivedKeys || []).forEach((k) => keep.add(k));
   /* The picture column, kept as plain addresses before anything is cut.
