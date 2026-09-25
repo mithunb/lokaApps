@@ -1384,7 +1384,14 @@ router.get('/instances/:slug', (req, res) => {
      Only the PUBLIC datasets folder is consulted, so this says nothing about
      whether a private atlas exists — the 404 below still guards that. */
   if (!inst) {
-    if (reg.validSlug(slug) && fs.existsSync(path.join(DATASETS_ROOT, slug, 'manifest.json'))) {
+    /* A plain slug and nothing else, so it cannot walk out of the folder.
+
+       Deliberately NOT validSlug: that answers "may somebody claim this
+       address", and the reference atlas's address is on the reserved list
+       precisely because it is already taken — so the one dataset this was
+       written for was the one it turned away. */
+    const plain = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(slug);
+    if (plain && fs.existsSync(path.join(DATASETS_ROOT, slug, 'manifest.json'))) {
       return res.json({ slug, canEdit: false, registered: false });
     }
     return res.status(404).json({ error: 'not found' });

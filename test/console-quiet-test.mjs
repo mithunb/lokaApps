@@ -25,7 +25,12 @@ check('a dataset on disk with no registry entry answers plainly',
   /return res\.json\(\{ slug, canEdit: false, registered: false \}\);/.test(server), true);
 check('and it must really be on disk to say so',
   /fs\.existsSync\(path\.join\(DATASETS_ROOT, slug, 'manifest\.json'\)\)/.test(server), true);
-check('under a slug that is a slug at all', /reg\.validSlug\(slug\) &&/.test(server), true);
+check('under a plain slug that cannot walk out of the folder',
+  /const plain = \/\^\[a-z0-9\]\[a-z0-9-\]\{1,38\}\[a-z0-9\]\$\/\.test\(slug\);/.test(server), true);
+/* validSlug answers "may somebody CLAIM this address". The reference atlas's
+   address is reserved because it is already taken, so asking that question
+   turned away the very dataset this was written for — measured live. */
+check('and not by asking whether the address is free', /reg\.validSlug\(slug\) &&/.test(server), false);
 /* PRIVATE_ROOT is deliberately not consulted: whether a private atlas exists
    is exactly what the remaining 404 is there to withhold. */
 check('the private folder is not consulted here',
