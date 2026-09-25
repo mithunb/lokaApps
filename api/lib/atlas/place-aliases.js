@@ -39,6 +39,8 @@ const GROUPS = [
   ['Prayagraj', 'Allahabad'],
   ['Varanasi', 'Benares'],
   ['Gurugram', 'Gurgaon'],
+  // districts under a former or colloquial name people still write
+  ['Kodagu', 'Coorg'],
   // states & union territories (Puduchcheri is geoBoundaries' own ADM3/4 variant)
   ['Puducherry', 'Puduchcheri', 'Pondicherry'],
   ['Odisha', 'Orissa'],
