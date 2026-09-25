@@ -90,7 +90,7 @@ echo "==> Configuring pm2 to start on boot"
 env PATH="$PATH:/usr/bin" pm2 startup systemd -u "${OWNER}" --hp "${OWNER_HOME}" >/dev/null
 
 echo "==> Enabling Apache proxy modules"
-a2enmod proxy proxy_http >/dev/null
+a2enmod proxy proxy_http deflate >/dev/null
 
 echo
 echo "Add to your loka.place <VirtualHost> blocks (80 and 443):"

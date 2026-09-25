@@ -458,6 +458,27 @@ async function knownNames(iso3, avail) {
   return set;
 }
 
+/* How many units one atlas may cover, and why saying so matters.
+
+   The cap is real work rather than a whim: every unit is a polygon fetched,
+   clipped, simplified and written, and the whole build is killed at ten
+   minutes. But it used to be applied with `.slice(0, 100)` in three places,
+   which silently built a DIFFERENT atlas from the one somebody asked for —
+   a file naming a hundred and fifty districts produced a hundred, and nothing
+   anywhere said which fifty were gone. Dropping somebody's own choices
+   without a word is worse than refusing.
+
+   So it refuses, and says the number, because the person can act on that:
+   take some out, or pick a coarser level where fewer units cover the same
+   ground. */
+const MAX_REGION_UNITS = 100;
+function tooManyUnits(ids) {
+  return ids.length > MAX_REGION_UNITS
+    ? 'That is ' + ids.length + ' places, and an atlas can cover ' + MAX_REGION_UNITS + '. ' +
+      'Take some out, or pick a coarser level \u2014 one state covers the ground of thirty districts.'
+    : '';
+}
+
 const MAX_NAME_COLUMNS = 4;      // more than this and we are guessing, not choosing
 const SCREEN_ROWS = 400;         // a sample is enough to tell two columns apart
 const ONE_PLACE = [true];        // stands in for "yes, something is named here"
@@ -1068,10 +1089,12 @@ router.post('/instances', async (req, res) => {
   const r = b.region || {};
   const iso3 = String(r.iso3 || '').toUpperCase();
   const level = Number(r.level) || 1;
-  const shapeIDs = Array.isArray(r.shapeIDs) ? r.shapeIDs.map(String).slice(0, 100) : [];
+  const shapeIDs = Array.isArray(r.shapeIDs) ? r.shapeIDs.map(String) : [];
   if (!/^[A-Z]{3}$/.test(iso3) || !shapeIDs.length) {
     return res.status(400).json({ error: 'region (iso3 + shapeIDs) is required' });
   }
+  const tooMany = tooManyUnits(shapeIDs);
+  if (tooMany) return res.status(400).json({ error: tooMany, tooManyUnits: shapeIDs.length });
   let regionDoc;
   try {
     regionDoc = await loadAdmin(iso3, level);
@@ -1601,9 +1624,11 @@ router.post('/instances/:slug/rebuild', async (req, res) => {
   const b = req.body || {};
   const r = b.region;
   const useR = (r && r.iso3 && Array.isArray(r.shapeIDs) && r.shapeIDs.length)
-    ? { iso3: String(r.iso3).toUpperCase(), level: Number(r.level) || 1, shapeIDs: r.shapeIDs.map(String).slice(0, 100) }
+    ? { iso3: String(r.iso3).toUpperCase(), level: Number(r.level) || 1, shapeIDs: r.shapeIDs.map(String) }
     : { iso3: inst.region.iso3, level: inst.region.level, shapeIDs: inst.region.shapeIDs };
   if (!/^[A-Z]{3}$/.test(useR.iso3) || !useR.shapeIDs.length) return res.status(400).json({ error: 'region is required' });
+  const tooManyNow = tooManyUnits(useR.shapeIDs);
+  if (tooManyNow) return res.status(400).json({ error: tooManyNow, tooManyUnits: useR.shapeIDs.length });
 
   let regionDoc;
   try { regionDoc = await loadAdmin(useR.iso3, useR.level); } catch (e) { return res.status(502).json({ error: 'boundary source unavailable: ' + e.message }); }
@@ -2820,10 +2845,12 @@ async function ingestLayer(b, who) {
   const pendingRegion = (!dataset && b.region && b.region.iso3) ? {
     iso3: String(b.region.iso3).toUpperCase(),
     level: Number(b.region.level) || 1,
-    shapeIDs: (Array.isArray(b.region.shapeIDs) ? b.region.shapeIDs : []).map(String).slice(0, 100),
+    shapeIDs: (Array.isArray(b.region.shapeIDs) ? b.region.shapeIDs : []).map(String),
     bbox: Array.isArray(b.region.bbox) && b.region.bbox.length === 4 ? b.region.bbox.map(Number) : null,
   } : null;
   if (pendingRegion) {
+    const tooManyHere = tooManyUnits(pendingRegion.shapeIDs);
+    if (tooManyHere) return res.status(400).json({ error: tooManyHere, tooManyUnits: pendingRegion.shapeIDs.length });
     // no instance to authorise against yet — building requires a session, so
     // that (or the admin token) is the gate
     if (who !== 'server' && !auth.sessionFromReq(who) && !auth.isAdmin(who)) {

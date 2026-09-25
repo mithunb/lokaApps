@@ -112,9 +112,38 @@ def bbi(row, b):
                 float(row["ymax"]) < b[1] or float(row["ymin"]) > b[3])
 
 
+# Six decimal places is about 11 cm of latitude. The finest zoom this product
+# ever sets is 19, where one pixel is 28 cm on the ground, so a rounded vertex
+# can never land anywhere a reader could see — and the outlines have already
+# been simplified at 0.0007 degrees, about 78 metres, long before they get
+# here. Seven decimals was writing centimetre precision onto a 78-metre shape.
+#
+# Five would save more again (0.83 MB against 0.97 on a 228-district file) but
+# its 1.1 m grid is four pixels at zoom 19, which is arguable rather than
+# provable. This is the precision that needs no argument.
+COORD_DP = 6
+
+
+def _round_coords(o):
+    if isinstance(o, float):
+        return round(o, COORD_DP)
+    if isinstance(o, list):
+        return [_round_coords(x) for x in o]
+    if isinstance(o, tuple):
+        return tuple(_round_coords(x) for x in o)
+    return o
+
+
 def write_geojson(out_dir, name, feats):
     p = os.path.join(out_dir, name)
-    json.dump({"type": "FeatureCollection", "features": feats}, open(p, "w"))
+    for f in feats:
+        g = f.get("geometry") if isinstance(f, dict) else None
+        if g and "coordinates" in g:
+            g["coordinates"] = _round_coords(g["coordinates"])
+    # separators: the default writes ", " between every number, which on a
+    # boundary file is a megabyte of spaces
+    json.dump({"type": "FeatureCollection", "features": feats}, open(p, "w"),
+              separators=(",", ":"))
     return p
 
 
