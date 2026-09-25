@@ -24,7 +24,13 @@ function check(label, got, want) {
 }
 
 console.log('\n  the index holds names and ids, never shapes');
-check('it is small enough to read', fs.statSync(ROOT + '/api/atlas-builders/places/index.json').size < 20000, true);
+/* The point is not that the index is tiny, it is that it is text: 709 places
+   in 388 KB of names against 2.5 MB of the shapes it points at, and the shapes
+   are fetched only when a region reaches them. */
+const idxBytes = fs.statSync(ROOT + '/api/atlas-builders/places/index.json').size;
+const shapeBytes = fs.statSync(ROOT + '/api/atlas-builders/places/ranges-IND.geojson').size +
+                   fs.statSync(ROOT + '/api/atlas-builders/places/reserves-IND.geojson').size;
+check('the index is a fraction of the shapes it points at', idxBytes < shapeBytes / 3, true);
 check('no geometry anywhere in it', /"coordinates"/.test(JSON.stringify(idx)), false);
 check('every place says where its shape comes from',
   idx.places.every((p) => p.source && p.id && idx.sources[p.source]), true);
@@ -35,9 +41,35 @@ check('and a credit and a licence', idx.places.every((p) => p.credit && p.licenc
 check('every id is an id, not a name',
   idx.places.every((p) => p.source !== 'osm' || /^[NWR]\d+$/.test(p.id)), true);
 
-console.log('\n  the five places Mithun named are in it');
+console.log('\n  the five places Mithun named are reachable by the name he wrote');
+/* Reachable by NAME OR ALIAS, which is the point: the official name of BRT is
+   four words longer than anything anybody writes, and the index carries both. */
+const reaches = (n) => idx.places.some((p) => p.name === n || (p.aliases || []).includes(n));
 ['Western Ghats', 'Eastern Ghats', 'BRT Tiger Reserve', 'Jeevan Bhima Nagar', 'Beas Conservation Reserve']
-  .forEach((n) => check(n, idx.places.some((p) => p.name === n), true));
+  .forEach((n) => check(n, reaches(n), true));
+check('and BRT is filed under its official name', idx.places.some((p) =>
+  p.name === 'Biligiri Rangaswami Temple Wildlife Sanctuary'), true);
+
+console.log('\n  and the index is now the whole national list');
+check('705 protected areas plus the rest', idx.places.length > 700, true);
+check('still no geometry in it', /"coordinates"/.test(JSON.stringify(idx)), false);
+/* every reserve gets the names its own designation earns, never the bare stem —
+   "Bor" alone finds a sanctuary in the wrong state */
+const bor = idx.places.find((p) => p.name === 'Bor Wildlife Sanctuary');
+check('a reserve carries its designation variants', !!bor && bor.aliases.includes('Bor WLS'), true);
+check('and never its bare stem', !!bor && !bor.aliases.includes('Bor'), true);
+
+console.log('\n  and the names a rule could never derive are written by hand');
+/* "BRT" cannot be generated from "Biligiri Rangaswami Temple", and nobody
+   writes the official name. */
+const brt = idx.places.find((p) => p.name === 'Biligiri Rangaswami Temple Wildlife Sanctuary');
+check('BRT reaches the sanctuary', !!brt && brt.aliases.includes('BRT Tiger Reserve'), true);
+check('so does the dotted spelling', !!brt && brt.aliases.includes('B.R.T. Wildlife Sanctuary'), true);
+/* deliberately not the bare initialism: BRT is also bus rapid transit */
+check('but the bare initialism is not an alias', !!brt && !brt.aliases.includes('BRT'), true);
+const extra = JSON.parse(fs.readFileSync(ROOT + '/api/atlas-builders/places/aliases-extra.json', 'utf8'));
+check('the hand-written ones are kept apart from the generated ones',
+  Object.keys(extra.aliases).length > 5, true);
 
 console.log('\n  the ranges ship with the atlas, because there is no per-range service');
 check('India’s ranges are one committed file', ranges.features.length > 100, true);
