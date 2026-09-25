@@ -1369,8 +1369,26 @@ router.get('/instances', (_req, res) => {
 });
 
 router.get('/instances/:slug', (req, res) => {
-  const inst = reg.getInstance(String(req.params.slug));
-  if (!inst) return res.status(404).json({ error: 'not found' });
+  const slug = String(req.params.slug);
+  const inst = reg.getInstance(slug);
+  /* A dataset can exist on disk and have no registry entry. The reference
+     atlas is one — it was built before the registry existed — and so is any
+     folder put there by hand.
+
+     The viewer asks this route one question on every load: may the person
+     looking at this edit it? For those datasets the answer is plainly "no",
+     and "no" is not the same as "there is no such thing". Answering 404 made
+     every visit to the reference atlas log a failed request in the console,
+     which JavaScript cannot suppress and which buries the errors that matter.
+
+     Only the PUBLIC datasets folder is consulted, so this says nothing about
+     whether a private atlas exists — the 404 below still guards that. */
+  if (!inst) {
+    if (reg.validSlug(slug) && fs.existsSync(path.join(DATASETS_ROOT, slug, 'manifest.json'))) {
+      return res.json({ slug, canEdit: false, registered: false });
+    }
+    return res.status(404).json({ error: 'not found' });
+  }
   const role = callerRole(req, inst);
   if (role) {
     const { tokenHash, viewKeyHash, spec, ...rest } = inst;

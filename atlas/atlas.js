@@ -322,6 +322,30 @@
     window.__map = map;   // debug hook
     map.on("error", function (e) { console.error("Atlas map error:", e && e.error && e.error.message); });
 
+    /* An image the style asks for and its own sprite does not have.
+
+       The base map style is somebody else's, fetched and merged, and one of its
+       layers builds a road-shield name by joining "road_" to a road's shield
+       number: ["concat", "road_", ["get", "ref_length"]]. A road with no number
+       makes the name "road_", and the sprite has road_1 to road_6 and nothing
+       called road_. Nothing of ours is missing and nothing fails to draw — the
+       shield is simply not painted, which is right for a road with no number.
+
+       Left alone it warns once per feature, and a third party filling the
+       console is how our own faults get missed. So the blank is supplied, and
+       each NAME is said once rather than silenced: a missing image that really
+       is ours must still be visible. */
+    var blanked = {};
+    map.on("styleimagemissing", function (e) {
+      var id = e && e.id;
+      if (!id || map.hasImage(id)) return;
+      map.addImage(id, { width: 1, height: 1, data: new Uint8Array(4) });
+      if (blanked[id]) return;
+      blanked[id] = true;
+      console.info('Atlas: the base map asked for an image called "' + id +
+        '" that its sprite does not have — drawn blank.');
+    });
+
     // The layers panel and credits are plain DOM built from the manifest — they
     // must never wait on the basemap. On a slow tile fetch (or a throttled
     // iframe) the map's "load" can be seconds away, and the atlas looked empty:
