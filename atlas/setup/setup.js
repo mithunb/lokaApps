@@ -20,7 +20,7 @@
     me: null,
     // chosen holds the boundary-data name (what we build with) and the label
     // the person recognised (what we show them) — see the alias note in step 2
-    chosen: [], iso3: "", level: 2, catalog: null, picked: {},
+    chosen: [], iso3: "", level: 2, catalog: null, picked: {}, worldwide: false,
     slug: "", jobId: "",
   };
 
@@ -436,6 +436,8 @@
   });
 
   function add(p, label) {
+    // choosing a place by hand says this atlas is of somewhere after all
+    S.worldwide = false;
     if (!has(p.id)) {
       S.chosen.push({ id: p.id, name: p.name, label: label || p.name, level: p.level, bbox: p.bbox });
       // Every unit in one build has to come from one admin level — the API
@@ -473,7 +475,14 @@
       };
       host.appendChild(el);
     });
-    $("#chips-empty").hidden = S.chosen.length > 0;
+    var empty = $("#chips-empty");
+    empty.hidden = S.chosen.length > 0 || S.worldwide;
+    if (S.worldwide) {
+      empty.hidden = false;
+      empty.textContent = "Worldwide — your data is not in one country, so no places are needed.";
+    } else if (!S.chosen.length) {
+      empty.textContent = "No places yet. Search above to add one.";
+    }
     paintFileBlock();      // the file's places live there, and its counts move with them
     // name the chosen place at the field as well as in the chips: a label reading
     // only "Place" beside an empty box made a finished step look untouched
@@ -484,6 +493,13 @@
         : S.chosen[0].label + " +" + (S.chosen.length - 1) + " more";
     }
     var v = $("#verdict");
+    // an atlas of data that is not in one country covers the world, and is as
+    // ready to build as any other
+    if (S.worldwide) {
+      v.hidden = false;
+      v.textContent = "Your atlas will cover the whole world and open on your own places. Ready to build.";
+      return;
+    }
     if (!S.chosen.length) { v.hidden = true; return; }
     v.hidden = false;
     v.textContent = "Your atlas will cover " + S.chosen.map(function (c) { return c.label; }).join(", ") +
@@ -806,7 +822,32 @@
     return out;
   }
 
+  /* The data turned out not to be of one country.
+
+     No question is asked about this, because there is nothing to decide: a
+     record of sightings across four countries HAS no country, and an atlas of
+     it has no region. The wizard says what it found and carries on — the open
+     data step will then offer almost nothing, which is the truthful answer at
+     that width rather than a second thing to choose. */
+  function goWorldwide(d, file, rows) {
+    S.worldwide = true;
+    S.chosen = [];
+    paintChips();
+    var why = d && d.shareInside != null
+      ? "Only " + Math.round(d.shareInside * 100) + "% of your places are in " +
+        ($("#country").selectedOptions[0] || {}).textContent + "."
+      : (d && (d.outsideNames || []).length
+          ? "Some of your places are elsewhere (" + d.outsideNames.slice(0, 3).join(", ") + ")."
+          : "");
+    msg(2, why + " This data is not of one country, so the atlas will cover the whole world " +
+      "and open on your own places. Base layers built from open data need a region, so there " +
+      "will be very few to choose from.", "ok");
+    showFileCard(file.name, rows + " rows \u00b7 worldwide");
+    syncRungs();
+  }
+
   function applyInferred(d, file, rows, fromPoints) {
+    if (d && d.worldwide) { goWorldwide(d, file, rows); return; }
     /* Which column was read is part of the answer, and when nothing is found it
        is the WHOLE answer: "no places found" sent somebody hunting for a fault
        in their data when the page had simply read the wrong column. */
@@ -1023,6 +1064,7 @@
   /* The box around the places chosen so far, in square degrees — the same
      number the server works the region's size out from. */
   function chosenAreaDeg2() {
+    if (S.worldwide) return 360 * 170;      // the world, so the catalogue answers for it
     var b = chosenBbox();
     return (b && b.length === 4) ? (b[2] - b[0]) * (b[3] - b[1]) : 0;
   }
@@ -1141,7 +1183,7 @@
         org: $("#f-org").value.trim(),
         subtitle: $("#f-desc").value.trim(),
         branding: { orgName: $("#f-org").value.trim() },
-        region: {
+        region: S.worldwide ? { worldwide: true } : {
           iso3: S.iso3,
           level: S.level,
           shapeIDs: S.chosen.map(function (c) { return c.id; }),

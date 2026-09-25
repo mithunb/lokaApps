@@ -584,6 +584,21 @@ router.post('/geo/infer', async (req, res) => {
     let avail;
     try { avail = JSON.parse(fs.readFileSync(path.join(GEOCACHE_DIR, `${iso3}-levels.json`), 'utf8')).levels; }
     catch { avail = [1, 2, 3, 4]; }
+    /* Does this data belong to the country it was filed under at all?
+
+       Answered here, from the data, because nobody should have to be asked. A
+       set of sightings across four countries is not a person failing to pick
+       the right one — it is an atlas with no country, and the wizard can be
+       told that rather than made to ask. */
+    if (points.length) {
+      const inside = await shareInsideCountry(iso3, points);
+      if (inside < 0.5) {
+        return res.json({ iso3, mode: 'points', worldwide: true,
+                          shareInside: Number(inside.toFixed(2)),
+                          rows: points.length, matchedRows: 0, units: [], level: null,
+                          bbox: null, coverage: 0, parents: [], ancestors: [] });
+      }
+    }
     let r = null, mode = null, chosen = null;
     if (points.length) { r = await inferRegionFromPoints(iso3, points, avail); mode = 'points'; }
     else {
@@ -603,6 +618,14 @@ router.post('/geo/infer', async (req, res) => {
                         outsideRows: (r && r.outsideRows) || 0,
                         outsideNames: (r && r.outsideNames) || [],
                         parents: [], ancestors: [] });
+    }
+    /* The same question asked of names. More rows naming somewhere else than
+       places inside here means the data is not of this country either. */
+    if (mode === 'names' && (r.outsideRows || 0) > (r.matchedRows || 0)) {
+      return res.json({ iso3, mode, column, worldwide: true,
+                        outsideNames: r.outsideNames || [],
+                        rows: r.rows, matchedRows: 0, units: [], level: null,
+                        bbox: null, coverage: 0, parents: [], ancestors: [] });
     }
     const parents = await parentUnitsOf(iso3, r.level, r.units);
     const ancestors = await ancestorChainOf(iso3, r.level, r.units);
@@ -989,6 +1012,29 @@ async function resolveCountryFromPoints(points) {
     if (coverage >= 0.9) break;   // confident — skip the remaining candidates
   }
   return best && best.coverage >= 0.5 ? best.iso3 : null;
+}
+
+/* How much of this data actually sits inside the country it was filed under.
+
+   The wizard always sends a country, because one is always picked — India by
+   default — so nothing ever asked whether the data agreed. A record of where
+   something was sighted does not agree: half its points are somewhere else,
+   and the honest answer is that this atlas has no country, not that the person
+   should choose a better one.
+
+   Sampled rather than exhaustive: fifty points settle this, and the question is
+   "most of them or not", never a precise fraction. */
+async function shareInsideCountry(iso3, points) {
+  const sample = points.slice(0, 50);
+  if (!sample.length) return 1;
+  let doc; try { doc = await loadAdmin(iso3, 1); } catch { return 1; }
+  const feats = doc.features || [];
+  let inside = 0;
+  for (const [x, y] of sample) {
+    if (feats.some((f) => f.bbox && x >= f.bbox[0] && x <= f.bbox[2] &&
+        y >= f.bbox[1] && y <= f.bbox[3] && pointInGeom(x, y, f.geometry))) inside++;
+  }
+  return inside / sample.length;
 }
 
 // Immediate parents (level-1 up) of the inferred units — lets the wizard's

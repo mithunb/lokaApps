@@ -73,5 +73,24 @@ check('the world is not padded past its own edges',
 check('and it opens zoomed out, not into the Atlantic', /floor = 1\.0 if span > 180 else 5\.5/.test(build), true);
 check('the manifest says so', /"worldwide": True\} if spec\["region"\]\.get\("worldwide"\)/.test(build), true);
 
+console.log('\n  and nobody is asked about it');
+/* The wizard always sends a country, because one is always picked — India by
+   default — so nothing ever asked whether the data agreed. */
+check('the server asks how much of the data is even in that country',
+  /async function shareInsideCountry\(iso3, points\)/.test(server), true);
+check('and answers worldwide when most of it is not',
+  /if \(inside < 0\.5\) \{\n\s*return res\.json\(\{ iso3, mode: 'points', worldwide: true,/.test(server), true);
+check('the same question is asked of names',
+  /if \(mode === 'names' && \(r\.outsideRows \|\| 0\) > \(r\.matchedRows \|\| 0\)\)/.test(server), true);
+check('the wizard acts on it without asking anything', /if \(d && d\.worldwide\) \{ goWorldwide\(d, file, rows\); return; \}/.test(setup), true);
+check('and says what it found and why', /This data is not of one country, so the atlas will cover the whole world/.test(setup), true);
+check('it warns that open data needs a region', /Base layers built from open data need a region/.test(setup), true);
+check('the region step counts as answered', /Your atlas will cover the whole world and open on your own places\. Ready to build\./.test(setup), true);
+check('the catalogue is asked about the world', /if \(S\.worldwide\) return 360 \* 170;/.test(setup), true);
+check('and the build sends no region', /region: S\.worldwide \? \{ worldwide: true \} :/.test(setup), true);
+/* picking a place by hand is the one thing that overrides it, because it says
+   the atlas is of somewhere after all */
+check('choosing a place by hand undoes it', /\/\/ choosing a place by hand says this atlas is of somewhere after all\n\s*S\.worldwide = false;/.test(setup), true);
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
