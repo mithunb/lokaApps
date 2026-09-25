@@ -153,6 +153,10 @@
       color:var(--color-text-secondary); }
     .cat-row { display:flex; gap:.6rem; align-items:flex-start; padding:.6rem .9rem;
       border-top:1px solid var(--color-divider); cursor:pointer; }
+    /* a layer the region is too wide to build — shown, so you can see what
+       you would get by choosing a smaller region, but not offered */
+    .cat-row-off { opacity:.55; cursor:not-allowed; }
+    .cat-row-off input { cursor:not-allowed; }
     .cat-row input { margin-top:.2rem; width:1rem; height:1rem; accent-color:var(--color-moss); }
     .cat-row b { font-family:'Figtree',sans-serif; font-size:var(--t-ui); }
     .cat-row .src { display:block; font-size:var(--t-meta); color:var(--color-text-muted); max-width:60ch; }

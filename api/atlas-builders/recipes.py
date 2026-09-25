@@ -22,6 +22,7 @@ from shapely.geometry import shape, mapping, LineString
 from shapely.ops import unary_union
 
 from common import (
+    simplify_for,
     R2, UA, WORLDCOVER, bbi, fetch_cached, fetch_wcs_array, progress,
     read_cog_window, warn, write_geojson, worldcover_tiles,
 )
@@ -97,13 +98,14 @@ def _admin_geoboundaries(ctx):
     path = fetch_cached(url, ctx["cache"], name=f"gb-{ctx['spec']['region']['iso3']}-ADM{ctx['spec']['region']['level']}.geojson", step="admin")
     gj = json.load(open(path))
     want = set(ctx["spec"]["region"]["shapeIDs"])
+    tol = simplify_for(ctx["bbox"])
     feats = []
     for f in gj.get("features", []):
         p = f.get("properties", {})
         fid = p.get("shapeID") or p.get("shapeName")
         if fid not in want:
             continue
-        g = shape(f["geometry"]).buffer(0).simplify(0.0007, preserve_topology=True)
+        g = shape(f["geometry"]).buffer(0).simplify(tol, preserve_topology=True)
         feats.append({"type": "Feature", "properties": {
             "name": p.get("shapeName") or fid, "kind": "admin"}, "geometry": mapping(g)})
     progress("admin", 90, f"{len(feats)} units")
@@ -118,10 +120,11 @@ def _admin_lgd(ctx):
     path = fetch_cached(R2 + "admin/districts/LGD_Districts.geojson", ctx["cache"], step="admin")
     gj = json.load(open(path))
     sel = ctx["sel"]
+    tol = simplify_for(ctx["bbox"])
     feats = []
     for f, g in _pick_districts(gj["features"], sel, ctx.get("selParts")):
         p = f["properties"]
-        g = g.simplify(0.0007, preserve_topology=True)
+        g = g.simplify(tol, preserve_topology=True)
         name = str(p.get("dtname") or "").strip().title()
         feats.append({"type": "Feature", "properties": {
             "name": name, "kind": "admin", "dist_lgd": p.get("dist_lgd"),

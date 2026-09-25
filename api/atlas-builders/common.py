@@ -124,6 +124,39 @@ def bbi(row, b):
 COORD_DP = 6
 
 
+# One tolerance for every extent was the other half of the same mistake as
+# seven decimal places. 0.0007 degrees is about 78 metres, chosen for an atlas
+# a district or two wide; the same number over ten states keeps roughly fifteen
+# times the vertices that a view of ten states can draw, because a vertex you
+# cannot see still costs its bytes.
+#
+# So the tolerance follows the region. A map W degrees wide, shown in about a
+# thousand pixels, has W/1000 degrees to a pixel; simplifying at half of that
+# throws away only what lands inside a pixel it already shares. Anything under
+# about a degree and a half wide computes something finer than the floor and
+# gets the floor, so Cubbon Park and LOKA x Bengaluru are untouched; Deoria at
+# 1.47 degrees moves from 78 to 82 metres, which is nothing.
+#
+# Measured on all 785 Indian districts, 29 degrees wide, with the rounding
+# above already applied: 11.30 MB raw and 3.55 MB gzipped at the fixed
+# tolerance, against 1.13 MB and 0.35 MB at the scaled one.
+#
+# The outlines were never precise anyway: 78 metres is thirty-five pixels at
+# the finest zoom this product offers, so nobody has ever been reading these
+# shapes closely. This changes how coarse they are with the size of the thing
+# being looked at, which is the only reading that makes sense.
+SIMPLIFY_FLOOR = 0.0007
+
+
+def simplify_for(bbox, floor=SIMPLIFY_FLOOR):
+    """Degrees of tolerance for outlines drawn across this bounding box."""
+    try:
+        width = max(float(bbox[2]) - float(bbox[0]), float(bbox[3]) - float(bbox[1]))
+    except Exception:
+        return floor
+    return max(floor, width / 2000.0)
+
+
 def _round_coords(o):
     if isinstance(o, float):
         return round(o, COORD_DP)

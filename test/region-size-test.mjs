@@ -4,11 +4,11 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-/* How wide a region may be depends on what is being built in it. No network. */
+/* What can be built across a region, and what is simply not offered. No network. */
 import fs from 'node:fs';
 
 const server = fs.readFileSync(ROOT + '/api/apps/atlas.js', 'utf8');
-const recipes = fs.readFileSync(ROOT + '/api/atlas-builders/recipes.py', 'utf8');
+const setup = fs.readFileSync(ROOT + '/atlas/setup/setup.js', 'utf8');
 const cat = JSON.parse(fs.readFileSync(ROOT + '/atlas/setup/catalog.json', 'utf8'));
 const LAYERS = Array.isArray(cat) ? cat : (cat.layers || []);
 
@@ -17,11 +17,14 @@ const cut = (src, head, close) => {
   if (a < 0) throw new Error('not found: ' + head);
   return src.slice(a, src.indexOf(close, a + head.length) + close.length);
 };
-const { regionTooWide } = new Function('HARD_AREA_DEG2',
-  cut(server, '\nfunction regionTooWide(', '\n}\n') + '\n return { regionTooWide };')(40);
+const { layerSeconds, feasibleAt, feasibleLayers } = new Function('BUILD_BUDGET_S', 'EST_AT_DEG2',
+  cut(server, '\nfunction layerSeconds(', '\n}\n') +
+  cut(server, '\nfunction feasibleAt(', '\n}\n') +
+  cut(server, '\nfunction feasibleLayers(', '\n}\n') +
+  '\n return { layerSeconds, feasibleAt, feasibleLayers };')(9 * 60, 2);
 
 const allowed = new Map(LAYERS.map((l) => [l.id, l]));
-const wide = (area, ids) => regionTooWide(area, ids, allowed);
+const at = (area, ids) => feasibleLayers(ids, allowed, area);
 
 let pass = 0, fail = 0;
 function check(label, got, want) {
@@ -31,68 +34,58 @@ function check(label, got, want) {
     (ok ? '' : '\n        got  ' + JSON.stringify(got) + '\n        want ' + JSON.stringify(want)));
 }
 
-/* The ten states one survey named span 618 square degrees. The ceiling is 40. */
-console.log('\n  under the ceiling nothing is refused, whatever is being built');
-check('a district with terrain', wide(2, ['admin', 'terrain']), '');
-check('a district with everything', wide(39, LAYERS.map((l) => l.id)), '');
+console.log('\n  the atlas is never refused for being wide');
+/* Somebody with sightings across a subcontinent should get their map. What
+   cannot be built at that width is left out and named, not used as a reason
+   to say no. */
+check('the old refusal is gone', /regionTooWide/.test(server), false);
+check('and so are the two area thresholds it used',
+  /FREE_AREA_DEG2|HARD_AREA_DEG2/.test(server), false);
+check('markers and outlines go as wide as the markers do',
+  at(618, ['admin']).dropped, []);
+check('so do the other fixed-cost layers',
+  at(618, ['admin', 'labels', 'roads', 'buildings']).dropped, []);
 
-console.log('\n  over it, what is being built decides');
-/* This is the whole change: the gate used to run before the layer list was
-   read, so an atlas of India holding nothing but boundaries and somebody's own
-   places was refused on the same grounds as one holding terrain. */
-check('boundaries alone go as wide as they need', wide(618, ['admin']), '');
-check('and so do the other fixed-cost layers',
-  wide(618, ['admin', 'labels', 'roads', 'buildings']), '');
-check('terrain does not', /too wide for terrain/.test(wide(618, ['admin', 'terrain'])), true);
-check('and the refusal names it, not the region',
-  /terrain & elevation/.test(wide(618, ['admin', 'terrain'])), true);
-check('it says how to proceed',
-  /leave it out: boundaries and your own places have no such limit/.test(wide(618, ['admin', 'terrain'])), true);
-check('several are counted, not listed forever',
-  /forest cover & loss, terrain & elevation and 1 more/.test(wide(618, ['forest', 'terrain', 'lulc'])), true);
-check('two are both named', /and/.test(wide(618, ['forest', 'terrain'])), true);
+console.log('\n  what cannot be built at that width is dropped and named');
+check('terrain across ten states', at(618, ['admin', 'terrain']).dropped, ['terrain']);
+check('and it is named in words, not by id',
+  at(618, ['admin', 'terrain']).droppedLabels, ['Terrain & elevation']);
+check('several are all named',
+  at(618, ['forest', 'terrain', 'lulc']).droppedLabels.length, 3);
+check('the answer carries them', /droppedLayers: fit\.droppedLabels\.length \? fit\.droppedLabels : undefined/.test(server), true);
+check('and the wizard says so', /Too wide an area for " \+ r\.droppedLayers\.join/.test(setup), true);
 
-console.log('\n  not knowing means gated');
-check('a layer nobody recognises is still gated',
-  /too wide for something-new/.test(wide(618, ['admin', 'something-new'])), true);
-
-console.log('\n  the catalogue says which layers cost the same however wide the region');
-const fixed = LAYERS.filter((l) => l.fixedCost).map((l) => l.id);
-check('four of them, named', fixed, ['admin', 'labels', 'buildings', 'roads']);
-/* If the compulsory layer were gated, no wide atlas could ever be built and
-   the change would be pointless. */
-check('and the compulsory one is among them',
-  LAYERS.filter((l) => l.required).every((l) => l.fixedCost), true);
-
-console.log('\n  and none of them reads imagery');
-/* Drift protection: mark a raster layer fixedCost by mistake and a build that
-   reads imagery over a continent slips straight through. */
-const bodyOf = (name) => {
-  const m = recipes.indexOf('\ndef ' + name + '(');
-  if (m < 0) return '';
-  const nxt = recipes.indexOf('\ndef ', m + 5);
-  return recipes.slice(m, nxt > 0 ? nxt : recipes.length);
-};
-const readsImagery = (l) => {
-  let body = bodyOf(l.recipe);
-  for (const h of new Set(body.match(/\b_\w+(?=\()/g) || [])) body += bodyOf(h);
-  return /read_cog_window|_read_worldcover|rasterio/.test(body);
-};
-LAYERS.filter((l) => l.fixedCost).forEach((l) => {
-  check(l.id + ' builds no imagery', readsImagery(l), false);
-});
-/* and the ones that plainly do are plainly not marked */
-['terrain', 'forest', 'lulc', 'soil', 'rainfall'].forEach((id) => {
-  check(id + ' is gated', !!allowed.get(id) && !allowed.get(id).fixedCost, true);
+console.log('\n  a region the size of every atlas built so far loses nothing');
+/* Cubbon Park 0.4, LOKA x Bengaluru 0.4, Deoria 1.9, Tumakuru 2.5. */
+[0.4, 1.9, 2.5].forEach((a) => {
+  check(a + ' sq deg keeps every layer', at(a, LAYERS.map((l) => l.id)).dropped.length, 0);
 });
 
-console.log('\n  both gates ask the same question');
-check('creating an atlas', (server.match(/const tooWide = regionTooWide\(areaDeg2, layerIds, allowed\);/g) || []).length, 2);
-check('and it now comes after the layers are known',
-  server.indexOf("if (!layerIds.length) return res.status(400).json({ error: 'no valid layers chosen' });") <
-  server.indexOf('const tooWide = regionTooWide(areaDeg2, layerIds, allowed);'), true);
-check('the old blind refusal is gone', /larger than a single atlas can cover/.test(server), false);
-check('the approval step is untouched', /const largeRegion = areaDeg2 > FREE_AREA_DEG2;/.test(server), true);
+console.log('\n  feasible means it fits the time a build is given');
+check('a layer that does not grow costs the same anywhere',
+  layerSeconds(allowed.get('admin'), 618), layerSeconds(allowed.get('admin'), 2));
+check('one that does is scaled by how much bigger the region is',
+  layerSeconds(allowed.get('terrain'), 20), 900);
+check('terrain is feasible across a large cluster of districts', feasibleAt(allowed.get('terrain'), 12), true);
+check('and not across ten states', feasibleAt(allowed.get('terrain'), 618), false);
+check('an unknown layer is costed, not waved through', layerSeconds(undefined, 618), 30);
+
+console.log('\n  approval follows the work, not the width');
+check('a wide atlas of outlines and pins goes straight through',
+  /const largeRegion = buildSeconds > BUILD_BUDGET_S \/ 2;/.test(server), true);
+check('and the reason given is the time, not the area',
+  /a long build: \$\{regionLabel\}, about \$\{Math\.round\(buildSeconds \/ 60\)\} minutes/.test(server), true);
+
+console.log('\n  and the wizard never offers what will be dropped');
+check('it asks the catalogue about this width', /catalog\?iso3=" \+ encodeURIComponent\(S\.iso3\) \+\n\s*\(area > 0 \? "&areaDeg2="/.test(setup), true);
+check('the catalogue answers per layer', /feasible: feasibleAt\(l, areaDeg2\), estSecondsHere: layerSeconds\(l, areaDeg2\)/.test(server), true);
+check('asked without a width it answers as before', /Number\.isFinite\(areaDeg2\) && areaDeg2 > 0/.test(server), true);
+check('a layer it cannot build is disabled, not just unticked', /\(cannot \? " disabled" : ""\)/.test(setup), true);
+check('and says why', /too wide an area for this one/.test(setup), true);
+/* the cache used to key on country alone, so adding a place left the old
+   answer on screen */
+check('the offer is refreshed when the region changes size',
+  /Math\.abs\(\(S\.catalogArea \|\| 0\) - area\) < 0\.001/.test(setup), true);
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

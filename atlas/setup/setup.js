@@ -1009,14 +1009,35 @@
     // on offer depends entirely on which country this atlas is in
     $("#cats").innerHTML = '<p class="hint">Loading what is available here…</p>';
     loadCountries().then(function () {
-      if (S.catalog && S.catalogIso === S.iso3) { paintCatalog(); return; }
+      /* Cached on the country AND the region's size: what can be built here
+         changes when places are added or taken away, not only when the
+         country does, and a stale answer would offer a layer that will be
+         dropped. */
+      var area = chosenAreaDeg2();
+      var same = S.catalog && S.catalogIso === S.iso3 &&
+        Math.abs((S.catalogArea || 0) - area) < 0.001;
+      if (same) { paintCatalog(); return; }
       return fetchCatalog();
     });
   }
+  /* The box around the places chosen so far, in square degrees — the same
+     number the server works the region's size out from. */
+  function chosenAreaDeg2() {
+    var b = chosenBbox();
+    return (b && b.length === 4) ? (b[2] - b[0]) * (b[3] - b[1]) : 0;
+  }
+
   function fetchCatalog() {
-    return api("catalog?iso3=" + encodeURIComponent(S.iso3)).then(function (r) {
+    /* Asked with the region's width, so the catalogue can say which layers
+       can actually be built across it. A layer that would take the builder
+       longer than it is given should not be a tick box somebody discovers was
+       ignored — it should not be offered. */
+    var area = chosenAreaDeg2();
+    return api("catalog?iso3=" + encodeURIComponent(S.iso3) +
+               (area > 0 ? "&areaDeg2=" + area.toFixed(3) : "")).then(function (r) {
       S.catalog = r.layers || [];
       S.catalogIso = S.iso3;
+      S.catalogArea = area;
       paintCatalog();
     }).catch(function (e) {
       $("#cats").innerHTML = "";
@@ -1054,13 +1075,20 @@
       if (gi === 0) d.open = true;
       d.innerHTML = "<summary>" + esc(GROUP_LABELS[g] || g) + '<span class="cat-n"></span></summary>';
       byGroup[g].forEach(function (l) {
+        // built from imagery or downloaded by the box, over a region too wide
+        // for the time a build gets
+        var cannot = l.feasible === false;
+        if (cannot) S.picked[l.id] = false;
         var lab = document.createElement("label");
-        lab.className = "cat-row";
+        lab.className = "cat-row" + (cannot ? " cat-row-off" : "");
         lab.innerHTML = '<input type="checkbox" value="' + esc(l.id) + '"' +
-            (S.picked[l.id] ? " checked" : "") + " />" +
+            (S.picked[l.id] && !cannot ? " checked" : "") + (cannot ? " disabled" : "") + " />" +
           "<span><b>" + esc(l.label) + "</b>" +
             '<span class="src">' + esc(l.info || "") +
-            (l.cost && l.cost !== "free" ? " · needs approval" : "") + "</span></span>";
+            (cannot ? " · too wide an area for this one" : "") +
+            (!cannot && l.cost && l.cost !== "free" ? " · needs approval" : "") + "</span></span>";
+        if (cannot) lab.title = "This is built for the area you pick, and the work grows with it. " +
+          "Choose a smaller region to include it.";
         lab.querySelector("input").onchange = function () {
           S.picked[l.id] = this.checked;
           paintCounts();
@@ -1123,6 +1151,14 @@
     }).then(function (r) {
       S.slug = r.slug; S.jobId = r.jobId;
       log("[atlas] " + r.slug);
+      /* Layers the region turned out to be too wide for. The atlas is being
+         built either way — this says what it will not contain, rather than
+         leaving somebody to notice the absence on the finished map. */
+      if (r.droppedLayers && r.droppedLayers.length) {
+        msg(4, "Too wide an area for " + r.droppedLayers.join(", ") +
+          ", so " + (r.droppedLayers.length > 1 ? "those are" : "that is") +
+          " left out. Everything else is being built.", "ok");
+      }
       if (!r.jobId) { finish(); return; }
       poll();
     }).catch(function (e) {

@@ -39,8 +39,11 @@ const RULES = requireScript(path.join(REPO_ROOT, 'atlas', 'reading-rules.js'));
 const CATALOG_FILE = path.join(REPO_ROOT, 'atlas', 'setup', 'catalog.json');
 const GEOCACHE_DIR = path.join(reg.DATA_DIR, 'geocache');
 
-const FREE_AREA_DEG2 = Number(process.env.ATLAS_MAX_AREA_DEG2) || 6;   // beyond this: admin approval
-const HARD_AREA_DEG2 = Number(process.env.ATLAS_HARD_AREA_DEG2) || 40; // beyond this: refuse politely
+/* Two area thresholds used to decide everything: approval past 6 square
+   degrees, outright refusal past 40. Both are gone. An area cannot tell you
+   what a build will cost — an atlas of India holding boundaries and pins is
+   seconds of work, and one district of terrain and forest is minutes — so the
+   question is now asked of the layers, in feasibleLayers below. */
 const MAX_INSTANCES = Number(process.env.ATLAS_MAX_INSTANCES) || 50;
 const PER_IP_PER_DAY = Number(process.env.ATLAS_PER_IP_PER_DAY) || 3;
 const ADMIN_EMAIL = process.env.ATLAS_ADMIN_EMAIL || 'mithun@socratus.org';
@@ -111,47 +114,67 @@ router.get('/catalog', (req, res) => {
   const iso3 = String(req.query.iso3 || '').toUpperCase();
   if (!/^[A-Z]{3}$/.test(iso3)) return res.status(400).json({ error: 'iso3 required' });
   const tier = tierOf(iso3);
-  res.json({ tier, layers: layersForTier(tier) });
+  /* Told how wide the region is, the catalogue says which layers can be built
+     across it. Asked without a width it answers as it always did, so a caller
+     that does not know yet is not lied to. */
+  const areaDeg2 = Number(req.query.areaDeg2);
+  const layers = layersForTier(tier).map((l) => (Number.isFinite(areaDeg2) && areaDeg2 > 0
+    ? { ...l, feasible: feasibleAt(l, areaDeg2), estSecondsHere: layerSeconds(l, areaDeg2) }
+    : l));
+  res.json({ tier, layers, areaDeg2: Number.isFinite(areaDeg2) ? areaDeg2 : undefined,
+             budgetSeconds: BUILD_BUDGET_S });
 });
 
-/* How wide a region may be, asked of the layers actually chosen.
+/* What can actually be built across a region this wide.
 
-   The ceiling used to be applied to the region alone, eleven lines before the
-   layer list was even read — so an atlas of India carrying nothing but
-   boundaries and somebody's own places was refused on exactly the same grounds
-   as one carrying terrain, forest change and land use. The first costs almost
-   nothing: the basemap is somebody else's tiles, streamed, and the compulsory
-   layer picks its districts out of one national file that is already cached.
-   The second reads imagery over every square degree.
+   The rule this replaces refused the ATLAS. First on area alone, then — after
+   it turned out that an atlas of India carrying only boundaries and somebody's
+   own pins costs almost nothing — on area plus whether any chosen layer grows
+   with it. Both versions answered a person who wanted a map of sightings across
+   a continent by saying no.
 
-   So the gate asks what is being built. A layer is gated unless the catalogue
-   marks it `fixedCost` — that way round on purpose: a layer added later is
-   gated until somebody shows it should not be, which is the safe direction to
-   be wrong in. Four are marked today, and one of them is the only compulsory
-   layer, so a map of boundaries and your own places can be as wide as it needs.
+   That is the wrong thing to refuse. Markers cost the same wherever they are:
+   the same rows, the same pins, the same popups. What does not survive a
+   continent is terrain read from imagery over every square degree, or rivers
+   downloaded by bounding box. So the atlas is always buildable, and the LAYERS
+   that cannot be built at this width are simply not on offer.
 
-   The approval step is untouched. A wide region is worth an operator hearing
-   about whatever it is made of; this only stops the outright refusal.
+   Feasible means: it fits in the time a build is given. Every catalogue entry
+   carries estSeconds, quoted for a region about two square degrees — a district
+   or two, which is every atlas built so far. A layer whose work grows with the
+   area is scaled by how much bigger this region is; the four that do not grow
+   (boundaries, labels, buildings, roads — tiles and one national file) are not.
+   The budget is the build timeout less a minute for everything around it.
 
-   Returns the sentence to refuse with, or '' to let it through. */
-function regionTooWide(areaDeg2, layerIds, allowed) {
-  if (areaDeg2 <= HARD_AREA_DEG2) return '';
-  // a layer nobody recognises is gated too — the whole point is that not
-  // knowing means gated
-  const grows = layerIds.filter((id) => !(allowed.get(id) || {}).fixedCost);
-  if (!grows.length) return '';
-  const named = grows.map((id) => ((allowed.get(id) || {}).label || id).toLowerCase());
-  const list = named.length > 2
-    ? named.slice(0, 2).join(', ') + ' and ' + (named.length - 2) + ' more'
-    : named.join(' and ');
-  return 'That region is too wide for ' + list + ' \u2014 ' +
-    (grows.length > 1 ? 'those are' : 'that is') + ' built for the area you pick, and the work ' +
-    'grows with it. Pick smaller areas inside it, or leave ' + (grows.length > 1 ? 'them' : 'it') +
-    ' out: boundaries and your own places have no such limit.';
+   The arithmetic falls where you would want it: terrain, 90 seconds at two
+   square degrees, is feasible up to about thirteen — a large cluster of
+   districts — and not across ten states. Boundaries are feasible anywhere. */
+const BUILD_BUDGET_S = 9 * 60;   // JOB_TIMEOUT_MS is ten minutes
+const EST_AT_DEG2 = 2;           // the size estSeconds is quoted for
+
+function layerSeconds(l, areaDeg2) {
+  const base = Number(l && l.estSeconds) || 30;
+  if (!l || l.fixedCost) return base;
+  return Math.round(base * Math.max(1, (Number(areaDeg2) || 0) / EST_AT_DEG2));
+}
+function feasibleAt(l, areaDeg2) {
+  return layerSeconds(l, areaDeg2) <= BUILD_BUDGET_S;
+}
+
+/* Split what was asked for into what will be built and what cannot be, at this
+   width. Nothing is refused; the second list is what the answer has to name. */
+function feasibleLayers(layerIds, allowed, areaDeg2) {
+  const keep = [], dropped = [];
+  for (const id of layerIds) {
+    const l = allowed.get(id);
+    if (!l) continue;
+    (feasibleAt(l, areaDeg2) ? keep : dropped).push(id);
+  }
+  return { keep, dropped, droppedLabels: dropped.map((id) => (allowed.get(id) || {}).label || id) };
 }
 
 router.get('/config', (_req, res) => {
-  res.json({ freeAreaDeg2: FREE_AREA_DEG2, hardAreaDeg2: HARD_AREA_DEG2 });
+  res.json({ budgetSeconds: BUILD_BUDGET_S, estAtDeg2: EST_AT_DEG2 });
 });
 
 /* ================= geography (geoBoundaries picker data) ================= */
@@ -1119,10 +1142,22 @@ router.post('/instances', async (req, res) => {
   for (const l of allowed.values()) if (l.required && !layerIds.includes(l.id)) layerIds.unshift(l.id);
   if (!layerIds.length) return res.status(400).json({ error: 'no valid layers chosen' });
 
-  const tooWide = regionTooWide(areaDeg2, layerIds, allowed);
-  if (tooWide) return res.status(400).json({ error: tooWide, tooLarge: true });
-  // Bigger than the free tier → same approval pipeline as heavy layers.
-  const largeRegion = areaDeg2 > FREE_AREA_DEG2;
+  /* Nothing is refused for being wide. What cannot be built across a region
+     this size is dropped from the build and named in the answer, so an atlas
+     of markers can be as wide as the markers are. */
+  const fit = feasibleLayers(layerIds, allowed, areaDeg2);
+  layerIds = fit.keep;
+  if (!layerIds.length) {
+    return res.status(400).json({
+      error: 'Nothing can be built across a region this wide except boundaries, and they were not asked for.',
+      droppedLayers: fit.droppedLabels });
+  }
+  /* Approval follows the WORK, not the width. A wide atlas of outlines and
+     pins is a few seconds of building and goes straight through; one that
+     will occupy the builder for minutes is worth an operator hearing about
+     first, at any size. */
+  const buildSeconds = layerIds.reduce((t, id) => t + layerSeconds(allowed.get(id), areaDeg2), 0);
+  const largeRegion = buildSeconds > BUILD_BUDGET_S / 2;
 
   // Slug: derived from the title, never asked for. Uniqueness is the server's
   // job — two atlases may legitimately share a title, so a taken address gets a
@@ -1158,7 +1193,7 @@ router.post('/instances', async (req, res) => {
   const approvalLayers = layerIds.filter((id) => allowed.get(id).cost === 'approval');
   const approvalReasons = [];
   if (approvalLayers.length) approvalReasons.push(`heavy layers: ${approvalLayers.join(', ')}`);
-  if (largeRegion) approvalReasons.push(`large region: ${regionLabel} (~${Math.round(areaDeg2 * 12300).toLocaleString('en-IN')} km²)`);
+  if (largeRegion) approvalReasons.push(`a long build: ${regionLabel}, about ${Math.round(buildSeconds / 60)} minutes`);
   const needsApproval = approvalReasons.length > 0;
   if (needsApproval && !reg.validEmail(email)) {
     return res.status(400).json({ error: 'this build needs a quick approval from the LOKA team — add a contact email so we can reach you', needsEmail: true });
@@ -1210,6 +1245,8 @@ router.post('/instances', async (req, res) => {
 
   res.json({
     slug, jobId, status: needsApproval ? 'pending-approval' : 'building',
+    // what the region was too wide to build — never a refusal, always said
+    droppedLayers: fit.droppedLabels.length ? fit.droppedLabels : undefined,
     editToken, viewKey: viewKey || undefined,
   });
 });
@@ -1644,9 +1681,14 @@ router.post('/instances/:slug/rebuild', async (req, res) => {
   let layerIds = (Array.isArray(b.layers) ? b.layers.map(String) : inst.layers).filter((id) => allowed.has(id));
   for (const l of allowed.values()) if (l.required && !layerIds.includes(l.id)) layerIds.unshift(l.id);
   if (!layerIds.length) return res.status(400).json({ error: 'pick at least one layer' });
-  // the same gate as a first build, and for the same reason
-  const tooWide = regionTooWide(areaDeg2, layerIds, allowed);
-  if (tooWide) return res.status(400).json({ error: tooWide, tooLarge: true });
+  // the same rule as a first build, and for the same reason
+  const fit = feasibleLayers(layerIds, allowed, areaDeg2);
+  layerIds = fit.keep;
+  if (!layerIds.length) {
+    return res.status(400).json({
+      error: 'Nothing can be built across a region this wide except boundaries, and they were not asked for.',
+      droppedLayers: fit.droppedLabels });
+  }
 
   // A rebuild that crosses into approval territory used to be refused outright
   // with "email us" — a dead end for the case that most needs it: widening an
@@ -1654,7 +1696,8 @@ router.post('/instances/:slug/rebuild', async (req, res) => {
   // queue a first build uses. The live atlas keeps serving its existing files
   // throughout, because a build only swaps them on success.
   const heavy = layerIds.some((id) => allowed.get(id).cost === 'approval');
-  const needsApproval = heavy || areaDeg2 > FREE_AREA_DEG2;
+  const buildSeconds = layerIds.reduce((t, id) => t + layerSeconds(allowed.get(id), areaDeg2), 0);
+  const needsApproval = heavy || buildSeconds > BUILD_BUDGET_S / 2;
 
   const shapeNames = picked.map((f) => f.properties.name);
   const regionLabel = shapeNames.slice(0, 3).join(' · ') + (shapeNames.length > 3 ? ` +${shapeNames.length - 3}` : '');
@@ -1698,8 +1741,8 @@ router.post('/instances/:slug/rebuild', async (req, res) => {
     const deny = `${base}/apps/atlas/api/admin/action?token=${auth.makeActionToken(inst.slug, 'deny')}`;
     const why = [];
     if (heavy) why.push('heavy layers');
-    if (areaDeg2 > FREE_AREA_DEG2) {
-      why.push(`large region: ${regionLabel} (~${Math.round(areaDeg2 * 12300).toLocaleString('en-IN')} km2)`);
+    if (buildSeconds > BUILD_BUDGET_S / 2) {
+      why.push(`a long build: ${regionLabel}, about ${Math.round(buildSeconds / 60)} minutes`);
     }
     await sendMail({
       to: ADMIN_EMAIL,
@@ -1710,6 +1753,7 @@ router.post('/instances/:slug/rebuild', async (req, res) => {
         + `The atlas keeps serving its current map until this is approved.`,
     });
     return res.json({
+    droppedLayers: fit.droppedLabels.length ? fit.droppedLabels : undefined,
       ok: true, pendingApproval: true, slug: inst.slug, regionLabel,
       message: 'That covers a lot of ground, so the LOKA team takes a quick look first — '
         + 'usually within a day. Your atlas carries on exactly as it is until then, and '
