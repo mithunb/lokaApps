@@ -213,12 +213,34 @@
    cannot change, which is the point: the panel is read far more often than it
    is edited. Hover or focus gives it a dotted underline, the way an editable
    name behaves anywhere else. */
+/* The owner's name reads like a reader's: it wraps.
+
+   It used to be one line ending in an ellipsis, sharing its row with "Edit
+   card" and "Remove…", which left it 88 pixels of 284 and showed "Where the
+   re…". Those actions are behind a "⋯" now, so the name has the room, and
+   wrapping means even a very long one is readable rather than cut. */
 .own-nameable {
   font:inherit; font-size:inherit; color:inherit; background:none; border:0;
   padding:0; margin:0; text-align:left; cursor:text;
   border-bottom:1px dashed transparent; border-radius:2px;
-  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%;
+  white-space:normal; overflow-wrap:anywhere; max-width:100%;
 }
+
+/* One quiet control for the things an owner does rarely. */
+.own-more {
+  flex:0 0 auto; margin-left:.25rem; padding:0 .3rem; min-width:1.5rem;
+  font:inherit; line-height:1; letter-spacing:.06em;
+  color:var(--color-text-secondary); background:none; border:0; border-radius:4px;
+  cursor:pointer;
+}
+.own-more:hover { color:var(--color-text-primary); background:var(--color-surface-sunk, rgba(0,0,0,.05)); }
+.own-more[aria-expanded="true"] { color:var(--color-text-primary); }
+.own-menu {
+  display:flex; flex-direction:column; align-items:flex-start; gap:.1rem;
+  margin:.35rem 0 .1rem; padding:.3rem 0 .1rem;
+  border-top:1px solid var(--color-border);
+}
+.own-menu .own-change { margin:0; }
 .own-nameable:hover { border-bottom-color:var(--color-border); }
 .own-nameable:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; }
 

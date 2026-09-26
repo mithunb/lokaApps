@@ -661,10 +661,57 @@
       e.stopPropagation();
       toggleFold(L, m, "remove");
     };
+    /* Both actions live behind one "⋯", and the name gets its line back.
+
+       Side by side on the row, "Edit card" and "Remove…" took 105 of its 284
+       pixels and the little "i" took 25 more, leaving the name 88 — so the
+       owner of an atlas saw "Where the re…" while every reader saw the name
+       whole. The one person who can edit a layer was the only one who could not
+       read what it was called.
+
+       The actions are not lost, they are one press further away, which is the
+       right trade for a control you touch rarely against a name you read every
+       time. Rename is not in here: the name itself is the way to rename it. */
     var head = row.querySelector(".ctl-toggle") || row;
+    var more = document.createElement("button");
+    more.type = "button";
+    more.className = "own-more";
+    more.textContent = "\u22ef";
+    more.setAttribute("aria-expanded", "false");
+    more.setAttribute("aria-haspopup", "true");
+    more.setAttribute("aria-label", "More for " + (L.label || L.id));
+    var menu = document.createElement("div");
+    menu.className = "own-menu";
+    menu.hidden = true;
+    menu.appendChild(btn);
+    menu.appendChild(del);
+    function shut() {
+      menu.hidden = true;
+      more.setAttribute("aria-expanded", "false");
+      document.removeEventListener("click", away, true);
+      document.removeEventListener("keydown", onKey, true);
+    }
+    function away(e) { if (!menu.contains(e.target) && e.target !== more) shut(); }
+    function onKey(e) { if (e.key === "Escape") { shut(); more.focus(); } }
+    more.onclick = function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!menu.hidden) { shut(); return; }
+      menu.hidden = false;
+      more.setAttribute("aria-expanded", "true");
+      document.addEventListener("click", away, true);
+      document.addEventListener("keydown", onKey, true);
+      var first = menu.querySelector("button");
+      if (first) first.focus();
+    };
+    // opening either fold has served its purpose; the menu should not stay up
+    [btn, del].forEach(function (b) {
+      var was = b.onclick;
+      b.onclick = function (e) { shut(); was.call(this, e); };
+    });
     var info = head.querySelector(".ctl-info");
-    if (info) { head.insertBefore(btn, info); head.insertBefore(del, info); }
-    else { head.appendChild(btn); head.appendChild(del); }
+    if (info) head.insertBefore(more, info); else head.appendChild(more);
+    row.appendChild(menu);
     addRenamePencil(L, head, btn);
     // who contributed it — an owner's question, not a reader's, so it is added
     // here rather than built into the viewer's row

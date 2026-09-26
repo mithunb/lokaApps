@@ -53,6 +53,18 @@ console.log('\n  an atlas can show its own region on a phone');
    Half the width was off the screen with nothing to say so. */
 check('the zoom floor gives way to the region before framing it',
   /function fitToData\(animate\) \{[\s\S]{0,160}floorFitsTheRegion\(\);/.test(atlas), true);
+/* And on the path actually taken. The first version of this check proved the
+   function existed and was called from fitToData — but every load runs
+   `if (!focusFit()) fitToData(false)`, and focusFit succeeds whenever there is
+   a layer to frame, so on the one atlas that needed it the fix never ran. It
+   was reported fixed on the strength of the file being served. Measured live
+   afterwards: a phone showed 82.1°E to 87.9°E of an atlas covering 70.7 to
+   99.4. A check that a function is present is not a check that it runs. */
+check('and on the path a load actually takes, not only the other one',
+  /function focusFit\(animate\) \{[\s\S]{0,900}?floorFitsTheRegion\(\);/.test(atlas), true);
+check('every framing path reaches it',
+  (atlas.match(/floorFitsTheRegion\(\);/g) || []).length >= 2 &&
+  /if \(!focusFit\(\)\) fitToData\(false\);/.test(atlas), true);
 check('and it is lowered only as far as the region needs',
   /Math\.min\(built, cam\.zoom\)/.test(atlas), true);
 check('measured against what the build asked for, not against last time',

@@ -434,9 +434,52 @@ export function buildFragment(spec, feats, existingIds) {
    layer read before the naming settled as much as for one read tomorrow. */
 function isAnswerColumn(col) { return /^pattern_/.test(String(col)); }
 
-function prettify(col) {
-  return String(col).replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
-    .replace(/^\w/, (c) => c.toUpperCase()).slice(0, 40);
+/* What a column is called on a card.
+
+   This used to end in .slice(0, 40), which cut every survey question in the
+   middle of a word: a card read "Name of Organisation or Collective (if a",
+   "Which geographic areas do you work in? (", "What best describes your work,
+   profile, ". Forty letters is not enough for a question, and a cut that lands
+   mid-word reads as a fault rather than as a shortening.
+
+   Three steps, each of which takes something a reader does not need before
+   anything readable is touched:
+
+     the aside in brackets at the end — "(if applicable)", "(Please select all
+     that apply)" — which is instruction to whoever filled the form, not part of
+     what the answer is about;
+
+     everything after the first question or sentence, because a form often
+     follows its question with guidance: "Which geographic areas do you work
+     in? (Feel free to mention country, village, district...)";
+
+     and only then, if it is still too long, a cut at a word with an ellipsis,
+     so a shortening always looks deliberate.
+
+   On the atlas this was written for, the first two steps alone leave every one
+   of the eight questions whole. */
+export const LABEL_MAX = 72;
+
+export function prettify(col) {
+  const raw = String(col);
+  /* Underscores are always a stand-in for a space. Hyphens are not — "human-
+     friendly" and "Nawegaon-Nagzira" are words, and opening them out damages
+     them. So hyphens only open out in a name that has no spaces at all, which
+     is the slug case they were meant for: "created-at", "place-tags". */
+  let t = (/\s/.test(raw) ? raw.replace(/_+/g, ' ') : raw.replace(/[_-]+/g, ' '))
+    .replace(/\s+/g, ' ').trim()
+    // "affiliation ?" is how a form wrote it; nobody reads it that way
+    .replace(/\s+([?!.,;:])/g, '$1');
+  if (t.length > LABEL_MAX) t = t.replace(/\s*\([^()]*\)\s*$/, '').trim();
+  if (t.length > LABEL_MAX) {
+    const stop = t.search(/[?!.](\s|$)/);
+    if (stop > 0) t = t.slice(0, stop + 1).trim();
+  }
+  if (t.length > LABEL_MAX) {
+    const cut = t.slice(0, LABEL_MAX + 1).lastIndexOf(' ');
+    t = (cut > 20 ? t.slice(0, cut) : t.slice(0, LABEL_MAX)).replace(/[\s,;:]+$/, '') + '\u2026';
+  }
+  return t.replace(/^\w/, (c) => c.toUpperCase());
 }
 
 /* ---------------- sanitisation ---------------- */

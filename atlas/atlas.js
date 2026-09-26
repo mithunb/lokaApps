@@ -607,6 +607,15 @@
      focusFit used a flat sixty on every side. */
   function viewPadding() {
     var pad = { top: 40, right: 40, bottom: 40, left: 40 };
+    /* Room for the bottom sheet, the same way room is made for the side panel
+       below. Without it a pin or a cluster disc can land under the sheet on
+       first load and nothing says it is there — seen on the Bengaluru atlas,
+       where a disc sat half-hidden at the bottom-left. */
+    try {
+      var stage = map.getContainer().closest(".atlas-stage");
+      var sheet = parseFloat(stage && getComputedStyle(stage).getPropertyValue("--sheet-h")) || 0;
+      if (sheet > 0) pad.bottom = Math.min(sheet + 16, map.getContainer().clientHeight * 0.45);
+    } catch (e) {}
     try {
       var mr = map.getContainer().getBoundingClientRect();
       var panel = document.getElementById("atlas-panel");
@@ -628,6 +637,19 @@
   function focusFit(animate) {
     var ids = framedLayers();
     if (!ids.length) return false;
+    /* Before framing anything, let the region lower the floor.
+    
+       This used to live only in fitToData, and fitToData is the path NOT taken
+       whenever there is a layer to frame — every load runs
+       `if (!focusFit()) fitToData(false)`. So on the one atlas that needed it,
+       the fix never ran: on a phone it opened showing 82.1°E to 87.9°E of an
+       atlas covering 70.7 to 99.4, under six degrees of twenty-nine, because
+       fitting needs zoom 2.84 and the floor was 4. Measured on the live site
+       after I had already reported it fixed, which it was not.
+    
+       It is cheap and it always computes from what the build asked for, so
+       calling it from both paths costs nothing and leaves neither uncovered. */
+    floorFitsTheRegion();
     var w = 180, s = 90, e = -180, n = -90, seen = 0;
     ids.forEach(function (id) {
       var d = DATA[id];
@@ -3774,6 +3796,31 @@
      placeStripPieces, which also owns the 720px flip: phones keep
      Map/Satellite and the region row in the bottom sheet exactly as before,
      and the strip carries search alone. */
+  /* How tall the bottom sheet is, measured and kept current.
+
+     On a phone the sheet sits over the foot of the map, and nothing allowed for
+     it: the zoom buttons landed at 768-834 down the page while the shut sheet
+     spanned 725-844, so a tap on "+" hit the sheet, a tap on "-" hit its credit
+     line, and the scale bar sat behind the Satellite button. Pins could load
+     under it too, because the framing only ever made room for the side panel a
+     desktop has.
+
+     Measured rather than guessed, because the sheet is one height shut, another
+     open, another again with a long region name wrapped across it. */
+  function watchSheetHeight(stage) {
+    var panel = stage.querySelector(".atlas-panel");
+    if (!panel || panel._sheetWatched) return;
+    panel._sheetWatched = true;
+    var sync = function () {
+      var onPhone = window.matchMedia("(max-width: 720px)").matches;
+      stage.style.setProperty("--sheet-h", (onPhone ? panel.offsetHeight : 0) + "px");
+    };
+    if (window.ResizeObserver) new ResizeObserver(sync).observe(panel);
+    window.addEventListener("resize", sync);
+    window.matchMedia("(max-width: 720px)").addEventListener("change", sync);
+    requestAnimationFrame(sync);
+  }
+
   function ensureStrip(stage) {
     var strip = stage.querySelector(".atlas-strip");
     if (!strip) {
@@ -3787,6 +3834,7 @@
       else window.addEventListener("resize", syncH);
       requestAnimationFrame(syncH);
     }
+    watchSheetHeight(stage);
     strip.innerHTML = "";   // a rebuild remakes every piece below
     /* The wordmark, first on the strip and on every atlas view — embeds too.
        It is LOKA's, not the atlas's: no manifest can rename or remove it. */
@@ -4628,7 +4676,23 @@
        Anything that is not a plain fact (tags, notes, a photo) closes the
        list, and the next plain fact opens a new one. */
     var facts = "";
-    function flushFacts() { if (facts) { h += '<div class="pop-facts">' + facts + "</div>"; facts = ""; } }
+    /* Label beside value works for "Name · Gijs Spoor". It does not work for a
+       survey question: the label column takes as much width as its longest
+       label wants, so a sixty-letter question left the answer a column 56
+       pixels wide and "Foundation for research on socio economic development"
+       came out over eight lines with words split in the middle.
+
+       So when a card's labels are long, the whole card stacks — question above
+       answer, each across the full width. The whole card, not the offending
+       row, because a card half in one shape and half in the other reads as a
+       mistake. */
+    var LONG_LABEL = 26;
+    var stacked = false;
+    function flushFacts() {
+      if (!facts) return;
+      h += '<div class="pop-facts' + (stacked ? " pop-facts-stacked" : "") + '">' + facts + "</div>";
+      facts = "";
+    }
     /* A layer's popup rows are generated from its columns when it is added, so
        every column a key later claims got said twice: once in the key rows above
        and again as a row of its own. Worse, a question's column arrived as a raw
@@ -4708,6 +4772,16 @@
         if (shown !== String(v)) {
           shown = shown.split(",").map(unquotePiece).filter(Boolean).join(", ");
         }
+        /* A whole number that came out of a spreadsheet as a decimal.
+        
+           "How long have you been involved in this work?" answered "30" arrives
+           as the text "30.0", because the sheet held it in a column of
+           decimals, and the card printed "30.0" years at a reader. Only a
+           string that is ENTIRELY a number is touched, and only its pointless
+           trailing zeros: "1.5" stays, "v1.0" stays, "30.0 km" stays, and the
+           stored data is not altered — this is how it reads, not what it is. */
+        if (/^-?\d+\.0+$/.test(shown)) shown = shown.replace(/\.0+$/, "");
+        if (String(fld.label || "").length > LONG_LABEL) stacked = true;
         facts += '<div class="pop-field pop-field-inline"><span class="pop-lbl">' + esc(fld.label) +
           '</span> <span class="pop-val">' + esc(shown) + (fld.suffix || "") + "</span></div>";
       }

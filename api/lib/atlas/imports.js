@@ -15,7 +15,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { DATA_DIR } from './registry.js';
 import { DATASETS_ROOT, PRIVATE_ROOT } from './jobs.js';
-import { detectDelimiter } from '../fragment.js';
+import { detectDelimiter, prettify } from '../fragment.js';
 
 const IMPORTS_DIR = path.join(DATA_DIR, 'imports');
 const TTL_MS = 24 * 3600 * 1000;
@@ -309,15 +309,17 @@ export function dropSearchIndex(datasetId, layerId) {
    The name is written in the three places a layer keeps it, because they had
    already drifted apart once: the stanza's own label, the spec the next build
    starts from, and the single-entry legend a marker layer carries. */
-/* What a column is called on a card, and how it is drawn. The same two rules
-   buildFragment applies when it first makes a layer — a name with its
-   underscores opened out, and a ';'-separated column drawn as chips rather than
-   as a line of text. Kept here rather than imported because fragment's version
-   is not exported, and kept SHORT for the same reason: two rules, both visible. */
+/* What a column is called on a card, and how it is drawn. Two rules: the name
+   as buildFragment writes it, and a ';'-separated column drawn as chips rather
+   than as a line of text.
+
+   The naming rule used to be copied here rather than imported, on the grounds
+   that it was two lines and better read than fetched. It has now grown teeth —
+   it drops a trailing aside, keeps the first question, and only then shortens —
+   and a copy of that would drift within a week. The comment it replaces already
+   warned that these two had drifted apart once. One copy, imported. */
 function cardFieldFor(col, values, imageColumn) {
-  const label = String(col).replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
-    .replace(/^\w/, (c) => c.toUpperCase()).slice(0, 40);
-  const f = { label, property: String(col) };
+  const f = { label: prettify(col), property: String(col) };
   if (col === imageColumn) f.type = 'image';
   else if (detectDelimiter(values) === ';') f.type = 'tags';
   return f;

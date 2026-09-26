@@ -793,6 +793,14 @@
        own column and never pushes the label off its line. */
     .pop-facts { display:grid; grid-template-columns:minmax(5rem,max-content) 1fr; gap:.22rem .7rem; margin-top:.6rem; align-items:baseline; }
     .pop-facts + .pop-facts { margin-top:.22rem; }
+    /* A card whose labels are questions stacks instead: the question on its own
+       line, quiet and small, the answer beneath it across the whole card. Side
+       by side, the label column takes what its longest label wants, and a
+       sixty-letter question left the answer 56 pixels to live in. */
+    .pop-facts-stacked { grid-template-columns:1fr; gap:.55rem 0; }
+    .pop-facts-stacked .pop-field-inline { display:block; }
+    .pop-facts-stacked .pop-lbl { display:block; margin-bottom:.1rem; line-height:1.35; }
+    .pop-facts-stacked .pop-val { font-size:var(--t-ui); line-height:1.45; }
     .pop-field-inline { display:contents; }
     .pop-field-inline .pop-lbl { text-transform:none; letter-spacing:0; font-size:var(--t-meta); color:var(--color-text-secondary); }
     .pop-field-inline .pop-val { display:block; min-width:0; overflow-wrap:anywhere; font-weight:600; }
@@ -1064,6 +1072,17 @@
     }
 
     /* Mobile: the layer widget becomes a bottom sheet — map stays visible, thumb-reachable */
+    /* On a phone the zoom buttons and the scale bar clear the bottom sheet.
+       They used to sit behind it: a tap on "+" landed on the sheet, a tap on
+       "-" on its credit line, and the scale bar behind the Satellite button.
+       --sheet-h is measured by atlas.js, because the sheet is one height shut
+       and another open. */
+    @media (max-width:720px){
+      .atlas-stage .maplibregl-ctrl-bottom-right,
+      .atlas-stage .maplibregl-ctrl-bottom-left {
+        bottom:calc(var(--sheet-h, 0px) + 12px);
+      }
+    }
     @media (max-width:720px){
       /* Phones: the strip carries search only. Map/Satellite and the region
          row live in the bottom sheet as before (atlas.js re-homes them), and
@@ -1191,7 +1210,31 @@
       .sheet-foot-build { font-weight:600; color:var(--color-leaf); white-space:nowrap; }
       /* a place card opens above the sheet, not behind it: the map box makes
          no stacking context of its own, so the card can outrank the sheet */
+      /* On a phone a place's card becomes a card along the bottom.
+
+         Anchored to the pin it ran off the screen and under the sheet: on the
+         Bengaluru atlas a card 320px wide on a 375px map opened 61px past the
+         right edge with 145px of it hidden; on Cubbon Park, 82px past and 305px
+         hidden. There is no width on a phone in which a card beside a pin can
+         also be read.
+
+         So it sits across the map's foot, above the sheet, at the width of the
+         map. The tip goes: it is not pointing at anything any more, and a tip
+         on a card that is not beside its pin is a small lie. */
       .atlas-popup { z-index:7; }
+      .atlas-stage .atlas-popup.maplibregl-popup {
+        position:absolute; inset:auto 8px calc(var(--sheet-h, 0px) + 8px) 8px;
+        /* The map library writes max-width and transform straight onto the
+           element, so a stylesheet has to say !important to be heard at all.
+           Used here deliberately and only here: the card is being taken off
+           its pin, which is the library's own job being overridden. */
+        width:auto; max-width:none !important; transform:none !important;
+      }
+      .atlas-stage .atlas-popup .maplibregl-popup-tip { display:none; }
+      .atlas-stage .atlas-popup .maplibregl-popup-content { width:100%; }
+      /* Shorter, because it is sharing the map's height rather than floating
+         over it, and the map underneath is worth still seeing. */
+      .atlas-stage .atlas-popup .pop { max-height:min(38vh, 320px); }
       /* the wordmark over the map wears a small Surface chip, since the phone's
          strip has no surface of its own */
       .atlas-wordmark { padding:.3rem .5rem; background:rgba(253,252,248,.92); border:1px solid var(--color-border); border-radius:var(--radius-md); }
