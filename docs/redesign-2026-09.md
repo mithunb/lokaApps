@@ -60,21 +60,20 @@ Text #24211D on Surface #FDFCF8 = **15.6:1**; muted #5A5751 on Surface = **7.0:1
 
 Everything below is for the viewer (`atlas/index.html` + `atlas.js`) unless marked *owner* or *wizard*. Plain-language copy throughout; no jargon in any string a user sees.
 
-### 2.1 Header, title, site bar
-- Site bar: "LOKA / APPS" wordmark in Label type (Sans 700, .72rem, +.12em, uppercase, Ink); links Ink Soft .9rem; no active pills, no bottom borders. Background Page.
-- Atlas title block above the stage (kept where it is): Display in Source Serif 4 700; the one-line subtitle in Body Ink Soft; description Body. `text-wrap: balance` on the title.
-- The Share button: secondary button (Leaf border/text).
+### 2.1 Header, title, site bar — superseded by layout B (26 Sep 2026, see DESIGN.md §5 "The atlas page")
+Built after this plan, on Mithun's choice of Option B from the branding review: an atlas puts `.atlas-full` on `<html>` (atlas.js), and the map fills everything under one 44px header (`.nav`) that carries the organisation's logo, name and the atlas title (`.org-head`, `#org-branding`, `#atlas-title`), the strip's pieces (`#head-tools`), Share, and the site links. The title block above the stage, the "LOKA / APPS" wordmark, the CTA band and the footer are not drawn on an atlas. Bottom-left of the map: the `#sources-btn` chip opens `<dialog id="atlas-sources">` (not modal) holding the lead text and the whole credits ledger. Bottom-right: the hard-coded `.loka-badge` ("Powered by [LOKA] Atlas", links to `./setup/`). What follows below is the earlier spec, kept for the parts that still hold (tokens, controls, rows).
+- The Share button: secondary button (Leaf border/text); icon only on phones.
 
-### 2.2 The strip (top of the stage)
-- Surface at 95% + hairline bottom (`--color-divider`); min-height 48px; the sanctioned blur backdrop stays.
-- Left: the **"LOKA Atlas" wordmark** (Label type, "LOKA" 800 Ink, "Atlas" 600 at 60%) — new; it must appear on every atlas view including embeds.
+### 2.2 The strip
+- On a wide screen the strip is moved into the header by `placeStripPieces` (search, then Map/Satellite, then the owner's region row); on a phone it stays over the map as the floating search box. The rules below describe its pieces.
+- ~~Left: the **"LOKA Atlas" wordmark**~~ — replaced by the badge (layout B).
 - Map/Satellite segmented control: Surface, 1px Ink Border, 4px; the active segment Leaf with white text (was moss).
 - Search: Surface, 1px Ink Border, 4px, magnifier icon Ink Faded; placeholder "Search this map…"; focus = 2px Leaf outline (offset −1px, as today); the result count hangs below as today.
 - Owner-only region row unchanged in structure; colours re-tokened.
 
 ### 2.3 The shelf (layer panel)
-- 19.5rem wide, Surface at 95%, 4px radius, panel-lift shadow (kept). Floats top-left below the strip.
-- Panel head "MAP LAYERS · 17 layers": Label type; **2px Leaf rule beneath** (replaces the hairline). Collapse chevron unchanged.
+- 19.5rem wide, Surface at 95%, 4px radius, panel-lift shadow (kept). Layout B: floats 8px under the header and stops 44px above the stage's foot; **open on load**; folded, its head alone is the "Layers · N" button.
+- Panel head "LAYERS · 17": Label type; **2px Leaf rule beneath** (replaces the hairline). Collapse chevron unchanged; a layers icon shows when folded.
 - Group heads ("BASE", "CROPS & LAND"): Label type in Ink Soft over a hairline; sticky as today; the gap above a group is ≥ 3× the row gap.
 - Rows: one skeleton (switch, name, then anything else pushed to the end). Name Sans 600 `--t-ui`; off rows drop to 400 + Ink Soft (Two-Channel Rule kept).
 - **Switch**: 32×18 track `--color-toggle-off` off → Leaf on; white knob; 0.2s ease-out; indeterminate = Leaf at 60% with centred knob; ≥ 44px hit area on touch. The key toggles (26×15) and tick boxes follow the same colours.
@@ -116,15 +115,15 @@ Everything below is for the viewer (`atlas/index.html` + `atlas.js`) unless mark
 
 ### 2.8 Phone bottom sheet (≤ 720px) — replaces the tray + bar of marks
 - The stage is 64dvh (kept). The sheet (`.atlas-panel` on mobile) is a bottom sheet with: a 30×4 grab bar in `--color-toggle-off`; a **row of group tabs** (one per `.ctl-group`, labels from the group heads, e.g. "Base · Crops & land · Water"); then **only the active group's rows**. Tabs: Label type, Surface with Ink Border, 4px; active = Leaf fill, white text. Rows: full-width, min 44px, switch at the row's end, hairline between rows. Keys/legends fold under their row as today.
-- The sheet's foot: hairline, then "**LOKA** · Socratus" left and "Build your own atlas →" right (Meta type, Leaf link). This is the credit strip's phone form.
+- The sheet's foot (layout B): hairline, then Map/Satellite left and LOKA's badge right. Tapping the grab bar with no group open folds the sheet to a "Layers · N" chip bottom-left; the badge then floats bottom-right.
 - Height: max 50% of the stage, never covering the top third of the map; slide 0.28s `cubic-bezier(.22,1,.36,1)`; `prefers-reduced-motion` disables.
 - The existing `.atlas-bar` (46px bar of marks with `.mk-lb` labels) is retired **but** `test/panel-form-test.mjs` asserts the literal CSS lines `.atlas-bar { display:none; }` and `.atlas-bar:not([hidden]) {` exist in `index.html`. Keep those two rules (they can style the new tab row: give the tab row the class `atlas-bar` and keep the `hidden` attribute behaviour) so the test stays green; do not edit the test.
 - Strip on phones: transparent, search only (kept); Map/Satellite moves into the sheet's foot row (kept from today's tray).
 
 ### 2.9 Credits strip and the call to action (`.atlas-credits` ≈ 855, `.atlas-cta` ≈ 928)
-- Desktop: the two-column credits grid stays; background Surface Alt, hairline top, 6px radius; "Made by" column headed in Label type; the LOKA logo image unchanged; sources in Meta.
-- The CTA aside keeps its wording exactly: "Build an atlas like this for your own geography and data." / "Your region, your layers, your branding — free to start." / button **"Build your own atlas for free →"** (Leaf primary, hover Leaf Deep). Background Leaf Tint.
-- Embeds (`.atlas-embed`, `.atlas-embed-map`) keep hiding the credits/CTA as today, but the strip's "LOKA Atlas" wordmark always shows.
+- Layout B: the two-column credits grid stays in full (Surface Alt, hairline top, 6px radius; "Made by" column headed in Label type; sources in Meta) but inside the "About & sources" panel; the LOKA logo image at its head is gone (the badge is LOKA's mark).
+- The CTA aside keeps its wording exactly and shows on the home gallery; on an atlas it is not drawn (the badge and the panel's foot carry "Build your own atlas for free →").
+- Embeds (`.atlas-embed`, `.atlas-embed-map`) hide the links/CTA/footer as today; the badge always shows, and `?embed=map` hides the header too.
 
 ### 2.10 States
 - **Loading**: while the manifest/style loads, the stage shows Ground with a centred Meta line "Loading the map…" in Ink Soft (add a `.atlas-loading` element toggled by `atlas.js`; today there is none and the map simply appears). No spinner graphic; a 3-dot ellipsis is enough.

@@ -16,8 +16,15 @@ function check(label, got, want) {
     (ok ? '' : '\n        got  ' + JSON.stringify(got) + '\n        want ' + JSON.stringify(want)));
 }
 
-console.log('\n  on a wide screen the shelf floats just inside the map frame');
-check('it sits 8px in from the frame, top to bottom', /\.atlas-panel \{ position:absolute; top:8px; left:8px; bottom:8px;/.test(html), true);
+console.log('\n  on a wide screen the drawer floats just inside the map frame');
+check('it sits 8px in from the frame', /\.atlas-panel \{ position:absolute; top:8px; left:8px; bottom:8px;/.test(html), true);
+/* an atlas fills the page (html.atlas-full): the drawer starts under the header
+   and stops above the chips row at the foot, so the credits are never under it */
+check('on an atlas it stops above the credits chip', /\n\s+\.atlas-full \.atlas-panel \{ bottom:44px; \}/.test(html), true);
+check('folded, its head alone is the "Layers · N" button', /\.atlas-full \.atlas-panel\.collapsed \{ bottom:auto; width:auto; \}/.test(html), true);
+check('and those two are wide-screen rules, not the phone sheet\'s',
+  /@media \(min-width:721px\)\{\n\s+\.atlas-full \.atlas-stage\.has-strip \.atlas-panel \{ top:8px; \}\n\s+\.atlas-full \.atlas-panel \{ bottom:44px; \}/.test(html), true);
+check('and it is open when the page loads, at either width', /panel\.classList\.toggle\("collapsed", mq\.matches\)/.test(html), false);
 check('no corner of map is trapped behind a rounded card', /border-radius:0;/.test(html), true);
 check('it is near-opaque paper, so the map never shows through the words', /background:rgba\(253,252,248,\.95\)/.test(html), true);
 /* the phone sheet's top edge is the Block hairline, which reads on the cream ground */

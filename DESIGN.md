@@ -272,24 +272,36 @@ Surface fill, 1px Ink Border, 4px, Sans 0.95rem. Labels small bold Ink Soft abov
 ### Toggles (signature, kept)
 32×18 pill track (#CFCBC2 off → Leaf on), white knob, 0.2s ease-out; tri-state masters render indeterminate as Leaf at 60% with a centred knob. Touch target ≥ 44px on phones. The most-touched control in the product: calm and instant.
 
-### The Strip and the Shelf (signature, kept)
-The **strip** across the top of the stage holds what is true of the whole atlas: wordmark "LOKA Atlas", Map/Satellite, search, and (owner-only) the region row. It wears Surface at 95% with a hairline bottom edge. The **shelf** (panel) holds layers and nothing else: switches, keys, legends, fold notes. Panel head has a 2px Leaf rule beneath it; group heads are Label type over a hairline, with at least three times the gap between groups as between rows inside them.
+### The atlas page: map edge to edge (September 2026, layout B)
+An atlas is the map. Below one thin header (44px on a wide screen, 52px on a phone) the stage fills the whole viewport; the page does not scroll. The lead text, the call-to-action band and the site footer are not drawn on an atlas — their words are reached from the map (the "About & sources" panel, LOKA's badge). The home gallery keeps its page shape.
 
-### The phone sheet (signature, new shape)
-On phones the shelf docks as a bottom sheet with a grab bar and a **row of group tabs** (Base · Crops · Water …). One group shows at a time; each row is a full-width touch target (min 44px) with the switch at the row's end; the active tab is Leaf with white text. The sheet's foot carries the LOKA credit and the "Build your own atlas →" link. It never covers the map's top third.
+### The header (org branding first)
+The header carries the organisation that built the atlas: its logo (30px, if it gave one) at the left spanning two lines, its name in Label type above, the atlas title in Source Serif 4 700 (1.1rem) beneath. With no logo the name alone reads finished. Long names and titles get an ellipsis (the full name stays in the credits and the page title). Then, on a wide screen, the strip's pieces — search, Map/Satellite, the owner's region row — then Share (and the owner's controls), then the site links in Meta type. For an owner the bar may wrap to a second row; the map starts beneath it either way. No "LOKA / APPS" wordmark: LOKA's presence on an atlas is the badge.
+
+### The Strip and the Shelf (signature, kept; the strip moved)
+The **strip** holds what is true of the whole atlas: Map/Satellite, search, and (owner-only) the region row. On a wide screen it lives in the header; on a phone it stays over the top of the map as the floating search box. The **shelf** is now a **drawer**: it floats 8px inside the stage under the header, holds layers and nothing else (switches, keys, legends, fold notes), and stops 44px above the stage's foot so the chips there are never under it. It is **open when the page loads**. Folded, its head alone stays as the "Layers · N" button (layers icon, Label type, count in Ink Faded) that opens it again. Panel head has a 2px Leaf rule beneath it; group heads are Label type over a hairline, with at least three times the gap between groups as between rows inside them.
+
+### The phone sheet (signature, kept)
+On phones the drawer docks as a bottom sheet with a grab bar and a **row of group tabs** (Base · Crops · Water …), shown at rest so the layers are obvious. One group shows at a time; each row is a full-width touch target (min 44px) with the switch at the row's end; the active tab is Leaf with white text. The sheet's foot carries Map/Satellite at the left and LOKA's badge at the right. Tapping the grab bar puts an open group away; tapping it again folds the sheet to a "Layers · N" chip bottom-left, and the badge comes out to float bottom-right. It never covers the map's top third.
+
+### LOKA's badge ("Powered by [LOKA] Atlas")
+The one LOKA element on every atlas view, embeds included. Hard-coded in the page, never manifest-driven. "Powered by" in Source Sans 3 600 at Label size, the LOKA mark as an image 10px tall, "Atlas" in Source Serif 4 700 at .85rem; a hairline pill on Surface at 94%. Floats bottom-right over the map on a wide screen; sits in the sheet's foot on a phone. Links to `./setup/` (in an embed, in a new tab).
+
+### "About & sources"
+A chip bottom-left of the map (Label type on a Surface pill), with the base map's own attribution beside it. It opens the credits as a panel over the map's corner (Surface, hairline, panel-lift shadow; a bottom sheet on phones): the atlas's subtitle and description, then the credits ledger as before — "Made by" (the organisation, partners), "Data & sources" — and a foot with "Build your own atlas for free →" and "All atlases". Not modal: the map stays live; Esc, the × or a click on the map put it away.
 
 ### Map frame, controls, place card
 - The map well: Ground background, double ink frame (see Elevation), 8px inset from the shelf.
 - Zoom controls: 22–26px Surface squares with Ink Border, 4px, bottom-right; no compass.
-- A scale note ("1 : 250 000") bottom-left in Label type on Surface.
+- The scale bar sits with the zoom buttons bottom-right (the bottom-left corner belongs to the "About & sources" chip).
 - **Place card:** Surface, 4px, 3px Sindoor top edge, photo band, Label kicker in Leaf ("SURVEY VILLAGE · GORAKHPUR"), Headline name, then a two-column fact list with tabular values. Close is a 14px circle top-right.
 - **Selected feature:** a 2px Sindoor ring plus a faint 1px outer ring; the label is not changed.
 
 ### Navigation
-Thin top bar: wordmark "LOKA / APPS" in Label type, Ink; links Ink Soft 0.9rem. No active pills, no bottom borders.
+One thin bar, shared by the home gallery and every atlas. On the home gallery it reads "LOKA Atlas" (the page's title, Source Serif 4) with the links at the right; on an atlas it carries the organisation's block (see The header). Links Ink Soft in Meta type. No active pills, no bottom borders.
 
 ### Credits and the call to action
-The credit strip is Surface Alt with a hairline top edge: a black "LOKA" tag, "Made by … with …", data sources, and at the end "Build an atlas like this for your own geography and data." with a Leaf button "Build your own atlas for free →". It is part of the brand and appears on every atlas view, including the phone sheet's foot.
+The credits ledger (Surface Alt, hairline top edge: "Made by … with …", data sources, contributed data, the people who walked the ground, the ODbL note) is kept in full but lives behind the "About & sources" chip on an atlas. The LOKA logo block that headed it is gone — the badge is LOKA's mark now. The call-to-action band ("Build an atlas like this…") shows on the home gallery only; on an atlas its link is the badge and the panel's foot.
 
 ## 6. Motion
 Transitions ≤ 0.2s ease-out (kept); the phone sheet slides in 0.28s with `cubic-bezier(.22,1,.36,1)`. `prefers-reduced-motion` disables all of it. Nothing bounces, nothing springs.
@@ -324,6 +336,7 @@ Not shipped. The product is used outdoors and on projectors in light rooms; a da
 - Map base: the pale grey base and its "grey CARTO" feel → cream Ground (#F5F1E6) inside a double ink frame; boundary ink is now near-black (#26231F), not ochre.
 - Map data colours: the `greens` / `ylorbr` earth ramps → the marigold ramp; point colours are the seven-colour set with mandatory marker shapes.
 - Phone layout: the 46% bottom tray with a bar of group marks → a bottom sheet with group tabs, one group at a time, 44px rows.
+- Atlas page (layout B, later in September): the title block above a framed map well → the map edge to edge under one 44px header carrying the organisation's logo, name and title; the "LOKA Atlas" wordmark in the strip and the LOKA logo in the credits → one "Powered by [LOKA] Atlas" badge; the credits ledger and the lead text → the "About & sources" panel; the shelf → a drawer that is open on load and folds to a "Layers · N" button. Measured at 1280×800: map on screen 55% → 94%, map not covered 36% → 70% (drawer open) / 92% (folded). At 375×812: 63% → 93% on screen, 38% → 70% not covered with the sheet at rest.
 
 **Kept**
 The Map Speaks Rule, the Two Voices Rule (faces changed), the Two-Channel Rule, the Ink-on-Paper Rule, the One-Skeleton Rule for lists, the Strip and the Shelf, the signature toggle, small radii, the credits ledger, the motion limits.
