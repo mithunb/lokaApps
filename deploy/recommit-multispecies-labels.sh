@@ -19,7 +19,7 @@ LAYER=where-the-respondents-work
 D=$REPO/atlas/datasets/$SLUG
 API=http://127.0.0.1:8181/api/atlas
 BK=/root/msla-before-$(date +%Y%m%d-%H%M%S)
-TOKEN=$(grep -E '^ATLAS_ADMIN_TOKEN=' "$REPO/api/.env" | head -1 | cut -d= -f2- | tr -d '"'"'"'"'')
+TOKEN=$(grep -E '^ATLAS_ADMIN_TOKEN=' "$REPO/api/.env" | head -1 | cut -d= -f2- | tr -d "\"'")
 [ -n "$TOKEN" ] || { echo "no admin token on the server; stopping, nothing changed"; exit 1; }
 GJ=$(node -e 'const m=require(process.argv[1]);const l=(m.layers||[]).find(x=>x.id===process.argv[2]);process.stdout.write(l&&l.source?String(l.source).split("/").pop():"")' "$D/manifest.local.json" "$LAYER")
 [ -n "$GJ" ] || { echo "layer $LAYER not found in manifest.local.json; stopping, nothing changed"; exit 1; }
