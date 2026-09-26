@@ -103,6 +103,10 @@
 
   var map, MANIFEST, activeBasemap, DATA = {}, markersByLayer = {}, cropState = {};
   var flipWired = false;   // the layout-flip listener outlives any one map — see start()
+  /* A map framed for one window size is wrong for another: made narrower, the
+     region ran off the right edge. So while nobody has moved the map, a resize
+     frames it again; once someone pans or zooms, their view is left alone. */
+  var resizeWired = false, userMoved = false;
   var searchKeyWired = false;   // "/"-to-search is wired once, however often the panel rebuilds
 
   /* ---- more than one key: shared palette + state ----
@@ -412,6 +416,8 @@
        was slow — or that never finished — left the map crediting nobody. */
     renderMapAttrib();
 
+    userMoved = false;
+    map.on("movestart", function (e) { if (e && e.originalEvent) userMoved = true; });
     map.on("load", function () {
       try {
         // the base style is up: warm it before anything of ours goes on top,
@@ -453,6 +459,14 @@
         // the bottom sheet (mobile). Wired once for the life of the page: start()
         // runs again on every draft preview (reboot), and this listener outlives
         // the map it was registered alongside.
+        if (!resizeWired) {
+          resizeWired = true;
+          var refitT = null;
+          window.addEventListener("resize", function () {
+            clearTimeout(refitT);
+            refitT = setTimeout(function () { if (map && !userMoved && !focusFit(true)) fitToData(true); }, 250);
+          });
+        }
         if (!flipWired) {
           flipWired = true;
           window.matchMedia("(max-width: 720px)").addEventListener("change", function () {

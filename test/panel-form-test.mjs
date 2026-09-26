@@ -90,5 +90,10 @@ check('only one script measures the sheet', /function sheetH\(\)/.test(html), fa
 
 check('a phone card wears a thinner red edge than the desktop one', /\.atlas-popup \.maplibregl-popup-content \{ border-top-width:1\.5px; \}/.test(html), true);
 
+console.log('\n  a resized window frames the region again');
+check('a resize re-frames while nobody has moved the map',
+  /refitT = setTimeout\(function \(\) \{ if \(map && !userMoved && !focusFit\(true\)\) fitToData\(true\); \}/.test(js), true);
+check('and a person\'s own pan or zoom is left alone', /if \(e && e\.originalEvent\) userMoved = true;/.test(js), true);
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
