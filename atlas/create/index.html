@@ -7,93 +7,120 @@
   <meta name="description" content="LOKA Atlas is a self-serve map publishing platform — organisations pick a region, choose layers built from open data, add their own, and publish a shareable atlas in minutes. Free to start." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Figtree:wght@500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:wght@700&display=swap" />
   <style>
     :root {
-      /* Same earthy-ink system as the atlas viewer, on clean near-white paper */
-      --color-bg:#F9F9F7; --color-bg-alt:#F0EFEA; --color-surface:#FFFFFF;
-      --color-moss:#4A5A33; --color-canopy:#384526;
-      --color-rust:#AE5028; --color-rust-deep:#7C3616;
-      --color-sienna:#99582F; --color-ochre:#B8862F;
-      --color-text-primary:#2A241A; --color-text-secondary:#564E3C; --color-text-muted:#6B6350;
-      --color-divider:rgba(42,36,26,.09); --color-border:rgba(42,36,26,.14);
-      --color-moss-tint:rgba(74,90,51,.10); --color-rust-tint:rgba(174,80,40,.10);
-      --radius-md:.25rem; --radius-lg:.375rem;
-      --container:min(64rem,100% - 2.5rem);
+      /* the atlas's own tokens (DESIGN.md frontmatter), repeated on every page */
+      --color-page:#FAF8F3; --color-surface:#FDFCF8; --color-surface-alt:#F0EDE4;
+      --color-text-primary:#24211D; --color-text-secondary:#5A5751; --color-text-muted:#6E6A63;
+      --color-border:rgba(36,33,29,.18); --color-divider:rgba(36,33,29,.10);
+      --color-leaf:#2A6B41; --color-leaf-deep:#1F5232; --color-leaf-tint:rgba(42,107,65,.10);
+      --color-sindoor:#C9402B; --color-sindoor-deep:#9E3220; --color-sindoor-tint:rgba(201,64,43,.10);
+      --color-marigold:#E9A237;
+      /* a caution wash: marigold at .16 under Ink (14:1) or Ink Soft (6.3:1) —
+         marigold itself is never text */
+      --color-marigold-tint:rgba(233,162,55,.16);
+      --color-toggle-off:#CFCBC2;
+      --map-ground:#F5F1E6; --map-outside:#EAE6DC; --map-water:#3A7FA1; --map-water-fill:#C8DBE5;
+      --map-boundary:#26231F; --map-block:#8C8985; --map-road:#E2DDD0; --map-label:#24211D; --map-halo:#F5F1E6;
+      --ramp-1:#FBF1D9; --ramp-2:#F4CF82; --ramp-3:#E9A237; --ramp-4:#D2692A; --ramp-5:#A8321A;
+      --point-1:#C9402B; --point-2:#2A6B41; --point-3:#E9A237; --point-4:#3A7FA1; --point-5:#A39E94; --point-6:#26231F; --point-7:#B99A1C;
+      /* script companions (Noto faces for other languages) go here later. They
+         hold the primary face itself until then: an EMPTY value makes the
+         stack read "Source Serif 4", , serif — a double comma — and the whole
+         font-family is thrown away (measured in Chrome: page fell to Times). */
+      --font-companions-serif:"Source Serif 4"; --font-companions-sans:"Source Sans 3";
+      --font-display:"Source Serif 4",var(--font-companions-serif),serif;
+      --font-body:"Source Sans 3",var(--font-companions-sans),sans-serif;
+      --t-display:clamp(1.6rem,4vw,2.4rem); --t-section:1.2rem; --t-body:1rem; --t-control:.95rem;
+      --t-ui:.9rem; --t-meta:.8rem; --t-label:.72rem;
+      --radius-xs:.125rem; --radius-md:.25rem; --radius-lg:.375rem; --radius-pill:999px;
+      --shadow-sm:none; --shadow-md:0 1px 4px rgba(36,33,29,.10); --shadow-lg:0 2px 12px rgba(36,33,29,.12);
+      --container:min(76rem,100% - 2.5rem);
     }
     * { box-sizing:border-box; }
-    body { margin:0; background:var(--color-bg); color:var(--color-text-primary);
-      font-family:'DM Sans',system-ui,-apple-system,sans-serif; font-size:1rem; line-height:1.6;
+    body { margin:0; background:var(--color-page); color:var(--color-text-primary);
+      font-family:var(--font-body); font-size:var(--t-body); line-height:1.55;
       -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
-    h1,h2,h3 { font-family:'Figtree',sans-serif; letter-spacing:-.01em; margin:0 0 .5rem; text-wrap:balance; }
-    h1 { font-size:clamp(1.8rem,4.5vw,2.7rem); font-weight:700; line-height:1.12; }
-    h2 { font-size:clamp(1.2rem,2.4vw,1.45rem); font-weight:600; }
+    h1,h2,h3 { font-family:var(--font-display); font-weight:700; letter-spacing:-.01em; margin:0 0 .5rem; text-wrap:balance; }
+    h1 { font-size:clamp(1.8rem,4.5vw,2.7rem); line-height:1.12; }
+    h2 { font-size:clamp(1.2rem,2.4vw,1.45rem); line-height:1.25; }
     p { color:var(--color-text-secondary); margin:0 0 1rem; text-wrap:pretty; }
-    a { color:var(--color-moss); text-decoration:none; }
-    a:hover { color:var(--color-canopy); text-decoration:underline; }
-    :focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:4px; }
+    a { color:var(--color-leaf); text-decoration:none; }
+    a:hover { color:var(--color-leaf-deep); text-decoration:underline; }
+    :focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; border-radius:var(--radius-md); }
 
-    header.site { border-bottom:1px solid var(--color-divider); background:var(--color-bg); }
-    .nav { width:var(--container); margin:0 auto; padding:1rem 0; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
-    .brand { font-family:'Figtree',sans-serif; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--color-text-primary); font-size:.875rem; }
+    /* the site bar: wordmark in Label type, links in ink soft, nothing underlined at rest */
+    header.site { border-bottom:1px solid var(--color-divider); background:var(--color-page); }
+    .nav { width:min(64rem,100% - 2.5rem); margin:0 auto; padding:1rem 0; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+    .brand { font-size:var(--t-label); font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--color-text-primary); }
     .brand:hover { color:var(--color-text-primary); text-decoration:none; }
     .nav .links { display:flex; gap:1.25rem; }
-    .nav .links a { color:var(--color-text-secondary); font-size:.9rem; }
+    .nav .links a { color:var(--color-text-secondary); font-size:var(--t-ui); }
+    .nav .links a:hover { color:var(--color-text-primary); }
 
-    main { width:var(--container); margin:0 auto; padding:2.75rem 0 3.5rem; }
+    main { width:min(64rem,100% - 2.5rem); margin:0 auto; padding:2.75rem 0 3.5rem; }
 
-    .eyebrow { display:inline-block; font-family:'Figtree',sans-serif; font-size:.72rem; font-weight:600;
-      letter-spacing:.14em; text-transform:uppercase; color:var(--color-moss); margin:0 0 .85rem;
-      padding:.25rem .6rem; background:var(--color-moss-tint); border-radius:4px; }
+    .eyebrow { display:inline-block; font-size:var(--t-label); font-weight:700;
+      letter-spacing:.12em; text-transform:uppercase; color:var(--color-leaf); margin:0 0 .85rem;
+      padding:.25rem .6rem; background:var(--color-leaf-tint); border-radius:var(--radius-md); }
     .lead { font-size:1.1rem; max-width:44rem; }
 
-    .btn { display:inline-block; padding:.6rem 1.2rem; border-radius:var(--radius-md);
-      background:var(--color-moss); color:#fff; font-weight:600; font-size:.95rem; }
-    .btn:hover { background:var(--color-canopy); color:#fff; text-decoration:none; }
+    .btn { display:inline-block; padding:.6rem 1.2rem; border-radius:var(--radius-md); border:1px solid transparent;
+      background:var(--color-leaf); color:#fff; font-weight:600; font-size:var(--t-control);
+      transition:background-color .15s ease-out, color .15s ease-out; }
+    .btn:hover { background:var(--color-leaf-deep); color:#fff; text-decoration:none; }
     .btn:active { transform:translateY(1px); }
-    .btn.secondary { background:transparent; color:var(--color-moss); border:1px solid var(--color-moss); }
-    .btn.secondary:hover { background:var(--color-moss-tint); color:var(--color-canopy); }
+    .btn.secondary { background:transparent; color:var(--color-leaf); border-color:var(--color-leaf); }
+    .btn.secondary:hover { background:var(--color-leaf-tint); color:var(--color-leaf-deep); }
     .hero-actions { display:flex; gap:.75rem; flex-wrap:wrap; margin-top:1.25rem; }
 
-    /* showcase band */
+    /* showcase band: the drawn map sits in the atlas's own frame, cream ground inside ink */
     .showcase { margin:3rem 0; border:1px solid var(--color-border); border-radius:var(--radius-lg);
       background:var(--color-surface); overflow:hidden; display:grid; grid-template-columns:1fr; }
     @media (min-width:760px){ .showcase { grid-template-columns:1.15fr 1fr; } }
     .showcase-copy { padding:1.75rem; }
-    .showcase-copy .tag { font-size:.75rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--color-rust); }
-    .showcase-map { min-height:230px; background:var(--color-bg-alt); position:relative; }
+    .showcase-copy .tag { display:inline-block; font-size:var(--t-label); font-weight:700; letter-spacing:.12em; text-transform:uppercase;
+      color:var(--color-sindoor-deep); border-top:3px solid var(--color-sindoor); padding-top:.35rem; margin-bottom:.5rem; }
+    .showcase-map { min-height:230px; background:var(--map-outside); position:relative; border-left:1px solid var(--color-border); }
+    @media (max-width:759px){ .showcase-map { border-left:0; border-top:1px solid var(--color-border); } }
     .showcase-map svg { position:absolute; inset:0; width:100%; height:100%; }
 
     /* what you get: editorial rows, not a card grid */
     .features { margin:3rem 0; }
     .feature { display:flex; gap:1rem; padding:1.05rem 0; border-top:1px solid var(--color-divider); }
     .feature:last-child { border-bottom:1px solid var(--color-divider); }
-    .feature svg { flex:0 0 auto; width:22px; height:22px; margin-top:.2rem; color:var(--color-moss); }
-    .feature b { display:block; font-family:'Figtree',sans-serif; font-weight:600; color:var(--color-text-primary); }
-    .feature span { font-size:.95rem; color:var(--color-text-secondary); }
-    .feature .soon { display:inline-block; margin-left:.5rem; font-size:.68rem; font-weight:600; letter-spacing:.08em;
-      text-transform:uppercase; color:var(--color-sienna); background:var(--color-rust-tint); border-radius:4px; padding:.1rem .4rem; vertical-align:2px; }
+    .feature svg { flex:0 0 auto; width:22px; height:22px; margin-top:.2rem; color:var(--color-leaf); }
+    .feature b { display:block; font-weight:600; color:var(--color-text-primary); }
+    .feature span { font-size:var(--t-control); font-weight:400; color:var(--color-text-secondary); }
+    .feature .soon { display:inline-block; margin-left:.5rem; font-size:var(--t-label); font-weight:700; letter-spacing:.08em;
+      text-transform:uppercase; color:var(--color-sindoor-deep); background:var(--color-sindoor-tint); border-radius:var(--radius-md); padding:.1rem .4rem; vertical-align:2px; }
 
-    /* how it works: a genuine sequence */
+    /* how it works: a genuine sequence, so the numerals stay — in the serif, as
+       a title would be, and in leaf: marigold is a data colour, never text */
     .steps { margin:3rem 0; display:grid; gap:1rem; grid-template-columns:1fr; }
     @media (min-width:760px){ .steps { grid-template-columns:repeat(3,1fr); } }
     .step { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:1.25rem 1.35rem; }
-    .step em { display:block; font-style:normal; font-family:'Figtree',sans-serif; font-weight:700; font-size:1.35rem; color:var(--color-ochre); margin-bottom:.35rem; }
-    .step b { display:block; font-family:'Figtree',sans-serif; font-weight:600; margin-bottom:.25rem; }
-    .step p { font-size:.92rem; margin:0; }
+    .step em { display:block; font-style:normal; font-family:var(--font-display); font-weight:700; font-size:1.5rem; line-height:1;
+      color:var(--color-leaf); margin-bottom:.5rem; font-variant-numeric:tabular-nums; }
+    .step b { display:block; font-weight:600; margin-bottom:.25rem; }
+    .step p { font-size:var(--t-control); margin:0; }
 
-    .fineprint { max-width:44rem; font-size:.92rem; }
+    .fineprint { max-width:44rem; font-size:var(--t-control); }
 
-    /* CTA */
-    .invite { margin:3rem 0 0; background:var(--color-moss); border-radius:var(--radius-lg); padding:2rem 1.75rem; color:#eef2ec; }
+    /* CTA: the one leaf-filled block on the page; every word on it is white, at
+       most a little softened (white at 85% on leaf is 5.2:1) */
+    .invite { margin:3rem 0 0; background:var(--color-leaf); border-radius:var(--radius-lg); padding:2rem 1.75rem; color:#fff; }
     .invite h2 { color:#fff; }
-    .invite p { color:#d6ddd2; max-width:44rem; }
-    .invite .btn { background:#FFFFFF; color:var(--color-canopy); }
-    .invite .btn:hover { background:var(--color-surface); color:var(--color-canopy); }
-    .invite small { display:block; margin-top:.9rem; color:#b9c4b4; font-size:.82rem; }
+    .invite p { color:rgba(255,255,255,.88); max-width:44rem; }
+    .invite .btn { background:#FFFFFF; color:var(--color-leaf-deep); border-color:#fff; }
+    .invite .btn:hover { background:var(--color-surface); color:var(--color-leaf-deep); }
+    .invite .btn.ghost { background:transparent; color:#fff; border-color:rgba(255,255,255,.7); margin-left:.5rem; }
+    .invite .btn.ghost:hover { background:rgba(255,255,255,.12); color:#fff; border-color:#fff; }
+    .invite small { display:block; margin-top:.9rem; color:rgba(255,255,255,.85); font-size:var(--t-meta); }
 
-    footer.site { margin-top:3.5rem; border-top:1px solid var(--color-divider); background:var(--color-bg-alt); }
-    .foot-inner { width:var(--container); margin:0 auto; padding:1.5rem 0; color:var(--color-text-secondary); font-size:.875rem; }
+    footer.site { margin-top:3.5rem; border-top:1px solid var(--color-divider); background:var(--color-surface-alt); }
+    .foot-inner { width:min(64rem,100% - 2.5rem); margin:0 auto; padding:1.5rem 0; color:var(--color-text-secondary); font-size:var(--t-ui); }
 
     @media (prefers-reduced-motion: reduce){
       *, *::before, *::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; }
@@ -141,17 +168,18 @@
       </div>
       <div class="showcase-map" aria-hidden="true">
         <svg viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-          <rect width="400" height="260" fill="#F0EFEA"/>
-          <path d="M60 40 L160 25 L235 60 L305 45 L355 95 L330 170 L360 215 L280 240 L190 225 L120 240 L70 190 L40 120 Z" fill="#E9E6DE" stroke="#B8862F" stroke-width="3"/>
-          <path d="M160 25 L175 90 L235 60 M175 90 L150 160 L120 240 M175 90 L250 130 L305 45 M250 130 L245 200 L280 240 M150 160 L245 200" fill="none" stroke="#564E3C" stroke-width="1" opacity=".45"/>
-          <path d="M40 120 C110 130 170 105 230 125 C285 143 330 130 360 145" fill="none" stroke="#5f7f92" stroke-width="3" opacity=".85"/>
-          <path d="M120 240 C140 200 165 185 205 175" fill="none" stroke="#7ba0b0" stroke-width="1.6" opacity=".8"/>
-          <circle cx="205" cy="112" r="7" fill="#99582F"/>
-          <circle cx="150" cy="160" r="7" fill="#4A5A33"/>
-          <circle cx="284" cy="170" r="7" fill="#AE5028"/>
-          <rect x="96" y="60" width="34" height="22" rx="3" fill="#4A5A33" opacity=".35"/>
-          <rect x="255" y="88" width="40" height="26" rx="3" fill="#9aad5b" opacity=".5"/>
-          <rect x="180" y="205" width="30" height="18" rx="3" fill="#cdb14a" opacity=".5"/>
+          <!-- the map tokens: outside, ground, boundary ink, block hairlines, water, the marigold ramp, the point set -->
+          <rect width="400" height="260" fill="#EAE6DC"/>
+          <path d="M60 40 L160 25 L235 60 L305 45 L355 95 L330 170 L360 215 L280 240 L190 225 L120 240 L70 190 L40 120 Z" fill="#F5F1E6" stroke="#26231F" stroke-width="2"/>
+          <path d="M160 25 L175 90 L235 60 M175 90 L150 160 L120 240 M175 90 L250 130 L305 45 M250 130 L245 200 L280 240 M150 160 L245 200" fill="none" stroke="#8C8985" stroke-width=".9"/>
+          <rect x="96" y="60" width="34" height="22" rx="2" fill="#F4CF82" opacity=".7"/>
+          <rect x="255" y="88" width="40" height="26" rx="2" fill="#E9A237" opacity=".65"/>
+          <rect x="180" y="205" width="30" height="18" rx="2" fill="#D2692A" opacity=".6"/>
+          <path d="M40 120 C110 130 170 105 230 125 C285 143 330 130 360 145" fill="none" stroke="#3A7FA1" stroke-width="3" opacity=".9"/>
+          <path d="M120 240 C140 200 165 185 205 175" fill="none" stroke="#3A7FA1" stroke-width="1.6" opacity=".7"/>
+          <circle cx="205" cy="112" r="7" fill="#C9402B" stroke="#F5F1E6" stroke-width="1.5"/>
+          <path d="M150 152 L158 166 L142 166 Z" fill="#2A6B41" stroke="#F5F1E6" stroke-width="1.5"/>
+          <rect x="277" y="163" width="14" height="14" fill="#E9A237" stroke="#F5F1E6" stroke-width="1.5"/>
         </svg>
       </div>
     </section>
@@ -207,7 +235,7 @@
         start? Write to us and we'll set it up with you.
       </p>
       <a class="btn" href="../setup/">Build your own atlas for free</a>
-      <a class="btn" style="background:transparent;border:1px solid #fff;margin-left:.5rem" href="mailto:mithun@socratus.org?subject=Create%20a%20LOKA%20Atlas%20for%20our%20organisation&body=Hi%2C%0A%0AWe%27d%20like%20a%20LOKA%20Atlas.%0A%0AOrganisation%3A%20%0ARegion%20(districts%20%2F%20area)%3A%20%0AWhat%20we%27d%20like%20to%20map%3A%20%0AData%20we%20have%20(spreadsheets%2C%20GPS%20points%2C%20none%20yet)%3A%20%0A%0AThanks%21">Email us instead</a>
+      <a class="btn ghost" href="mailto:mithun@socratus.org?subject=Create%20a%20LOKA%20Atlas%20for%20our%20organisation&body=Hi%2C%0A%0AWe%27d%20like%20a%20LOKA%20Atlas.%0A%0AOrganisation%3A%20%0ARegion%20(districts%20%2F%20area)%3A%20%0AWhat%20we%27d%20like%20to%20map%3A%20%0AData%20we%20have%20(spreadsheets%2C%20GPS%20points%2C%20none%20yet)%3A%20%0A%0AThanks%21">Email us instead</a>
       <small>LOKA Atlas is Public Tech by Socratus — built on open data, openly credited.</small>
     </section>
   </main>

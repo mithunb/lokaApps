@@ -12,12 +12,12 @@
        Signed in, the first thing you see is your own atlases, not a form. -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Figtree:wght@500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:wght@700&display=swap" />
   <link rel="stylesheet" href="../databench.css?v=dev" />
   <style>
-    .working { height:3px; border-radius:var(--radius-pill); overflow:hidden; background:var(--color-bg-alt);
+    .working { height:3px; border-radius:var(--radius-pill); overflow:hidden; background:var(--color-surface-alt);
       margin:.45rem 0 .1rem; max-width:22rem; }
-    .working i { display:block; height:100%; width:38%; border-radius:var(--radius-pill); background:var(--color-moss);
+    .working i { display:block; height:100%; width:38%; border-radius:var(--radius-pill); background:var(--color-leaf);
       animation:working 1.15s cubic-bezier(.45,0,.55,1) infinite; }
     @keyframes working { 0% { transform:translateX(-100%); } 100% { transform:translateX(360%); } }
     /* a stripe that never stops moving is worse than no stripe for anyone who
@@ -27,74 +27,103 @@
     }
 
     :root {
-      --color-bg:#F9F9F7; --color-bg-alt:#F0EFEA; --color-surface:#FFFFFF;
-      --color-moss:#4A5A33; --color-canopy:#384526;
-      --color-rust:#AE5028; --color-rust-deep:#7C3616;
-      --color-ochre:#B8862F;
-      --color-text-primary:#2A241A; --color-text-secondary:#564E3C; --color-text-muted:#6B6350;
-      --color-divider:rgba(42,36,26,.09); --color-border:rgba(42,36,26,.14);
-      --color-moss-tint:rgba(74,90,51,.10); --color-rust-tint:rgba(174,80,40,.10);
-      --color-ochre-tint:rgba(184,134,47,.14);
-      --t-display:1.6rem; --t-section:1.15rem; --t-body:1rem; --t-control:.95rem;
-      --t-ui:.875rem; --t-meta:.78rem; --t-label:.72rem;
-      --shadow-md:0 1px 4px rgba(42,36,26,.10);
-      --shadow-lg:0 2px 12px rgba(42,36,26,.12);
-      /* corners: xs is for a shape under 16px, where md would read as a circle */
+      /* the atlas's own tokens (DESIGN.md frontmatter), repeated on every page */
+      --color-page:#FAF8F3; --color-surface:#FDFCF8; --color-surface-alt:#F0EDE4;
+      --color-text-primary:#24211D; --color-text-secondary:#5A5751; --color-text-muted:#6E6A63;
+      --color-border:rgba(36,33,29,.18); --color-divider:rgba(36,33,29,.10);
+      --color-leaf:#2A6B41; --color-leaf-deep:#1F5232; --color-leaf-tint:rgba(42,107,65,.10);
+      --color-sindoor:#C9402B; --color-sindoor-deep:#9E3220; --color-sindoor-tint:rgba(201,64,43,.10);
+      --color-marigold:#E9A237;
+      /* a caution wash: marigold at .16 under Ink (14:1) or Ink Soft (6.3:1) —
+         marigold itself is never text */
+      --color-marigold-tint:rgba(233,162,55,.16);
+      --color-toggle-off:#CFCBC2;
+      --map-ground:#F5F1E6; --map-outside:#EAE6DC; --map-water:#3A7FA1; --map-water-fill:#C8DBE5;
+      --map-boundary:#26231F; --map-block:#8C8985; --map-road:#E2DDD0; --map-label:#24211D; --map-halo:#F5F1E6;
+      --ramp-1:#FBF1D9; --ramp-2:#F4CF82; --ramp-3:#E9A237; --ramp-4:#D2692A; --ramp-5:#A8321A;
+      --point-1:#C9402B; --point-2:#2A6B41; --point-3:#E9A237; --point-4:#3A7FA1; --point-5:#A39E94; --point-6:#26231F; --point-7:#B99A1C;
+      /* script companions (Noto faces for other languages) go here later. They
+         hold the primary face itself until then: an EMPTY value makes the
+         stack read "Source Serif 4", , serif — a double comma — and the whole
+         font-family is thrown away (measured in Chrome: page fell to Times). */
+      --font-companions-serif:"Source Serif 4"; --font-companions-sans:"Source Sans 3";
+      --font-display:"Source Serif 4",var(--font-companions-serif),serif;
+      --font-body:"Source Sans 3",var(--font-companions-sans),sans-serif;
+      --t-display:clamp(1.6rem,4vw,2.4rem); --t-section:1.2rem; --t-body:1rem; --t-control:.95rem;
+      --t-ui:.9rem; --t-meta:.8rem; --t-label:.72rem;
       --radius-xs:.125rem; --radius-md:.25rem; --radius-lg:.375rem; --radius-pill:999px;
+      --shadow-sm:none; --shadow-md:0 1px 4px rgba(36,33,29,.10); --shadow-lg:0 2px 12px rgba(36,33,29,.12);
+      --container:min(76rem,100% - 2.5rem);
     }
     * { box-sizing:border-box; }
-    body { margin:0; background:var(--color-bg); color:var(--color-text-primary);
-      font-family:'DM Sans',system-ui,-apple-system,sans-serif; font-size:var(--t-body); line-height:1.55;
+    body { margin:0; background:var(--color-page); color:var(--color-text-primary);
+      font-family:var(--font-body); font-size:var(--t-body); line-height:1.55;
       -webkit-font-smoothing:antialiased; }
-    h1,h2,h3 { font-family:'Figtree',sans-serif; letter-spacing:-.01em; margin:0; text-wrap:balance; }
+    h1,h2,h3 { font-family:var(--font-display); font-weight:700; letter-spacing:-.01em; margin:0; text-wrap:balance; }
     button { font:inherit; }
     [hidden] { display:none !important; }
-    :focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:var(--radius-md); }
-    a { color:var(--color-canopy); }
+    :focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; border-radius:var(--radius-md); }
+    a { color:var(--color-leaf); }
+    a:hover { color:var(--color-leaf-deep); }
+    /* any number beside another number lines up on its digits */
+    .stp b, #cat-total, .k-count, .key-note { font-variant-numeric:tabular-nums; }
 
     .site { display:flex; align-items:center; gap:1rem; padding:.9rem clamp(.9rem,4vw,2rem);
       border-bottom:1px solid var(--color-divider); }
-    .site .mark { font-family:'Figtree',sans-serif; font-weight:700; letter-spacing:.06em;
-      font-size:var(--t-ui); text-decoration:none; color:inherit; }
+    /* the wordmark, in Label type: Sans 700, small, spaced, Ink */
+    .site .mark { font-size:var(--t-label); font-weight:700; letter-spacing:.12em; text-transform:uppercase;
+      text-decoration:none; color:var(--color-text-primary); }
     .site .sp { flex:1 1 auto; }
     .site .who { font-size:var(--t-meta); color:var(--color-text-muted); }
 
     .wrap { max-width:52rem; margin:0 auto; padding:clamp(1.1rem,4vw,2.4rem) clamp(.9rem,4vw,2rem) 4rem; }
-    h1 { font-size:var(--t-display); }
-    .lede { font-size:var(--t-meta); color:var(--color-text-muted); max-width:52ch; margin:.35rem 0 0; }
+    h1 { font-size:var(--t-display); line-height:1.12; }
+    .lede { font-size:var(--t-body); color:var(--color-text-secondary); max-width:52ch; margin:.35rem 0 0; text-wrap:pretty; }
+    /* the one kicker on the page: names the wizard above its title */
+    .eyebrow { display:inline-block; font-size:var(--t-label); font-weight:700; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--color-leaf); background:var(--color-leaf-tint);
+      border-radius:var(--radius-md); padding:.25rem .6rem; margin:0 0 .7rem; }
 
+    /* the stepper: the current step wears the leaf wash; done steps stay
+       readable, steps still ahead are faded and cannot be pressed */
     .stepper { display:flex; flex-wrap:wrap; gap:.15rem; margin:1.2rem 0 1rem; }
     .stp { display:flex; align-items:baseline; gap:.4rem; min-height:2.75rem; padding:.5rem .7rem;
       background:none; border:1px solid transparent; border-radius:var(--radius-md);
-      color:var(--color-text-muted); font-size:var(--t-ui); cursor:pointer; }
-    .stp b { font-family:'Figtree',sans-serif; }
-    .stp[aria-current="step"] { background:var(--color-surface); border-color:var(--color-border);
-      color:var(--color-text-primary); font-weight:600; }
-    .stp:disabled { cursor:not-allowed; opacity:.55; }
+      color:var(--color-text-secondary); font-size:var(--t-ui); font-weight:600; cursor:pointer; }
+    .stp:hover { background:var(--color-leaf-tint); }
+    .stp b { font-weight:700; }
+    .stp[aria-current="step"] { background:var(--color-leaf-tint); border-color:var(--color-leaf);
+      color:var(--color-leaf-deep); }
+    .stp:disabled, .stp:disabled:hover { cursor:not-allowed; opacity:.5; background:none; }
 
     .panel { background:var(--color-surface); border:1px solid var(--color-border);
       border-radius:var(--radius-lg); padding:clamp(1rem,3vw,1.6rem); }
-    .panel > h2 { font-size:var(--t-section); margin-bottom:.5rem; }
+    .panel > h2 { font-size:var(--t-section); line-height:1.25; margin-bottom:.5rem; }
     .hint { font-size:var(--t-meta); color:var(--color-text-muted); max-width:52ch; }
     /* A step's opening sentence is the most-read line on the page and was set
        as a hint: 0.78rem, ink faded. A hint is an aside; this is the thing you
        are meant to read first. */
-    .intro { font-size:var(--t-ui); color:var(--color-text-secondary);
-      max-width:46ch; margin:.15rem 0 0; }
+    .intro { font-size:var(--t-body); color:var(--color-text-secondary);
+      max-width:46ch; margin:.15rem 0 0; text-wrap:pretty; }
     .btnrow { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; margin-top:1.3rem; }
 
+    /* buttons: primary is the leaf fill; secondary the leaf outline; quiet is
+       borderless ink that underlines when reached for. Disabled only fades. */
     .btn { min-height:2.75rem; padding:.6rem 1.1rem; border:1px solid transparent;
-      border-radius:var(--radius-md); background:var(--color-moss); color:#fff;
+      border-radius:var(--radius-md); background:var(--color-leaf); color:#fff;
       font-weight:600; font-size:var(--t-control); cursor:pointer; text-decoration:none;
-      display:inline-flex; align-items:center; justify-content:center; }
-    .btn:hover { background:var(--color-canopy); }
-    .btn.secondary { background:var(--color-surface); color:var(--color-text-primary); border-color:var(--color-border); }
-    .btn.secondary:hover { background:var(--color-bg-alt); }
+      display:inline-flex; align-items:center; justify-content:center;
+      transition:background-color .15s ease-out, color .15s ease-out; }
+    .btn:hover { background:var(--color-leaf-deep); color:#fff; }
+    .btn.secondary { background:transparent; color:var(--color-leaf); border-color:var(--color-leaf); }
+    .btn.secondary:hover { background:var(--color-leaf-tint); color:var(--color-leaf-deep); }
     .btn.quiet { background:none; color:var(--color-text-secondary); }
-    .btn.quiet:hover { background:var(--color-bg-alt); }
+    .btn.quiet:hover { background:none; color:var(--color-text-primary); text-decoration:underline; text-underline-offset:.2em; }
     .btn.small { min-height:2.75rem; padding:.4rem .7rem; font-size:var(--t-ui); }
-    .btn:disabled, .btn:disabled:hover { background:var(--color-bg-alt); color:var(--color-text-muted);
-      border-color:var(--color-border); cursor:not-allowed; }
+    .btn:disabled, .btn:disabled:hover { opacity:.5; cursor:not-allowed; background:var(--color-leaf); color:#fff; text-decoration:none; }
+    .btn.quiet:disabled, .btn.quiet:disabled:hover { background:none; color:var(--color-text-secondary); }
+    .btn.secondary:disabled, .btn.secondary:disabled:hover { background:transparent; color:var(--color-leaf); }
+    @media (prefers-reduced-motion:reduce) { .btn { transition:none; } }
 
     .fgroup { display:grid; grid-template-columns:1fr 1fr; gap:.9rem 1.1rem; }
     .fgroup > .wide { grid-column:1/-1; }
@@ -102,17 +131,19 @@
     label.f { display:flex; flex-wrap:wrap; align-items:baseline; gap:.15rem .4rem;
       font-size:var(--t-ui); font-weight:600; color:var(--color-text-secondary); }
     label.f > input, label.f > textarea, label.f > select, label.f > .fielderr { flex:1 0 100%; margin-top:.2rem; }
-    label.f input, label.f textarea, label.f select { font:inherit; font-size:var(--t-body); font-weight:400;
-      padding:.6rem .7rem; border:1px solid var(--color-border); border-radius:var(--radius-md);
+    label.f input, label.f textarea, label.f select { font:inherit; font-size:var(--t-control); font-weight:400;
+      padding:.55rem .65rem; border:1px solid var(--color-border); border-radius:var(--radius-md);
       background:var(--color-surface); color:var(--color-text-primary); width:100%; min-height:2.75rem; }
+    label.f input::placeholder, label.f textarea::placeholder { color:var(--color-text-muted); opacity:1; }
     label.f textarea { resize:vertical; line-height:1.45; }
     label.f .opt { font-weight:400; font-size:var(--t-meta); color:var(--color-text-muted); }
-    label.f .req { font-weight:600; font-size:var(--t-meta); color:var(--color-rust-deep); }
-    label.f.bad input, label.f.bad textarea { border-color:var(--color-rust); }
-    .fielderr { font-size:var(--t-meta); font-weight:400; color:var(--color-rust-deep); }
+    label.f .req { font-weight:600; font-size:var(--t-meta); color:var(--color-sindoor-deep); }
+    /* a field that needs another look: the message says so; the box keeps its hairline, now in sindoor */
+    label.f.bad input, label.f.bad textarea { border-color:var(--color-sindoor); }
+    .fielderr { font-size:var(--t-meta); font-weight:400; color:var(--color-sindoor-deep); }
     .msg { margin-top:.9rem; padding:.6rem .8rem; border-radius:var(--radius-md); font-size:var(--t-ui); }
-    .msg.err { background:var(--color-rust-tint); color:var(--color-rust-deep); }
-    .msg.ok { background:var(--color-moss-tint); color:var(--color-canopy); }
+    .msg.err { background:var(--color-sindoor-tint); color:var(--color-sindoor-deep); }
+    .msg.ok { background:var(--color-leaf-tint); color:var(--color-leaf-deep); }
 
     /* ---- place box ---- */
     .combo { position:relative; }
@@ -121,53 +152,60 @@
       border-radius:var(--radius-md); box-shadow:var(--shadow-lg); max-height:17rem; overflow:auto; }
     .sugg button { display:block; width:100%; text-align:left; background:none; border:none;
       padding:.5rem .6rem; border-radius:var(--radius-md); cursor:pointer; color:inherit; min-height:2.75rem; }
-    .sugg button:hover, .sugg button[aria-selected="true"] { background:var(--color-moss-tint); }
-    .sugg button[aria-selected="true"] { outline:2px solid var(--color-moss); outline-offset:-2px; }
-    .sugg .nm { display:block; font-family:'Figtree',sans-serif; font-size:var(--t-ui); font-weight:600; }
+    .sugg button:hover, .sugg button[aria-selected="true"] { background:var(--color-leaf-tint); }
+    .sugg button[aria-selected="true"] { outline:2px solid var(--color-leaf); outline-offset:-2px; }
+    .sugg .nm { display:block; font-size:var(--t-ui); font-weight:600; }
     .sugg .wh { display:block; font-size:var(--t-meta); color:var(--color-text-muted); }
     /* A cold lookup takes about four seconds — the server reads the whole
        country's boundary list the first time. Silence there reads as broken. */
     .sugg .note { display:flex; align-items:center; padding:.55rem .6rem;
       font-size:var(--t-ui); color:var(--color-text-secondary); }
-    .sugg .note.is-err { color:var(--color-rust-deep); }
+    .sugg .note.is-err { color:var(--color-sindoor-deep); }
     .chips { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.7rem; }
+    /* a chosen place: surface with a hairline, 4px corners — pills are for the switch track */
     .chip { display:inline-flex; align-items:center; gap:.15rem; padding:.3rem .3rem .3rem .6rem;
-      background:var(--color-bg-alt); border-radius:var(--radius-pill); font-size:var(--t-ui); }
+      background:var(--color-surface); border:1px solid var(--color-border);
+      border-radius:var(--radius-md); font-size:var(--t-ui); font-weight:600; }
     .chip-alt { opacity:.62; }
     .chip .x { width:2.75rem; height:2.75rem; display:inline-flex; align-items:center; justify-content:center;
       background:none; border:none; cursor:pointer; color:inherit; border-radius:var(--radius-md);
       margin:-.4rem -.35rem -.4rem 0; }
-    .chip .x:hover { background:var(--color-rust-tint); color:var(--color-rust-deep); }
+    .chip .x:hover { background:var(--color-sindoor-tint); color:var(--color-sindoor-deep); }
     .chips-empty { font-size:var(--t-meta); color:var(--color-text-muted); margin:.7rem 0 0; }
-    .verdict { margin-top:.8rem; padding:.6rem .8rem; background:var(--color-moss-tint);
-      border-radius:var(--radius-md); font-size:var(--t-ui); color:var(--color-canopy); }
-    .verdict.err { background:var(--color-rust-tint); color:var(--color-rust-deep); }
+    .verdict { margin-top:.8rem; padding:.6rem .8rem; background:var(--color-leaf-tint);
+      border-radius:var(--radius-md); font-size:var(--t-ui); color:var(--color-leaf-deep); }
+    .verdict.err { background:var(--color-sindoor-tint); color:var(--color-sindoor-deep); }
 
     /* ---- open data ---- */
-    .given { margin:.9rem 0; padding:.7rem .85rem; background:var(--color-bg-alt);
+    .given { margin:.9rem 0; padding:.7rem .85rem; background:var(--color-surface-alt);
       border-radius:var(--radius-md); font-size:var(--t-ui); }
     .cat { border:1px solid var(--color-border); border-radius:var(--radius-md); margin-bottom:.6rem; }
     .cat > summary { display:flex; justify-content:space-between; gap:.6rem; align-items:center;
-      min-height:2.75rem; padding:.55rem .9rem; cursor:pointer; font-family:'Figtree',sans-serif;
-      font-size:var(--t-label); letter-spacing:.1em; text-transform:uppercase; font-weight:600;
+      min-height:2.75rem; padding:.55rem .9rem; cursor:pointer;
+      font-size:var(--t-label); letter-spacing:.12em; text-transform:uppercase; font-weight:700;
       color:var(--color-text-secondary); }
+    .cat > summary:hover { color:var(--color-text-primary); }
     .cat-row { display:flex; gap:.6rem; align-items:flex-start; padding:.6rem .9rem;
       border-top:1px solid var(--color-divider); cursor:pointer; }
     /* a layer the region is too wide to build — shown, so you can see what
        you would get by choosing a smaller region, but not offered */
     .cat-row-off { opacity:.55; cursor:not-allowed; }
     .cat-row-off input { cursor:not-allowed; }
-    .cat-row input { margin-top:.2rem; width:1rem; height:1rem; accent-color:var(--color-moss); }
-    .cat-row b { font-family:'Figtree',sans-serif; font-size:var(--t-ui); }
+    .cat-row input { margin-top:.2rem; width:1rem; height:1rem; accent-color:var(--color-leaf); }
+    .cat-row b { font-size:var(--t-ui); font-weight:600; }
+    /* a layer that costs something says so in the cost's own wash */
+    .cat-row .cost { display:inline-block; margin-left:.35rem; padding:.05rem .4rem; border-radius:var(--radius-md);
+      font-size:var(--t-label); font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+    .cat-row .cost-ask { background:var(--color-sindoor-tint); color:var(--color-sindoor-deep); }
     .cat-row .src { display:block; font-size:var(--t-meta); color:var(--color-text-muted); max-width:60ch; }
 
     /* ---- build ---- */
-    .prog { height:.4rem; background:var(--color-bg-alt); border-radius:var(--radius-pill); overflow:hidden; margin-top:1rem; }
-    .prog i { display:block; height:100%; background:var(--color-moss); transform-origin:left;
+    .prog { height:.4rem; background:var(--color-surface-alt); border-radius:var(--radius-pill); overflow:hidden; margin-top:1rem; }
+    .prog i { display:block; height:100%; background:var(--color-leaf); transform-origin:left;
       transform:scaleX(0); transition:transform .5s ease-out; }
     @media (prefers-reduced-motion:reduce) { .prog i { transition:none; } }
     .log { font-family:ui-monospace,Menlo,monospace; font-size:var(--t-meta); white-space:pre-line;
-      color:var(--color-text-muted); background:var(--color-bg-alt); border-radius:var(--radius-md);
+      color:var(--color-text-muted); background:var(--color-surface-alt); border-radius:var(--radius-md);
       padding:.6rem .7rem; margin-top:.6rem; max-height:9rem; overflow:auto; }
 
     /* ---- your atlases ---- */
@@ -180,14 +218,14 @@
       border-top:1px solid var(--color-divider); }
     .mine a.row { display:flex; align-items:center; gap:.8rem; padding:.85rem .1rem;
       text-decoration:none; color:inherit; background:none; border:0; border-radius:0; }
-    .mine .row-wrap:hover a.row .t b { color:var(--color-canopy); }
+    .mine .row-wrap:hover a.row .t b { color:var(--color-leaf-deep); }
     .mine .t { flex:1 1 auto; min-width:0; }
-    .mine .t b { display:block; font-family:'Figtree',sans-serif; font-size:var(--t-ui); }
+    .mine .t b { display:block; font-size:var(--t-ui); font-weight:600; }
     .mine .t span { display:block; font-size:var(--t-meta); color:var(--color-text-muted); }
     /* wide enough for "Not live", right-aligned, so the status words on every
        row end on the same edge instead of stepping in and out */
     .mine .st { flex:0 0 4.4rem; text-align:right; font-size:var(--t-meta); color:var(--color-text-muted); }
-    .mine .st.live { color:var(--color-canopy); font-weight:600; }
+    .mine .st.live { color:var(--color-leaf-deep); font-weight:600; }
 
     /* Delete, on the row. Until now the only way to remove an atlas was inside
        its own Settings — which is unreachable for exactly the atlas you most
@@ -204,16 +242,15 @@
     .mine .kill { grid-column:2; justify-self:end; font:inherit; font-size:var(--t-meta);
       cursor:pointer; background:none; border:0; border-radius:var(--radius-md);
       color:var(--color-text-muted); padding:.5rem .35rem; position:relative; }
-    .mine .kill:hover { color:var(--color-rust-deep); }
+    .mine .kill:hover { color:var(--color-sindoor-deep); }
     @media (pointer:coarse) {
       .mine .kill::after { content:""; position:absolute; left:50%; top:50%;
         width:44px; height:44px; transform:translate(-50%,-50%); }
     }
     /* the confirm replaces the row rather than floating over it, so the atlas it
        is about stays in view while you read the question */
-    .mine .confirm { margin:.5rem 0; background:var(--color-rust-tint);
-      border:1px solid var(--color-rust); border-radius:var(--radius-md);
-      padding:.7rem .9rem; font-size:var(--t-ui); }
+    .mine .confirm { margin:.5rem 0; background:var(--color-sindoor-tint);
+      border-radius:var(--radius-md); padding:.7rem .9rem; font-size:var(--t-ui); }
     .mine .confirm p { margin:0 0 .55rem; }
     .mine .confirm .btnrow { margin:0; gap:.45rem; }
     .mine .confirm .btn { font-size:var(--t-meta); padding:.4rem .8rem; }
@@ -223,17 +260,17 @@
     /* the chosen place, named at the field itself — the chips below are the full
        list, but a label that still reads only "Place" makes a filled-in step look
        empty, which is exactly how it read to the owner */
-    .f-chosen { font-weight:600; color:var(--color-moss); }
-    .f-chosen:not(:empty)::before { content:"— "; color:var(--color-text-muted,#6B6350); font-weight:400; }
+    .f-chosen { font-weight:600; color:var(--color-leaf); }
+    .f-chosen:not(:empty)::before { content:"— "; color:var(--color-text-muted,#6E6A63); font-weight:400; }
     .fromfile { margin-top:.9rem; }
-    .drop { display:block; border:2px dashed var(--color-border); border-radius:var(--radius-lg);
-      background:var(--color-bg-alt,#F0EFEA); padding:.85rem 1rem; text-align:center; cursor:pointer;
-      font-size:var(--t-ui); color:var(--color-text-secondary,#564E3C); }
-    .drop:hover, .drop.over { border-color:var(--color-moss); background:var(--color-moss-tint); }
-    .drop b { display:block; font-family:'Figtree',sans-serif; font-weight:600;
-      color:var(--color-text-primary,#2A241A); margin-bottom:.15rem; }
+    .drop { display:block; border:1px dashed var(--color-border); border-radius:var(--radius-lg);
+      background:var(--color-surface-alt,#F0EDE4); padding:.85rem 1rem; text-align:center; cursor:pointer;
+      font-size:var(--t-ui); color:var(--color-text-secondary,#5A5751); }
+    .drop:hover, .drop.over { border-color:var(--color-leaf); background:var(--color-leaf-tint); }
+    .drop b { display:block; font-weight:600;
+      color:var(--color-text-primary,#24211D); margin-bottom:.15rem; }
     .drop input { display:none; }
-    .drop-note { display:block; font-size:var(--t-meta); color:var(--color-text-muted,#6B6350); margin-top:.35rem; }
+    .drop-note { display:block; font-size:var(--t-meta); color:var(--color-text-muted,#6E6A63); margin-top:.35rem; }
     /* The file, what it found, and one button — one act, one block. It used to be
        a card in a row with a bare ✕, and the places it found were loose chips
        elsewhere with ✕s of their own: two homes and two buttons for one thing. */
@@ -247,18 +284,18 @@
     .filecard-parts { display:flex; flex-wrap:wrap; gap:.4rem; }
     .part-opt { font:inherit; text-align:left; cursor:pointer; padding:.45rem .7rem;
       display:flex; flex-direction:column; gap:.1rem; border-radius:var(--radius-md);
-      border:1px solid var(--color-border); background:var(--color-bg); }
+      border:1px solid var(--color-border); background:var(--color-page); }
     .part-opt b { font-size:var(--t-ui); }
     .part-opt span { font-size:var(--t-label); color:var(--color-text-secondary); }
-    .part-opt:hover { border-color:var(--color-moss); }
-    .part-opt:focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; }
+    .part-opt:hover { border-color:var(--color-leaf); }
+    .part-opt:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; }
     /* the places a file found carry no ✕ of their own: they arrived as a set and
        the one button below takes the set */
     .chip-static { cursor:default; }
     .filecard-kill { font:inherit; font-size:var(--t-meta); cursor:pointer; padding:.3rem .7rem;
       background:none; border:1px solid var(--color-border); border-radius:var(--radius-md);
-      color:var(--color-text-muted,#6B6350); }
-    .filecard-kill:hover { border-color:var(--color-rust,#AE5028); color:var(--color-rust-deep,#7C3616); }
+      color:var(--color-text-muted,#6E6A63); }
+    .filecard-kill:hover { border-color:var(--color-sindoor,#C9402B); color:var(--color-sindoor-deep,#9E3220); }
   </style>
 </head>
 <body>
@@ -307,6 +344,7 @@
 
     <!-- the four steps -------------------------------------------------- -->
     <div id="flow" hidden>
+      <span class="eyebrow">LOKA Atlas · Setup wizard</span>
       <h1>Set up your atlas</h1>
       <p class="lede">Four steps: who you are, where it is, what open data goes on it. Then we build it
         and hand you the map.</p>

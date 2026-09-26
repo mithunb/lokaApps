@@ -1128,7 +1128,7 @@
           "<span><b>" + esc(l.label) + "</b>" +
             '<span class="src">' + esc(l.info || "") +
             (cannot ? " · too wide an area for this one" : "") +
-            (!cannot && l.cost && l.cost !== "free" ? " · needs approval" : "") + "</span></span>";
+            (!cannot && l.cost && l.cost !== "free" ? ' <span class="cost cost-ask">needs approval</span>' : "") + "</span></span>";
         if (cannot) lab.title = "This is built for the area you pick, and the work grows with it. " +
           "Choose a smaller region to include it.";
         lab.querySelector("input").onchange = function () {
