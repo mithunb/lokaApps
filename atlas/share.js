@@ -57,7 +57,7 @@
     var ctx = cv.getContext("2d");
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, size, size);
-    ctx.fillStyle = "#2A241A";
+    ctx.fillStyle = "#24211D";
     for (var r = 0; r < n; r++) {
       for (var c = 0; c < n; c++) {
         if (qr.isDark(r, c)) ctx.fillRect((c + quiet) * scale, (r + quiet) * scale, scale, scale);
@@ -132,7 +132,8 @@
 
     // embed snippet (public only)
     if (!isPrivate) {
-      var snippet = '<iframe src="' + url + '" width="100%" height="620" style="border:1px solid #F1E7CC;border-radius:var(--radius-lg)" title="' + title.replace(/"/g, "&quot;") + '" loading="lazy"></iframe>';
+      // the snippet lands on somebody else's page, so it names its own values
+      var snippet = '<iframe src="' + url + '" width="100%" height="620" style="border:1px solid #26231F;border-radius:0" title="' + title.replace(/"/g, "&quot;") + '" loading="lazy"></iframe>';
       var embed = el("div", "shr-embed");
       embed.appendChild(el("b", null, "Embed on your website"));
       var pre = el("textarea", "shr-code");
@@ -150,26 +151,34 @@
   function injectStyle() {
     if (styleInjected) return;
     styleInjected = true;
+    /* The page's tokens, with the same values written as fallbacks so the
+       panel reads right even on a page that has not defined them. */
     var css = [
-      ".shr{display:flex;flex-direction:column;gap:.9rem;font-size:var(--t-ui)}",
+      ".shr{display:flex;flex-direction:column;gap:.9rem;font-size:var(--t-ui,.9rem)}",
       ".shr-row{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}",
-      ".shr-link{flex:1 1 14rem;font:inherit;font-size:var(--t-ui);padding:.5rem .6rem;border:1px solid rgba(42,36,26,.16);border-radius:var(--radius-md);background:#FFFFFF;color:#2A241A;min-width:0}",
-      ".shr-btn{display:inline-flex;align-items:center;gap:.4rem;font:inherit;font-size:var(--t-ui);font-weight:600;padding:.5rem .8rem;border:1px solid rgba(42,36,26,.16);border-radius:var(--radius-md);background:#FAF2DC;color:#2A241A;cursor:pointer;text-decoration:none}",
-      ".shr-btn:hover{border-color:#4A5A33;color:#384526;text-decoration:none}",
+      ".shr-link{flex:1 1 14rem;font:inherit;font-size:var(--t-ui,.9rem);padding:.55rem .65rem;border:1px solid var(--color-border,rgba(36,33,29,.18));border-radius:var(--radius-md,.25rem);background:var(--color-surface,#FDFCF8);color:var(--color-text-primary,#24211D);min-width:0}",
+      ".shr-link:focus-visible{outline:2px solid var(--color-leaf,#2A6B41);outline-offset:2px}",
+      ".shr-btn{display:inline-flex;align-items:center;gap:.4rem;font:inherit;font-size:var(--t-ui,.9rem);font-weight:600;padding:.5rem .8rem;border:1px solid var(--color-leaf,#2A6B41);border-radius:var(--radius-md,.25rem);background:transparent;color:var(--color-leaf,#2A6B41);cursor:pointer;text-decoration:none;transition:background .15s ease}",
+      ".shr-btn:hover{background:var(--color-leaf-tint,rgba(42,107,65,.10));color:var(--color-leaf-deep,#1F5232);text-decoration:none}",
+      ".shr-btn:focus-visible{outline:2px solid var(--color-leaf,#2A6B41);outline-offset:2px}",
       ".shr-btn svg{width:15px;height:15px}",
-      ".shr-note{margin:0;color:#564E3C}",
-      ".shr-warn{padding:.6rem .8rem;border-radius:var(--radius-md);background:rgba(174,80,40,.10);color:#7C3616}",
-      ".shr-warn b{color:#7C3616}",
+      ".shr-note{margin:0;color:var(--color-text-secondary,#5A5751)}",
+      ".shr-warn{padding:.6rem .8rem;border-radius:var(--radius-md,.25rem);background:var(--color-sindoor-tint,rgba(201,64,43,.10));color:var(--color-sindoor-deep,#9E3220)}",
+      ".shr-warn b{color:var(--color-sindoor-deep,#9E3220)}",
       ".shr-qr{display:flex;gap:1rem;align-items:center;flex-wrap:wrap}",
-      ".shr-qr canvas{border:1px solid rgba(42,36,26,.16);border-radius:var(--radius-md);width:132px;height:132px;image-rendering:pixelated}",
+      ".shr-qr canvas{border:1px solid var(--color-border,rgba(36,33,29,.18));border-radius:var(--radius-md,.25rem);width:132px;height:132px;image-rendering:pixelated}",
       ".shr-qr-col{display:flex;flex-direction:column;gap:.35rem;max-width:20rem}",
-      ".shr-qr-col span{color:#564E3C;font-size:var(--t-ui)}",
+      ".shr-qr-col b{font-family:var(--font-display,serif);font-size:var(--t-section,1.2rem);font-weight:700}",
+      ".shr-qr-col span{color:var(--color-text-secondary,#5A5751);font-size:var(--t-ui,.9rem)}",
       ".shr-embed{display:flex;flex-direction:column;gap:.4rem;align-items:flex-start}",
-      ".shr-code{width:100%;font:var(--t-meta)/1.45 ui-monospace,Menlo,monospace;padding:.5rem .6rem;border:1px solid rgba(42,36,26,.16);border-radius:var(--radius-md);background:#FFFFFF;color:#2A241A;resize:vertical;box-sizing:border-box}",
-      ".shr-dialog{border:1px solid rgba(42,36,26,.2);border-radius:var(--radius-lg);padding:1.25rem 1.35rem;max-width:30rem;width:calc(100vw - 2.5rem);background:#FAF2DC;color:#2A241A;font-family:'DM Sans',system-ui,sans-serif}",
-      ".shr-dialog::backdrop{background:rgba(42,36,26,.35)}",
-      ".shr-dialog h3{margin:0 0 .9rem;font-family:Figtree,sans-serif;font-size:var(--t-section)}",
-      ".shr-dialog .shr-close{position:absolute;top:.6rem;right:.6rem;border:none;background:none;font-size:var(--t-section);cursor:pointer;color:#6B6350;padding:.2rem .45rem}",
+      ".shr-embed b{font-weight:600}",
+      ".shr-code{width:100%;font:var(--t-meta,.8rem)/1.45 ui-monospace,Menlo,monospace;padding:.5rem .6rem;border:1px solid var(--color-border,rgba(36,33,29,.18));border-radius:var(--radius-md,.25rem);background:var(--color-surface,#FDFCF8);color:var(--color-text-primary,#24211D);resize:vertical;box-sizing:border-box}",
+      ".shr-dialog{border:1px solid var(--color-border,rgba(36,33,29,.18));border-radius:var(--radius-lg,.375rem);padding:1.25rem 1.35rem;max-width:30rem;width:calc(100vw - 2.5rem);background:var(--color-surface,#FDFCF8);color:var(--color-text-primary,#24211D);font-family:var(--font-body,sans-serif);box-shadow:0 8px 30px rgba(36,33,29,.22)}",
+      ".shr-dialog::backdrop{background:rgba(36,33,29,.35)}",
+      ".shr-dialog h3{margin:0 0 .9rem;font-family:var(--font-display,serif);font-weight:700;font-size:var(--t-section,1.2rem);line-height:1.25}",
+      ".shr-dialog .shr-close{position:absolute;top:.6rem;right:.6rem;border:none;background:none;font-size:var(--t-section,1.2rem);cursor:pointer;color:var(--color-text-muted,#6E6A63);padding:.2rem .45rem;border-radius:50%}",
+      ".shr-dialog .shr-close:hover{color:var(--color-text-primary,#24211D)}",
+      ".shr-dialog .shr-close:focus-visible{outline:2px solid var(--color-leaf,#2A6B41);outline-offset:1px}",
     ].join("\n");
     var s = document.createElement("style");
     s.textContent = css;

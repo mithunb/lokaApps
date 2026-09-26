@@ -9,6 +9,11 @@
 // for deuteranopes (the two middle classes of the old rdylgn were 4.4 ΔE00
 // apart once simulated, i.e. the same colour).
 export const PALETTES = {
+  // The atlas's own ramp (DESIGN.md §2): five steps, light → dark, that stay
+  // in lightness order under deuteranopia (L* 96 → 86 → 74 → 59 → 43). The
+  // default for every NEW layer; the ramps below stay for layers that name
+  // them, so nothing already built changes colour.
+  marigold: ['#FBF1D9', '#F4CF82', '#E9A237', '#D2692A', '#A8321A'],
   greens: ['#e7e3d8', '#cdd3b4', '#a9bd8e', '#7f9c65', '#566f42', '#39502f'],
   blues: ['#e6ebec', '#c2d2d8', '#93b1bd', '#6690a1', '#446e80', '#2d4f5e'],
   rust: ['#f0e6dd', '#e0c4ab', '#cb9c77', '#b06f47', '#8f4d2c', '#6e371d'],
@@ -21,25 +26,31 @@ export const PALETTES = {
 // spec saved before the swap still applies instead of silently falling back.
 export const PALETTE_ALIASES = { rdylgn: 'brteal', gnrd: 'tealbr' };
 export function rampFor(name) {
-  return PALETTES[name] || PALETTES[PALETTE_ALIASES[name]] || PALETTES.greens;
+  return PALETTES[name] || PALETTES[PALETTE_ALIASES[name]] || PALETTES.marigold;
 }
 // Named single colours a HUMAN picks for a whole layer — brand choices, not
-// auto-assignment, so they stay exactly as chosen.
+// auto-assignment, so they stay exactly as chosen. The seven-colour point set
+// by its own names; the old names keep resolving, to the new value of the
+// same name, so a saved spec still applies.
 export const MARKER_COLORS = {
-  rust: '#A6522F', moss: '#40573D', ochre: '#B0863A', sienna: '#9C5A34', slate: '#5f7f92',
+  sindoor: '#C9402B', leaf: '#2A6B41', marigold: '#E9A237', blue: '#3A7FA1',
+  stone: '#A39E94', ink: '#26231F', turmeric: '#B99A1C',
+  rust: '#C9402B', moss: '#2A6B41', ochre: '#E9A237', sienna: '#D2692A', slate: '#3A7FA1',
 };
-// AUTO-assigned categorical palette: Paul Tol's colourblind-safe "muted" scheme
-// (indigo, olive, teal, purple, green, wine, cyan, sand — its rose is left out
-// because it lands on the neutral used for "other" under protanopia). Ordered so
-// (a) every prefix stays distinct, since a layer with k categories only uses
-// slots 1..k, and (b) the two palest colours come last — the cream page/basemap
-// (#FFFAEB family) swallows them. Checked with Viénot-Brettel dichromacy
-// simulation + CIEDE2000: worst pair 14.5 ΔE00 under deuteranopia and 15.0
-// under protanopia (the previous earth palette collapsed to 1.4).
-export const CATEGORY_COLORS = ['#332288', '#999933', '#44AA99', '#AA4499', '#117733', '#882255', '#88CCEE', '#DDCC77'];
-// warm grey for the residual bucket: ≥14.5 ΔE00 from all eight in every mode.
+// AUTO-assigned categorical palette: the seven-colour point set (DESIGN.md
+// §2), in order, each with a marker shape of its own — shape carries the
+// difference colour cannot. After red-green simulation the closest pair is
+// Marigold vs Turmeric (ΔE 8.7), and they never share a shape.
+export const CATEGORY_COLORS = ['#C9402B', '#2A6B41', '#E9A237', '#3A7FA1', '#A39E94', '#26231F', '#B99A1C'];
+export const CATEGORY_SHAPES = ['dot', 'triangle', 'square', 'diamond', 'dot-outlined', 'square-hollow', 'triangle-hollow'];
+// Paul Tol's colourblind-safe "muted" scheme, the auto palette until September
+// 2026, kept by name for anything that asks for it.
+export const TOL_COLORS = ['#332288', '#999933', '#44AA99', '#AA4499', '#117733', '#882255', '#88CCEE', '#DDCC77'];
+export const CATEGORY_PALETTES = { point: CATEGORY_COLORS, tol: TOL_COLORS };
+// warm grey for the residual bucket, apart from every colour in the set.
 export const CATEGORY_OTHER = '#7a756c';
-export const MAX_CATEGORIES = 8;
+// one kind per colour-and-shape; the eighth and beyond become "other"
+export const MAX_CATEGORIES = 7;
 export const KINDS = ['markers', 'choropleth', 'line', 'polygon', 'category', 'bubble'];
 const MAX_TOTAL_VERTICES = 300000;
 const CAT_KEY = '_category';   // derived per-feature primary tag (multi-value columns)
@@ -231,17 +242,21 @@ export function buildFragment(spec, feats, existingIds) {
       color = CATEGORY_OTHER;   // empty column — still renders, just unclassed
     }
     const gt = feats.length && feats[0].geometry ? feats[0].geometry.type : 'Point';
-    const shape = /LineString/.test(gt) ? 'line' : /Point/.test(gt) ? 'dot' : undefined;
+    const isPoint = /Point/.test(gt);
+    // a point kind wears the shape that goes with its colour's place in the set
+    const shapeAt = (i) => isPoint ? CATEGORY_SHAPES[i % CATEGORY_SHAPES.length]
+      : /LineString/.test(gt) ? 'line' : undefined;
     // categorical:true tells the viewer to derive an icon/badge per value
     // (colour + icon reinforce each other — the agreed default)
     const legend = kept.map((v, i) => {
       const it = { color: CATEGORY_COLORS[i % CATEGORY_COLORS.length], label: v, categorical: true };
-      if (shape) it.shape = shape;
+      const sh = shapeAt(i);
+      if (sh) it.shape = sh;
       return it;
     });
     if (values.length > kept.length || !kept.length) {
       const it = { color: CATEGORY_OTHER, label: 'other', categorical: true };
-      if (shape) it.shape = shape;
+      if (isPoint) it.shape = 'dot'; else if (/LineString/.test(gt)) it.shape = 'line';
       legend.push(it);
     }
     const base = {
@@ -255,13 +270,13 @@ export function buildFragment(spec, feats, existingIds) {
       // within the pin budget → marker pins, which can carry a colour per kind and
       // the rows of shapes beside them (see MAX_CIRCLE_SWITCH above)
       const markers = {};
-      kept.forEach((v, i) => { markers[v] = { color: CATEGORY_COLORS[i % CATEGORY_COLORS.length] }; });
+      kept.forEach((v, i) => { markers[v] = { color: CATEGORY_COLORS[i % CATEGORY_COLORS.length], shape: shapeAt(i) }; });
       stanza = { ...base, type: 'marker', markerBy: matchProp, markers,
         markerDefault: { color: CATEGORY_OTHER }, categoryIcons: true,
         label_text: (popup.title && isMapLabelColumn(feats, popup.title)) ? { property: popup.title } : undefined };
     } else if (/Point/.test(gt)) {
       stanza = { ...base, type: 'circle',
-        paint: { radius: 5, color, strokeColor: '#ffffff', strokeWidth: 1.2 } };
+        paint: { radius: 5, color, strokeColor: '#F5F1E6', strokeWidth: 1.2 } };
     } else if (/LineString/.test(gt)) {
       stanza = { ...base, type: 'line',
         paint: { color, width: Math.min(6, Math.max(0.5, Number(spec.lineWidth) || 2.5)), opacity: 0.9 } };
@@ -315,7 +330,9 @@ export function buildFragment(spec, feats, existingIds) {
     const values = feats.map((f) => Number(f.properties[prop])).filter(Number.isFinite);
     const ramp = rampFor(spec.palette);
     const colors = spec.reverse ? [...ramp].reverse() : ramp;
-    const breaks = quantileBreaks(values, spec.classCount);
+    // never more classes than the ramp has steps — a sixth class on a
+    // five-step ramp would be painted with nothing
+    const breaks = quantileBreaks(values, Math.min(spec.classCount || 5, ramp.length));
     const used = colors.slice(0, breaks.length + 1);
     const expr = ['step', ['get', prop], used[0]];
     breaks.forEach((b, j) => { expr.push(b, used[j + 1]); });
@@ -329,7 +346,8 @@ export function buildFragment(spec, feats, existingIds) {
     stanza = {
       id, group, type: 'fill', source: sourceFile,
       label: String(spec.label).slice(0, 60), default: true,
-      paint: { fillColor: expr, fillOpacity: 0.72, outlineColor: '#5c544a', outlineWidth: 0.5 },
+      // the Block hairline, so the palest class still reads against the ground
+      paint: { fillColor: expr, fillOpacity: 0.72, outlineColor: '#8C8985', outlineWidth: 0.7 },
       legend,
       popup: { title: popup.title || 'name', fields: popup.fields },
       userLayer: true,
@@ -368,7 +386,7 @@ export function buildFragment(spec, feats, existingIds) {
     stanza = {
       id, group, type: 'circle', source: sourceFile,
       label: String(spec.label).slice(0, 60), default: true,
-      paint: { radius, color, strokeColor: '#ffffff', strokeWidth: 1, opacity: 0.75 },
+      paint: { radius, color, strokeColor: '#F5F1E6', strokeWidth: 1, opacity: 0.75 },
       sizeLegend: sizeLegend.length ? sizeLegend : undefined,
       // the unit rides the ordinary legend as a faint note, like choropleth's
       legend: spec.unit ? [{ color: 'transparent', label: '(' + String(spec.unit).slice(0, 20) + ')', faint: true }] : undefined,
@@ -381,7 +399,7 @@ export function buildFragment(spec, feats, existingIds) {
       stanza = {
         id, group, type: 'circle', source: sourceFile,
         label: String(spec.label).slice(0, 60), default: true,
-        paint: { radius: 4.5, color, strokeColor: '#ffffff', strokeWidth: 1.2 },
+        paint: { radius: 4.5, color, strokeColor: '#F5F1E6', strokeWidth: 1.2 },
         legend: [{ color, label: String(spec.label).slice(0, 40), shape: 'dot' }],
         popup: { title: popup.title || 'name', fields: popup.fields },
         userLayer: true,

@@ -16,20 +16,20 @@ function check(label, got, want) {
     (ok ? '' : '\n        got  ' + JSON.stringify(got) + '\n        want ' + JSON.stringify(want)));
 }
 
-console.log('\n  the panel is docked, not floating');
-check('it reaches both edges of the map', /\.atlas-panel \{ position:absolute; top:0; left:0; bottom:0;/.test(html), true);
+console.log('\n  on a wide screen the shelf floats just inside the map frame');
+check('it sits 8px in from the frame, top to bottom', /\.atlas-panel \{ position:absolute; top:8px; left:8px; bottom:8px;/.test(html), true);
 check('no corner of map is trapped behind a rounded card', /border-radius:0;/.test(html), true);
-check('and there is no shadow to read past', /box-shadow:none; overflow:hidden/.test(html), true);
-/* --border over a white road is 1.32:1, and this map draws white roads */
-check('its edge stays visible where a road runs under it', /border-right:1px solid #767060/.test(html), true);
+check('it is near-opaque paper, so the map never shows through the words', /background:rgba\(253,252,248,\.95\)/.test(html), true);
+/* the phone sheet's top edge is the Block hairline, which reads on the cream ground */
+check('the phone sheet keeps an edge where it meets the map', /border-top:1px solid var\(--map-block\)/.test(html), true);
 
-console.log('\n  the phone gets a bar, and only the phone');
+console.log('\n  the phone gets a tab row, and only the phone');
 check('the bar is absent on a wide screen', /\.atlas-bar \{ display:none; \}/.test(html), true);
 check('and appears only once it has marks', /\.atlas-bar:not\(\[hidden\]\) \{/.test(html), true);
-check('it clears the phone\'s own strip at the bottom',
-  /padding:\.2rem \.25rem calc\(\.2rem \+ env\(safe-area-inset-bottom\)\)/.test(html), true);
-check('the tray rises to meet it and never covers it',
-  /bottom:calc\(46px \+ \.4rem \+ env\(safe-area-inset-bottom\)\)/.test(html), true);
+check('the sheet foot clears the phone\'s own strip at the bottom',
+  /padding:\.35rem \.75rem calc\(\.4rem \+ env\(safe-area-inset-bottom\)\)/.test(html), true);
+check('the tabs scroll sideways rather than cutting names short',
+  /\.atlas-bar:not\(\[hidden\]\) \{[^}]*overflow-x:auto/.test(html), true);
 check('and never takes more than half the screen', /max-height:50%/.test(html), true);
 
 console.log('\n  the bar is built from what the panel actually drew');
@@ -38,7 +38,8 @@ check('the marks come from the rendered groups',
   /querySelectorAll\("#atlas-controls \.ctl-group\[data-group\]"\)/.test(js), true);
 check('a mark counts the switches that are on in its group',
   /\.ctl-toggle input\[type="checkbox"\]:checked/.test(js), true);
-check('past four groups the rest go behind More', /BAR_SLOTS = 4/.test(js), true);
+check('every group gets its own tab, with no More to hide behind', /BAR_SLOTS|"More"/.test(js), false);
+check('each tab carries the group\'s whole name', /b\.className = "atlas-tab";/.test(js), true);
 check('a label that runs out of room ellipsises rather than being chopped',
   /\.slice\(0, 9\)/.test(js), false);
 

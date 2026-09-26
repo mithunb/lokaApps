@@ -7,97 +7,128 @@
   <meta name="description" content="LOKA Atlas — layered, shareable maps for any geography, built from open data. Pick a region, choose layers, add your own data, and publish." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Figtree:wght@500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:wght@700&display=swap" />
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <style>
     :root {
-      /* Clean near-white paper; earthy ink & accents kept from the field-notebook identity */
-      --color-bg:#F9F9F7; --color-bg-alt:#F0EFEA; --color-surface:#FFFFFF;
-      --color-moss:#4A5A33; --color-canopy:#384526;           /* rustic dark green (primary) */
-      --color-rust:#AE5028; --color-rust-deep:#7C3616;         /* rust accent */
-      /* the ground a quoted reason sits on; the wizard and the bench already
-         carry it, and the viewer needed it once the because arrived */
-      --color-ochre-tint:rgba(184,134,47,.14);
-      --color-sienna:#99582F; --color-ochre:#B8862F;           /* sienna + ochre accents */
-      --color-text-primary:#2A241A; --color-text-secondary:#564E3C; --color-text-muted:#6B6350;
-      --color-divider:rgba(42,36,26,.09); --color-border:rgba(42,36,26,.14);
-      /* the ground the stage shows before any tile arrives — kept the same as
-         the app's base map (APP_BASEMAPS in atlas.js) so a slow first fetch
-         reads as the map still loading, not as a grey fault */
-      --color-map-ground:#FBF8F3;
-      --color-moss-tint:rgba(74,90,51,.10); --color-rust-tint:rgba(174,80,40,.10);
-      /* corners: xs is for a shape under 16px, where md would read as a circle */
+      /* The Bazaar palette, a little softer — every value is measured, see
+         DESIGN.md. Interface first, then the map's own colours, then type. */
+      --color-page:#FAF8F3; --color-surface:#FDFCF8; --color-surface-alt:#F0EDE4;
+      --color-text-primary:#24211D; --color-text-secondary:#5A5751; --color-text-muted:#6E6A63;
+      --color-border:rgba(36,33,29,.18); --color-divider:rgba(36,33,29,.10);
+      --color-leaf:#2A6B41; --color-leaf-deep:#1F5232; --color-leaf-tint:rgba(42,107,65,.10);
+      --color-sindoor:#C9402B; --color-sindoor-deep:#9E3220; --color-sindoor-tint:rgba(201,64,43,.10);
+      --color-marigold:#E9A237; --color-marigold-tint:rgba(233,162,55,.16); --color-blue-tint:rgba(58,127,161,.14);
+      --color-toggle-off:#CFCBC2;
+      /* aliases: owner.css still speaks the old names until Builder B lands;
+         remove once no selector in any file uses them */
+      --color-bg:var(--color-page); --color-bg-alt:var(--color-surface-alt);
+      --color-moss:var(--color-leaf); --color-canopy:var(--color-leaf-deep); --color-moss-tint:var(--color-leaf-tint);
+      --color-rust:var(--color-sindoor); --color-rust-deep:var(--color-sindoor-deep); --color-rust-tint:var(--color-sindoor-tint);
+      --color-ochre:var(--color-marigold); --color-ochre-tint:var(--color-marigold-tint); --color-sienna:#D2692A;
+      --color-map-ground:var(--map-ground);
+      /* map */
+      --map-ground:#F5F1E6; --map-outside:#EAE6DC; --map-water:#3A7FA1; --map-water-fill:#C8DBE5;
+      --map-boundary:#26231F; --map-block:#8C8985; --map-road:#E2DDD0; --map-label:#24211D; --map-halo:#F5F1E6;
+      --ramp-1:#FBF1D9; --ramp-2:#F4CF82; --ramp-3:#E9A237; --ramp-4:#D2692A; --ramp-5:#A8321A;
+      --point-1:#C9402B; --point-2:#2A6B41; --point-3:#E9A237; --point-4:#3A7FA1; --point-5:#A39E94; --point-6:#26231F; --point-7:#B99A1C;
+      /* type: the companion slots hold the primary face as a placeholder
+         today; the matched faces for another script are appended there later
+         and no selector changes. The slot is never empty: an empty value left
+         `, ,` in the stack, Chromium threw the whole declaration away and every
+         page fell back to Times (measured by both builders, 26 Sep 2026). */
+      --font-companions-serif:"Source Serif 4"; --font-companions-sans:"Source Sans 3";
+      --font-display:"Source Serif 4",var(--font-companions-serif),serif;
+      --font-body:"Source Sans 3",var(--font-companions-sans),sans-serif;
+      --t-display:clamp(1.6rem,4vw,2.4rem); --t-section:1.2rem; --t-body:1rem; --t-control:.95rem; --t-ui:.9rem; --t-meta:.8rem; --t-label:.72rem;
+      /* shape and depth: corners stay small; xs is for a shape under 16px */
       --radius-xs:.125rem; --radius-md:.25rem; --radius-lg:.375rem; --radius-pill:999px;
-      /* type roles, by the job they do — the ramp documented in DESIGN.md */
-      --t-display:clamp(1.6rem,4vw,2.4rem);
-      --t-section:1.15rem; --t-body:1rem; --t-control:.95rem; --t-ui:.875rem;
-      --t-meta:.78rem; --t-label:.72rem;
-      --shadow-sm:none;
-      --shadow-md:0 1px 4px rgba(42,36,26,.10);
-      --shadow-lg:0 2px 12px rgba(42,36,26,.12);
+      --shadow-sm:none; --shadow-md:0 1px 4px rgba(36,33,29,.10); --shadow-lg:0 2px 12px rgba(36,33,29,.12);
       --container:min(76rem,100% - 2.5rem);
     }
     * { box-sizing:border-box; }
-    body { margin:0; background:var(--color-bg); color:var(--color-text-primary);
-      font-family:'DM Sans',system-ui,-apple-system,sans-serif; font-size:var(--t-body); line-height:1.6;
+    body { margin:0; background:var(--color-page); color:var(--color-text-primary);
+      font-family:var(--font-body); font-size:var(--t-body); line-height:1.55;
       -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
       min-height:100dvh; display:flex; flex-direction:column; }
     body > * { width:100%; }
     footer.site { margin-top:auto; }
-    h1,h2,h3 { font-family:'Figtree',sans-serif; letter-spacing:-.01em; margin:0 0 .5rem; }
-    h1 { font-size:var(--t-display); font-weight:700; line-height:1.12; text-wrap:balance; }
+    h1,h2,h3 { font-family:var(--font-display); font-weight:700; letter-spacing:-.01em; margin:0 0 .5rem; }
+    h1 { font-size:var(--t-display); line-height:1.12; text-wrap:balance; }
     .lead, #atlas-about { text-wrap:pretty; }
     p { color:var(--color-text-secondary); margin:0 0 1rem; }
-    a { color:var(--color-moss); text-decoration:none; }
-    a:hover { color:var(--color-canopy); text-decoration:underline; }
-    :focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:var(--radius-md); }
+    a { color:var(--color-leaf); text-decoration:none; }
+    a:hover { color:var(--color-leaf-deep); text-decoration:underline; }
+    :focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; border-radius:var(--radius-md); }
     .lead { font-size:var(--t-body); color:var(--color-text-secondary); max-width:72ch; }
+    /* the stamp: one uppercase label style for every kicker in the product */
+    .stamp { font-family:var(--font-body); font-size:var(--t-label); font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
 
-    header.site { border-bottom:1px solid var(--color-divider); background:var(--color-bg); position:relative; z-index:2; }
+    header.site { border-bottom:1px solid var(--color-divider); background:var(--color-page); position:relative; z-index:2; }
     .nav { width:var(--container); margin:0 auto; padding:1rem 0; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
-    .brand { font-family:'Figtree',sans-serif; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--color-text-primary); font-size:var(--t-ui); }
+    .brand { font-family:var(--font-body); font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--color-text-primary); font-size:var(--t-label); }
     .brand:hover { color:var(--color-text-primary); text-decoration:none; }
     .nav .links { display:flex; gap:1.25rem; align-items:center; flex-wrap:wrap; }
     .nav .links a, .nav .links button { color:var(--color-text-secondary); font-size:var(--t-ui);
       background:none; border:none; font-family:inherit; cursor:pointer; padding:0; }
-    .nav .links button:hover { color:var(--color-canopy); text-decoration:underline; }
+    .nav .links a:hover, .nav .links button:hover { color:var(--color-leaf-deep); text-decoration:underline; }
     #nav-user { color:var(--color-text-primary); font-size:var(--t-ui); font-weight:600; }
 
     .atlas-hero { width:var(--container); margin:0 auto; padding:2rem 0 1.25rem; }
-    #atlas-about { max-width:72ch; font-size:var(--t-control); color:var(--color-text-secondary); margin:.35rem 0 0; }
+    #atlas-about { max-width:72ch; font-size:var(--t-control); font-weight:400; color:var(--color-text-secondary); margin:.35rem 0 0; }
     .hero-top { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
     .hero-actions { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
     #add-data-btn { text-decoration:none; }
+    /* the secondary button: Leaf border and Leaf text on nothing; hover a Leaf wash */
     .share-btn { display:inline-flex; align-items:center; gap:.4rem; font:inherit; font-size:var(--t-ui); font-weight:600;
-      padding:.45rem .85rem; border:1px solid var(--color-border); border-radius:var(--radius-md);
-      background:var(--color-surface); color:var(--color-text-primary); cursor:pointer; }
+      padding:.45rem .85rem; border:1px solid var(--color-leaf); border-radius:var(--radius-md);
+      background:transparent; color:var(--color-leaf); cursor:pointer; transition:background .15s ease; }
     /* the hidden attribute must always win, whatever display a class sets */
     [hidden] { display:none !important; }
-    .share-btn:hover { border-color:var(--color-moss); color:var(--color-canopy); }
+    .share-btn:hover { background:var(--color-leaf-tint); color:var(--color-leaf-deep); text-decoration:none; }
     .share-btn svg { width:15px; height:15px; }
     .org-brand-line { display:inline-flex; align-items:center; gap:.5rem; margin-top:.4rem;
       font-size:var(--t-ui); color:var(--color-text-secondary); }
     .org-brand-line b { color:var(--color-text-primary); font-weight:600; }
     .org-brand-logo { height:26px; width:auto; max-width:140px; object-fit:contain; display:block; }
     #org-branding a { text-decoration:none; }
-    #org-branding a:hover .org-brand-line b { color:var(--color-moss); }
+    #org-branding a:hover .org-brand-line b { color:var(--color-leaf); }
     .org-credit-logo { height:30px; width:auto; max-width:160px; object-fit:contain; display:block; margin-bottom:.4rem; }
-    .org-credit-name { font-family:'Figtree',sans-serif; font-weight:600; }
+    .org-credit-name { font-weight:600; }
     .org-credit-line { font-size:var(--t-ui); color:var(--color-text-secondary); margin-bottom:.9rem; }
     #org-credit:not(:empty) { padding-bottom:.9rem; margin-bottom:.9rem; border-bottom:1px solid var(--color-divider); }
 
-    /* ---- map stage ---- */
-    .atlas-stage { position:relative; width:var(--container); margin:0 auto .4rem;
-      height:clamp(560px,80vh,940px); border-radius:var(--radius-lg); overflow:hidden;
-      box-shadow:var(--shadow-lg); background:var(--color-map-ground); border:1px solid var(--color-border); }
+    /* ---- map stage ----
+       The map is the page's plate: a cream ground inside a double ink frame
+       (a 1px line, a 2px gap, a second 1px line), not a shadowed screenshot.
+       The outline lives outside the box, so the stage keeps its margins
+       honest and nothing inside it is clipped by the frame. */
+    .atlas-stage { position:relative; width:var(--container); margin:.35rem auto .6rem;
+      height:clamp(560px,80vh,940px); border-radius:0; overflow:hidden;
+      background:var(--map-ground); border:1px solid var(--map-boundary);
+      outline:1px solid var(--map-boundary); outline-offset:2px; }
     #atlas-map { position:absolute; inset:0; }
     /* basemap attribution rendered below the map, not overlaying it */
     .map-attrib { width:var(--container); margin:0 auto 1.5rem; text-align:right;
       font-size:var(--t-label); line-height:1.4; color:var(--color-text-muted); }
     .map-attrib:empty { display:none; }
     .map-attrib a { color:inherit; text-decoration:underline; }
-    .atlas-error { position:absolute; inset:0; display:flex; flex-direction:column; gap:.5rem;
-      align-items:center; justify-content:center; color:var(--color-text-secondary); font-size:var(--t-body); text-align:center; padding:2rem; }
+    /* While the manifest and the base style are on their way the stage shows
+       its own ground and one quiet line; the map appears in its place. */
+    .atlas-loading { position:absolute; inset:0; z-index:3; display:flex; align-items:center; justify-content:center;
+      pointer-events:none; font-size:var(--t-meta); color:var(--color-text-secondary); background:var(--map-ground);
+      transition:opacity .2s ease; }
+    .atlas-loading.gone { opacity:0; }
+    .atlas-loading[hidden] { display:none !important; }
+    .atlas-loading span::after { content:'…'; }
+    /* The map could not be loaded: a small Surface panel that says what
+       happened in words and offers one thing to try. Never a red wall. */
+    .atlas-error { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:2rem; }
+    .atlas-error-box { max-width:26rem; background:var(--color-surface); border:1px solid var(--color-border);
+      border-radius:var(--radius-md); padding:1.1rem 1.25rem 1.2rem; text-align:left; box-shadow:var(--shadow-lg); }
+    .atlas-error-box h2 { font-family:var(--font-display); font-size:var(--t-section); line-height:1.25; color:var(--color-sindoor-deep); margin:0 0 .4rem; }
+    .atlas-error-box p { font-size:var(--t-ui); font-weight:400; color:var(--color-text-secondary); margin:0 0 .9rem; text-wrap:pretty; overflow-wrap:anywhere; }
+    .atlas-error-box .share-btn { font-size:var(--t-ui); }
 
     /* ---- the strip: one calm edge for what is true of the whole atlas ----
        Map/Satellite, search, and (for the owner) the region each give ONE
@@ -111,8 +142,15 @@
        below always clears it exactly. */
     .atlas-strip { position:absolute; top:0; left:0; right:0; z-index:6;
       display:flex; align-items:center; gap:.75rem; min-height:48px; padding:.4rem .75rem;
-      background:rgba(255,255,255,.95); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
-      border-bottom:1px solid var(--color-border); }
+      background:rgba(253,252,248,.95); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+      border-bottom:1px solid var(--color-divider); }
+    /* The wordmark: on every atlas view, embeds included. LOKA in full ink,
+       Atlas one step quieter — one word said in two voices. */
+    .atlas-wordmark { flex:0 0 auto; display:inline-flex; align-items:baseline; gap:.3em;
+      font-size:var(--t-label); font-weight:800; letter-spacing:.12em; text-transform:uppercase;
+      color:var(--color-text-primary); text-decoration:none; white-space:nowrap; }
+    .atlas-wordmark:hover { color:var(--color-text-primary); text-decoration:none; }
+    .atlas-wordmark em { font-style:normal; font-weight:600; opacity:.6; }
     .atlas-strip .ctl-basemaps { flex:0 0 auto; margin:0; }
     .atlas-strip .bm-btn { flex:0 0 auto; }
     /* The owner's region row (owner.js's .own-region-wrap, relocated here by
@@ -128,40 +166,40 @@
     .atlas-strip .own-region-go { flex:0 0 auto; }
     .atlas-strip .own-region-warn { position:absolute; top:calc(100% + .55rem); right:.75rem;
       margin:0; padding:.2rem .6rem; font-size:var(--t-label); font-weight:400; letter-spacing:0;
-      background:rgba(255,255,255,.95); border:1px solid var(--color-border);
+      background:rgba(253,252,248,.95); border:1px solid var(--color-border);
       border-radius:var(--radius-md); box-shadow:var(--shadow-md); }
 
     /* ---- control widget ---- */
-    /* The panel is a rail, docked to the edge of the map.
-
-       It used to float: an inch in from the corner, rounded, blurred, on a
-       shadow. Floating buys one thing — the map continues underneath, so you
-       can drag what you want out from behind it — and costs the same three
-       hundred pixels either way. Docked, the edge of the map IS the edge of the
-       panel, there is no shadow to read past and no corner of map trapped
-       behind glass, and the rail folds away entirely when the map is what you
-       want. That fold is what makes docking pay.
-
-       The edge against the map is drawn at #767060 rather than --border: this
-       map draws white roads, and --border over white is 1.32:1, so the one line
-       telling you where the panel ends disappears exactly where a road runs
-       under it. */
-    .atlas-panel { position:absolute; top:0; left:0; bottom:0; z-index:5; width:19.5rem; max-width:calc(100% - 3rem);
+    /* The shelf floats over the map, 8px in from the frame and just under the
+       strip: Surface at 95% on the one sanctioned shadow, because it sits over
+       map imagery whose colours nobody can predict. It folds to a small
+       "Map layers" pill when the map is what you want (see below). */
+    .atlas-panel { position:absolute; top:8px; left:8px; bottom:8px; z-index:5; width:19.5rem; max-width:calc(100% - 3rem);
       max-height:none; display:flex; flex-direction:column;
-      background:var(--color-surface);
-      border:0; border-right:1px solid #767060; border-radius:0; box-shadow:none; overflow:hidden; }
+      background:rgba(253,252,248,.95);
+      border:1px solid var(--color-border); border-radius:var(--radius-md); box-shadow:var(--shadow-lg); overflow:hidden; }
+    /* the sheet's own body: on a wide screen it is just the scroller's box;
+       on a phone it is what slides open (see the mobile block) */
+    .sheet-body { display:flex; flex-direction:column; min-height:0; flex:1 1 auto; }
+    /* the phone sheet's foot: on a wide screen the credit strip below the map
+       says all of this, so the foot is not there */
+    .sheet-foot { display:none; }
     @media (min-width:721px){
-      /* the owner's strip sits above the map, so the rail starts below it */
-      .atlas-stage.has-strip .atlas-panel { top:var(--strip-h,48px); }
+      /* the strip sits above the map, so the shelf starts just below it */
+      .atlas-stage.has-strip .atlas-panel { top:calc(var(--strip-h,48px) + 8px); }
+      /* folded: the shelf stops being a column and becomes its own head */
+      .atlas-panel.collapsed { bottom:auto; }
     }
     /* The bar is the phone's form of the panel. On a wide screen the rail is
        the panel, and the bar is not merely invisible — it is not there, so it
        takes no space and nothing can tab into it. */
     .atlas-bar { display:none; }
+    /* the panel's head wears a 2px Leaf rule beneath it: the one line of
+       product colour in the shelf, and the rule every group head sits under */
     .panel-head { display:flex; align-items:center; gap:.45rem;
-      padding:.7rem .9rem; border-bottom:1px solid var(--color-divider); flex:0 0 auto; }
-    .panel-head strong { font-family:'Figtree',sans-serif; font-size:var(--t-label); letter-spacing:.14em; text-transform:uppercase; color:var(--color-text-secondary); }
-    .panel-count { font-size:var(--t-label); color:var(--color-text-muted); white-space:nowrap; }
+      padding:.7rem .9rem; border-bottom:2px solid var(--color-leaf); flex:0 0 auto; }
+    .panel-head strong { font-size:var(--t-label); font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--color-text-primary); }
+    .panel-count { font-size:var(--t-label); color:var(--color-text-muted); white-space:nowrap; font-variant-numeric:tabular-nums; }
     .panel-count:empty { display:none; }
     /* the count describes the layer list; while the owner's edit card stands
        in for the list, the head names the layer instead and the count would
@@ -177,16 +215,20 @@
       .panel-collapse { display:inline-flex; transition:transform .2s cubic-bezier(.25,1,.5,1); }
       .atlas-panel.collapsed { width:auto; }
       .atlas-panel.collapsed #atlas-controls { display:none; }
-      .atlas-panel.collapsed .panel-head { border-bottom:none; }
+      .atlas-panel.collapsed .panel-head { border-bottom:none; padding:.55rem .8rem; }
       .atlas-panel.collapsed .panel-collapse { transform:rotate(180deg); }
     }
 
-    .ctl-basemaps { display:flex; gap:.35rem; }
-    /* on phones the pair lives at the top of the bottom sheet, as before */
-    #atlas-controls .ctl-basemaps { margin-bottom:.7rem; }
-    .bm-btn { flex:1; padding:.4rem .5rem; font:inherit; font-size:var(--t-meta); font-weight:500; cursor:pointer;
-      background:var(--color-bg-alt); color:var(--color-text-secondary); border:1px solid transparent; border-radius:var(--radius-md); }
-    .bm-btn.active { background:var(--color-moss); color:#fff; }
+    /* Map / Satellite: one segmented control on Surface with an ink border;
+       the segment that is showing is Leaf with white text */
+    .ctl-basemaps { display:inline-flex; gap:0; padding:2px; background:var(--color-surface);
+      border:1px solid var(--color-border); border-radius:var(--radius-md); }
+    .bm-btn { flex:1; padding:.32rem .65rem; font:inherit; font-size:var(--t-meta); font-weight:600; cursor:pointer;
+      background:transparent; color:var(--color-text-secondary); border:0; border-radius:var(--radius-xs);
+      transition:background .15s ease, color .15s ease; }
+    .bm-btn:hover { color:var(--color-leaf-deep); background:var(--color-leaf-tint); }
+    .bm-btn.active { background:var(--color-leaf); color:#fff; }
+    .bm-btn:focus-visible { outline:2px solid var(--color-leaf); outline-offset:1px; }
 
     /* ---- search: lives in the strip ----
        Searching is a reader's first move; inside the panel it read as one
@@ -197,21 +239,21 @@
     .ctl-search-box { display:flex; align-items:center; gap:.4rem; padding:0 .3rem 0 .75rem;
       background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md); }
     .ctl-search-box svg { flex:0 0 auto; width:16px; height:16px; color:var(--color-text-muted); }
-    .ctl-search-box:focus-within { border-color:var(--color-moss); outline:2px solid var(--color-moss); outline-offset:-1px; }
-    .ctl-search-box:focus-within svg { color:var(--color-moss); }
+    .ctl-search-box:focus-within { border-color:var(--color-leaf); outline:2px solid var(--color-leaf); outline-offset:-1px; }
+    .ctl-search-box:focus-within svg { color:var(--color-leaf); }
     .ctl-search-input { flex:1 1 auto; min-width:0; font:inherit; font-size:var(--t-ui); padding:.42rem .3rem .42rem .1rem;
       border:none; background:none; color:var(--color-text-primary); }
     .ctl-search-input:focus { outline:none; }
     .ctl-search-count { position:absolute; top:calc(100% + .95rem); left:50%; transform:translateX(-50%);
       width:max-content; max-width:min(24rem, calc(100vw - 2rem)); text-align:center;
       padding:.2rem .6rem; font-size:var(--t-meta); color:var(--color-text-secondary);
-      background:rgba(255,255,255,.95); border:1px solid var(--color-border);
+      background:rgba(253,252,248,.95); border:1px solid var(--color-border);
       border-radius:var(--radius-md); box-shadow:var(--shadow-md); }
     .ctl-search-go { font:inherit; font-weight:600; border:none; background:none; padding:0;
-      color:var(--color-moss); cursor:pointer; text-decoration:underline; }
-    .ctl-search-go:hover { color:var(--color-canopy); }
+      color:var(--color-leaf); cursor:pointer; text-decoration:underline; }
+    .ctl-search-go:hover { color:var(--color-leaf-deep); }
     /* pins are reachable by keyboard — the focused one must say so */
-    .atlas-mnode:focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:50%; }
+    .atlas-mnode:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; border-radius:50%; }
 
     /* Groups: real edges, wide air. Each head owns a hairline edge and a
        count that stays when the group is folded, and groups sit at least
@@ -232,11 +274,11 @@
 
        It sticks as the list scrolls, so a reader who has scrolled into a long
        group can still see which one they are in. */
-    .ctl-group-head { margin:0 0 .375rem; padding:0 .1rem .25rem;
+    .ctl-group-head { margin:0 0 .375rem; padding:.1rem .1rem .3rem;
       border-bottom:1px solid var(--color-divider);
       position:sticky; top:0; z-index:1; background:var(--color-surface);
-      font-family:'Figtree',sans-serif; font-size:var(--t-meta); font-weight:600;
-      letter-spacing:0; text-transform:none; color:var(--color-text-primary); }
+      font-family:var(--font-body); font-size:var(--t-label); font-weight:700;
+      letter-spacing:.12em; text-transform:uppercase; color:var(--color-text-secondary); }
     .ctl-group + .ctl-group .ctl-group-head { margin-top:1rem; }
     .ctl-group-body { padding-bottom:.375rem; }
 
@@ -245,7 +287,7 @@
        (the Two-Channel Rule in DESIGN.md): a layer that is on reads
        .875rem/600/ink; off drops weight AND colour together. */
     .ctl-row { padding:.12rem 0; }
-    .ctl-row.off .ctl-name { font-weight:400; color:var(--color-text-muted); }
+    .ctl-row.off .ctl-name { font-weight:400; color:var(--color-text-secondary); }
     /* One strip down the left of the panel holds the controls, and every word
        in the panel starts where it ends — a layer's name, a subgroup's name, a
        key, a legend, the share a question reaches. Whatever its depth.
@@ -262,16 +304,15 @@
     :root { --panel-strip: calc(32px + .55rem); }
     .ctl-toggle { display:flex; align-items:center; gap:.55rem; cursor:pointer; min-height:32px; }
     .ctl-toggle input { position:absolute; opacity:0; width:0; height:0; }
-    /* The off track was #cfd6cf on a near-white panel — 1.44:1, about half the
-       3:1 a control's own outline needs, on every switch in the product. The
-       fill stays (the quiet look is deliberate); a hairline ring carries the
-       contrast instead, at 3.28:1. An INSET SHADOW rather than a border, so the
-       switch does not change size by a pixel and the knob keeps its geometry.
-       The on state is moss, which clears 3:1 on its own, so it drops the ring. */
-    .ctl-switch { flex:0 0 auto; width:32px; height:18px; border-radius:var(--radius-pill); background:#cfd6cf;
+    /* The off track is the warm grey the tokens name, and it is 1.6:1 on the
+       panel — short of the 3:1 a control's own outline needs. A hairline ring
+       carries the contrast instead, as an INSET SHADOW rather than a border so
+       the switch does not change size by a pixel and the knob keeps its
+       geometry. The on state is Leaf, which clears 3:1 alone and drops the ring. */
+    .ctl-switch { flex:0 0 auto; width:32px; height:18px; border-radius:var(--radius-pill); background:var(--color-toggle-off);
       box-shadow:inset 0 0 0 1px #82907f; position:relative;
-      transition:background .2s cubic-bezier(.25,1,.5,1), box-shadow .2s ease; }
-    .ctl-switch::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#FFFFFF; box-shadow:0 1px 2px rgba(42,36,26,.25); transition:transform .2s cubic-bezier(.25,1,.5,1); }
+      transition:background .2s ease-out, box-shadow .2s ease-out; }
+    .ctl-switch::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#FFFFFF; box-shadow:0 1px 2px rgba(36,33,29,.25); transition:transform .2s ease-out; }
     /* A subgroup's master switch is a switch. It had rules for being part-on
        and for being focused but none at all for being ON, so a subgroup whose
        layers were all showing sat there grey — the state underneath was right
@@ -284,10 +325,11 @@
        part-on master is checked AND indeterminate at once, and that rule comes
        later at the same weight. */
     .ctl-toggle input:checked + .ctl-switch,
-    .ctl-sub-toggle input:checked + .ctl-switch { background:var(--color-moss); box-shadow:none; }
+    .ctl-sub-toggle input:checked + .ctl-switch { background:var(--color-leaf); box-shadow:none; }
     .ctl-toggle input:checked + .ctl-switch::after,
     .ctl-sub-toggle input:checked + .ctl-switch::after { transform:translateX(14px); }
-    .ctl-toggle input:focus-visible + .ctl-switch { outline:2px solid var(--color-moss); outline-offset:2px; }
+    .ctl-toggle input:focus-visible + .ctl-switch { outline:2px solid var(--color-leaf); outline-offset:2px; }
+    .ctl-toggle input:disabled + .ctl-switch { opacity:.5; }
     .ctl-name { font-size:var(--t-ui); font-weight:600; line-height:1.25; }
     /* A button, not a span carrying a title: it can be pressed, focused and
        read out. The mark stays 15px; the padding around it is the part you
@@ -296,9 +338,9 @@
       display:inline-flex; align-items:center; justify-content:center;
       background:none; border:0; padding:5px; cursor:pointer; }
     .ctl-info svg { width:15px; height:15px; }
-    .ctl-info:hover { color:var(--color-moss); }
-    .ctl-info:focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; border-radius:var(--radius-md); }
-    .ctl-info[aria-expanded="true"] { color:var(--color-moss); }
+    .ctl-info:hover { color:var(--color-leaf); }
+    .ctl-info:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; border-radius:var(--radius-md); }
+    .ctl-info[aria-expanded="true"] { color:var(--color-leaf); }
     /* what the layer is, in its own words — on the panel's strip like everything else */
     .ctl-said { margin:.1rem 0 .35rem; padding-left:var(--panel-strip);
       font-size:var(--t-label); line-height:1.45; color:var(--color-text-secondary); }
@@ -310,6 +352,8 @@
        to, which says the same thing without spending width on saying it. */
     .ctl-extra { margin:.05rem 0 .35rem; padding-left:var(--panel-strip); border-left:0; }
     .ctl-extra:empty { display:none; }
+    /* an atlas with nothing on its shelf */
+    .ctl-empty { margin:.6rem .1rem; font-size:var(--t-meta); color:var(--color-text-secondary); }
 
     /* related-layer sub-group: master toggle + collapsible children */
     .ctl-sub { margin:.1rem 0 .2rem; }
@@ -318,9 +362,9 @@
     .ctl-sub-toggle input { position:absolute; opacity:0; width:0; height:0; }
     .ctl-sub-name { font-size:var(--t-label); font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:var(--color-text-secondary); }
     .ctl-sub-head.off .ctl-sub-name { color:var(--color-text-muted); }
-    .ctl-sub-toggle input:indeterminate + .ctl-switch { background:var(--color-moss); opacity:.6; }
+    .ctl-sub-toggle input:indeterminate + .ctl-switch { background:var(--color-leaf); opacity:.6; box-shadow:none; }
     .ctl-sub-toggle input:indeterminate + .ctl-switch::after { transform:translateX(7px); }
-    .ctl-sub-toggle input:focus-visible + .ctl-switch { outline:2px solid var(--color-moss); outline-offset:2px; }
+    .ctl-sub-toggle input:focus-visible + .ctl-switch { outline:2px solid var(--color-leaf); outline-offset:2px; }
     .ctl-sub-chev { background:none; border:none; cursor:pointer; padding:.15rem; display:inline-flex; color:var(--color-text-muted); }
     .ctl-sub-chev .chev { display:inline-flex; transition:transform .18s cubic-bezier(.25,1,.5,1); }
     .ctl-sub-chev .chev svg { width:15px; height:15px; }
@@ -332,14 +376,14 @@
 
     .crop-chips { display:flex; flex-wrap:wrap; gap:.3rem; margin:.4rem 0 .1rem; }
     .crop-chip { font:inherit; font-size:var(--t-label); padding:.2rem .5rem; border-radius:var(--radius-md); cursor:pointer;
-      border:1px solid var(--color-border); background:#FFFFFF; color:var(--color-text-secondary); display:inline-flex; align-items:center; gap:.3rem;
+      border:1px solid var(--color-border); background:var(--color-surface); color:var(--color-text-secondary); display:inline-flex; align-items:center; gap:.3rem;
       transition:background .15s ease, border-color .15s ease, color .15s ease, transform .1s cubic-bezier(.25,1,.5,1); }
     .crop-chip::before { content:''; width:8px; height:8px; border-radius:var(--radius-xs); background:var(--c,#888); transition:transform .15s cubic-bezier(.25,1,.5,1); }
     .crop-chip.diversity::before { background:linear-gradient(90deg,#cdd3b4,#39502f); }
-    .crop-chip.on { border-color:var(--color-moss); background:var(--color-moss-tint); color:var(--color-text-primary); font-weight:600; }
+    .crop-chip.on { border-color:var(--color-leaf); background:var(--color-leaf-tint); color:var(--color-text-primary); font-weight:600; }
     .crop-chip.on::before { transform:scale(1.25); }
     .crop-chip:active { transform:scale(.95); }
-    @media (hover:hover){ .crop-chip:hover:not(.on){ border-color:var(--color-moss); color:var(--color-text-primary); } }
+    @media (hover:hover){ .crop-chip:hover:not(.on){ border-color:var(--color-leaf); color:var(--color-text-primary); } }
 
     /* ---- colour keys (contributed marker layers can wear more than one) ----
        Each key is a switch — the same control a layer is turned on with, one
@@ -390,13 +434,13 @@
       border:1px solid #82907f; border-radius:var(--radius-xs);
       background:var(--color-surface); transition:background .2s, border-color .2s; }
     .key-toggle input:checked + .key-tick {
-      background:var(--color-moss); border-color:var(--color-moss); }
+      background:var(--color-leaf); border-color:var(--color-leaf); }
     .key-toggle input:checked + .key-tick::after {
       content:''; position:absolute; left:5px; top:1px; width:4px; height:9px;
       border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg); }
     .key-toggle input:focus-visible + .key-tick {
-      outline:2px solid var(--color-moss); outline-offset:2px; }
-    .key-toggle:hover .key-tick { border-color:var(--color-moss); }
+      outline:2px solid var(--color-leaf); outline-offset:2px; }
+    .key-toggle:hover .key-tick { border-color:var(--color-leaf); }
     /* ticked, on a layer nobody is showing: the choice holds, the voice drops */
     .key-toggle.key-held .key-tname { color:var(--color-text-muted); font-weight:400; }
     @media (prefers-reduced-motion:reduce) { .key-tick { transition:none; } }
@@ -425,7 +469,7 @@
        the rows off it */
     @media (hover:hover){
       .atlas-marker:hover .atlas-rowed { transform:translateY(-2px) scale(1.14); }
-      .atlas-marker:hover .atlas-rowed .atlas-pin { transform:none; box-shadow:0 3px 8px rgba(42,36,26,.4); }
+      .atlas-marker:hover .atlas-rowed .atlas-pin { transform:none; box-shadow:0 3px 8px rgba(36,33,29,.4); }
     }
     /* keyed legend: kinds grouped under a header per key, each row wearing
        the key's own shape at the panel's size */
@@ -434,7 +478,7 @@
 
     .ctl-opacity { display:flex; align-items:center; gap:.5rem; margin:.45rem 0 .1rem; }
     .ctl-opacity-lbl { font-size:var(--t-label); color:var(--color-text-muted); }
-    .ctl-opacity input { flex:1; accent-color:var(--color-moss); }
+    .ctl-opacity input { flex:1; accent-color:var(--color-leaf); }
 
     .ctl-legend { margin:.4rem 0 .2rem; display:flex; flex-direction:column; }
     .leg-item { display:flex; align-items:center; gap:.5rem; min-height:24px; padding:.1rem 0;
@@ -469,8 +513,8 @@
     .leg-silent-p { font:inherit; font-size:var(--t-label); font-family:inherit; text-align:left;
       background:none; border:0; padding:.1rem 0; cursor:pointer; color:var(--color-text-secondary);
       overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .leg-silent-p:hover { color:var(--color-canopy); text-decoration:underline; }
-    .leg-silent-p:focus-visible { outline:2px solid var(--color-moss); outline-offset:1px;
+    .leg-silent-p:hover { color:var(--color-leaf-deep); text-decoration:underline; }
+    .leg-silent-p:focus-visible { outline:2px solid var(--color-leaf); outline-offset:1px;
       border-radius:var(--radius-xs); }
     .leg-silent-more { font-size:var(--t-label); color:var(--color-text-muted); padding:.1rem 0; }
     /* the one line that turns eight grey pins into a fact about the question */
@@ -478,26 +522,26 @@
       margin-top:.2rem; }
 
     .leg-openable { cursor:pointer; border-radius:var(--radius-md); }
-    .leg-openable:hover { background:var(--color-bg-alt); }
-    .leg-openable[aria-expanded="true"] { background:var(--color-bg-alt); }
+    .leg-openable:hover { background:var(--color-surface-alt); }
+    .leg-openable[aria-expanded="true"] { background:var(--color-surface-alt); }
     .leg-why { display:flex; flex-wrap:wrap; gap:.2rem; padding:.1rem 0 .35rem 1.5rem; }
     /* Each word is a button now, because each one leads back to the place that
        said it. It keeps the quiet look it had as a label — a word of evidence
        should not shout like a control — and only declares itself on hover and
        on focus, where a person is already asking what it does. */
     .leg-why-w { font:inherit; font-size:var(--t-label); font-family:inherit;
-      background:var(--color-ochre-tint); border:0; border-radius:var(--radius-md);
+      background:var(--color-marigold-tint); border:0; border-radius:var(--radius-md);
       padding:.05rem .25rem; color:var(--color-text-secondary); text-align:left; }
     .leg-why-w.leg-why-go { cursor:pointer; }
-    .leg-why-w.leg-why-go:hover { background:var(--color-moss-tint); color:var(--color-canopy); }
-    .leg-why-w.leg-why-go:focus-visible { outline:2px solid var(--color-moss); outline-offset:1px; }
+    .leg-why-w.leg-why-go:hover { background:var(--color-leaf-tint); color:var(--color-leaf-deep); }
+    .leg-why-w.leg-why-go:focus-visible { outline:2px solid var(--color-leaf); outline-offset:1px; }
     .leg-why-w:disabled { cursor:default; }
     @media (pointer:coarse) {
       /* room for a fingertip without moving the words apart on a mouse */
       .leg-why-w.leg-why-go { padding:.3rem .4rem; }
     }
     /* sequential scale: one graduated bar, endpoints labelled */
-    .leg-ramp { display:flex; height:9px; border-radius:var(--radius-pill); overflow:hidden; margin:.15rem 0 .25rem; box-shadow:inset 0 0 0 1px rgba(42,36,26,.08); }
+    .leg-ramp { display:flex; height:9px; border-radius:var(--radius-pill); overflow:hidden; margin:.15rem 0 .25rem; box-shadow:inset 0 0 0 1px rgba(0,0,0,.08); }
     .leg-ramp-seg { flex:1 1 0; }
     .leg-ramp-labels { display:flex; justify-content:space-between; align-items:baseline; gap:.5rem; }
     .leg-ramp-end { font-size:var(--t-label); color:var(--color-text-secondary); font-variant-numeric:tabular-nums; }
@@ -513,25 +557,32 @@
        were drawn for, so reviving either means picking a real size first. */
     .leg-badge { flex:0 0 auto; width:15px; height:15px; border-radius:50%; background:var(--c); color:#fff;
       font-size:var(--t-label); font-weight:700; line-height:1; display:inline-flex; align-items:center; justify-content:center; }
-    .leg-swatch.box { background:var(--c); border-radius:var(--radius-xs); }
+    .leg-swatch.box { background:var(--c); border-radius:var(--radius-xs); box-shadow:inset 0 0 0 1px rgba(0,0,0,.08); }
     .leg-swatch.dot { background:var(--c); border-radius:50%; width:11px; height:11px; margin:0 1.5px; }
     .leg-swatch.line { height:0; border-top:3px solid var(--c); border-radius:var(--radius-xs); align-self:center; }
     .leg-swatch.dashed { height:0; border-top:3px dashed var(--c); }
     .leg-swatch.triangle { width:0; height:0; border-left:7px solid transparent; border-right:7px solid transparent; border-bottom:12px solid var(--c); }
     .leg-swatch.diamond { width:11px; height:11px; background:var(--c); transform:rotate(45deg); margin:0 1.5px; }
+    /* the point set's three further shapes (DESIGN.md §2): an outlined dot, a
+       hollow square, a hollow triangle — shape carries what colour cannot */
+    .leg-swatch.dot-outlined { background:var(--c); border-radius:50%; width:11px; height:11px; margin:0 1.5px; box-shadow:0 0 0 1.5px var(--map-boundary); }
+    .leg-swatch.square-hollow { width:11px; height:11px; margin:0 1.5px; background:none; border:2.5px solid var(--c); border-radius:var(--radius-xs); }
+    .leg-swatch.triangle-hollow { width:14px; height:14px; background:none; }
+    .leg-swatch.triangle-hollow::before { content:''; display:block; width:14px; height:14px;
+      background:var(--c); clip-path:polygon(50% 0,100% 100%,0 100%,0 100%,50% 0,50% 22%,17% 88%,83% 88%,50% 22%,50% 0); }
     /* bubble layers: reference circles at true on-map size, value beneath each */
     .leg-size { display:flex; align-items:flex-end; gap:.75rem; padding:.2rem 0 .1rem; }
     .leg-size-item { display:flex; flex-direction:column; align-items:center; gap:.2rem; }
     .leg-size-circle { flex:0 0 auto; border-radius:50%; background:var(--c); opacity:.78;
-      border:1.2px solid #fff; box-shadow:0 0 0 1px rgba(42,36,26,.10); box-sizing:border-box; }
+      border:1.2px solid #fff; box-shadow:0 0 0 1px rgba(36,33,29,.10); box-sizing:border-box; }
     .leg-size-val { font-size:var(--t-label); color:var(--color-text-secondary); font-variant-numeric:tabular-nums; line-height:1; }
 
     /* ---- DOM markers ---- */
     .atlas-marker { display:flex; flex-direction:column; align-items:center; cursor:pointer; }
-    .atlas-pin { width:20px; height:20px; border-radius:50%; background:#FFFFFF; border:2px solid var(--pin,#AE5028);
-      color:var(--pin,#AE5028); font-size:var(--t-label); line-height:1; display:flex; align-items:center; justify-content:center;
-      box-shadow:0 1px 3px rgba(42,36,26,.32); transition:transform .18s cubic-bezier(.25,1,.5,1), box-shadow .18s ease; }
-    .atlas-pin.ring { background:var(--pin,#AE5028); border-color:#fff; }
+    .atlas-pin { width:20px; height:20px; border-radius:50%; background:#FFFFFF; border:2px solid var(--pin,#C9402B);
+      color:var(--pin,#C9402B); font-size:var(--t-label); line-height:1; display:flex; align-items:center; justify-content:center;
+      box-shadow:0 1px 3px rgba(36,33,29,.32); transition:transform .18s cubic-bezier(.25,1,.5,1), box-shadow .18s ease; }
+    .atlas-pin.ring { background:var(--pin,#C9402B); border-color:#fff; }
 
     /* The standard location marker. A circle centred on a point never said which
        pixel was the place; a pin's tip does — and the marker is already anchored at
@@ -547,8 +598,8 @@
        its fill is invisible. */
     .atlas-pin.loc {
       width:20px; height:28px; border:0; border-radius:0; background:none; box-shadow:none;
-      color:var(--pin,#7C3616); position:relative; display:block;
-      filter:drop-shadow(0 1px 2px rgba(42,36,26,.45));
+      color:var(--pin,#9E3220); position:relative; display:block;
+      filter:drop-shadow(0 1px 2px rgba(36,33,29,.45));
       transform-origin:50% 100%;   /* it grows from its tip, so the place never moves */
     }
     .atlas-pin.loc .pin-body { width:20px; height:28px; display:block; }
@@ -561,24 +612,24 @@
     @media (hover:hover){
       .atlas-marker:hover .atlas-pin.loc {
         transform:scale(1.12); box-shadow:none;
-        filter:drop-shadow(0 3px 6px rgba(42,36,26,.5));
+        filter:drop-shadow(0 3px 6px rgba(36,33,29,.5));
       }
     }
-    .atlas-pin.badge { background:var(--pin,#AE5028); color:#fff; font-size:var(--t-label); font-weight:700; }
-    .atlas-pin.badge.pale, .leg-badge.pale { color:#2A241A; }   /* dark ink on pale fills */
+    .atlas-pin.badge { background:var(--pin,#C9402B); color:#fff; font-size:var(--t-label); font-weight:700; }
+    .atlas-pin.badge.pale, .leg-badge.pale { color:#24211D; }   /* dark ink on pale fills */
     .atlas-pin svg { width:12px; height:12px; display:block; }
     /* lift the pin (a child) on hover — never the marker element itself; MapLibre owns its transform */
-    @media (hover:hover){ .atlas-marker:hover .atlas-pin { transform:translateY(-2px) scale(1.14); box-shadow:0 3px 8px rgba(42,36,26,.4); } }
+    @media (hover:hover){ .atlas-marker:hover .atlas-pin { transform:translateY(-2px) scale(1.14); box-shadow:0 3px 8px rgba(36,33,29,.4); } }
 
     /* numbered cluster badge (stands in for a tight group at overview zoom) */
     .atlas-cluster { display:flex; align-items:center; gap:.4rem; cursor:pointer;
-      background:var(--color-surface); border:1.5px solid var(--color-rust); border-radius:var(--radius-md);
-      padding:.2rem .5rem .2rem .3rem; box-shadow:0 1px 5px rgba(42,36,26,.22);
-      font-family:'Figtree',sans-serif; transition:transform .15s cubic-bezier(.25,1,.5,1), box-shadow .15s; }
-    .atlas-cluster:hover { transform:scale(1.04); box-shadow:0 2px 8px rgba(42,36,26,.28); }
+      background:var(--color-surface); border:1.5px solid var(--color-leaf); border-radius:var(--radius-md);
+      padding:.2rem .5rem .2rem .3rem; box-shadow:0 1px 5px rgba(36,33,29,.22);
+      transition:transform .15s cubic-bezier(.25,1,.5,1), box-shadow .15s; }
+    .atlas-cluster:hover { transform:scale(1.04); box-shadow:0 2px 8px rgba(36,33,29,.28); }
     .atlas-cluster .cl-count { display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:20px;
-      padding:0 4px; background:var(--color-rust); color:#fff; border-radius:var(--radius-md); font-size:var(--t-meta); font-weight:700; }
-    .atlas-cluster .cl-label { font-size:var(--t-meta); font-weight:600; color:var(--color-rust-deep); white-space:nowrap; }
+      padding:0 4px; background:var(--color-leaf); color:#fff; border-radius:var(--radius-md); font-size:var(--t-meta); font-weight:700; font-variant-numeric:tabular-nums; }
+    .atlas-cluster .cl-label { font-size:var(--t-meta); font-weight:600; color:var(--color-leaf-deep); white-space:nowrap; }
     /* ---- cluster fan veil ---- */
     /* Cluster discs are GL layers now (see CLUSTERS in atlas.js) — no DOM to
        style. While a fan is open, a translucent paper wash sits between the
@@ -586,13 +637,15 @@
        pins outside the fan step back with it. The wash never takes the
        pointer: the click that folds the fan must reach the map beneath. */
     .atlas-dim { position:absolute; inset:0; pointer-events:none;
-      background:rgba(255,255,255,.55); opacity:0; transition:opacity .2s ease; }
+      background:rgba(245,241,230,.6); opacity:0; transition:opacity .2s ease; }
     .atlas-fanned .atlas-dim { opacity:1; }
     .atlas-marker { transition:opacity .18s ease; }
     .atlas-fanned .atlas-marker:not(.fanned), .atlas-fanned .atlas-cluster { opacity:.25; }
 
-    .atlas-mlabel { margin-top:2px; font-family:'Figtree',sans-serif; font-size:var(--t-label); font-weight:600; color:#1e2a1c;
-      text-shadow:0 0 2px #fff,0 0 3px #fff,0 0 4px #fff,0 1px 1px #fff; white-space:nowrap; pointer-events:none; }
+    /* a place's own name under its pin: Sans 600 with the Ground halo, like
+       every other label the map draws */
+    .atlas-mlabel { margin-top:2px; font-family:var(--font-body); font-size:var(--t-label); font-weight:600; color:var(--map-label);
+      text-shadow:0 0 2px var(--map-halo),0 0 3px var(--map-halo),0 0 4px var(--map-halo),0 1px 1px var(--map-halo); white-space:nowrap; pointer-events:none; }
 
     /* ---- spiderfy: stacked markers fan out on click ---- */
     /* MapLibre transforms the wrap (true position); the inner node carries the
@@ -609,7 +662,7 @@
       transform:translate(var(--fan-x,0px),var(--fan-y,0px)); }
     /* thin leader lines from the shared point to each displaced pin */
     .spider-legs { position:absolute; top:0; left:0; pointer-events:none; overflow:visible; }
-    .spider-leg { stroke:#4D6050; stroke-width:1.1; stroke-opacity:.55; animation:leg-in .22s ease-out; }
+    .spider-leg { stroke:#26231F; stroke-width:1.1; stroke-opacity:.5; animation:leg-in .22s ease-out; }
     @keyframes leg-in { from { stroke-opacity:0; } }
 
     /* ---- hover tooltip: a pin or bubble names itself under the pointer ---- */
@@ -621,9 +674,9 @@
        the fade to nothing. */
     .atlas-hint { position:absolute; top:0; left:0; z-index:4; pointer-events:none;
       max-width:16rem; padding:.18rem .45rem; border-radius:var(--radius-md);
-      background:rgba(255,255,255,.97); border:1px solid var(--color-border);
-      box-shadow:0 1px 4px rgba(42,36,26,.2);
-      font-family:'DM Sans',sans-serif; font-size:var(--t-meta); font-weight:500; line-height:1.3;
+      background:var(--color-surface); border:1px solid var(--color-border);
+      box-shadow:none;
+      font-family:var(--font-body); font-size:var(--t-meta); font-weight:400; line-height:1.3;
       color:var(--color-text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
       opacity:0; visibility:hidden; transition:opacity .12s ease; }
     .atlas-hint.on { opacity:1; visibility:visible; }
@@ -654,7 +707,7 @@
     .key-because { display:flex; flex-wrap:wrap; gap:.22rem .28rem; align-items:baseline;
       padding:.05rem 0 .34rem 1.5rem; min-width:0; }
     .key-because-lead { flex:0 0 auto; font-size:var(--t-label); color:var(--color-text-muted); }
-    .key-because-w { font-size:var(--t-label); background:var(--color-ochre-tint);
+    .key-because-w { font-size:var(--t-label); background:var(--color-marigold-tint);
       border-radius:var(--radius-md); padding:.02rem .26rem; min-width:0;
       overflow-wrap:anywhere; }
     .key-row.blank .key-word { color:var(--color-text-muted); font-weight:400; }
@@ -679,23 +732,46 @@
     .pop .key-word { font-size:var(--t-ui); }
     .pop .key-row .key-name, .pop .key-row .key-word { display:inline; }
     .pop .key-row-open { cursor:pointer; }
-    .pop .key-row-open:focus-visible { outline:2px solid var(--color-moss); outline-offset:2px;
+    .pop .key-row-open:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px;
       border-radius:var(--radius-md); }
     .pop .key-chev { grid-column:3; grid-row:1; width:10px; height:6px; margin-top:.42rem;
       color:var(--color-text-muted); transition:transform .15s ease; }
-    .pop .key-row-open:hover .key-chev { color:var(--color-moss); }
+    .pop .key-row-open:hover .key-chev { color:var(--color-leaf); }
     .pop .key-row-open[aria-expanded="true"] .key-chev { transform:rotate(180deg); }
     .pop .key-because { padding:.1rem 0 .05rem 1.5rem; }
     @media (prefers-reduced-motion:reduce) { .pop .key-chev { transition:none; } }
 
-    /* ---- popups ---- */
-    .atlas-popup .maplibregl-popup-content { border-radius:var(--radius-md); padding:0; box-shadow:var(--shadow-md);
-      font-family:'DM Sans',sans-serif; overflow:hidden; animation:pop-in .18s cubic-bezier(.25,1,.5,1); }
+    /* ---- the place card ----
+       Surface, small corners, a 3px Sindoor top edge (this is the one you
+       chose), the panel's shadow because it sits over map imagery. The edge is
+       drawn on the card's own box, so the tip below stays plain Surface. */
+    .atlas-popup .maplibregl-popup-content { border-radius:var(--radius-md); padding:0; box-shadow:var(--shadow-lg);
+      background:var(--color-surface); border-top:3px solid var(--color-sindoor);
+      font-family:var(--font-body); overflow:hidden; animation:pop-in .18s cubic-bezier(.25,1,.5,1); }
+    .atlas-popup .maplibregl-popup-tip { border-top-color:var(--color-surface); border-bottom-color:var(--color-surface); }
+    .atlas-popup.maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color:var(--color-surface); }
+    .atlas-popup.maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color:var(--color-surface); }
     @keyframes pop-in { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
     .pop-val, .leg-label, .maplibregl-ctrl-scale { font-variant-numeric:tabular-nums; }
-    /* MapLibre ships its scale bar at 10px; it reports a distance, so it is read */
-    .maplibregl-ctrl-scale { font-size:var(--t-label); }
-    .atlas-popup .maplibregl-popup-close-button { font-size:var(--t-section); color:var(--color-text-muted); padding:.15rem .4rem; }
+    /* the scale note: Label type on Surface, bottom-left */
+    .maplibregl-ctrl-scale { font-family:var(--font-body); font-size:var(--t-label); font-weight:700; letter-spacing:.06em;
+      color:var(--color-text-primary); background:rgba(253,252,248,.9); border-color:var(--color-text-primary); border-width:0 1px 1px; }
+    /* close: a 14px circle, ink glyph, top right */
+    .atlas-popup .maplibregl-popup-close-button { top:8px; right:8px; width:22px; height:22px; padding:0; line-height:1;
+      border-radius:50%; background:rgba(255,255,255,.85); color:var(--color-text-primary); font-size:1rem; }
+    .atlas-popup .maplibregl-popup-close-button:hover { background:var(--color-surface-alt); }
+    .atlas-popup .maplibregl-popup-close-button:focus-visible { outline:2px solid var(--color-leaf); outline-offset:1px; }
+    /* ---- map controls: Surface squares with an ink border, no shadow ---- */
+    .maplibregl-ctrl-group { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md); box-shadow:none; }
+    .maplibregl-ctrl-group:not(:empty) { box-shadow:none; }
+    .maplibregl-ctrl-group button { width:26px; height:26px; color:var(--color-text-primary); }
+    .maplibregl-ctrl-group button + button { border-top:1px solid var(--color-divider); }
+    .maplibregl-ctrl-group button:hover { background:var(--color-leaf-tint); }
+    .maplibregl-ctrl-group button:focus-visible { outline:2px solid var(--color-leaf); outline-offset:-2px; box-shadow:none; }
+    .maplibregl-ctrl-group button:focus:first-child, .maplibregl-ctrl-group button:focus:last-child { border-radius:var(--radius-md); }
+    .maplibregl-ctrl button.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon { background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2324211D' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M12 5v14M5 12h14'/%3E%3C/svg%3E"); background-size:16px; }
+    .maplibregl-ctrl button.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon { background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2324211D' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M5 12h14'/%3E%3C/svg%3E"); background-size:16px; }
+    @media (pointer:coarse){ .maplibregl-ctrl-group button { width:32px; height:32px; } }
     /* Room for the reasons. At 340px a place answering four questions, each
        with the words behind it, started scrolling inside a box most people do
        not realise scrolls — which reads as text cut off. */
@@ -703,18 +779,23 @@
        the edge — measured at 1280×720, 101px of a 432px box. Room for four
        questions and their reasons, and no taller than the stage. */
     .pop { padding:.85rem .95rem; max-height:min(44vh, 400px); overflow-y:auto; }
-    .pop-title { font-family:'Figtree',sans-serif; font-weight:700; font-size:var(--t-body); color:var(--color-text-primary); line-height:1.2; }
-    .pop-sub { font-size:var(--t-meta); text-transform:uppercase; letter-spacing:.08em; color:var(--color-moss); margin-top:.1rem; }
+    /* the kicker comes first: "SURVEY VILLAGE · GORAKHPUR" in Leaf, then the
+       name in the serif — the card reads like a catalogue entry */
+    .pop-sub { font-size:var(--t-label); font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:var(--color-leaf); margin:0 0 .2rem; padding-right:1.4rem; }
+    .pop-title { font-family:var(--font-display); font-weight:700; font-size:1.1rem; color:var(--color-text-primary); line-height:1.25; padding-right:1.4rem; text-wrap:balance; }
+    .pop-sub + .pop-title { padding-right:0; }
     /* A group of facts is a group: tight between them, with air before the
        group rather than repeated inside it. */
     .pop-field { margin-top:.5rem; min-width:0; }
     .pop-field + .pop-field { margin-top:.12rem; }
-    /* Label and value in one run of text, wrapping only when the value is long.
-       Stacked, "Creator / Sharang" spent two lines on one short word. */
-    /* the gap is a real space in the markup, so it is read aloud too; this only
-       widens what is already there */
-    .pop-field-inline .pop-lbl { margin-right:.2rem; }
-    .pop-field-inline .pop-val { display:inline; }
+    /* The fact list: two columns, the label in Meta beside a value that lines
+       up with the value above it, numbers tabular. A long value wraps in its
+       own column and never pushes the label off its line. */
+    .pop-facts { display:grid; grid-template-columns:minmax(5rem,max-content) 1fr; gap:.22rem .7rem; margin-top:.6rem; align-items:baseline; }
+    .pop-facts + .pop-facts { margin-top:.22rem; }
+    .pop-field-inline { display:contents; }
+    .pop-field-inline .pop-lbl { text-transform:none; letter-spacing:0; font-size:var(--t-meta); color:var(--color-text-secondary); }
+    .pop-field-inline .pop-val { display:block; min-width:0; overflow-wrap:anywhere; font-weight:600; }
     /* Where this place came from — last, and quieter than the place itself. */
     .pop-src { margin-top:.7rem; padding-top:.5rem; border-top:1px solid var(--color-border);
       font-size:var(--t-label); color:var(--color-text-muted); }
@@ -738,19 +819,19 @@
       position:absolute; top:50%; transform:translateY(-50%);
       width:26px; height:26px; line-height:1; padding:0;
       display:flex; align-items:center; justify-content:center;
-      font:inherit; font-size:18px; color:#2A241A;
+      font:inherit; font-size:18px; color:#24211D;
       background:rgba(255,255,255,.86); border:0; border-radius:50%;
-      box-shadow:0 1px 3px rgba(42,36,26,.3); cursor:pointer; opacity:0; transition:opacity .15s;
+      box-shadow:0 1px 3px rgba(36,33,29,.3); cursor:pointer; opacity:0; transition:opacity .15s;
     }
     .pop-shots:hover .pop-shot-go,
     .pop-shot-go:focus-visible { opacity:1; }
     .pop-shot-go.back { left:6px; }
     .pop-shot-go.on { right:6px; }
-    .pop-shot-go:focus-visible { outline:2px solid var(--color-moss); outline-offset:1px; }
+    .pop-shot-go:focus-visible { outline:2px solid var(--color-leaf); outline-offset:1px; }
     .pop-shot-at {
       position:absolute; right:8px; bottom:8px;
       font-size:11px; line-height:1; padding:.2rem .4rem; border-radius:var(--radius-pill);
-      color:#fff; background:rgba(42,36,26,.62); pointer-events:none;
+      color:#fff; background:rgba(36,33,29,.62); pointer-events:none;
       font-variant-numeric:tabular-nums;
     }
     /* a finger already has the strip; the arrows are for pointers that hover */
@@ -777,89 +858,89 @@
     .pop-fold .key-chev { width:10px; height:6px; color:var(--color-text-muted);
       transition:transform .15s ease; }
     .pop-fold:hover .pop-lbl, .pop-fold:hover .pop-fold-n, .pop-fold:hover .key-chev {
-      color:var(--color-moss); }
+      color:var(--color-leaf); }
     .pop-fold[aria-expanded="true"] .key-chev { transform:rotate(180deg); }
-    .pop-fold:focus-visible { outline:2px solid var(--color-moss); outline-offset:2px;
+    .pop-fold:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px;
       border-radius:var(--radius-md); }
     .pop-fold + .pop-tags { margin-top:.25rem; }
     @media (prefers-reduced-motion:reduce) { .pop-fold .key-chev { transition:none; } }
     .pop-val { font-size:var(--t-ui); color:var(--color-text-primary); }
     /* ---------- the labels, shelved (FAMILIES OF MEANING) ---------- */
     .label-index { margin:.4rem 0 .1rem; }
-    .label-index-go { font:inherit; font-size:var(--t-meta); font-weight:600; color:var(--color-moss);
+    .label-index-go { font:inherit; font-size:var(--t-meta); font-weight:600; color:var(--color-leaf);
       background:none; border:0; padding:0; cursor:pointer; text-align:left; }
-    .label-index-go:hover { color:var(--color-canopy); text-decoration:underline; }
+    .label-index-go:hover { color:var(--color-leaf-deep); text-decoration:underline; }
 
     /* The owner's door on a layer's own row, beside the labels door. It reads as
        the same kind of thing because it is: a way into what the places say. */
     .own-door { margin:.35rem 0 .1rem; }
     .own-door-said { display:block; font-size:var(--t-label); color:var(--color-text-muted); }
     .own-door-body { margin:.45rem 0 .2rem; padding:.55rem .6rem; border-radius:var(--radius-md);
-      background:var(--color-bg-alt); display:flex; flex-direction:column; gap:.45rem; }
+      background:var(--color-surface-alt); display:flex; flex-direction:column; gap:.45rem; }
     .own-door-body .own-note { margin:0; font-size:var(--t-label); line-height:1.45; }
     /* what it costs, said before the button rather than after */
     .own-door-cost { color:var(--color-text-muted); font-variant-numeric:tabular-nums; }
     .own-door-offer { display:flex; flex-direction:column; gap:.45rem; }
 
-    .lx-scrim { position:fixed; inset:0; z-index:140; background:rgba(42,36,26,.34);
+    .lx-scrim { position:fixed; inset:0; z-index:140; background:rgba(36,33,29,.34);
       display:grid; place-items:start center; padding:2.5rem 1rem; overflow-y:auto; }
     .lx-sheet { width:min(40rem,100%); background:var(--color-surface);
-      border-radius:var(--radius-lg); box-shadow:0 8px 30px rgba(42,36,26,.22); padding:1rem 1.25rem 1.5rem; }
+      border-radius:var(--radius-lg); box-shadow:0 8px 30px rgba(36,33,29,.22); padding:1rem 1.25rem 1.5rem; }
     .lx-head { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
-    .lx-head h2 { margin:0; font-family:'Figtree',sans-serif; font-size:var(--t-section); color:var(--color-text-primary); }
+    .lx-head h2 { margin:0; font-size:var(--t-section); color:var(--color-text-primary); }
     .lx-x { font:inherit; font-size:var(--t-body); line-height:1; color:var(--color-text-muted);
       background:none; border:0; cursor:pointer; padding:.2rem .3rem; }
     .lx-x:hover { color:var(--color-text-primary); }
     .lx-sub { margin:.3rem 0 .9rem; font-size:var(--t-meta); color:var(--color-text-secondary); }
     .lx-family { margin-bottom:1rem; }
-    .lx-family h3 { margin:0 0 .35rem; font-family:'Figtree',sans-serif; font-size:var(--t-ui);
+    .lx-family h3 { margin:0 0 .35rem; font-family:var(--font-body); font-size:var(--t-ui); font-weight:600; letter-spacing:0;
       color:var(--color-text-primary); }
-    .lx-count { font-family:'DM Sans',sans-serif; font-weight:400; font-size:var(--t-label); color:var(--color-text-muted); }
+    .lx-count { font-weight:400; font-size:var(--t-label); color:var(--color-text-muted); font-variant-numeric:tabular-nums; }
     .lx-tags { display:flex; flex-wrap:wrap; gap:.3rem; }
     /* the same chip the popups use, so a label looks the same wherever it is read */
-    .lx-tag { font:inherit; font-size:var(--t-label); padding:.15rem .5rem; background:var(--color-moss-tint);
-      color:var(--color-canopy); border-radius:var(--radius-md); font-weight:500; border:1px solid transparent;
+    .lx-tag { font:inherit; font-size:var(--t-label); padding:.15rem .5rem; background:var(--color-leaf-tint);
+      color:var(--color-leaf-deep); border-radius:var(--radius-md); font-weight:600; border:1px solid transparent;
       cursor:pointer; transition:background .15s ease, border-color .15s ease; }
-    .lx-tag:hover { border-color:var(--color-moss); }
-    .lx-tag b { font-weight:600; opacity:.6; margin-left:.15rem; }
-    .lx-tag:focus-visible { outline:2px solid var(--color-moss); outline-offset:1px; }
+    .lx-tag:hover { border-color:var(--color-leaf); }
+    .lx-tag b { font-weight:600; opacity:.6; margin-left:.15rem; font-variant-numeric:tabular-nums; }
+    .lx-tag:focus-visible { outline:2px solid var(--color-leaf); outline-offset:1px; }
 
     .pop-tags { display:flex; flex-wrap:wrap; gap:.3rem; margin-top:.25rem; }
     /* A tag is a button now — tap it to see the places that share it. It keeps
        the same quiet look it had as a label, because it is still first of all a
        thing to read; the pointer and the hover say it can be pressed, and the
        lit state says which one is doing the showing. */
-    .pop-tag { font:inherit; font-size:var(--t-label); padding:.15rem .5rem; background:var(--color-moss-tint);
-      color:var(--color-canopy); border-radius:var(--radius-md); font-weight:500; border:1px solid transparent;
+    .pop-tag { font:inherit; font-size:var(--t-label); padding:.15rem .5rem; background:var(--color-leaf-tint);
+      color:var(--color-leaf-deep); border-radius:var(--radius-md); font-weight:600; border:1px solid transparent;
       cursor:pointer; transition:background .15s ease, border-color .15s ease; }
-    .pop-tag:hover { border-color:var(--color-moss); }
-    .pop-tag.on { background:var(--color-moss); color:#fff; border-color:var(--color-moss); }
-    .pop-tag:focus-visible { outline:2px solid var(--color-moss); outline-offset:1px; }
+    .pop-tag:hover { border-color:var(--color-leaf); }
+    .pop-tag.on { background:var(--color-leaf); color:#fff; border-color:var(--color-leaf); }
+    .pop-tag:focus-visible { outline:2px solid var(--color-leaf); outline-offset:1px; }
     .pop-notes { margin-top:.6rem; display:flex; flex-direction:column; gap:.5rem; }
     .pop-note { font-size:var(--t-meta); }
     /* at-a-glance hover tooltip (crop distribution) — never intercepts the pointer */
     .atlas-tooltip { pointer-events:none; }
-    .atlas-tooltip .maplibregl-popup-content { border-radius:var(--radius-md); padding:.5rem .6rem; box-shadow:var(--shadow-md);
-      font-family:'DM Sans',sans-serif; background:rgba(255,255,255,.97); border:1px solid var(--color-border); }
+    .atlas-tooltip .maplibregl-popup-content { border-radius:var(--radius-md); padding:.5rem .6rem; box-shadow:none;
+      font-family:var(--font-body); font-size:var(--t-meta); background:var(--color-surface); border:1px solid var(--color-border); }
     .atlas-tooltip .maplibregl-popup-tip { display:none; }
-    .tt-name { font-family:'Figtree',sans-serif; font-weight:700; font-size:var(--t-ui); color:var(--color-text-primary); margin-bottom:.3rem; }
+    .tt-name { font-weight:700; font-size:var(--t-ui); color:var(--color-text-primary); margin-bottom:.3rem; }
     .tt-crops { display:flex; flex-wrap:wrap; gap:.25rem; max-width:15rem; }
-    .tt-crop { font-size:var(--t-label); font-weight:500; padding:.1rem .4rem; border-radius:var(--radius-md); color:#fff;
+    .tt-crop { font-size:var(--t-label); font-weight:600; padding:.1rem .4rem; border-radius:var(--radius-md); color:#fff;
       background:var(--c,#8a8f7a); white-space:nowrap; }
-    .pop-note b { display:block; color:var(--color-canopy); font-family:'Figtree',sans-serif; }
+    .pop-note b { display:block; color:var(--color-leaf-deep); font-weight:700; }
     .pop-note span { color:var(--color-text-secondary); }
 
     .maplibregl-ctrl-attrib { font-size:var(--t-label); }   /* was 10px, under the floor */
 
-    /* ---- credits footer ---- */
+    /* ---- credits footer: the ledger. Surface Alt, hairline top, everything named. ---- */
     .atlas-credits { width:var(--container); margin:0 auto; padding:1.75rem 0 1rem; }
     .credits-grid { display:grid; grid-template-columns:1.1fr 1.5fr; gap:2rem;
-      background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      background:var(--color-surface-alt); border:1px solid var(--color-divider); border-top:1px solid var(--color-border); border-radius:var(--radius-lg);
       padding:1.6rem 1.75rem; box-shadow:var(--shadow-sm); }
     @media (max-width:720px){ .credits-grid{ grid-template-columns:1fr; gap:1.5rem; } }
-    .credits-col h2 { display:flex; align-items:center; gap:.5rem; font-family:'Figtree',sans-serif; font-size:var(--t-label);
-      font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--color-text-muted); margin:0 0 .8rem; }
-    .credits-col h2 svg { width:15px; height:15px; color:var(--color-moss); }
+    .credits-col h2 { display:flex; align-items:center; gap:.5rem; font-family:var(--font-body); font-size:var(--t-label);
+      font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--color-text-secondary); margin:0 0 .8rem; }
+    .credits-col h2 svg { width:15px; height:15px; color:var(--color-leaf); }
     .loka-wordmark-link { display:inline-block; margin:0 0 .85rem; transition:opacity .15s ease; }
     .loka-wordmark-link:hover { opacity:.78; }
     .loka-wordmark { display:block; height:28px; width:auto; }
@@ -867,9 +948,9 @@
     .cr-lede b { color:var(--color-text-primary); font-weight:600; }
     .cr-orgs { display:flex; flex-direction:column; gap:.9rem; }
     .cr-org { display:flex; align-items:center; gap:.7rem; }
-    .cr-org .cr-icon { width:34px; height:34px; border-radius:var(--radius-lg); flex:0 0 auto; display:flex; align-items:center; justify-content:center; background:var(--color-moss-tint); color:var(--color-moss); }
+    .cr-org .cr-icon { width:34px; height:34px; border-radius:var(--radius-lg); flex:0 0 auto; display:flex; align-items:center; justify-content:center; background:var(--color-leaf-tint); color:var(--color-leaf); }
     .cr-org .cr-icon svg { width:18px; height:18px; }
-    .cr-org b { font-family:'Figtree',sans-serif; font-size:var(--t-control); color:var(--color-text-primary); font-weight:600; display:block; line-height:1.2; }
+    .cr-org b { font-size:var(--t-control); color:var(--color-text-primary); font-weight:600; display:block; line-height:1.2; }
     .cr-org span { font-size:var(--t-meta); color:var(--color-text-secondary); }
     #data-credits { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:.55rem .9rem; }
     @media (max-width:520px){ #data-credits{ grid-template-columns:1fr; } }
@@ -879,8 +960,8 @@
     #data-credits .cr-lic { color:var(--color-text-muted); font-size:var(--t-meta); letter-spacing:.02em; }
     /* layers contributed by collaborating orgs */
     #contrib-credits { margin-top:1.1rem; }
-    .contrib-head { font-family:'Figtree',sans-serif; font-size:var(--t-label); font-weight:600; letter-spacing:.1em;
-      text-transform:uppercase; color:var(--color-text-muted); margin:0 0 .5rem; }
+    .contrib-head { font-family:var(--font-body); font-size:var(--t-label); font-weight:700; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--color-text-secondary); margin:0 0 .5rem; }
     #contrib-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.4rem; }
     #contrib-list li { font-size:var(--t-meta); line-height:1.35; }
     #contrib-list .cr-name { font-weight:600; color:var(--color-text-primary); }
@@ -911,14 +992,14 @@
     a.home-row:hover, a.home-row:focus-visible { text-decoration:none; color:var(--color-text-primary); }
     .home-row h2 { grid-column:1; margin:0; font-size:var(--t-section); font-weight:600; line-height:1.25;
       transition:color .15s ease; }
-    a.home-row:hover h2 { color:var(--color-canopy); }
+    a.home-row:hover h2 { color:var(--color-leaf-deep); }
     .home-row p { grid-column:1; margin:0; font-size:var(--t-ui); color:var(--color-text-secondary); max-width:62ch; }
-    .home-row .feat { margin-left:.6rem; font-family:'Figtree',sans-serif; font-size:var(--t-label);
-      font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--color-rust-deep);
+    .home-row .feat { margin-left:.6rem; font-family:var(--font-body); font-size:var(--t-label);
+      font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--color-sindoor-deep);
       vertical-align:.12em; white-space:nowrap; }
     .home-row .go { grid-column:2; grid-row:1 / span 2; align-self:center; font-size:var(--t-section);
       color:var(--color-text-muted); transition:transform .15s ease, color .15s ease; }
-    a.home-row:hover .go { color:var(--color-moss); transform:translateX(3px); }
+    a.home-row:hover .go { color:var(--color-leaf); transform:translateX(3px); }
     @media (prefers-reduced-motion:reduce) {
       .home-row .go, .home-row h2 { transition:none; }
       a.home-row:hover .go { transform:none; }
@@ -927,21 +1008,24 @@
     /* ---- "build your own" CTA band (fixed LOKA element on every instance) ---- */
     .atlas-cta { width:var(--container); margin:0 auto 2rem; }
     .cta-inner { display:flex; align-items:center; justify-content:space-between; gap:1.25rem; flex-wrap:wrap;
-      background:var(--color-moss-tint); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      background:var(--color-leaf-tint); border:1px solid var(--color-border); border-radius:var(--radius-lg);
       padding:1.15rem 1.4rem; }
-    .cta-inner b { display:block; font-family:'Figtree',sans-serif; font-weight:600; color:var(--color-text-primary); }
+    .cta-inner b { display:block; font-family:var(--font-display); font-weight:700; font-size:var(--t-section); line-height:1.25; color:var(--color-text-primary); text-wrap:balance; }
     .cta-inner span { font-size:var(--t-ui); color:var(--color-text-secondary); }
-    .cta-btn { flex:0 0 auto; display:inline-block; padding:.55rem 1.1rem; border-radius:var(--radius-md);
-      background:var(--color-moss); color:#fff; font-weight:600; font-size:var(--t-ui); }
-    .cta-btn:hover { background:var(--color-canopy); color:#fff; text-decoration:none; }
+    .cta-btn { flex:0 0 auto; display:inline-block; padding:.6rem 1.2rem; border-radius:var(--radius-md);
+      background:var(--color-leaf); color:#fff; font-weight:600; font-size:var(--t-control); transition:background .15s ease; }
+    .cta-btn:hover { background:var(--color-leaf-deep); color:#fff; text-decoration:none; }
 
-    footer.site { border-top:1px solid var(--color-divider); background:var(--color-bg-alt); }
+    footer.site { border-top:1px solid var(--color-divider); background:var(--color-surface-alt); }
     .foot-inner { width:var(--container); margin:0 auto; padding:1.5rem 0; color:var(--color-text-secondary); font-size:var(--t-ui); }
 
     /* ?embed=1 — the atlas inside someone else's frame (the wizard's preview).
-       Its own identity and map stay; loka.place's furniture goes. */
+       Its own identity and map stay; loka.place's furniture goes — except the
+       "LOKA Atlas" wordmark in the strip and the credit in the phone sheet's
+       foot, which travel with the map wherever it is shown. */
     .atlas-embed header.site,
     .atlas-embed .atlas-cta,
+    .atlas-embed .sheet-foot-build,
     .atlas-embed footer.site { display:none; }
     .atlas-embed main { padding-top:1.25rem; }
     /* map-only: the frame IS the map, so the stage loses its page margins and
@@ -952,7 +1036,7 @@
     .atlas-embed-map, .atlas-embed-map body { height:100%; }
     .atlas-embed-map main { padding:0; }
     .atlas-embed-map .atlas-stage { width:100%; height:100dvh; margin:0;
-      border-radius:0; border:none; box-shadow:none; }
+      border-radius:0; border:none; outline:none; box-shadow:none; }
     /* Coarse pointer (touch): comfortable 44px targets regardless of screen size */
     @media (pointer:coarse){
       .ctl-toggle, .ctl-sub-toggle { min-height:44px; }
@@ -1018,56 +1102,99 @@
          The bar never gets covered. Whichever mark you came in by stays lit and
          stays under your thumb, so the way out is the way you came and there is
          no close button to hunt for. */
-      .atlas-stage { height:64dvh; min-height:420px; }
+      .atlas-stage { height:64dvh; min-height:420px; margin-left:0; margin-right:0; width:100%;
+        outline-offset:0; }   /* the frame without its gap: a phone has no width to spare */
       #atlas-map { position:absolute; inset:0; }
 
-      .atlas-bar:not([hidden]) {
-        position:absolute; left:0; right:0; bottom:0; z-index:7;
-        display:flex; align-items:stretch; gap:.1rem;
-        background:var(--color-surface); border-top:1px solid #767060;
-        padding:.2rem .25rem calc(.2rem + env(safe-area-inset-bottom));
-      }
-      .atlas-mark {
-        flex:1 1 0; min-width:0; border:0; background:none; cursor:pointer; font:inherit;
-        display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.12rem;
-        padding:.3rem .1rem; border-radius:var(--radius-md); color:var(--color-text-muted);
-        position:relative; min-height:46px;
-      }
-      .atlas-mark .mk-lb {
-        font-family:'Figtree',sans-serif; font-size:.58rem; font-weight:700; letter-spacing:.03em;
-        text-transform:uppercase; line-height:1; max-width:100%;
-        overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-      }
-      .atlas-mark svg { width:19px; height:19px; }
-      .atlas-mark[aria-expanded="true"] { background:var(--color-moss-tint); color:var(--color-canopy); }
-      .atlas-mark:focus-visible { outline:2px solid var(--color-moss); outline-offset:-2px; }
-      .mk-on {
-        position:absolute; top:2px; right:calc(50% - 20px); min-width:15px; height:15px; padding:0 3px;
-        border-radius:var(--radius-pill); background:var(--color-moss); color:#fff;
-        font-size:.58rem; font-weight:700; line-height:15px; text-align:center;
-        font-variant-numeric:tabular-nums;
-      }
-
-      /* the tray rises to meet the bar, and never past half the screen */
+      /* ---- the sheet ----
+         The shelf docks at the foot of the stage as a bottom sheet. At rest it
+         is a grab bar, the row of group tabs and the foot; tapping a tab slides
+         that group's rows open above the foot. It never rises past half the
+         stage, so the top third of the map is always in view — which is why
+         the head, the tab row and the foot are each as short as a thumb
+         allows: every pixel they spend is a row the list cannot show. */
       .atlas-panel {
-        position:absolute; left:0; right:0; top:auto; z-index:6;
-        bottom:calc(46px + .4rem + env(safe-area-inset-bottom));
+        position:absolute; left:0; right:0; top:auto; bottom:0; z-index:6;
         width:auto; max-width:none; max-height:50%; min-height:0;
-        border-radius:var(--radius-lg) var(--radius-lg) 0 0;
-        border-right:0; border-top:1px solid #767060;
-        box-shadow:0 -2px 14px rgba(42,36,26,.16);
-        transform:translateY(calc(100% + 60px)); visibility:hidden;
-        transition:transform .28s cubic-bezier(.22,1,.36,1), visibility .28s;
+        background:var(--color-surface);
+        border-radius:0; border-right:0; border-top:1px solid var(--map-block);
+        box-shadow:0 -2px 14px rgba(36,33,29,.16);
+        transform:none; visibility:visible;
       }
-      .atlas-stage.tray-open .atlas-panel { transform:none; visibility:visible; }
-      .atlas-panel #atlas-controls { flex:1 1 auto; min-height:0; overflow-y:auto; }
-      /* one group at a time: the bar is the fold */
-      .atlas-stage.tray-open #atlas-controls .ctl-group[data-group]{ display:none; }
-      .atlas-stage.tray-open #atlas-controls .ctl-group.on-show{ display:block; }
-      .panel-head { position:relative; cursor:pointer; padding-top:1.05rem; }
-      .panel-head::before { content:''; position:absolute; top:7px; left:50%; transform:translateX(-50%);
-        width:34px; height:4px; border-radius:var(--radius-pill); background:var(--color-border); }
-      .panel-collapse { display:inline-flex; transition:transform .2s cubic-bezier(.25,1,.5,1); }
+      /* the head is the grab bar and nothing else: the tabs say what is here */
+      .panel-head { position:relative; cursor:pointer; padding:.7rem .9rem .2rem; border-bottom:0; justify-content:center; min-height:0; }
+      .panel-head::before { content:''; position:absolute; top:5px; left:50%; transform:translateX(-50%);
+        width:30px; height:4px; border-radius:var(--radius-pill); background:var(--color-toggle-off); }
+      .panel-head strong, .panel-count { display:none; }
+      .panel-collapse { display:none; }
+      /* while the owner's edit card stands in for the list, the head must
+         name the layer again — it is the only place that says which one */
+      .atlas-panel:has(#atlas-controls[hidden]) .panel-head strong { display:block; }
+
+      /* the tab row: one tab per group, scrolling sideways when the names
+         need more room than the phone has (names are never cut short) */
+      .atlas-bar:not([hidden]) {
+        display:flex; gap:.35rem; flex:0 0 auto;
+        padding:.1rem .75rem .4rem; overflow-x:auto; scrollbar-width:none;
+        -webkit-overflow-scrolling:touch; scroll-snap-type:x proximity;
+      }
+      .atlas-bar::-webkit-scrollbar { display:none; }
+      .atlas-tab {
+        flex:0 0 auto; scroll-snap-align:start; min-height:34px; padding:.3rem .7rem;
+        font:inherit; font-size:var(--t-label); font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+        color:var(--color-text-primary); background:var(--color-surface); border:1px solid var(--color-border);
+        border-radius:var(--radius-md); cursor:pointer; white-space:nowrap; display:inline-flex; align-items:center; gap:.4rem;
+        transition:background .15s ease, color .15s ease, border-color .15s ease;
+      }
+      .atlas-tab .tab-on { font-weight:600; letter-spacing:0; color:var(--color-text-secondary); font-variant-numeric:tabular-nums; }
+      .atlas-tab[aria-expanded="true"] { background:var(--color-leaf); border-color:var(--color-leaf); color:#fff; }
+      .atlas-tab[aria-expanded="true"] .tab-on { color:rgba(255,255,255,.8); }
+      .atlas-tab:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; }
+
+      /* the rows slide open beneath the tabs (0.28s, the sheet's own ease) */
+      .sheet-body { display:grid; grid-template-rows:0fr; flex:0 1 auto; min-height:0;
+        transition:grid-template-rows .28s cubic-bezier(.22,1,.36,1); }
+      .atlas-stage.tray-open .sheet-body { grid-template-rows:1fr; }
+      .sheet-body > * { min-height:0; overflow:hidden; }
+      .atlas-panel #atlas-controls { overflow-y:auto; padding:0 .75rem .5rem; border-top:1px solid var(--color-divider); }
+      .atlas-stage:not(.tray-open) #atlas-controls { border-top-color:transparent; }
+      /* one group at a time: the tab is the fold */
+      #atlas-controls .ctl-group[data-group] { display:none; }
+      .atlas-stage.tray-open #atlas-controls .ctl-group.on-show { display:block; }
+      /* the tab already names the group, so the group's own head steps aside;
+         its hairline stays as the top edge of the list */
+      .atlas-stage.tray-open #atlas-controls .ctl-group.on-show .ctl-group-head { position:static; height:0; padding:0; margin:0; border:0; overflow:hidden; }
+      .ctl-group:first-of-type { margin-top:0; }
+      /* rows: full width, a finger high, the switch at the end, a hairline between */
+      .ctl-row { padding:0; border-bottom:1px solid var(--color-divider); }
+      .ctl-row:last-child { border-bottom:0; }
+      .ctl-toggle { min-height:44px; gap:.75rem; }
+      .ctl-toggle .ctl-switch { order:3; margin-left:auto; }
+      .ctl-toggle .ctl-name { order:1; flex:1 1 auto; min-width:0; }
+      .ctl-toggle .ctl-info { order:2; margin-left:0; }
+      :root { --panel-strip:0px; }
+      .ctl-sub-head { min-height:44px; }
+      .ctl-sub-toggle .ctl-switch { order:3; margin-left:auto; }
+      .ctl-sub-toggle .ctl-sub-name { order:1; flex:1 1 auto; }
+
+      /* the foot: Map/Satellite at the left; at the right the way to build
+         your own atlas, with the credit beneath it — one row, a thumb high */
+      .sheet-foot { display:flex; align-items:center; gap:.6rem .9rem; flex-wrap:wrap; flex:0 0 auto;
+        padding:.35rem .75rem calc(.4rem + env(safe-area-inset-bottom)); border-top:1px solid var(--color-divider);
+        background:var(--color-surface-alt); font-size:var(--t-meta); color:var(--color-text-secondary); }
+      .sheet-foot .ctl-basemaps { flex:0 0 auto; }
+      .sheet-foot .bm-btn { padding:.4rem .6rem; }
+      .sheet-foot .own-region-wrap { flex:1 1 100%; margin:0; order:3; }
+      .sheet-foot-words { margin-left:auto; display:flex; flex-direction:column; align-items:flex-end; gap:.05rem; line-height:1.35; }
+      .sheet-foot-credit { white-space:nowrap; font-size:var(--t-label); }
+      .sheet-foot-credit b { color:var(--color-text-primary); font-weight:700; letter-spacing:.08em; }
+      .sheet-foot-build { font-weight:600; color:var(--color-leaf); white-space:nowrap; }
+      /* a place card opens above the sheet, not behind it: the map box makes
+         no stacking context of its own, so the card can outrank the sheet */
+      .atlas-popup { z-index:7; }
+      /* the wordmark over the map wears a small Surface chip, since the phone's
+         strip has no surface of its own */
+      .atlas-wordmark { padding:.3rem .5rem; background:rgba(253,252,248,.92); border:1px solid var(--color-border); border-radius:var(--radius-md); }
       .credits-grid { padding:1.35rem 1.25rem; }
     }
 
@@ -1125,15 +1252,26 @@
 
   <div class="atlas-stage">
     <div id="atlas-map"></div>
+    <div class="atlas-loading" id="atlas-loading" hidden aria-live="polite"><span>Loading the map</span></div>
     <aside class="atlas-panel" id="atlas-panel">
       <div class="panel-head">
         <strong>Map layers</strong>
         <span class="panel-count" id="panel-count"></span>
         <button class="panel-collapse" type="button" aria-label="Show or hide map layers" aria-expanded="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
       </div>
-      <div id="atlas-controls"></div>
+      <!-- the phone's row of group tabs; on a wide screen it is not there -->
+      <nav class="atlas-bar" id="atlas-bar" aria-label="Layer groups" hidden></nav>
+      <div class="sheet-body">
+        <div id="atlas-controls"></div>
+      </div>
+      <!-- the credit strip's phone form: Map/Satellite is moved in by atlas.js -->
+      <div class="sheet-foot">
+        <div class="sheet-foot-words">
+          <a class="sheet-foot-build" href="./setup/">Build your own atlas →</a>
+          <span class="sheet-foot-credit"><b>LOKA</b> · Socratus</span>
+        </div>
+      </div>
     </aside>
-    <nav class="atlas-bar" id="atlas-bar" aria-label="Map layers" hidden></nav>
   </div>
   <div class="map-attrib" id="map-attrib" aria-label="Map data attribution"></div>
 
@@ -1209,7 +1347,12 @@
       function apply() { panel.classList.toggle("collapsed", mq.matches); sync(); resizeMap(); }
       apply();
       mq.addEventListener("change", apply);
-      head.addEventListener("click", function () { panel.classList.toggle("collapsed"); sync(); resizeMap(); });
+      head.addEventListener("click", function () {
+        // on a phone the head is the sheet's grab bar: it opens the first
+        // group or puts the open one away (atlas.js owns which group shows)
+        if (mq.matches) { if (window.LokaAtlas && window.LokaAtlas.toggleSheet) window.LokaAtlas.toggleSheet(); return; }
+        panel.classList.toggle("collapsed"); sync(); resizeMap();
+      });
     })();
 
     /* Crisp text over the map. The map canvas and the blurred panel are
