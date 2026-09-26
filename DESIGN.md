@@ -17,6 +17,8 @@ colors:
   sindoor-deep: "#9E3220"
   sindoor-tint: "rgba(201,64,43,.10)"
   marigold: "#E9A237"
+  marigold-tint: "rgba(233,162,55,.16)"
+  blue-tint: "rgba(58,127,161,.14)"
   map-ground: "#F5F1E6"
   map-outside: "#EAE6DC"
   map-water: "#3A7FA1"
@@ -179,7 +181,7 @@ holds one map, one shelf of layers, and a credits ledger, in that order of impor
 ### Action and selection
 - **Leaf** (#2A6B41): the product's one voice — primary buttons, switches when on, links, focus rings, the active Map/Satellite segment, the active phone tab. White on Leaf is 6.4:1. Deepens to **Leaf Deep** (#1F5232) on hover/press. **Leaf Tint** for eyebrow chips and selection washes.
 - **Sindoor** (#C9402B): "this thing, here" — the ring around a selected map feature, the top edge of the place card, the selected-row mark. 4.8:1 on Surface, so it may also carry short warning text as **Sindoor Deep** (#9E3220). Never a button fill.
-- **Marigold** (#E9A237): the middle of the data ramp and a marker colour. Never text.
+- **Marigold** (#E9A237): the middle of the data ramp and a marker colour. Never text. **Marigold Tint** rgba(233,162,55,.16) is the ground a quoted reason sits on (the "because" chips); **Blue Tint** rgba(58,127,161,.14) is the wash for a water-coloured chip in the owner's pickers. Both are washes, never fills for text to sit on unless the text is Ink.
 
 ### Map tokens
 - **Ground** (#F5F1E6) inside the atlas region; **Outside** (#EAE6DC) beyond it; the framed well's background is Ground.
@@ -238,7 +240,7 @@ The closest pair after red-green simulation is Marigold vs Turmeric (ΔE 8.7); t
 
 **The Numbers Line Up Rule** (new). Any number that sits above or beside another number is tabular. Source Sans 3's default figures are proportional, so this must be set explicitly.
 
-**The Companions Rule** (new, for later). Font stacks are written so a script companion can be added without touching a selector: `"Source Sans 3", var(--font-companions-sans), sans-serif` and `"Source Serif 4", var(--font-companions-serif), serif`, where the companion variables are empty today. When another language ships, the matched Noto faces go into those variables and nothing else changes.
+**The Companions Rule** (new, for later). Font stacks are written so a script companion can be added without touching a selector: `"Source Sans 3", var(--font-companions-sans), sans-serif` and `"Source Serif 4", var(--font-companions-serif), serif`. The companion variables are **never empty**: today they hold the primary face as a placeholder (`--font-companions-sans: "Source Sans 3"; --font-companions-serif: "Source Serif 4";`). An empty value left `, ,` in the stack, Chromium threw the whole declaration away and every page fell back to Times (measured by both builders, 26 Sep 2026). When another language ships, the matched Noto faces are appended in those variables — `--font-companions-sans: "Source Sans 3", "Noto Sans Devanagari";` — and nothing else changes.
 
 ## 4. Elevation
 

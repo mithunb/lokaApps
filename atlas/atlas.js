@@ -8,9 +8,9 @@
   try {
     console.log(
       "%cLOKA Atlas%c · a Socratus project\n%cOpen data, openly mapped — discoverloka.org",
-      "font:700 15px/1.5 Figtree,system-ui,sans-serif;color:#1A7048",
-      "font:500 12px/1.5 system-ui,sans-serif;color:#4D6050",
-      "font:400 11px/1.5 system-ui,sans-serif;color:#7A8E7A"
+      "font:700 15px/1.5 'Source Serif 4',serif;color:#2A6B41",
+      "font:400 12px/1.5 'Source Sans 3',system-ui,sans-serif;color:#5A5751",
+      "font:400 11px/1.5 'Source Sans 3',system-ui,sans-serif;color:#6E6A63"
     );
   } catch (e) {}
 
@@ -121,7 +121,16 @@
   // note where it is used. Eight are drawn; the ninth and tenth become "other".
   var KEY_CAP = 10;
   // the wizard's named single colours (fragment.js MARKER_COLORS), for "one colour"
-  var ONE_COLORS = { rust: "#A6522F", moss: "#40573D", ochre: "#B0863A", sienna: "#9C5A34", slate: "#5f7f92" };
+  /* The seven-colour point set (DESIGN.md §2), each with a marker shape of its
+     own in iconkit.js. The old names keep resolving so a manifest written
+     before the Bazaar palette still draws — to the new value of the same
+     name, which is the one place an existing atlas changes colour: a layer
+     that asked for "rust" by name, not by hex, asked for the product's red. */
+  var ONE_COLORS = {
+    sindoor: "#C9402B", leaf: "#2A6B41", marigold: "#E9A237", blue: "#3A7FA1",
+    stone: "#A39E94", ink: "#26231F", turmeric: "#B99A1C",
+    rust: "#C9402B", moss: "#2A6B41", ochre: "#E9A237", sienna: "#D2692A", slate: "#3A7FA1",
+  };
   var keyState = {};   // layer id -> { active: [column, ...], note: string|null }
 
   // Signed-in state in the nav — on the home gallery and on every atlas.
@@ -167,7 +176,30 @@
      a second renderer that could quietly disagree with this one. See reboot().
      Resolves true when something was drawn, false when the reader has been
      handed an error in the map's place. */
+  /* The stage's own ground and one quiet line while the manifest and the base
+     style are on their way; the map takes its place once it has drawn. */
+  function showLoading(on) {
+    var n = $("#atlas-loading");
+    if (!n) return;
+    if (on) { n.classList.remove("gone"); n.hidden = false; return; }
+    n.classList.add("gone");
+    setTimeout(function () { n.hidden = true; }, 220);
+  }
+
+  /* The reason, in words a reader can act on. Our own messages already are;
+     the map engine's are not — a browser that cannot draw the map throws a
+     block of JSON about WebGL, which nobody should be shown. */
+  function plainReason(err) {
+    var m = String(err && err.message || "");
+    if (/webgl/i.test(m) || /^\s*[\[{]/.test(m)) {
+      return "Your browser could not draw the map. Try again in a newer browser, or with hardware acceleration switched on.";
+    }
+    if (!m || m.length > 240) return "Something went wrong while loading the atlas. Reload the page, and tell us if it keeps happening.";
+    return m;
+  }
+
   function draw() {
+    showLoading(true);
     return fetch(dataUrl("manifest.json"))
       .then(function (r) {
         if (!r.ok) throw new Error(r.status === 404
@@ -189,8 +221,18 @@
         return baseStyle(m).then(function (st) { start(m, st); return true; });
       })
       .catch(function (err) {
+        showLoading(false);
+        /* A small panel that says what happened in words and offers one thing
+           to try. The title is the same every time; the line under it is the
+           reason, which is the part a reader can act on. */
         $("#atlas-map").innerHTML =
-          '<div class="atlas-error">Could not load “' + esc(DATASET) + '”.<br><small>' + esc(err.message) + "</small></div>";
+          '<div class="atlas-error"><div class="atlas-error-box" role="alert">' +
+            '<h2>The map could not be loaded</h2>' +
+            '<p>' + esc(plainReason(err)) + '</p>' +
+            '<button type="button" class="share-btn atlas-error-retry">Try again</button>' +
+          '</div></div>';
+        var again = $(".atlas-error-retry");
+        if (again) again.onclick = function () { location.reload(); };
         return false;
       });
   }
@@ -317,7 +359,8 @@
       hash: false
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
-    map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-right");
+    // the scale note sits bottom-left, away from the zoom buttons (DESIGN.md §5)
+    map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-left");
     // attribution is rendered in a strip below the map (renderMapAttrib), not over it
     window.__map = map;   // debug hook
     map.on("error", function (e) { console.error("Atlas map error:", e && e.error && e.error.message); });
@@ -361,6 +404,10 @@
 
     map.on("load", function () {
       try {
+        // the base style is up: warm it before anything of ours goes on top,
+        // and take the loading line away now there is a map to look at
+        warmBaseStyle(map);
+        showLoading(false);
         // buildLayers preloads sources async, so layer ids (L._ids) only exist once
         // it resolves. wirePopups + fitToData depend on those, so run them after.
         renderMapAttrib();
@@ -655,7 +702,7 @@
       style: "https://tiles.openfreemap.org/styles/bright",
       labels: null,                    // built into the style
       attribution: "© OpenStreetMap contributors, © OpenFreeMap",
-      ground: "#F8F4EC",
+      ground: "#F5F1E6",               // --map-ground: the cream the frame holds
     },
     satellite: {
       tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
@@ -689,6 +736,65 @@
   // map and is re-read from whichever basemap the atlas opens on, so there is
   // no third colour to keep in step.
   var mapGround = APP_BASEMAPS.light.ground;
+
+  /* The everyday map, warmed and quietened to sit with the cream ground.
+
+     OSM Bright is somebody else's style, fetched whole, and it is drawn for a
+     white page: sky-blue water, lime woods, salmon motorways, black place
+     names. On the atlas those colours compete with the data, which is the one
+     thing the Map Speaks Rule forbids. So once the style is up its layers are
+     repainted in the map tokens — water to the atlas's blue, greens
+     desaturated, roads to a tone step above the ground, base labels to Ink
+     Soft with the Ground halo — matched by the id and source-layer OSM Bright
+     uses. Every call is guarded, and a layer that is not there is simply not
+     touched: a style update upstream can drop a layer, and that must cost
+     nothing. Satellite is never touched; the atlas's own layers are not
+     touched either, because they are not in the style until after this runs
+     and none of them carry these ids. */
+  var BASE_WARM = {
+    ground: "#F5F1E6", outside: "#EAE6DC", water: "#C8DBE5", waterway: "#3A7FA1",
+    green: "#E9EDDF", wood: "#DCE3CF", landuse: "#EFEAE0", road: "#E2DDD0", roadMajor: "#D6D0C0",
+    roadCasing: "#CFC9B8", building: "#E8E2D6", boundary: "#8C8985", label: "#5A5751", halo: "#F5F1E6",
+    labelStrong: "#24211D",
+  };
+  function warmBaseStyle(m) {
+    if (!m || !m.getStyle) return;
+    var style; try { style = m.getStyle(); } catch (e) { return; }
+    var W = BASE_WARM;
+    function paint(id, prop, val) {
+      if (!m.getLayer(id)) return;
+      try { m.setPaintProperty(id, prop, val); } catch (e) { /* a property this layer type lacks */ }
+    }
+    (style && style.layers || []).forEach(function (L) {
+      var id = L.id, src = L["source-layer"] || "", type = L.type;
+      if (id === "background") { paint(id, "background-color", W.ground); return; }
+      if (type === "fill" && src === "water") { paint(id, "fill-color", W.water); return; }
+      if (type === "line" && src === "waterway") { paint(id, "line-color", W.waterway); paint(id, "line-opacity", 0.55); return; }
+      if (type === "fill" && (src === "landcover" || src === "park")) {
+        if (/glacier|ice|sand/.test(id)) { paint(id, "fill-color", W.landuse); return; }
+        paint(id, "fill-color", /wood/.test(id) ? W.wood : W.green);
+        if (/wood/.test(id)) { paint(id, "fill-opacity", 0.6); paint(id, "fill-outline-color", "rgba(0,0,0,0)"); }
+        return;
+      }
+      if (type === "fill" && src === "landuse") { paint(id, "fill-color", W.landuse); return; }
+      if (type === "fill" && src === "building") { paint(id, "fill-color", W.building); paint(id, "fill-outline-color", "rgba(0,0,0,0)"); return; }
+      if (type === "fill" && (src === "aeroway" || src === "transportation")) { paint(id, "fill-color", W.landuse); paint(id, "fill-outline-color", "rgba(0,0,0,0)"); return; }
+      if (type === "line" && (src === "transportation" || src === "aeroway")) {
+        if (/railway|transit|cablecar|ferry/.test(id)) { paint(id, "line-color", W.boundary); paint(id, "line-opacity", 0.5); return; }
+        var major = /motorway|trunk|primary/.test(id) && !/link/.test(id);
+        if (/casing/.test(id)) { paint(id, "line-color", major ? W.roadCasing : W.road); return; }
+        paint(id, "line-color", major ? W.roadMajor : (/path|track|service|minor/.test(id) ? "#EDE8DC" : W.road));
+        return;
+      }
+      if (type === "line" && src === "boundary") { paint(id, "line-color", W.boundary); return; }
+      if (type === "symbol") {
+        var strong = src === "place" && /city|town|state|country/.test(id);
+        paint(id, "text-color", strong ? W.labelStrong : W.label);
+        paint(id, "text-halo-color", W.halo);
+        paint(id, "text-halo-width", 1.6);
+      }
+    });
+  }
 
   function applyAppBasemaps(m) {
     (m.basemaps || []).forEach(function (b) {
@@ -918,16 +1024,31 @@
     });
   }
 
-  // Feature-state driven outline: invisible until a feature is hovered (thin dark) or
-  // selected (bold orange, persists while the map pans). Only for clickable layers.
+  // Feature-state driven outline: invisible until a feature is hovered (a thin
+  // ink line) or selected (the Sindoor ring, persisting while the map pans).
+  // Only for clickable layers. The selected ring is two lines: a 2px Sindoor
+  // ring and a faint 1px ring just outside it, drawn by a second layer with a
+  // gap the width of the first — "this one, here", and nothing else changes.
   function addHighlight(L) {
     if (!L.popup || !map.getSource(srcId(L))) return;
+    var SEL = ["boolean", ["feature-state", "selected"], false];
+    var HOV = ["boolean", ["feature-state", "hover"], false];
+    map.addLayer(withFilter(L, {
+      id: L.id + "-hl-ring", type: "line", source: srcId(L), layout: { visibility: vis(L) },
+      paint: {
+        "line-color": "#C9402B",
+        "line-width": ["case", SEL, 1, 0],
+        "line-gap-width": ["case", SEL, 2.4, 0],
+        "line-opacity": ["case", SEL, 0.45, 0]
+      }
+    }));
+    L._ids.push(L.id + "-hl-ring");
     map.addLayer(withFilter(L, {
       id: L.id + "-hl", type: "line", source: srcId(L), layout: { visibility: vis(L) },
       paint: {
-        "line-color": ["case", ["boolean", ["feature-state", "selected"], false], "#A6522F", "#1e2a1c"],
-        "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 3.4, ["boolean", ["feature-state", "hover"], false], 1.8, 0],
-        "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 1, ["boolean", ["feature-state", "hover"], false], 0.9, 0]
+        "line-color": ["case", SEL, "#C9402B", "#26231F"],
+        "line-width": ["case", SEL, 2.4, HOV, 1.8, 0],
+        "line-opacity": ["case", SEL, 1, HOV, 0.9, 0]
       }
     }));
     L._ids.push(L.id + "-hl");
@@ -952,8 +1073,8 @@
       map.addLayer({
         id: L.id + "-circle", type: "circle", source: srcId(L), layout: { visibility: vis(L) },
         paint: {
-          "circle-radius": p.radius || 5, "circle-color": p.color || "#f97316",
-          "circle-stroke-color": p.strokeColor || "#fff", "circle-stroke-width": p.strokeWidth != null ? p.strokeWidth : 1.5,
+          "circle-radius": p.radius || 5, "circle-color": p.color || "#C9402B",
+          "circle-stroke-color": p.strokeColor || "#F5F1E6", "circle-stroke-width": p.strokeWidth != null ? p.strokeWidth : 1.2,
           "circle-opacity": p.opacity != null ? p.opacity : 1
         }
       });
@@ -1011,23 +1132,31 @@
     if (!t) return;
     var source = srcId(L);
     if (L.type !== "line") source = labelPointSource(L) || source;
+    /* An area's name is set like a district on a printed map — uppercase,
+       tracked, in the bold — and a place's or a line's name is plain. Every
+       label wears Ink with the Ground halo unless the atlas says otherwise.
+       (The map's glyphs are Noto Sans, the nearest the tile server has to the
+       page's Source Sans; a web font cannot be drawn on the map.) */
+    var area = L.type === "polygon" || L.type === "fill";
     var layout = {
       visibility: vis(L),
       "text-field": ["coalesce", ["get", t.property], ""],
       "text-size": t.size || 12,
-      "text-font": [GLYPH_FONTS.regular],
+      "text-font": [area ? GLYPH_FONTS.bold : GLYPH_FONTS.regular],
       "symbol-placement": L.type === "line" ? "line" : "point",
       "text-allow-overlap": !!t.alwaysShow,
       "text-ignore-placement": !!t.alwaysShow,
       "text-optional": !t.alwaysShow
     };
     if (t.transform) layout["text-transform"] = t.transform;
+    else if (area) layout["text-transform"] = "uppercase";
     if (t.letterSpacing) layout["text-letter-spacing"] = t.letterSpacing;
+    else if (area) layout["text-letter-spacing"] = 0.2;
     if (t.minzoom == null) {} else layout["text-size"] = ["interpolate", ["linear"], ["zoom"], (t.minzoom - 0.5), 0, t.minzoom, t.size || 12];
     var paint = {
-      "text-color": t.color || "#fff",
-      "text-halo-color": t.haloColor || "#000",
-      "text-halo-width": t.haloWidth || 1.2
+      "text-color": t.color || "#24211D",
+      "text-halo-color": t.haloColor || "#F5F1E6",
+      "text-halo-width": t.haloWidth || 2.2
     };
     map.addLayer(withFilter(L, { id: L.id + "-label", type: "symbol", source: source, layout: layout, paint: paint }));
     L._ids.push(L.id + "-label");
@@ -1171,7 +1300,7 @@
          villages are all one kind, so their rust said nothing and they join every
          other place at the one standard colour. */
       var perKind = !!(L.markers && L.markerBy);
-      var pin = locPinEl((perKind && cfg.color) ? cfg.color : PIN_ONE, cfg.icon);
+      var pin = locPinEl((perKind && cfg.color) ? cfg.color : PIN_ONE, cfg.icon, perKind ? cfg.shape : null);
       // Explicit icons and glyphs are an atlas's own bespoke styling (deoria's
       // factory and flask) and stay exactly as declared. The DERIVED icon —
       // guessed from a kind's words on contributed layers — is retired: those
@@ -1590,7 +1719,7 @@
      atlas wore the same rust because neither had chosen. A colour that declares
      a real difference still wins: Deoria's sugar mills and distilleries keep
      sienna and moss, because there that colour IS the distinction. */
-  var PIN_ONE = "#7C3616";        // --color-rust-deep
+  var PIN_ONE = "#9E3220";        // --color-sindoor-deep
   function oneColorOf(L) {
     if (L.marker && L.marker.color) return L.marker.color;
     return PIN_ONE;
@@ -1621,10 +1750,14 @@
   /* The head holds whatever the place has to say: a declared icon in white, or
      failing that a plain white dot. Deoria's factory and flask live here — they
      are the only thing separating a sugar mill from a distillery. */
-  function pinHeart(iconName) {
+  function pinHeart(iconName, shape) {
     var heart = el("span", "pin-heart");
     if (iconName && ICONS[iconName]) heart.innerHTML = ICONS[iconName];
-    else {
+    else if (shape && shape !== "dot" && window.LokaIcons && window.LokaIcons.markSVG) {
+      // a kind's shape from the point set, in white, in the pin's head — so
+      // the map says the same thing as the legend without a colour
+      heart.innerHTML = window.LokaIcons.markSVG(shape, "#fff", 12);
+    } else {
       var ns = "http://www.w3.org/2000/svg";
       var svg = document.createElementNS(ns, "svg");
       svg.setAttribute("viewBox", "0 0 12 12");
@@ -1636,11 +1769,11 @@
     }
     return heart;
   }
-  function locPinEl(color, iconName) {
+  function locPinEl(color, iconName, shape) {
     var pin = el("div", "atlas-pin loc");
     pin.style.setProperty("--pin", color);
     pin.appendChild(pinBody());
-    pin.appendChild(pinHeart(iconName));
+    pin.appendChild(pinHeart(iconName, shape));
     return pin;
   }
   function keyPinEl(color) { return locPinEl(color, null); }
@@ -2573,22 +2706,23 @@
     // hover footprint first, so the discs and their counts draw above it
     map.addLayer({
       id: "atlas-cluster-bounds-fill", type: "fill", source: CLUSTER_BOUNDS_SRC,
-      paint: { "fill-color": "#4A5A33", "fill-opacity": 0.08 }
+      paint: { "fill-color": "#2A6B41", "fill-opacity": 0.08 }
     });
     map.addLayer({
       id: "atlas-cluster-bounds-line", type: "line", source: CLUSTER_BOUNDS_SRC,
-      paint: { "line-color": "#4A5A33", "line-width": 1.2, "line-dasharray": [2, 2], "line-opacity": 0.5 }
+      paint: { "line-color": "#2A6B41", "line-width": 1.2, "line-dasharray": [2, 2], "line-opacity": 0.5 }
     });
-    // Size brackets: small (<10), medium (10–50), large (50+). One moss hue
+    // Size brackets: small (<10), medium (10–50), large (50+). One Leaf hue
     // deepening with count — a scale, not a category, because count is a
-    // quantity. White bold count clears 4.8:1 on the palest fill, and the
-    // white ring lifts the disc off any basemap the way the pins' own white
-    // fill does.
+    // quantity. The plan's palest step (#5B8E6A) put the white count at
+    // 3.8:1, under the 4.5 a 12px number needs; #4F8161 is the lightest Leaf
+    // that clears it (4.52:1, measured). The white ring lifts the disc off
+    // any basemap the way the pins' own white fill does.
     map.addLayer({
       id: CLUSTER_LAYER, type: "circle", source: CLUSTER_SRC,
       filter: ["has", "point_count"],
       paint: {
-        "circle-color": ["step", ["get", "point_count"], "#66784A", 10, "#4A5A33", 50, "#2E3A20"],
+        "circle-color": ["step", ["get", "point_count"], "#4F8161", 10, "#2A6B41", 50, "#1F5232"],
         "circle-radius": ["step", ["get", "point_count"], 13, 10, 17, 50, 22],
         "circle-stroke-color": "#FFFFFF",
         "circle-stroke-width": 2
@@ -3530,6 +3664,9 @@
       mapGround = app.ground;
       map.setPaintProperty("bg", "background-color", app.ground);
     }
+    // the vector map underneath keeps its warm paint whichever raster is
+    // showing over it; re-applied here so a style reload cannot undo it
+    if (app && app.style) warmBaseStyle(map);
     renderMapAttrib();
     // sub-layers tied to a specific basemap (e.g. per-basemap place names)
     MANIFEST.layers.forEach(function (L) {
@@ -3579,6 +3716,12 @@
       requestAnimationFrame(syncH);
     }
     strip.innerHTML = "";   // a rebuild remakes every piece below
+    /* The wordmark, first on the strip and on every atlas view — embeds too.
+       It is LOKA's, not the atlas's: no manifest can rename or remove it. */
+    var mark = el("a", "atlas-wordmark", "LOKA <em>Atlas</em>");
+    mark.href = "./";
+    mark.setAttribute("aria-label", "LOKA Atlas — all atlases");
+    strip.appendChild(mark);
     return strip;
   }
 
@@ -3591,16 +3734,15 @@
     var phone = window.matchMedia("(max-width: 720px)").matches;
     var bm = document.querySelector(".ctl-basemaps");
     var region = document.querySelector(".own-region-wrap");   // owner.js's row
-    if (phone) {
-      // the bottom sheet keeps its old order: Map/Satellite first, region under it
-      if (bm && bm.parentNode !== panel) panel.insertBefore(bm, panel.firstChild);
-      if (region && region.parentNode !== panel) {
-        if (bm && bm.parentNode === panel) panel.insertBefore(region, bm.nextSibling);
-        else panel.insertBefore(region, panel.firstChild);
-      }
+    var foot = document.querySelector("#atlas-panel .sheet-foot");
+    if (phone && foot) {
+      // the sheet's foot: Map/Satellite first, then (for the owner) the region
+      if (bm && bm.parentNode !== foot) foot.insertBefore(bm, foot.firstChild);
+      if (region && region.parentNode !== foot) foot.appendChild(region);
     } else {
-      // strip order: Map/Satellite, search (already there), the region row
-      if (bm && bm.parentNode !== strip) strip.insertBefore(bm, strip.firstChild);
+      // strip order: wordmark (already there), Map/Satellite, search, the region row
+      var mark = strip.querySelector(".atlas-wordmark");
+      if (bm && bm.parentNode !== strip) strip.insertBefore(bm, mark ? mark.nextSibling : strip.firstChild);
       if (region && region.parentNode !== strip) strip.appendChild(region);
     }
   }
@@ -3752,6 +3894,9 @@
     // group shares it; a lone group's own head already says the number
     setText("#panel-count", groupsShown > 1
       ? "· " + layersShown + (layersShown === 1 ? " layer" : " layers") : "");
+    // an atlas with nothing on its shelf says so, in one line, rather than
+    // standing there with an empty box
+    if (!layersShown) panel.appendChild(el("p", "ctl-empty", "This atlas has no layers yet."));
 
     // the owner's tools add their rows to this panel — see LokaAtlas.onControlsBuilt
     controlsHooks.forEach(function (fn) {
@@ -4389,10 +4534,17 @@
     if (loka) {
       h += lokaLead(L, props, title, krows);
     } else {
-      if (title) h += '<div class="pop-title">' + esc(title) + "</div>";
+      // the kicker first ("SURVEY VILLAGE · GORAKHPUR"), then the name
       if (sub) h += '<div class="pop-sub">' + esc(sub) + "</div>";
+      if (title) h += '<div class="pop-title">' + esc(title) + "</div>";
       if (krows) h += krows.outerHTML;
     }
+    /* Plain facts sit in one two-column list — label beside value, values
+       lined up — so consecutive facts are gathered and written out together.
+       Anything that is not a plain fact (tags, notes, a photo) closes the
+       list, and the next plain fact opens a new one. */
+    var facts = "";
+    function flushFacts() { if (facts) { h += '<div class="pop-facts">' + facts + "</div>"; facts = ""; } }
     /* A layer's popup rows are generated from its columns when it is added, so
        every column a key later claims got said twice: once in the key rows above
        and again as a row of its own. Worse, a question's column arrived as a raw
@@ -4416,6 +4568,7 @@
       if (fld.type === "tags") {
         var arr = Array.isArray(v) ? v : tagArr(v);
         if (!arr.length) return;
+        flushFacts();
         // Each tag is a button, not a label: tapping one shows the places that
         // share it (see filterByTag). A button so a keyboard reaches it, and so
         // it announces itself as something that does a thing.
@@ -4435,6 +4588,7 @@
       } else if (fld.type === "notes") {
         var notes = Array.isArray(v) ? v : safeArr(v);
         if (!notes.length) return;
+        flushFacts();
         h += '<div class="pop-notes">' + notes.map(function (n) {
           return '<div class="pop-note"><b>' + esc(n.title) + "</b>" + (n.body ? "<span>" + esc(n.body) + "</span>" : "") + "</div>";
         }).join("") + "</div>";
@@ -4450,10 +4604,12 @@
            The addresses are looked for inside the value rather than demanded of
            it, so a place carrying several — or carrying them wrapped, which is
            how they arrive from LOKA — shows its photographs instead of nothing. */
+        flushFacts();
         h += shotsHTML(linksIn(v));
       } else if (fld.type === "cropProfile") {
         var cp = Array.isArray(v) ? v : safeArr(v);
         if (!cp.length) return;
+        flushFacts();
         h += '<div class="pop-field"><span class="pop-lbl">' + esc(fld.label) + '</span><div class="pop-tags">' +
           cp.map(function (c) { return '<span class="pop-tag">' + esc(c.crop) + ' <b>' + esc(c.blocks) + "</b></span>"; }).join("") + "</div></div>";
       } else {
@@ -4468,10 +4624,11 @@
         if (shown !== String(v)) {
           shown = shown.split(",").map(unquotePiece).filter(Boolean).join(", ");
         }
-        h += '<div class="pop-field pop-field-inline"><span class="pop-lbl">' + esc(fld.label) +
+        facts += '<div class="pop-field pop-field-inline"><span class="pop-lbl">' + esc(fld.label) +
           '</span> <span class="pop-val">' + esc(shown) + (fld.suffix || "") + "</span></div>";
       }
     });
+    flushFacts();
     /* Where this place came from, in words. The pin's ring used to hint at this
        and could not be checked — the popup never named the upload, so a reader
        who wondered had nowhere to look. Only contributed layers have an upload
@@ -4741,36 +4898,18 @@
      the three "wired" guards below all protect map listeners, which die with
      the map — leaving them set would silently kill fanning and clustering
      for the rest of the visit. */
-  /* The phone's bar, built from the groups the panel just drew.
+  /* The phone's row of group tabs, built from the groups the panel just drew.
 
      It reads the rendered panel rather than the manifest, so it can never
-     disagree with the list it opens — a group that was not drawn gets no mark,
-     and the count on a mark is the switches actually on in that group.
+     disagree with the list it opens — a group that was not drawn gets no tab,
+     and the count on a tab is the switches actually on in that group.
 
-     Four marks fit across a phone. Past that the rest go behind More, one tap
-     deeper, because a bar cannot grow sideways the way a rail grows downward.
-     The first marks keep their places: the order is the owner's, and a mark
-     that moves under a thumb is worse than one tap. */
-  var BAR_SLOTS = 4;
-  var BAR_ICON = {
-    userdata: '<path d="M12 21s-7-4.6-7-10a7 7 0 0 1 14 0c0 5.4-7 10-7 10z"/><circle cx="12" cy="11" r="2.4"/>',
-    base: '<path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/>',
-    more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
-    other: '<path d="M3 18l6-9 4 6 3-4 5 7z"/>',
-  };
-  function barMarkSvg(d) {
-    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" ' +
-      'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + "</svg>";
-  }
-  function shortLabel(s) {
-    /* The first word, whole. Cutting it to a fixed nine characters turned
-       "Ecological" into "ECOLOGICA", which reads as a misspelling rather than
-       as a word that ran out of room. The label is already told to ellipsis
-       when it does not fit, and an ellipsis is how a reader knows there is
-       more. */
-    return String(s || "").split(/[\s,&\/]+/)[0];
-  }
-  var TRAY = null;              // which group the tray is showing, if any
+     Tabs scroll sideways when the names need more room than the phone has;
+     a name is never cut short, because a tab reading "Ecolog…" is a guess
+     and a tab reading "Ecological landscape" is a place to go. Whichever tab
+     you came in by stays lit and stays where it was, so the way out is the
+     way you came. */
+  var TRAY = null;              // which group the sheet is showing, if any
 
   function buildBar() {
     var bar = document.getElementById("atlas-bar");
@@ -4781,44 +4920,33 @@
     if (!secs.length) { bar.hidden = true; return; }
     bar.hidden = false;
 
-    var shown = secs.slice(0, BAR_SLOTS);
-    var rest = secs.slice(BAR_SLOTS);
-
     function onIn(sec) {
       return sec.querySelectorAll('.ctl-toggle input[type="checkbox"]:checked').length;
     }
-    function mark(id, label, icon, count, open) {
-      var b = document.createElement("button");
-      b.type = "button";
-      b.className = "atlas-mark";
-      b.setAttribute("data-mark", id);
-      b.setAttribute("aria-expanded", String(!!open));
-      b.setAttribute("aria-label", label + (count ? ", " + count + " on" : ""));
-      b.innerHTML = barMarkSvg(icon);
-      var lb = document.createElement("span");
-      lb.className = "mk-lb";
-      lb.textContent = shortLabel(label);
-      b.appendChild(lb);
-      if (count) {
-        var c = document.createElement("span");
-        c.className = "mk-on"; c.textContent = String(count);
-        b.appendChild(c);
-      }
-      return b;
-    }
-
-    shown.forEach(function (sec) {
+    secs.forEach(function (sec) {
       var id = sec.getAttribute("data-group");
       var label = sec.getAttribute("data-group-label") || id;
-      var b = mark(id, label, BAR_ICON[id] || BAR_ICON.other, onIn(sec), TRAY === id);
+      var count = onIn(sec);
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "atlas-tab";
+      b.setAttribute("data-mark", id);
+      b.setAttribute("aria-expanded", String(TRAY === id));
+      b.setAttribute("aria-label", label + (count ? ", " + count + " on" : ""));
+      b.appendChild(document.createTextNode(label));
+      if (count) {
+        var c = document.createElement("span");
+        c.className = "tab-on"; c.textContent = String(count);
+        c.setAttribute("aria-hidden", "true");
+        b.appendChild(c);
+      }
       b.onclick = function () { openTray(TRAY === id ? null : id); };
       bar.appendChild(b);
     });
-    if (rest.length) {
-      var n = rest.reduce(function (a, sec) { return a + onIn(sec); }, 0);
-      var mb = mark("__more", "More", BAR_ICON.more, n, TRAY === "__more");
-      mb.onclick = function () { openTray(TRAY === "__more" ? null : "__more"); };
-      bar.appendChild(mb);
+    // the lit tab stays in view, even when the row has scrolled
+    var lit = bar.querySelector('.atlas-tab[aria-expanded="true"]');
+    if (lit && lit.scrollIntoView) {
+      try { lit.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (e) {}
     }
   }
 
@@ -4829,25 +4957,32 @@
     TRAY = which;
     stage.classList.toggle("tray-open", !!which);
     var secs = [].slice.call(document.querySelectorAll("#atlas-controls .ctl-group[data-group]"));
-    secs.forEach(function (sec, i) {
-      var mine = which === "__more" ? i >= BAR_SLOTS : sec.getAttribute("data-group") === which;
-      sec.classList.toggle("on-show", !!mine);
+    secs.forEach(function (sec) {
+      sec.classList.toggle("on-show", sec.getAttribute("data-group") === which);
     });
     buildBar();
     if (which) {
-      var head = panel.querySelector("#atlas-controls .ctl-group.on-show .ctl-group-head");
-      if (head) { head.setAttribute("tabindex", "-1"); head.focus(); }
-    } else {
-      var back = document.querySelector('.atlas-mark[data-mark="' + (which || "") + '"]');
-      if (back) back.focus();
+      // focus stays on the tab that opened the group: the rows are right
+      // beneath it, and a thumb that just tapped here is still here
+      var tab = document.querySelector('.atlas-tab[data-mark="' + which + '"]');
+      if (tab) { try { tab.focus({ preventScroll: true }); } catch (e) { tab.focus(); } }
+      var controls = document.getElementById("atlas-controls");
+      if (controls) controls.scrollTop = 0;
     }
+  }
+
+  /* The grab bar's job: open the first group, or put the open one away. */
+  function toggleSheet() {
+    if (TRAY) { openTray(null); return; }
+    var first = document.querySelector("#atlas-controls .ctl-group[data-group]");
+    if (first) openTray(first.getAttribute("data-group"));
   }
 
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && TRAY) {
       var was = TRAY;
       openTray(null);
-      var m = document.querySelector('.atlas-mark[data-mark="' + was + '"]');
+      var m = document.querySelector('.atlas-tab[data-mark="' + was + '"]');
       if (m) m.focus();
     }
   });
@@ -4922,6 +5057,8 @@
       (MANIFEST && MANIFEST.layers || []).forEach(function (L) { if (L._extra) renderExtra(L); });
     },
     reboot: reboot,
+    // the phone sheet's grab bar lives in index.html; it asks here
+    toggleSheet: toggleSheet,
   };
 
   function setText(sel, txt) { var e = $(sel); if (e) e.textContent = txt; }

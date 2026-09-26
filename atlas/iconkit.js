@@ -98,6 +98,39 @@
     return { badge: initials || "?" };
   }
 
+  /* The point set (DESIGN.md §2): seven colours, and a marker shape for each,
+     in this order. Shape carries the difference colour cannot — after
+     red-green simulation Marigold and Turmeric come within ΔE 8.7 of each
+     other, so they never share a shape. A layer that has no icon of its own
+     wears the shape that goes with its colour's place in the set. */
+  var POINT_COLORS = ["#C9402B", "#2A6B41", "#E9A237", "#3A7FA1", "#A39E94", "#26231F", "#B99A1C"];
+  var POINT_SHAPES = ["dot", "triangle", "square", "diamond", "dot-outlined", "square-hollow", "triangle-hollow"];
+  function shapeForIndex(i) {
+    var n = POINT_SHAPES.length;
+    return POINT_SHAPES[((i % n) + n) % n];
+  }
+  function colorForIndex(i) {
+    var n = POINT_COLORS.length;
+    return POINT_COLORS[((i % n) + n) % n];
+  }
+  /* One mark as an SVG string, drawn in a 20×20 box: the solid shapes filled,
+     the hollow ones stroked, the outlined dot filled with an ink rim. Every
+     mark carries a thin light rim (`rim`) so it lifts off any ground. */
+  function markSVG(shape, color, size) {
+    var s = size || 14, c = color || "#26231F", ink = "#26231F", rim = "#F5F1E6";
+    var body;
+    switch (shape) {
+      case "triangle": body = '<path d="M10 2.4 18.2 17.6H1.8Z" fill="' + c + '" stroke="' + rim + '" stroke-width="1.2" stroke-linejoin="round"/>'; break;
+      case "square": body = '<rect x="3.2" y="3.2" width="13.6" height="13.6" rx="1" fill="' + c + '" stroke="' + rim + '" stroke-width="1.2"/>'; break;
+      case "diamond": body = '<path d="M10 1.6 18.4 10 10 18.4 1.6 10Z" fill="' + c + '" stroke="' + rim + '" stroke-width="1.2" stroke-linejoin="round"/>'; break;
+      case "dot-outlined": body = '<circle cx="10" cy="10" r="6.6" fill="' + c + '" stroke="' + ink + '" stroke-width="1.8"/>'; break;
+      case "square-hollow": body = '<rect x="3.6" y="3.6" width="12.8" height="12.8" rx="1" fill="none" stroke="' + c + '" stroke-width="2.6"/>'; break;
+      case "triangle-hollow": body = '<path d="M10 3.2 17.4 16.8H2.6Z" fill="none" stroke="' + c + '" stroke-width="2.4" stroke-linejoin="round"/>'; break;
+      default: body = '<circle cx="10" cy="10" r="7" fill="' + c + '" stroke="' + rim + '" stroke-width="1.2"/>';
+    }
+    return '<svg viewBox="0 0 20 20" width="' + s + '" height="' + s + '" aria-hidden="true">' + body + "</svg>";
+  }
+
   // pale fills (the auto palette's cyan and sand) need dark ink, not white
   function paleHex(h) {
     if (!/^#[0-9a-fA-F]{6}$/.test(h || "")) return false;
@@ -130,6 +163,11 @@
     KEYWORD_ICONS: KEYWORD_ICONS,
     iconFor: iconFor,
     paleHex: paleHex,
-    swatchHTML: swatchHTML
+    swatchHTML: swatchHTML,
+    POINT_COLORS: POINT_COLORS,
+    POINT_SHAPES: POINT_SHAPES,
+    shapeForIndex: shapeForIndex,
+    colorForIndex: colorForIndex,
+    markSVG: markSVG
   };
 })(window);

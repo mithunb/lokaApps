@@ -25,7 +25,7 @@ Every page defines these on `:root` with exactly these names. The old names (`--
   --color-border:rgba(36,33,29,.18); --color-divider:rgba(36,33,29,.10);
   --color-leaf:#2A6B41; --color-leaf-deep:#1F5232; --color-leaf-tint:rgba(42,107,65,.10);
   --color-sindoor:#C9402B; --color-sindoor-deep:#9E3220; --color-sindoor-tint:rgba(201,64,43,.10);
-  --color-marigold:#E9A237;
+  --color-marigold:#E9A237; --color-marigold-tint:rgba(233,162,55,.16); --color-blue-tint:rgba(58,127,161,.14);
   --color-toggle-off:#CFCBC2;
   /* aliases, remove when unused */
   --color-bg:var(--color-page); --color-bg-alt:var(--color-surface-alt);
@@ -38,7 +38,7 @@ Every page defines these on `:root` with exactly these names. The old names (`--
   --ramp-1:#FBF1D9; --ramp-2:#F4CF82; --ramp-3:#E9A237; --ramp-4:#D2692A; --ramp-5:#A8321A;
   --point-1:#C9402B; --point-2:#2A6B41; --point-3:#E9A237; --point-4:#3A7FA1; --point-5:#A39E94; --point-6:#26231F; --point-7:#B99A1C;
   /* type */
-  --font-companions-serif:; --font-companions-sans:;            /* empty today; script companions go here later */
+  --font-companions-serif:"Source Serif 4"; --font-companions-sans:"Source Sans 3";   /* never empty — see the note below; script companions are appended here later */
   --font-display:"Source Serif 4",var(--font-companions-serif),serif;
   --font-body:"Source Sans 3",var(--font-companions-sans),sans-serif;
   --t-display:clamp(1.6rem,4vw,2.4rem); --t-section:1.2rem; --t-body:1rem; --t-control:.95rem; --t-ui:.9rem; --t-meta:.8rem; --t-label:.72rem;
@@ -49,7 +49,7 @@ Every page defines these on `:root` with exactly these names. The old names (`--
 }
 ```
 
-Note on empty custom properties: `--font-companions-serif:;` is valid CSS (an empty value) and `var()` of it resolves to nothing, so the stack reads `"Source Serif 4", , serif` — browsers accept the empty slot. If any builder sees a font stack fail to apply, use the alternative form `var(--font-companions-serif, )` and say so in the commit.
+Note on empty custom properties (corrected by both builders, 26 Sep 2026): `--font-companions-serif:;` is valid CSS, but the stack `"Source Serif 4", var(--font-companions-serif), serif` reads `"Source Serif 4", , serif` once substituted, and Chromium rejected the whole declaration — every heading fell back to Times (measured on the viewer and on the wizard pages). `var(--x, )` fails the same way. The form that works, now in every page, keeps the slot **non-empty** by holding the primary face as a placeholder: `--font-companions-serif:"Source Serif 4"; --font-companions-sans:"Source Sans 3";`. A companion is appended to that value later: `--font-companions-sans:"Source Sans 3", "Noto Sans Devanagari";`. Two further tokens were added during the build: `--color-marigold-tint: rgba(233,162,55,.16)` (the "because" chips) and `--color-blue-tint: rgba(58,127,161,.14)` (the owner's pickers).
 
 ### Measured contrast (WCAG 2.x, computed on the round-3 page)
 Text #24211D on Surface #FDFCF8 = **15.6:1**; muted #5A5751 on Surface = **7.0:1**; white on Leaf #2A6B41 = **6.4:1**; Sindoor #C9402B on Surface = **4.8:1** (passes 3:1 for lines/rings and 4.5 for short text). Ramp stays in lightness order under deuteranopia (L* 96 → 86 → 74 → 59 → 43). Point set: closest pair after simulation is Marigold vs Turmeric (ΔE 8.7) — they never share a marker shape.
