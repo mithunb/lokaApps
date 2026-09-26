@@ -1404,7 +1404,7 @@
     var bits = ["<b>" + (result.stats ? result.stats.features : 0) + "</b> features on the map"];
     if (rep.strategy === "adminJoin") {
       bits.push("joined to <b>" + esc(rep.joinLabel || rep.joinLayer || "boundaries") + "</b>");
-      if (rep.ambiguous && rep.ambiguous.length) bits.push('<b style="color:var(--color-rust-deep)">' + rep.ambiguous.length + " need attention</b>");
+      if (rep.ambiguous && rep.ambiguous.length) bits.push('<b style="color:var(--color-sindoor-deep)">' + rep.ambiguous.length + " need attention</b>");
       if (rep.unmatched && rep.unmatched.length) bits.push(rep.unmatched.length + " unmatched");
       // rows whose cell was a sentence with a place inside it, not a place name
       if (rep.inSentence) bits.push(rep.inSentence + " found inside a longer answer");
@@ -1413,7 +1413,7 @@
     // a column that was kept, held something, and still did not make it onto the
     // map is a fault worth saying plainly rather than leaving to be discovered
     if (rep.droppedColumns && rep.droppedColumns.length) {
-      bits.push('<b style="color:var(--color-rust-deep)">' +
+      bits.push('<b style="color:var(--color-sindoor-deep)">' +
         esc(rep.droppedColumns.join(", ")) + " did not reach the map — please report this</b>");
     }
     $("#stat-line").innerHTML = bits.join(" · ");
@@ -1863,10 +1863,10 @@
      Both mirror api/lib/fragment.js; the key itself is always drawn from the
      server's legend, so if fragment.js ever changes the key stays truthful.
      (The edit screen carries the same two tables — a shared home is owed.) */
-  var MARKER_COLORS = { rust: "#A6522F", moss: "#40573D", ochre: "#B0863A", sienna: "#9C5A34", slate: "#5f7f92" };
-  var MARKER_NAMES = { rust: "Rust", moss: "Moss", ochre: "Ochre", sienna: "Sienna", slate: "Slate" };
+  var MARKER_COLORS = { rust: "#C9402B", moss: "#2A6B41", ochre: "#E9A237", sienna: "#D2692A", slate: "#3A7FA1" };
+  var MARKER_NAMES = { rust: "Sindoor red", moss: "Leaf green", ochre: "Marigold", sienna: "Sienna", slate: "Blue" };
   var PALETTE_NAMES = {
-    greens: "Greens", blues: "Blues", rust: "Rust", ylorbr: "Sand to brown",
+    marigold: "Marigold", greens: "Greens", blues: "Blues", rust: "Rust", ylorbr: "Sand to brown",
     brteal: "Brown to teal", tealbr: "Teal to brown", purples: "Purples",
   };
   function paletteOptions() {

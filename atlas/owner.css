@@ -10,6 +10,19 @@
  * can never collide with the viewer's classes.
  */
 
+/* The tokens this file reads are the atlas page's (Bazaar colours, Source
+   faces, September 2026). Declared here too at zero specificity, so the owner's
+   tools keep their colours on any host that has not defined the new names yet;
+   a host :root always wins. */
+:where(:root) {
+  --color-page:#FAF8F3; --color-surface:#FDFCF8; --color-surface-alt:#F0EDE4;
+  --color-text-primary:#24211D; --color-text-secondary:#5A5751; --color-text-muted:#6E6A63;
+  --color-border:rgba(36,33,29,.18); --color-divider:rgba(36,33,29,.10);
+  --color-leaf:#2A6B41; --color-leaf-deep:#1F5232; --color-leaf-tint:rgba(42,107,65,.10);
+  --color-sindoor:#C9402B; --color-sindoor-deep:#9E3220; --color-sindoor-tint:rgba(201,64,43,.10);
+  --radius-xs:.125rem; --radius-md:.25rem; --radius-lg:.375rem; --radius-pill:999px;
+}
+
 /* ---------- the row beside Share ---------- */
 
 .own-acts { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
@@ -18,25 +31,32 @@
   display:inline-flex; align-items:center; gap:.35rem;
   font-size:var(--t-meta); color:var(--color-text-secondary);
   padding:.3rem .55rem; border-radius:var(--radius-md);
-  background:var(--color-bg-alt);
+  background:var(--color-surface-alt);
 }
 .own-dot {
   width:.5rem; height:.5rem; border-radius:50%;
   background:var(--color-text-muted); flex:none;
 }
-.own-status.live .own-dot { background:var(--color-moss); }
+.own-status.live .own-dot { background:var(--color-leaf); }
 .own-what { font-weight:600; color:var(--color-text-primary); }
-.own-status.live .own-what { color:var(--color-canopy); }
+.own-status.live .own-what { color:var(--color-leaf-deep); }
 .own-who { color:var(--color-text-muted); }
 
 .share-btn.primary {
-  background:var(--color-moss); border-color:var(--color-moss); color:#fff;
+  background:var(--color-leaf); border-color:var(--color-leaf); color:#fff;
 }
-.share-btn.primary:hover { background:var(--color-canopy); border-color:var(--color-canopy); color:#fff; }
-.share-btn.danger { color:var(--color-rust-deep); border-color:var(--color-rust); }
-.share-btn.danger:hover { background:var(--color-rust); border-color:var(--color-rust); color:#fff; }
+.share-btn.primary:hover { background:var(--color-leaf-deep); border-color:var(--color-leaf-deep); color:#fff; }
+/* the one that ends something: sindoor words, and only a wash on hover — never a red fill */
+.share-btn.danger { color:var(--color-sindoor-deep); border-color:var(--color-sindoor); }
+.share-btn.danger:hover { background:var(--color-sindoor-tint); border-color:var(--color-sindoor-deep); color:var(--color-sindoor-deep); }
 .share-btn:disabled { opacity:.5; cursor:default; }
 .share-btn:disabled:hover { border-color:var(--color-border); color:var(--color-text-primary); }
+.share-btn:focus-visible, .own-region:focus-visible, .own-shelf:focus-visible,
+.own-nameable:focus-visible, .own-pencil:focus-visible, .own-change:focus-visible,
+.own-linkish:focus-visible, .own-x:focus-visible, .own-inv-x:focus-visible,
+.own-chip-x:focus-visible, .own-ask-drop:focus-visible, .own-sugg button:focus-visible {
+  outline:2px solid var(--color-leaf); outline-offset:2px;
+}
 
 /* ---------- what the owner adds to the viewer's panel ---------- */
 
@@ -48,14 +68,14 @@
   padding:.5rem .6rem; border:1px solid var(--color-border);
   border-radius:var(--radius-md); background:var(--color-surface);
 }
-.own-region:hover { border-color:var(--color-moss); }
+.own-region:hover { border-color:var(--color-leaf); }
 .own-region-k { grid-column:1; color:var(--color-text-muted); font-size:var(--t-meta); }
 .own-region-v { grid-column:1; font-weight:600; color:var(--color-text-primary); }
 .own-region-go { grid-column:2; grid-row:1 / span 2; align-self:center;
-  font-size:var(--t-meta); font-weight:600; color:var(--color-moss); }
-.own-region:hover .own-region-go { color:var(--color-canopy); }
+  font-size:var(--t-meta); font-weight:600; color:var(--color-leaf); }
+.own-region:hover .own-region-go { color:var(--color-leaf-deep); }
 .own-region-warn {
-  margin:.35rem 0 0; font-size:var(--t-meta); color:var(--color-rust-deep);
+  margin:.35rem 0 0; font-size:var(--t-meta); color:var(--color-sindoor-deep);
 }
 
 /* "Change" ends the layer's name line, just before the little "i" — the toggle
@@ -63,15 +83,15 @@
 .own-change {
   margin-left:auto; flex:none;
   font:inherit; font-size:var(--t-label); font-weight:600; line-height:18px;
-  color:var(--color-moss); background:none; border:0; cursor:pointer;
+  color:var(--color-leaf); background:none; border:0; cursor:pointer;
   padding:0 .15rem; border-radius:var(--radius-md);
 }
-.own-change:hover { color:var(--color-canopy); text-decoration:underline; }
+.own-change:hover { color:var(--color-leaf-deep); text-decoration:underline; }
 /* the one control here that ends something wears the colour this product keeps
    for that, so it is never mistaken for its neighbour at a glance */
-.own-change-danger { color:var(--color-rust-deep); }
-.own-change-danger:hover { color:var(--color-rust-deep); }
-.own-change:focus-visible { outline:2px solid var(--color-moss); outline-offset:1px; }
+.own-change-danger { color:var(--color-sindoor-deep); }
+.own-change-danger:hover { color:var(--color-sindoor-deep); }
+.own-change:focus-visible { outline:2px solid var(--color-leaf); outline-offset:1px; }
 /* on the panel's own strip, like every other word in it */
 .own-by {
   display:block; font-size:var(--t-label); color:var(--color-text-muted);
@@ -101,20 +121,20 @@
    the point: one place to switch between two orders of thing, and no others. */
 .own-shelves { display:flex; gap:.15rem; }
 .own-shelf {
-  font:inherit; font-family:'Figtree',sans-serif; font-size:var(--t-label);
-  font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+  font:inherit; font-size:var(--t-label);
+  font-weight:700; letter-spacing:.12em; text-transform:uppercase;
   color:var(--color-text-muted); background:none; border:0; cursor:pointer;
   padding:.15rem .4rem; border-radius:var(--radius-md);
 }
 .own-shelf:hover { color:var(--color-text-secondary); }
-.own-shelf.on { color:var(--color-text-primary); background:var(--color-bg-alt); }
-.own-shelf:focus-visible { outline:2px solid var(--color-moss); outline-offset:1px; }
+.own-shelf.on { color:var(--color-leaf-deep); background:var(--color-leaf-tint); }
+.own-shelf:focus-visible { outline:2px solid var(--color-leaf); outline-offset:1px; }
 
 .own-qshelf { padding:.6rem .8rem .8rem; display:flex; flex-direction:column; gap:.9rem;
   overflow-y:auto; scrollbar-width:thin; }
 .own-qblock { display:flex; flex-direction:column; gap:.5rem; }
-.own-qlayer { margin:0; font-family:'Figtree',sans-serif; font-size:var(--t-meta);
-  font-weight:600; color:var(--color-text-primary); }
+.own-qlayer { margin:0; font-size:var(--t-meta);
+  font-weight:700; color:var(--color-text-primary); }
 /* Everything under a question lines up with the question's own name.
 
    The name begins after the switch and the gap beside it, so the indent is
@@ -147,13 +167,13 @@
   border-radius:var(--radius-md); background:var(--color-surface); width:100%;
   box-sizing:border-box;
 }
-.own-ask-kind:focus { outline:2px solid var(--color-moss); outline-offset:1px; }
+.own-ask-kind:focus { outline:2px solid var(--color-leaf); outline-offset:1px; }
 /* a real place, its answer, and the words behind it — the preview is the work */
 .own-ask-eg { display:flex; flex-direction:column; gap:.05rem; padding:.25rem 0;
   border-top:1px solid var(--color-divider); }
 .own-ask-eg-p { font-size:var(--t-meta); color:var(--color-text-primary);
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.own-ask-eg-a { font-size:var(--t-label); color:var(--color-canopy); font-weight:600; }
+.own-ask-eg-a { font-size:var(--t-label); color:var(--color-leaf-deep); font-weight:600; }
 .own-ask-eg-w { font-size:var(--t-label); color:var(--color-text-muted); }
 /* what this place used to answer, beside what it answers now. quiet, because
    the new answer is the news and this is only how to recognise a change. */
@@ -175,7 +195,7 @@
   cursor:pointer; padding:0;
 }
 .own-ask-drop:hover { color:var(--color-text-primary); border-color:var(--color-border); }
-.own-ask-drop:focus-visible { outline:2px solid var(--color-moss); outline-offset:1px; }
+.own-ask-drop:focus-visible { outline:2px solid var(--color-leaf); outline-offset:1px; }
 .own-ask-add { align-self:flex-start; font-size:var(--t-label); }
 
 /* ---------- putting one question right ----------
@@ -200,7 +220,7 @@
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%;
 }
 .own-nameable:hover { border-bottom-color:var(--color-border); }
-.own-nameable:focus-visible { outline:2px solid var(--color-moss); outline-offset:2px; }
+.own-nameable:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; }
 
 /* ---------- renaming, where the name is ----------
    The pencil is quiet until the row is under a pointer, because a visitor's eye
@@ -213,15 +233,15 @@
   opacity:0; transition:opacity .12s;
 }
 .ctl-row:hover .own-pencil, .own-pencil:focus-visible { opacity:1; }
-.own-pencil:hover { color:var(--color-canopy); }
-.own-pencil:focus-visible { outline:2px solid var(--color-moss); outline-offset:1px; }
+.own-pencil:hover { color:var(--color-leaf-deep); }
+.own-pencil:focus-visible { outline:2px solid var(--color-leaf); outline-offset:1px; }
 .own-rename {
   flex:1 1 auto; min-width:0; font:inherit; font-size:var(--t-ui);
   color:var(--color-text-primary); padding:.1rem .3rem;
-  border:1px solid var(--color-moss); border-radius:var(--radius-md);
+  border:1px solid var(--color-leaf); border-radius:var(--radius-md);
   background:var(--color-surface);
 }
-.own-rename:focus { outline:2px solid var(--color-moss); outline-offset:1px; }
+.own-rename:focus { outline:2px solid var(--color-leaf); outline-offset:1px; }
 
 /* ---------- what a place's card says ----------
    Ticks, not switches. A switch in this column already means two things — show
@@ -235,14 +255,14 @@
   background:var(--color-surface); position:relative;
 }
 .own-card input:checked + .own-card-tick {
-  background:var(--color-moss); border-color:var(--color-moss);
+  background:var(--color-leaf); border-color:var(--color-leaf);
 }
 .own-card input:checked + .own-card-tick::after {
   content:''; position:absolute; left:4px; top:1px; width:5px; height:9px;
   border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg);
 }
 .own-card input:focus-visible + .own-card-tick {
-  outline:2px solid var(--color-moss); outline-offset:2px;
+  outline:2px solid var(--color-leaf); outline-offset:2px;
 }
 .own-card-t { min-width:0; display:flex; flex-direction:column; }
 .own-card-n { font-size:var(--t-meta); color:var(--color-text-primary); }
@@ -284,11 +304,11 @@
 }
 .own-fld textarea { resize:vertical; }
 .own-fld input:focus, .own-fld select:focus, .own-fld textarea:focus {
-  outline:2px solid var(--color-moss); outline-offset:2px; border-color:var(--color-moss);
+  outline:2px solid var(--color-leaf); outline-offset:2px; border-color:var(--color-leaf);
 }
 .own-note { font-size:var(--t-label); color:var(--color-text-muted); font-weight:400; }
-.own-note.warnish { color:var(--color-rust-deep); }
-.own-err { font-size:var(--t-meta); color:var(--color-rust-deep); margin:0; }
+.own-note.warnish { color:var(--color-sindoor-deep); }
+.own-err { font-size:var(--t-meta); color:var(--color-sindoor-deep); margin:0; }
 
 
 
@@ -299,15 +319,15 @@
   font:inherit; font-size:var(--t-meta); color:var(--color-text-muted);
   background:none; border:0; padding:0; cursor:pointer; text-align:left;
 }
-.own-linkish:hover { color:var(--color-rust-deep); text-decoration:underline; }
-.own-linkish.danger { color:var(--color-rust-deep); }
+.own-linkish:hover { color:var(--color-sindoor-deep); text-decoration:underline; }
+.own-linkish.danger { color:var(--color-sindoor-deep); }
 
 /* Asking for a different set of questions. Quiet, and below the sentence that
    says what the current ones are — it is a way back, not an invitation. */
 
 .own-confirm {
   margin-top:.5rem; padding:.6rem; border-radius:var(--radius-md);
-  background:var(--color-rust-tint);
+  background:var(--color-sindoor-tint);
 }
 .own-confirm p { margin:0 0 .5rem; font-size:var(--t-meta); color:var(--color-text-secondary); }
 .own-row { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
@@ -323,18 +343,19 @@
 
 .own-scrim {
   position:fixed; inset:0; z-index:120;
-  background:rgba(42,36,26,.34);
+  background:rgba(36,33,29,.34);
   display:grid; place-items:start center;
   padding:2.5rem 1rem; overflow-y:auto;
 }
 .own-sheet {
   width:min(34rem,100%); background:var(--color-surface);
-  border-radius:var(--radius-lg, .375rem); box-shadow:0 8px 30px rgba(42,36,26,.22);
+  border-radius:var(--radius-lg, .375rem); box-shadow:0 8px 30px rgba(36,33,29,.22);
   padding:0 1.25rem 1.25rem;
 }
+/* the sheet's title is a headline: the serif, like every heading on the page */
 .own-sheet h2 {
-  margin:0 0 .3rem; font-family:'Figtree',sans-serif; font-size:var(--t-section);
-  color:var(--color-text-primary);
+  margin:0 0 .3rem; font-family:var(--font-display, "Source Serif 4", serif); font-weight:700;
+  font-size:var(--t-section); line-height:1.25; color:var(--color-text-primary);
 }
 .own-xrow { display:flex; justify-content:flex-end; padding-top:.6rem; }
 .own-x {
@@ -344,7 +365,7 @@
 .own-x:hover { color:var(--color-text-primary); }
 
 .own-set-h {
-  margin:1.25rem 0 .3rem; font-family:'Figtree',sans-serif; font-size:var(--t-ui);
+  margin:1.25rem 0 .3rem; font-size:var(--t-ui); font-weight:700;
   color:var(--color-text-primary);
 }
 .own-set-p { margin:0 0 .5rem; font-size:var(--t-meta); color:var(--color-text-secondary); }
@@ -353,15 +374,15 @@
 .own-chips { display:flex; flex-wrap:wrap; gap:.35rem; }
 .own-chip {
   display:inline-flex; align-items:center; gap:.3rem;
-  font-size:var(--t-meta); padding:.25rem .3rem .25rem .55rem;
-  border-radius:var(--radius-pill); background:var(--color-moss-tint); color:var(--color-canopy);
+  font-size:var(--t-meta); font-weight:600; padding:.25rem .3rem .25rem .55rem;
+  border-radius:var(--radius-pill); background:var(--color-leaf-tint); color:var(--color-leaf-deep);
 }
 .own-chip-alt { color:var(--color-text-muted); font-size:var(--t-label); }
 .own-chip-x {
   font:inherit; font-size:var(--t-label); line-height:1; cursor:pointer;
   background:none; border:0; color:inherit; padding:.15rem;
 }
-.own-chip-x:hover { color:var(--color-rust-deep); }
+.own-chip-x:hover { color:var(--color-sindoor-deep); }
 
 /* the place search: a listbox under the field, escaping nothing it cannot */
 .own-combo { position:relative; }
@@ -370,14 +391,14 @@
   position:absolute; top:100%; left:0; right:0; z-index:2;
   max-height:14rem; overflow-y:auto;
   background:var(--color-surface); border:1px solid var(--color-border);
-  border-radius:var(--radius-md); box-shadow:0 4px 16px rgba(42,36,26,.14);
+  border-radius:var(--radius-md); box-shadow:0 4px 16px rgba(36,33,29,.14);
 }
 .own-sugg button {
   display:flex; flex-direction:column; gap:.05rem; width:100%; text-align:left;
   font:inherit; background:none; border:0; cursor:pointer;
   padding:.35rem .45rem; border-radius:var(--radius-md);
 }
-.own-sugg button:hover, .own-sugg button[aria-selected="true"] { background:var(--color-bg-alt); }
+.own-sugg button:hover, .own-sugg button[aria-selected="true"] { background:var(--color-leaf-tint); }
 .own-nm { font-size:var(--t-ui); font-weight:600; color:var(--color-text-primary); }
 .own-wh { font-size:var(--t-label); color:var(--color-text-muted); }
 
@@ -388,7 +409,7 @@
   display:flex; align-items:center;
   padding:.45rem .5rem; font-size:var(--t-meta); color:var(--color-text-secondary);
 }
-.own-sugg-note.is-err { color:var(--color-rust-deep); }
+.own-sugg-note.is-err { color:var(--color-sindoor-deep); }
 .own-spin {
   display:inline-block; width:.8em; height:.8em; margin-right:.45em; flex:none;
   border:2px solid currentColor; border-right-color:transparent; border-radius:50%;
@@ -427,13 +448,13 @@
   }
   .own-inv-x, .own-x, .own-change { position:relative; }
 }
-.own-inv-x:hover { color:var(--color-rust-deep); }
+.own-inv-x:hover { color:var(--color-sindoor-deep); }
 .own-inv-add { display:flex; gap:.4rem; margin-top:.4rem; }
 .own-inv-add input {
   flex:1; font:inherit; font-size:var(--t-ui); padding:.4rem .5rem;
   border:1px solid var(--color-border); border-radius:var(--radius-md);
 }
-.own-inv-add input:focus { outline:2px solid var(--color-moss); outline-offset:2px; border-color:var(--color-moss); }
+.own-inv-add input:focus { outline:2px solid var(--color-leaf); outline-offset:2px; border-color:var(--color-leaf); }
 
 .own-del { margin-top:1.5rem; padding-top:.8rem; border-top:1px solid var(--color-divider); }
 
@@ -443,7 +464,8 @@
   position:fixed; left:50%; bottom:1.5rem; transform:translateX(-50%); z-index:200;
   max-width:min(28rem,calc(100vw - 2rem));
   font-size:var(--t-ui); padding:.55rem .9rem; border-radius:var(--radius-md);
-  background:var(--color-text-primary); color:var(--color-bg);
-  box-shadow:0 4px 18px rgba(42,36,26,.28);
+  background:var(--color-surface); color:var(--color-text-primary);
+  border:1px solid var(--color-border);
+  box-shadow:0 4px 18px rgba(36,33,29,.22);
 }
 

@@ -4,15 +4,15 @@
    Page chrome (nav, panel, buttons, form fields) stays with each host — both
    define those already. */
 
-    /* sienna is in the earth palette but neither host defines its tint, and the
-       module needs a fourth wash for the date column and the tag role. Declared
-       at zero specificity so a host :root can still take it over. */
-    :where(:root) { --color-sienna-tint:rgba(153,88,47,.12); }
+    /* The tag role needs a fourth wash beside leaf, sindoor and marigold. It is
+       the map's blue (#3A7FA1) as a transparency, under Ink — no new hue.
+       Declared at zero specificity so a host :root can still take it over. */
+    :where(:root) { --color-blue-tint:rgba(58,127,161,.14); }
 
     /* readable measure: explanatory prose stops at 70-odd characters. Uncapped,
        these sentences run the whole page — the enrichment hint measured 197
-       characters a line at 1440px — and the eye loses the return sweep. DM
-       Sans sets a wide zero, so 46ch of it measures ~70 characters of prose. */
+       characters a line at 1440px — and the eye loses the return sweep. 46ch
+       of Source Sans measures ~70 characters of prose. */
     .db-prose, .enrich-head .hint, .ck-notice, .ck-derive > .hint,
     .loc-first, .infer-note, .kind-steer, #geom-summary, #card-fixes > .hint {
       max-width:46ch; text-wrap:pretty; }
@@ -20,18 +20,18 @@
     /* an inline action inside a sentence: the placement step is skipped when
        coordinates settle it, and this is how a person asks for it back */
     .linkish { background:none; border:none; padding:0; font:inherit; font-size:inherit;
-      color:var(--color-canopy,#384526); text-decoration:underline; cursor:pointer; }
+      color:var(--color-leaf,#2A6B41); text-decoration:underline; cursor:pointer; }
     .linkish:hover { text-decoration-thickness:2px; }
 
     .step-nav { display:flex; gap:.6rem; flex-wrap:wrap; margin-top:1rem; align-items:center; }
 
     /* drop zone */
-    .drop { border:2px dashed var(--color-border); border-radius:var(--radius-lg); background:var(--color-surface);
-      padding:2.2rem 1.5rem; text-align:center; color:var(--color-text-secondary); cursor:pointer; transition:border-color .15s ease; }
-    .drop.over { border-color:var(--color-moss); background:var(--color-moss-tint); }
+    .drop { border:1px dashed var(--color-border); border-radius:var(--radius-lg); background:var(--color-surface);
+      padding:2.2rem 1.5rem; text-align:center; color:var(--color-text-secondary); cursor:pointer; transition:border-color .15s ease-out; }
+    .drop:hover, .drop.over { border-color:var(--color-leaf); background:var(--color-leaf-tint); }
     .drop-ico { width:30px; height:30px; color:var(--color-text-muted); margin-bottom:.45rem; }
-    .drop.over .drop-ico { color:var(--color-moss); }
-    .drop b { display:block; font-family:'Figtree',sans-serif; color:var(--color-text-primary); margin-bottom:.25rem; }
+    .drop.over .drop-ico { color:var(--color-leaf); }
+    .drop b { display:block; font-weight:600; color:var(--color-text-primary); margin-bottom:.25rem; }
     .drop input { display:none; }
     details.paste { margin-top:.8rem; }
     details.paste summary { cursor:pointer; font-size:var(--t-ui); color:var(--color-text-secondary); }
@@ -45,14 +45,14 @@
     /* sheet picker */
     .sheet-list { display:flex; flex-direction:column; gap:.5rem; margin:.6rem 0 0; }
     .sheet-list button { display:flex; justify-content:space-between; gap:1rem; text-align:left; font:inherit;
-      padding:.65rem .9rem; border:1px solid var(--color-border); border-radius:var(--radius-md); background:#fff; cursor:pointer; }
-    .sheet-list button:hover { border-color:var(--color-moss); background:var(--color-moss-tint); }
+      padding:.65rem .9rem; border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface); cursor:pointer; }
+    .sheet-list button:hover { border-color:var(--color-leaf); background:var(--color-leaf-tint); }
     .sheet-list .dim { color:var(--color-text-muted); font-size:var(--t-ui); white-space:nowrap; }
 
     /* choose-the-fields step */
-    .enrich-panel { border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-moss-tint); padding:.8rem 1rem; margin:0 0 1rem; }
+    .enrich-panel { border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-leaf-tint); padding:.8rem 1rem; margin:0 0 1rem; }
     .enrich-head { display:flex; flex-direction:column; gap:.15rem; margin-bottom:.6rem; }
-    .enrich-head b { font-family:'Figtree',sans-serif; }
+    .enrich-head b { font-weight:600; }
     .enrich-row { display:flex; gap:.6rem; align-items:flex-end; flex-wrap:wrap; }
     .enrich-row label.f { flex:1 1 16rem; max-width:24rem; }
     /* the advanced fold: which columns theme-finding reads */
@@ -76,20 +76,20 @@
     @media (prefers-reduced-motion: reduce){ .spin { animation-duration:1.6s; } }
 
     .ck-notices { display:flex; flex-direction:column; gap:.4rem; margin-bottom:.7rem; }
-    .ck-notice { background:var(--color-ochre-tint); color:var(--color-text-secondary); border-radius:var(--radius-md); padding:.5rem .75rem; font-size:var(--t-ui); }
-    .ck-notice.ck-err { background:var(--color-rust-tint); color:var(--color-rust-deep); }
+    .ck-notice { background:var(--color-marigold-tint); color:var(--color-text-secondary); border-radius:var(--radius-md); padding:.5rem .75rem; font-size:var(--t-ui); }
+    .ck-notice.ck-err { background:var(--color-sindoor-tint); color:var(--color-sindoor-deep); }
     /* the design system keeps pills for the toggle track, so chips and the two
        segmented controls below sit at the 4px container radius instead */
     .ck-chips { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.7rem; }
-    .ck-chip { font-size:var(--t-meta); padding:.25rem .6rem; border-radius:var(--radius-md); background:var(--color-rust-tint); color:var(--color-rust-deep); border:none; }
-    .ck-chip.ck-act { cursor:pointer; font:inherit; font-size:var(--t-meta); border:1px solid var(--color-rust); }
+    .ck-chip { font-size:var(--t-meta); padding:.25rem .6rem; border-radius:var(--radius-md); background:var(--color-sindoor-tint); color:var(--color-sindoor-deep); border:none; }
+    .ck-chip.ck-act { cursor:pointer; font:inherit; font-size:var(--t-meta); border:1px solid var(--color-sindoor); }
 
     /* view toggle: Fields (cards) vs Preview rows (table). Selected is a moss
        wash and weight — green means you can act on it — not a raised pill. */
-    .ck-viewtabs { display:inline-flex; gap:.25rem; padding:.2rem; margin:0 0 .8rem; background:var(--color-bg-alt);
+    .ck-viewtabs { display:inline-flex; gap:.25rem; padding:.2rem; margin:0 0 .8rem; background:var(--color-surface-alt);
       border:1px solid var(--color-border); border-radius:var(--radius-md); }
     .ck-viewtab { font:inherit; font-size:var(--t-meta); padding:.32rem .85rem; border:none; border-radius:var(--radius-md); background:transparent; color:var(--color-text-secondary); cursor:pointer; }
-    .ck-viewtab.on { background:var(--color-moss-tint); color:var(--color-canopy); font-weight:600; }
+    .ck-viewtab.on { background:var(--color-leaf-tint); color:var(--color-leaf-deep); font-weight:600; }
 
     /* field cards — the primary overview */
     .ck-fields { display:grid; grid-template-columns:repeat(auto-fill, minmax(15rem, 1fr)); gap:.7rem; }
@@ -98,39 +98,39 @@
     .ck-field.off .ck-fname, .ck-field.off .ck-samples { opacity:.5; }
     .ck-field-top { display:flex; align-items:center; gap:.45rem; }
     .ck-inc { flex:0 0 auto; cursor:pointer; }   /* its box is drawn in the touch-target block below */
-    .ck-fname { flex:1 1 auto; font-family:'Figtree',sans-serif; font-weight:600; font-size:var(--t-ui); color:var(--color-text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ck-fname { flex:1 1 auto; font-weight:600; font-size:var(--t-ui); color:var(--color-text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     /* 11px is the floor for anything meant to be read — this badge was 9.9px */
-    .ck-gen { flex:0 0 auto; font-size:var(--t-label); letter-spacing:.06em; text-transform:uppercase; padding:.1rem .35rem; border-radius:var(--radius-md); background:var(--color-moss-tint); color:var(--color-canopy); }
+    .ck-gen { flex:0 0 auto; font-size:var(--t-label); letter-spacing:.06em; text-transform:uppercase; padding:.1rem .35rem; border-radius:var(--radius-md); background:var(--color-leaf-tint); color:var(--color-leaf-deep); }
     .ck-edit-btn { flex:0 0 auto; font:inherit; font-size:var(--t-meta); line-height:1; padding:.25rem .4rem; border:1px solid transparent; border-radius:var(--radius-lg); background:none; color:var(--color-text-muted); cursor:pointer; }
-    .ck-edit-btn:hover, .ck-edit-btn.on { border-color:var(--color-border); color:var(--color-canopy); background:var(--color-bg-alt); }
+    .ck-edit-btn:hover, .ck-edit-btn.on { border-color:var(--color-border); color:var(--color-leaf-deep); background:var(--color-surface-alt); }
     .ck-meta { display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; }
     .ck-type-badge { font-size:var(--t-label); color:var(--color-text-muted); }
     .ck-role { font-size:var(--t-label); padding:.12rem .5rem; border-radius:var(--radius-md); font-weight:600; }
-    .ck-role-location { background:var(--color-moss-tint); color:var(--color-canopy); }
-    .ck-role-colour   { background:var(--color-rust-tint); color:var(--color-rust-deep); }
+    .ck-role-location { background:var(--color-leaf-tint); color:var(--color-leaf-deep); }
+    .ck-role-colour   { background:var(--color-sindoor-tint); color:var(--color-sindoor-deep); }
     /* sienna, not the purple this used to carry: the palette is moss, rust,
        sienna and ochre, and a violet badge outsaturates every one of them */
-    .ck-role-tags     { background:var(--color-sienna-tint); color:#6B4020; }
-    .ck-role-value    { background:var(--color-ochre-tint); color:#6d5013; }
-    .ck-role-text     { background:var(--color-bg-alt); color:var(--color-text-secondary); }
+    .ck-role-tags     { background:var(--color-blue-tint); color:var(--color-text-primary); }
+    .ck-role-value    { background:var(--color-marigold-tint); color:var(--color-text-primary); }
+    .ck-role-text     { background:var(--color-surface-alt); color:var(--color-text-secondary); }
     .ck-role-off      { background:transparent; color:var(--color-text-muted); border:1px dashed var(--color-border); }
     .ck-samples { font-size:var(--t-meta); color:var(--color-text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .ck-issue { font-size:var(--t-meta); color:var(--color-rust-deep); }
+    .ck-issue { font-size:var(--t-meta); color:var(--color-sindoor-deep); }
     .ck-edit { display:flex; flex-direction:column; gap:.4rem; padding-top:.5rem; margin-top:.1rem; border-top:1px solid var(--color-divider); }
     .ck-edit-row { display:flex; align-items:center; gap:.45rem; font-size:var(--t-meta); color:var(--color-text-secondary); }
     .ck-edit-row input, .ck-edit-row select { flex:1 1 auto; font:inherit; font-size:var(--t-meta); padding:.28rem .4rem; }
     .ck-mini, .ck-mini2 { font:inherit; font-size:var(--t-meta); padding:.28rem .55rem; border:1px solid var(--color-border); border-radius:var(--radius-lg); background:var(--color-surface); color:var(--color-text-secondary); cursor:pointer; align-self:flex-start; }
-    .ck-mini:hover { border-color:var(--color-moss); color:var(--color-canopy); }
+    .ck-mini:hover { border-color:var(--color-leaf); color:var(--color-leaf-deep); }
 
     /* preview rows — the secondary, editable table */
-    .ck-scroll { overflow-x:auto; border:1px solid var(--color-border); border-radius:var(--radius-md); background:#fff; }
-    .ck-table { border-collapse:collapse; font-size:var(--t-ui); min-width:100%; }
+    .ck-scroll { overflow-x:auto; border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface); }
+    .ck-table { border-collapse:collapse; font-size:var(--t-ui); min-width:100%; font-variant-numeric:tabular-nums; }
     .ck-table th { position:sticky; top:0; background:var(--color-surface); border-bottom:2px solid var(--color-border);
-      padding:.45rem .6rem; text-align:left; min-width:8rem; white-space:nowrap; font-family:'Figtree',sans-serif; }
-    .ck-th-type { font-family:'DM Sans',sans-serif; font-weight:400; font-size:var(--t-label); color:var(--color-text-muted); }
+      padding:.45rem .6rem; text-align:left; min-width:8rem; white-space:nowrap; font-weight:600; }
+    .ck-th-type { font-weight:400; font-size:var(--t-label); color:var(--color-text-muted); }
     .ck-table td { border-bottom:1px solid var(--color-divider); padding:.32rem .55rem; white-space:nowrap; max-width:16rem; overflow:hidden; text-overflow:ellipsis; }
     .ck-cell { cursor:text; }
-    .ck-cell:focus { outline:2px solid var(--color-moss); outline-offset:-2px; background:#fff; overflow:visible; text-overflow:clip; border-radius:var(--radius-md); }
+    .ck-cell:focus { outline:2px solid var(--color-leaf); outline-offset:-2px; background:var(--color-surface); overflow:visible; text-overflow:clip; border-radius:var(--radius-md); }
     /* Four whole columns used to be washed in four tints — moss, sienna, ochre,
        rust — and the badge at the head of each column already names what it
        holds. The wash said the same thing over ten times the area, and made a
@@ -147,7 +147,7 @@
        is worse — a blank cell and a wrong one need different answers. So it is
        marked, not filled: a dotted rust line under the words, the way a
        spell-checker marks a word without shouting at it. */
-    td.ck-off { text-decoration:underline dotted var(--color-rust);
+    td.ck-off { text-decoration:underline dotted var(--color-sindoor);
       text-decoration-thickness:1px; text-underline-offset:3px; }
     td.ck-empty { color:var(--color-text-muted); }
     td.ck-ignored, th.ck-ignored { opacity:.45; }
@@ -155,7 +155,7 @@
        it belongs to the step it interrupts, so it borrows the step's ground
        rather than drawing a card of its own. */
     .db-ask { margin:.6rem 0 0; padding:.75rem .85rem; border-radius:var(--radius-md);
-      background:var(--color-ochre-tint); }
+      background:var(--color-marigold-tint); }
     .db-ask p { margin:0 0 .5rem; font-size:var(--t-ui); color:var(--color-text-secondary); }
     .db-ask p b { color:var(--color-text-primary); }
     .db-ask .step-nav { margin:0; }
@@ -169,20 +169,20 @@
     /* place-on-map + style cards */
     .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:.35rem .8rem; }
     @media (max-width:700px){ .grid2 { grid-template-columns:1fr; } }
-    .infer-note { font-size:var(--t-ui); color:var(--color-text-secondary); background:var(--color-moss-tint); border-radius:var(--radius-md); padding:.6rem .75rem; margin:.4rem 0 .9rem; }
+    .infer-note { font-size:var(--t-ui); color:var(--color-text-secondary); background:var(--color-leaf-tint); border-radius:var(--radius-md); padding:.6rem .75rem; margin:.4rem 0 .9rem; }
 
     /* the single "where are these located?" answer + its confirm/change control */
     .place-summary { display:flex; align-items:center; gap:.6rem; padding:.7rem .9rem; margin:.2rem 0 .6rem; border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface); max-width:44rem; }
     .ps-text { flex:1 1 auto; font-size:var(--t-ui); color:var(--color-text-primary); }
     .ps-text b { font-weight:600; }
-    .ps-text .warn { color:var(--color-rust-deep); }
+    .ps-text .warn { color:var(--color-sindoor-deep); }
     /* both hosts define .btn after this file, so a size set here never lands —
        the button keeps the host's own metrics, which clear the touch floor */
     .ps-change { flex:0 0 auto; }
-    .place-details { max-width:44rem; margin:0 0 .8rem; padding:.85rem .9rem; border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-bg-alt); }
+    .place-details { max-width:44rem; margin:0 0 .8rem; padding:.85rem .9rem; border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface-alt); }
     .pd-seg { display:inline-flex; gap:.25rem; padding:.2rem; margin-bottom:.8rem; background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md); }
     .pd-opt { font:inherit; font-size:var(--t-meta); padding:.34rem .9rem; border:none; border-radius:var(--radius-md); background:transparent; color:var(--color-text-secondary); cursor:pointer; }
-    .pd-opt.on { background:var(--color-moss); color:#fff; font-weight:600; }
+    .pd-opt.on { background:var(--color-leaf); color:#fff; font-weight:600; }
     .pd-fields { display:grid; grid-template-columns:1fr 1fr; gap:.35rem .8rem; }
     .pd-fields label.f { grid-column:1 / -1; margin-bottom:.4rem; }
     .pd-fields label.f:first-child, #pd-coord-fields label.f { grid-column:auto; }
@@ -201,7 +201,7 @@
     .addr-q { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .addr-a { color:var(--color-text-secondary); }
     /* the reason it is not ticked, in the colour this product keeps for care */
-    .addr-c { font-size:var(--t-label); color:var(--color-rust-deep); white-space:nowrap; }
+    .addr-c { font-size:var(--t-label); color:var(--color-sindoor-deep); white-space:nowrap; }
     @media (max-width:640px){ .addr-row { grid-template-columns:auto 1fr; } .addr-a, .addr-c { grid-column:2; } }
     .radio-row { display:flex; gap:1rem; flex-wrap:wrap; font-size:var(--t-ui); color:var(--color-text-secondary); }
     .radio-row label { display:flex; gap:.35rem; align-items:center; font-weight:400; }
@@ -210,14 +210,16 @@
        the editor's own layout, cause and effect in one glance — and above it
        on narrow ones */
     .bench { display:grid; grid-template-columns:1fr; gap:1rem; align-items:start; }
-    #db-preview-frame { width:100%; height:clamp(22rem, 60vh, 40rem); border:1px solid var(--color-border); border-radius:var(--radius-lg); background:#F3E9CE; }
+    /* the live preview is the map's plate: cream ground inside a thin ink frame */
+    #db-preview-frame { width:100%; height:clamp(22rem, 60vh, 40rem); border:1px solid var(--map-boundary,#26231F);
+      border-radius:var(--radius-md); background:var(--map-ground,#F5F1E6); }
     @media (min-width:900px) {
       .bench { grid-template-columns:minmax(19rem, 23rem) minmax(0, 1fr); }
       #db-preview-frame { position:sticky; top:1rem; height:min(44rem, calc(100vh - 2rem)); }
     }
     .card { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:1.1rem 1.2rem; }
     .card h2 { display:flex; align-items:center; justify-content:space-between; gap:.5rem; margin-bottom:.8rem; }
-    footer.site { margin-top:3rem; border-top:1px solid var(--color-divider); background:var(--color-bg-alt); }
+    footer.site { margin-top:3rem; border-top:1px solid var(--color-divider); background:var(--color-surface-alt); }
 
     /* notes under a question — the edit screen's own quiet line */
     .step label.f > .note { flex:1 0 100%; font-weight:400; font-size:var(--t-meta);
@@ -234,17 +236,17 @@
       background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md);
       cursor:pointer; padding:0; }
     .sw i { width:1.35rem; height:1.35rem; border-radius:50%; background:var(--c); display:block; }
-    .sw:hover { background:var(--color-bg-alt); }
-    .sw[aria-pressed="true"] { border-color:var(--color-moss); background:var(--color-moss-tint); }
+    .sw:hover { background:var(--color-surface-alt); }
+    .sw[aria-pressed="true"] { border-color:var(--color-leaf); background:var(--color-leaf-tint); }
 
     /* the live map key: output, not a control — the edit screen's metrics,
        drawn by the same swatch code (iconkit) as the atlas itself */
     .key-head { display:flex; align-items:baseline; gap:.6rem; margin:.2rem 0 .2rem; }
-    .key-stamp { flex:1 1 auto; font-family:'Figtree',sans-serif; font-size:var(--t-label); font-weight:700;
-      letter-spacing:.12em; text-transform:uppercase; color:var(--color-text-muted); }
+    .key-stamp { flex:1 1 auto; font-size:var(--t-label); font-weight:700;
+      letter-spacing:.12em; text-transform:uppercase; color:var(--color-text-secondary); }
     .key-note { font-size:var(--t-meta); color:var(--color-text-muted); font-variant-numeric:tabular-nums; }
     .key-block { padding:.55rem .65rem .6rem; border:1px solid var(--color-divider);
-      border-radius:var(--radius-md); background:var(--color-bg); margin-bottom:1rem; }
+      border-radius:var(--radius-md); background:var(--color-page); margin-bottom:1rem; }
     .key { list-style:none; margin:.15rem 0 0; padding:0; display:flex; flex-direction:column; gap:.28rem; }
     .key li { display:flex; align-items:center; gap:.45rem; font-size:var(--t-meta); color:var(--color-text-secondary); }
     .k-label { flex:1 1 auto; line-height:1.2; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -256,7 +258,8 @@
       color:#fff; font-size:var(--t-label); font-weight:700; display:inline-flex; align-items:center;
       justify-content:center; letter-spacing:.02em; }
     .key .leg-badge.pale { color:var(--color-text-primary); }
-    .key .leg-swatch { flex:0 0 auto; width:12px; height:12px; background:var(--c,#7a756c); border-radius:var(--radius-xs); }
+    .key .leg-swatch { flex:0 0 auto; width:12px; height:12px; background:var(--c,#7a756c); border-radius:var(--radius-xs);
+      box-shadow:inset 0 0 0 1px rgba(0,0,0,.08); }
     .key .leg-swatch.dot { width:11px; height:11px; border-radius:50%; margin:0 1px; }
     .key .leg-swatch.line { height:4px; border-radius:var(--radius-pill); }
     .key .leg-swatch.dashed { height:4px; border-radius:0;
@@ -268,7 +271,7 @@
       font-size:var(--t-meta); color:var(--color-text-muted); }
 
     /* the card's foot: one reassurance, then the verbs */
-    .s4-foot { border-top:1px solid var(--color-divider); background:var(--color-bg);
+    .s4-foot { border-top:1px solid var(--color-divider); background:var(--color-page);
       margin:1.1rem -1.2rem -1.1rem; padding:.85rem 1.2rem 1rem;
       border-radius:0 0 var(--radius-lg) var(--radius-lg); }
     .s4-foot .assure { margin:0 0 .6rem; font-size:var(--t-meta); color:var(--color-text-secondary);
@@ -277,8 +280,8 @@
 
     /* the location answer, stated before anything about styling */
     .loc-first { font-size:var(--t-ui); padding:.6rem .8rem; border-radius:var(--radius-md); margin:0 0 .9rem; }
-    .loc-first.ok { background:var(--color-moss-tint); color:var(--color-canopy); }
-    .loc-first.warn { background:var(--color-rust-tint); color:var(--color-rust-deep); }
+    .loc-first.ok { background:var(--color-leaf-tint); color:var(--color-leaf-deep); }
+    .loc-first.warn { background:var(--color-sindoor-tint); color:var(--color-sindoor-deep); }
     .loc-first b { font-weight:600; }
 
     /* styling step */
@@ -286,7 +289,7 @@
     .style-more > summary { cursor:pointer; font-size:var(--t-ui); color:var(--color-text-secondary); }
     /* steering, not blocking: a nudge when the chosen shading misleads */
     .kind-steer { font-size:var(--t-meta); padding:.45rem .7rem; border-radius:var(--radius-md); margin:-.2rem 0 .7rem;
-      background:var(--color-ochre-tint); color:var(--color-text-primary); }
+      background:var(--color-marigold-tint); color:var(--color-text-primary); }
     /* a closed <details> stops hiding a child that sets its own display (our
        .grid2), so make the collapse explicit */
     details:not([open]) > *:not(summary) { display:none !important; }
@@ -315,9 +318,9 @@
     .ck-inc { appearance:none; -webkit-appearance:none; position:relative;
       width:44px; height:44px; margin:-14px; padding:0; border:0; background:none; }
     .ck-inc::before { content:""; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-      width:1rem; height:1rem; border:1px solid var(--color-text-muted); border-radius:var(--radius-md); background:var(--color-surface); }
-    .ck-inc:checked::before { background:var(--color-moss); border-color:var(--color-moss); }
+      width:1rem; height:1rem; border:1px solid var(--color-border); border-radius:var(--radius-xs); background:var(--color-surface); }
+    .ck-inc:checked::before { background:var(--color-leaf); border-color:var(--color-leaf); }
     .ck-inc:checked::after { content:"✓"; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
       color:#fff; font-size:var(--t-label); line-height:1; }
     .ck-inc:focus-visible { outline:none; }
-    .ck-inc:focus-visible::before { outline:2px solid var(--color-moss); outline-offset:2px; }
+    .ck-inc:focus-visible::before { outline:2px solid var(--color-leaf); outline-offset:2px; }

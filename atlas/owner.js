@@ -710,11 +710,15 @@
   // the server's named single colours (api/lib/fragment.js MARKER_COLORS) —
   // brand choices a person picks for a whole layer. The key itself is always
   // drawn from the server's own legend, so these hexes only tint the chips.
-  var MARKER_COLORS = { rust: "#A6522F", moss: "#40573D", ochre: "#B0863A", sienna: "#9C5A34", slate: "#5f7f92" };
-  var MARKER_NAMES = { rust: "Rust", moss: "Moss", ochre: "Ochre", sienna: "Sienna", slate: "Slate" };
+  // The keys are the manifest's words and stay; the hexes are the Bazaar set
+  // (DESIGN.md, September 2026): rust→sindoor, moss→leaf, ochre→marigold,
+  // sienna→the ramp's fourth step, slate→the map's blue.
+  var MARKER_COLORS = { rust: "#C9402B", moss: "#2A6B41", ochre: "#E9A237", sienna: "#D2692A", slate: "#3A7FA1" };
+  var MARKER_NAMES = { rust: "Sindoor red", moss: "Leaf green", ochre: "Marigold", sienna: "Sienna", slate: "Blue" };
   // mirrors PALETTES in api/lib/fragment.js — the server owns which ramp a spec
   // means; these are only so the choice can be seen before it is made
   var PALETTES = {
+    marigold: ["#FBF1D9", "#F4CF82", "#E9A237", "#D2692A", "#A8321A"],
     greens: ["#e7e3d8", "#cdd3b4", "#a9bd8e", "#7f9c65", "#566f42", "#39502f"],
     blues: ["#e6ebec", "#c2d2d8", "#93b1bd", "#6690a1", "#446e80", "#2d4f5e"],
     rust: ["#f0e6dd", "#e0c4ab", "#cb9c77", "#b06f47", "#8f4d2c", "#6e371d"],
@@ -724,7 +728,7 @@
     purples: ["#e9e4ea", "#cfc3d4", "#ac97b6", "#8a6e96", "#6a4d75", "#4c3454"],
   };
   var PALETTE_NAMES = {
-    greens: "Greens", blues: "Blues", rust: "Rust", ylorbr: "Sand to brown",
+    marigold: "Marigold", greens: "Greens", blues: "Blues", rust: "Rust", ylorbr: "Sand to brown",
     brteal: "Brown to teal", tealbr: "Teal to brown", purples: "Purples",
   };
 
