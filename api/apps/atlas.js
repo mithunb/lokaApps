@@ -4077,6 +4077,12 @@ const ROW_MIN_COSINE = 0.50;
    (and above the floor). 0.06 keeps the BRT tiger-reserve respondent (0.558)
    under the top (0.615) there — one query, so revisit with real traffic. */
 const ROW_BAND = 0.06;
+/* And meaning is the fallback, not an addition. When the words typed appear
+   in some rows, those rows are the answer: "Telugu" is in one person's
+   languages, yet by meaning alone six more scored 0.50–0.55 and joined them.
+   Paraphrases are used only when no row has the words, and only if the best
+   one is a clear signal rather than the bunched middle of the scale. */
+const ROW_STRONG = 0.55;
 // gemini-embedding-001 defaults to 3072 dims; 768 (a supported MRL size) keeps
 // the side-file small. Query + rows share this, so cosine stays comparable.
 const EMBED_DIM = 768;
@@ -4516,7 +4522,9 @@ router.post('/layers/search', async (req, res) => {
       }
       const top = Math.max(-1, ...scored.filter((f) => f.score != null).map((f) => f.score));
       const bar = Math.max(ROW_MIN_COSINE, top - ROW_BAND);
-      const found = scored.filter((f) => f.lex || (f.score != null && f.score >= bar));
+      const anyLex = scored.some((f) => f.lex);
+      const found = anyLex ? scored.filter((f) => f.lex)
+        : (top >= ROW_STRONG ? scored.filter((f) => f.score != null && f.score >= bar) : []);
       if (!found.length) continue;
       matched += found.length;
       // literal matches outrank paraphrases (they are what the user typed);

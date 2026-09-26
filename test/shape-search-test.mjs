@@ -86,7 +86,8 @@ check('the old pin wording is untouched', /c\.textContent = shown \? \(shown \+ 
 
 console.log('\n  a search by meaning keeps only answers close to the best one');
 check('a paraphrase must sit within a band of the top score', /const bar = Math\.max\(ROW_MIN_COSINE, top - ROW_BAND\);/.test(api), true);
-check('and a word typed exactly always counts', /const found = scored\.filter\(\(f\) => f\.lex \|\| \(f\.score != null && f\.score >= bar\)\);/.test(api), true);
+check('when the words typed are in some rows, those rows are the answer', /const found = anyLex \? scored\.filter\(\(f\) => f\.lex\)/.test(api), true);
+check('meaning is used only when no row has the words, and only on a clear signal', /: \(top >= ROW_STRONG \? scored\.filter\(\(f\) => f\.score != null && f\.score >= bar\) : \[\]\);/.test(api), true);
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
