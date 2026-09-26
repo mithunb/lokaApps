@@ -1348,6 +1348,9 @@
       }
       .atlas-stage .atlas-popup .maplibregl-popup-tip { display:none; }
       .atlas-stage .atlas-popup .maplibregl-popup-content { width:100%; }
+      /* across the full width the 3px Sindoor edge read as a heavy red rule;
+         1.5px keeps the "this one" mark without shouting */
+      .atlas-stage .atlas-popup .maplibregl-popup-content { border-top-width:1.5px; }
       /* Shorter, because it is sharing the map's height rather than floating
          over it, and the map underneath is worth still seeing. */
       .atlas-stage .atlas-popup .pop { max-height:min(38vh, 320px); }

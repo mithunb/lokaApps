@@ -88,5 +88,7 @@ check('the header keeps sign in and sign out on a phone',
 check('and it is a thumb-sized target', /#nav-signout:not\(\[hidden\]\) \{ display:inline-flex; align-items:center; min-height:44px;/.test(html), true);
 check('only one script measures the sheet', /function sheetH\(\)/.test(html), false);
 
+check('a phone card wears a thinner red edge than the desktop one', /\.atlas-popup \.maplibregl-popup-content \{ border-top-width:1\.5px; \}/.test(html), true);
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
