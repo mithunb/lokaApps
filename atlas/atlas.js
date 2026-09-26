@@ -1012,7 +1012,7 @@
       // debug than a named miss).
       return fetch(layerUrl(L))
         .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-        .then(function (d) { DATA[L.id] = d; })
+        .then(function (d) { DATA[L.id] = d; numberRows(L, d); })
         .catch(function (e) {
           L._missing = true;
           console.warn("Atlas: layer “" + L.id + "” couldn't load its data (" + L.source + "): " + e.message);
@@ -3418,6 +3418,7 @@
      features tagged "heritage". Keyword works with no AI; semantic adds to it.
   ================================================================== */
   var searchTags = [], searchSeq = 0, searchTimer = null;
+  var searchWord = "";   // the search as typed, for the line under the box; matching lowercases its own copy
 
   function tagFieldsOf(L) {
     var out = ((L.popup && L.popup.fields) || []).filter(function (f) { return f.type === "tags"; }).map(function (f) { return f.property; });
@@ -3504,22 +3505,59 @@
   // the box from every atlas whose layers simply have no tag column.
   function manifestSearchable() {
     return (MANIFEST.layers || []).filter(function (L) {
+      if (shapeSearchable(L)) return true;
       if (L.type !== "marker") return false;
       var p = L.popup || {};
       return !!(L.userLayer || L.markerBy || p.title || (p.fields && p.fields.length));
     });
   }
+  /* Which SHAPE layers a search may touch. A pin layer only has to look like
+     it could carry text (above); a shape layer has to be the data itself. The
+     multispecies atlas draws each person as the region they work in, and the
+     search there must find people — but Deoria's forests, wards and district
+     boundaries have popups too, and they are the ground the data sits on.
+     Typing "forest" and watching every forest polygon light up is noise, and
+     it would change what Deoria's search has always done. So the rule is
+     explicit: a shape layer is searchable when it was contributed through the
+     wizard (userLayer) or the manifest says `searchable: true`. Anything in
+     the base group stays out whatever it says. */
+  function shapeSearchable(L) {
+    if (L.type !== "fill" && L.type !== "polygon" && L.type !== "line") return false;
+    if (L.group === "base") return false;
+    return !!(L.userLayer || L.searchable === true);
+  }
+  /* Every feature learns its row number as its data arrives, on the feature
+     (for the semantic hits the server reports by row) and, on a searchable
+     shape layer, in its properties too — the map's paint can only read
+     properties, and that number is how a fill knows whether it matched. A
+     bare number never reaches a popup or a search: the fact rows skip "_"
+     columns and featureText skips values with no letters. */
+  function numberRows(L, gj) {
+    var shape = shapeSearchable(L);
+    ((gj && gj.features) || []).forEach(function (f, i) {
+      f._row = i;
+      if (shape && f.properties) f.properties._srow = i;
+    });
+  }
+  // The rows a search runs over: a pin layer's markers, a shape layer's
+  // features — each as { f } so one loop serves both.
+  function searchRows(L) {
+    if (markersByLayer[L.id]) return markersByLayer[L.id];
+    if (!shapeSearchable(L) || !DATA[L.id]) return [];
+    if (!L._srows) L._srows = (DATA[L.id].features || []).map(function (f) { return { f: f }; });
+    return L._srows;
+  }
   function layerHasText(L) {
     if (L._hasText == null) {
-      L._hasText = (markersByLayer[L.id] || []).some(function (e) { return featureText(L, e.f).length > 1; });
+      L._hasText = searchRows(L).some(function (e) { return featureText(L, e.f).length > 1; });
     }
     return L._hasText;
   }
-  // layers search can actually act on: markers on the map, carrying real text.
+  // layers search can actually act on: rows on the map, carrying real text.
   // A layer with nothing searchable is left alone by a query rather than blanked.
   function searchableLayers() {
     return (MANIFEST.layers || []).filter(function (L) {
-      return markersByLayer[L.id] && markersByLayer[L.id].length && layerHasText(L);
+      return searchRows(L).length && layerHasText(L);
     });
   }
   function syncSearchBox() {
@@ -3528,28 +3566,105 @@
   }
   function layerVocab() {
     var v = {};
-    searchableLayers().forEach(function (L) { (markersByLayer[L.id] || []).forEach(function (e) { for (var t in featureTagSet(L, e.f)) v[t] = 1; }); });
+    searchableLayers().forEach(function (L) { searchRows(L).forEach(function (e) { for (var t in featureTagSet(L, e.f)) v[t] = 1; }); });
     return Object.keys(v);
+  }
+  /* A pin that doesn't match is taken off the map; a shape that doesn't match
+     stays, faded to a faint outline. Hiding it would leave a hole where a
+     region was, and a faded region can still be tapped, which a hole cannot.
+     The fade rides on each sub-layer's own opacity, wrapped in "does this row
+     match", so a matching area keeps exactly the colour, outline, dot and
+     name it had. The original values are kept the first time so that
+     clearing puts them back rather than guessing. */
+  var SEARCH_FADE = { "fill-opacity": 0.15, "line-opacity": 0.4, "circle-opacity": 0.25, "circle-stroke-opacity": 0.25, "text-opacity": 0.3 };
+  function fadeProps(id) {
+    var lay = map.getLayer(id); if (!lay) return [];
+    return { fill: ["fill-opacity"], line: ["line-opacity"], circle: ["circle-opacity", "circle-stroke-opacity"], symbol: ["text-opacity"] }[lay.type] || [];
+  }
+  function applyShapeFade(L) {
+    if (!map || !L._ids) return;
+    var hits = [], any = false;
+    searchRows(L).forEach(function (e) { if (e.hidden) any = true; else hits.push(e.f._row); });
+    var ids = L._ids.filter(function (id) { return /-(fill|line|mark|label)$/.test(id); });
+    if (!L._searchPaint) {
+      L._searchPaint = {};
+      ids.forEach(function (id) {
+        fadeProps(id).forEach(function (p) {
+          var v; try { v = map.getPaintProperty(id, p); } catch (e) {}
+          L._searchPaint[id + "|" + p] = v == null ? 1 : v;
+        });
+      });
+    }
+    var hit = ["in", ["get", "_srow"], ["literal", hits]];
+    ids.forEach(function (id) {
+      fadeProps(id).forEach(function (p) {
+        var orig = L._searchPaint[id + "|" + p];
+        var v = any ? ["case", hit, orig, ["*", orig, SEARCH_FADE[p]]] : orig;
+        try { map.setPaintProperty(id, p, v); } catch (e) {}
+      });
+    });
+  }
+  // after a search touches a layer's rows: pins re-draw, shapes re-paint
+  function applyRowVisibility(L) {
+    if (markersByLayer[L.id]) applyMarkerVisibility(L); else applyShapeFade(L);
+  }
+  // The corners of every matching area, so the map can fit them. A pin is a
+  // point; a shape contributes every point on its outline.
+  function shapeBounds(L) {
+    var b = null;
+    searchRows(L).forEach(function (e) {
+      if (e.hidden) return;
+      walkCoords(e.f.geometry, function (c) { if (!b) b = new maplibregl.LngLatBounds(c, c); else b.extend(c); });
+    });
+    return b;
+  }
+  function walkCoords(g, fn) {
+    if (!g) return;
+    if (g.type === "GeometryCollection") return (g.geometries || []).forEach(function (x) { walkCoords(x, fn); });
+    (function walk(c) { if (typeof c[0] === "number") fn(c); else c.forEach(walk); })(g.coordinates || []);
+  }
+  /* What the line under the box calls a row. A pin layer's rows are places;
+     a shape layer's are areas unless the manifest names them ("people").
+     Where the layers disagree, "places" covers both. */
+  function searchNoun(layers) {
+    var nouns = [];
+    layers.forEach(function (L) {
+      var n = L.noun || (markersByLayer[L.id] ? "places" : "areas");
+      if (nouns.indexOf(n) < 0) nouns.push(n);
+    });
+    return nouns.length === 1 ? nouns[0] : "places";
   }
   // `lead` names what is being shown when it is not a typed search — a tapped
   // tag, say. Without it the line reads "5 of 66 shown", which is true and
   // says nothing about why.
-  function updateSearchCount(shown, total, pts, lead) {
+  // `word` is the typed search on an atlas with shape layers: faded areas are
+  // still on the map, so the line has to say what they were tested against —
+  // "3 of 11 areas match ‘Telugu’" — and name the way back to all of them.
+  // `noun` is what the rows are called (places, areas, people).
+  function updateSearchCount(shown, total, pts, lead, word, noun) {
     var c = $("#atlas-search-count"); if (!c) return;
     if (shown == null) { c.hidden = true; c.textContent = ""; return; }
     c.hidden = false;
+    noun = noun || "places";
+    var one = noun === "people" ? "person" : noun.replace(/s$/, "");
     if (lead) {
       c.textContent = shown
-        ? shown + (shown === 1 ? " place " : " places ") + lead
-        : "no places " + lead;
+        ? shown + " " + (shown === 1 ? one : noun) + " " + lead
+        : "no " + noun + " " + lead;
+    } else if (word) {
+      c.textContent = shown
+        ? shown + " of " + total + " " + (total === 1 ? one : noun) + " match ‘" + word + "’"
+        : "nothing matched ‘" + word + "’ — try another word";
     } else {
       c.textContent = shown ? (shown + " of " + total + " shown") : "nothing matched — try another word";
     }
     // a filter with no way out is a trap; the words name the way out
-    if (lead) {
+    if (lead || word) {
       var all = el("button", "ctl-search-go", "show all");
       all.type = "button";
-      all.onclick = function () { clearSearch(); };
+      // the box empties too: a line that has gone while the box still says
+      // "Telugu" would leave the reader wondering which of them is right
+      all.onclick = function () { var box = $(".ctl-search-input"); if (box) box.value = ""; clearSearch(); };
       c.appendChild(document.createTextNode(" · "));
       c.appendChild(all);
     }
@@ -3585,22 +3700,46 @@
     }
     return termRes[t];
   }
-  function applySearch(q, tags) {
+  /* `rows` is what the server found by meaning: { layerId: { rowNumber: 1 } }.
+     A row it names matches even when none of the words do — that is the
+     whole point of it — and it is empty on an atlas with no embeddings, where
+     the words alone decide, as they always did. */
+  var lastFitKey = null;
+  function applySearch(q, tags, rows) {
     var terms = [];
     tags.forEach(function (t) { t = String(t || "").toLowerCase(); if (t && terms.indexOf(t) < 0) terms.push(t); });
-    var shown = 0, total = 0, matchPts = [];
-    searchableLayers().forEach(function (L) {
-      (markersByLayer[L.id] || []).forEach(function (e) {
+    rows = rows || {};
+    var shown = 0, total = 0, matchPts = [], layers = searchableLayers(), shapes = false, b = null;
+    layers.forEach(function (L) {
+      var byRow = rows[L.id] || {};
+      searchRows(L).forEach(function (e) {
         total++;
         var text = featureText(L, e.f);
-        var match = !!(q && text.indexOf(q) >= 0);
+        var match = !!(q && text.indexOf(q) >= 0) || !!byRow[e.f._row];
         for (var i = 0; !match && i < terms.length; i++) match = termRe(terms[i]).test(text);
         e.hidden = !match;
-        if (match) { shown++; matchPts.push(e.f.geometry.coordinates); }
+        if (match) { shown++; if (markersByLayer[L.id]) matchPts.push(e.f.geometry.coordinates); }
       });
-      applyMarkerVisibility(L);
+      applyRowVisibility(L);
+      if (!markersByLayer[L.id]) {
+        shapes = true;
+        var sb = shapeBounds(L);
+        if (sb) b = b ? b.extend(sb) : sb;
+      }
     });
-    updateSearchCount(shown, total, matchPts);
+    // A pin-only atlas keeps its old line and its "Show me" offer, unchanged.
+    if (!shapes) { updateSearchCount(shown, total, matchPts); return; }
+    updateSearchCount(shown, total, null, null, searchWord || q, searchNoun(layers));
+    /* The map goes to the matching areas, making room for the drawer and the
+       phone sheet as every other fit does. Only when the set of matches has
+       changed: the words match on every keystroke and the meaning a moment
+       later, and a map that lurches twice for one answer reads as broken. */
+    if (!shown || !b) { lastFitKey = null; return; }
+    matchPts.forEach(function (p) { b.extend(p); });
+    var key = layers.map(function (L) { return searchRows(L).map(function (e) { return e.hidden ? 0 : 1; }).join(""); }).join("|");
+    if (key === lastFitKey) return;
+    lastFitKey = key;
+    try { map.fitBounds(b, { padding: viewPadding(), maxZoom: 13, duration: 600 }); } catch (e) {}
   }
   /* ==================================================================
      TAP A TAG — the places that share it
@@ -3645,9 +3784,10 @@
     // read. Compare on the set's own terms, or every capitalised tag matches
     // nothing at all.
     var want = String(tag).trim().toLowerCase();
-    searchableLayers().forEach(function (L) {
+    var layers = searchableLayers();
+    layers.forEach(function (L) {
       var mine = !TAGFILTER_LAYER || L.id === TAGFILTER_LAYER;
-      (markersByLayer[L.id] || []).forEach(function (e) {
+      searchRows(L).forEach(function (e) {
         // Count only what this filter could possibly match. A tag belongs to one
         // layer, so counting every layer's markers made the total describe a
         // different population than the number beside it — on an atlas holding
@@ -3655,11 +3795,11 @@
         if (mine) total++;
         var has = mine && !!featureTagSet(L, e.f)[want];
         e.hidden = !has;
-        if (has) { shown++; pts.push(e.f.geometry.coordinates); }
+        if (has) { shown++; if (markersByLayer[L.id]) pts.push(e.f.geometry.coordinates); }
       });
-      applyMarkerVisibility(L);
+      applyRowVisibility(L);
     });
-    updateSearchCount(shown, total, pts, "tagged \u201c" + tag + "\u201d");
+    updateSearchCount(shown, total, pts, "tagged \u201c" + tag + "\u201d", null, searchNoun(layers));
     markLitTags();
   }
 
@@ -3705,11 +3845,13 @@
     TAGFILTER = null;
     TAGFILTER_LAYER = null;
     markLitTags();
-    searchableLayers().forEach(function (L) { (markersByLayer[L.id] || []).forEach(function (e) { e.hidden = false; }); applyMarkerVisibility(L); });
+    lastFitKey = null;
+    searchableLayers().forEach(function (L) { searchRows(L).forEach(function (e) { e.hidden = false; }); applyRowVisibility(L); });
     updateSearchCount(null);
   }
   function runSearch(raw) {
-    var q = (raw || "").trim().toLowerCase();
+    searchWord = (raw || "").trim();
+    var q = searchWord.toLowerCase();
     if (!q) { clearSearch(); return; }
     // Typing replaces a tapped tag rather than joining it: one filter at a
     // time, the same rule tapping a second tag follows. Without this the chip
@@ -3733,9 +3875,22 @@
         .then(function (r) {
           if (seq !== searchSeq) return;      // a newer keystroke won
           searchTags = (r && r.tags) || [];
-          if (!searchTags.length) return;
+          /* The server scores every row against the meaning of the query and
+             names its hits by layer and row number — the same numbers the
+             features here were given as they loaded. Only rows found by
+             meaning are taken: a row it found by its words the words here
+             already found, and with no key on the server it has nothing
+             beyond the words, so the pass below is the same as the first. */
+          var rows = {}, anyRow = false;
+          ((r && r.hits) || []).forEach(function (h) {
+            (h.features || []).forEach(function (f) {
+              if (f.score == null) return;
+              (rows[h.layer] = rows[h.layer] || {})[f.i] = 1; anyRow = true;
+            });
+          });
+          if (!searchTags.length && !anyRow) return;
           var kw2 = layerVocab().filter(function (t) { return t.indexOf(q) >= 0 || q.indexOf(t) >= 0; });
-          applySearch(q, kw2.concat(searchTags));
+          applySearch(q, kw2.concat(searchTags), rows);
         }).catch(function () {});
     }, 250);
   }
