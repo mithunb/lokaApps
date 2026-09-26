@@ -376,7 +376,7 @@
 }
 /* the sheet's title is a headline: the serif, like every heading on the page */
 .own-sheet h2 {
-  margin:0 0 .3rem; font-family:var(--font-display, "Source Serif 4", serif); font-weight:700;
+  margin:0 0 .3rem; font-family:var(--font-display, "Lora", serif); font-weight:700;
   font-size:var(--t-section); line-height:1.25; color:var(--color-text-primary);
 }
 .own-xrow { display:flex; justify-content:flex-end; padding-top:.6rem; }

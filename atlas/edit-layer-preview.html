@@ -16,7 +16,7 @@
          atlas's own panel, over the live map. Editing is three questions and a
          map key, not a wizard step that re-asks the upload's questions.
        OWN-WORLD: the editor's, wholesale — paper ground, hairline ink borders,
-         leaf green as the only interactive colour, Source Sans stamps. Pins,
+         leaf green as the only interactive colour, Karla stamps. Pins,
          key rows and popups reuse the viewer's own renderers (atlas.js: ICONS,
          iconFor, swatch), so what this panel shows is what the map shows.
        STORY: this is my layer; I can rename it, recolour it, and watch the map
@@ -28,7 +28,7 @@
        FORM: master–detail inside the one panel the editor already has. -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:wght@700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600;700&family=Lora:wght@700&display=swap" />
   <style>
     /* ---------- tokens: the editor's, verbatim ---------- */
     :root {
@@ -49,11 +49,11 @@
       --point-1:#C9402B; --point-2:#2A6B41; --point-3:#E9A237; --point-4:#3A7FA1; --point-5:#A39E94; --point-6:#26231F; --point-7:#B99A1C;
       /* script companions (Noto faces for other languages) go here later. They
          hold the primary face itself until then: an EMPTY value makes the
-         stack read "Source Serif 4", , serif — a double comma — and the whole
+         stack read "Lora", , serif — a double comma — and the whole
          font-family is thrown away (measured in Chrome: page fell to Times). */
-      --font-companions-serif:"Source Serif 4"; --font-companions-sans:"Source Sans 3";
-      --font-display:"Source Serif 4",var(--font-companions-serif),serif;
-      --font-body:"Source Sans 3",var(--font-companions-sans),sans-serif;
+      --font-companions-serif:"Lora"; --font-companions-sans:"Karla";
+      --font-display:"Lora",var(--font-companions-serif),serif;
+      --font-body:"Karla",var(--font-companions-sans),sans-serif;
       --t-display:clamp(1.6rem,4vw,2.4rem); --t-section:1.2rem; --t-body:1rem; --t-control:.95rem;
       --t-ui:.9rem; --t-meta:.8rem; --t-label:.72rem;
       --radius-xs:.125rem; --radius-md:.25rem; --radius-lg:.375rem; --radius-pill:999px;

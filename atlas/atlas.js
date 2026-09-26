@@ -8,9 +8,9 @@
   try {
     console.log(
       "%cLOKA Atlas%c · a Socratus project\n%cOpen data, openly mapped — discoverloka.org",
-      "font:700 15px/1.5 'Source Serif 4',serif;color:#2A6B41",
-      "font:400 12px/1.5 'Source Sans 3',system-ui,sans-serif;color:#5A5751",
-      "font:400 11px/1.5 'Source Sans 3',system-ui,sans-serif;color:#6E6A63"
+      "font:700 15px/1.5 'Lora',serif;color:#2A6B41",
+      "font:400 12px/1.5 'Karla',system-ui,sans-serif;color:#5A5751",
+      "font:400 11px/1.5 'Karla',system-ui,sans-serif;color:#6E6A63"
     );
   } catch (e) {}
 
@@ -35,7 +35,13 @@
     // can't stop `hidden = false`.
     var ownerActions = document.querySelector(".hero-actions");
     if (ownerActions && ownerActions.parentNode) ownerActions.parentNode.removeChild(ownerActions);
+    // LOKA's badge leaves the frame for a tab of its own, never the host page
+    Array.prototype.forEach.call(document.querySelectorAll(".loka-badge"), function (a) { a.target = "_blank"; a.rel = "noopener"; });
   }
+  // An atlas takes the whole page — the map edge to edge under one thin
+  // header (index.html's .atlas-full rules). The home gallery keeps its own
+  // page shape.
+  if (DATASET) document.documentElement.classList.add("atlas-full");
   // Public datasets are plain static files. A private atlas's files sit outside
   // the web root, so they come through the API instead, and there are two ways to
   // be allowed: a view key in the address, or — with ?via=api and no key — the
@@ -340,6 +346,9 @@
     setText("#atlas-title", manifest.title);
     setText("#atlas-subtitle", manifest.subtitle || "");
     setText("#atlas-about", manifest.about || "");
+    // the same two lines, where an atlas view reads them: the About & sources panel
+    setText("#sources-sub", manifest.subtitle || "");
+    setText("#sources-lead", manifest.about || "");
     renderBranding(manifest.branding);
     renderCollaborators(manifest);
     wireShare(manifest);
@@ -360,7 +369,8 @@
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
     // the scale note sits bottom-left, away from the zoom buttons (DESIGN.md §5)
-    map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-left");
+    // with the zoom buttons: the bottom-left corner belongs to the credits chip
+    map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-right");
     // attribution is rendered in a strip below the map (renderMapAttrib), not over it
     window.__map = map;   // debug hook
     map.on("error", function (e) { console.error("Atlas map error:", e && e.error && e.error.message); });
@@ -470,7 +480,7 @@
         wrap.appendChild(img);
       }
       if (b.orgName) {
-        var lbl = el("span", null, "By <b>" + esc(b.orgName) + "</b>");
+        var lbl = el("span", null, "<b>" + esc(b.orgName) + "</b>");
         wrap.appendChild(lbl);
       }
       if (b.orgUrl && /^https:\/\//.test(b.orgUrl)) {
@@ -1226,7 +1236,7 @@
        tracked, in the bold — and a place's or a line's name is plain. Every
        label wears Ink with the Ground halo unless the atlas says otherwise.
        (The map's glyphs are Noto Sans, the nearest the tile server has to the
-       page's Source Sans; a web font cannot be drawn on the map.) */
+       page's Karla; a web font cannot be drawn on the map.) */
     var area = L.type === "polygon" || L.type === "fill";
     var layout = {
       visibility: vis(L),
@@ -3822,7 +3832,8 @@
   }
 
   function ensureStrip(stage) {
-    var strip = stage.querySelector(".atlas-strip");
+    // looked up page-wide: on a wide screen the strip lives in the header
+    var strip = document.querySelector(".atlas-strip");
     if (!strip) {
       strip = el("div", "atlas-strip");
       stage.insertBefore(strip, stage.firstChild);
@@ -3836,34 +3847,34 @@
     }
     watchSheetHeight(stage);
     strip.innerHTML = "";   // a rebuild remakes every piece below
-    /* The wordmark, first on the strip and on every atlas view — embeds too.
-       It is LOKA's, not the atlas's: no manifest can rename or remove it. */
-    var mark = el("a", "atlas-wordmark", "LOKA <em>Atlas</em>");
-    mark.href = "./";
-    mark.setAttribute("aria-label", "LOKA Atlas — all atlases");
-    strip.appendChild(mark);
     return strip;
   }
 
   var stripWired = false;
   function placeStripPieces() {
     var stage = document.querySelector(".atlas-stage");
-    var strip = stage && stage.querySelector(".atlas-strip");
+    var strip = document.querySelector(".atlas-strip");
     var panel = $("#atlas-controls");
-    if (!strip || !panel) return;
+    if (!strip || !panel || !stage) return;
     var phone = window.matchMedia("(max-width: 720px)").matches;
     var bm = document.querySelector(".ctl-basemaps");
     var region = document.querySelector(".own-region-wrap");   // owner.js's row
     var foot = document.querySelector("#atlas-panel .sheet-foot");
+    /* The strip itself: over the top of the map on a phone (where it is the
+       floating search box), in the header on a wide screen, so the map has
+       the whole stage. Moved, not rebuilt, so what it holds comes along. */
+    var tools = document.getElementById("head-tools");
+    if (phone || !tools) { if (strip.parentNode !== stage) stage.insertBefore(strip, stage.firstChild); }
+    else if (strip.parentNode !== tools) tools.appendChild(strip);
     if (phone && foot) {
       // the sheet's foot: Map/Satellite first, then (for the owner) the region
       if (bm && bm.parentNode !== foot) foot.insertBefore(bm, foot.firstChild);
       if (region && region.parentNode !== foot) foot.appendChild(region);
     } else {
-      // strip order: wordmark (already there), Map/Satellite, search, the region row
-      var mark = strip.querySelector(".atlas-wordmark");
-      if (bm && bm.parentNode !== strip) strip.insertBefore(bm, mark ? mark.nextSibling : strip.firstChild);
-      if (region && region.parentNode !== strip) strip.appendChild(region);
+      // strip order: search (already there), Map/Satellite, the region row —
+      // appended in that order every time, so a rebuild cannot shuffle them
+      if (bm) strip.appendChild(bm);
+      if (region) strip.appendChild(region);
     }
   }
   function wireStripPlacement() {
@@ -3898,7 +3909,7 @@
       };
       bm.appendChild(btn);
     });
-    if (strip) strip.appendChild(bm); else panel.appendChild(bm);
+    if (strip) strip.appendChild(bm); else panel.appendChild(bm);   // placeStripPieces orders it after the search
 
     // search box — over marker layers that could carry text (keyword now,
     // semantic on public atlases with embeddings). syncSearchBox() takes it away
@@ -4012,8 +4023,7 @@
 
     // the panel head says how much the shelf holds — only when more than one
     // group shares it; a lone group's own head already says the number
-    setText("#panel-count", groupsShown > 1
-      ? "· " + layersShown + (layersShown === 1 ? " layer" : " layers") : "");
+    setText("#panel-count", groupsShown > 1 ? "· " + layersShown : "");   // the head already says "Layers"
     // an atlas with nothing on its shelf says so, in one line, rather than
     // standing there with an empty box
     if (!layersShown) panel.appendChild(el("p", "ctl-empty", "This atlas has no layers yet."));

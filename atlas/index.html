@@ -7,7 +7,7 @@
   <meta name="description" content="LOKA Atlas — layered, shareable maps for any geography, built from open data. Pick a region, choose layers, add your own data, and publish." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:wght@700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600;700&family=Lora:wght@700&display=swap" />
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <style>
     :root {
@@ -37,9 +37,9 @@
          and no selector changes. The slot is never empty: an empty value left
          `, ,` in the stack, Chromium threw the whole declaration away and every
          page fell back to Times (measured by both builders, 26 Sep 2026). */
-      --font-companions-serif:"Source Serif 4"; --font-companions-sans:"Source Sans 3";
-      --font-display:"Source Serif 4",var(--font-companions-serif),serif;
-      --font-body:"Source Sans 3",var(--font-companions-sans),sans-serif;
+      --font-companions-serif:"Lora"; --font-companions-sans:"Karla";
+      --font-display:"Lora",var(--font-companions-serif),serif;
+      --font-body:"Karla",var(--font-companions-sans),sans-serif;
       --t-display:clamp(1.6rem,4vw,2.4rem); --t-section:1.2rem; --t-body:1rem; --t-control:.95rem; --t-ui:.9rem; --t-meta:.8rem; --t-label:.72rem;
       /* shape and depth: corners stay small; xs is for a shape under 16px */
       --radius-xs:.125rem; --radius-md:.25rem; --radius-lg:.375rem; --radius-pill:999px;
@@ -66,8 +66,6 @@
 
     header.site { border-bottom:1px solid var(--color-divider); background:var(--color-page); position:relative; z-index:2; }
     .nav { width:var(--container); margin:0 auto; padding:1rem 0; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
-    .brand { font-family:var(--font-body); font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--color-text-primary); font-size:var(--t-label); }
-    .brand:hover { color:var(--color-text-primary); text-decoration:none; }
     .nav .links { display:flex; gap:1.25rem; align-items:center; flex-wrap:wrap; }
     .nav .links a, .nav .links button { color:var(--color-text-secondary); font-size:var(--t-ui);
       background:none; border:none; font-family:inherit; cursor:pointer; padding:0; }
@@ -87,12 +85,24 @@
     [hidden] { display:none !important; }
     .share-btn:hover { background:var(--color-leaf-tint); color:var(--color-leaf-deep); text-decoration:none; }
     .share-btn svg { width:15px; height:15px; }
-    .org-brand-line { display:inline-flex; align-items:center; gap:.5rem; margin-top:.4rem;
-      font-size:var(--t-ui); color:var(--color-text-secondary); }
-    .org-brand-line b { color:var(--color-text-primary); font-weight:600; }
-    .org-brand-logo { height:26px; width:auto; max-width:140px; object-fit:contain; display:block; }
+    /* ---- the organisation's block in the header ----
+       Its logo (if it gave one) at the left, spanning two lines: its name in
+       Label type above, the atlas's title in the serif beneath. With no logo
+       the name alone reads fine — it is the small line above the title, not
+       a gap where a picture should be. Long names get an ellipsis; the full
+       name stays in the credits and the page title. */
+    .org-head { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center;
+      column-gap:0; min-width:0; flex:0 1 auto; max-width:min(100%, 34rem); }
+    .org-head:has(.org-brand-logo) { column-gap:.6rem; }
+    #org-branding, #org-branding a, .org-brand-line { display:contents; }
     #org-branding a { text-decoration:none; }
+    .org-brand-logo { grid-column:1; grid-row:1 / span 2; height:30px; width:auto; max-width:120px; object-fit:contain; display:block; }
+    .org-brand-line > span { grid-column:2; grid-row:1; font-size:var(--t-label); font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+      color:var(--color-text-secondary); line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:320px; }
+    .org-brand-line b { font-weight:700; }
     #org-branding a:hover .org-brand-line b { color:var(--color-leaf); }
+    .org-head #atlas-title { grid-column:2; grid-row:2; margin:0; font-size:1.1rem; line-height:1.2; letter-spacing:-.005em;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-wrap:initial; }
     .org-credit-logo { height:30px; width:auto; max-width:160px; object-fit:contain; display:block; margin-bottom:.4rem; }
     .org-credit-name { font-weight:600; }
     .org-credit-line { font-size:var(--t-ui); color:var(--color-text-secondary); margin-bottom:.9rem; }
@@ -144,13 +154,6 @@
       display:flex; align-items:center; gap:.75rem; min-height:48px; padding:.4rem .75rem;
       background:rgba(253,252,248,.95); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
       border-bottom:1px solid var(--color-divider); }
-    /* The wordmark: on every atlas view, embeds included. LOKA in full ink,
-       Atlas one step quieter — one word said in two voices. */
-    .atlas-wordmark { flex:0 0 auto; display:inline-flex; align-items:baseline; gap:.3em;
-      font-size:var(--t-label); font-weight:800; letter-spacing:.12em; text-transform:uppercase;
-      color:var(--color-text-primary); text-decoration:none; white-space:nowrap; }
-    .atlas-wordmark:hover { color:var(--color-text-primary); text-decoration:none; }
-    .atlas-wordmark em { font-style:normal; font-weight:600; opacity:.6; }
     .atlas-strip .ctl-basemaps { flex:0 0 auto; margin:0; }
     .atlas-strip .bm-btn { flex:0 0 auto; }
     /* The owner's region row (owner.js's .own-region-wrap, relocated here by
@@ -949,9 +952,6 @@
     .credits-col h2 { display:flex; align-items:center; gap:.5rem; font-family:var(--font-body); font-size:var(--t-label);
       font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--color-text-secondary); margin:0 0 .8rem; }
     .credits-col h2 svg { width:15px; height:15px; color:var(--color-leaf); }
-    .loka-wordmark-link { display:inline-block; margin:0 0 .85rem; transition:opacity .15s ease; }
-    .loka-wordmark-link:hover { opacity:.78; }
-    .loka-wordmark { display:block; height:28px; width:auto; }
     .cr-lede { font-size:var(--t-ui); color:var(--color-text-secondary); margin:0 0 1.1rem; max-width:36ch; }
     .cr-lede b { color:var(--color-text-primary); font-weight:600; }
     .cr-orgs { display:flex; flex-direction:column; gap:.9rem; }
@@ -1027,24 +1027,135 @@
     footer.site { border-top:1px solid var(--color-divider); background:var(--color-surface-alt); }
     .foot-inner { width:var(--container); margin:0 auto; padding:1.5rem 0; color:var(--color-text-secondary); font-size:var(--t-ui); }
 
+    /* ---- an atlas: the map edge to edge ----
+       When a dataset is shown (atlas.js puts .atlas-full on <html>), the
+       page IS the map: one thin header, then the stage filling everything
+       beneath it. The lead text, the call-to-action band and the site
+       footer are not drawn — their words are reached from the map instead
+       (the "About & sources" panel, and LOKA's badge). */
+    .atlas-full, .atlas-full body { height:100%; }
+    .atlas-full body { height:100dvh; min-height:0; overflow:hidden; }
+    .atlas-full .atlas-hero, .atlas-full .atlas-cta, .atlas-full footer.site,
+    .atlas-full .nav .links a[href="../"], .atlas-full .nav .links a[href^="https://discoverloka"] { display:none; }
+    .atlas-full .nav { width:100%; min-height:44px; padding:.3rem .75rem; gap:.6rem 1rem; flex-wrap:wrap; justify-content:flex-start; }
+    .atlas-full .nav .links { margin-left:auto; gap:.9rem; }
+    .atlas-full .nav .links a, .atlas-full .nav .links button { font-size:var(--t-meta); white-space:nowrap; }
+    .atlas-full .hero-actions { flex:0 0 auto; }
+    .atlas-full .share-btn { padding:.3rem .65rem; font-size:var(--t-meta); }
+    .atlas-full .atlas-stage { flex:1 1 auto; min-height:0; width:100%; height:auto; margin:0;
+      border:none; outline:none; }
+    /* the strip's pieces (search, Map/Satellite, the owner's region) sit in
+       the header on a wide screen — atlas.js moves the strip itself here */
+    /* sized by what it holds, so the owner's region row wraps the bar to a
+       second line rather than crushing the title beside it */
+    .head-tools { display:flex; align-items:center; flex:1 1 auto; min-width:0; justify-content:flex-end; }
+    .atlas-full .org-head { min-width:min(100%, 14rem); }
+    .head-tools .atlas-strip { position:static; flex:1 1 auto; min-height:0; padding:0; gap:.6rem; justify-content:flex-end;
+      background:none; border:none; backdrop-filter:none; -webkit-backdrop-filter:none; }
+    .head-tools .ctl-search { flex:1 1 7rem; max-width:22rem; margin:0; }
+    .head-tools .ctl-search-input { padding-top:.32rem; padding-bottom:.32rem; }
+    .head-tools:empty { display:none; }
+    /* the drawer starts under the header now, not under a strip, and stops
+       above the chips row at the foot so the credits are never under it */
+    @media (min-width:721px){
+      .atlas-full .atlas-stage.has-strip .atlas-panel { top:8px; }
+      .atlas-full .atlas-panel { bottom:44px; }
+      /* folded: the head alone is the "Layers · N" button */
+      .atlas-full .atlas-panel.collapsed { bottom:auto; width:auto; }
+    }
+    .atlas-panel.collapsed .panel-head { border-bottom:none; padding:.5rem .8rem; }
+    .panel-icon { width:15px; height:15px; flex:0 0 auto; color:var(--color-leaf); display:none; }
+    .atlas-panel.collapsed .panel-icon { display:block; }
+    /* bottom-left: the way to the credits and the base map's own line */
+    .map-foot { position:absolute; left:8px; bottom:8px; z-index:4; display:flex; align-items:center; gap:.4rem;
+      max-width:calc(100% - 9rem); pointer-events:none; }
+    .map-foot > * { pointer-events:auto; }
+    .map-chip { font:inherit; font-size:var(--t-label); font-weight:600; letter-spacing:.02em; color:var(--color-text-secondary); cursor:pointer;
+      background:rgba(253,252,248,.94); border:1px solid var(--color-border); border-radius:var(--radius-md);
+      padding:.3rem .6rem; white-space:nowrap; transition:color .15s ease, background .15s ease; }
+    .map-chip:hover, .map-chip[aria-expanded="true"] { color:var(--color-leaf-deep); background:var(--color-surface); }
+    .atlas-full .map-attrib { width:auto; margin:0; padding:.3rem .5rem; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+      background:rgba(253,252,248,.82); border-radius:var(--radius-md); font-size:var(--t-label); }
+    /* the map's own zoom buttons and scale bar keep clear of the chips */
+    .atlas-full .maplibregl-ctrl-bottom-right { bottom:34px; }
+    .atlas-full .maplibregl-ctrl-bottom-right .maplibregl-ctrl-scale { margin-left:auto; }
+    /* ---- LOKA's badge: "Powered by [LOKA] Atlas" ----
+       The one LOKA element on every atlas view, embeds included. Hard-coded
+       in the page: no manifest can rename or remove it. "Powered by" in the
+       sans, the mark 10px tall, "Atlas" in the serif. Links to the page that
+       builds an atlas of your own. */
+    .loka-badge { display:inline-flex; align-items:center; gap:.35em; padding:3px 8px; white-space:nowrap; text-decoration:none;
+      font-size:var(--t-label); font-weight:600; line-height:1.2; color:var(--color-text-secondary);
+      background:rgba(253,252,248,.94); border:1px solid var(--color-border); border-radius:var(--radius-md);
+      transition:color .15s ease, border-color .15s ease; }
+    .loka-badge img { height:10px; width:auto; display:block; }
+    .loka-badge em { font-style:normal; font-family:var(--font-display); font-weight:700; font-size:.85rem; color:var(--color-text-primary); }
+    .loka-badge:hover { color:var(--color-leaf-deep); border-color:var(--color-leaf); text-decoration:none; }
+    .loka-badge-float { position:absolute; right:8px; bottom:8px; z-index:4; }
+    /* ---- "About & sources": the credits, in a panel over the map ----
+       Opens above its chip, bottom-left. Not modal, so the map stays live
+       behind it; Esc, the × or a click on the map put it away. */
+    .atlas-sources { position:absolute; left:8px; bottom:44px; top:auto; right:auto; margin:0; z-index:8;
+      width:min(46rem, calc(100% - 16px)); max-height:calc(100% - 60px); overflow-y:auto; scrollbar-width:thin;
+      padding:0; border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      background:var(--color-surface); color:inherit; box-shadow:var(--shadow-lg); }
+    .atlas-sources:not([open]) { display:none; }
+    .sources-head { display:flex; align-items:center; gap:.75rem; padding:.9rem 1.25rem 0; }
+    .sources-title { font-family:var(--font-display); font-size:var(--t-section); margin:0; flex:1 1 auto; min-width:0; }
+    .sources-close { margin-left:auto; flex:0 0 auto; width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center;
+      border:none; background:none; color:var(--color-text-muted); cursor:pointer; border-radius:var(--radius-md); }
+    .sources-close:hover { background:var(--color-surface-alt); color:var(--color-text-primary); }
+    .sources-close svg { width:18px; height:18px; }
+    .sources-lead { padding:0 1.25rem; margin:.35rem 0 0; font-size:var(--t-ui); font-weight:400; color:var(--color-text-secondary); max-width:72ch; text-wrap:pretty; }
+    .sources-sub { padding:0 1.25rem; margin:.35rem 0 0; font-size:var(--t-control); font-weight:600; color:var(--color-text-primary); text-wrap:pretty; }
+    .sources-sub + .sources-lead { margin-top:.2rem; }
+    .sources-lead:empty, .sources-sub:empty { display:none; }
+    .atlas-sources .credits-foot { display:block; }
+    .atlas-sources .atlas-credits { width:auto; padding:1rem 1.25rem .5rem; }
+    .atlas-sources .credits-grid { padding:1.2rem 1.25rem; }
+    .sources-foot { display:flex; flex-wrap:wrap; gap:.5rem 1.25rem; padding:0 1.25rem 1rem; font-size:var(--t-ui); font-weight:600; }
+    .sources-foot a:last-child { margin-left:auto; color:var(--color-text-secondary); }
+    @media (max-width:720px){
+      /* one row: a long title shortens rather than pushing Share to a second line */
+      .atlas-full .nav { min-height:52px; padding:.4rem .75rem; gap:.5rem .75rem; flex-wrap:nowrap; }
+      .atlas-full .org-head { flex:1 1 auto; max-width:none; }
+      .atlas-full .nav .links { display:none; }   /* "All atlases" is in the About & sources panel */
+      .atlas-full .share-btn span, .atlas-full #add-data-btn span { display:none; }   /* icon only: the width is the title's */
+      .atlas-full .share-btn { padding:.4rem .5rem; }
+      .atlas-full .share-btn svg { margin:0; }
+      .org-brand-logo { height:28px; }
+      .org-brand-line > span { max-width:none; }
+      .org-head #atlas-title { font-size:1rem; }
+      .head-tools { display:none; }   /* on a phone the strip stays over the map: search floats there */
+      /* the sheet folded: a chip bottom-left; LOKA's badge comes out of its foot to float */
+      .atlas-full .atlas-panel.collapsed { left:8px; right:auto; bottom:calc(8px + env(safe-area-inset-bottom)); max-height:none;
+        border:1px solid var(--color-border); border-radius:var(--radius-md); box-shadow:var(--shadow-md); background:rgba(253,252,248,.94); }
+      .atlas-panel.collapsed .panel-head { padding:.45rem .7rem; }
+      .atlas-panel.collapsed .panel-head::before { display:none; }
+      .atlas-panel.collapsed .panel-head strong, .atlas-panel.collapsed .panel-count { display:inline; }
+      .atlas-panel.collapsed .atlas-bar, .atlas-panel.collapsed .sheet-body, .atlas-panel.collapsed .sheet-foot { display:none; }
+      .loka-badge-float { display:none; }
+      .atlas-panel.collapsed ~ .loka-badge-float { display:inline-flex; bottom:calc(8px + env(safe-area-inset-bottom)); }
+      /* the sheet at rest: its foot carries Map/Satellite and the badge */
+      .sheet-foot-words { flex-direction:row; align-items:center; }
+      /* the chips sit just above the sheet, with the map's own buttons */
+      .map-foot { left:8px; bottom:calc(var(--sheet-h, 0px) + 8px); max-width:calc(100% - 4.5rem); }
+      .atlas-full .maplibregl-ctrl-bottom-left { bottom:calc(var(--sheet-h, 0px) + 40px); }
+      .atlas-full .maplibregl-ctrl-bottom-right { bottom:calc(var(--sheet-h, 0px) + 12px); }
+      .atlas-sources { left:0; right:0; bottom:0; width:auto; max-height:88%; border-radius:var(--radius-lg) var(--radius-lg) 0 0; border-left:0; border-right:0; }
+      .atlas-sources .atlas-credits { padding:.75rem .75rem .25rem; }
+      .sources-head, .sources-lead, .sources-foot { padding-left:1rem; padding-right:1rem; }
+    }
+
     /* ?embed=1 — the atlas inside someone else's frame (the wizard's preview).
-       Its own identity and map stay; loka.place's furniture goes — except the
-       "LOKA Atlas" wordmark in the strip and the credit in the phone sheet's
-       foot, which travel with the map wherever it is shown. */
-    .atlas-embed header.site,
+       Its own identity and map stay; loka.place's links go. LOKA's badge
+       travels with the map wherever it is shown. */
+    .atlas-embed .nav .links,
     .atlas-embed .atlas-cta,
-    .atlas-embed .sheet-foot-build,
     .atlas-embed footer.site { display:none; }
-    .atlas-embed main { padding-top:1.25rem; }
-    /* map-only: the frame IS the map, so the stage loses its page margins and
-       takes the whole viewport rather than a clamp of it */
-    .atlas-embed-map .atlas-hero,
-    .atlas-embed-map .atlas-credits,
-    .atlas-embed-map .map-attrib { display:none; }
-    .atlas-embed-map, .atlas-embed-map body { height:100%; }
-    .atlas-embed-map main { padding:0; }
-    .atlas-embed-map .atlas-stage { width:100%; height:100dvh; margin:0;
-      border-radius:0; border:none; outline:none; box-shadow:none; }
+    /* map-only: the frame IS the map — not even the header */
+    .atlas-embed-map header.site,
+    .atlas-embed-map .atlas-hero { display:none; }
     /* Coarse pointer (touch): comfortable 44px targets regardless of screen size */
     @media (pointer:coarse){
       .ctl-toggle, .ctl-sub-toggle { min-height:44px; }
@@ -1251,9 +1362,31 @@
   </style>
 </head>
 <body>
+  <!-- The header is one thin bar. On an atlas it carries the organisation
+       that built it (logo, name, the atlas's title), then search and
+       Map/Satellite (moved in by atlas.js on wide screens), Share, and the
+       site links. On the home gallery the same bar reads "LOKA Atlas". -->
   <header class="site">
     <nav class="nav" aria-label="Primary">
-      <a href="../" class="brand">LOKA / apps</a>
+      <div class="org-head">
+        <div id="org-branding"></div>
+        <h1 id="atlas-title">LOKA Atlas</h1>
+      </div>
+      <div class="head-tools" id="head-tools"></div>
+      <!-- An eyebrow stood here reading "interactive map · loka atlas". It said
+           nothing the nav above and the title below were not already saying, and
+           on a phone it wrapped to two lines to say it. -->
+      <div class="hero-actions">
+        <a id="add-data-btn" class="share-btn" hidden href="#" aria-label="Add your data to this atlas (experimental)"
+           title="Add your own data as a map layer — experimental, under development">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+          <span>Add data</span>
+        </a>
+        <button id="share-btn" class="share-btn" hidden type="button" aria-label="Share this atlas">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+          <span>Share</span>
+        </button>
+      </div>
       <div class="links">
         <a href="./">all atlases</a>
         <a href="../">all apps</a>
@@ -1265,26 +1398,10 @@
     </nav>
   </header>
 
+  <!-- The home gallery's lead. On an atlas these two lines are read in the
+       "About & sources" panel instead, so the map can have the whole page. -->
   <section class="atlas-hero">
-    <div class="hero-top">
-      <!-- An eyebrow stood here reading "interactive map · loka atlas". It said
-           nothing the nav above and the title below were not already saying, and
-           on a phone it wrapped to two lines to say it. -->
-      <div class="hero-actions">
-        <a id="add-data-btn" class="share-btn" hidden href="#" aria-label="Add your data to this atlas (experimental)"
-           title="Add your own data as a map layer — experimental, under development">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-          Add data
-        </a>
-        <button id="share-btn" class="share-btn" hidden type="button" aria-label="Share this atlas">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
-          Share
-        </button>
-      </div>
-    </div>
-    <h1 id="atlas-title">LOKA Atlas</h1>
     <p class="lead" id="atlas-subtitle"></p>
-    <div id="org-branding"></div>
     <p id="atlas-about"></p>
   </section>
 
@@ -1297,8 +1414,11 @@
     <div id="atlas-map"></div>
     <div class="atlas-loading" id="atlas-loading" hidden aria-live="polite"><span>Loading the map</span></div>
     <aside class="atlas-panel" id="atlas-panel">
+      <!-- open: the drawer's head. Folded: this same head is the
+           "Layers · N" button that opens it again. -->
       <div class="panel-head">
-        <strong>Map layers</strong>
+        <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/></svg>
+        <strong>Layers</strong>
         <span class="panel-count" id="panel-count"></span>
         <button class="panel-collapse" type="button" aria-label="Show or hide map layers" aria-expanded="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
       </div>
@@ -1307,17 +1427,36 @@
       <div class="sheet-body">
         <div id="atlas-controls"></div>
       </div>
-      <!-- the credit strip's phone form: Map/Satellite is moved in by atlas.js -->
+      <!-- the sheet's foot on phones: Map/Satellite is moved in by atlas.js,
+           and LOKA's badge sits at the right. Hard-coded: no manifest can
+           change or remove it. -->
       <div class="sheet-foot">
         <div class="sheet-foot-words">
-          <a class="sheet-foot-build" href="./setup/">Build your own atlas →</a>
-          <span class="sheet-foot-credit"><b>LOKA</b> · Socratus</span>
+          <a class="loka-badge" href="./setup/" title="Build your own atlas">Powered by <img src="./loka-logo.png" alt="LOKA"> <em>Atlas</em></a>
         </div>
       </div>
     </aside>
-  </div>
-  <div class="map-attrib" id="map-attrib" aria-label="Map data attribution"></div>
+    <!-- Bottom-left of the map: the way to the credits, with the base map's
+         own attribution beside it. Bottom-right: LOKA's badge (wide screens;
+         on phones it sits in the sheet's foot above, and here only while the
+         sheet is folded away). -->
+    <div class="map-foot">
+      <button id="sources-btn" class="map-chip" type="button" aria-expanded="false" aria-controls="atlas-sources">About &amp; sources</button>
+      <div class="map-attrib" id="map-attrib" aria-label="Map data attribution"></div>
+    </div>
+    <a class="loka-badge loka-badge-float" href="./setup/" title="Build your own atlas">Powered by <img src="./loka-logo.png" alt="LOKA"> <em>Atlas</em></a>
 
+  <!-- The credits, opened from the "About & sources" chip. Not modal: the
+       map stays live behind it, Esc or the × puts it away. -->
+  <dialog class="atlas-sources" id="atlas-sources" aria-labelledby="sources-title">
+    <div class="sources-head">
+      <h2 id="sources-title" class="sources-title">About this atlas</h2>
+      <button class="sources-close" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <p class="sources-sub" id="sources-sub"></p>
+    <p class="sources-lead" id="sources-lead"></p>
   <section class="atlas-credits">
     <div class="credits-grid">
       <div class="credits-col">
@@ -1326,7 +1465,6 @@
           Made by
         </h2>
         <div id="org-credit"></div>
-        <a class="loka-wordmark-link" href="https://discoverloka.org" target="_blank" rel="noopener" aria-label="LOKA — discoverloka.org"><img class="loka-wordmark" src="./loka-logo.png" alt="LOKA" /></a>
         <p class="cr-lede">A platform built by Socratus.<span id="collab-lede"></span></p>
         <div class="cr-orgs">
           <!-- instance-specific collaborators (from the manifest) render here -->
@@ -1354,6 +1492,12 @@
       </div>
     </div>
   </section>
+    <div class="sources-foot">
+      <a href="./setup/">Build your own atlas for free →</a>
+      <a href="./">All atlases</a>
+    </div>
+  </dialog>
+  </div>
 
   <aside class="atlas-cta" aria-label="Create your own atlas">
     <div class="cta-inner">
@@ -1375,10 +1519,12 @@
   </footer>
 
   <script>
-    /* Layer widget: a bottom sheet on mobile (collapsed by default, tap the
-       header to expand) and a collapsible floating panel on desktop — always
-       expanded on load so the layers are discoverable; folding it frees the
-       full map width for the rest of the visit. */
+    /* The layers: a drawer over the map on a wide screen, a bottom sheet on a
+       phone. Both are OPEN when the page loads — the layers are the point of
+       an atlas, and a first-time visitor must see that they exist. Folded,
+       the drawer becomes a "Layers · N" button (the sheet, a chip) that
+       opens it again. On a phone, tapping the grab bar puts an open group
+       away first, and only then folds the sheet. */
     (function () {
       var panel = document.getElementById("atlas-panel");
       if (!panel) return;
@@ -1387,15 +1533,43 @@
       var mq = window.matchMedia("(max-width: 720px)");
       function sync() { if (btn) btn.setAttribute("aria-expanded", String(!panel.classList.contains("collapsed"))); }
       function resizeMap() { if (window.__map) requestAnimationFrame(function () { window.__map.resize(); }); }
-      function apply() { panel.classList.toggle("collapsed", mq.matches); sync(); resizeMap(); }
-      apply();
-      mq.addEventListener("change", apply);
+      sync();
+      // How tall the sheet is, kept current in --sheet-h on the stage, so the
+      // chips and the map's own buttons sit just above it on a phone (0 on a
+      // wide screen, where nothing is at the foot of the map but them).
+      var stageEl = panel.closest(".atlas-stage");
+      function sheetH() { if (stageEl) stageEl.style.setProperty("--sheet-h", (mq.matches ? panel.offsetHeight : 0) + "px"); }
+      if (window.ResizeObserver) new ResizeObserver(sheetH).observe(panel);
+      mq.addEventListener("change", sheetH);
+      sheetH();
       head.addEventListener("click", function () {
-        // on a phone the head is the sheet's grab bar: it opens the first
-        // group or puts the open one away (atlas.js owns which group shows)
-        if (mq.matches) { if (window.LokaAtlas && window.LokaAtlas.toggleSheet) window.LokaAtlas.toggleSheet(); return; }
-        panel.classList.toggle("collapsed"); sync(); resizeMap();
+        if (panel.classList.contains("collapsed")) { panel.classList.remove("collapsed"); sync(); resizeMap(); return; }
+        var stage = panel.closest(".atlas-stage");
+        if (mq.matches && stage && stage.classList.contains("tray-open")) {
+          if (window.LokaAtlas && window.LokaAtlas.toggleSheet) window.LokaAtlas.toggleSheet();
+          return;
+        }
+        panel.classList.add("collapsed"); sync(); resizeMap();
       });
+    })();
+
+    /* "About & sources": the credits, in a panel over the map's corner. The
+       map stays live behind it; the chip, the ×, Esc or a click on the map
+       put it away. */
+    (function () {
+      var dlg = document.getElementById("atlas-sources");
+      var chip = document.getElementById("sources-btn");
+      if (!dlg || !chip || !dlg.show) return;
+      function open() { dlg.show(); chip.setAttribute("aria-expanded", "true"); }
+      function shut() { dlg.close(); chip.setAttribute("aria-expanded", "false"); }
+      chip.addEventListener("click", function () { dlg.open ? shut() : open(); });
+      dlg.querySelector(".sources-close").addEventListener("click", shut);
+      dlg.addEventListener("close", function () { chip.setAttribute("aria-expanded", "false"); });
+      document.addEventListener("click", function (e) {
+        if (dlg.open && !dlg.contains(e.target) && !chip.contains(e.target)) shut();
+      });
+      // a panel that is not modal does not hear Esc on its own
+      document.addEventListener("keydown", function (e) { if (e.key === "Escape" && dlg.open) { shut(); chip.focus(); } });
     })();
 
     /* Crisp text over the map. The map canvas and the blurred panel are
