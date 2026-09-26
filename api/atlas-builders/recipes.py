@@ -1384,6 +1384,32 @@ def nfhs_cleanfuel(ctx): return _nfhs_choropleth(ctx, "cleanfuel")
 def nfhs_stunting(ctx): return _nfhs_choropleth(ctx, "stunting")
 
 
+# What a person would call the places in this layer, from the kinds it holds —
+# "Protected areas & mountain ranges", "Wards". The layer name used to be
+# "Named places", which tells a visitor nothing about what they would see.
+PLACE_GROUPS = [
+    ({"sanctuary", "national park", "community reserve", "conservation reserve", "tiger reserve"},
+     "protected areas", "protected area"),
+    ({"mountain range"}, "mountain ranges", "mountain range"),
+    ({"wetland"}, "wetlands", "wetland"),
+    ({"ward"}, "wards", "ward"),
+]
+
+
+def places_label(kinds, one=False):
+    kinds = set(kinds)
+    names = [(pl, sg) for ks, pl, sg in PLACE_GROUPS if kinds & ks]
+    if not names:
+        return "Named place" if one else "Named places"
+    if one:
+        sg = [g for _, g in names]
+        text = sg[0] if len(sg) == 1 else ", ".join(sg[:-1]) + " or " + sg[-1]
+        return text[0].upper() + text[1:]
+    pl = [p for p, _ in names]
+    text = pl[0] if len(pl) == 1 else ", ".join(pl[:-1]) + " & " + pl[-1]
+    return text[0].upper() + text[1:]
+
+
 def places_named(ctx):
     """Ranges, reserves and wards the atlas's own box reaches.
 
@@ -1441,14 +1467,24 @@ def places_named(ctx):
         # can join to — a row saying "Western Ghats" gets that shape drawn in
         # its own layer. Drawing every reserve in the region as well is a
         # different map, and one nobody asked for.
-        "label": "Named places", "default": False,
-        "paint": {"fillColor": "#6E7F5C", "fillOpacity": 0.16,
-                  "outlineColor": "#4E6B3A", "outlineWidth": 1.6},
-        "label_text": {"property": "name", "size": 12, "color": "#33402B",
-                       "haloColor": "#ffffff", "haloWidth": 2, "minzoom": 6},
-        "legend": [{"color": "#6E7F5C", "label": "Named place"}],
-        "info": "Mountain ranges, reserves and wards in this area \u2014 " + ", ".join(kinds) +
-                ". " + "; ".join(credits),
+        "label": places_label(kinds), "default": False,
+        # Background, so it stays quiet: a dashed ink line over the faintest
+        # stone wash, well apart from any layer's own coloured shapes.
+        "paint": {"fillColor": "#A39E94", "fillOpacity": 0.08,
+                  "outlineColor": "#5A5751", "outlineWidth": 1.2, "outlineDash": [3, 2]},
+        # Every outline says its own name ("Western Ghats") at every zoom; where
+        # two names would collide the map drops one, never overprints.
+        # In ordinary case, not the tracked capitals a layer's own areas get,
+        # so "Pench National Park" never reads like a respondent's name.
+        "label_text": {"property": "name", "size": 11.5, "color": "#5A5751",
+                       "haloColor": "#F5F1E6", "haloWidth": 2,
+                       "transform": "none", "letterSpacing": 0.01},
+        "legend": [{"color": "#5A5751", "label": places_label(kinds, one=True), "shape": "dashed"}],
+        # a tap says which place it is and what kind — the info line promises it
+        "popup": {"title": "name", "fields": [{"label": "What it is", "property": "kind"},
+                                              {"label": "State", "property": "state"}]},
+        "info": "Background only: " + places_label(kinds).lower() + " in this region, each with its name. "
+                "Tap one to see what it is. " + "; ".join(credits),
         "attribution": "; ".join(credits),
         "credits": credit_rows,
     }]
