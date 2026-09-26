@@ -41,7 +41,7 @@ export function patchLayer(L, kinds) {
   const credits = L.attribution || '';
   L.label = label;
   L.paint = { fillColor: '#A39E94', fillOpacity: 0.08, outlineColor: '#5A5751', outlineWidth: 1.2, outlineDash: [3, 2] };
-  L.label_text = { property: 'name', size: 11.5, color: '#5A5751', haloColor: '#F5F1E6', haloWidth: 2, transform: 'none', letterSpacing: 0.01 };
+  L.label_text = { property: 'name', size: 11.5, color: '#5A5751', haloColor: '#F5F1E6', haloWidth: 2, transform: 'none', letterSpacing: 0.01, biggestFirst: true };
   L.legend = [{ color: '#5A5751', label: placesLabel(kinds, true), shape: 'dashed' }];
   L.popup = { title: 'name', fields: [{ label: 'What it is', property: 'kind' }, { label: 'State', property: 'state' }] };
   L.info = 'Background only: ' + label.toLowerCase() + ' in this region, each with its name. Tap one to see what it is.' + (credits ? ' ' + credits : '');

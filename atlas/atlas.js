@@ -1227,13 +1227,28 @@
     });
     return best;
   }
+  function boxArea(g) {
+    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    (function walk(c) {
+      if (typeof c[0] === "number") { if (c[0] < x0) x0 = c[0]; if (c[0] > x1) x1 = c[0]; if (c[1] < y0) y0 = c[1]; if (c[1] > y1) y1 = c[1]; return; }
+      for (var i = 0; i < c.length; i++) walk(c[i]);
+    })((g && g.coordinates) || []);
+    return x1 > x0 ? (x1 - x0) * (y1 - y0) : 0;
+  }
+
   function labelPointSource(L) {
     var gj = DATA[L.id];
     if (!gj || !gj.features) return null;
     var pts = [];
+    var t = L.label_text || {};
     gj.features.forEach(function (f) {
       var p = labelAnchorPoint(f.geometry);
-      if (p) pts.push({ type: "Feature", properties: f.properties, geometry: { type: "Point", coordinates: p } });
+      if (!p) return;
+      var props = f.properties;
+      // how much ground the shape covers (its box, in square degrees), so a
+      // layer that asks for it can let the big names win a crowded map
+      if (t.biggestFirst) { props = {}; for (var k in f.properties) props[k] = f.properties[k]; props._lblsize = boxArea(f.geometry); }
+      pts.push({ type: "Feature", properties: props, geometry: { type: "Point", coordinates: p } });
     });
     if (!pts.length) return null;
     var sid = srcId(L) + "-lblpt";
@@ -1270,6 +1285,10 @@
        this the name sits on top of its own dot and neither can be read. The
        offset is in multiples of the text size, so it holds as the text grows. */
     if (t.offset) { layout["text-offset"] = t.offset; layout["text-anchor"] = t.anchor || "top"; }
+    /* Where names compete for room, the biggest place keeps its name: a map
+       of India should say "Western Ghats" before it says every sanctuary
+       inside it. MapLibre places the lowest sort key first. */
+    if (t.biggestFirst) layout["symbol-sort-key"] = ["-", 0, ["coalesce", ["get", "_lblsize"], 0]];
     if (t.minzoom == null) {} else layout["text-size"] = ["interpolate", ["linear"], ["zoom"], (t.minzoom - 0.5), 0, t.minzoom, t.size || 12];
     var paint = {
       "text-color": t.color || "#24211D",
