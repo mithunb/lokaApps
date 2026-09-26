@@ -3237,6 +3237,8 @@ async function ingestLayer(b, who) {
     replacingHidden: replacing ? replacing.hiddenKeys : undefined,
     replacingAddedBy: replacing ? replacing.addedBy : undefined,
     replacingAddedAt: replacing ? replacing.addedAt : undefined,
+    replacingCredits: replacing ? replacing.credits : undefined,
+    replacingAttribution: replacing ? replacing.attribution : undefined,
   });
   if (geoms) imports.writeGeoms(session.id, geoms);
 
@@ -4623,6 +4625,24 @@ function commitLayer({ importId, dataset }, who) {
       frag.stanza.addedBy = session.replacingAddedBy || undefined;
       frag.stanza.addedAt = session.replacingAddedBy
         ? (session.replacingAddedAt || Date.now()) : undefined;
+      /* And whose shapes these are, when this reading is in no position to say.
+
+         Credits are worked out while rows are joined to borrowed outlines. A
+         layer reopened for editing skips that entirely — its shapes are already
+         there, so there is nothing to join and nothing to notice — and the
+         credits would have been dropped on the floor. Re-committing a layer to
+         fix its wording would quietly have stopped naming the mountain
+         inventory, the reserve register and OpenStreetMap as the source of the
+         outlines it draws, which is the thing those licences actually ask for.
+
+         So a replace keeps what it cannot re-derive. A reading that DID work
+         them out wins, because it has looked at the data and this has not. */
+      if (!frag.stanza.credits && session.replacingCredits && session.replacingCredits.length) {
+        frag.stanza.credits = session.replacingCredits;
+      }
+      if (!frag.stanza.attribution && session.replacingAttribution) {
+        frag.stanza.attribution = session.replacingAttribution;
+      }
     }
     if (session.patternsNone) frag.stanza.patternsNone = true;
     /* Merge, so a name an owner gave some other key survives — but a question's
@@ -4737,6 +4757,8 @@ router.post('/layers/reopen', (req, res) => {
     replacingLayerId: layerId,
     replacingAddedBy: layer.addedBy || null,
     replacingAddedAt: layer.addedAt || null,
+    replacingCredits: layer.credits || null,
+    replacingAttribution: layer.attribution || '',
   });
   imports.writeGeoms(session.id, geoms);
   session.strategy = 'geometry';

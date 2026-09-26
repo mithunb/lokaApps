@@ -153,5 +153,21 @@ const build = fs.readFileSync(ROOT + '/api/atlas-builders/build_dataset.py', 'ut
 check('and the atlas folds that into its own list',
   /for row in \(lyr\.get\("credits"\) or \[\]\)/.test(build), true);
 
+console.log('\n  re-committing a layer does not drop whose shapes they are');
+/* Credits are worked out while rows are joined to borrowed outlines. Reopening
+   a layer to fix its wording skips that — the shapes are already there, so
+   there is nothing to join — and the credits would have gone. Re-committing to
+   fix a label would have quietly stopped naming the mountain inventory, the
+   reserve register and OpenStreetMap as the source of the outlines drawn. */
+check('reopening a layer picks up the credits it already carries',
+  /replacingCredits: layer\.credits \|\| null,/.test(server), true);
+check('and its attribution line', /replacingAttribution: layer\.attribution \|\| '',/.test(server), true);
+check('a replace keeps them when the new reading cannot work them out',
+  /if \(!frag\.stanza\.credits && session\.replacingCredits && session\.replacingCredits\.length\)/.test(server), true);
+check('but a reading that DID work them out wins, having looked at the data',
+  /A reading that DID work\s*\n\s*them out wins/.test(server), true);
+check('the other replace path carries them too',
+  /replacingCredits: replacing \? replacing\.credits : undefined,/.test(server), true);
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
