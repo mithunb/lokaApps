@@ -437,7 +437,9 @@
              touches, but it bails early on a layer with no key-shaped column,
              and that layer is exactly the one whose door matters most. */
           (MANIFEST.layers || []).forEach(function (L) { if (L._extra) renderExtra(L); });
+          buildBar();        // the phone's tab now knows how many people or places
           if (!focusFit()) fitToData(false);
+          setTimeout(showCue, 700);   // once the map has settled on the data
           renderMapAttrib(); // re-run once layer sources (e.g. labels) are added
           /* And once more when the style is genuinely up. A basemap given as a
              whole style document is still fetching when "load" fires, so the
@@ -1248,6 +1250,14 @@
       // how much ground the shape covers (its box, in square degrees), so a
       // layer that asks for it can let the big names win a crowded map
       if (t.biggestFirst) { props = {}; for (var k in f.properties) props[k] = f.properties[k]; props._lblsize = boxArea(f.geometry); }
+      /* Twins (see findTwins) share one anchor, and the map writes one name
+         there — whichever wins the collision. So each twin's label carries
+         BOTH names, "Gijs Spoor & Vijay Ramesh", and whichever survives says
+         the whole truth. The dot is still one per row, on the same spot. */
+      if (f._twins && t.property) {
+        if (props === f.properties) { props = {}; for (var k2 in f.properties) props[k2] = f.properties[k2]; }
+        props[t.property] = joinNames(f._twins.map(function (r) { return popupTitleText(L, gj.features[r].properties) || gj.features[r].properties[t.property]; }));
+      }
       pts.push({ type: "Feature", properties: props, geometry: { type: "Point", coordinates: p } });
     });
     if (!pts.length) return null;
@@ -3538,6 +3548,76 @@
       f._row = i;
       if (shape && f.properties) f.properties._srow = i;
     });
+    if (shape) findTwins(L, gj);
+  }
+
+  /* ==================================================================
+     MAP BROWSER — a layer of your data is a collection
+
+     The panel used to treat a contributed layer as a style — one switch,
+     one swatch repeating the layer's name — when it is really eleven people,
+     or sixty-six places. A reader could not tell how many were on the map,
+     could not see their names, and could not reach the three whose shapes sat
+     under somebody else's. So such a layer's row says what it holds ("11
+     people"), opens into a list of names, and each name is a way in: the map
+     goes there and the card opens, the same card a tap on the map gives.
+
+     Which layers: the ones that ARE the data — a shape layer the search rule
+     already admits (contributed, or opted in by the manifest; never the base
+     group) and a contributed pin layer. Deoria's forests, wards and survey
+     villages are the ground the data sits on, and keep their old rows.
+  ================================================================== */
+  function collectionLayer(L) {
+    if (!L) return false;
+    if (L.type === "marker") return !!L.userLayer;
+    return shapeSearchable(L);
+  }
+  // What the rows are called: what the manifest says ("people"), else places
+  // for pins and areas for shapes. One of them is a person, a place, an area.
+  function layerNoun(L) {
+    return L.noun || (L.type === "marker" ? "places" : "areas");
+  }
+  function nounOne(noun) {
+    return noun === "people" ? "person" : String(noun).replace(/s$/, "");
+  }
+  function countWords(n, noun) {
+    return n + " " + (n === 1 ? nounOne(noun) : noun);
+  }
+  /* Two rows drawn as the same shape — two people who both work across the
+     Western Ghats — are twins. On the map the top one hides the other from a
+     tap, and only one of the two names can be written at the shared spot.
+     Twins are found once, as the data lands, by a signature of the shape:
+     its type, how many points it has, its corners and its first few points.
+     That is not a proof of sameness, but two different regions that agree on
+     all of it do not occur in practice, and the cost of a false twin is one
+     extra name in a chooser. */
+  function geomKey(g) {
+    if (!g) return "";
+    var n = 0, x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, head = [];
+    walkCoords(g, function (c) {
+      n++;
+      if (c[0] < x0) x0 = c[0]; if (c[0] > x1) x1 = c[0];
+      if (c[1] < y0) y0 = c[1]; if (c[1] > y1) y1 = c[1];
+      if (head.length < 3) head.push(c[0] + "," + c[1]);
+    });
+    return g.type + "|" + n + "|" + [x0, y0, x1, y1].join(",") + "|" + head.join(";");
+  }
+  function findTwins(L, gj) {
+    var byKey = {};
+    ((gj && gj.features) || []).forEach(function (f) {
+      var k = geomKey(f.geometry);
+      (byKey[k] = byKey[k] || []).push(f._row);
+    });
+    ((gj && gj.features) || []).forEach(function (f) {
+      var rows = byKey[geomKey(f.geometry)];
+      f._twins = rows.length > 1 ? rows : null;
+    });
+  }
+  // "Gijs Spoor & Vijay Ramesh"; three or more read "A, B & C"
+  function joinNames(names) {
+    names = names.filter(Boolean);
+    if (names.length < 2) return names[0] || "";
+    return names.slice(0, -1).join(", ") + " & " + names[names.length - 1];
   }
   // The rows a search runs over: a pin layer's markers, a shape layer's
   // features — each as { f } so one loop serves both.
@@ -3603,10 +3683,20 @@
         try { map.setPaintProperty(id, p, v); } catch (e) {}
       });
     });
+    /* Twins write one name for two rows (see labelPointSource). While a search
+       is on, the matching twin's copy is placed first, so the name on the map
+       is drawn at full strength when either of them matched. */
+    var lbl = L.id + "-label";
+    if (map.getLayer(lbl)) {
+      if (!("_searchSort" in L)) { try { L._searchSort = map.getLayoutProperty(lbl, "symbol-sort-key"); } catch (e) { L._searchSort = null; } }
+      var base = L._searchSort == null ? 0 : L._searchSort;
+      try { map.setLayoutProperty(lbl, "symbol-sort-key", any ? ["+", ["case", hit, 0, 1e9], base] : L._searchSort); } catch (e) {}
+    }
   }
   // after a search touches a layer's rows: pins re-draw, shapes re-paint
   function applyRowVisibility(L) {
     if (markersByLayer[L.id]) applyMarkerVisibility(L); else applyShapeFade(L);
+    syncCollection(L);   // the list in the panel narrows with the map
   }
   // The corners of every matching area, so the map can fit them. A pin is a
   // point; a shape contributes every point on its outline.
@@ -4486,6 +4576,9 @@
        box on every toggle and every reboot, so a door added once would vanish the
        first time someone switched the layer off and on — it has to be re-offered
        each time the row is drawn. */
+    // the Map Browser: what the layer holds, by name — a contributed layer is a collection
+    if (collectionLayer(L) && DATA[L.id]) box.appendChild(collectionEl(L));
+
     layerExtraHooks.forEach(function (fn) {
       // a door that throws must say so: swallowed silently it looks exactly like
       // a door that decided not to appear, which is a bug you cannot see
@@ -4500,6 +4593,14 @@
     var old = $(".ctl-legend", L._extra); if (old) old.remove();
     var data = L.type === "categories" ? categoryLegend(L) : (L._legend || L.legend);
     if (!data) data = legendFromPaint(L);   // derive from a match/step colour expression
+    /* The Map Browser row says "11 people" with the colour beside it (see
+       collectionEl), so a legend row that only repeats the layer's name under
+       the same colour is dropped. Any other row — a kind, a ramp — stays. */
+    if (collectionLayer(L) && data && data.length && !data.ramp) {
+      var own = String(L.label || "");
+      data = data.filter(function (it) { return it.header || (it.label !== own && it.label !== own.slice(0, 40)); });
+      if (!data.length) data = null;
+    }
     var size = L.sizeLegend;                // bubble layers: reference circles by value
     if (!data && !(size && size.length)) return;
     var leg = el("div", "ctl-legend");
@@ -4624,6 +4725,242 @@
   }
 
   /* ==================================================================
+     MAP BROWSER — the list in the row, the ring on the map, the chooser
+     in the card
+
+     One selection, shown in two places. A tap on the map, or on a name in
+     the panel, marks the row: the Sindoor ring around its shape (feature
+     state, drawn by addHighlight) and the Sindoor name in the list. Both
+     read from SEL, so they cannot disagree.
+  ================================================================== */
+  var SEL = { L: null, row: null, ref: null };
+  function selectRow(L, row, ref) {
+    clearSelection();
+    SEL.L = L; SEL.row = row; SEL.ref = ref || null;
+    if (ref) { try { map.setFeatureState(ref, { selected: true }); } catch (e) {} }
+    syncCollection(L);
+  }
+  function clearSelection() {
+    if (SEL.ref) { try { map.setFeatureState(SEL.ref, { selected: false }); } catch (e) {} }
+    var was = SEL.L;
+    SEL.L = null; SEL.row = null; SEL.ref = null;
+    if (was) syncCollection(was);
+  }
+
+  // The items of a collection layer, in row order: the name the card would
+  // be headed by, the colour of its dot or pin, and the row that finds it.
+  function collectionItems(L) {
+    var out = [];
+    if (L.type === "marker") {
+      (markersByLayer[L.id] || []).forEach(function (e) {
+        out.push({ row: e.f._row, name: popupTitleText(L, e.f.properties), color: e.color || oneColorOf(L), e: e, hidden: !!e.hidden });
+      });
+    } else {
+      var fill = (L.paint && L.paint.fillColor) || (L.paint && L.paint.color) || "#40573D";
+      searchRows(L).forEach(function (e) {
+        out.push({ row: e.f._row, name: popupTitleText(L, e.f.properties), color: fill, e: e, hidden: !!e.hidden });
+      });
+    }
+    return out.map(function (it) { if (!it.name) it.name = nounOne(layerNoun(L)) + " " + (it.row + 1); return it; });
+  }
+
+  /* The row's block: a line that says how many ("11 people") and opens into
+     the names. Long lists show the first COLL_CAP and offer the rest in one
+     press — Bengaluru's 66 places would otherwise push every other layer off
+     the phone's sheet. A search narrows the list to the rows that matched,
+     the same rows the map keeps at full strength, and the line says so. */
+  var COLL_CAP = 30;
+  function collectionEl(L) {
+    var wrap = el("div", "ctl-coll");
+    wrap.setAttribute("data-layer", L.id);
+    L._coll = wrap;
+    if (L._collOpen == null) L._collOpen = false;
+    syncCollection(L);
+    return wrap;
+  }
+  function syncCollection(L) {
+    var wrap = L._coll; if (!wrap) return;   // the newest block; an older one is off the page
+    var items = collectionItems(L);
+    wrap.innerHTML = "";
+    if (!items.length) return;
+    var noun = layerNoun(L);
+    var shown = items.filter(function (it) { return !it.hidden; });
+    var narrowed = shown.length !== items.length;
+    // the phone's tab reads this number instead of "1 layer" — see buildBar
+    if (L._row) L._row.setAttribute("data-count", String(shown.length));
+
+    var head = el("button", "coll-head");
+    head.type = "button";
+    head.setAttribute("aria-expanded", String(!!L._collOpen));
+    var dot = el("span", "coll-dot" + (L.type === "marker" ? " pin" : ""));
+    dot.style.setProperty("--c", items[0].color);
+    head.appendChild(dot);
+    var words = narrowed
+      ? shown.length + " of " + items.length + " " + noun + " match"
+      : countWords(items.length, noun);
+    head.appendChild(el("span", "coll-count", esc(words)));
+    head.appendChild(el("span", "coll-chev", ICONS.chevron));
+    head.onclick = function () {
+      L._collOpen = !L._collOpen;
+      syncCollection(L);
+    };
+    wrap.appendChild(head);
+    if (!L._collOpen) return;
+
+    var list = el("ul", "coll-list");
+    list.setAttribute("aria-label", noun + " on this layer");
+    var cap = L._collAll ? shown.length : COLL_CAP;
+    shown.slice(0, cap).forEach(function (it) {
+      var li = el("li");
+      var b = el("button", "coll-item" + (SEL.L === L && SEL.row === it.row ? " sel" : ""));
+      b.type = "button";
+      var d = el("span", "coll-dot" + (L.type === "marker" ? " pin" : ""));
+      d.style.setProperty("--c", it.color);
+      b.appendChild(d);
+      b.appendChild(el("span", "coll-name", esc(it.name)));
+      if (SEL.L === L && SEL.row === it.row) b.setAttribute("aria-current", "true");
+      b.onclick = function () { goToItem(L, it); };
+      li.appendChild(b);
+      list.appendChild(li);
+    });
+    wrap.appendChild(list);
+    if (shown.length > cap) {
+      var more = el("button", "coll-more", "Show all " + shown.length);
+      more.type = "button";
+      more.onclick = function () { L._collAll = true; syncCollection(L); };
+      wrap.appendChild(more);
+    }
+  }
+
+  /* A name is a way in. The map goes to the row and its card opens — the
+     same card a tap on the map gives, twins' chooser included. A pin uses the
+     move a search result already makes (goToWord); a shape is framed, with
+     room left for the drawer and the phone's sheet, and its card opens at
+     the spot its name is written. On a phone the sheet folds once the map
+     has arrived: a card under an open sheet is a card nobody sees. */
+  function goToItem(L, it) {
+    dismissCue();
+    /* The reader has chosen where to look, so the map is theirs from here:
+       without this the sheet folding on a phone re-framed all the data (see
+       watchSheetHeight) and undid the move a moment after it began. */
+    userMoved = true;
+    /* The sheet folds when the move ends, not before. Folding first shrinks
+       the sheet, and the nudge that keeps the map's middle still (see
+       watchSheetHeight) cancelled the move that had just begun — seen on a
+       phone as a card opening over a map that never went anywhere. Listeners
+       run in the order they were added, so the fold comes before the card. */
+    if (TRAY) map.once("moveend", function () { openTray(null); });
+    if (L.type === "marker") {
+      selectRow(L, it.row, null);
+      goToWord(L, [it.e]);
+      return;
+    }
+    var f = it.e.f;
+    selectRow(L, it.row, { source: srcId(L), id: f.id != null ? f.id : it.row });
+    var b = null;
+    walkCoords(f.geometry, function (c) { if (!b) b = new maplibregl.LngLatBounds(c, c); else b.extend(c); });
+    var at = labelAnchorPoint(f.geometry);
+    var opened = false;
+    var open = function () {
+      if (opened) return; opened = true;
+      if (TRAY) openTray(null);   // a move that never happened still folds the sheet
+      if (SEL.L !== L || SEL.row !== it.row) return;   // something else was chosen meanwhile
+      openPopup(L, f, at || map.getCenter(), null, null, twinRowsOf(L, f));
+    };
+    if (!b) { open(); return; }
+    map.once("moveend", open);
+    setTimeout(open, 900);   // a map already framed right may not move at all
+    try { map.fitBounds(b, { padding: viewPadding(), maxZoom: 10, duration: 600 }); } catch (e) { open(); }
+  }
+  // the rows a card should offer beside this one: its twins, if it has any
+  function twinRowsOf(L, f) {
+    return f && f._twins && f._twins.length > 1 ? f._twins.slice() : null;
+  }
+
+  /* THE CHOOSER. When a tap lands on two or more rows of one contributed
+     layer — twins drawn as the same region, or a neighbourhood inside the
+     state somebody else covers — the card names them all, "3 people here",
+     and each name is a press away. Without it the top shape won every tap,
+     and on the multispecies atlas three of eleven people could not be
+     reached from the map at all. */
+  function chooserHTML(L, rows, at) {
+    if (!rows || rows.length < 2) return "";
+    var feats = (DATA[L.id] && DATA[L.id].features) || [];
+    var h = '<div class="pop-twins" role="group" aria-label="' + esc(countWords(rows.length, layerNoun(L))) + ' here">';
+    h += '<span class="pop-twins-n">' + esc(countWords(rows.length, layerNoun(L))) + " here</span>";
+    rows.forEach(function (r) {
+      var f = feats[r]; if (!f) return;
+      var name = popupTitleText(L, f.properties) || (nounOne(layerNoun(L)) + " " + (r + 1));
+      h += '<button type="button" class="pop-twin" data-row="' + r + '" aria-pressed="' + (r === at ? "true" : "false") + '">' + esc(name) + "</button>";
+    });
+    return h + "</div>";
+  }
+  function wireChooser(pop, L, rows) {
+    var root = pop.getElement && pop.getElement(); if (!root) return;
+    Array.prototype.forEach.call(root.querySelectorAll(".pop-twin"), function (b) {
+      b.onclick = function () {
+        var r = +b.getAttribute("data-row");
+        var f = DATA[L.id].features[r]; if (!f) return;
+        selectRow(L, r, { source: srcId(L), id: f.id != null ? f.id : r });
+        pop.setHTML(chooserHTML(L, rows, r) + popupHTML(L, f.properties));
+        wireChooser(pop, L, rows);
+      };
+    });
+  }
+
+  /* THE FIRST-VISIT CUE. One line under the map's foot — "Tap an area to
+     read who works there" — and a soft pulse on one dot, so a first visitor
+     learns that the map answers a tap. It goes at the first tap on the map
+     or on a name, and never returns on that device. Not in an embed (the
+     frame's owner sets the tone there), and the pulse stays still for anyone
+     who asked for less motion. The line comes from the layer's noun, and a
+     manifest can say it its own way (L.hint). */
+  var CUE = { el: null, mk: null, seen: false };
+  function cueSeen() { try { return localStorage.getItem("atlas-cue-seen") === "1"; } catch (e) { return false; } }
+  function cueText(L) {
+    if (L.hint) return L.hint;
+    var noun = layerNoun(L);
+    if (L.type === "marker") return "Tap a pin to read about the place";
+    if (noun === "people") return "Tap an area to read who works there";
+    return "Tap an area to read about it";
+  }
+  function showCue() {
+    if (EMBED || CUE.seen || cueSeen() || CUE.el) return;
+    var L = null;
+    (MANIFEST.layers || []).some(function (x) { if (collectionLayer(x) && x._visible && collectionItems(x).length) { L = x; return true; } return false; });
+    if (!L) return;
+    var stage = map.getContainer().closest(".atlas-stage"); if (!stage) return;
+    CUE.el = el("div", "atlas-cue", esc(cueText(L)));
+    CUE.el.setAttribute("role", "status");
+    stage.appendChild(CUE.el);
+    if (reducedMotion()) return;
+    // the pulse rides the item nearest the middle of the view: the one a
+    // reader is most likely looking at already
+    var c = map.getCenter(), best = null, bestD = Infinity;
+    collectionItems(L).forEach(function (it) {
+      var p = L.type === "marker" ? it.e.f.geometry.coordinates : labelAnchorPoint(it.e.f.geometry);
+      if (!p) return;
+      var d = Math.pow(p[0] - c.lng, 2) + Math.pow(p[1] - c.lat, 2);
+      if (d < bestD) { bestD = d; best = p; }
+    });
+    if (!best) return;
+    // the map positions the marker's element with a transform of its own,
+    // so the ring that grows lives one level down
+    var ring = el("div", "atlas-pulse-wrap");
+    ring.setAttribute("aria-hidden", "true");
+    ring.appendChild(el("div", "atlas-pulse"));
+    // a pin's head is 18px above the spot it marks; a shape's dot is on it
+    CUE.mk = new maplibregl.Marker({ element: ring, anchor: "center", offset: L.type === "marker" ? [0, -18] : [0, 0] }).setLngLat(best).addTo(map);
+  }
+  function dismissCue() {
+    if (CUE.seen) return;
+    CUE.seen = true;
+    try { localStorage.setItem("atlas-cue-seen", "1"); } catch (e) {}
+    if (CUE.el) { CUE.el.classList.add("gone"); var c = CUE.el; setTimeout(function () { c.remove(); }, 400); CUE.el = null; }
+    if (CUE.mk) { try { CUE.mk.remove(); } catch (e) {} CUE.mk = null; }
+  }
+
+  /* ==================================================================
      POPUPS
   ================================================================== */
   function wirePopups() {
@@ -4631,7 +4968,7 @@
     var ids = [];
     clickable.forEach(function (L) { (L._ids || []).forEach(function (id) { if (/-(fill|line|circle)$/.test(id) && !/-hl$/.test(id)) ids.push({ id: id, L: L }); }); });
     var idList = ids.map(function (x) { return x.id; });
-    var hoverRef = null, selRef = null;
+    var hoverRef = null;
 
     // Prefer the most specific layer (earliest in manifest order — a block's crop popup
     // wins over the transparent district fill that sits above it).
@@ -4654,7 +4991,24 @@
       return best;
     }
     function clearHover() { if (hoverRef) { try { map.setFeatureState(hoverRef, { hover: false }); } catch (e) {} hoverRef = null; } }
-    function clearSel() { if (selRef) { try { map.setFeatureState(selRef, { selected: false }); } catch (e) {} selRef = null; } }
+    /* Every row of a contributed layer under the point, not only the top one:
+       the top shape hid its twins from a tap. Rows are told apart by their
+       number (a fill and its outline are the same row), and the one the old
+       rule chose stays first, so the ring the hover drew is the card that opens. */
+    function rowsUnder(pt, top) {
+      var L = top.L;
+      if (!collectionLayer(L) || L.type === "marker") return null;
+      var own = idList.filter(function (id) { return id.indexOf(L.id + "-") === 0; });
+      var rows = [], seen = {};
+      var first = top.f.properties && top.f.properties._srow;
+      if (first != null) { rows.push(first); seen[first] = 1; }
+      map.queryRenderedFeatures(pt, { layers: own }).forEach(function (h) {
+        var r = h.properties && h.properties._srow;
+        if (r == null || seen[r]) return;
+        seen[r] = 1; rows.push(r);
+      });
+      return rows.length > 1 ? rows : null;
+    }
 
     // at-a-glance crop tooltip: hovering a categories layer (crop distribution)
     // lists that feature's crops without a click, coloured to match the legend.
@@ -4691,23 +5045,30 @@
 
     map.on("click", function (e) {
       if (clusterAt(e.point)) return;             // the disc owns this click
+      dismissCue();                               // the map has been tapped: the cue's work is done
       var top = pick(e.point);
-      if (!top) { clearSel(); return; }           // click on empty map clears the selection
-      clearSel();
-      if (top.f.id != null) {
-        selRef = { source: top.f.source, id: top.f.id };
-        try { map.setFeatureState(selRef, { selected: true }); } catch (e) {}
-      }
-      openPopup(top.L, top.f, e.lngLat);
+      if (!top) { clearSelection(); return; }     // click on empty map clears the selection
+      var row = top.f.properties && top.f.properties._srow;
+      selectRow(top.L, row != null ? row : null, top.f.id != null ? { source: top.f.source, id: top.f.id } : null);
+      openPopup(top.L, top.f, e.lngLat, null, null, rowsUnder(e.point, top));
     });
 
     wireCircleHints();   // hover tooltips for circle/bubble layers (style-drawn, not DOM)
   }
 
-  function openPopup(L, feature, lngLat, offsetPx, anchor) {
+  // `rows` (optional) are the other rows a tap landed on, this one first or
+  // among them: the card opens with the chooser above it (see chooserHTML).
+  /* One card at a time. A tap on the map closes the last card by itself, but
+     a name in the Map Browser is not a tap on the map, and the cards piled up
+     — the first one still on top, saying the wrong name. */
+  var LAST_POP = null;
+  function openPopup(L, feature, lngLat, offsetPx, anchor, rows) {
     hideHint();   // the popup says everything the tooltip did, and more
+    dismissCue(); // a card is open: the reader has found the way in
     var html = popupHTML(L, feature.properties);
     if (!html) return;
+    var at = feature.properties && feature.properties._srow;
+    if (rows && rows.length > 1) html = chooserHTML(L, rows, at != null ? at : feature._row) + html;
     var opts = { closeButton: true, maxWidth: "320px", className: "atlas-popup" };
     // An un-fanned popup used to open with no offset, right on the pin — fine
     // over a 20px circle, but the taller pin now sits under its own popup.
@@ -4727,7 +5088,10 @@
       }
       opts.offset = off;
     }
+    if (LAST_POP) { try { LAST_POP.remove(); } catch (e) {} }
     var pop = new maplibregl.Popup(opts).setLngLat(lngLat).setHTML(html).addTo(map);
+    LAST_POP = pop;
+    if (rows && rows.length > 1) wireChooser(pop, L, rows);
     keepClearOfStrip(pop);
     return pop;
   }
@@ -5300,16 +5664,32 @@
     function onIn(sec) {
       return sec.querySelectorAll('.ctl-toggle input[type="checkbox"]:checked').length;
     }
+    /* "Your data 11", not "Your data 1": a group holding one Map Browser
+       layer counts its people or places, which is what a reader wants to
+       know. With two layers in the group the number goes back to layers —
+       eleven people plus sixty-six places is not one number. */
+    function tabCount(sec) {
+      var rows = sec.querySelectorAll(".ctl-row");
+      var on = onIn(sec);
+      if (rows.length === 1 && on === 1 && rows[0].hasAttribute("data-count")) {
+        var n = +rows[0].getAttribute("data-count");
+        var coll = rows[0].querySelector(".ctl-coll");
+        var lid = coll && coll.getAttribute("data-layer");
+        var L = null; (MANIFEST.layers || []).some(function (x) { if (x.id === lid) { L = x; return true; } return false; });
+        return { n: n, said: L ? countWords(n, layerNoun(L)) : n + " on" };
+      }
+      return { n: on, said: on + " on" };
+    }
     secs.forEach(function (sec) {
       var id = sec.getAttribute("data-group");
       var label = sec.getAttribute("data-group-label") || id;
-      var count = onIn(sec);
+      var tc = tabCount(sec), count = tc.n;
       var b = document.createElement("button");
       b.type = "button";
       b.className = "atlas-tab";
       b.setAttribute("data-mark", id);
       b.setAttribute("aria-expanded", String(TRAY === id));
-      b.setAttribute("aria-label", label + (count ? ", " + count + " on" : ""));
+      b.setAttribute("aria-label", label + (count ? ", " + tc.said : ""));
       b.appendChild(document.createTextNode(label));
       if (count) {
         var c = document.createElement("span");
@@ -5375,6 +5755,9 @@
     if (stageEl) stageEl.classList.remove("tray-open");
     DATA = {}; markersByLayer = {}; cropState = {}; keyState = {}; pmSources = {};
     SPIDER = { items: null, anchor: null, svg: null, pop: null, cid: null };
+    SEL = { L: null, row: null, ref: null };
+    if (CUE.el) { CUE.el.remove(); CUE.el = null; }
+    if (CUE.mk) { try { CUE.mk.remove(); } catch (e) {} CUE.mk = null; }
     CLUSTER = { ready: false, off: false, wired: false, radiusNow: CLUSTER_RADIUS,
                 hovering: false, hoverId: null,
                 byKey: {}, boundsCache: {}, refreshTimer: null, syncTimer: null };
