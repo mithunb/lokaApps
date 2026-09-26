@@ -84,5 +84,9 @@ check('a pin-only atlas keeps its old line and its "Show me" offer', /if \(!shap
 check('what the rows are called: places for pins, areas for shapes, or what the manifest says', /var n = L\.noun \|\| \(markersByLayer\[L\.id\] \? "places" : "areas"\);/.test(js), true);
 check('the old pin wording is untouched', /c\.textContent = shown \? \(shown \+ " of " \+ total \+ " shown"\) : "nothing matched — try another word";/.test(js), true);
 
+console.log('\n  a search by meaning keeps only answers close to the best one');
+check('a paraphrase must sit within a band of the top score', /const bar = Math\.max\(ROW_MIN_COSINE, top - ROW_BAND\);/.test(api), true);
+check('and a word typed exactly always counts', /const found = scored\.filter\(\(f\) => f\.lex \|\| \(f\.score != null && f\.score >= bar\)\);/.test(api), true);
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -4069,6 +4069,14 @@ const SEARCH_MAX_TERMS = 300;
    half the map. Chosen by reasoning, not measurement (no key on this machine)
    — revisit once a keyed instance has real traffic to log. */
 const ROW_MIN_COSINE = 0.50;
+/* A floor alone let nearly every row through: on the multispecies atlas,
+   "tiger conservation" scored all eleven people between 0.49 and 0.62, so 9
+   of 11 "matched" and the search said nothing. Scores from one model on one
+   query bunch together, so what separates a real answer is how close it is to
+   the BEST one. A paraphrase is kept only within this band of the top score
+   (and above the floor). 0.06 keeps the BRT tiger-reserve respondent (0.558)
+   under the top (0.615) there — one query, so revisit with real traffic. */
+const ROW_BAND = 0.06;
 // gemini-embedding-001 defaults to 3072 dims; 768 (a supported MRL size) keeps
 // the side-file small. Query + rows share this, so cosine stays comparable.
 const EMBED_DIM = 768;
@@ -4499,14 +4507,16 @@ router.post('/layers/search', async (req, res) => {
       const rows = layerSearchRows(built.dir, L, layerSig(built.dir, L));
       total += rows.length;
       const rv = qv ? rowVecs[L.id] : null;
-      const found = [];
+      const scored = [];
       for (const r of rows) {
         const lex = needles.some((n) => n && r.text.indexOf(n) >= 0);
         // cosine is scale-invariant, so the int8 row is scored as stored
         const score = rv ? cosine(qv, rv.q.subarray(r.i * rv.dim, (r.i + 1) * rv.dim)) : null;
-        if (!lex && !(score != null && score >= ROW_MIN_COSINE)) continue;
-        found.push({ i: r.i, title: r.title, lex, score });
+        scored.push({ i: r.i, title: r.title, lex, score });
       }
+      const top = Math.max(-1, ...scored.filter((f) => f.score != null).map((f) => f.score));
+      const bar = Math.max(ROW_MIN_COSINE, top - ROW_BAND);
+      const found = scored.filter((f) => f.lex || (f.score != null && f.score >= bar));
       if (!found.length) continue;
       matched += found.length;
       // literal matches outrank paraphrases (they are what the user typed);
