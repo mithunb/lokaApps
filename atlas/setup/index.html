@@ -271,6 +271,21 @@
       color:var(--color-text-primary,#24211D); margin-bottom:.15rem; }
     .drop input { display:none; }
     .drop-note { display:block; font-size:var(--t-meta); color:var(--color-text-muted,#6E6A63); margin-top:.35rem; }
+    /* ---- logo (step 1) ---- */
+    .logo-field { display:flex; flex-direction:column; gap:.2rem; }
+    .logo-field .lf-label { font-size:var(--t-ui); font-weight:600; color:var(--color-text-secondary); }
+    .logo-field .lf-label .opt { font-weight:400; font-size:var(--t-meta); color:var(--color-text-muted); }
+    .logo-field .drop.working-on { opacity:.6; cursor:progress; }
+    .logo-card { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.75rem 1rem;
+      border:1px solid var(--color-border); border-radius:var(--radius-lg); background:var(--color-surface-alt);
+      padding:.75rem 1rem; }
+    .logo-card.over { border-color:var(--color-leaf); background:var(--color-leaf-tint); }
+    .logo-preview { display:flex; align-items:center; gap:.65rem; min-width:0; flex:1 1 14rem; }
+    .logo-preview img { display:block; max-height:2.75rem; max-width:9rem; width:auto; height:auto; object-fit:contain; flex:none; }
+    .logo-preview span { font-family:var(--font-display); font-weight:700; font-size:var(--t-section); line-height:1.2;
+      color:var(--color-text-primary); overflow-wrap:anywhere; }
+    .logo-preview span:empty::before { content:"Your organisation"; color:var(--color-text-muted); font-weight:400; }
+    .logo-actions { display:flex; gap:.4rem; flex-wrap:wrap; }
     /* The file, what it found, and one button — one act, one block. It used to be
        a card in a row with a bare ✕, and the places it found were loose chips
        elsewhere with ✕s of their own: two homes and two buttons for one thing. */
@@ -376,6 +391,29 @@
           <label class="f wide">Description <span class="opt">(optional, shown under the title)</span>
             <textarea id="f-desc" rows="3" maxlength="160" placeholder="What this atlas is for, in a sentence."></textarea>
           </label>
+          <!-- The logo. Any everyday picture file works: the browser redraws it as a
+               PNG small enough to send, so nobody has to know about formats or sizes. -->
+          <div class="logo-field wide" id="logo-field">
+            <span class="lf-label">Your logo <span class="opt">(optional)</span></span>
+            <input type="file" id="logo-file" hidden
+              accept="image/png,image/jpeg,image/webp,image/svg+xml,.png,.jpg,.jpeg,.webp,.svg" />
+            <label class="drop" id="logo-drop" for="logo-file" tabindex="0">
+              <b>Add your logo</b>
+              Drop a picture of it here, or click to choose one.
+              <span class="drop-note">A PNG, JPG, WEBP or SVG file. We resize it for you.</span>
+            </label>
+            <div class="logo-card" id="logo-card" hidden>
+              <div class="logo-preview" aria-label="How your logo will look beside your name">
+                <img id="logo-img" alt="Your logo" />
+                <span id="logo-org"></span>
+              </div>
+              <div class="logo-actions">
+                <button type="button" class="btn secondary small" id="logo-change">Choose a different image</button>
+                <button type="button" class="btn quiet small" id="logo-remove">Remove</button>
+              </div>
+            </div>
+            <span class="fielderr" id="logo-err" role="alert" hidden></span>
+          </div>
         </div>
         <div class="btnrow"><button class="btn" id="next-1">Choose your region →</button></div>
         <div id="msg-1"></div>

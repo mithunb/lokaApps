@@ -22,6 +22,7 @@
     // the person recognised (what we show them) — see the alias note in step 2
     chosen: [], iso3: "", level: 2, catalog: null, picked: {}, worldwide: false,
     slug: "", jobId: "",
+    logo: "",   // a PNG data URL, already small enough for the server, or ""
   };
 
   function api(path, opts) {
@@ -280,6 +281,158 @@
       }
     });
   });
+
+  /* ---- 1 · the logo (optional) ----
+     The server takes a PNG under 200 KB and nothing else. People have JPGs from
+     their website, SVGs from a designer, photos of a letterhead — so the browser
+     redraws whatever they pick as a PNG no bigger than 512 × 512 (proportions and
+     see-through parts kept), and shrinks it again until it fits. Nobody is ever
+     asked about formats or sizes. */
+
+  var LOGO_MAX = 512, LOGO_BYTES = 200 * 1024, LOGO_MIN = 48;
+  var LOGO_UNREADABLE = "That file isn’t an image we can read — try a PNG or JPG.";
+
+  // how big to draw it: fit inside max × max, keep proportions. A drawing (SVG)
+  // has no real size, so it is drawn as large as allowed; a photo is never blown up.
+  function logoSize(w, h, max, grow) {
+    w = Number(w) || 0; h = Number(h) || 0;
+    if (w <= 0 || h <= 0) return { w: max, h: max };
+    var k = Math.min(max / w, max / h);
+    if (!grow) k = Math.min(1, k);
+    return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) };
+  }
+  function dataUrlBytes(u) {
+    var b64 = String(u).split(",")[1] || "";
+    return Math.floor(b64.length * 3 / 4) - (/==$/.test(b64) ? 2 : /=$/.test(b64) ? 1 : 0);
+  }
+  function isSvgFile(f) { return f.type === "image/svg+xml" || /\.svg$/i.test(f.name || ""); }
+  function looksLikeImage(f) {
+    return /^image\/(png|jpeg|pjpeg|webp|svg\+xml)$/.test(f.type || "") ||
+      /\.(png|jpe?g|webp|svg)$/i.test(f.name || "");
+  }
+
+  // An SVG often says only "viewBox", and then browsers disagree about its size
+  // (some draw nothing at all). Give it a real width and height before drawing.
+  function svgWithSize(text) {
+    var doc = new DOMParser().parseFromString(text, "image/svg+xml");
+    var el = doc.documentElement;
+    if (!el || el.nodeName.toLowerCase() !== "svg" || doc.getElementsByTagName("parsererror").length) return null;
+    var vb = (el.getAttribute("viewBox") || "").trim().split(/[\s,]+/).map(Number);
+    var w = parseFloat(el.getAttribute("width")), h = parseFloat(el.getAttribute("height"));
+    if (/%/.test(el.getAttribute("width") || "")) w = NaN;
+    if (/%/.test(el.getAttribute("height") || "")) h = NaN;
+    if (!(w > 0 && h > 0) && vb.length === 4 && vb[2] > 0 && vb[3] > 0) { w = vb[2]; h = vb[3]; }
+    if (!(w > 0 && h > 0)) { w = LOGO_MAX; h = LOGO_MAX; }
+    var sz = logoSize(w, h, LOGO_MAX, true);
+    if (!el.getAttribute("viewBox")) el.setAttribute("viewBox", "0 0 " + w + " " + h);
+    el.setAttribute("width", sz.w); el.setAttribute("height", sz.h);
+    return { text: new XMLSerializer().serializeToString(doc), w: sz.w, h: sz.h };
+  }
+
+  function drawLogo(img, w, h) {
+    var size = logoSize(w, h, LOGO_MAX, false);
+    for (var tries = 0; tries < 12; tries++) {
+      var c = document.createElement("canvas");
+      c.width = size.w; c.height = size.h;
+      var g = c.getContext("2d");
+      g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
+      g.drawImage(img, 0, 0, size.w, size.h);        // a clear canvas keeps see-through parts
+      var url = c.toDataURL("image/png");
+      if (!/^data:image\/png;base64,/.test(url)) return null;
+      if (dataUrlBytes(url) <= LOGO_BYTES) return url;
+      if (Math.max(size.w, size.h) <= LOGO_MIN) return null;
+      size = { w: Math.max(1, Math.round(size.w * 0.8)), h: Math.max(1, Math.round(size.h * 0.8)) };
+    }
+    return null;
+  }
+
+  function logoFromFile(file, cb) {
+    if (!file) return;
+    if (!looksLikeImage(file)) return cb(LOGO_UNREADABLE);
+    if (file.size > 25 * 1024 * 1024) return cb("That image is too big to use. Try a smaller copy of your logo.");
+    function fromUrl(src, w, h, done) {
+      var img = new Image();
+      img.onload = function () {
+        var out = null, err = null;
+        try { out = drawLogo(img, w || img.naturalWidth, h || img.naturalHeight); }
+        catch (e) { err = LOGO_UNREADABLE; }
+        done();
+        if (err) return cb(err);
+        if (!out) return cb("That logo has too much detail to fit. Try a simpler or smaller version.");
+        cb(null, out);
+      };
+      img.onerror = function () { done(); cb(LOGO_UNREADABLE); };
+      img.src = src;
+    }
+    if (isSvgFile(file)) {
+      var rd = new FileReader();
+      rd.onload = function () {
+        var fixed = null;
+        try { fixed = svgWithSize(String(rd.result || "")); } catch (e) { fixed = null; }
+        if (!fixed) return cb(LOGO_UNREADABLE);
+        var u = URL.createObjectURL(new Blob([fixed.text], { type: "image/svg+xml" }));
+        fromUrl(u, fixed.w, fixed.h, function () { URL.revokeObjectURL(u); });
+      };
+      rd.onerror = function () { cb(LOGO_UNREADABLE); };
+      rd.readAsText(file);
+    } else {
+      var u = URL.createObjectURL(file);
+      fromUrl(u, 0, 0, function () { URL.revokeObjectURL(u); });
+    }
+  }
+
+  function paintLogo() {
+    var has = !!S.logo;
+    $("#logo-drop").hidden = has;
+    $("#logo-card").hidden = !has;
+    if (has) $("#logo-img").src = S.logo; else $("#logo-img").removeAttribute("src");
+    $("#logo-org").textContent = $("#f-org").value.trim();
+  }
+  function sayLogo(text) {
+    var e = $("#logo-err");
+    e.textContent = text || ""; e.hidden = !text;
+  }
+  function takeLogo(file) {
+    if (!file) return;
+    var drop = $("#logo-drop");
+    drop.classList.add("working-on");
+    sayLogo("");
+    logoFromFile(file, function (err, url) {
+      drop.classList.remove("working-on");
+      if (err) { sayLogo(err); return; }   // a failed swap keeps the logo already there
+      S.logo = url;
+      paintLogo();
+    });
+  }
+  (function wireLogo() {
+    var input = $("#logo-file"), drop = $("#logo-drop"), card = $("#logo-card");
+    if (!input) return;
+    input.addEventListener("change", function () {
+      var f = input.files && input.files[0];
+      input.value = "";                              // picking the same file again still counts
+      takeLogo(f);
+    });
+    drop.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); }
+    });
+    [drop, card].forEach(function (zone) {
+      ["dragenter", "dragover"].forEach(function (t) {
+        zone.addEventListener(t, function (e) { e.preventDefault(); zone.classList.add("over"); });
+      });
+      ["dragleave", "dragend"].forEach(function (t) {
+        zone.addEventListener(t, function () { zone.classList.remove("over"); });
+      });
+      zone.addEventListener("drop", function (e) {
+        e.preventDefault(); zone.classList.remove("over");
+        var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f) takeLogo(f);
+      });
+    });
+    $("#logo-change").onclick = function () { input.click(); };
+    $("#logo-remove").onclick = function () { S.logo = ""; sayLogo(""); paintLogo(); drop.focus(); };
+    $("#f-org").addEventListener("input", function () { $("#logo-org").textContent = this.value.trim(); });
+    paintLogo();
+  })();
 
   /* ---- 2 · geography: a text box, not a drill-down ---- */
 
@@ -1182,7 +1335,8 @@
         title: $("#f-title").value.trim(),
         org: $("#f-org").value.trim(),
         subtitle: $("#f-desc").value.trim(),
-        branding: { orgName: $("#f-org").value.trim() },
+        branding: S.logo ? { orgName: $("#f-org").value.trim(), logoData: S.logo }
+                         : { orgName: $("#f-org").value.trim() },
         region: S.worldwide ? { worldwide: true } : {
           iso3: S.iso3,
           level: S.level,
