@@ -68,7 +68,10 @@ BASEMAPS = [
 
 BASE_ATTRIBUTIONS = [
     {"name": "Esri World Imagery", "url": "https://www.esri.com", "note": "Satellite basemap & place labels"},
-    {"name": "OpenStreetMap contributors & CARTO", "url": "https://www.openstreetmap.org/copyright",
+    # The map basemap is OpenFreeMap's OSM Bright (APP_BASEMAPS in atlas.js,
+    # which replaces whatever basemap a manifest names); CARTO left with the
+    # old raster tiles.
+    {"name": "OpenStreetMap contributors & OpenFreeMap", "url": "https://openfreemap.org",
      "note": "Map basemap", "license": "ODbL"},
 ]
 

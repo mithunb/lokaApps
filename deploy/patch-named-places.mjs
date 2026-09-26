@@ -44,6 +44,8 @@ export function patchLayer(L, kinds) {
   L.label_text = { property: 'name', size: 11.5, color: '#5A5751', haloColor: '#F5F1E6', haloWidth: 2, transform: 'none', letterSpacing: 0.01, biggestFirst: true, offset: [0, -0.9], anchor: 'bottom' };
   L.legend = [{ color: '#5A5751', label: placesLabel(kinds, true), shape: 'dashed' }];
   L.popup = { title: 'name', fields: [{ label: 'What it is', property: 'kind' }, { label: 'State', property: 'state' }] };
+  // its credits said "Named places on this map"; they name the same thing the layer does
+  (L.credits || []).forEach((c) => { if (c && / on this map$/.test(String(c.note || ''))) c.note = label + ' on this map'; });
   L.info = 'Background only: ' + label.toLowerCase() + ' in this region, each with its name. Tap one to see what it is.' + (credits ? ' ' + credits : '');
   return L;
 }
@@ -66,11 +68,16 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
           const gj = path.join(dir, String(L.source).split('/').pop());
           if (!fs.existsSync(gj)) continue;
           const kinds = [...new Set(JSON.parse(fs.readFileSync(gj, 'utf8')).features.map((f) => f.properties && f.properties.kind).filter(Boolean))];
-          const before = JSON.stringify(L);
+          const before = JSON.stringify(L) + JSON.stringify(m.attributions || []);
           patchLayer(L, kinds);
-          if (JSON.stringify(L) === before) continue;
+          // the build copies a layer's credits into the atlas's own list too
+          const names = new Set((L.credits || []).map((c) => c && c.name));
+          (m.attributions || []).forEach((a) => {
+            if (a && names.has(a.name) && / on this map$/.test(String(a.note || ''))) a.note = L.label + ' on this map';
+          });
+          if (JSON.stringify(L) + JSON.stringify(m.attributions || []) === before) continue;
           changed = true; layers++;
-          console.log(`  ${slug} / ${name}: "${JSON.parse(before).label}" → "${L.label}"`);
+          console.log(`  ${slug} / ${name}: → "${L.label}"`);
         }
         if (!changed) continue;
         files++;

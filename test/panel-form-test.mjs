@@ -100,5 +100,11 @@ check('in the middle sizes only sign in stays among the links',
   /@media \(min-width:721px\) and \(max-width:1100px\)\{\s*\.atlas-full \.nav \.links > :not\(#nav-signin\):not\(#nav-signout\) \{ display:none; \}/.test(html), true);
 check('and the search box shrinks before anything wraps', /\.atlas-full \.head-tools \{ flex:1 1 0; \}/.test(html), true);
 
+console.log('\n  a phone sheet that grows makes room on the map');
+check('the map is framed again, or nudged, when the sheet grows or shrinks',
+  /if \(!userMoved\) \{ if \(!focusFit\(true\)\) fitToData\(true\); \}\s*else map\.panBy\(\[0, \(h - was\) \/ 2\]/.test(js), true);
+check('the About panel\'s line under the title lines up on a phone', /\.sources-head, \.sources-sub, \.sources-lead, \.sources-foot \{ padding-left:1rem;/.test(html), true);
+check('an old CARTO basemap credit is shown as OpenFreeMap', /name: "OpenStreetMap contributors & OpenFreeMap", url: "https:\/\/openfreemap\.org"/.test(js), true);
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

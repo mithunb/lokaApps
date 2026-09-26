@@ -3854,9 +3854,24 @@
     var panel = stage.querySelector(".atlas-panel");
     if (!panel || panel._sheetWatched) return;
     panel._sheetWatched = true;
+    var lastH = null, roomT = null;
     var sync = function () {
       var onPhone = window.matchMedia("(max-width: 720px)").matches;
-      stage.style.setProperty("--sheet-h", (onPhone ? panel.offsetHeight : 0) + "px");
+      var h = (onPhone ? panel.offsetHeight : 0);
+      stage.style.setProperty("--sheet-h", h + "px");
+      /* The sheet opening a group rises over the foot of the map, and whatever
+         was framed there went under it (the southern tip on the multispecies
+         atlas). So when it grows or shrinks on a phone, the map makes room:
+         framed again while nobody has moved it, otherwise nudged by half the
+         change so what was in the middle stays in the middle. */
+      var was = lastH; lastH = h;
+      if (was == null || !h || !was || Math.abs(h - was) < 24 || !map) return;
+      clearTimeout(roomT);
+      roomT = setTimeout(function () {
+        if (!map) return;
+        if (!userMoved) { if (!focusFit(true)) fitToData(true); }
+        else map.panBy([0, (h - was) / 2], { duration: 250 });
+      }, 120);
     };
     if (window.ResizeObserver) new ResizeObserver(sync).observe(panel);
     window.addEventListener("resize", sync);
@@ -4980,7 +4995,13 @@
        Deduplicated by name, first mention wins, because the same register can
        reach the page twice — once as a source the atlas was built from and
        again as the origin of a shape somebody's data joined to. */
-    var sources = (MANIFEST.attributions || []).slice();
+    /* Atlases built before the basemap moved still list CARTO for the map
+       basemap; the tiles drawn are OpenFreeMap's, so the credit says so. */
+    var sources = (MANIFEST.attributions || []).map(function (a) {
+      if (a && /CARTO/.test(String(a.name)) && /basemap/i.test(String(a.note || "")))
+        return { name: "OpenStreetMap contributors & OpenFreeMap", url: "https://openfreemap.org", note: a.note, license: "ODbL" };
+      return a;
+    });
     var already = {};
     sources.forEach(function (a) { already[String(a.name).toLowerCase()] = true; });
     (MANIFEST.layers || []).forEach(function (L) {

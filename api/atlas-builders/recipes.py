@@ -1464,7 +1464,7 @@ def places_named(ctx):
         credit_rows.append({k: v for k, v in (
             ("name", nm),
             ("url", sd.get("home")),
-            ("note", "Named places on this map"),
+            ("note", places_label(kinds) + " on this map"),
             ("license", f["properties"].get("licence")),
         ) if v})
     return [{
