@@ -1328,7 +1328,8 @@ NFHS_LAYERS = {
     "cleanfuel": ("Households using clean cooking fuel", "%", [25, 45, 65, 85], _GREEN,
                   "Households cooking with clean fuel (NFHS-5). Higher is better."),
     "stunting": ("Child stunting (under 5)", "%", [25, 32, 38, 45], _RUST,
-                 "Children under 5 who are stunted — low height-for-age (NFHS-5). Lower is better."),
+                 "Children under 5 who are stunted — low height-for-age (NFHS-5). Lower is better: "
+                 "a darker district has more stunted children."),
 }
 
 
@@ -1359,10 +1360,15 @@ def _nfhs_choropleth(ctx, key):
     step = ["step", ["get", "value"], colors[0]]
     for i, b in enumerate(breaks):
         step += [b, colors[i + 1]]
-    legend = [{"color": colors[0], "label": f"< {breaks[0]}{unit}"}]
+    # All four share one ramp (darker = a higher number), so the colour alone
+    # no longer says which end is good. The key says it, at both ends:
+    # "> 45% (worse)" on stunting, "> 95% (better)" on institutional births.
+    low_is_good = "Lower is better" in info
+    lo_word, hi_word = ("better", "worse") if low_is_good else ("worse", "better")
+    legend = [{"color": colors[0], "label": f"< {breaks[0]}{unit} ({lo_word})"}]
     for i in range(len(breaks) - 1):
         legend.append({"color": colors[i + 1], "label": f"{breaks[i]}–{breaks[i + 1]}{unit}"})
-    legend.append({"color": colors[-1], "label": f"> {breaks[-1]}{unit}"})
+    legend.append({"color": colors[-1], "label": f"> {breaks[-1]}{unit} ({hi_word})"})
     legend.append({"color": "#e2ded6", "label": "No survey data"})
     write_geojson(ctx["out"], key + ".geojson", feats)
     return [{
