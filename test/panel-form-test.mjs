@@ -82,5 +82,11 @@ check('it looks like a name until it is reached for',
 check('Enter saves, Escape puts back what was there',
   /e\.key === "Enter".*finish\(true\)[\s\S]{0,120}e\.key === "Escape".*finish\(false\)/.test(owner), true);
 
+console.log('\n  a phone can still sign in from an atlas');
+check('the header keeps sign in and sign out on a phone',
+  /\.atlas-full \.nav \.links > :not\(#nav-signin\):not\(#nav-signout\) \{ display:none; \}/.test(html), true);
+check('and it is a thumb-sized target', /#nav-signout:not\(\[hidden\]\) \{ display:inline-flex; align-items:center; min-height:44px;/.test(html), true);
+check('only one script measures the sheet', /function sheetH\(\)/.test(html), false);
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -1119,7 +1119,12 @@
       /* one row: a long title shortens rather than pushing Share to a second line */
       .atlas-full .nav { min-height:52px; padding:.4rem .75rem; gap:.5rem .75rem; flex-wrap:nowrap; }
       .atlas-full .org-head { flex:1 1 auto; max-width:none; }
-      .atlas-full .nav .links { display:none; }   /* "All atlases" is in the About & sources panel */
+      /* only sign in / sign out stay on a phone ("All atlases" is in the About &
+         sources panel); a thumb-sized target, never pushing Share off the row */
+      .atlas-full .nav .links { display:flex; flex:0 0 auto; gap:0; }
+      .atlas-full .nav .links > :not(#nav-signin):not(#nav-signout) { display:none; }
+      .atlas-full .nav .links > #nav-signin:not([hidden]),
+      .atlas-full .nav .links > #nav-signout:not([hidden]) { display:inline-flex; align-items:center; min-height:44px; padding:0 .35rem; font-size:var(--t-meta); font-weight:600; white-space:nowrap; }
       .atlas-full .share-btn span, .atlas-full #add-data-btn span { display:none; }   /* icon only: the width is the title's */
       .atlas-full .share-btn { padding:.4rem .5rem; }
       .atlas-full .share-btn svg { margin:0; }
@@ -1534,14 +1539,8 @@
       function sync() { if (btn) btn.setAttribute("aria-expanded", String(!panel.classList.contains("collapsed"))); }
       function resizeMap() { if (window.__map) requestAnimationFrame(function () { window.__map.resize(); }); }
       sync();
-      // How tall the sheet is, kept current in --sheet-h on the stage, so the
-      // chips and the map's own buttons sit just above it on a phone (0 on a
-      // wide screen, where nothing is at the foot of the map but them).
-      var stageEl = panel.closest(".atlas-stage");
-      function sheetH() { if (stageEl) stageEl.style.setProperty("--sheet-h", (mq.matches ? panel.offsetHeight : 0) + "px"); }
-      if (window.ResizeObserver) new ResizeObserver(sheetH).observe(panel);
-      mq.addEventListener("change", sheetH);
-      sheetH();
+      // --sheet-h (how tall the sheet is, 0 on a wide screen) is kept current
+      // by watchSheetHeight() in atlas.js; the chips and map buttons read it.
       head.addEventListener("click", function () {
         if (panel.classList.contains("collapsed")) { panel.classList.remove("collapsed"); sync(); resizeMap(); return; }
         var stage = panel.closest(".atlas-stage");
