@@ -3267,7 +3267,7 @@ async function ingestLayer(b, who) {
       categoryColumn: catCol ? catCol.name : undefined,
       imageColumn: imgCol ? imgCol.name : undefined,
       categoryDelimiter: catCol && catCol.multiValue ? catCol.multiValue.delimiter : undefined,
-      palette: 'greens',
+      palette: 'marigold',
       markerColor: 'rust',
       lineColor: 'slate',
       fillColor: 'moss',
@@ -3406,7 +3406,7 @@ async function ingestLayer(b, who) {
       categoryColumn: catCol ? catCol.name : undefined,
       imageColumn: imgCol ? imgCol.name : undefined,
       categoryDelimiter: catCol && catCol.multiValue ? catCol.multiValue.delimiter : undefined,
-      palette: 'greens',
+      palette: 'marigold',
       markerColor: 'rust',
       popupTitleColumn: nameGuess ? nameGuess.column : pickTitleColumn(profiles, columns),
       popupColumns: pickPopupColumns(profiles, { title: nameGuess ? nameGuess.column : pickTitleColumn(profiles, columns), image: imgCol && imgCol.name }),
@@ -4746,7 +4746,7 @@ router.post('/layers/reopen', (req, res) => {
     popupTitleColumn: layer.popup && layer.popup.title,
     popupColumns: ((layer.popup && layer.popup.fields) || []).map((f) => f.property),
     imageColumn: (((layer.popup && layer.popup.fields) || []).find((f) => f.type === 'image') || {}).property,
-    palette: 'greens', markerColor: 'rust', lineColor: 'slate', fillColor: 'moss',
+    palette: 'marigold', markerColor: 'rust', lineColor: 'slate', fillColor: 'moss',
   };
 
   const session = imports.newImport({

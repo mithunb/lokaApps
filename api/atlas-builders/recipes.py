@@ -722,12 +722,12 @@ def wasteland_worldcover(ctx):
         "opacityControl": True, "opacity": 0.7,
         "info": "No open revenue-wasteland GIS exists, so this is a land-cover proxy: the share of "
                 "uncultivated open, scrub & barren land per block (ESA WorldCover 2021).",
-        "paint": {"fillColor": ["step", ["get", "wl_pct"], "#efe6d9", 1.5, "#ddc4a0", 3, "#caa06f",
-                                5, "#a8703f", 7, "#824e26"],
+        "paint": {"fillColor": ["step", ["get", "wl_pct"], MARIGOLD[0], 1.5, MARIGOLD[1], 3, MARIGOLD[2],
+                                5, MARIGOLD[3], 7, MARIGOLD[4]],
                   "fillOpacity": 0.7, "outlineColor": "#7a5a3a", "outlineWidth": 0.4},
-        "legend": [{"color": "#efe6d9", "label": "< 1.5%"}, {"color": "#ddc4a0", "label": "1.5–3%"},
-                   {"color": "#caa06f", "label": "3–5%"}, {"color": "#a8703f", "label": "5–7%"},
-                   {"color": "#824e26", "label": "> 7%"}],
+        "legend": [{"color": MARIGOLD[0], "label": "< 1.5%"}, {"color": MARIGOLD[1], "label": "1.5–3%"},
+                   {"color": MARIGOLD[2], "label": "3–5%"}, {"color": MARIGOLD[3], "label": "5–7%"},
+                   {"color": MARIGOLD[4], "label": "> 7%"}],
         "popup": {"title": "name", "subtitleProperty": "district", "fields": [
             {"label": "Open / barren land", "property": "wl_pct", "suffix": "% of block area"}]},
     }]
@@ -846,6 +846,15 @@ def _range_labels(edges, unit="", fmt="{:g}"):
             labels.append(fmt.format(lo) + "–" + fmt.format(ed) + unit)
         lo = ed
     return labels
+
+
+# The atlas's own ramp (DESIGN.md §2, api/lib/fragment.js PALETTES.marigold),
+# light → dark. Every shaded builder layer that is not about water uses it;
+# rainfall and surface water stay blue, terrain keeps its elevation tints.
+# The 4-step version is marigoldRamp(4) from fragment.js (the five anchors mixed
+# in CIELAB), computed once and written out here so the builders need no port.
+MARIGOLD = ["#FBF1D9", "#F4CF82", "#E9A237", "#D2692A", "#A8321A"]
+MARIGOLD_4 = ["#FBF1D9", "#F1C06A", "#DA7C2E", "#A8321A"]
 
 
 def _emit_ramp(ctx, lid, arr, valid, transform, size, extent, edges, colors, labels,
@@ -1078,7 +1087,7 @@ def soil_soilgrids(ctx):
     if not valid.any():
         return []
     edges = np.unique(np.percentile(arr[valid], [20, 40, 60, 80]))
-    colors = ["#eadfc0", "#d3b578", "#b3894a", "#8a5f30", "#5c3b1a"][: len(edges) + 1]
+    colors = MARIGOLD[: len(edges) + 1]
     labels = _range_labels(edges, unit=" g/kg", fmt="{:.0f}")
     progress("soil", 88, "colorizing")
     return _emit_ramp(ctx, "soil", arr, valid, transform, size, extent, edges, colors, labels,
@@ -1102,7 +1111,9 @@ def access_healthcare(ctx):
     if not valid.any():
         return []
     edges = np.array([30, 60, 120])
-    colors = ["#3f8f5a", "#c9c05a", "#e0913a", "#b23a2a"]
+    # was green → yellow → orange → red, which red-green colour blindness
+    # folds in half; lightness now carries the order (paler = nearer)
+    colors = MARIGOLD_4
     labels = ["< 30 min", "30–60 min", "1–2 hr", "≥ 2 hr"]
     progress("access", 88, "colorizing")
     return _emit_ramp(ctx, "access", arr, valid, transform, size, extent, edges, colors, labels,
@@ -1305,8 +1316,10 @@ def _dnorm(s):
 
 
 # short key -> (label, unit, breaks, colour ramp light→dark)
-_GREEN = ["#eef2e3", "#c9d6a8", "#9fb673", "#6f8f4a", "#4a5a33"]
-_RUST = ["#f2e3d6", "#e0b48f", "#cf8a5a", "#b25e30", "#7c3616"]
+# (both were their own ramps, green and rust, until September 2026; each
+# layer's info line already says whether higher is better)
+_GREEN = MARIGOLD
+_RUST = MARIGOLD
 NFHS_LAYERS = {
     "births": ("Institutional births", "%", [50, 70, 85, 95], _GREEN,
                "Share of births in a health facility (NFHS-5). Higher is better."),

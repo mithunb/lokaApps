@@ -763,20 +763,18 @@
   var MARKER_COLORS = { rust: "#C9402B", moss: "#2A6B41", ochre: "#E9A237", sienna: "#D2692A", slate: "#3A7FA1" };
   var MARKER_NAMES = { rust: "Sindoor red", moss: "Leaf green", ochre: "Marigold", sienna: "Sienna", slate: "Blue" };
   // mirrors PALETTES in api/lib/fragment.js — the server owns which ramp a spec
-  // means; these are only so the choice can be seen before it is made
+  // means; these are only so the choice can be seen before it is made.
+  // Marigold first: it is every shaded layer's ramp unless the layer is about
+  // water. greens, rust, ylorbr and purples were retired for it (September
+  // 2026) — a saved layer naming one still resolves to marigold on the server.
   var PALETTES = {
     marigold: ["#FBF1D9", "#F4CF82", "#E9A237", "#D2692A", "#A8321A"],
-    greens: ["#e7e3d8", "#cdd3b4", "#a9bd8e", "#7f9c65", "#566f42", "#39502f"],
     blues: ["#e6ebec", "#c2d2d8", "#93b1bd", "#6690a1", "#446e80", "#2d4f5e"],
-    rust: ["#f0e6dd", "#e0c4ab", "#cb9c77", "#b06f47", "#8f4d2c", "#6e371d"],
-    ylorbr: ["#efe6d9", "#ddc4a0", "#caa06f", "#a8703f", "#824e26", "#5e3618"],
     brteal: ["#8a5a25", "#bb8f4e", "#e2cfa4", "#9fc7bd", "#4e8f86", "#2c625d"],
     tealbr: ["#2c625d", "#4e8f86", "#9fc7bd", "#e2cfa4", "#bb8f4e", "#8a5a25"],
-    purples: ["#e9e4ea", "#cfc3d4", "#ac97b6", "#8a6e96", "#6a4d75", "#4c3454"],
   };
   var PALETTE_NAMES = {
-    marigold: "Marigold", greens: "Greens", blues: "Blues", rust: "Rust", ylorbr: "Sand to brown",
-    brteal: "Brown to teal", tealbr: "Teal to brown", purples: "Purples",
+    marigold: "Marigold", blues: "Blues", brteal: "Brown to teal", tealbr: "Teal to brown",
   };
 
   /* What "colour" means depends on what the layer draws, so the question
