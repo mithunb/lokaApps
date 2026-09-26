@@ -8,9 +8,9 @@
   try {
     console.log(
       "%cLOKA Atlas%c · a Socratus project\n%cOpen data, openly mapped — discoverloka.org",
-      "font:700 15px/1.5 'Source Serif 4',serif;color:#2A6B41",
-      "font:400 12px/1.5 'Source Sans 3',system-ui,sans-serif;color:#5A5751",
-      "font:400 11px/1.5 'Source Sans 3',system-ui,sans-serif;color:#6E6A63"
+      "font:700 15px/1.5 'Lora',serif;color:#2A6B41",
+      "font:400 12px/1.5 'Karla',system-ui,sans-serif;color:#5A5751",
+      "font:400 11px/1.5 'Karla',system-ui,sans-serif;color:#6E6A63"
     );
   } catch (e) {}
 
@@ -1214,7 +1214,7 @@
        tracked, in the bold — and a place's or a line's name is plain. Every
        label wears Ink with the Ground halo unless the atlas says otherwise.
        (The map's glyphs are Noto Sans, the nearest the tile server has to the
-       page's Source Sans; a web font cannot be drawn on the map.) */
+       page's Karla; a web font cannot be drawn on the map.) */
     var area = L.type === "polygon" || L.type === "fill";
     var layout = {
       visibility: vis(L),

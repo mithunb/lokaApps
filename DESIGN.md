@@ -42,47 +42,47 @@ colors:
   point-7: "#B99A1C"
 typography:
   display:
-    fontFamily: "'Source Serif 4', serif"
+    fontFamily: "'Lora', serif"
     fontSize: "clamp(1.6rem, 4vw, 2.4rem)"
     fontWeight: 700
     lineHeight: 1.12
     letterSpacing: "-0.01em"
   headline:
-    fontFamily: "'Source Serif 4', serif"
+    fontFamily: "'Lora', serif"
     fontSize: "1.2rem"
     fontWeight: 700
     lineHeight: 1.25
   body:
-    fontFamily: "'Source Sans 3', sans-serif"
+    fontFamily: "'Karla', sans-serif"
     fontSize: "1rem"
     fontWeight: 400
     lineHeight: 1.55
   control:
-    fontFamily: "'Source Sans 3', sans-serif"
+    fontFamily: "'Karla', sans-serif"
     fontSize: "0.95rem"
     fontWeight: 600
     lineHeight: 1.4
     role: "Buttons, and the name of a thing you can act on — a file, a layer being built."
   ui:
-    fontFamily: "'Source Sans 3', sans-serif"
+    fontFamily: "'Karla', sans-serif"
     fontSize: "0.9rem"
     fontWeight: 600
     lineHeight: 1.5
     role: "The workhorse: switch names, form labels, nav, stepper chips. Weight drops to 400 where it is reading text rather than a prompt."
   meta:
-    fontFamily: "'Source Sans 3', sans-serif"
+    fontFamily: "'Karla', sans-serif"
     fontSize: "0.8rem"
     fontWeight: 400
     lineHeight: 1.5
     role: "Anything that annotates something else — keys, hints, counts, required/optional markers."
   label:
-    fontFamily: "'Source Sans 3', sans-serif"
+    fontFamily: "'Karla', sans-serif"
     fontSize: "0.72rem"
     fontWeight: 700
     letterSpacing: "0.12em"
     role: "Uppercase stamps: the panel head, group heads, the place-card kicker, the eyebrow chip."
   numeral:
-    fontFamily: "'Source Sans 3', sans-serif"
+    fontFamily: "'Karla', sans-serif"
     fontVariantNumeric: "tabular-nums"
     role: "Any number that sits in a column or is compared with another: legend counts, percentages, place-card facts, stats."
   mono:
@@ -152,7 +152,7 @@ product is read on cheap phones in full sun — but every colour is measured so 
 shouts past the data.
 
 The interface has two typefaces with two jobs, both chosen for how their Latin reads on
-a phone: **Source Serif 4** structures (titles, headlines), **Source Sans 3** reads and
+a phone: **Lora** structures (titles, headlines), **Karla** reads and
 labels (everything else). Both have true tabular figures, so numbers line up.
 
 The system still rejects the shiny-SaaS register: no gradients, no glass, no floating
@@ -187,7 +187,7 @@ holds one map, one shelf of layers, and a credits ledger, in that order of impor
 - **Ground** (#F5F1E6) inside the atlas region; **Outside** (#EAE6DC) beyond it; the framed well's background is Ground.
 - **Water** (#3A7FA1) lines; **Water Fill** (#C8DBE5) for lakes, wetlands, oxbows.
 - **Boundary** (#26231F) at 1.8px for the district/region outline; **Block** (#8C8985) at 0.7px for the next level down; **Road** (#E2DDD0).
-- **Label** (#24211D) with a **Halo** of Ground (#F5F1E6) at 2.2px. District names uppercase, +0.2em, Source Serif 4 700; place names Source Sans 3 600, no tracking.
+- **Label** (#24211D) with a **Halo** of Ground (#F5F1E6) at 2.2px. District names uppercase, +0.2em, Lora 700; place names Karla 600, no tracking.
 
 ### Sequential ramp (5 steps, light → dark)
 `#FBF1D9 · #F4CF82 · #E9A237 · #D2692A · #A8321A`
@@ -217,11 +217,11 @@ The closest pair after red-green simulation is Marigold vs Turmeric (ΔE 8.7); t
 
 ## 3. Typography
 
-**Display font:** Source Serif 4 (700; 600 only if a file is added)
-**Body font:** Source Sans 3 (400, 600, 700)
+**Display font:** Lora (700; 600 only if a file is added)
+**Body font:** Karla (400, 600, 700)
 **Mono:** ui-monospace / Menlo — build logs, tokens, embed snippets only.
 
-**Character:** Source Serif 4 is a quiet transitional serif: classic, not bookish, at home on a title. Source Sans 3 has a large x-height, open counters and a distinct 1 / l / I, which is what keeps an 11px legend label readable on a cheap phone. Both were drawn by one studio for screens, so the pairing reads as one voice.
+**Character:** Lora is a quiet transitional serif: classic, not bookish, at home on a title. Karla has a large x-height, open counters and a distinct 1 / l / I, which is what keeps an 11px legend label readable on a cheap phone. Both were drawn by one studio for screens, so the pairing reads as one voice.
 
 ### Hierarchy
 - **Display** (Serif 700, clamp 1.6–2.4rem, 1.12): the atlas title; one per page, `text-wrap: balance`.
@@ -238,9 +238,9 @@ The closest pair after red-green simulation is Marigold vs Turmeric (ΔE 8.7); t
 
 **The Two-Channel Rule** (kept). Every step down in rank moves at least two of size, weight and colour together.
 
-**The Numbers Line Up Rule** (new). Any number that sits above or beside another number is tabular. Source Sans 3's default figures are proportional, so this must be set explicitly.
+**The Numbers Line Up Rule** (new). Any number that sits above or beside another number is tabular. Karla's default figures are proportional, so this must be set explicitly.
 
-**The Companions Rule** (new, for later). Font stacks are written so a script companion can be added without touching a selector: `"Source Sans 3", var(--font-companions-sans), sans-serif` and `"Source Serif 4", var(--font-companions-serif), serif`. The companion variables are **never empty**: today they hold the primary face as a placeholder (`--font-companions-sans: "Source Sans 3"; --font-companions-serif: "Source Serif 4";`). An empty value left `, ,` in the stack, Chromium threw the whole declaration away and every page fell back to Times (measured by both builders, 26 Sep 2026). When another language ships, the matched Noto faces are appended in those variables — `--font-companions-sans: "Source Sans 3", "Noto Sans Devanagari";` — and nothing else changes.
+**The Companions Rule** (new, for later). Font stacks are written so a script companion can be added without touching a selector: `"Karla", var(--font-companions-sans), sans-serif` and `"Lora", var(--font-companions-serif), serif`. The companion variables are **never empty**: today they hold the primary face as a placeholder (`--font-companions-sans: "Karla"; --font-companions-serif: "Lora";`). An empty value left `, ,` in the stack, Chromium threw the whole declaration away and every page fell back to Times (measured by both builders, 26 Sep 2026). When another language ships, the matched Noto faces are appended in those variables — `--font-companions-sans: "Karla", "Noto Sans Devanagari";` — and nothing else changes.
 
 ## 4. Elevation
 
@@ -276,7 +276,7 @@ Surface fill, 1px Ink Border, 4px, Sans 0.95rem. Labels small bold Ink Soft abov
 An atlas is the map. Below one thin header (44px on a wide screen, 52px on a phone) the stage fills the whole viewport; the page does not scroll. The lead text, the call-to-action band and the site footer are not drawn on an atlas — their words are reached from the map (the "About & sources" panel, LOKA's badge). The home gallery keeps its page shape.
 
 ### The header (org branding first)
-The header carries the organisation that built the atlas: its logo (30px, if it gave one) at the left spanning two lines, its name in Label type above, the atlas title in Source Serif 4 700 (1.1rem) beneath. With no logo the name alone reads finished. Long names and titles get an ellipsis (the full name stays in the credits and the page title). Then, on a wide screen, the strip's pieces — search, Map/Satellite, the owner's region row — then Share (and the owner's controls), then the site links in Meta type. For an owner the bar may wrap to a second row; the map starts beneath it either way. No "LOKA / APPS" wordmark: LOKA's presence on an atlas is the badge.
+The header carries the organisation that built the atlas: its logo (30px, if it gave one) at the left spanning two lines, its name in Label type above, the atlas title in Lora 700 (1.1rem) beneath. With no logo the name alone reads finished. Long names and titles get an ellipsis (the full name stays in the credits and the page title). Then, on a wide screen, the strip's pieces — search, Map/Satellite, the owner's region row — then Share (and the owner's controls), then the site links in Meta type. For an owner the bar may wrap to a second row; the map starts beneath it either way. No "LOKA / APPS" wordmark: LOKA's presence on an atlas is the badge.
 
 ### The Strip and the Shelf (signature, kept; the strip moved)
 The **strip** holds what is true of the whole atlas: Map/Satellite, search, and (owner-only) the region row. On a wide screen it lives in the header; on a phone it stays over the top of the map as the floating search box. The **shelf** is now a **drawer**: it floats 8px inside the stage under the header, holds layers and nothing else (switches, keys, legends, fold notes), and stops 44px above the stage's foot so the chips there are never under it. It is **open when the page loads**. Folded, its head alone stays as the "Layers · N" button (layers icon, Label type, count in Ink Faded) that opens it again. Panel head has a 2px Leaf rule beneath it; group heads are Label type over a hairline, with at least three times the gap between groups as between rows inside them.
@@ -285,7 +285,7 @@ The **strip** holds what is true of the whole atlas: Map/Satellite, search, and 
 On phones the drawer docks as a bottom sheet with a grab bar and a **row of group tabs** (Base · Crops · Water …), shown at rest so the layers are obvious. One group shows at a time; each row is a full-width touch target (min 44px) with the switch at the row's end; the active tab is Leaf with white text. The sheet's foot carries Map/Satellite at the left and LOKA's badge at the right. Tapping the grab bar puts an open group away; tapping it again folds the sheet to a "Layers · N" chip bottom-left, and the badge comes out to float bottom-right. It never covers the map's top third.
 
 ### LOKA's badge ("Powered by [LOKA] Atlas")
-The one LOKA element on every atlas view, embeds included. Hard-coded in the page, never manifest-driven. "Powered by" in Source Sans 3 600 at Label size, the LOKA mark as an image 10px tall, "Atlas" in Source Serif 4 700 at .85rem; a hairline pill on Surface at 94%. Floats bottom-right over the map on a wide screen; sits in the sheet's foot on a phone. Links to `./setup/` (in an embed, in a new tab).
+The one LOKA element on every atlas view, embeds included. Hard-coded in the page, never manifest-driven. "Powered by" in Karla 600 at Label size, the LOKA mark as an image 10px tall, "Atlas" in Lora 700 at .85rem; a hairline pill on Surface at 94%. Floats bottom-right over the map on a wide screen; sits in the sheet's foot on a phone. Links to `./setup/` (in an embed, in a new tab).
 
 ### "About & sources"
 A chip bottom-left of the map (Label type on a Surface pill), with the base map's own attribution beside it. It opens the credits as a panel over the map's corner (Surface, hairline, panel-lift shadow; a bottom sheet on phones): the atlas's subtitle and description, then the credits ledger as before — "Made by" (the organisation, partners), "Data & sources" — and a foot with "Build your own atlas for free →" and "All atlases". Not modal: the map stays live; Esc, the × or a click on the map put it away.
@@ -298,7 +298,7 @@ A chip bottom-left of the map (Label type on a Surface pill), with the base map'
 - **Selected feature:** a 2px Sindoor ring plus a faint 1px outer ring; the label is not changed.
 
 ### Navigation
-One thin bar, shared by the home gallery and every atlas. On the home gallery it reads "LOKA Atlas" (the page's title, Source Serif 4) with the links at the right; on an atlas it carries the organisation's block (see The header). Links Ink Soft in Meta type. No active pills, no bottom borders.
+One thin bar, shared by the home gallery and every atlas. On the home gallery it reads "LOKA Atlas" (the page's title, Lora) with the links at the right; on an atlas it carries the organisation's block (see The header). Links Ink Soft in Meta type. No active pills, no bottom borders.
 
 ### Credits and the call to action
 The credits ledger (Surface Alt, hairline top edge: "Made by … with …", data sources, contributed data, the people who walked the ground, the ODbL note) is kept in full but lives behind the "About & sources" chip on an atlas. The LOKA logo block that headed it is gone — the badge is LOKA's mark now. The call-to-action band ("Build an atlas like this…") shows on the home gallery only; on an atlas its link is the badge and the panel's foot.
@@ -332,7 +332,7 @@ Not shipped. The product is used outdoors and on projectors in light rooms; a da
 
 **Replaced**
 - Palette: moss / canopy / rust / ochre / sienna / paper → Leaf / Leaf Deep / Sindoor / Marigold / warm off-white ("Bazaar, a little softer", measured).
-- Faces: Figtree + DM Sans → Source Serif 4 + Source Sans 3. Weights: serif 700; sans 400 / 600 / 700.
+- Faces: Figtree + DM Sans → Lora + Karla. Weights: serif 700; sans 400 / 600 / 700.
 - Map base: the pale grey base and its "grey CARTO" feel → cream Ground (#F5F1E6) inside a double ink frame; boundary ink is now near-black (#26231F), not ochre.
 - Map data colours: the `greens` / `ylorbr` earth ramps → the marigold ramp; point colours are the seven-colour set with mandatory marker shapes.
 - Phone layout: the 46% bottom tray with a bar of group marks → a bottom sheet with group tabs, one group at a time, 44px rows.

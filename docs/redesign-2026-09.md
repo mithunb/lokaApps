@@ -3,7 +3,7 @@
 Decisions are final and approved by Mithun:
 - **Layout:** Field Notebook, refined (round 1) — strip + shelf on desktop, the map in a framed cream well, and on phones a bottom sheet that shows one group of layers at a time with large switches.
 - **Colours:** "Bazaar, a little softer" (Level 1). Tokens are in `DESIGN.md` frontmatter and repeated below.
-- **Fonts:** Source Serif 4 (700) for titles and headlines; Source Sans 3 (400/600/700) for everything else. Latin only for now; stacks are written so script companions can be added later without touching selectors.
+- **Fonts:** Lora (700) for titles and headlines; Karla (400/600/700) for everything else. Latin only for now; stacks are written so script companions can be added later without touching selectors.
 - **Set aside:** other-language font companions; print/hatching; dark mode.
 
 The mock-ups these decisions were made on are in the session scratchpad (`designs/loka-atlas-fonts.html`, pairing 1, is the closest single picture of the target). They are drawings, not code: the spec below is what to build.
@@ -38,9 +38,9 @@ Every page defines these on `:root` with exactly these names. The old names (`--
   --ramp-1:#FBF1D9; --ramp-2:#F4CF82; --ramp-3:#E9A237; --ramp-4:#D2692A; --ramp-5:#A8321A;
   --point-1:#C9402B; --point-2:#2A6B41; --point-3:#E9A237; --point-4:#3A7FA1; --point-5:#A39E94; --point-6:#26231F; --point-7:#B99A1C;
   /* type */
-  --font-companions-serif:"Source Serif 4"; --font-companions-sans:"Source Sans 3";   /* never empty — see the note below; script companions are appended here later */
-  --font-display:"Source Serif 4",var(--font-companions-serif),serif;
-  --font-body:"Source Sans 3",var(--font-companions-sans),sans-serif;
+  --font-companions-serif:"Lora"; --font-companions-sans:"Karla";   /* never empty — see the note below; script companions are appended here later */
+  --font-display:"Lora",var(--font-companions-serif),serif;
+  --font-body:"Karla",var(--font-companions-sans),sans-serif;
   --t-display:clamp(1.6rem,4vw,2.4rem); --t-section:1.2rem; --t-body:1rem; --t-control:.95rem; --t-ui:.9rem; --t-meta:.8rem; --t-label:.72rem;
   /* shape and depth */
   --radius-xs:.125rem; --radius-md:.25rem; --radius-lg:.375rem; --radius-pill:999px;
@@ -49,7 +49,7 @@ Every page defines these on `:root` with exactly these names. The old names (`--
 }
 ```
 
-Note on empty custom properties (corrected by both builders, 26 Sep 2026): `--font-companions-serif:;` is valid CSS, but the stack `"Source Serif 4", var(--font-companions-serif), serif` reads `"Source Serif 4", , serif` once substituted, and Chromium rejected the whole declaration — every heading fell back to Times (measured on the viewer and on the wizard pages). `var(--x, )` fails the same way. The form that works, now in every page, keeps the slot **non-empty** by holding the primary face as a placeholder: `--font-companions-serif:"Source Serif 4"; --font-companions-sans:"Source Sans 3";`. A companion is appended to that value later: `--font-companions-sans:"Source Sans 3", "Noto Sans Devanagari";`. Two further tokens were added during the build: `--color-marigold-tint: rgba(233,162,55,.16)` (the "because" chips) and `--color-blue-tint: rgba(58,127,161,.14)` (the owner's pickers).
+Note on empty custom properties (corrected by both builders, 26 Sep 2026): `--font-companions-serif:;` is valid CSS, but the stack `"Lora", var(--font-companions-serif), serif` reads `"Lora", , serif` once substituted, and Chromium rejected the whole declaration — every heading fell back to Times (measured on the viewer and on the wizard pages). `var(--x, )` fails the same way. The form that works, now in every page, keeps the slot **non-empty** by holding the primary face as a placeholder: `--font-companions-serif:"Lora"; --font-companions-sans:"Karla";`. A companion is appended to that value later: `--font-companions-sans:"Karla", "Noto Sans Devanagari";`. Two further tokens were added during the build: `--color-marigold-tint: rgba(233,162,55,.16)` (the "because" chips) and `--color-blue-tint: rgba(58,127,161,.14)` (the owner's pickers).
 
 ### Measured contrast (WCAG 2.x, computed on the round-3 page)
 Text #24211D on Surface #FDFCF8 = **15.6:1**; muted #5A5751 on Surface = **7.0:1**; white on Leaf #2A6B41 = **6.4:1**; Sindoor #C9402B on Surface = **4.8:1** (passes 3:1 for lines/rings and 4.5 for short text). Ramp stays in lightness order under deuteranopia (L* 96 → 86 → 74 → 59 → 43). Point set: closest pair after simulation is Marigold vs Turmeric (ΔE 8.7) — they never share a marker shape.
@@ -83,7 +83,7 @@ Built after this plan, on Mithun's choice of Option B from the branding review: 
 
 ### 2.4 The map well and base style
 - The map stage gets the **frame**: `border:1px solid var(--map-boundary); outline:1px solid var(--map-boundary); outline-offset:2px;` and background `--map-ground`; the stage keeps an 8px inset from the shelf on desktop. The old stage shadow is removed. On phones the frame is 0px-offset (frame only, no gap) so no width is lost.
-- **Base style lives in `atlas/atlas.js`**, `APP_BASEMAPS` (lines ≈ 642–668): `light` is the OpenFreeMap "bright" vector style (`https://tiles.openfreemap.org/styles/bright`) with `ground: "#F8F4EC"`; `satellite` is the Esri World Imagery raster with `ground: "#2B2F33"`. The background layer `bg` is painted from `mapGround` (≈ line 795) and re-set at ≈ line 3531 when the basemap changes. Glyphs: `GLYPH_FONTS = { regular: "Noto Sans Regular", bold: "Noto Sans Bold" }` (≈ line 685; the map's own label glyphs stay Noto Sans — MapLibre cannot use web fonts, and Noto Sans is the closest match to Source Sans 3 in x-height).
+- **Base style lives in `atlas/atlas.js`**, `APP_BASEMAPS` (lines ≈ 642–668): `light` is the OpenFreeMap "bright" vector style (`https://tiles.openfreemap.org/styles/bright`) with `ground: "#F8F4EC"`; `satellite` is the Esri World Imagery raster with `ground: "#2B2F33"`. The background layer `bg` is painted from `mapGround` (≈ line 795) and re-set at ≈ line 3531 when the basemap changes. Glyphs: `GLYPH_FONTS = { regular: "Noto Sans Regular", bold: "Noto Sans Bold" }` (≈ line 685; the map's own label glyphs stay Noto Sans — MapLibre cannot use web fonts, and Noto Sans is the closest match to Karla in x-height).
   - Set `light.ground` to `#F5F1E6` (`--map-ground`).
   - After the vector style loads, **warm and quiet the OpenFreeMap "bright" layers** so they sit with the cream ground: water fill → `#C8DBE5`, waterway lines → `#3A7FA1`, landcover/park greens → desaturated toward `#E9EDDF`, residential/landuse → `#EFEAE0`, roads → `#E2DDD0` (major roads may stay one step darker, `#D6D0C0`), building fills → `#E8E2D6`, admin boundaries → `#8C8985`, base labels → `#5A5751` with halo `#F5F1E6`. Do this in one function (`warmBaseStyle(map)`) that iterates `map.getStyle().layers` and matches by `source-layer`/`id` prefixes (`water`, `waterway`, `landcover`, `landuse`, `park`, `road|highway|transportation`, `building`, `boundary`, `place|poi|label`), applying `setPaintProperty`. Guard every call with `map.getLayer(id)`; log nothing on a miss. Satellite is untouched.
   - The "warm" raster treatment in `atlas/map-style-variations.html` is a precedent only; it is not loaded by the product.
@@ -102,7 +102,7 @@ Built after this plan, on Mithun's choice of Option B from the branding review: 
 - `.maplibregl-popup-content`: Surface, 4px, **3px Sindoor top border**, `--shadow-lg`, padding 0; the pop-in animation kept at .18s.
 - Photo band (`.pop-img`, `.pop-shots`): unchanged geometry; corner radius 4px.
 - `.pop-sub` (kicker): Label type in **Leaf** ("SURVEY VILLAGE · GORAKHPUR").
-- `.pop-title`: Source Serif 4 700, 1.1rem, Ink.
+- `.pop-title`: Lora 700, 1.1rem, Ink.
 - Fields: two-column (`.pop-lbl` Meta Ink Soft; `.pop-val` Sans 600 Ink with `tabular-nums`).
 - Close: 14px circle, rgba(255,255,255,.85), Ink glyph; focus ring Leaf.
 - Hover tooltip (`.atlas-tooltip`): Surface, hairline, Meta type; no shadow.
@@ -151,9 +151,9 @@ Today every page carries a Google Fonts link (`fonts.googleapis.com/css2?family=
 ```html
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:wght@700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600;700&family=Lora:wght@700&display=swap">
 ```
-Measured on 26 Sep 2026 (woff2, Latin subset): Source Sans 3 400/600/700 = 84 KB in 3 files; Source Serif 4 700 = 21 KB in 1 file; **105 KB total**, versus today's DM Sans + Figtree at 6 weights.
+Measured on 26 Sep 2026 (woff2, Latin subset): Karla 400/600/700 = 84 KB in 3 files; Lora 700 = 21 KB in 1 file; **105 KB total**, versus today's DM Sans + Figtree at 6 weights.
 - One shared snippet, pasted identically into each page (there is no shared head include). Remove the Figtree/DM Sans link in the same commit.
 - Map glyphs (labels drawn by MapLibre) stay Noto Sans via the style's `glyphs` URL; that is not a web font and is unaffected.
 - **Later, for other scripts:** add `&family=Noto+Sans+Devanagari:wght@400;600` (and Bengali/Tamil/Arabic, or IBM Plex siblings) to the link and set `--font-companions-sans: "Noto Sans Devanagari", "Noto Sans Bengali", …;` / `--font-companions-serif: "Noto Serif Devanagari", …;` in `:root`. No selector changes. Google Fonts serves companions with `unicode-range`, so they download only on pages that contain that script.
@@ -167,7 +167,7 @@ Before opening a PR, each builder runs, on their own port (`LOKA_DEV_STATIC=1 �
 1. **Desktop (≥ 1200px)**: viewer at `/apps/atlas/` for the Deoria atlas — strip, shelf, framed map, place card open, credits, CTA, all in the new tokens and fonts; no old moss/rust/ochre anywhere (`grep -n "#4A5A33\|#AE5028\|#B8862F\|Figtree\|DM Sans" atlas/index.html atlas/*.css atlas/*/index.html` returns nothing in your files).
 2. **375px**: bottom sheet with tabs, one group at a time, 44px rows, no horizontal scroll (`document.documentElement.scrollWidth === innerWidth`), map not covered above its top third, credits in the sheet foot.
 3. **Contrast**: the token pairs above are already measured; any new pair a builder introduces is checked (a one-line Node script with the WCAG formula is fine) and the ratio is noted in the commit message.
-4. **Fonts**: in DevTools, `document.fonts.check('700 16px "Source Serif 4"')` and `document.fonts.check('400 16px "Source Sans 3"')` both `true`; Network shows 4 woff2 files from `fonts.gstatic.com`.
+4. **Fonts**: in DevTools, `document.fonts.check('700 16px "Lora"')` and `document.fonts.check('400 16px "Karla"')` both `true`; Network shows 4 woff2 files from `fonts.gstatic.com`.
 5. **Console**: no errors on load, on basemap switch, on opening a popup, on toggling every layer.
 6. **Tests**: `node test/run.mjs` passes with the same count as before your change (the runner reports the total; a lower total is a finding). Do not edit `test/places-test.mjs` or `test/source-rows-test.mjs`.
 7. **Owner view** (Builder B): sign in as an owner locally, open settings sheet, rename a layer, see the toast — all in new tokens.
