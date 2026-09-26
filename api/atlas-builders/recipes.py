@@ -1478,7 +1478,10 @@ def places_named(ctx):
         # so "Pench National Park" never reads like a respondent's name.
         "label_text": {"property": "name", "size": 11.5, "color": "#5A5751",
                        "haloColor": "#F5F1E6", "haloWidth": 2,
-                       "transform": "none", "letterSpacing": 0.01, "biggestFirst": True},
+                       "transform": "none", "letterSpacing": 0.01, "biggestFirst": True,
+                       # set just above the middle, so it never sits on top of
+                       # the name a layer of people puts just below it
+                       "offset": [0, -0.9], "anchor": "bottom"},
         "legend": [{"color": "#5A5751", "label": places_label(kinds, one=True), "shape": "dashed"}],
         # a tap says which place it is and what kind — the info line promises it
         "popup": {"title": "name", "fields": [{"label": "What it is", "property": "kind"},

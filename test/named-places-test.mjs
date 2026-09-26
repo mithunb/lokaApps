@@ -53,6 +53,7 @@ check('names show at every zoom (no minzoom)', 'minzoom' in L.label_text, false)
 check('names are in ordinary case, unlike a layer\'s own area names', L.label_text.transform, 'none');
 check('the biggest places win a crowded map', L.label_text.biggestFirst, true);
 check('the viewer sorts names by the size of their place', /if \(t\.biggestFirst\) layout\["symbol-sort-key"\]/.test(fs.readFileSync(ROOT + '/atlas/atlas.js', 'utf8')), true);
+check('a place name sits just above the middle, clear of a person\'s name below it', [L.label_text.offset, L.label_text.anchor], [[0, -0.9], 'bottom']);
 check('the key is dashed like the line', L.legend[0].shape, 'dashed');
 check('a tap says what it is', L.popup.fields.map((f) => f.property), ['kind', 'state']);
 check('the info line keeps the credits', /GMBA; NTCA$/.test(L.info), true);
