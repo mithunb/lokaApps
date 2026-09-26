@@ -1055,6 +1055,21 @@
     .head-tools .ctl-search { flex:1 1 7rem; max-width:22rem; margin:0; }
     .head-tools .ctl-search-input { padding-top:.32rem; padding-bottom:.32rem; }
     .head-tools:empty { display:none; }
+    /* Between a phone and a wide screen (about 721–1100px) the header's pieces
+       did not fit one row, and "all atlases" and "sign in" wrapped under it.
+       Here Share is its icon, and only sign in / sign out stay among the links
+       ("All atlases" is in About & sources) — one row, as on the other sizes. */
+    @media (min-width:721px) and (max-width:1100px){
+      .atlas-full .nav .links > :not(#nav-signin):not(#nav-signout) { display:none; }
+      .atlas-full .share-btn span, .atlas-full #add-data-btn span { display:none; }
+      .atlas-full .share-btn { padding:.3rem .45rem; }
+      .atlas-full .share-btn svg { margin:0; }
+      .atlas-full .nav { gap:.6rem .75rem; }
+      /* grow into what is left rather than claiming a full row first, so the
+         search box shrinks before anything wraps; the title shortens with "…" */
+      .atlas-full .head-tools { flex:1 1 0; }
+      .atlas-full .org-head { flex:0 1 auto; min-width:10rem; }
+    }
     /* the drawer starts under the header now, not under a strip, and stops
        above the chips row at the foot so the credits are never under it */
     @media (min-width:721px){
