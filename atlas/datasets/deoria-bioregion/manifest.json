@@ -45,7 +45,7 @@
       "label": "Crop distribution by block", "default": true,
       "arrayProperty": "crops", "countProperty": "ncrops", "nameProperty": "name",
       "defaultMode": "diversity",
-      "diversity": { "label": "Crop diversity", "ramp": ["#e7e3d8", "#cdd3b4", "#a9bd8e", "#7f9c65", "#566f42", "#39502f"], "max": 5 },
+      "diversity": { "label": "Crop diversity", "ramp": ["#FBF1D9", "#F6D693", "#EEB456", "#E08C32", "#CA5E27", "#A8321A"], "max": 5 },
       "categories": [
         { "name": "Sugarcane", "color": "#4f6b3f" },
         { "name": "Rice", "color": "#6f8fa0" },
@@ -95,15 +95,15 @@
       "label": "Wasteland (open / barren land)", "default": false, "opacityControl": true, "opacity": 0.7,
       "info": "No open revenue-wasteland GIS exists for these districts, so this is a land-cover proxy: the share of uncultivated open, scrub & barren land per block (ESA WorldCover 2021).",
       "paint": {
-        "fillColor": ["step", ["get", "wl_pct"], "#efe6d9", 1.5, "#ddc4a0", 3, "#caa06f", 5, "#a8703f", 7, "#824e26"],
+        "fillColor": ["step", ["get", "wl_pct"], "#FBF1D9", 1.5, "#F4CF82", 3, "#E9A237", 5, "#D2692A", 7, "#A8321A"],
         "fillOpacity": 0.7, "outlineColor": "#7a5a3a", "outlineWidth": 0.4
       },
       "legend": [
-        { "color": "#efe6d9", "label": "< 1.5%" },
-        { "color": "#ddc4a0", "label": "1.5–3%" },
-        { "color": "#caa06f", "label": "3–5%" },
-        { "color": "#a8703f", "label": "5–7%" },
-        { "color": "#824e26", "label": "> 7%" }
+        { "color": "#FBF1D9", "label": "< 1.5%" },
+        { "color": "#F4CF82", "label": "1.5–3%" },
+        { "color": "#E9A237", "label": "3–5%" },
+        { "color": "#D2692A", "label": "5–7%" },
+        { "color": "#A8321A", "label": "> 7%" }
       ],
       "popup": { "title": "name", "subtitleProperty": "district", "fields": [
         { "label": "Open / barren land", "property": "wl_pct", "suffix": "% of block area" } ] }

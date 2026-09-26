@@ -1866,8 +1866,7 @@
   var MARKER_COLORS = { rust: "#C9402B", moss: "#2A6B41", ochre: "#E9A237", sienna: "#D2692A", slate: "#3A7FA1" };
   var MARKER_NAMES = { rust: "Sindoor red", moss: "Leaf green", ochre: "Marigold", sienna: "Sienna", slate: "Blue" };
   var PALETTE_NAMES = {
-    marigold: "Marigold", greens: "Greens", blues: "Blues", rust: "Rust", ylorbr: "Sand to brown",
-    brteal: "Brown to teal", tealbr: "Teal to brown", purples: "Purples",
+    marigold: "Marigold", blues: "Blues", brteal: "Brown to teal", tealbr: "Teal to brown",
   };
   function paletteOptions() {
     return ((S.options && S.options.palettes) || []).map(function (k) {
@@ -2117,7 +2116,7 @@
       var imgs = imageColumns();
       fillSelect("#s-image", imgs, spec.imageColumn && imgs.indexOf(spec.imageColumn) >= 0 ? spec.imageColumn : "", true);
       var pals = paletteOptions();
-      fillSelect("#s-palette", pals, pals.some(function (p) { return p.value === spec.palette; }) ? spec.palette : "greens");
+      fillSelect("#s-palette", pals, pals.some(function (p) { return p.value === spec.palette; }) ? spec.palette : "marigold");
       // one row of swatches serves pins, circles, borders and lines alike —
       // seeded from whichever slot the saved spec filled
       var flat = (pair.shape === "border" ? spec.fillColor : pair.shape === "line" ? spec.lineColor : spec.markerColor) || spec.markerColor || "rust";

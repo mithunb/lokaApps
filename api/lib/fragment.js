@@ -10,23 +10,81 @@
 // apart once simulated, i.e. the same colour).
 export const PALETTES = {
   // The atlas's own ramp (DESIGN.md §2): five steps, light → dark, that stay
-  // in lightness order under deuteranopia (L* 96 → 86 → 74 → 59 → 43). The
-  // default for every NEW layer; the ramps below stay for layers that name
-  // them, so nothing already built changes colour.
+  // in lightness order under deuteranopia (L* 96 → 86 → 74 → 59 → 43). Every
+  // shaded layer that is not about water uses it; marigoldRamp() below gives
+  // it at any other number of steps.
   marigold: ['#FBF1D9', '#F4CF82', '#E9A237', '#D2692A', '#A8321A'],
-  greens: ['#e7e3d8', '#cdd3b4', '#a9bd8e', '#7f9c65', '#566f42', '#39502f'],
+  // Water stays blue: rainfall, surface water, flood depth.
   blues: ['#e6ebec', '#c2d2d8', '#93b1bd', '#6690a1', '#446e80', '#2d4f5e'],
-  rust: ['#f0e6dd', '#e0c4ab', '#cb9c77', '#b06f47', '#8f4d2c', '#6e371d'],
-  ylorbr: ['#efe6d9', '#ddc4a0', '#caa06f', '#a8703f', '#824e26', '#5e3618'],
   brteal: ['#8a5a25', '#bb8f4e', '#e2cfa4', '#9fc7bd', '#4e8f86', '#2c625d'],
   tealbr: ['#2c625d', '#4e8f86', '#9fc7bd', '#e2cfa4', '#bb8f4e', '#8a5a25'],
+};
+// The four single-hue ramps retired in September 2026 for marigold. Kept only
+// so deploy/migrate-ramps-marigold.mjs can recognise them in a built atlas;
+// nothing paints with them any more.
+export const RETIRED_RAMPS = {
+  greens: ['#e7e3d8', '#cdd3b4', '#a9bd8e', '#7f9c65', '#566f42', '#39502f'],
+  rust: ['#f0e6dd', '#e0c4ab', '#cb9c77', '#b06f47', '#8f4d2c', '#6e371d'],
+  ylorbr: ['#efe6d9', '#ddc4a0', '#caa06f', '#a8703f', '#824e26', '#5e3618'],
   purples: ['#e9e4ea', '#cfc3d4', '#ac97b6', '#8a6e96', '#6a4d75', '#4c3454'],
 };
 // Retired ramp names keep resolving, at the same polarity (low → high), so a
 // spec saved before the swap still applies instead of silently falling back.
-export const PALETTE_ALIASES = { rdylgn: 'brteal', gnrd: 'tealbr' };
+export const PALETTE_ALIASES = {
+  rdylgn: 'brteal', gnrd: 'tealbr',
+  greens: 'marigold', rust: 'marigold', ylorbr: 'marigold', purples: 'marigold',
+};
 export function rampFor(name) {
   return PALETTES[name] || PALETTES[PALETTE_ALIASES[name]] || PALETTES.marigold;
+}
+export function isMarigold(name) {
+  return rampFor(name) === PALETTES.marigold;
+}
+
+// Marigold at any number of steps, light → dark. The five anchors are spaced
+// evenly and the steps between them are mixed in CIELAB, where equal distances
+// look like equal changes, so a six- or seven-class layer keeps every class
+// instead of losing one to a five-step ramp. n = 5 gives the anchors exactly.
+function hexToLab(hex) {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  const [fx, fy, fz] = [
+    (0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / 0.95047,
+    0.2126729 * r + 0.7151522 * g + 0.0721750 * b,
+    (0.0193339 * r + 0.1191920 * g + 0.9503041 * b) / 1.08883,
+  ].map((t) => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116));
+  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+}
+function labToHex([L, a, b]) {
+  const fy = (L + 16) / 116, fx = fy + a / 500, fz = fy - b / 200;
+  const inv = (f) => (f ** 3 > 216 / 24389 ? f ** 3 : (116 * f - 16) / (24389 / 27));
+  const X = inv(fx) * 0.95047, Y = inv(fy), Z = inv(fz) * 1.08883;
+  return '#' + [
+    3.2404542 * X - 1.5371385 * Y - 0.4985314 * Z,
+    -0.9692660 * X + 1.8760108 * Y + 0.0415560 * Z,
+    0.0556434 * X - 0.2040259 * Y + 1.0572252 * Z,
+  ].map((c) => {
+    const v = c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
+    return Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0').toUpperCase();
+  }).join('');
+}
+export function marigoldRamp(n) {
+  const anchors = PALETTES.marigold;
+  n = Math.floor(Number(n) || anchors.length);
+  if (n === anchors.length) return [...anchors];
+  if (n < 2) return [anchors[0]];
+  const labs = anchors.map(hexToLab);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const t = (i / (n - 1)) * (anchors.length - 1);
+    const k = Math.min(anchors.length - 2, Math.floor(t)), f = t - k;
+    if (f < 1e-9) out.push(anchors[k]);
+    else if (f > 1 - 1e-9) out.push(anchors[k + 1]);
+    else out.push(labToHex(labs[k].map((v, j) => v + (labs[k + 1][j] - v) * f)));
+  }
+  return out;
 }
 // Named single colours a HUMAN picks for a whole layer — brand choices, not
 // auto-assignment, so they stay exactly as chosen. The seven-colour point set
@@ -328,11 +386,15 @@ export function buildFragment(spec, feats, existingIds) {
   } else if (kind === 'choropleth') {
     const prop = String(spec.valueColumn || '');
     const values = feats.map((f) => Number(f.properties[prop])).filter(Number.isFinite);
-    const ramp = rampFor(spec.palette);
+    // Marigold is resampled to however many classes the numbers actually make,
+    // so every class gets its own step across the whole light → dark range. The
+    // fixed ramps (blues, the diverging pair) still cap the class count at
+    // their length — a class past the end would be painted with nothing.
+    const marigold = isMarigold(spec.palette);
+    const fixed = rampFor(spec.palette);
+    const breaks = quantileBreaks(values, marigold ? (spec.classCount || 5) : Math.min(spec.classCount || 5, fixed.length));
+    const ramp = marigold ? marigoldRamp(breaks.length + 1) : fixed;
     const colors = spec.reverse ? [...ramp].reverse() : ramp;
-    // never more classes than the ramp has steps — a sixth class on a
-    // five-step ramp would be painted with nothing
-    const breaks = quantileBreaks(values, Math.min(spec.classCount || 5, ramp.length));
     const used = colors.slice(0, breaks.length + 1);
     const expr = ['step', ['get', prop], used[0]];
     breaks.forEach((b, j) => { expr.push(b, used[j + 1]); });
