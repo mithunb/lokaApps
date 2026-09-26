@@ -1,27 +1,41 @@
 {
  "comment": "Named places an atlas can match a row against. Names and a rough box only — the shape is fetched when a build asks for it. Written by build_places_index.py; edit the files it reads, not this one.",
  "sources": {
+  "file": {
+   "label": "shipped with the atlas",
+   "fetch": "{id}",
+   "read": {
+    "in": "features",
+    "match": "name"
+   },
+   "credit": "see each entry",
+   "licence": "see each entry"
+  },
   "osm": {
    "label": "OpenStreetMap",
    "fetch": "https://nominatim.openstreetmap.org/lookup?osm_ids={id}&format=json&polygon_geojson=1",
+   "read": {
+    "in": "list",
+    "geometry_at": "geojson",
+    "areas_only": true
+   },
+   "gap_s": 1.1,
    "home": "https://www.openstreetmap.org/copyright",
    "credit": "© OpenStreetMap contributors",
    "licence": "ODbL 1.0",
    "note": "one request a second, per their policy; the result is cached"
   },
-  "file": {
-   "label": "shipped with the atlas",
-   "fetch": "api/atlas-builders/places/{id}",
-   "credit": "see each entry",
-   "licence": "see each entry"
-  },
   "ramsar": {
    "label": "Ramsar Sites Information Service",
-   "fetch": "https://rsis.ramsar.org/geoserver/wfs?service=WFS&version=1.1.0&request=GetFeature&typeName=ramsar_sdi:features_bnd&outputFormat=application/json&CQL_FILTER=ramsarid={id}",
+   "fetch": "https://rsis.ramsar.org/geoserver/wfs?service=WFS&version=1.1.0&request=GetFeature&typeName=ramsar_sdi:features_published&outputFormat=application/json&CQL_FILTER=ramsarid={id}",
+   "read": {
+    "in": "features"
+   },
+   "timeout_s": 90,
    "home": "https://rsis.ramsar.org",
    "credit": "Ramsar Sites Information Service",
    "licence": "open access",
-   "note": "not yet proven against the live service; a failure is silent and the place is simply left off the map"
+   "note": "the boundaries layer, features_bnd, is keyed on an internal number and knows nothing of Ramsar site numbers — three attempts failed against it. features_published carries the site number, the official name and the outline together."
   }
  },
  "places": [
@@ -1450,24 +1464,6 @@
    ],
    "credit": "National Tiger Conservation Authority",
    "licence": "reproducible free of charge with the source acknowledged (ntca.gov.in/copyright-policy)"
-  },
-  {
-   "name": "Beas Conservation Reserve",
-   "aliases": [
-    "Beas River Conservation Reserve"
-   ],
-   "kind": "conservation reserve",
-   "state": "Punjab",
-   "source": "ramsar",
-   "id": "2408",
-   "bbox": [
-    74.9,
-    31.2,
-    75.6,
-    31.9
-   ],
-   "credit": "Ramsar Sites Information Service",
-   "licence": "open access"
   },
   {
    "name": "Bedthi Conservation Reserve",
@@ -17337,6 +17333,1266 @@
    "note": "a ward of Bengaluru, which is the nearest published boundary to the neighbourhood",
    "credit": "© OpenStreetMap contributors",
    "licence": "ODbL 1.0"
+  },
+  {
+   "name": "Aghanashini Estuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Aghanashini Estuary",
+   "at": 57,
+   "bbox": [
+    74.335,
+    14.442,
+    74.471,
+    14.575
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Ankasamudra Bird Conservation Reserve",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Ankasamudra Bird Conservation Reserve",
+   "at": 50,
+   "bbox": [
+    76.227,
+    15.121,
+    76.24,
+    15.135
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Ansupa Lake",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Ansupa Lake",
+   "at": 32,
+   "bbox": [
+    85.597,
+    20.444,
+    85.609,
+    20.477
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Asan Conservation Reserve",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Asan Conservation Reserve",
+   "at": 29,
+   "bbox": [
+    77.659,
+    30.426,
+    77.723,
+    30.445
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Beas Conservation Reserve",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Beas Conservation Reserve",
+   "at": 5,
+   "bbox": [
+    74.942,
+    31.143,
+    75.894,
+    32.118
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Chhari Dhand",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Chhari Dhand",
+   "at": 65,
+   "bbox": [
+    69.189,
+    23.512,
+    69.554,
+    23.635
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Chitrangudi Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Chitrangudi Bird Sanctuary",
+   "at": 38,
+   "bbox": [
+    78.468,
+    9.332,
+    78.488,
+    9.351
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Glaw Lake",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Glaw Lake",
+   "at": 72,
+   "bbox": [
+    96.445,
+    27.691,
+    96.461,
+    27.702
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Gogabil Lake",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Gogabil Lake",
+   "at": 70,
+   "bbox": [
+    87.688,
+    25.367,
+    87.699,
+    25.38
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Gokul Jalashay",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Gokul Jalashay",
+   "at": 64,
+   "bbox": [
+    84.226,
+    25.622,
+    84.337,
+    25.685
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Gulf of Mannar Marine Biosphere Reserve",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Gulf of Mannar Marine Biosphere Reserve",
+   "at": 16,
+   "bbox": [
+    78.192,
+    8.817,
+    79.25,
+    9.253
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Haiderpur Wetland",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Haiderpur Wetland",
+   "at": 3,
+   "bbox": [
+    77.97,
+    29.37,
+    78.066,
+    29.472
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Hirakud Reservoir",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Hirakud Reservoir",
+   "at": 33,
+   "bbox": [
+    83.419,
+    21.476,
+    84.046,
+    21.803
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Hygam Wetland Conservation Reserve",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Hygam Wetland Conservation Reserve",
+   "at": 45,
+   "bbox": [
+    74.509,
+    34.225,
+    74.548,
+    34.268
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Jai Prakash Narayan Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Jai Prakash Narayan Bird Sanctuary",
+   "at": 73,
+   "bbox": [
+    84.137,
+    25.811,
+    84.212,
+    25.869
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Kabartal Wetland",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Kabartal Wetland",
+   "at": 28,
+   "bbox": [
+    86.083,
+    25.583,
+    86.176,
+    25.657
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Kanjirankulam Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Kanjirankulam Bird Sanctuary",
+   "at": 24,
+   "bbox": [
+    78.472,
+    9.356,
+    78.486,
+    9.363
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Karaivetti Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Karaivetti Bird Sanctuary",
+   "at": 48,
+   "bbox": [
+    79.033,
+    10.968,
+    79.059,
+    10.995
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Karikili Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Karikili Bird Sanctuary",
+   "at": 23,
+   "bbox": [
+    79.836,
+    12.592,
+    79.846,
+    12.604
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Kazhuveli Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Kazhuveli Bird Sanctuary",
+   "at": 53,
+   "bbox": [
+    79.82,
+    12.067,
+    79.912,
+    12.17
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Keshopur-Miani Community Reserve",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Keshopur-Miani Community Reserve",
+   "at": 7,
+   "bbox": [
+    75.374,
+    32.079,
+    75.411,
+    32.11
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Khachoedpalri wetland",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Khachoedpalri wetland",
+   "at": 61,
+   "bbox": [
+    88.174,
+    27.345,
+    88.196,
+    27.36
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Khichan wetland",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Khichan wetland",
+   "at": 69,
+   "bbox": [
+    72.413,
+    27.137,
+    72.421,
+    27.146
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Koonthankulam Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Koonthankulam Bird Sanctuary",
+   "at": 37,
+   "bbox": [
+    77.745,
+    8.49,
+    77.759,
+    8.503
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Kopra Jalashay",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Kopra Jalashay",
+   "at": 66,
+   "bbox": [
+    82.042,
+    22.055,
+    82.069,
+    22.079
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Lonar Lake",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Lonar Lake",
+   "at": 27,
+   "bbox": [
+    76.496,
+    19.962,
+    76.52,
+    19.986
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Longwood Shola Reserve Forest",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Longwood Shola Reserve Forest",
+   "at": 49,
+   "bbox": [
+    76.871,
+    11.431,
+    76.885,
+    11.446
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Magadi Kere Conservation Reserve",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Magadi Kere Conservation Reserve",
+   "at": 52,
+   "bbox": [
+    75.513,
+    15.218,
+    75.522,
+    15.229
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Menar Wetland Complex",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Menar Wetland Complex",
+   "at": 67,
+   "bbox": [
+    74.062,
+    24.586,
+    74.115,
+    24.61
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Nagi Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Nagi Bird Sanctuary",
+   "at": 51,
+   "bbox": [
+    86.398,
+    24.806,
+    86.435,
+    24.829
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Nakti Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Nakti Bird Sanctuary",
+   "at": 60,
+   "bbox": [
+    86.433,
+    24.837,
+    86.46,
+    24.858
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Nanda Lake",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Nanda Lake",
+   "at": 43,
+   "bbox": [
+    74.103,
+    15.231,
+    74.112,
+    15.241
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Nandur Madhameshwar",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Nandur Madhameshwar",
+   "at": 8,
+   "bbox": [
+    74.059,
+    20.002,
+    74.148,
+    20.043
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Nangal Wildlife Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Nangal Wildlife Sanctuary",
+   "at": 25,
+   "bbox": [
+    76.364,
+    31.38,
+    76.384,
+    31.404
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Nanjarayan Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Nanjarayan Bird Sanctuary",
+   "at": 55,
+   "bbox": [
+    77.376,
+    11.129,
+    77.393,
+    11.141
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Nawabganj Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Nawabganj Bird Sanctuary",
+   "at": 26,
+   "bbox": [
+    80.645,
+    26.602,
+    80.668,
+    26.621
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Pala Wetland",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Pala Wetland",
+   "at": 31,
+   "bbox": [
+    92.878,
+    22.169,
+    92.926,
+    22.224
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Pallikaranai Marsh Reserve Forest",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Pallikaranai Marsh Reserve Forest",
+   "at": 35,
+   "bbox": [
+    80.208,
+    12.877,
+    80.243,
+    12.968
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Parvati Arga Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Parvati Arga Bird Sanctuary",
+   "at": 14,
+   "bbox": [
+    82.108,
+    26.905,
+    82.183,
+    26.959
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Patna Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Patna Bird Sanctuary",
+   "at": 56,
+   "bbox": [
+    78.306,
+    27.515,
+    78.318,
+    27.533
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Pichavaram Mangrove",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Pichavaram Mangrove",
+   "at": 36,
+   "bbox": [
+    79.767,
+    11.407,
+    79.809,
+    11.467
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Ranganathittu Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Ranganathittu Bird Sanctuary",
+   "at": 12,
+   "bbox": [
+    76.587,
+    12.356,
+    76.809,
+    12.434
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Sakhya Sagar",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Sakhya Sagar",
+   "at": 17,
+   "bbox": [
+    77.692,
+    25.417,
+    77.718,
+    25.447
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Sakkarakottai Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Sakkarakottai Bird Sanctuary",
+   "at": 58,
+   "bbox": [
+    78.78,
+    9.333,
+    78.844,
+    9.356
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Saman Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Saman Bird Sanctuary",
+   "at": 6,
+   "bbox": [
+    79.163,
+    27.003,
+    79.191,
+    27.027
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Samaspur Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Samaspur Bird Sanctuary",
+   "at": 13,
+   "bbox": [
+    81.36,
+    25.97,
+    81.414,
+    26.017
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Sandi Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Sandi Bird Sanctuary",
+   "at": 4,
+   "bbox": [
+    79.964,
+    27.299,
+    79.983,
+    27.327
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Sarsai Nawar Jheel",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Sarsai Nawar Jheel",
+   "at": 15,
+   "bbox": [
+    79.238,
+    26.96,
+    79.262,
+    26.977
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Satkosia Gorge",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Satkosia Gorge",
+   "at": 30,
+   "bbox": [
+    84.59,
+    20.397,
+    85.094,
+    20.76
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Shallbugh Wetland Conservation Reserve",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Shallbugh Wetland Conservation Reserve",
+   "at": 46,
+   "bbox": [
+    74.689,
+    34.135,
+    74.77,
+    34.192
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Sheikha Jheel Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Sheikha Jheel Bird Sanctuary",
+   "at": 74,
+   "bbox": [
+    78.213,
+    27.855,
+    78.222,
+    27.861
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Siliserh lake",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Siliserh lake",
+   "at": 68,
+   "bbox": [
+    76.512,
+    27.518,
+    76.54,
+    27.543
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Sirpur Wetland",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Sirpur Wetland",
+   "at": 41,
+   "bbox": [
+    75.8,
+    22.692,
+    75.825,
+    22.705
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Suchindram Theroor Wetland Complex",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Suchindram Theroor Wetland Complex",
+   "at": 44,
+   "bbox": [
+    77.45,
+    8.14,
+    77.457,
+    8.163
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Sundarban Wetland",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Sundarban Wetland",
+   "at": 1,
+   "bbox": [
+    88.137,
+    21.423,
+    89.102,
+    22.225
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Sur Sarovar",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Sur Sarovar",
+   "at": 21,
+   "bbox": [
+    77.827,
+    27.24,
+    77.855,
+    27.266
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Tampara Lake",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Tampara Lake",
+   "at": 34,
+   "bbox": [
+    84.972,
+    19.329,
+    85.024,
+    19.368
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Tawa Reservoir",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Tawa Reservoir",
+   "at": 62,
+   "bbox": [
+    77.828,
+    22.286,
+    78.258,
+    22.609
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Thane Creek",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Thane Creek",
+   "at": 47,
+   "bbox": [
+    72.918,
+    19.051,
+    73.006,
+    19.189
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Therthangal Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Therthangal Bird Sanctuary",
+   "at": 63,
+   "bbox": [
+    78.769,
+    9.455,
+    78.772,
+    9.466
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Tso Kar Wetland Complex",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Tso Kar Wetland Complex",
+   "at": 18,
+   "bbox": [
+    77.948,
+    33.218,
+    78.078,
+    33.372
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Udaipur Jheel",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Udaipur Jheel",
+   "at": 71,
+   "bbox": [
+    84.423,
+    26.78,
+    84.45,
+    26.814
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Udhayamarthandapuram Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Udhayamarthandapuram Bird Sanctuary",
+   "at": 40,
+   "bbox": [
+    79.551,
+    10.446,
+    79.558,
+    10.455
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Udhwa Lake Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Udhwa Lake Bird Sanctuary",
+   "at": 54,
+   "bbox": [
+    87.79,
+    24.963,
+    87.832,
+    25.024
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Vaduvur Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Vaduvur Bird Sanctuary",
+   "at": 39,
+   "bbox": [
+    79.31,
+    10.697,
+    79.323,
+    10.71
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Vedanthangal Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Vedanthangal Bird Sanctuary",
+   "at": 20,
+   "bbox": [
+    79.853,
+    12.542,
+    79.859,
+    12.55
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Vellode Bird Sanctuary",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Vellode Bird Sanctuary",
+   "at": 19,
+   "bbox": [
+    77.645,
+    11.248,
+    77.659,
+    11.256
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Vembannur Wetland Complex",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Vembannur Wetland Complex",
+   "at": 59,
+   "bbox": [
+    77.373,
+    8.179,
+    77.379,
+    8.185
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Wadhvana Wetland",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Wadhvana Wetland",
+   "at": 11,
+   "bbox": [
+    73.47,
+    22.161,
+    73.51,
+    22.184
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
+  },
+  {
+   "name": "Yashwant Sagar",
+   "aliases": [],
+   "kind": "wetland",
+   "state": null,
+   "source": "file",
+   "id": "ramsar-IND.geojson",
+   "feature": "Yashwant Sagar",
+   "at": 42,
+   "bbox": [
+    75.679,
+    22.771,
+    75.716,
+    22.825
+   ],
+   "credit": "Ramsar Sites Information Service",
+   "licence": "open access"
   }
  ]
 }

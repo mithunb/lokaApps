@@ -11,6 +11,7 @@ import { joinByName } from '../api/lib/matching.js';
 
 const idx = JSON.parse(fs.readFileSync(ROOT + '/api/atlas-builders/places/index.json', 'utf8'));
 const py = fs.readFileSync(ROOT + '/api/atlas-builders/places.py', 'utf8');
+const builder = fs.readFileSync(ROOT + '/api/atlas-builders/build_places_index.py', 'utf8');
 const server = fs.readFileSync(ROOT + '/api/apps/atlas.js', 'utf8');
 const matching = fs.readFileSync(ROOT + '/api/lib/matching.js', 'utf8');
 const ranges = JSON.parse(fs.readFileSync(ROOT + '/api/atlas-builders/places/ranges-IND.geojson', 'utf8'));
@@ -82,9 +83,16 @@ check('small enough to commit', fs.statSync(ROOT + '/api/atlas-builders/places/r
 
 console.log('\n  only what a region reaches is fetched, and only by id');
 check('the build filters on the box first', /def within\(bbox\)/.test(py) && /Reads no geometry at all/.test(py), true);
-check('a point is never drawn as an area', /g if g and g\.get\("type"\) in \("Polygon", "MultiPolygon"\) else None/.test(py), true);
+/* A point is not an area, and a geocoder that cannot find an outline will
+   happily offer a dot instead. The refusal used to be written into the
+   OpenStreetMap fetcher; it is now something a source asks for, so the check
+   is that the rule exists AND that the source which needs it asks for it. */
+check('a point is never drawn as an area',
+  /read\.get\("areas_only"\) and g\.get\("type"\) not in \("Polygon", "MultiPolygon"\)/.test(py), true);
+check('and the geocoder is the source that asks for that',
+  /"read": \{"in": "list", "geometry_at": "geojson", "areas_only": True\}/.test(builder), true);
 check('every fetch is cached', /if not \(os\.path\.exists\(dest\) and os\.path\.getsize\(dest\) > 0\):/.test(py), true);
-check('and paced, because the service asks for that', /POLITE_GAP_S = 1\.1/.test(py), true);
+check('and paced, because the service asks for that', /"gap_s": 1\.1/.test(builder), true);
 check('a place that cannot be fetched is not a build that fails',
   /Never raises: a place that cannot be\n    fetched is a place the atlas does without/.test(py), true);
 

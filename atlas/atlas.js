@@ -614,8 +614,35 @@
     return true;
   }
 
+  /* The floor on how far out you can zoom is worked out when the atlas is
+     built, against no screen in particular. On a phone that floor can be
+     tighter than the atlas's own region needs, and then the map cannot show
+     the thing it is a map of.
+
+     Measured on this atlas: it covers 70.7°E to 99.4°E, a phone opened it
+     showing 77.7°E to 92.3°E, and fitting the region on a 333-pixel-wide map
+     needs zoom 2.63 against a floor of 4. Half the width — Punjab, Gujarat,
+     the whole Western Ghats — was off the screen, with nothing to say so.
+
+     So the floor gives way to the region. It is lowered only as far as the
+     region actually needs on this screen, and only ever downwards, so a narrow
+     window loosens it and a wide one leaves it exactly where the build put it.
+     Run again on resize, because turning a phone sideways changes the answer. */
+  function floorFitsTheRegion() {
+    if (!MANIFEST.bounds || !map || !map.cameraForBounds) return;
+    // Always measured against what the build asked for, never against whatever
+    // this ran to last time — otherwise a narrow window loosens the floor and
+    // a later wide one never tightens it back.
+    var built = MANIFEST.minzoom || 5;
+    map.setMinZoom(0);
+    var cam = null;
+    try { cam = map.cameraForBounds(MANIFEST.bounds, { padding: viewPadding() }); } catch (e) {}
+    map.setMinZoom(cam && typeof cam.zoom === "number" ? Math.min(built, cam.zoom) : built);
+  }
+
   function fitToData(animate) {
     if (!MANIFEST.bounds || !map) return;
+    floorFitsTheRegion();
     map.fitBounds(MANIFEST.bounds, { padding: viewPadding(), duration: animate ? 350 : 0 });
   }
 

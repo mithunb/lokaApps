@@ -46,5 +46,23 @@ check('the ceiling follows the region', /"maxzoom": max_zoom_for\(final_bounds, 
 check('and never drops below seventeen', /return 17\b/.test(builder) && !/return 1[0-6]\b[\s\S]*return 1[0-6]\b[\s\S]*return 1[0-6]\b/.test(builder), true);
 check('and never asks for more than the basemaps have', /return 19\b/.test(builder) && !/return 2\d\b/.test(builder), true);
 
+console.log('\n  an atlas can show its own region on a phone');
+/* Measured on the multispecies atlas before this was fixed: the atlas covers
+   70.7°E to 99.4°E, a phone showed 77.7°E to 92.3°E, and fitting the region on
+   a 333-pixel-wide map needs zoom 2.63 against a floor of 4 set at build time.
+   Half the width was off the screen with nothing to say so. */
+check('the zoom floor gives way to the region before framing it',
+  /function fitToData\(animate\) \{[\s\S]{0,160}floorFitsTheRegion\(\);/.test(atlas), true);
+check('and it is lowered only as far as the region needs',
+  /Math\.min\(built, cam\.zoom\)/.test(atlas), true);
+check('measured against what the build asked for, not against last time',
+  /var built = MANIFEST\.minzoom \|\| 5;/.test(atlas), true);
+check('so a wide screen is left exactly where the build put it',
+  /map\.setMinZoom\(cam && typeof cam\.zoom === "number" \? Math\.min\(built, cam\.zoom\) : built\);/.test(atlas), true);
+check('and the floor is re-worked when the layout flips to the phone one',
+  /max-width: 720px[\s\S]{0,200}fitToData\(true\)/.test(atlas), true);
+check('a map with no bounds is left alone rather than guessed at',
+  /if \(!MANIFEST\.bounds \|\| !map \|\| !map\.cameraForBounds\) return;/.test(atlas), true);
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

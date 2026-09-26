@@ -29,7 +29,6 @@ from common import UA, progress, warn
 HERE = os.path.dirname(os.path.abspath(__file__))
 SHIPPED = os.path.join(HERE, "places")
 INDEX = os.path.join(SHIPPED, "index.json")
-POLITE_GAP_S = 1.1          # Nominatim asks for one request a second
 
 
 def load_index():
@@ -53,12 +52,113 @@ def within(bbox):
                  and _overlaps(p["bbox"], bbox)]
 
 
-def _from_file(entry):
-    path = os.path.join(SHIPPED, entry["id"])
-    with open(path, encoding="utf-8") as fh:
-        doc = json.load(fh)
-    feats = doc.get("features", [])
-    want = entry.get("feature") or entry["name"]
+# ---------------------------------------------------------------------------
+# Fetching a shape
+#
+# Three sources were three hand-written functions, and adding a fourth meant
+# writing a fifth. They differ in only two ways that matter — where the answer
+# comes from, and where the shape sits inside it — so both are written down in
+# the source row instead of in code. Adding a source is now a row in
+# build_places_index.py's SOURCES table:
+#
+#   "fetch"  an address with {id} in it, or a path relative to places/
+#   "read"   how to find the shape in the answer:
+#              in           "features" (a GeoJSON collection), "list" (a plain
+#                           array of records), or "geometry" (the answer IS one)
+#              geometry_at  for "list": the key on each record holding the shape
+#              match        a property to match the place's name against, when
+#                           the answer carries more than one place
+#              areas_only   true to refuse a point where an outline was wanted
+#   "gap_s"  seconds to wait before each call, when the service asks for one
+#
+# Everything fetched is cached under the build's cache directory and fetched
+# once, ever.
+# ---------------------------------------------------------------------------
+
+def _dig(rec, key):
+    """One level, or a dotted path — "geojson" or "geometry.shape"."""
+    cur = rec
+    for part in str(key).split("."):
+        if not isinstance(cur, dict):
+            return None
+        cur = cur.get(part)
+    return cur
+
+
+def _safe(s):
+    return "".join(c if (c.isalnum() or c in "-_.") else "_" for c in str(s))[:80]
+
+
+def _answer(entry, src, cache_dir):
+    """The source's reply, parsed. Local files are read; addresses are fetched
+    once and kept. Returns None when there is nothing to read."""
+    fetch = str(src.get("fetch") or "")
+    if not fetch:
+        return None
+
+    if not fetch.lower().startswith(("http://", "https://")):
+        # A file shipped beside the index. {id} names it.
+        path = os.path.join(SHIPPED, os.path.basename(fetch.replace("{id}", entry["id"])))
+        if not os.path.exists(path):
+            return None
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+
+    import requests
+    url = fetch.replace("{id}", str(entry["id"]))
+    dest = os.path.join(cache_dir, "place-%s-%s.json" % (
+        _safe(entry.get("source")), _safe(entry["id"])))
+    # Caches written before sources were named this way. Cheap to look for, and
+    # it saves asking a public service again for something already on disk.
+    if not (os.path.exists(dest) and os.path.getsize(dest) > 0):
+        for old in ("place-%s.json" % _safe(entry["id"]),
+                    "place-%s-%s.json" % (_safe(entry.get("source")), _safe(entry["id"]))):
+            legacy = os.path.join(cache_dir, old)
+            if os.path.exists(legacy) and os.path.getsize(legacy) > 0:
+                dest = legacy
+                break
+    if not (os.path.exists(dest) and os.path.getsize(dest) > 0):
+        gap = src.get("gap_s")
+        if gap:
+            time.sleep(float(gap))
+        r = requests.get(url, headers=UA, timeout=float(src.get("timeout_s") or 60))
+        r.raise_for_status()
+        with open(dest, "w", encoding="utf-8") as fh:
+            fh.write(r.text)
+    with open(dest, encoding="utf-8") as fh:
+        try:
+            return json.load(fh)
+        except ValueError:
+            return None
+
+
+def _shape_in(doc, entry, read):
+    """The one shape this entry wants, out of whatever came back."""
+    if doc is None:
+        return None
+    where = str(read.get("in") or "features")
+
+    if where == "geometry":
+        return doc if isinstance(doc, dict) and doc.get("type") else None
+
+    if where == "list":
+        recs = doc if isinstance(doc, list) else (doc.get(read.get("at") or "results") or [])
+        key = read.get("geometry_at") or "geometry"
+        for rec in recs:
+            g = _dig(rec, key)
+            if g and g.get("type"):
+                return g
+        return None
+
+    # a GeoJSON collection
+    feats = (doc.get("features") or []) if isinstance(doc, dict) else []
+    if not feats:
+        return None
+    prop = read.get("match")
+    if not prop:
+        return feats[0].get("geometry")
+
+    want = str(entry.get("feature") or entry["name"]).strip()
     # Where in the file it sits, when the list knows. Four names in the reserve
     # register belong to more than one place — two national parks called Rajiv
     # Gandhi, a sanctuary listed once per state it runs through — so searching
@@ -69,65 +169,34 @@ def _from_file(entry):
     at = entry.get("at")
     if isinstance(at, int) and 0 <= at < len(feats):
         f = feats[at]
-        if str(f.get("properties", {}).get("name", "")).strip() == want:
+        if str((f.get("properties") or {}).get(prop, "")).strip() == want:
             return f.get("geometry")
     for f in feats:
-        if str(f.get("properties", {}).get("name", "")).strip() == want:
+        if str((f.get("properties") or {}).get(prop, "")).strip() == want:
             return f.get("geometry")
     return None
-
-
-def _from_osm(entry, cache_dir, fetch_url):
-    import requests
-    url = fetch_url.replace("{id}", entry["id"])
-    dest = os.path.join(cache_dir, "place-" + entry["id"] + ".json")
-    if not (os.path.exists(dest) and os.path.getsize(dest) > 0):
-        time.sleep(POLITE_GAP_S)
-        r = requests.get(url, headers=UA, timeout=60)
-        r.raise_for_status()
-        with open(dest, "w", encoding="utf-8") as fh:
-            fh.write(r.text)
-    with open(dest, encoding="utf-8") as fh:
-        got = json.load(fh)
-    if not got:
-        return None
-    g = got[0].get("geojson")
-    # a point is not an area; drawing one as a shape is the mistake this avoids
-    return g if g and g.get("type") in ("Polygon", "MultiPolygon") else None
-
-
-def _from_ramsar(entry, cache_dir, fetch_url):
-    import requests
-    url = fetch_url.replace("{id}", entry["id"])
-    dest = os.path.join(cache_dir, "place-ramsar-" + entry["id"] + ".json")
-    if not (os.path.exists(dest) and os.path.getsize(dest) > 0):
-        r = requests.get(url, headers=UA, timeout=90)
-        r.raise_for_status()
-        with open(dest, "w", encoding="utf-8") as fh:
-            fh.write(r.text)
-    with open(dest, encoding="utf-8") as fh:
-        try:
-            doc = json.load(fh)
-        except ValueError:
-            return None
-    feats = doc.get("features") or []
-    return feats[0].get("geometry") if feats else None
 
 
 def geometry_for(entry, sources, cache_dir):
     """The shape for one entry, or None. Never raises: a place that cannot be
     fetched is a place the atlas does without, not a build that fails."""
     src = sources.get(entry.get("source")) or {}
+    if not src:
+        warn(f"{entry.get('name')}: no source called {entry.get('source')!r}")
+        return None
+    read = src.get("read") or {}
     try:
-        if entry.get("source") == "file":
-            return _from_file(entry)
-        if entry.get("source") == "osm":
-            return _from_osm(entry, cache_dir, src.get("fetch", ""))
-        if entry.get("source") == "ramsar":
-            return _from_ramsar(entry, cache_dir, src.get("fetch", ""))
+        g = _shape_in(_answer(entry, src, cache_dir), entry, read)
     except Exception as e:
         warn(f"{entry.get('name')}: could not be fetched ({e})")
-    return None
+        return None
+    if not g:
+        return None
+    # A point is not an area. Drawing one as a shape is the mistake this avoids:
+    # a geocoder that cannot find an outline will happily offer a dot instead.
+    if read.get("areas_only") and g.get("type") not in ("Polygon", "MultiPolygon"):
+        return None
+    return g
 
 
 def collect(bbox, cache_dir):

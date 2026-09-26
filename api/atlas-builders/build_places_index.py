@@ -54,36 +54,61 @@ SHIPPED = [
                    " (ntca.gov.in/copyright-policy)",
         "home": "https://ntca.gov.in",
     },
+    {
+        "file": "ramsar-IND.geojson",
+        "credit": "Ramsar Sites Information Service",
+        "licence": "open access",
+        "home": "https://rsis.ramsar.org",
+    },
 ]
 
-# How a place that is not in a shipped file is fetched. An entry in
-# places-extra.json names one of these.
+# Every source a place can come from.
+#
+# This table IS the plug-in point. A source is a row, not a function: say where
+# to fetch from and how to read the answer, and places.py does the rest. The
+# fields are documented at the top of places.py's fetching section.
+#
+#   fetch    an address with {id} in it, or a filename relative to places/
+#   read     in: "features" | "list" | "geometry"
+#            geometry_at: for "list", the key on each record holding the shape
+#            match: a property to match the place's name against
+#            areas_only: refuse a point where an outline was wanted
+#   gap_s    seconds to wait before each call, when the service asks for one
+#   home     a link a reader can follow; the fetch address is for the machine
+#   credit / licence   what has to be said wherever its shapes are drawn
 SOURCES = {
+    "file": {
+        "label": "shipped with the atlas",
+        "fetch": "{id}",
+        "read": {"in": "features", "match": "name"},
+        "credit": "see each entry",
+        "licence": "see each entry",
+    },
     "osm": {
         "label": "OpenStreetMap",
         "fetch": "https://nominatim.openstreetmap.org/lookup"
                  "?osm_ids={id}&format=json&polygon_geojson=1",
+        "read": {"in": "list", "geometry_at": "geojson", "areas_only": True},
+        "gap_s": 1.1,
         "home": "https://www.openstreetmap.org/copyright",
-        "credit": "© OpenStreetMap contributors",
+        "credit": "\u00a9 OpenStreetMap contributors",
         "licence": "ODbL 1.0",
         "note": "one request a second, per their policy; the result is cached",
-    },
-    "file": {
-        "label": "shipped with the atlas",
-        "fetch": "api/atlas-builders/places/{id}",
-        "credit": "see each entry",
-        "licence": "see each entry",
     },
     "ramsar": {
         "label": "Ramsar Sites Information Service",
         "fetch": "https://rsis.ramsar.org/geoserver/wfs?service=WFS&version=1.1.0"
-                 "&request=GetFeature&typeName=ramsar_sdi:features_bnd"
+                 "&request=GetFeature&typeName=ramsar_sdi:features_published"
                  "&outputFormat=application/json&CQL_FILTER=ramsarid={id}",
+        "read": {"in": "features"},
+        "timeout_s": 90,
         "home": "https://rsis.ramsar.org",
         "credit": "Ramsar Sites Information Service",
         "licence": "open access",
-        "note": "not yet proven against the live service; a failure is silent"
-                " and the place is simply left off the map",
+        "note": "the boundaries layer, features_bnd, is keyed on an internal"
+                " number and knows nothing of Ramsar site numbers \u2014 three"
+                " attempts failed against it. features_published carries the"
+                " site number, the official name and the outline together.",
     },
 }
 
@@ -183,6 +208,24 @@ def build():
                 "credit": src["credit"],
                 "licence": src["licence"],
             })
+
+    # ---- a place two registers both describe is one place -----------------
+    #
+    # Five wetlands are in the Ramsar register and in the reserve register
+    # under the same name. They are not two places, and listing both would make
+    # the name ambiguous — which is worse than either answer on its own. The
+    # first register to carry a name keeps it, so the order of SHIPPED is the
+    # order of preference. One register listing a name twice is a different
+    # thing entirely and is handled below.
+    also_in, kept, owner = [], [], {}
+    for e in found:
+        k = canon(e["name"])
+        if k in owner and owner[k] != e["id"]:
+            also_in.append("%s (kept from %s)" % (e["name"], owner[k]))
+            continue
+        owner.setdefault(k, e["id"])
+        kept.append(e)
+    found = kept
 
     # ---- pass two: make every name answer to exactly one place ------------
     #
@@ -294,6 +337,8 @@ def build():
         print("  left out, the name belongs to a state or union territory:")
         for n in skipped_political:
             print("     " + n)
+    if also_in:
+        print("  in more than one register, so listed once: " + ", ".join(sorted(also_in)))
     if shared:
         print("  told apart by their state, because the name is shared: "
               + ", ".join(sorted(shared)))
