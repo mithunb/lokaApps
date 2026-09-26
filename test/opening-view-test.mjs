@@ -64,5 +64,36 @@ check('and the floor is re-worked when the layout flips to the phone one',
 check('a map with no bounds is left alone rather than guessed at',
   /if \(!MANIFEST\.bounds \|\| !map \|\| !map\.cameraForBounds\) return;/.test(atlas), true);
 
+console.log('\n  every shape is findable, however small it draws');
+/* Measured on the multispecies atlas before this: at the view it opens on, a
+   neighbourhood in Bengaluru came out 0 by 0 pixels and a tiger reserve 6 by
+   10, so two of the eleven people on that map were not on it. The nine that
+   were showed as unnamed blobs. A pin instead of a shape is not the answer —
+   a pin in the middle of the Western Ghats says the person works at a point.
+   So both: the shape for the extent, a dot for the fact somebody is there. */
+const fragment = fs.readFileSync(ROOT + '/api/lib/fragment.js', 'utf8');
+check('a shape layer asks for a dot at each middle', /centreMarks: true,/.test(fragment), true);
+check('and for the name beside it', /label_text: \{\s*\n\s*property: nameProp,/.test(fragment), true);
+check('the name and the popup title agree about which column names a row',
+  /const nameProp = popup\.title \|\| 'name';/.test(fragment) &&
+  /popup: \{ title: nameProp, fields: popup\.fields \},/.test(fragment), true);
+
+check('the dots ride on the same anchors the names use',
+  /function addCentreMarks\(L\) \{[\s\S]{0,120}labelPointSource\(L\)/.test(atlas), true);
+check('they are drawn for shape layers, under the names',
+  /addCentreMarks\(L\);\n      addLabel\(L\);/.test(atlas), true);
+check('only when the layer asks — a boundary file does not want 700 dots',
+  /if \(!L\.centreMarks\) return;/.test(atlas), true);
+check('clicking a dot opens the same card as clicking the shape',
+  /L\._ids\.push\(L\.id \+ "-mark"\);/.test(atlas), true);
+/* The dot never yields and the name may: a dropped name costs you something
+   you can click for, a dropped dot costs you the person. */
+check('a name can be held back when the map is crowded',
+  /"text-optional": !t\.alwaysShow/.test(atlas), true);
+check('a name sits clear of its own dot rather than on top of it',
+  /layout\["text-offset"\] = t\.offset; layout\["text-anchor"\] = t\.anchor \|\| "top";/.test(atlas), true);
+check('the dot takes the layer\u2019s own colour, with a ring so it reads on either ground',
+  /"circle-color": fill,[\s\S]{0,200}"circle-stroke-color": "#ffffff"/.test(atlas), true);
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

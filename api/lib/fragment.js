@@ -288,12 +288,26 @@ export function buildFragment(spec, feats, existingIds) {
     const fillOpacity = Math.min(0.9, Math.max(0.15, Number(spec.fillOpacity) || 0.45));
     const paint = { fillColor: color, fillOpacity };
     if (spec.outline !== false) { paint.outlineColor = '#5c544a'; paint.outlineWidth = 0.8; }
+    /* A shape on its own is only findable if it is big enough to see, and on a
+       map of a whole country most are not: on the multispecies atlas a
+       neighbourhood measured 0 by 0 pixels at the opening view and a tiger
+       reserve 6 by 10, so two of eleven people were not on their own map. Every
+       shape gets a dot at its middle and its name beside it — the shape says
+       how far the work reaches, the dot says somebody is there. */
+    const nameProp = popup.title || 'name';
     stanza = {
       id, group, type: 'fill', source: sourceFile,
       label: String(spec.label).slice(0, 60), default: true,
       paint,
+      centreMarks: true,
+      label_text: {
+        property: nameProp, size: 12, color: '#33402B',
+        haloColor: '#ffffff', haloWidth: 2,
+        // Below the dot, clear of it at every size the dot grows to.
+        offset: [0, 1.1],
+      },
       legend: [{ color, label: String(spec.label).slice(0, 40) }],
-      popup: { title: popup.title || 'name', fields: popup.fields },
+      popup: { title: nameProp, fields: popup.fields },
       userLayer: true,
     };
   } else if (kind === 'choropleth') {

@@ -941,8 +941,49 @@
         L._ids.push(L.id + "-line");
       }
       addHighlight(L);
+      addCentreMarks(L);
       addLabel(L);
     });
+  }
+
+  /* A dot at the middle of every shape.
+
+     A shape is only findable if it is big enough to see, and on a map of a
+     whole country most are not. Measured on the multispecies atlas at the view
+     it opens on: a neighbourhood in Bengaluru came out 0 by 0 pixels and a
+     tiger reserve 6 by 10, so two of the eleven people on that map were simply
+     not on it. The nine that were showed as unnamed green blobs.
+
+     Pins instead of shapes is not the answer either — a pin in the middle of
+     the Western Ghats says the person works at a point, which is the opposite
+     of true. So both: the shape for the extent, a dot for the fact that
+     somebody is there.
+
+     The dot never yields. Text can be dropped when the map is crowded and
+     nothing is lost but a name you can click for; a dropped dot loses the
+     person. It rides on the same anchor points the labels use, so a dot and
+     its name always agree about where they are. */
+  function addCentreMarks(L) {
+    if (!L.centreMarks) return;
+    var sid = labelPointSource(L);
+    if (!sid) return;
+    var p = L.paint || {};
+    var fill = p.fillColor || "#40573D";
+    map.addLayer(withFilter(L, {
+      id: L.id + "-mark", type: "circle", source: sid,
+      layout: { visibility: vis(L) },
+      paint: {
+        // Small enough not to hide a small shape, big enough to aim at.
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 3, 3.4, 8, 5, 14, 6.5],
+        "circle-color": fill,
+        "circle-opacity": 1,
+        // A ring, so the dot reads on its own shading and on the ground alike.
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 3, 1.2, 14, 2],
+        "circle-stroke-opacity": 0.95
+      }
+    }));
+    L._ids.push(L.id + "-mark");
   }
 
   // Feature-state driven outline: invisible until a feature is hovered (thin dark) or
@@ -1050,6 +1091,10 @@
     };
     if (t.transform) layout["text-transform"] = t.transform;
     if (t.letterSpacing) layout["text-letter-spacing"] = t.letterSpacing;
+    /* Nudged off the anchor, for a layer that also draws a dot there. Without
+       this the name sits on top of its own dot and neither can be read. The
+       offset is in multiples of the text size, so it holds as the text grows. */
+    if (t.offset) { layout["text-offset"] = t.offset; layout["text-anchor"] = t.anchor || "top"; }
     if (t.minzoom == null) {} else layout["text-size"] = ["interpolate", ["linear"], ["zoom"], (t.minzoom - 0.5), 0, t.minzoom, t.size || 12];
     var paint = {
       "text-color": t.color || "#fff",
