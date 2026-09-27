@@ -16,6 +16,7 @@ import crypto from 'node:crypto';
 import { DATA_DIR } from './registry.js';
 import { DATASETS_ROOT, PRIVATE_ROOT } from './jobs.js';
 import { detectDelimiter, prettify } from '../fragment.js';
+import { trimFeatureCollection } from './coords.js';
 
 const IMPORTS_DIR = path.join(DATA_DIR, 'imports');
 const TTL_MS = 24 * 3600 * 1000;
@@ -239,7 +240,8 @@ export function writeDraft(datasetId, importId, stanza, sourceFile, geojson, rep
   draft.id = draftId;
   draft.focusLayer = stanza.id;        // preview zooms to the proposed layer
 
-  fs.writeFileSync(path.join(draftDir, sourceFile), JSON.stringify(geojson));
+  // trimmed exactly as the commit will be, so the preview is what lands
+  fs.writeFileSync(path.join(draftDir, sourceFile), JSON.stringify(trimFeatureCollection(geojson)));
   fs.writeFileSync(path.join(draftDir, 'manifest.json'), JSON.stringify(draft));
   return draftId;
 }
@@ -261,7 +263,8 @@ export function commitLayer(datasetId, stanza, sourceFile, geojson) {
     }
   } catch {}
 
-  fs.writeFileSync(path.join(m.dir, sourceFile), JSON.stringify(geojson));
+  // six decimals, as the map builder writes its own layers (coords.js says why)
+  fs.writeFileSync(path.join(m.dir, sourceFile), JSON.stringify(trimFeatureCollection(geojson)));
   // Replace in place. Filtering then pushing sent an edited layer to the end,
   // which is not just a list reordering: contributed layers draw in this order,
   // so changing a layer's colour also moved it above everything it used to sit

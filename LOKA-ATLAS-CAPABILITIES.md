@@ -405,9 +405,10 @@ the "Colour by" choice, while the **map** will accept up to **9**. A column with
 become a key by tapping it on the map but will never appear in the editor's dropdown.
 
 **A hard structural limit.** Keys, pins, badges and per-place icons only exist on layers drawn as
-pins, and a point layer becomes pins only when it has **300 or fewer** places. Above 300 the layer is
-drawn as plain flat circles — no keys, no badges, no icons. **If a proposal needs the key system, it
-needs layers of 300 places or fewer.**
+pins, and a point layer becomes pins only when it has **3,000 or fewer** places (the server's
+`ATLAS_MAX_PINS` setting can move this; 3,000 is the default). Above 3,000 the layer is drawn as plain
+flat circles — no keys, no badges, no icons. **If a proposal needs the key system, it needs layers of
+3,000 places or fewer.**
 
 Colour ramps for shaded areas: 7 ramps of 6 steps each (Greens, Blues, Rust, Sand to brown, Brown to
 teal, Teal to brown, Purples). Red-to-green was retired because its middle steps were
@@ -416,15 +417,18 @@ slate.
 
 ### Grouping nearby pins, and separating pins on top of each other
 
-- Pins closer than **20 pixels** group into one numbered circle; **40 pixels** when the layer is
-  wearing more than one key (the badges make each pin wider). Grouping applies at every zoom below
-  the map's top zoom.
+- Pins closer than **20 pixels** (one pin's width) group into one numbered circle. When keys are
+  switched on, the pins wearing them are wider, so the distance grows to the **average width of
+  those pins** — but only when zoomed in: at zoom 13 and further out it stays 20 pixels, at zoom 16
+  and closer it is the full average width (about 48 pixels measured on a dense Bengaluru map), and in
+  between it climbs in 4-pixel steps. Grouping applies at every zoom below the map's top zoom.
 - The numbered circle grows in three steps: radius 13 under 10 places, 17 for 10–49, 22 for 50 and
   up; it darkens at the same thresholds. Hovering it outlines where its members are and says
   "N places here". Clicking zooms in.
 - When zooming in cannot separate them — places at genuinely identical coordinates — the pins **fan
   out** around the spot instead: a ring for up to 8, a spiral beyond, keeping **28 pixels** apart
-  (**44** when badges are on), up to **100 pins**. Beyond 100 the fan stops.
+  (with keys on, the widest pin in the fan plus 8 pixels, if that is more), up to **100 pins**.
+  Beyond 100 the fan stops.
 
 ### Popups and hover
 
@@ -643,7 +647,7 @@ The table, as seen in a real layer of 66 places:
   "Where are these located?" step needs no work. No name matching, no "Needs your eye" list, no
   rows lost. `address` is not needed and is not used for placement (§2 — address-to-coordinate
   conversion is not wired up).
-- **66 places is comfortably under 300**, so the layer is drawn as real pins and gets the whole key
+- **66 places is comfortably under 3,000**, so the layer is drawn as real pins and gets the whole key
   system: icons, colours, up to five keys, corner badges, hover bubbles, fan-out for places on the
   same spot.
 - **`description` and `labels` together are exactly what theme-finding wants.** 66 places is well
@@ -699,8 +703,8 @@ The table, as seen in a real layer of 66 places:
   one and adding the new. Atlas does notice when the same data comes back — it fingerprints what was
   uploaded and warns — but it will not merge or update.
 - **The 5,000-row ceiling is the growth ceiling.** 66 places is far from it, but a tagging app can
-  cross 5,000 quickly, and at that point rows are silently trimmed. And crossing **300** places
-  matters sooner: past 300 the layer stops being pins and loses the whole key and badge system.
+  cross 5,000 quickly, and at that point rows are silently trimmed. And crossing **3,000** places
+  matters sooner: past 3,000 the layer stops being pins and loses the whole key and badge system.
 
 ---
 
@@ -715,7 +719,7 @@ State these as out of scope, or as new work, in any proposal.
    an ID column, no in-place update, no append.
 5. **Upload several files at once**, or combine several files into one layer.
 6. **Accept a zipped shapefile.** Refused with a message. `.kmz` fails with a misleading message.
-7. **Show the key system on a layer of more than 300 places.** Above 300, flat circles only.
+7. **Show the key system on a layer of more than 3,000 places.** Above 3,000, flat circles only.
 8. **Show more than 5 keys, or more than 8 colours plus grey within one key.**
 9. **Show more than one photo per place.**
 10. **Grow an atlas's region past the free size ceiling through the editor.** Refused; requires an
@@ -765,9 +769,9 @@ State these as out of scope, or as new work, in any proposal.
 | Colours per key | 8, plus grey "other" |
 | Different answers a column may hold to be a key | 2–9 (2–12 for a list column) |
 | Share of places a key's kinds must cover | 60% |
-| Places for a layer to be drawn as pins | 300 or fewer |
-| Grouping distance for nearby pins | 20 px (40 px with badges) |
-| Pins in one fan-out | 100, 28 px apart (44 px with badges) |
+| Places for a layer to be drawn as pins | 3,000 or fewer |
+| Grouping distance for nearby pins | 20 px (with keys on and zoomed in, the average width of the keyed pins) |
+| Pins in one fan-out | 100, 28 px apart (with keys on, the widest pin + 8 px if more) |
 | Popup columns | 6, plus one photo and the title (5 when auto-picked) |
 | Themes proposed | 2–7, plus "other" |
 | Described places needed for theme-finding | 8 |
