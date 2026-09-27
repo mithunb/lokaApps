@@ -566,6 +566,26 @@
     button.key-kind:focus-visible { outline:2px solid var(--color-leaf); outline-offset:0; }
     button.key-kind.on { background:var(--color-leaf-tint); border-color:var(--color-leaf); }
     button.key-kind.on .leg-label { color:var(--color-leaf-deep); font-weight:600; }
+    /* While one kind is pressed: it wears a small × ("tap again to clear"),
+       and the rest of its key step back — still there, still tappable,
+       tapping one switches to it. Under the chips a line says what is
+       showing and offers Show all (see keyOnlyLine in atlas.js). */
+    .key-x { display:none; flex:0 0 auto; margin-left:.35rem; width:16px; height:16px; align-items:center; justify-content:center;
+      border-radius:50%; font-size:13px; line-height:1; color:var(--color-leaf-deep); background:rgba(42,107,65,.14); }
+    button.key-kind.on .key-x { display:inline-flex; }
+    button.key-kind.on .leg-n { margin-left:auto; }
+    button.key-kind.dim { opacity:.55; }
+    button.key-kind.dim:hover { opacity:1; }
+    .key-only { display:flex; flex-wrap:wrap; align-items:baseline; gap:.3rem; padding:.2rem .35rem .3rem;
+      font-size:var(--t-label); color:var(--color-text-secondary); line-height:1.4; }
+    .key-only[hidden] { display:none; }
+    .key-only-t { font-weight:600; color:var(--color-text-primary); }
+    .key-only-dot { color:var(--color-text-muted); }
+    .key-only-all { font:inherit; font-size:var(--t-label); font-weight:600; padding:0 .1rem; margin:0; border:0; background:none;
+      color:var(--color-leaf-deep); text-decoration:underline; text-underline-offset:2px; cursor:pointer; border-radius:var(--radius-md); }
+    .key-only-all:hover { color:var(--color-leaf); }
+    .key-only-all:focus-visible { outline:2px solid var(--color-leaf); outline-offset:1px; }
+    @media (pointer:coarse) { .key-only-all { min-height:32px; padding:0 .4rem; } }
     /* a kind with words (or silent places) behind it: the chevron after the
        row opens them, so the row itself is free to narrow the map */
     .leg-pair { display:flex; align-items:center; gap:.15rem; }
@@ -656,6 +676,11 @@
       transform-origin:50% 100%;   /* it grows from its tip, so the place never moves */
     }
     .atlas-pin.loc .pin-body { width:20px; height:28px; display:block; }
+    /* the chosen pin: a Sindoor ring around its head, the mark every chosen
+       thing on the map wears (see selectRow) */
+    .atlas-mnode.sel .atlas-pin.loc::before { content:""; position:absolute; left:50%; top:10px; width:30px; height:30px;
+      transform:translate(-50%,-50%); border-radius:50%; border:2px solid var(--color-sindoor);
+      box-shadow:0 0 0 1px rgba(253,252,248,.9); pointer-events:none; }
     .atlas-pin.loc .pin-heart {
       position:absolute; left:50%; top:10px; transform:translate(-50%,-50%);
       width:12px; height:12px; display:flex; align-items:center; justify-content:center;
@@ -675,14 +700,15 @@
     @media (hover:hover){ .atlas-marker:hover .atlas-pin { transform:translateY(-2px) scale(1.14); box-shadow:0 3px 8px rgba(36,33,29,.4); } }
 
     /* numbered cluster badge (stands in for a tight group at overview zoom) */
+    /* Ink, not Leaf, like the counted discs: a count is not a kind of place */
     .atlas-cluster { display:flex; align-items:center; gap:.4rem; cursor:pointer;
-      background:var(--color-surface); border:1.5px solid var(--color-leaf); border-radius:var(--radius-md);
+      background:var(--color-surface); border:1.5px solid var(--color-text-secondary); border-radius:var(--radius-md);
       padding:.2rem .5rem .2rem .3rem; box-shadow:0 1px 5px rgba(36,33,29,.22);
       transition:transform .15s cubic-bezier(.25,1,.5,1), box-shadow .15s; }
     .atlas-cluster:hover { transform:scale(1.04); box-shadow:0 2px 8px rgba(36,33,29,.28); }
     .atlas-cluster .cl-count { display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:20px;
-      padding:0 4px; background:var(--color-leaf); color:#fff; border-radius:var(--radius-md); font-size:var(--t-meta); font-weight:700; font-variant-numeric:tabular-nums; }
-    .atlas-cluster .cl-label { font-size:var(--t-meta); font-weight:600; color:var(--color-leaf-deep); white-space:nowrap; }
+      padding:0 4px; background:var(--color-text-secondary); color:#fff; border-radius:var(--radius-md); font-size:var(--t-meta); font-weight:700; font-variant-numeric:tabular-nums; }
+    .atlas-cluster .cl-label { font-size:var(--t-meta); font-weight:600; color:var(--color-text-primary); white-space:nowrap; }
     /* ---- cluster fan veil ---- */
     /* Cluster discs are GL layers now (see CLUSTERS in atlas.js) — no DOM to
        style. While a fan is open, a translucent paper wash sits between the
@@ -1155,6 +1181,34 @@
     @media (min-width:721px){
       .atlas-full .atlas-stage.has-strip .atlas-panel { top:8px; }
       .atlas-full .atlas-panel { bottom:44px; }
+      /* ---- the place card, docked at the right ----
+         Beside its pin the card opened wherever the pin was — under the
+         toolbar, off the bottom, half out of the frame — and a reader had
+         to hunt for it each time. Now every card opens in one place: a
+         panel down the right side of the map, under the header's row and
+         clear of the badge, as tall as it needs to be up to that, with its
+         own scroll. The map pans its pin clear of the card (see
+         keepClearOfCard), and the pin keeps its Sindoor mark, so the card
+         and the place are still one thing in two places. The tip goes:
+         a docked card points at nothing. The same !important as the phone
+         rule, for the same reason: the map library writes max-width and
+         transform straight onto the element. */
+      /* --card-top is 8px unless the toolbar would sit under the card (a
+         900px screen: drawer, toolbar and card do not share one row), when
+         atlas.js sets it to just below the toolbar (see openPopup) */
+      .atlas-stage .atlas-popup.maplibregl-popup {
+        position:absolute; top:var(--card-top, 8px); right:8px; bottom:auto; left:auto;
+        width:340px; max-width:none !important; transform:none !important;
+        max-height:calc(100% - var(--card-top, 8px) - 44px); display:flex; flex-direction:column; align-items:stretch; }
+      /* it arrives from the right edge, the way a drawer would */
+      @keyframes card-in { from { opacity:0; transform:translateX(14px); } to { opacity:1; transform:none; } }
+      .atlas-stage .atlas-popup .maplibregl-popup-tip { display:none; }
+      .atlas-stage .atlas-popup .maplibregl-popup-content { width:100%; flex:0 1 auto; min-height:0; overflow-y:auto; scrollbar-width:thin;
+        animation:card-in .22s cubic-bezier(.22,1,.36,1); }
+      .atlas-stage .atlas-popup .pop { max-height:none; overflow:visible; }
+      /* the zoom buttons and the scale step left while a card is docked */
+      .atlas-full .maplibregl-ctrl-bottom-right { transition:right .22s cubic-bezier(.22,1,.36,1); }
+      .atlas-full .atlas-stage.card-docked .maplibregl-ctrl-bottom-right { right:348px; }
       /* folded: the head alone is the "Layers · N" button */
       .atlas-full .atlas-panel.collapsed { bottom:auto; width:auto; }
     }

@@ -316,7 +316,11 @@ A chip bottom-left of the map (Label type on a Surface pill), with the base map'
 - Zoom controls: 22–26px Surface squares with Ink Border, 4px, bottom-right; no compass.
 - The scale bar sits with the zoom buttons bottom-right (the bottom-left corner belongs to the "About & sources" chip).
 - **Place card:** Surface, 4px, 3px Sindoor top edge, photo band, Label kicker in Leaf ("SURVEY VILLAGE · GORAKHPUR"), Headline name, then a two-column fact list with tabular values. Close is a 14px circle top-right.
-- **Selected feature:** a 2px Sindoor ring plus a faint 1px outer ring; the label is not changed.
+- **Where the card opens (late September 2026):** on a wide screen (721px and up) every card is **docked at the right** of the map — 8px in from the top and right edges, 340px wide, as tall as it needs up to the badge, then it scrolls as one piece; no tip. The zoom buttons step left of it while it is open. The pin or shape it is about keeps its Sindoor mark, and the map pans it clear of the card if it would sit underneath. Esc, × or a tap on the map close it. On a phone the card stays along the bottom, above the sheet, as before. Measured on Bengaluru at 1280×800: a 691px card fits without a scroll; the pin, 200px left of the card, is not moved.
+- **Selected feature:** a 2px Sindoor ring plus a faint 1px outer ring; the label is not changed. A chosen **pin** wears the same ring around its head (`.atlas-mnode.sel`).
+- **Counted discs:** where pins would collide they are one disc with a count. A counted disc is **ink, not Leaf** — Ink Soft (#5A5751) under 10, #3F3C37 to 49, Ink (#24211D) from 50 — with a 2px white ring and a white count (7.0:1 on the palest step). Green read as a key colour ("Green Space"), and a disc is a count, not a kind of place. Discs never touch: two discs, or a disc and a lone pin, that would land on each other on screen are drawn once as one disc that counts them all (see MERGED DISCS in atlas.js).
+- **Pin names:** a pin layer's `label_text` is drawn by the map, like a shape layer's — Karla-equivalent sans at 11px under the pin's foot, with the Ground halo — so names that would collide are dropped, and a name is never written across a pin or a disc. `maxChars` (default 32) cuts a sentence at a word.
+- **A pressed kind in a key:** the pressed chip fills with Leaf Tint on a Leaf edge and wears a small ×; the other kinds of that key step back to 55% but stay tappable (tapping one switches); and under the chips a line in Label type says "Showing only Culture (32) · Show all". The count line above the map says the same thing in the toolbar's voice.
 
 ### Navigation
 One thin bar, shared by the home gallery and every atlas. On the home gallery it reads "LOKA Atlas" (the page's title, Lora) with the links at the right; on an atlas it carries the organisation's block (see The header). Links Ink Soft in Meta type. No active pills, no bottom borders.
@@ -367,6 +371,9 @@ The Earth Ink Rule ("nothing bluer than #5f7f92, nothing redder than rust") — 
 
 **Set aside for later**
 Script companions for other languages (the Companions Rule reserves the variables). Print and hatching (the top ramp class may gain a hatch for photocopies; not now).
+
+**Viewer batch (late September 2026)**
+The place card docks at the right on a wide screen instead of opening beside its pin; a pressed kind says so under the key it was pressed in; counted discs are ink, and never touch each other or a pin; pin layers' names are drawn by the map. Five wordings went plain: a layer's note says "from a spreadsheet" rather than the file's name; a date key reads "When it was added (by month)"; the share beside a question reads "88% answered"; a one-colour layer no longer repeats its own name in a legend row; and the gallery prints region names without transliteration marks.
 
 **Header and keys (late September 2026)**
 Search and Map/Satellite left the header for a floating toolbar beside the drawer, so the header is one 44px row for a visitor and an owner alike; the owner's controls (live status, region, add data, settings) fold into one Sindoor-outlined Owner menu. In the Map Browser a name wears its key marks, and a kind under a key is a chip that narrows list and map together with the line search uses.

@@ -91,7 +91,8 @@ check('a tag replaces a pressed kind', /TAGFILTER_LAYER = layerId \|\| null;\s*i
 check('"show all" clears it with everything else', /function clearSearch\(\) \{[^}]*KINDFILTER = null;\s*markLitKinds\(\);/.test(js), true);
 check('a key going off drops a filter that was on it', /if \(KINDFILTER && KINDFILTER\.layer === L\.id &&\s*!act\.some\(function \(o\) \{ return o\.col === KINDFILTER\.col; \}\)\) clearSearch\(\);/.test(js), true);
 check('the pressed kind is filled with Leaf Tint on a Leaf edge', /button\.key-kind\.on \{ background:var\(--color-leaf-tint\); border-color:var\(--color-leaf\); \}/.test(html), true);
-check('the hint under "Mark each place by" says so', /Tap a kind to see only those places, or any word on a place to see who shares it\./.test(js), true);
+// (reworded in the viewer-ux batch: the hint now says what a second tap does)
+check('the hint under "Mark each place by" says so', /Tap a kind to show only those places; tap it again, or Show all, to bring the rest back\./.test(js), true);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -292,7 +292,7 @@
         data.instances.forEach(function (i) {
           if (i.slug === "deoria-bioregion") return;
           grid.appendChild(row("./?dataset=" + encodeURIComponent(i.slug), i.title,
-            [i.org, i.regionLabel].filter(Boolean).join(" \u00b7 ") || "Built with LOKA Atlas."));
+            [i.org, plainName(i.regionLabel)].filter(Boolean).join(" \u00b7 ") || "Built with LOKA Atlas."));
         });
       })
       .catch(function () {});
@@ -320,16 +320,18 @@
         if (!local) return manifest;
         (local.layers || []).forEach(function (L) {
           // contributed layers carry their credit into the layer's info tooltip
+          /* And, in plain words, what kind of thing it came from. The note
+             used to print the file's own name ("From Multispecies Landscape
+             Assessment Timeline 2026.xlsx"), which tells a visitor nothing
+             they can use and looks like a database field. The owner's own
+             tools still know the filename; the visitor is told "a
+             spreadsheet" or "a map file", and who shared it. */
+          var kind = uploadKind(L.uploadedAs);
           if (L.addedBy && (L.addedBy.org || L.addedBy.name)) {
-            var by = "Added by " + (L.addedBy.org || L.addedBy.name);
+            var by = "Added by " + (L.addedBy.org || L.addedBy.name) + (kind ? ", from " + kind : "");
             L.info = L.info ? L.info + " — " + by : by;
-          }
-          /* And the file it came from, where one was recorded. A layer's name
-             is written for reading and can be changed; this says which upload
-             it actually is, which is the thing you want when two layers look
-             alike or when you are trying to remember what you sent. */
-          if (L.uploadedAs) {
-            var from = "From " + L.uploadedAs;
+          } else if (kind) {
+            var from = "From " + kind + " someone shared";
             L.info = L.info ? L.info + " — " + from : from;
           }
           manifest.layers.push(L);
@@ -653,6 +655,8 @@
         if (overlapsVertically && onLeftHalf && intersectsMap) {
           pad.left = Math.min(mr.width * 0.55, (pr.right - mr.left) + 24);
         }
+        // and for the card docked at the right, while one is open
+        if (LAST_POP && cardDocked()) pad.right = Math.min(mr.width * 0.45, 340 + 8 + 24);
       }
     } catch (e) {}
     return pad;
@@ -1454,7 +1458,7 @@
       // pins carry nothing inside, and the keys a layer can wear are drawn
       // beside the pin instead (see KEYS WEAR ROWS below).
       node.appendChild(pin);
-      if (L.label_text) node.appendChild(el("span", "atlas-mlabel", esc(f.properties[L.label_text.property])));
+      // a pin's name is drawn by the map, not the marker — see PIN NAMES
       wrap.appendChild(node);
       var mk = new maplibregl.Marker({ element: wrap, anchor: "bottom" }).setLngLat(f.geometry.coordinates).addTo(map);
       // keep the feature alongside its marker so search can gate it by content;
@@ -1486,6 +1490,7 @@
     });
     L._pts = pts;
     if (L.cluster && pts.length) setupCluster(L);
+    ensurePinNames(L);
     applyMarkerVisibility(L);
     initLayerKeys(L);
   }
@@ -1548,6 +1553,13 @@
        question, but it can at least start like a sentence. */
     var t = String(name).replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
     return t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+  }
+  // the plain name of a date column that is really the app's own bookkeeping
+  function dateKeyName(col) {
+    var t = String(col).replace(/[_-]+/g, " ").trim().toLowerCase();
+    if (/^(created|added|tagged)( at| on| date)?$/.test(t)) return "When it was added";
+    if (/^(updated|modified|edited|changed)( at| on| date)?$/.test(t)) return "When it was last changed";
+    return prettyCol(col);
   }
 
   // Marker layers contributed through the wizard may offer their qualifying
@@ -1774,9 +1786,12 @@
          it holds — and the switch lowercased it while the popup capitalised it,
          so a reader could meet "themes" and "Themes" in one sitting. */
       var given = L.keyLabels && L.keyLabels[col];
-      // "Created at · by month" says what the marks mean without a legend note
-      var shown = given ? String(given) : prettyCol(col);
-      if (grain) shown += " \u00b7 by " + grain;
+      /* A date column grouped by month is named for what it means, not for
+         the column: "Created at · by month" read like a database field. The
+         app's own bookkeeping dates get plain names ("When it was added"),
+         any other date keeps its name, and the grouping is said in brackets. */
+      var shown = given ? String(given) : (grain ? dateKeyName(col) : prettyCol(col));
+      if (grain) shown += " (by " + grain + ")";
       // the commonest answer, and how much of this key's own answers it takes
       var top = null;
       counts.forEach(function (c) {
@@ -2121,6 +2136,11 @@
       r.appendChild(swatch(it));
       r.appendChild(el("span", "leg-label", esc(it.label)));
       if (it.n != null) r.appendChild(el("span", "leg-n", String(it.n)));
+      /* The pressed chip wears a small × so it reads "tap again to clear",
+         and the line under the key says the rest (see keyOnlyLine). */
+      var x = el("span", "key-x", "×");
+      x.setAttribute("aria-hidden", "true");
+      r.appendChild(x);
       r.onclick = function () { filterByKind(L, opt, which, it.label); };
       out.push(r);
       /* The words behind a kind, or the places a question is silent on, open
@@ -2148,7 +2168,27 @@
         out.push(fold);
       }
     });
+    out.push(keyOnlyLine(L, opt));
     return out;
+  }
+  /* The line under a key's kinds while one is pressed: "Showing only Green
+     Space (16) · Show all". Tapping a kind used to flip the map between
+     "only these" and "all" with nothing near the tap saying which — the
+     count line at the top of the panel said it, but not where the reader
+     was looking. This sits right under the chips; Show all is a plain
+     button; hidden when nothing is pressed. Filled in by markLitKinds. */
+  function keyOnlyLine(L, opt) {
+    var line = el("div", "key-only");
+    line.setAttribute("data-layer", L.id);
+    line.setAttribute("data-col", opt.col);
+    line.hidden = true;
+    line.appendChild(el("span", "key-only-t"));
+    var all = el("button", "key-only-all", "Show all");
+    all.type = "button";
+    all.onclick = function () { clearSearch(); };
+    line.appendChild(el("span", "key-only-dot", "·"));
+    line.appendChild(all);
+    return line;
   }
   // how a kind is named in the count line and to a screen reader
   function kindWords(label, which) {
@@ -2444,7 +2484,7 @@
        colour here and as a tappable word on a place knows they are the same
        word doing two different jobs. */
     wrap.appendChild(el("span", "key-hint",
-      "Keys colour the map — each wears its own shape. Tap a kind to see only those places, or any word on a place to see who shares it."));
+      "Keys colour the map — each wears its own shape. Tap a kind to show only those places; tap it again, or Show all, to bring the rest back. Tap a word on a place to see who else said it."));
     var list = el("div", "key-list");
     // The cap message, when it has something to say (kept in st.note so a
     // rebuild mid-conversation does not eat it). role=status: the refused
@@ -2482,9 +2522,11 @@
          with nothing telling them that is the answer rather than a fault. */
       if (opt.isQuestion) {
         var pct = Math.round(opt.reach * 100);
-        var reach = el("span", "key-reach", pct + "%");
-        // a lone number on a switch is a riddle; the long form is one hover away
-        reach.title = "Has an answer for " + pct + " of every 100 places";
+        /* "88% answered", not a bare "88%": a lone number beside a switch was
+           a riddle. The word costs a few pixels and says what is counted;
+           the long form is one hover away. */
+        var reach = el("span", "key-reach", pct + "% answered");
+        reach.title = pct + " of every 100 places have an answer to this";
         reach.setAttribute("aria-label", reach.title);
         lab.appendChild(reach);
       }
@@ -2606,6 +2648,95 @@
     if (!L._zoomWired) { map.on("zoom", function () { applyMarkerVisibility(L); }); L._zoomWired = true; }
   }
 
+  /* ==================================================================
+     PIN NAMES — a marker layer's `label_text`, drawn by the map.
+
+     Shape layers have had names for a while (addLabel). A pin layer's
+     name used to be a span under the pin's own element, which the map
+     knew nothing about: names piled on top of one another and over the
+     next pin along, and nothing was ever dropped. Now the names go into
+     the map as a symbol layer fed by the pins that are actually standing
+     alone (not folded into a disc, not hidden by a search), and the map
+     does what it does for every other label: two names that would
+     collide, and one is dropped; a name that would run across a pin or a
+     counted disc is dropped too, because every pin claims its ground
+     through an invisible icon placed first.
+
+     The manifest stanza is the shape layers' one: { property, size,
+     color, haloColor, haloWidth, alwaysShow }, plus `maxChars` (default
+     32) because a pin's name may be a whole sentence.
+  ================================================================== */
+  var PIN_NAME_BOX = "atlas-pin-box";   // a transparent image the size of a pin
+  function ensurePinNames(L) {
+    var t = L.label_text;
+    if (!t || !t.property || !map || map.getSource(srcId(L) + "-names")) return;
+    var style = map.getStyle();
+    if (!style || !style.glyphs) return;   // no font to draw with (see ensureClusterEngine)
+    try {
+      if (!map.hasImage(PIN_NAME_BOX)) {
+        map.addImage(PIN_NAME_BOX, { width: PIN_W + 4, height: 30, data: new Uint8Array((PIN_W + 4) * 30 * 4) });
+      }
+      map.addSource(srcId(L) + "-names", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      var before = map.getLayer(CLUSTER_LAYER) ? CLUSTER_LAYER : undefined;
+      /* the names, placed after the boxes (the map places higher layers
+         first), so a name never sits on a pin */
+      map.addLayer({
+        id: L.id + "-pinname", type: "symbol", source: srcId(L) + "-names",
+        layout: {
+          "text-field": ["get", "_name"],
+          "text-font": [GLYPH_FONTS.regular],
+          "text-size": t.size || 11,
+          "text-anchor": "top",
+          // clear of the pin's own box below (measured: at 0.35 the text's
+          // collision padding touched the box's, and every name was dropped)
+          "text-offset": [0, 0.6],
+          "text-max-width": 9,
+          "text-allow-overlap": !!t.alwaysShow,
+          "text-ignore-placement": !!t.alwaysShow,
+          "text-optional": true
+        },
+        paint: {
+          "text-color": t.color || "#24211D",
+          "text-halo-color": t.haloColor || "#F5F1E6",
+          "text-halo-width": t.haloWidth || 2
+        }
+      }, before);
+      map.addLayer({
+        id: L.id + "-pinbox", type: "symbol", source: srcId(L) + "-names",
+        layout: { "icon-image": PIN_NAME_BOX, "icon-anchor": "bottom", "icon-allow-overlap": true, "icon-ignore-placement": false, "icon-padding": 0 }
+      }, before);
+      L._ids = (L._ids || []).concat([L.id + "-pinname", L.id + "-pinbox"]);
+    } catch (e) {}
+  }
+  // the names of the pins standing alone right now, and nothing else
+  function syncPinNames(L) {
+    var t = L.label_text;
+    if (!t || !t.property || !map) return;
+    var src = map.getSource(srcId(L) + "-names");
+    if (!src) return;
+    var feats = [];
+    var folded = L.cluster && L._clusterMarker && map.getZoom() < L.cluster.belowZoom;
+    var max = t.maxChars || 32;
+    if (L._visible !== false && !folded) {
+      (markersByLayer[L.id] || []).forEach(function (e) {
+        if (e.hidden || e._clustered || e._absorbed || e._fanned) return;
+        var v = e.f.properties[t.property];
+        if (v == null || v === "") return;
+        feats.push({ type: "Feature", geometry: e.f.geometry, properties: { _name: shortName(String(v), max) } });
+      });
+    }
+    src.setData({ type: "FeatureCollection", features: feats });
+  }
+  // a name cut at a word, with an ellipsis, when it is really a sentence
+  function shortName(s, max) {
+    s = s.trim();
+    if (s.length <= max) return s;
+    var cut = s.slice(0, max - 1);
+    var sp = cut.lastIndexOf(" ");
+    if (sp > max * 0.5) cut = cut.slice(0, sp);
+    return cut.replace(/[\s,;:\-–—]+$/, "") + "…";
+  }
+
   // Writes display for one layer's pins. `e._clustered` is the cluster
   // engine's verdict (folded into a disc, or outside the viewport);
   // `e._fanned` overrides it while that pin is spread out of a fan.
@@ -2614,9 +2745,10 @@
     var folded = L.cluster && L._clusterMarker && map.getZoom() < L.cluster.belowZoom;
     (markersByLayer[L.id] || []).forEach(function (e) {
       e.mk.getElement().style.display =
-        (shown && !folded && !e.hidden && (!e._clustered || e._fanned)) ? "" : "none";
+        (shown && !folded && !e.hidden && ((!e._clustered && !e._absorbed) || e._fanned)) ? "" : "none";
     });
     if (L._clusterMarker) L._clusterMarker.getElement().style.display = (shown && folded) ? "" : "none";
+    syncPinNames(L);
   }
   function applyMarkerVisibility(L) {
     // whatever is changing here (layer toggle, badge fold, search) can change
@@ -2829,6 +2961,32 @@
   var CLUSTER_SRC = "atlas-cluster-src";
   var CLUSTER_BOUNDS_SRC = "atlas-cluster-bounds-src";
   var CLUSTER_LAYER = "atlas-cluster-disc";
+  var MERGED_SRC = "atlas-cluster-merged-src";
+  var MERGED_LAYER = "atlas-cluster-merged-disc";
+  // the disc's ink by count bracket: Ink Soft (#5A5751), a step darker, Ink
+  var DISC_INK = ["#5A5751", "#3F3C37", "#24211D"];
+  var DISC_R = [13, 17, 22];          // disc radius by bracket (<10, 10–49, 50+)
+  function discBracket(n) { return n >= 50 ? 2 : n >= 10 ? 1 : 0; }
+  function discPaint() {
+    return {
+      "circle-color": ["step", ["get", "point_count"], DISC_INK[0], 10, DISC_INK[1], 50, DISC_INK[2]],
+      "circle-radius": ["step", ["get", "point_count"], DISC_R[0], 10, DISC_R[1], 50, DISC_R[2]],
+      "circle-stroke-color": "#FFFFFF",
+      "circle-stroke-width": 2
+    };
+  }
+  function countLayout() {
+    return {
+      "text-field": ["get", "point_count_abbreviated"],
+      "text-font": [GLYPH_FONTS.bold],
+      "text-size": ["step", ["get", "point_count"], 12, 10, 13, 50, 14],
+      // the count IS the feature — it must never lose a placement contest;
+      // it does claim its ground, though, so a pin's name (PIN NAMES below)
+      // is dropped rather than written across it
+      "text-allow-overlap": true,
+      "text-ignore-placement": false
+    };
+  }
   var CLUSTER_RADIUS = 20;   // = pin diameter: fold only what truly collides
   // With keys switched on a pin wears rows beside it and its true footprint
   // grows with the data, so "truly collides" starts further out — the engine
@@ -2878,41 +3036,38 @@
     // hover footprint first, so the discs and their counts draw above it
     map.addLayer({
       id: "atlas-cluster-bounds-fill", type: "fill", source: CLUSTER_BOUNDS_SRC,
-      paint: { "fill-color": "#2A6B41", "fill-opacity": 0.08 }
+      paint: { "fill-color": DISC_INK[0], "fill-opacity": 0.08 }
     });
     map.addLayer({
       id: "atlas-cluster-bounds-line", type: "line", source: CLUSTER_BOUNDS_SRC,
-      paint: { "line-color": "#2A6B41", "line-width": 1.2, "line-dasharray": [2, 2], "line-opacity": 0.5 }
+      paint: { "line-color": DISC_INK[0], "line-width": 1.2, "line-dasharray": [2, 2], "line-opacity": 0.5 }
     });
-    // Size brackets: small (<10), medium (10–50), large (50+). One Leaf hue
+    // Size brackets: small (<10), medium (10–50), large (50+). One ink
     // deepening with count — a scale, not a category, because count is a
-    // quantity. The plan's palest step (#5B8E6A) put the white count at
-    // 3.8:1, under the 4.5 a 12px number needs; #4F8161 is the lightest Leaf
-    // that clears it (4.52:1, measured). The white ring lifts the disc off
-    // any basemap the way the pins' own white fill does.
+    // quantity. Ink, not Leaf: a green disc read as one of the key's colours
+    // ("Green Space"), and a disc is not a kind of place, it is a count. The
+    // white ring lifts the disc off any basemap the way the pins' own white
+    // fill does. Contrast of the white count: 7.0:1 on the palest step.
     map.addLayer({
       id: CLUSTER_LAYER, type: "circle", source: CLUSTER_SRC,
       filter: ["has", "point_count"],
-      paint: {
-        "circle-color": ["step", ["get", "point_count"], "#4F8161", 10, "#2A6B41", 50, "#1F5232"],
-        "circle-radius": ["step", ["get", "point_count"], 13, 10, 17, 50, 22],
-        "circle-stroke-color": "#FFFFFF",
-        "circle-stroke-width": 2
-      }
+      paint: discPaint()
     });
     map.addLayer({
       id: "atlas-cluster-count", type: "symbol", source: CLUSTER_SRC,
       filter: ["has", "point_count"],
-      layout: {
-        "text-field": ["get", "point_count_abbreviated"],
-        "text-font": [GLYPH_FONTS.bold],
-        "text-size": ["step", ["get", "point_count"], 12, 10, 13, 50, 14],
-        // the count IS the feature — it must never lose a placement contest
-        "text-allow-overlap": true,
-        "text-ignore-placement": true
-      },
+      layout: countLayout(),
       paint: { "text-color": "#FFFFFF" }
     });
+    /* The merged discs (see MERGED below): where two discs, or a disc and a
+       lone pin, would land on each other at the closest zoom, they are
+       drawn once here as one disc, and the originals are filtered out. Same
+       look, same source shape, so nothing tells them apart — which is the
+       point. */
+    map.addSource(MERGED_SRC, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    map.addLayer({ id: MERGED_LAYER, type: "circle", source: MERGED_SRC, paint: discPaint() });
+    map.addLayer({ id: "atlas-cluster-merged-count", type: "symbol", source: MERGED_SRC,
+      layout: countLayout(), paint: { "text-color": "#FFFFFF" } });
     wireClusterEvents();
     CLUSTER.ready = true;
     return true;
@@ -2920,7 +3075,7 @@
 
   function clusterAt(pt) {
     if (!CLUSTER.ready || !map.getLayer(CLUSTER_LAYER)) return null;
-    var hits = map.queryRenderedFeatures(pt, { layers: [CLUSTER_LAYER] });
+    var hits = map.queryRenderedFeatures(pt, { layers: [CLUSTER_LAYER, MERGED_LAYER] });
     return hits.length ? hits[0] : null;
   }
 
@@ -2952,6 +3107,25 @@
       map.getCanvas().style.cursor = "";
       if (typeof HINT.key === "string" && HINT.key.indexOf("cl|") === 0) hideHintSoon();
       hideClusterBounds();
+    });
+    // a merged disc answers a click and a hover the same way its parts did
+    map.on("click", MERGED_LAYER, function (e) {
+      var f = e.features && e.features[0];
+      if (f) mergedClick(f);
+    });
+    map.on("mousemove", MERGED_LAYER, function (e) {
+      var f = e.features && e.features[0];
+      if (!f) return;
+      CLUSTER.hovering = true;
+      map.getCanvas().style.cursor = "pointer";
+      if (SPIDER.items) return;
+      var p = map.project(f.geometry.coordinates.slice());
+      showHint(f.properties.point_count + " places here", { x: p.x, y: p.y - DISC_R[discBracket(f.properties.point_count)] }, "cl|m" + f.properties.mid);
+    });
+    map.on("mouseleave", MERGED_LAYER, function () {
+      CLUSTER.hovering = false;
+      map.getCanvas().style.cursor = "";
+      if (typeof HINT.key === "string" && HINT.key.indexOf("cl|") === 0) hideHintSoon();
     });
     // pans are the tile machinery's problem; we only re-read the answer
     map.on("moveend", scheduleClusterSync);
@@ -3062,11 +3236,14 @@
   // Handlers stay wired — see wireClusterEvents.
   function clusterTeardown() {
     if (!CLUSTER.ready) return;
-    ["atlas-cluster-count", CLUSTER_LAYER, "atlas-cluster-bounds-line", "atlas-cluster-bounds-fill"].forEach(function (id) {
+    clearMerged();
+    ["atlas-cluster-count", CLUSTER_LAYER, "atlas-cluster-bounds-line", "atlas-cluster-bounds-fill",
+     "atlas-cluster-merged-count", MERGED_LAYER].forEach(function (id) {
       if (map.getLayer(id)) map.removeLayer(id);
     });
     if (map.getSource(CLUSTER_SRC)) map.removeSource(CLUSTER_SRC);
     if (map.getSource(CLUSTER_BOUNDS_SRC)) map.removeSource(CLUSTER_BOUNDS_SRC);
+    if (map.getSource(MERGED_SRC)) map.removeSource(MERGED_SRC);
     CLUSTER.ready = false;
     CLUSTER.byKey = {};
     CLUSTER.boundsCache = {};
@@ -3095,6 +3272,7 @@
     });
     // entries that just LEFT the source must not stay hidden by a stale flag
     for (var k in CLUSTER.byKey) { if (!byKey[k]) CLUSTER.byKey[k].e._clustered = false; }
+    clearMerged(true);   // a fresh index means fresh verdicts; the merge re-reads them
     CLUSTER.byKey = byKey;
     CLUSTER.boundsCache = {};
     hideClusterBounds();
@@ -3136,12 +3314,163 @@
     // every keyed layer's fold note re-reads the fresh verdicts — including
     // layers whose pins all left the population (search can empty one)
     (MANIFEST.layers || []).forEach(function (L) { if (L._foldEl) updateFoldNote(L); });
+    mergeOverlaps();
+  }
+
+  /* ==================================================================
+     MERGED DISCS — what the engine cannot promise, checked on screen.
+
+     supercluster folds pins that fall within the fold radius of a cluster's
+     first member, and puts the disc at the members' mean. Two discs' means
+     can therefore land closer than a disc is wide — seen west of Bengaluru
+     at the closest zoom, a "9" and an "8" nine pixels apart, their numbers
+     run together — and a lone pin standing just outside a disc's radius is
+     drawn OVER it (pins are DOM, discs are canvas), hiding its number: the
+     "16" east of the city read "6". Neither is fixable by the fold radius:
+     it is the pin's own width by design, so pins that do not collide are
+     not folded.
+
+     So after every verdict the discs and lone pins in view are measured in
+     screen pixels, and any that touch are drawn once, as one disc that
+     counts them all. Its parts are filtered out (discs) or hidden (pins);
+     the pin's marker keeps its place in the list and in search. Clicking
+     the merged disc does what clicking either part did: zoom in where a
+     zoom would separate them, fan them out where it would not. The whole
+     pass is a read of what is on screen, and it runs after the engine has
+     spoken, never instead of it.
+  ================================================================== */
+  var MERGED = { feats: [], byId: {}, hiddenDiscs: [], seq: 0 };
+  var MERGE_GAP = 3;   // discs (and a disc and a pin) keep at least this many pixels apart
+
+  function clearMerged(quiet) {
+    var had = MERGED.feats.length;
+    for (var k in CLUSTER.byKey) CLUSTER.byKey[k].e._absorbed = false;
+    MERGED.feats = []; MERGED.byId = {}; MERGED.hiddenDiscs = [];
+    if (!had || !map) return;
+    try {
+      if (map.getLayer(CLUSTER_LAYER)) map.setFilter(CLUSTER_LAYER, ["has", "point_count"]);
+      if (map.getLayer("atlas-cluster-count")) map.setFilter("atlas-cluster-count", ["has", "point_count"]);
+      var src = map.getSource(MERGED_SRC);
+      if (src) src.setData({ type: "FeatureCollection", features: [] });
+    } catch (e) {}
+    if (!quiet) (MANIFEST.layers || []).forEach(paintMarkerDisplay);
+  }
+
+  function mergeOverlaps() {
+    if (!map || !CLUSTER.ready || SPIDER.items || !map.getLayer(CLUSTER_LAYER)) return;
+    var items = [], seen = {};
+    // the discs on screen, once each (a disc on a tile seam is reported twice)
+    // read from the source, not the drawn layer: the drawn layer is missing
+    // whatever the last merge filtered out, and reading it would free those
+    // discs every other pass
+    var discs = [];
+    try { discs = map.querySourceFeatures(CLUSTER_SRC, { filter: ["has", "point_count"] }); } catch (e) { return; }
+    // measured against the engine's own answer, not against the last merge;
+    // a pin hidden by the last merge must come back if this one frees it
+    var hadBefore = MERGED.feats.length > 0;
+    clearMerged(true);
+    var w = map.getContainer().clientWidth, h = map.getContainer().clientHeight;
+    discs.forEach(function (f) {
+      var cid = f.properties.cluster_id;
+      if (seen[cid]) return;
+      seen[cid] = 1;
+      var n = f.properties.point_count;
+      var p = map.project(f.geometry.coordinates.slice());
+      if (p.x < -60 || p.y < -60 || p.x > w + 60 || p.y > h + 60) return;   // off screen
+      items.push({ disc: cid, n: n, x: p.x, y: p.y, r: DISC_R[discBracket(n)] + 2, lngLat: f.geometry.coordinates.slice() });
+    });
+    if (!items.length) { if (hadBefore) (MANIFEST.layers || []).forEach(paintMarkerDisplay); return; }
+    // the lone pins on screen: a pin stands on its point, 20 wide and 28 tall
+    for (var k in CLUSTER.byKey) {
+      var it = CLUSTER.byKey[k];
+      if (it.e._clustered || it.e.hidden || it.L._visible === false) continue;
+      var q = map.project(it.e.mk.getLngLat());
+      if (q.x < -30 || q.y < -30 || q.x > w + 30 || q.y > h + 30) continue;
+      // a pin wearing key rows is wider on the side the rows sit (see
+      // updateRowFlips): its footprint grows that way by the rows' width
+      var rw = it.e._rowsW || 0;
+      var flip = rw && it.e._rowsEl && it.e._rowsEl.classList.contains("flip");
+      items.push({ pin: it, n: 1, x: q.x + (flip ? -rw / 2 : rw / 2), y: q.y - 14, r: 12 + rw / 2, lngLat: it.e.mk.getLngLat() });
+    }
+    // group everything that touches (a pin touching a pin is the engine's
+    // job and is left alone: only groups holding a disc are merged)
+    var parent = items.map(function (_, i) { return i; });
+    function find(i) { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; }
+    for (var i = 0; i < items.length; i++) {
+      for (var j = i + 1; j < items.length; j++) {
+        if (items[i].pin && items[j].pin) continue;
+        var dx = items[i].x - items[j].x, dy = items[i].y - items[j].y;
+        var lim = items[i].r + items[j].r + MERGE_GAP;
+        if (dx * dx + dy * dy < lim * lim) parent[find(i)] = find(j);
+      }
+    }
+    var groups = {};
+    items.forEach(function (it, i) { var g = find(i); (groups[g] = groups[g] || []).push(it); });
+    var feats = [], hidden = [];
+    for (var g in groups) {
+      var members = groups[g];
+      if (members.length < 2) continue;
+      var n = 0, sx = 0, sy = 0, discIds = [], pinKeys = [];
+      members.forEach(function (m) {
+        n += m.n; sx += m.x * m.n; sy += m.y * m.n;
+        if (m.disc != null) { discIds.push(m.disc); hidden.push(m.disc); }
+        else { pinKeys.push(m.pin.key); m.pin.e._absorbed = true; }
+      });
+      var at = map.unproject([sx / n, sy / n]);
+      var mid = ++MERGED.seq;
+      MERGED.byId[mid] = { discs: discIds, pins: pinKeys, n: n, at: [at.lng, at.lat] };
+      feats.push({ type: "Feature", geometry: { type: "Point", coordinates: [at.lng, at.lat] },
+        properties: { mid: mid, point_count: n, point_count_abbreviated: n >= 1000 ? Math.round(n / 100) / 10 + "k" : String(n) } });
+    }
+    MERGED.feats = feats; MERGED.hiddenDiscs = hidden;
+    if (feats.length) {
+      var keep = ["all", ["has", "point_count"], ["!", ["in", ["get", "cluster_id"], ["literal", hidden]]]];
+      try {
+        map.setFilter(CLUSTER_LAYER, keep);
+        map.setFilter("atlas-cluster-count", keep);
+        map.getSource(MERGED_SRC).setData({ type: "FeatureCollection", features: feats });
+      } catch (e) {}
+    }
+    if (feats.length || hadBefore) (MANIFEST.layers || []).forEach(paintMarkerDisplay);
+  }
+
+  // A merged disc: zoom in if any part would come apart at a reachable
+  // zoom; otherwise fan every member — the discs' leaves and the pins.
+  function mergedClick(f) {
+    var m = MERGED.byId[f.properties.mid];
+    if (!m) return;
+    if (SPIDER.items) {
+      var same = SPIDER.cid === "m" + f.properties.mid;
+      spiderCollapse();
+      if (same) return;      // clicking the fan's own centre folds it, full stop
+    }
+    var src = map.getSource(CLUSTER_SRC);
+    if (!src) return;
+    var maxZ = map.getMaxZoom();
+    Promise.all(m.discs.map(function (cid) { return src.getClusterExpansionZoom(cid); }))
+      .then(function (zs) {
+        var z = Math.min.apply(null, zs.concat([Infinity]));
+        if (m.discs.length && z <= maxZ && map.getZoom() < maxZ - 0.05) {
+          map.easeTo({ center: m.at, zoom: Math.min(z + 0.25, maxZ), duration: 500 });
+          return;
+        }
+        return Promise.all(m.discs.map(function (cid) { return src.getClusterLeaves(cid, FAN_MAX, 0); }))
+          .then(function (lists) {
+            var leaves = [];
+            lists.forEach(function (l) { leaves = leaves.concat(l); });
+            m.pins.forEach(function (k) { leaves.push({ properties: { __k: k } }); });
+            spiderfyLeaves("m" + f.properties.mid, m.at, leaves.slice(0, FAN_MAX));
+          });
+      }).catch(function () {});
   }
 
   // every marker click lands here: a fanned pin opens its own popup (fan
   // stays); any other visible pin is a loner by construction — the engine
   // has already folded everything that overlaps — so it pops up directly
   function spiderClick(L, entry) {
+    // the tapped pin is the chosen one: the Sindoor ring on the map, the
+    // Sindoor name in the Map Browser, whichever way it was reached
+    if (entry.f && entry.f._row != null) selectRow(L, entry.f._row, null);
     if (SPIDER.items) {
       for (var i = 0; i < SPIDER.items.length; i++) {
         var it = SPIDER.items[i];
@@ -3964,14 +4293,31 @@
   }
   // the pressed kind shows as on in the panel, and only that one
   function markLitKinds() {
+    var litN = "";
     document.querySelectorAll(".key-kind[data-which]").forEach(function (b) {
-      var on = !!KINDFILTER &&
+      var sameKey = !!KINDFILTER &&
         b.getAttribute("data-layer") === KINDFILTER.layer &&
-        b.getAttribute("data-col") === KINDFILTER.col &&
+        b.getAttribute("data-col") === KINDFILTER.col;
+      var on = sameKey &&
         b.getAttribute("data-which") === KINDFILTER.which &&
         (KINDFILTER.which !== "kind" || b.getAttribute("data-kind") === KINDFILTER.label);
       b.classList.toggle("on", on);
+      // the other kinds of the same key step back, still there to switch to
+      b.classList.toggle("dim", sameKey && !on);
       b.setAttribute("aria-pressed", on ? "true" : "false");
+      if (on) { var n = b.querySelector(".leg-n"); litN = n ? n.textContent : ""; }
+    });
+    document.querySelectorAll(".key-only[data-layer]").forEach(function (line) {
+      var mine = !!KINDFILTER &&
+        line.getAttribute("data-layer") === KINDFILTER.layer &&
+        line.getAttribute("data-col") === KINDFILTER.col;
+      line.hidden = !mine;
+      if (mine) {
+        var t = line.querySelector(".key-only-t");
+        var what = KINDFILTER.which === "kind" ? KINDFILTER.label
+          : KINDFILTER.which === "silent" ? "places without an answer" : "places that said something else";
+        t.textContent = "Showing only " + what + (litN ? " (" + litN + ")" : "");
+      }
     });
   }
 
@@ -4691,10 +5037,17 @@
     /* The Map Browser row says "11 people" with the colour beside it (see
        collectionEl), so a legend row that only repeats the layer's name under
        the same colour is dropped. Any other row — a kind, a ramp — stays. */
-    if (collectionLayer(L) && data && data.length && !data.ramp) {
+    /* The same for any one-colour layer: its only legend row said its own
+       name again under the switch that already says it ("Where the
+       respondents work" under "Where the respondents work"). One colour
+       needs no key; the row is dropped where it only repeats. */
+    if (data && data.length && !data.ramp) {
       var own = String(L.label || "");
-      data = data.filter(function (it) { return it.header || (it.label !== own && it.label !== own.slice(0, 40)); });
-      if (!data.length) data = null;
+      var repeats = function (it) { return !it.header && (it.label === own || it.label === own.slice(0, 40)); };
+      if (collectionLayer(L) || (data.length === 1 && repeats(data[0]))) {
+        data = data.filter(function (it) { return !repeats(it); });
+        if (!data.length) data = null;
+      }
     }
     var size = L.sizeLegend;                // bubble layers: reference circles by value
     if (!data && !(size && size.length)) return;
@@ -4833,13 +5186,24 @@
     clearSelection();
     SEL.L = L; SEL.row = row; SEL.ref = ref || null;
     if (ref) { try { map.setFeatureState(ref, { selected: true }); } catch (e) {} }
+    markSelPin();
     syncCollection(L);
   }
   function clearSelection() {
     if (SEL.ref) { try { map.setFeatureState(SEL.ref, { selected: false }); } catch (e) {} }
     var was = SEL.L;
     SEL.L = null; SEL.row = null; SEL.ref = null;
+    markSelPin();
     if (was) syncCollection(was);
+  }
+  // a pin has no feature state: the chosen one wears the ring by class
+  function markSelPin() {
+    document.querySelectorAll(".atlas-mnode.sel").forEach(function (n) { n.classList.remove("sel"); });
+    if (!SEL.L || SEL.L.type !== "marker" || SEL.row == null) return;
+    var es = markersByLayer[SEL.L.id] || [];
+    for (var i = 0; i < es.length; i++) {
+      if (es[i].f._row === SEL.row) { if (es[i].node) es[i].node.classList.add("sel"); return; }
+    }
   }
 
   // The items of a collection layer, in row order: the name the card would
@@ -5190,11 +5554,16 @@
     // An un-fanned popup used to open with no offset, right on the pin — fine
     // over a 20px circle, but the taller pin now sits under its own popup.
     opts.offset = 30;
+    /* On a wide screen the card is docked at the map's right (see the
+       desktop rule in index.html), so the pin's offset and anchor mean
+       nothing to it — the stylesheet fixes its place. The pin stays marked
+       (selectRow) and is panned clear of the card (keepClearOfCard). */
+    var docked = cardDocked();
     // a spiderfied marker keeps its true lngLat plus a px displacement — the
     // popup takes the same displacement so it points at the pin the user
     // sees, and (fanned pins only) an anchor chosen to open away from the
     // rest of the fan, nudged so it clears the pin's own body
-    if (offsetPx) {
+    if (offsetPx && !docked) {
       var off = [offsetPx[0], offsetPx[1]];
       if (anchor) {
         // the pin is 28px tall now, not 20 — these clear its body
@@ -5209,9 +5578,42 @@
     var pop = new maplibregl.Popup(opts).setLngLat(lngLat).setHTML(html).addTo(map);
     LAST_POP = pop;
     if (rows && rows.length > 1) wireChooser(pop, L, rows);
-    keepClearOfStrip(pop);
+    var stage = map.getContainer().closest(".atlas-stage");
+    if (docked) {
+      if (stage) {
+        stage.classList.add("card-docked");
+        /* the toolbar (search, Map/Satellite) floats top-left of the map;
+           where the map is narrow enough for it to reach under the card,
+           the card starts below it instead of covering it */
+        var top = 8;
+        try {
+          var strip = document.querySelector(".atlas-strip");
+          var mr = map.getContainer().getBoundingClientRect();
+          if (strip && strip.offsetHeight && strip.getBoundingClientRect().right > mr.right - 340 - 8 - 8) {
+            top = Math.round(strip.getBoundingClientRect().bottom - mr.top) + 8;
+          }
+        } catch (e) {}
+        stage.style.setProperty("--card-top", top + "px");
+      }
+      pop.on("close", function () {
+        if (LAST_POP === pop) LAST_POP = null;
+        if (stage && !LAST_POP) stage.classList.remove("card-docked");
+      });
+      keepClearOfCard(lngLat, offsetPx);
+    } else {
+      pop.on("close", function () { if (LAST_POP === pop) LAST_POP = null; });
+      keepClearOfStrip(pop);
+    }
     return pop;
   }
+  // wide enough for the card to dock at the right (the phone keeps its bottom card)
+  function cardDocked() {
+    try { return window.matchMedia("(min-width: 721px)").matches; } catch (e) { return false; }
+  }
+  // Esc puts the card away, as it does the fan and the tooltip
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && LAST_POP) { try { LAST_POP.remove(); } catch (err) {} }
+  });
 
   // The strip floats over the top of the map, so a card opened near the top
   // would tuck its name under it. Nudge the map down just enough to show it.
@@ -5221,6 +5623,36 @@
     if (!el || !strip || !strip.offsetHeight) return;
     var over = strip.getBoundingClientRect().bottom + 8 - el.getBoundingClientRect().top;
     if (over > 0) map.panBy([0, -over], { duration: 250 });
+  }
+
+  /* The docked card covers the map's right edge, so the place the card is
+     about could be under it — or under the toolbar at the top, or just off
+     an edge. Pan the map the least distance that brings the pin (28px
+     tall, its rows beside it) into the open, so the card and its place are
+     both in view. Measured from the card's own box, so a narrower map is
+     handled the same way. */
+  function keepClearOfCard(lngLat, offsetPx) {
+    if (!LAST_POP || !LAST_POP.getElement) return;
+    var el = LAST_POP.getElement();
+    var box = map.getContainer();
+    var mr = box.getBoundingClientRect();
+    var cr = el.getBoundingClientRect();
+    var p = map.project(lngLat);
+    if (offsetPx) { p.x += offsetPx[0]; p.y += offsetPx[1]; }
+    var room = 48;                                     // the pin and a little air
+    var rightLimit = (cr.width ? cr.left - mr.left : mr.width) - room;
+    var dx = 0, dy = 0;
+    if (p.x > rightLimit) dx = p.x - rightLimit;
+    else if (p.x < room) dx = p.x - room;
+    var topLimit = 40;
+    var strip = document.querySelector(".atlas-strip");
+    if (strip && strip.offsetHeight) {
+      var sr = strip.getBoundingClientRect();
+      if (p.x + mr.left > sr.left - 20 && p.x + mr.left < sr.right + 20) topLimit = sr.bottom - mr.top + 40;
+    }
+    if (p.y - 34 < topLimit) dy = (p.y - 34) - topLimit;
+    else if (p.y > mr.height - 24) dy = p.y - (mr.height - 24);
+    if (dx || dy) map.panBy([dx, dy], { duration: 250 });
   }
 
   // The popup title and the hover tooltip must call a feature the same thing,
@@ -5241,6 +5673,26 @@
   /* Three cases, in order of how much the upload can tell us: its own name; the
      person who added it and when; or just when. Never the email — that belongs
      to the owner's tools, not to every reader of the map. */
+  /* "a spreadsheet" or "a map file" — the words a visitor gets instead of a
+     filename. Anything else that was uploaded is "a file". */
+  function uploadKind(name) {
+    var n = String(name || "").trim();
+    if (!n) return "";
+    if (/\.(csv|tsv|xlsx?|ods)$/i.test(n)) return "a spreadsheet";
+    if (/\.(geojson|json|kml|kmz|gpx|zip|shp)$/i.test(n)) return "a map file";
+    return "a file";
+  }
+
+  /* Place names as the gallery prints them: "Maharashtra", not "Mahārāshtra".
+     The region names come from the boundary data with their transliteration
+     marks on, and beside "Delhi" they read as three spellings in one line.
+     Stripping the marks gives the plain English spelling every time. */
+  function plainName(s) {
+    s = String(s || "");
+    try { s = s.normalize("NFD").replace(/[̀-ͯ]/g, ""); } catch (e) {}
+    return s;
+  }
+
   function sourceLine(L) {
     if (!L || !L.userLayer) return "";
     var by = L.addedBy || null;

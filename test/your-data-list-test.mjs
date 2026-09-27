@@ -71,7 +71,8 @@ check('and the line says how many matched', /shown\.length \+ " of " \+ items\.l
 check('a name is a button that goes there and opens the card', /b\.onclick = function \(\) \{ goToItem\(L, it\); \};/.test(js) && /function goToItem\(L, it\) \{/.test(js), true);
 check('the chosen name and the ring on the map read from one selection', /function selectRow\(L, row, ref\) \{[\s\S]*?syncCollection\(L\);/.test(js) && /selectRow\(top\.L, row != null \? row : null/.test(js), true);
 check('the chosen name wears Sindoor', /\.coll-item\.sel \{ color:var\(--color-sindoor\);/.test(html), true);
-check('the legend row that only repeated the layer\'s name is gone from such a layer', /if \(collectionLayer\(L\) && data && data\.length && !data\.ramp\) \{[\s\S]*?it\.label !== own/.test(js), true);
+// (widened in the viewer-ux batch: any one-colour layer drops its repeating row, not only a collection)
+check('the legend row that only repeated the layer\'s name is gone from such a layer', /if \(collectionLayer\(L\) \|\| \(data\.length === 1 && repeats\(data\[0\]\)\)\) \{[\s\S]*?return !repeats\(it\)/.test(js), true);
 check('a name without a title still has one ("person 4")', /if \(!it\.name\) it\.name = nounOne\(layerNoun\(L\)\) \+ " " \+ \(it\.row \+ 1\);/.test(js), true);
 check('on a phone the sheet folds so the card can be seen', /function goToItem\(L, it\) \{[\s\S]*?if \(TRAY\) openTray\(null\);/.test(js), true);
 check('the phone\'s tab counts the people, not the one layer', /function tabCount\(sec\) \{[\s\S]*?rows\[0\]\.hasAttribute\("data-count"\)/.test(js) && /L\._row\.setAttribute\("data-count", String\(shown\.length\)\)/.test(js), true);
