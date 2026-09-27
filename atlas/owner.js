@@ -497,7 +497,7 @@
     var box = document.createElement("div");
     box.className = "own-acts";
     box.innerHTML =
-      '<button class="own-btn" id="own-btn" type="button" aria-expanded="false" aria-haspopup="true" aria-controls="own-panel" aria-label="Owner menu — live status, region, add data, settings">' +
+      '<button class="own-btn" id="own-btn" type="button" aria-expanded="false" aria-haspopup="true" aria-controls="own-panel" aria-label="Owner menu — live status, region, open data layers, add data, settings">' +
         '<span class="own-dot" aria-hidden="true"></span><span class="own-btn-word">Owner</span>' +
         '<svg class="own-btn-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>' +
       "</button>" +
@@ -512,6 +512,9 @@
           '<button class="own-act" id="own-live" hidden type="button"></button>' +
         "</div>" +
         '<div class="own-panel-ln" id="own-panel-region"></div>' +
+        '<div class="own-panel-ln" id="own-panel-open"><span class="own-panel-k">Open data layers</span>' +
+          '<button class="own-act" id="own-open-data" type="button">Add or remove</button>' +
+          '<span class="own-panel-note" id="own-open-note" hidden></span></div>' +
         '<div class="own-panel-ln" id="own-panel-data"><span class="own-panel-k">Your data</span></div>' +
         '<div class="own-panel-ln"><span class="own-panel-k">Title, logo, about</span>' +
           '<button class="own-act" id="own-settings" type="button">Settings</button></div>' +
@@ -519,6 +522,7 @@
     row.insertBefore(box, row.firstChild);
     $("#own-live").onclick = toggleLive;
     $("#own-settings").onclick = function () { openSettings(); };
+    $("#own-open-data").onclick = function () { openOpenData(); };
 
     // the add-data flow is its own several-step job, like first setting an atlas
     // up: it keeps its own page and comes back here when it is done
@@ -559,7 +563,7 @@
     };
     // a line that opens something else puts the menu away first
     panel.addEventListener("click", function (e) {
-      var t = e.target && e.target.closest && e.target.closest("#own-settings, #own-region, #add-data-btn");
+      var t = e.target && e.target.closest && e.target.closest("#own-settings, #own-region, #own-open-data, #add-data-btn");
       if (t) shut();
     });
   }
@@ -588,6 +592,259 @@
     // owner — a printed poster of a not-live atlas is a dead poster
     var share = $("#share-btn");
     if (share && share.__shareOpts) share.__shareOpts.notLive = !live;
+    paintOpenDataLine();
+  }
+
+  /* ================= open data layers =================
+     The catalogue layers an atlas was set up with — rivers, terrain, health
+     centres — chosen at step 3 of the wizard and, until now, fixed from then
+     on: adding one meant starting the atlas over. This sheet is that step
+     again, for a built atlas: the same rows and words (catalog-rows.js),
+     pre-ticked with what the atlas has, and "Apply" rebuilds the base map the
+     way a change of region does. The build swaps the atlas over on success and
+     carries the owner's own layers, About text and logo across, so the atlas
+     stays up and nothing of theirs is lost.
+
+     Only an atlas the wizard built can be changed here. One put together by
+     hand has no recorded choice of layers to pre-tick and no recipe to rebuild
+     from, so the line says so rather than offering a rebuild that would wipe
+     hand-made work — and that is read from the record, not from a name. */
+
+  function wizardBuilt() {
+    var r = INST && INST.region;
+    return !!(INST && Array.isArray(INST.layers) && INST.layers.length && r &&
+      (r.worldwide || (Array.isArray(r.shapeIDs) && r.shapeIDs.length)));
+  }
+  function waitingForLayers() {
+    return !!(INST && INST.status === "pending-approval" && INST.rebuildPrior);
+  }
+
+  function paintOpenDataLine() {
+    var act = $("#own-open-data"), note = $("#own-open-note");
+    if (!act || !note) return;
+    if (!wizardBuilt()) {
+      act.hidden = true;
+      note.hidden = false;
+      note.textContent = "Made by hand — can’t be changed here";
+      return;
+    }
+    note.hidden = true;
+    act.hidden = false;
+    act.disabled = false;
+    if (waitingForLayers()) { act.textContent = "Waiting for approval"; return; }
+    if (INST.status === "building" || INST._rebuilding) { act.textContent = "Rebuilding…"; act.disabled = true; return; }
+    act.textContent = "Add or remove";
+  }
+
+  // catalog-rows.js is the wizard's; it is fetched the first time it is needed
+  // here, stamped like owner.js itself so a deploy refreshes both together
+  var rowsLoading = null;
+  function ensureCatalogRows() {
+    if (window.LokaCatalogRows) return Promise.resolve();
+    if (rowsLoading) return rowsLoading;
+    rowsLoading = new Promise(function (resolve, reject) {
+      var me = document.querySelector('script[src*="owner.js"]');
+      var m = me && /[?&]v=([0-9A-Za-z._-]+)/.exec(me.getAttribute("src") || "");
+      var s = document.createElement("script");
+      s.src = "./catalog-rows.js?v=" + (m ? m[1] : "dev");
+      s.onload = function () { resolve(); };
+      s.onerror = function () { rowsLoading = null; reject({ error: "The list of open data could not be loaded." }); };
+      document.head.appendChild(s);
+    });
+    return rowsLoading;
+  }
+
+  var OD = { catalog: [], picked: {}, have: [] };
+
+  function openDataHTML() {
+    var waiting = waitingForLayers();
+    return '<div class="own-sheet own-od" role="dialog" aria-modal="true" aria-label="Open data layers">' +
+      "<h2>Open data layers</h2>" +
+      (waiting
+        ? '<p class="own-set-p" id="own-od-wait"></p>'
+        : '<p class="own-set-p">Layers drawn from open sources for ' + esc(INST.regionLabel || "this region") +
+          '. Tick what this atlas should carry. Applying rebuilds the base map, which takes a few ' +
+          'minutes — the atlas stays up, and your own data, About text and logo are kept.</p>') +
+      '<p class="own-set-p own-od-given" id="own-od-given"></p>' +
+      '<div class="own-od-cats" id="own-od-cats" aria-busy="true"><span class="own-set-p">Loading the list…</span></div>' +
+      (waiting ? "" :
+        '<p class="own-set-p own-od-sum" id="own-od-sum" aria-live="polite"></p>' +
+        '<div class="own-row own-row-tight">' +
+          '<button class="share-btn primary" id="own-od-apply" type="button" disabled>Apply changes</button>' +
+          '<button class="own-linkish" type="button" data-close>Cancel</button>' +
+          '<span class="own-err" id="own-od-msg" role="alert"></span></div>' +
+        '<div class="own-confirm" id="own-od-confirm" hidden>' +
+          '<p id="own-od-warn"></p>' +
+          '<div class="own-row"><button class="share-btn danger" id="own-od-yes" type="button">Yes, take it off</button>' +
+          '<button class="own-linkish" id="own-od-no" type="button">Keep it</button></div></div>') +
+      "</div>";
+  }
+
+  function openOpenData() {
+    if (!wizardBuilt()) return;
+    openDialog(openDataHTML(), function (scrim) {
+      var r = INST.region || {};
+      var area = r.worldwide ? 360 * 170
+        : (Number(r.areaDeg2) || ((r.bbox && r.bbox.length === 4) ? (r.bbox[2] - r.bbox[0]) * (r.bbox[3] - r.bbox[1]) : 0));
+      var iso3 = r.iso3 || (INST.tier === "india" ? "IND" : "XXX");
+      Promise.all([
+        ensureCatalogRows(),
+        api("catalog?iso3=" + encodeURIComponent(iso3) + (area > 0 ? "&areaDeg2=" + area.toFixed(3) : "")),
+      ]).then(function (got) {
+        OD.catalog = (got[1] && got[1].layers) || [];
+        OD.have = (INST.layers || []).slice();
+        paintOpenData(scrim);
+      }).catch(function (e) {
+        var host = scrim.querySelector("#own-od-cats");
+        host.setAttribute("aria-busy", "false");
+        host.innerHTML = '<span class="own-err">' + esc(errMsg(e)) + "</span>";
+      });
+    });
+  }
+
+  function paintOpenData(scrim) {
+    var CR = window.LokaCatalogRows;
+    var host = scrim.querySelector("#own-od-cats");
+    host.setAttribute("aria-busy", "false");
+    host.innerHTML = "";
+    scrim.querySelector("#own-od-given").innerHTML = CR.givenLine(OD.catalog);
+    var labelOf = function (id) {
+      var l = OD.catalog.filter(function (x) { return x.id === id; })[0];
+      return l ? l.label : id;
+    };
+
+    if (waitingForLayers()) {
+      /* Nothing to tick while an operator is looking: what was asked for is
+         said, and the atlas the visitor sees is the one from before. */
+      var ch = (INST.rebuildPrior && INST.rebuildPrior.change) || {};
+      var was = (INST.rebuildPrior && INST.rebuildPrior.layers) || [];
+      var added = ch.added || (INST.layers || []).filter(function (id) { return was.indexOf(id) < 0; }).map(labelOf);
+      var removed = ch.removed || was.filter(function (id) { return (INST.layers || []).indexOf(id) < 0; }).map(labelOf);
+      var bits = [];
+      if (ch.region) bits.push("cover more ground");
+      if (added.length) bits.push("add " + added.join(", "));
+      if (removed.length) bits.push("take off " + removed.join(", "));
+      scrim.querySelector("#own-od-wait").textContent = "You asked to " + (bits.join(" and ") || "rebuild") +
+        ". Heavy layers are checked by the LOKA team first, usually within a day — you will get an " +
+        "email either way. The atlas carries on exactly as it is until then, and your data stays where it is.";
+      var now = (INST.layers || []).filter(function (id) {
+        var l = OD.catalog.filter(function (x) { return x.id === id; })[0];
+        return l && !CR.isGiven(l);
+      }).map(labelOf);
+      host.innerHTML = '<p class="own-set-p">Asked for: <b>' + (now.length ? esc(now.join(", ")) : "no open-data layers") + "</b></p>";
+      return;
+    }
+
+    OD.picked = {};
+    OD.catalog.forEach(function (l) {
+      OD.picked[l.id] = CR.isGiven(l) || OD.have.indexOf(l.id) >= 0;
+    });
+    CR.groups(OD.catalog).forEach(function (g) {
+      var d = document.createElement("details");
+      d.className = "cat";
+      // open the groups the atlas already draws from, so what it has is in view
+      d.open = g.layers.some(function (l) { return OD.have.indexOf(l.id) >= 0; });
+      d.innerHTML = "<summary>" + esc(g.label) + '<span class="cat-n"></span></summary>';
+      g.layers.forEach(function (l) {
+        var cannot = CR.cannotBuild(l);
+        if (cannot) OD.picked[l.id] = false;
+        var lab = document.createElement("label");
+        lab.className = "cat-row" + (cannot ? " cat-row-off" : "");
+        lab.innerHTML = CR.rowHTML(l, !!OD.picked[l.id]);
+        if (cannot) lab.title = CR.TOO_WIDE_TITLE;
+        lab.querySelector("input").onchange = function () {
+          OD.picked[l.id] = this.checked;
+          paintOpenDataSum(scrim);
+        };
+        d.appendChild(lab);
+      });
+      host.appendChild(d);
+    });
+    if (!host.children.length) host.innerHTML = '<p class="own-set-p">No open data is on offer for this region.</p>';
+    paintOpenDataSum(scrim);
+    scrim.querySelector("#own-od-apply").onclick = function () { applyOpenData(scrim, this); };
+  }
+
+  // what a press of Apply would do, in the words the confirm and the toast use
+  function openDataDiff() {
+    var CR = window.LokaCatalogRows;
+    var byId = {};
+    OD.catalog.forEach(function (l) { byId[l.id] = l; });
+    var want = OD.catalog.filter(function (l) { return OD.picked[l.id]; }).map(function (l) { return l.id; });
+    var add = want.filter(function (id) { return OD.have.indexOf(id) < 0; });
+    var drop = OD.have.filter(function (id) { return byId[id] && !CR.isGiven(byId[id]) && want.indexOf(id) < 0; });
+    var label = function (id) { return byId[id] ? byId[id].label : id; };
+    return {
+      want: want, add: add, drop: drop,
+      addNames: add.map(label), dropNames: drop.map(label),
+      needsApproval: add.filter(function (id) { return CR.needsApproval(byId[id]); }).map(label),
+    };
+  }
+
+  function paintOpenDataSum(scrim) {
+    var d = openDataDiff();
+    var sum = scrim.querySelector("#own-od-sum"), btn = scrim.querySelector("#own-od-apply");
+    scrim.querySelectorAll("details.cat").forEach(function (det) {
+      var boxes = det.querySelectorAll('.cat-row input[type="checkbox"]'), on = 0;
+      boxes.forEach(function (b) { if (b.checked) on++; });
+      det.querySelector(".cat-n").textContent = on + " of " + boxes.length;
+    });
+    var bits = [];
+    if (d.addNames.length) bits.push("Adding " + d.addNames.join(", "));
+    if (d.dropNames.length) bits.push("Taking off " + d.dropNames.join(", "));
+    if (!bits.length) { sum.textContent = "No changes yet."; btn.disabled = true; return; }
+    sum.textContent = bits.join(" · ") + "." +
+      (d.needsApproval.length
+        ? " " + d.needsApproval.join(", ") + (d.needsApproval.length === 1 ? " is" : " are") +
+          " heavy to build, so the LOKA team checks first — usually within a day."
+        : "");
+    btn.disabled = false;
+  }
+
+  function applyOpenData(scrim, btn) {
+    var d = openDataDiff();
+    var m = scrim.querySelector("#own-od-msg");
+    var box = scrim.querySelector("#own-od-confirm");
+    function send() {
+      box.hidden = true;
+      btn.disabled = true; m.textContent = "";
+      api("instances/" + encodeURIComponent(SLUG) + "/rebuild", {
+        method: "POST", body: { layers: d.want },
+      }).then(function (r) {
+        closeDialog(scrim);
+        INST.layers = (r && r.layers) || d.want;
+        if (r && r.pendingApproval) {
+          INST.status = "pending-approval";
+          INST.rebuildPrior = { layers: OD.have, change: r.change || {} };
+          paintStatus();
+          toast("Sent for approval — heavy layers are checked first. " +
+                "The atlas keeps serving its current map meanwhile.");
+          return;
+        }
+        var lost = (r && r.droppedLayers) || [];
+        toast(lost.length
+          ? "Rebuilding without " + lost.join(", ") + " — too wide an area for " +
+            (lost.length > 1 ? "those" : "that") + ". The atlas stays up meanwhile."
+          : "Rebuilding the base map — a few minutes. The atlas stays up meanwhile.");
+        INST._rebuilding = true;
+        paintStatus();
+        if (r.jobId) watchRebuild(r.jobId, "Open data updated");
+      }).catch(function (e) {
+        btn.disabled = false;
+        m.textContent = errMsg(e);
+      });
+    }
+    if (!d.drop.length) { send(); return; }
+    // taking a layer off is the one thing here that removes something from the
+    // map, so it is asked about — plainly, and once
+    scrim.querySelector("#own-od-warn").textContent =
+      "Take " + d.dropNames.join(", ") + " off the map? " +
+      (d.drop.length === 1 ? "It comes" : "They come") + " from open data and can be added back " +
+      "any time. Your own data layers stay as they are.";
+    box.hidden = false;
+    scrim.querySelector("#own-od-no").onclick = function () { box.hidden = true; btn.focus(); };
+    scrim.querySelector("#own-od-yes").onclick = send;
+    scrim.querySelector("#own-od-yes").focus();
   }
 
   function toggleLive() {
@@ -1915,11 +2172,11 @@
   }
 
   // the atlas is live throughout, so this only has to say when it is done
-  function watchRebuild(jobId) {
+  function watchRebuild(jobId, doneWord) {
     var tick = function () {
       api("jobs/" + encodeURIComponent(jobId)).then(function (j) {
         if (j.status === "done") {
-          toast("Region rebuilt — redrawing the map");
+          toast((doneWord || "Region rebuilt") + " — redrawing the map");
           // the whole atlas changed underneath, base layers and all, so it is
           // read again from the top rather than patched
           setTimeout(function () { location.reload(); }, 900);
@@ -1927,6 +2184,13 @@
         }
         if (j.status === "failed") {
           toast("The rebuild failed — your atlas is unchanged. " + (j.message || ""));
+          // the server put the record back to what is actually built; read it
+          // again so the menu says what the atlas has, not what was asked for
+          INST._rebuilding = false;
+          api("instances/" + encodeURIComponent(SLUG)).then(function (inst) {
+            if (inst && inst.slug) INST = inst;
+            paintStatus();
+          }).catch(function () { paintStatus(); });
           return;
         }
         setTimeout(tick, 2500);

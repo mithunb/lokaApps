@@ -43,8 +43,11 @@ check('the card that swallowed the panel has not come back',
 const ownerCodeLines = owner
   .replace(/\/\*[\s\S]*?\*\//g, '')
   .split('\n').filter((l) => l.trim() && !l.trim().startsWith('//')).length;
+/* 1700 was the ceiling until the Owner menu grew its "Open data layers" sheet
+   (September 2026, ~150 lines that are a second use of the wizard's step 3,
+   not a card); the guard above still says the card itself is gone. */
 check('and the code is still lighter than it was with the card',
-  ownerCodeLines < 1700, true);
+  ownerCodeLines < 1900, true);
 
 console.log('\n  renaming happens on the row');
 check('there is a pencil beside the name', /function addRenamePencil/.test(owner), true);

@@ -1240,50 +1240,31 @@
     });
   }
 
-  var GROUP_LABELS = { base: "Boundaries & basics", eco: "Ecological landscape",
-    context: "Context & infrastructure", people: "People & services" };
-
+  /* The rows, their grouping and their words come from catalog-rows.js — the
+     same piece the Owner menu's "Open data layers" sheet draws from, so a
+     layer reads the same on the day an atlas is set up and on the day one is
+     added to it. */
   function paintCatalog() {
+    var CR = window.LokaCatalogRows;
     // required layers are not a choice; say what always comes rather than
     // showing a checkbox nobody may untick
-    var always = S.catalog.filter(function (l) { return l.required || l.id === "labels"; });
-    // catalogue names can be technical ("Admin boundaries"); this line speaks
-    // to a person setting up their first atlas
-    var plainNames = { admin: "your region’s boundaries", labels: "place names" };
-    var names = always.map(function (l) { return "<b>" + esc(plainNames[l.id] || l.label) + "</b>"; });
-    $("#given").innerHTML = "Included in every atlas: " +
-      (names.length === 2 ? names.join(" and ") : names.join(", ")) +
-      ". Sources are credited on the map.";
-    always.forEach(function (l) { S.picked[l.id] = true; });
-
-    var byGroup = {};
-    S.catalog.forEach(function (l) {
-      if (l.required || l.id === "labels") return;
-      (byGroup[l.group || "context"] || (byGroup[l.group || "context"] = [])).push(l);
-    });
+    $("#given").innerHTML = CR.givenLine(S.catalog);
+    S.catalog.filter(CR.isGiven).forEach(function (l) { S.picked[l.id] = true; });
 
     var host = $("#cats");
     host.innerHTML = "";
-    Object.keys(byGroup).forEach(function (g, gi) {
+    CR.groups(S.catalog).forEach(function (g, gi) {
       var d = document.createElement("details");
       d.className = "cat";
       if (gi === 0) d.open = true;
-      d.innerHTML = "<summary>" + esc(GROUP_LABELS[g] || g) + '<span class="cat-n"></span></summary>';
-      byGroup[g].forEach(function (l) {
-        // built from imagery or downloaded by the box, over a region too wide
-        // for the time a build gets
-        var cannot = l.feasible === false;
+      d.innerHTML = "<summary>" + esc(g.label) + '<span class="cat-n"></span></summary>';
+      g.layers.forEach(function (l) {
+        var cannot = CR.cannotBuild(l);
         if (cannot) S.picked[l.id] = false;
         var lab = document.createElement("label");
         lab.className = "cat-row" + (cannot ? " cat-row-off" : "");
-        lab.innerHTML = '<input type="checkbox" value="' + esc(l.id) + '"' +
-            (S.picked[l.id] && !cannot ? " checked" : "") + (cannot ? " disabled" : "") + " />" +
-          "<span><b>" + esc(l.label) + "</b>" +
-            '<span class="src">' + esc(l.info || "") +
-            (cannot ? " · too wide an area for this one" : "") +
-            (!cannot && l.cost && l.cost !== "free" ? ' <span class="cost cost-ask">needs approval</span>' : "") + "</span></span>";
-        if (cannot) lab.title = "This is built for the area you pick, and the work grows with it. " +
-          "Choose a smaller region to include it.";
+        lab.innerHTML = CR.rowHTML(l, !!S.picked[l.id]);
+        if (cannot) lab.title = CR.TOO_WIDE_TITLE;
         lab.querySelector("input").onchange = function () {
           S.picked[l.id] = this.checked;
           paintCounts();
