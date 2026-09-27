@@ -472,12 +472,24 @@
     return null;
   }
 
-  /* ================= the bar across the top =================
-     The viewer's hero already carries the title, the description and Share.
-     What an owner needs on top of that is whether the atlas is on the air, the
-     switch for it, a way in to Settings, and the way to add data. They go in
-     the same row as Share rather than in a bar of their own — a second bar
-     saying "this is the owner's strip" is how the second page started. */
+  /* ================= the Owner menu =================
+     The viewer's header already carries the title and Share. What an owner
+     needs on top of that — whether the atlas is on the air and the switch for
+     it, the region the base map draws, the way to add data, Settings — folds
+     into ONE "Owner" button beside Share, outlined in Sindoor because only the
+     owner sees it. Laid loose in the header these four wrapped it to a second
+     row and pushed the map down for the one person who looks at it most; in
+     a menu the owner's header is the visitor's header, one row, and the
+     owner's tools are one press away.
+
+     Each line of the menu pairs what it is about with what you can do:
+       Live · anyone with the link            Make it private
+       Boundaries & place names for Deoria    Change
+       Your data                              + Add data
+       Title, logo, about                     Settings
+     The region line is owner.js's own row (addRegionRow); Add data is the
+     page's own link, moved in. The buttons keep the ids and handlers they
+     always had, so nothing else on the page has to know they moved. */
 
   function buildBar() {
     var row = document.querySelector(".hero-actions");
@@ -485,13 +497,25 @@
     var box = document.createElement("div");
     box.className = "own-acts";
     box.innerHTML =
-      '<span class="own-status" id="own-status" role="status">' +
-        '<span class="own-dot" aria-hidden="true"></span>' +
-        '<span class="own-what" id="own-what"></span>' +
-        '<span class="own-who" id="own-who"></span>' +
-      "</span>" +
-      '<button class="share-btn" id="own-live" hidden type="button"></button>' +
-      '<button class="share-btn" id="own-settings" type="button">Settings</button>';
+      '<button class="own-btn" id="own-btn" type="button" aria-expanded="false" aria-haspopup="true" aria-controls="own-panel" aria-label="Owner menu — live status, region, add data, settings">' +
+        '<span class="own-dot" aria-hidden="true"></span><span class="own-btn-word">Owner</span>' +
+        '<svg class="own-btn-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>' +
+      "</button>" +
+      '<div class="own-panel" id="own-panel" hidden>' +
+        '<div class="own-panel-t">Owner</div>' +
+        '<div class="own-panel-ln">' +
+          '<span class="own-status" id="own-status" role="status">' +
+            '<span class="own-dot" aria-hidden="true"></span>' +
+            '<span class="own-what" id="own-what"></span>' +
+            '<span class="own-who" id="own-who"></span>' +
+          "</span>" +
+          '<button class="own-act" id="own-live" hidden type="button"></button>' +
+        "</div>" +
+        '<div class="own-panel-ln" id="own-panel-region"></div>' +
+        '<div class="own-panel-ln" id="own-panel-data"><span class="own-panel-k">Your data</span></div>' +
+        '<div class="own-panel-ln"><span class="own-panel-k">Title, logo, about</span>' +
+          '<button class="own-act" id="own-settings" type="button">Settings</button></div>' +
+      "</div>";
     row.insertBefore(box, row.firstChild);
     $("#own-live").onclick = toggleLive;
     $("#own-settings").onclick = function () { openSettings(); };
@@ -504,8 +528,40 @@
       add.hidden = false;
       add.removeAttribute("title");
       add.setAttribute("aria-label", "Add your data to this atlas");
+      add.className = "own-act";
+      $("#own-panel-data").appendChild(add);
     }
+    wireOwnerMenu();
     paintStatus();
+  }
+
+  /* Open on press; shut on a press outside, on Esc, or when a line has done
+     its job (Settings opens a dialog, Add data leaves the page). The menu is
+     the owner's, so its state is not remembered — it opens shut every time,
+     the way a menu does. */
+  function wireOwnerMenu() {
+    var btn = $("#own-btn"), panel = $("#own-panel");
+    if (!btn || !panel) return;
+    function shut() {
+      panel.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+      document.removeEventListener("click", away, true);
+      document.removeEventListener("keydown", onKey, true);
+    }
+    function away(e) { if (!panel.contains(e.target) && !btn.contains(e.target)) shut(); }
+    function onKey(e) { if (e.key === "Escape") { shut(); btn.focus(); } }
+    btn.onclick = function () {
+      if (!panel.hidden) { shut(); return; }
+      panel.hidden = false;
+      btn.setAttribute("aria-expanded", "true");
+      document.addEventListener("click", away, true);
+      document.addEventListener("keydown", onKey, true);
+    };
+    // a line that opens something else puts the menu away first
+    panel.addEventListener("click", function (e) {
+      var t = e.target && e.target.closest && e.target.closest("#own-settings, #own-region, #add-data-btn");
+      if (t) shut();
+    });
   }
 
   // Two things, said as one sentence. `published` is what makes an atlas listed
@@ -515,6 +571,7 @@
     var live = INST.status === "published";
     var priv = INST.visibility === "private";
     $("#own-status").classList.toggle("live", live);
+    var ob = $("#own-btn"); if (ob) ob.classList.toggle("live", live);   // the dot on the button says it too
     $("#own-what").textContent = live ? "Live" : "Not live";
     $("#own-who").textContent = live
       ? (priv ? "— only invited people" : "— anyone with the link")
@@ -598,12 +655,15 @@
       (have.length ? "Boundaries and place names are drawn for " : "This atlas covers ") +
       (label || "no region yet") + ". Change the region.");
     $("#own-region", wrap).onclick = function () { openSettings("region"); };
-    // right under the Map/Satellite switch: the region is what the base map
-    // draws, so it belongs with the base map and not among the data layers
-    var after = panel.querySelector(".ctl-basemaps");
-    if (after && after.nextSibling) panel.insertBefore(wrap, after.nextSibling);
-    else if (after) panel.appendChild(wrap);
-    else panel.insertBefore(wrap, panel.firstChild);
+    // its line in the Owner menu: the region is what the base map draws, and
+    // changing it is the owner's act, not a layer a reader switches
+    var slot = $("#own-panel-region");
+    if (slot) slot.appendChild(wrap);
+    else {
+      var after = panel.querySelector(".ctl-basemaps");
+      if (after && after.nextSibling) panel.insertBefore(wrap, after.nextSibling);
+      else panel.insertBefore(wrap, panel.firstChild);
+    }
   }
 
   /* One extra control on the rows this caller may change, named for what it

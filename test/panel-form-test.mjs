@@ -98,7 +98,11 @@ check('and a person\'s own pan or zoom is left alone', /if \(e && e\.originalEve
 console.log('\n  the header is one row between a phone and a wide screen');
 check('in the middle sizes only sign in stays among the links',
   /@media \(min-width:721px\) and \(max-width:1100px\)\{\s*\.atlas-full \.nav \.links > :not\(#nav-signin\):not\(#nav-signout\) \{ display:none; \}/.test(html), true);
-check('and the search box shrinks before anything wraps', /\.atlas-full \.head-tools \{ flex:1 1 0; \}/.test(html), true);
+/* search left the header for the map's own toolbar (see header-and-keys-test),
+   so nothing in the header has to shrink: the row never wraps and the title
+   shortens with "…" instead */
+check('and the header row never wraps', /\.atlas-full \.nav \{ width:100%; min-height:44px; padding:\.3rem \.75rem; gap:\.6rem 1rem; flex-wrap:nowrap;/.test(html), true);
+check('search is not in the header any more', /head-tools/.test(html), false);
 
 console.log('\n  a phone sheet that grows makes room on the map');
 check('the map is framed again, or nudged, when the sheet grows or shrinks',

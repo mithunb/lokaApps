@@ -140,37 +140,23 @@
     .atlas-error-box p { font-size:var(--t-ui); font-weight:400; color:var(--color-text-secondary); margin:0 0 .9rem; text-wrap:pretty; overflow-wrap:anywhere; }
     .atlas-error-box .share-btn { font-size:var(--t-ui); }
 
-    /* ---- the strip: one calm edge for what is true of the whole atlas ----
-       Map/Satellite, search, and (for the owner) the region each give ONE
-       answer for the whole map, so they ride a slim strip across the top of
-       the stage instead of opening the panel — the panel keeps only the
-       layers and their keys, and its first scroll-stop is a layer. The strip
-       wears the panel's own materials (white at 95%, hairline edge, the
-       sanctioned blur), so what were three floating objects — panel chrome,
-       a search box adrift mid-air, the region row — become one edge. Its
-       real height is measured into --strip-h by atlas.js, so the panel
-       below always clears it exactly. */
-    .atlas-strip { position:absolute; top:0; left:0; right:0; z-index:6;
-      display:flex; align-items:center; gap:.75rem; min-height:48px; padding:.4rem .75rem;
+    /* ---- the map's toolbar: search and Map/Satellite, floating beside the drawer ----
+       Search and Map/Satellite each give ONE answer for the whole map, so
+       they sit together on one small toolbar at the map's top edge, just to
+       the right of the Layers drawer — grouped with the map they act on,
+       wearing the drawer's own materials (Surface at 95%, hairline edge, the
+       panel-lift shadow) so the two read as one family of controls over the
+       map. The drawer's width is measured into --panel-w by atlas.js, so the
+       toolbar follows it when the drawer folds to its "Layers · N" head. On
+       a phone (below) the band goes quiet and search floats alone, as it
+       always did. */
+    .atlas-strip { position:absolute; top:8px; left:calc(var(--panel-w, 19.5rem) + 16px); z-index:6;
+      display:flex; align-items:center; gap:.4rem; padding:.25rem .3rem;
+      max-width:calc(100% - var(--panel-w, 19.5rem) - 24px);
       background:rgba(253,252,248,.95); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
-      border-bottom:1px solid var(--color-divider); }
-    .atlas-strip .ctl-basemaps { flex:0 0 auto; margin:0; }
+      border:1px solid var(--color-border); border-radius:var(--radius-md); box-shadow:var(--shadow-md); }
+    .atlas-strip .ctl-basemaps { flex:0 0 auto; margin:0; border-color:transparent; background:none; padding:0; }
     .atlas-strip .bm-btn { flex:0 0 auto; }
-    /* The owner's region row (owner.js's .own-region-wrap, relocated here by
-       atlas.js on wide screens) reads as one line: the card costume it wears
-       inside the bottom sheet is undone, and its warning note hangs just
-       below the strip's edge, the same way the search count does. */
-    .atlas-strip .own-region-wrap { flex:0 0 auto; min-width:0; margin:0; }
-    .atlas-strip .own-region { display:flex; align-items:baseline; gap:.4rem;
-      border:none; background:none; padding:.2rem 0; }
-    .atlas-strip .own-region-k { flex:0 0 auto; }
-    .atlas-strip .own-region-v { min-width:0; max-width:clamp(6rem,24vw,16rem);
-      overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .atlas-strip .own-region-go { flex:0 0 auto; }
-    .atlas-strip .own-region-warn { position:absolute; top:calc(100% + .55rem); right:.75rem;
-      margin:0; padding:.2rem .6rem; font-size:var(--t-label); font-weight:400; letter-spacing:0;
-      background:rgba(253,252,248,.95); border:1px solid var(--color-border);
-      border-radius:var(--radius-md); box-shadow:var(--shadow-md); }
 
     /* ---- control widget ---- */
     /* The shelf floats over the map, 8px in from the frame and just under the
@@ -188,8 +174,6 @@
        says all of this, so the foot is not there */
     .sheet-foot { display:none; }
     @media (min-width:721px){
-      /* the strip sits above the map, so the shelf starts just below it */
-      .atlas-stage.has-strip .atlas-panel { top:calc(var(--strip-h,48px) + 8px); }
       /* folded: the shelf stops being a column and becomes its own head */
       .atlas-panel.collapsed { bottom:auto; }
     }
@@ -238,7 +222,12 @@
        more layer setting, and floating alone it was mid-air. The strip is
        its home. The count line hangs just under the strip's edge, over the
        map, exactly where the vanishing pins are. */
-    .ctl-search { position:relative; flex:1 1 auto; min-width:7rem; max-width:26rem; margin:0 auto; }
+    .ctl-search { position:relative; flex:1 1 auto; min-width:7rem; max-width:26rem; margin:0; }
+    .atlas-strip .ctl-search { flex:0 1 16rem; }
+    .atlas-strip .ctl-search-box { border-color:transparent; background:none; }
+    .atlas-strip .ctl-search-box:focus-within { background:var(--color-surface); }
+    /* the count line hangs from the toolbar's left edge, clear of the drawer beside it */
+    .atlas-strip .ctl-search-count { left:-.3rem; transform:none; text-align:left; }
     .ctl-search-box { display:flex; align-items:center; gap:.4rem; padding:0 .3rem 0 .75rem;
       background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md); }
     .ctl-search-box svg { flex:0 0 auto; width:16px; height:16px; color:var(--color-text-muted); }
@@ -519,6 +508,12 @@
     .coll-name { min-width:0; overflow-wrap:anywhere; }
     .coll-item.sel { color:var(--color-sindoor); font-weight:600; }
     .coll-item.sel .coll-dot { box-shadow:0 0 0 1.5px #fff, 0 0 0 3px var(--color-sindoor); }
+    /* With a key on, a name wears the marks its pin wears on the map — one row
+       per key, the key's shape in the kind's colour — instead of the plain dot
+       (collMarkEl). Sized to the pin's own rows at the panel's scale. */
+    .coll-marks { flex:0 0 auto; display:inline-flex; flex-direction:column; align-items:flex-start; gap:2px; min-width:14px; }
+    .coll-marks .atlas-keyrow { display:block; height:auto; max-height:12px; width:auto; overflow:visible; }
+    .coll-item.sel .coll-marks { border-radius:var(--radius-xs); box-shadow:0 0 0 2px var(--color-sindoor); }
     .coll-more { display:block; margin:.2rem 0 0 1.4rem; padding:.15rem 0; font:inherit; font-size:var(--t-meta); font-weight:600;
       color:var(--color-leaf); background:none; border:none; cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
     .coll-more:hover { color:var(--color-leaf-deep); }
@@ -560,6 +555,28 @@
     .leg-openable { cursor:pointer; border-radius:var(--radius-md); }
     .leg-openable:hover { background:var(--color-surface-alt); }
     .leg-openable[aria-expanded="true"] { background:var(--color-surface-alt); }
+    /* A kind is a chip you press: the map keeps only those places and the list
+       narrows with it (filterByKind). Pressed, it fills with Leaf Tint and
+       wears a Leaf edge, the way a pressed tag on a place card does; the
+       count stays in ink so it can still be read. A button, so a keyboard
+       reaches it, but dressed as the row it always was. */
+    button.key-kind { width:100%; font:inherit; text-align:left; background:none; border:1px solid transparent;
+      border-radius:var(--radius-md); cursor:pointer; color:inherit; margin:0; }
+    button.key-kind:hover { background:var(--color-surface-alt); }
+    button.key-kind:focus-visible { outline:2px solid var(--color-leaf); outline-offset:0; }
+    button.key-kind.on { background:var(--color-leaf-tint); border-color:var(--color-leaf); }
+    button.key-kind.on .leg-label { color:var(--color-leaf-deep); font-weight:600; }
+    /* a kind with words (or silent places) behind it: the chevron after the
+       row opens them, so the row itself is free to narrow the map */
+    .leg-pair { display:flex; align-items:center; gap:.15rem; }
+    .leg-pair .key-kind { flex:1 1 auto; min-width:0; }
+    .leg-open { flex:0 0 auto; width:22px; height:22px; padding:0; display:inline-flex; align-items:center; justify-content:center;
+      border:none; background:none; border-radius:var(--radius-md); cursor:pointer; color:var(--color-text-muted);
+      transition:transform .2s cubic-bezier(.25,1,.5,1), color .15s ease; }
+    .leg-open svg { width:14px; height:14px; }
+    .leg-open:hover { color:var(--color-text-primary); background:var(--color-surface-alt); }
+    .leg-open[aria-expanded="true"] { transform:rotate(180deg); color:var(--color-text-primary); }
+    .leg-open:focus-visible { outline:2px solid var(--color-leaf); outline-offset:0; }
     .leg-why { display:flex; flex-wrap:wrap; gap:.2rem; padding:.1rem 0 .35rem 1.5rem; }
     /* Each word is a button now, because each one leads back to the place that
        said it. It keeps the quiet look it had as a label — a word of evidence
@@ -1106,37 +1123,31 @@
     .atlas-full body { height:100dvh; min-height:0; overflow:hidden; }
     .atlas-full .atlas-hero, .atlas-full .atlas-cta, .atlas-full footer.site,
     .atlas-full .nav .links a[href="../"], .atlas-full .nav .links a[href^="https://discoverloka"] { display:none; }
-    .atlas-full .nav { width:100%; min-height:44px; padding:.3rem .75rem; gap:.6rem 1rem; flex-wrap:wrap; justify-content:flex-start; }
-    .atlas-full .nav .links { margin-left:auto; gap:.9rem; }
+    /* above the map's own floating pieces (the toolbar, the drawer), so the
+       Owner menu hanging from the header is never under the search box */
+    .atlas-full header.site { z-index:10; }
+    .atlas-full .nav { width:100%; min-height:44px; padding:.3rem .75rem; gap:.6rem 1rem; flex-wrap:nowrap; justify-content:flex-start; }
+    .atlas-full .org-head { flex:1 1 auto; min-width:0; }
+    .atlas-full .nav .links { margin-left:0; gap:.9rem; flex-wrap:nowrap; }
     .atlas-full .nav .links a, .atlas-full .nav .links button { font-size:var(--t-meta); white-space:nowrap; }
-    .atlas-full .hero-actions { flex:0 0 auto; }
+    /* Share (and the Owner menu) sit at the right with the links: one group of acts, one row */
+    .atlas-full .hero-actions { flex:0 0 auto; margin-left:auto; flex-wrap:nowrap; }
     .atlas-full .share-btn { padding:.3rem .65rem; font-size:var(--t-meta); }
     .atlas-full .atlas-stage { flex:1 1 auto; min-height:0; width:100%; height:auto; margin:0;
       border:none; outline:none; }
-    /* the strip's pieces (search, Map/Satellite, the owner's region) sit in
-       the header on a wide screen — atlas.js moves the strip itself here */
-    /* sized by what it holds, so the owner's region row wraps the bar to a
-       second line rather than crushing the title beside it */
-    .head-tools { display:flex; align-items:center; flex:1 1 auto; min-width:0; justify-content:flex-end; }
     .atlas-full .org-head { min-width:min(100%, 14rem); }
-    .head-tools .atlas-strip { position:static; flex:1 1 auto; min-height:0; padding:0; gap:.6rem; justify-content:flex-end;
-      background:none; border:none; backdrop-filter:none; -webkit-backdrop-filter:none; }
-    .head-tools .ctl-search { flex:1 1 7rem; max-width:22rem; margin:0; }
-    .head-tools .ctl-search-input { padding-top:.32rem; padding-bottom:.32rem; }
-    .head-tools:empty { display:none; }
     /* Between a phone and a wide screen (about 721–1100px) the header's pieces
        did not fit one row, and "all atlases" and "sign in" wrapped under it.
        Here Share is its icon, and only sign in / sign out stay among the links
-       ("All atlases" is in About & sources) — one row, as on the other sizes. */
+       ("All atlases" is in About & sources) — one row, as on the other sizes.
+       The owner's button keeps its word: "Owner" is what tells the owner
+       the menu is theirs. */
     @media (min-width:721px) and (max-width:1100px){
       .atlas-full .nav .links > :not(#nav-signin):not(#nav-signout) { display:none; }
-      .atlas-full .share-btn span, .atlas-full #add-data-btn span { display:none; }
-      .atlas-full .share-btn { padding:.3rem .45rem; }
-      .atlas-full .share-btn svg { margin:0; }
+      .atlas-full #share-btn span { display:none; }
+      .atlas-full #share-btn { padding:.3rem .45rem; }
+      .atlas-full #share-btn svg { margin:0; }
       .atlas-full .nav { gap:.6rem .75rem; }
-      /* grow into what is left rather than claiming a full row first, so the
-         search box shrinks before anything wraps; the title shortens with "…" */
-      .atlas-full .head-tools { flex:1 1 0; }
       .atlas-full .org-head { flex:0 1 auto; min-width:10rem; }
     }
     /* the drawer starts under the header now, not under a strip, and stops
@@ -1202,20 +1213,19 @@
     @media (max-width:720px){
       /* one row: a long title shortens rather than pushing Share to a second line */
       .atlas-full .nav { min-height:52px; padding:.4rem .75rem; gap:.5rem .75rem; flex-wrap:nowrap; }
-      .atlas-full .org-head { flex:1 1 auto; max-width:none; }
+      .atlas-full .org-head { flex:1 1 auto; min-width:0; max-width:none; }   /* the title gives way, never the acts beside it */
       /* only sign in / sign out stay on a phone ("All atlases" is in the About &
          sources panel); a thumb-sized target, never pushing Share off the row */
       .atlas-full .nav .links { display:flex; flex:0 0 auto; gap:0; }
       .atlas-full .nav .links > :not(#nav-signin):not(#nav-signout) { display:none; }
       .atlas-full .nav .links > #nav-signin:not([hidden]),
       .atlas-full .nav .links > #nav-signout:not([hidden]) { display:inline-flex; align-items:center; min-height:44px; padding:0 .35rem; font-size:var(--t-meta); font-weight:600; white-space:nowrap; }
-      .atlas-full .share-btn span, .atlas-full #add-data-btn span { display:none; }   /* icon only: the width is the title's */
-      .atlas-full .share-btn { padding:.4rem .5rem; }
-      .atlas-full .share-btn svg { margin:0; }
+      .atlas-full #share-btn span { display:none; }   /* icon only: the width is the title's */
+      .atlas-full #share-btn { padding:.4rem .5rem; }
+      .atlas-full #share-btn svg { margin:0; }
       .org-brand-logo { height:28px; }
       .org-brand-line > span { max-width:none; }
       .org-head #atlas-title { font-size:1rem; }
-      .head-tools { display:none; }   /* on a phone the strip stays over the map: search floats there */
       /* the sheet folded: a chip bottom-left; LOKA's badge comes out of its foot to float */
       .atlas-full .atlas-panel.collapsed { left:8px; right:auto; bottom:calc(8px + env(safe-area-inset-bottom)); max-height:none;
         border:1px solid var(--color-border); border-radius:var(--radius-md); box-shadow:var(--shadow-md); background:rgba(253,252,248,.94); }
@@ -1293,9 +1303,12 @@
          the band itself goes quiet — no surface, no edge — leaving just the
          floating search box the phone always had. The empty band must not
          swallow map drags, so it gives up the pointer except on its child. */
-      .atlas-strip { background:none; border-bottom:none;
+      .atlas-strip { top:0; left:0; right:0; max-width:none; background:none; border:none; box-shadow:none;
         backdrop-filter:none; -webkit-backdrop-filter:none;
         min-height:0; padding:.75rem .75rem 0; pointer-events:none; }
+      .atlas-strip .ctl-search { flex:1 1 auto; margin:0 auto; }
+      .atlas-strip .ctl-search-box { border-color:var(--color-border); background:var(--color-surface); }
+      .atlas-strip .ctl-search-count { left:50%; transform:translateX(-50%); text-align:center; }
       .atlas-strip > * { pointer-events:auto; }
       .ctl-search-box { box-shadow:var(--shadow-md); }
       /* The sheet shows about three rows at a time, so the section you are in
@@ -1407,7 +1420,6 @@
         background:var(--color-surface-alt); font-size:var(--t-meta); color:var(--color-text-secondary); }
       .sheet-foot .ctl-basemaps { flex:0 0 auto; }
       .sheet-foot .bm-btn { padding:.4rem .6rem; }
-      .sheet-foot .own-region-wrap { flex:1 1 100%; margin:0; order:3; }
       .sheet-foot-words { margin-left:auto; display:flex; flex-direction:column; align-items:flex-end; gap:.05rem; line-height:1.35; }
       .sheet-foot-credit { white-space:nowrap; font-size:var(--t-label); }
       .sheet-foot-credit b { color:var(--color-text-primary); font-weight:700; letter-spacing:.08em; }
@@ -1458,17 +1470,18 @@
   </style>
 </head>
 <body>
-  <!-- The header is one thin bar. On an atlas it carries the organisation
-       that built it (logo, name, the atlas's title), then search and
-       Map/Satellite (moved in by atlas.js on wide screens), Share, and the
-       site links. On the home gallery the same bar reads "LOKA Atlas". -->
+  <!-- The header is one thin row for everyone. On an atlas it carries the
+       organisation that built it (logo, name, the atlas's title) at the
+       left; at the right the Owner menu (owner.js, owner only), Share, and
+       the site links. Search and Map/Satellite are the map's own toolbar,
+       floating on the map beside the Layers drawer (atlas.js). On the home
+       gallery the same bar reads "LOKA Atlas". -->
   <header class="site">
     <nav class="nav" aria-label="Primary">
       <div class="org-head">
         <div id="org-branding"></div>
         <h1 id="atlas-title">LOKA Atlas</h1>
       </div>
-      <div class="head-tools" id="head-tools"></div>
       <!-- An eyebrow stood here reading "interactive map · loka atlas". It said
            nothing the nav above and the title below were not already saying, and
            on a phone it wrapped to two lines to say it. -->

@@ -2016,21 +2016,30 @@
   // other answer grey. The marker element and all its wiring stay; only
   // what is drawn inside changes. entry._rowsW records how far the block
   // reaches past the pin — folding and the fan spacing read it.
-  function renderMarks(L, entry, act) {
-    var node = entry.node;
-    if (!node) return;
-    while (node.firstChild && node.firstChild.className !== "atlas-mlabel") node.removeChild(node.firstChild);
-    entry._rowsW = 0;
-    entry._rowsEl = null;
+  /* The marks one place wears under the keys that are on: one row per key
+     the place answers, every answer its own mark, kept kinds in their colours,
+     any other answer grey. One builder, read by the pin on the map AND by the
+     place's line in the Map Browser, so the list can never disagree with
+     the map about what a place is. */
+  function keyMarkRows(L, f, act) {
     var rows = [];
     act.forEach(function (opt, fi) {
-      var vals = optValuesOf(L, opt, entry.f);
+      var vals = optValuesOf(L, opt, f);
       if (!vals.length) return;   // no answer under this key: no row
       rows.push({ shape: ROW_SHAPES[fi], colors: vals.map(function (v) {
         var slot = opt.kept.indexOf(v);
         return slot >= 0 ? keyKindColor(L, opt, fi, slot) : KEY_OTHER;
       }) });
     });
+    return rows;
+  }
+  function renderMarks(L, entry, act) {
+    var node = entry.node;
+    if (!node) return;
+    while (node.firstChild && node.firstChild.className !== "atlas-mlabel") node.removeChild(node.firstChild);
+    entry._rowsW = 0;
+    entry._rowsEl = null;
+    var rows = keyMarkRows(L, entry.f, act);
     if (!rows.length) {
       node.insertBefore(keyPinEl(oneColorOf(L)), node.firstChild);
       return;
@@ -2093,47 +2102,59 @@
     }
     var out = [];
     mine.forEach(function (it) {
-      var r = el("div", "leg-item key-kind" + (it.faint ? " faint" : ""));
+      /* Each kind is a chip you can press: the map keeps the places of that
+         kind and the list narrows to them, the way search does (filterByKind).
+         Pressing it again, or "show all", comes back. The row wears the
+         same mark the map draws, so what you press is what you see. */
+      var r = el("button", "leg-item key-kind" + (it.faint ? " faint" : ""));
+      r.type = "button";
+      var which = it.silentOf ? "silent" : (it.label === "other" && it.color === KEY_OTHER ? "other" : "kind");
+      r.setAttribute("data-kind", which === "kind" ? it.label : "");
+      r.setAttribute("data-which", which);
+      r.setAttribute("data-layer", L.id);
+      r.setAttribute("data-col", opt.col);
+      var lit = kindFilterIs(L, opt, which, it.label);
+      r.classList.toggle("on", lit);
+      r.setAttribute("aria-pressed", lit ? "true" : "false");
+      r.setAttribute("aria-label", (lit ? "Showing only the places that are " : "Show only the places that are ") +
+        kindWords(it.label, which) + (it.n != null ? " — " + it.n : ""));
       r.appendChild(swatch(it));
       r.appendChild(el("span", "leg-label", esc(it.label)));
       if (it.n != null) r.appendChild(el("span", "leg-n", String(it.n)));
+      r.onclick = function () { filterByKind(L, opt, which, it.label); };
       out.push(r);
-      if (it.silentOf) {
-        r.classList.add("leg-openable");
-        r.setAttribute("role", "button");
-        r.setAttribute("tabindex", "0");
-        r.setAttribute("aria-expanded", "false");
-        var who = silentPlacesEl(L, it.silentOf);
-        who.hidden = true;
-        out.push(who);
-        var flipSilent = function () {
-          who.hidden = !who.hidden;
-          r.setAttribute("aria-expanded", String(!who.hidden));
+      /* The words behind a kind, or the places a question is silent on, open
+         from a small chevron after the row — not from the row itself, which
+         now narrows the map. */
+      var fold = null;
+      if (it.silentOf) fold = silentPlacesEl(L, it.silentOf);
+      else if (it.why && it.why.length) fold = whyWordsEl(L, it.why);
+      if (fold) {
+        fold.hidden = true;
+        var open = el("button", "leg-open", ICONS.chevron);
+        open.type = "button";
+        open.setAttribute("aria-expanded", "false");
+        open.setAttribute("aria-label", it.silentOf
+          ? "Which places have no answer"
+          : "The words that put a place under " + it.label);
+        open.onclick = function () {
+          fold.hidden = !fold.hidden;
+          open.setAttribute("aria-expanded", String(!fold.hidden));
         };
-        r.onclick = flipSilent;
-        r.onkeydown = function (ev) {
-          if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); flipSilent(); }
-        };
-      }
-      if (it.why && it.why.length) {
-        r.classList.add("leg-openable");
-        r.setAttribute("role", "button");
-        r.setAttribute("tabindex", "0");
-        r.setAttribute("aria-expanded", "false");
-        var words = whyWordsEl(L, it.why);
-        words.hidden = true;
-        out.push(words);
-        var flip = function () {
-          words.hidden = !words.hidden;
-          r.setAttribute("aria-expanded", String(!words.hidden));
-        };
-        r.onclick = flip;
-        r.onkeydown = function (e) {
-          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); flip(); }
-        };
+        var pair = el("div", "leg-pair");
+        pair.appendChild(r);
+        pair.appendChild(open);
+        out[out.length - 1] = pair;
+        out.push(fold);
       }
     });
     return out;
+  }
+  // how a kind is named in the count line and to a screen reader
+  function kindWords(label, which) {
+    if (which === "silent") return "without an answer";
+    if (which === "other") return "something else";
+    return label;
   }
 
   function keyLegendRows(L, act) {
@@ -2325,6 +2346,10 @@
     L._legend = keyLegendRows(L, act);
     renderExtra(L);
     applyMarkerVisibility(L);   // discs re-read the new footprints (fold distance included)
+    // a pressed kind whose key just went off has nothing left to filter by
+    if (KINDFILTER && KINDFILTER.layer === L.id &&
+        !act.some(function (o) { return o.col === KINDFILTER.col; })) clearSearch();
+    syncCollection(L);   // the names in the list wear the marks the pins now wear
   }
 
   // Fold distance follows the markers' true footprint. With nothing switched
@@ -2419,7 +2444,7 @@
        colour here and as a tappable word on a place knows they are the same
        word doing two different jobs. */
     wrap.appendChild(el("span", "key-hint",
-      "Keys colour the map — each wears its own shape. Tap any word on a place to see who shares it."));
+      "Keys colour the map — each wears its own shape. Tap a kind to see only those places, or any word on a place to see who shares it."));
     var list = el("div", "key-list");
     // The cap message, when it has something to say (kept in st.note so a
     // rebuild mid-conversation does not eat it). role=status: the refused
@@ -3737,7 +3762,12 @@
     c.hidden = false;
     noun = noun || "places";
     var one = noun === "people" ? "person" : noun.replace(/s$/, "");
-    if (lead) {
+    // a pressed kind counts against the whole layer: "12 of 66 places are Market"
+    if (lead && lead.ofAll) {
+      c.textContent = shown
+        ? shown + " of " + total + " " + noun + (shown === 1 ? " is " : " are ") + lead.ofAll
+        : "none of the " + total + " " + noun + " are " + lead.ofAll;
+    } else if (lead) {
       c.textContent = shown
         ? shown + " " + (shown === 1 ? one : noun) + " " + lead
         : "no " + noun + " " + lead;
@@ -3863,6 +3893,7 @@
     if (TAGFILTER === tag && TAGFILTER_LAYER === (layerId || null)) { clearSearch(); return; }
     TAGFILTER = tag;
     TAGFILTER_LAYER = layerId || null;
+    if (KINDFILTER) { KINDFILTER = null; markLitKinds(); }   // one filter at a time
     var box = $(".ctl-search-input");
     if (box) box.value = "";          // one filter at a time, and it is this one
     searchTags = [];
@@ -3891,6 +3922,57 @@
     });
     updateSearchCount(shown, total, pts, "tagged \u201c" + tag + "\u201d", null, searchNoun(layers));
     markLitTags();
+  }
+
+  /* A kind on a key, pressed in the panel, narrows the map the same way a tag
+     does: the places of that kind stay, the rest go, the list narrows with
+     them, and the line under the search box says "12 of 66 places are
+     Market · show all". One filter at a time — a kind replaces a tag or a
+     typed word, and typing replaces the kind (runSearch). `which` is "kind"
+     for a named kind, "other" for the key's leftover row, "silent" for the
+     places a question has no answer for. */
+  var KINDFILTER = null;   // { layer, col, which, label }
+  function kindFilterIs(L, opt, which, label) {
+    return !!KINDFILTER && KINDFILTER.layer === L.id && KINDFILTER.col === opt.col &&
+      KINDFILTER.which === which && (which !== "kind" || KINDFILTER.label === label);
+  }
+  function filterByKind(L, opt, which, label) {
+    if (!$("#atlas-search-count")) return;
+    if (kindFilterIs(L, opt, which, label)) { clearSearch(); return; }
+    clearSearch();   // whatever stood before — a tag, a word — is gone
+    var box = $(".ctl-search-input");
+    if (box) box.value = "";          // one filter at a time, and it is this one
+    searchWord = "";
+    searchSeq++;                       // orphan any search still in flight
+    clearTimeout(searchTimer);
+    KINDFILTER = { layer: L.id, col: opt.col, which: which, label: label };
+    var shown = 0, total = 0, pts = [];
+    var rows = searchRows(L);
+    rows.forEach(function (e) {
+      total++;
+      var vals = optValuesOf(L, opt, e.f);
+      var has;
+      if (which === "silent") has = !vals.length;
+      else if (which === "other") has = vals.some(function (v) { return opt.kept.indexOf(v) < 0; });
+      else has = vals.indexOf(label) >= 0;
+      e.hidden = !has;
+      if (has) { shown++; if (markersByLayer[L.id]) pts.push(e.f.geometry.coordinates); }
+    });
+    applyRowVisibility(L);
+    updateSearchCount(shown, total, pts, { ofAll: kindWords(label, which) }, null, searchNoun([L]));
+    markLitKinds();
+  }
+  // the pressed kind shows as on in the panel, and only that one
+  function markLitKinds() {
+    document.querySelectorAll(".key-kind[data-which]").forEach(function (b) {
+      var on = !!KINDFILTER &&
+        b.getAttribute("data-layer") === KINDFILTER.layer &&
+        b.getAttribute("data-col") === KINDFILTER.col &&
+        b.getAttribute("data-which") === KINDFILTER.which &&
+        (KINDFILTER.which !== "kind" || b.getAttribute("data-kind") === KINDFILTER.label);
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
   }
 
   // the tapped tag shows as on wherever it appears — in this popup and in any
@@ -3935,6 +4017,8 @@
     TAGFILTER = null;
     TAGFILTER_LAYER = null;
     markLitTags();
+    KINDFILTER = null;
+    markLitKinds();
     lastFitKey = null;
     searchableLayers().forEach(function (L) { searchRows(L).forEach(function (e) { e.hidden = false; }); applyRowVisibility(L); });
     updateSearchCount(null);
@@ -3948,6 +4032,7 @@
     // stayed lit — and announced as pressed — for a filter that had already
     // been replaced, and tapping it then cleared a search the box still showed.
     if (TAGFILTER) { TAGFILTER = null; TAGFILTER_LAYER = null; markLitTags(); }
+    if (KINDFILTER) { KINDFILTER = null; markLitKinds(); }   // a pressed kind, likewise
     searchTags = [];                         // expansion belongs to the query that fetched it
     var kw = layerVocab().filter(function (t) { return t.indexOf(q) >= 0 || q.indexOf(t) >= 0; });
     applySearch(q, kw);                      // instant keyword pass
@@ -4075,15 +4160,14 @@
       /^(admin|labels|boundary|boundaries|placenames|place-names)$/i.test(String(L.id || ""));
   }
 
-  /* ---- the strip: what is true of the whole atlas rides the map's top edge ----
-     Map/Satellite, search and (for the owner) the region each give ONE answer
-     for the whole atlas, so they live on a slim strip across the top of the
-     stage rather than opening the panel — the panel keeps only the layers and
-     their keys, and its first scroll-stop is a layer. Rebuilt with the panel;
-     the owner's region row arrives later through owner.js and is re-homed by
-     placeStripPieces, which also owns the 720px flip: phones keep
-     Map/Satellite and the region row in the bottom sheet exactly as before,
-     and the strip carries search alone. */
+  /* ---- the strip: the map's own toolbar, floating beside the drawer ----
+     Search and Map/Satellite each give ONE answer for the whole atlas, so
+     they live on one small floating toolbar at the map's top edge, to the
+     right of the Layers drawer — grouped with the map they act on, and the
+     panel keeps only the layers and their keys. Rebuilt with the panel.
+     placeStripPieces owns the 720px flip: phones keep Map/Satellite in the
+     bottom sheet's foot exactly as before, and the strip carries search
+     alone. The owner's region row lives in the Owner menu (owner.js). */
   /* How tall the bottom sheet is, measured and kept current.
 
      On a phone the sheet sits over the foot of the map, and nothing allowed for
@@ -4104,6 +4188,10 @@
       var onPhone = window.matchMedia("(max-width: 720px)").matches;
       var h = (onPhone ? panel.offsetHeight : 0);
       stage.style.setProperty("--sheet-h", h + "px");
+      /* The map's toolbar sits just to the right of the drawer, whether the
+         drawer is open (19.5rem) or folded to its "Layers · N" head — so the
+         drawer's width is measured too, and the toolbar follows it. */
+      stage.style.setProperty("--panel-w", (onPhone ? 0 : panel.offsetWidth) + "px");
       /* The sheet opening a group rises over the foot of the map, and whatever
          was framed there went under it (the southern tip on the multispecies
          atlas). So when it grows or shrinks on a phone, the map makes room:
@@ -4153,22 +4241,26 @@
     var bm = document.querySelector(".ctl-basemaps");
     var region = document.querySelector(".own-region-wrap");   // owner.js's row
     var foot = document.querySelector("#atlas-panel .sheet-foot");
-    /* The strip itself: over the top of the map on a phone (where it is the
-       floating search box), in the header on a wide screen, so the map has
-       the whole stage. Moved, not rebuilt, so what it holds comes along. */
-    var tools = document.getElementById("head-tools");
-    if (phone || !tools) { if (strip.parentNode !== stage) stage.insertBefore(strip, stage.firstChild); }
-    else if (strip.parentNode !== tools) tools.appendChild(strip);
+    /* The strip is the map's own toolbar and never leaves the stage: on a
+       wide screen it floats beside the Layers drawer (search, then
+       Map/Satellite), on a phone it is the floating search box the phone
+       always had. It used to ride up into the header on wide screens, which
+       made the owner's header two rows tall and put the map's own controls
+       a level away from the map. */
+    if (strip.parentNode !== stage) stage.insertBefore(strip, stage.firstChild);
     if (phone && foot) {
-      // the sheet's foot: Map/Satellite first, then (for the owner) the region
+      // the sheet's foot: Map/Satellite first
       if (bm && bm.parentNode !== foot) foot.insertBefore(bm, foot.firstChild);
-      if (region && region.parentNode !== foot) foot.appendChild(region);
     } else {
-      // strip order: search (already there), Map/Satellite, the region row —
-      // appended in that order every time, so a rebuild cannot shuffle them
+      // strip order: search (already there), then Map/Satellite — appended
+      // every time, so a rebuild cannot shuffle them
       if (bm) strip.appendChild(bm);
-      if (region) strip.appendChild(region);
     }
+    /* The owner's region row belongs to the Owner menu (owner.js builds
+       both). owner.js places it there itself; this is the safety net for a
+       row that landed in the layers panel before the menu existed. */
+    var slot = document.getElementById("own-panel-region");
+    if (region && slot && region.parentNode !== slot) slot.appendChild(region);
   }
   function wireStripPlacement() {
     if (stripWired) return;
@@ -4244,7 +4336,10 @@
     // groups + layers — declared groups first, then a synthesized group for any
     // layer whose group id isn't declared (e.g. contributed "userdata" layers),
     // so nothing is ever orphaned out of the panel
-    var GROUP_LABELS = { userdata: "Your data", base: "Base", agri: "Crops & value chain", eco: "Ecological landscape" };
+    // "Boundaries & places" is the viewer's own name for an undeclared base
+    // group — the same words the owner's menu uses for it. A manifest that
+    // declares the group keeps whatever it called it.
+    var GROUP_LABELS = { userdata: "Your data", base: "Boundaries & places", agri: "Crops & value chain", eco: "Ecological landscape" };
     var declaredIds = {};
     MANIFEST.groups.forEach(function (g) { declaredIds[g.id] = true; });
     var groupList = MANIFEST.groups.slice();
@@ -4770,6 +4865,30 @@
      the phone's sheet. A search narrows the list to the rows that matched,
      the same rows the map keeps at full strength, and the line says so. */
   var COLL_CAP = 30;
+  /* What sits before a name in the list. With no key on: the layer's dot (a
+     pin for a pin layer). With a key on: the same marks the place's pin wears
+     on the map — the key's shape in the kind's colour, grey for an answer the
+     key calls "other" — and a grey dot for a place the key has no answer
+     for, which is what the key's own "no answer" row shows. Nothing new to
+     tap; the list simply stops disagreeing with the map. */
+  function collMarkEl(L, it) {
+    var act = L.type === "marker" ? activeKeyOptions(L) : [];
+    if (!act.length) {
+      var d = el("span", "coll-dot" + (L.type === "marker" ? " pin" : ""));
+      d.style.setProperty("--c", it.color);
+      return d;
+    }
+    var box = el("span", "coll-marks");
+    var rows = keyMarkRows(L, it.e.f, act);
+    if (!rows.length) {
+      var none = el("span", "coll-dot");
+      none.style.setProperty("--c", KEY_OTHER);
+      box.appendChild(none);
+      return box;
+    }
+    rows.forEach(function (r) { box.appendChild(rowSvg(r.shape, r.colors)); });
+    return box;
+  }
   function collectionEl(L) {
     var wrap = el("div", "ctl-coll");
     wrap.setAttribute("data-layer", L.id);
@@ -4814,9 +4933,7 @@
       var li = el("li");
       var b = el("button", "coll-item" + (SEL.L === L && SEL.row === it.row ? " sel" : ""));
       b.type = "button";
-      var d = el("span", "coll-dot" + (L.type === "marker" ? " pin" : ""));
-      d.style.setProperty("--c", it.color);
-      b.appendChild(d);
+      b.appendChild(collMarkEl(L, it));
       b.appendChild(el("span", "coll-name", esc(it.name)));
       if (SEL.L === L && SEL.row === it.row) b.setAttribute("aria-current", "true");
       b.onclick = function () { goToItem(L, it); };

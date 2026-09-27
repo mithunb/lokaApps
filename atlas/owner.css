@@ -23,15 +23,70 @@
   --radius-xs:.125rem; --radius-md:.25rem; --radius-lg:.375rem; --radius-pill:999px;
 }
 
-/* ---------- the row beside Share ---------- */
+/* ---------- the Owner menu, beside Share ---------- */
 
-.own-acts { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+.own-acts { position:relative; display:flex; align-items:center; flex:0 0 auto; }
+
+/* The one owner-only control in the header. Outlined in Sindoor: the colour
+   the product keeps for "this is yours" — the same edge the chosen name in
+   the Map Browser wears. Its dot says whether the atlas is live before the
+   menu is opened (Leaf when it is). */
+.own-btn {
+  display:inline-flex; align-items:center; gap:.35rem;
+  font:inherit; font-size:var(--t-meta); font-weight:600; line-height:1;
+  padding:.3rem .55rem; min-height:30px;
+  color:var(--color-sindoor-deep); background:var(--color-surface);
+  border:1px solid var(--color-sindoor); border-radius:var(--radius-md); cursor:pointer;
+  transition:background .15s ease, color .15s ease;
+}
+.own-btn:hover, .own-btn[aria-expanded="true"] { background:var(--color-sindoor-tint); }
+.own-btn:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; }
+.own-btn-chev { width:14px; height:14px; transition:transform .2s cubic-bezier(.25,1,.5,1); }
+.own-btn[aria-expanded="true"] .own-btn-chev { transform:rotate(180deg); }
+.own-btn .own-dot { background:var(--color-text-muted); }
+.own-btn.live .own-dot { background:var(--color-leaf); }
+
+/* The menu: Surface at 97% on the panel-lift shadow, a Sindoor hairline to
+   match the button, hanging from the header's right under the button. Each
+   line pairs what it is about (left, quiet) with the one act on it (right,
+   Leaf 600), so the eye reads down the right edge for the verbs. */
+.own-panel {
+  position:absolute; top:calc(100% + 6px); right:0; z-index:40;
+  width:max-content; min-width:19rem; max-width:min(26rem, calc(100vw - 1.5rem));
+  display:flex; flex-direction:column; gap:.1rem;
+  padding:.55rem .8rem .65rem;
+  background:rgba(253,252,248,.97); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  border:1px solid var(--color-sindoor); border-radius:var(--radius-md); box-shadow:var(--shadow-lg);
+  text-align:left;
+}
+.own-panel-t {
+  font-size:var(--t-label); font-weight:700; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--color-sindoor-deep); margin:0 0 .3rem;
+}
+.own-panel-ln {
+  display:flex; align-items:center; justify-content:space-between; gap:.9rem;
+  min-height:34px; padding:.15rem 0; border-top:1px solid var(--color-divider);
+}
+.own-panel-ln:empty { display:none; }
+.own-panel-t + .own-panel-ln { border-top:none; }
+.own-panel-k { font-size:var(--t-ui); font-weight:400; color:var(--color-text-secondary); }
+/* the act on each line: a word in Leaf, underlined on hover, never a box —
+   four boxes stacked would read as a form */
+.own-act, a.own-act {
+  display:inline-flex; align-items:center; gap:.3rem; flex:0 0 auto;
+  font:inherit; font-size:var(--t-ui); font-weight:600; color:var(--color-leaf);
+  background:none; border:none; padding:.2rem 0; cursor:pointer; text-decoration:none;
+  border-radius:var(--radius-xs); white-space:nowrap;
+}
+.own-act:hover { color:var(--color-leaf-deep); text-decoration:underline; text-underline-offset:2px; }
+.own-act:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; }
+.own-act:disabled { opacity:.5; cursor:default; text-decoration:none; }
+.own-act svg { width:14px; height:14px; }
+.own-act.primary { color:var(--color-leaf-deep); }
 
 .own-status {
-  display:inline-flex; align-items:center; gap:.35rem;
-  font-size:var(--t-meta); color:var(--color-text-secondary);
-  padding:.3rem .55rem; border-radius:var(--radius-md);
-  background:var(--color-surface-alt);
+  display:inline-flex; align-items:center; gap:.35rem; flex-wrap:wrap;
+  font-size:var(--t-ui); color:var(--color-text-secondary);
 }
 .own-dot {
   width:.5rem; height:.5rem; border-radius:50%;
@@ -41,6 +96,15 @@
 .own-what { font-weight:600; color:var(--color-text-primary); }
 .own-status.live .own-what { color:var(--color-leaf-deep); }
 .own-who { color:var(--color-text-muted); }
+
+/* On a phone the button is its dot alone and the menu is a sheet from the
+   top, full width under the header, so the four lines have room. */
+@media (max-width:720px){
+  .own-btn-word, .own-btn-chev { display:none; }
+  .own-btn { padding:.4rem .5rem; min-height:34px; min-width:34px; justify-content:center; }
+  .own-acts { position:static; }
+  .own-panel { position:fixed; top:calc(52px + 6px); left:8px; right:8px; width:auto; min-width:0; max-width:none; }
+}
 
 .share-btn.primary {
   background:var(--color-leaf); border-color:var(--color-leaf); color:#fff;
@@ -58,22 +122,25 @@
   outline:2px solid var(--color-leaf); outline-offset:2px;
 }
 
-/* ---------- what the owner adds to the viewer's panel ---------- */
+/* ---------- the region line, inside the Owner menu ---------- */
 
-.own-region-wrap { margin:0 0 .6rem; }
+.own-region-wrap { flex:1 1 auto; min-width:0; margin:0; }
 .own-region {
-  display:grid; grid-template-columns:1fr auto; align-items:baseline;
-  gap:.15rem .5rem; width:100%; text-align:left;
-  font:inherit; font-size:var(--t-ui); cursor:pointer;
-  padding:.5rem .6rem; border:1px solid var(--color-border);
-  border-radius:var(--radius-md); background:var(--color-surface);
+  display:flex; align-items:baseline; justify-content:space-between; gap:.9rem; width:100%;
+  text-align:left; font:inherit; font-size:var(--t-ui); cursor:pointer;
+  padding:0; border:none; background:none; color:inherit;
 }
-.own-region:hover { border-color:var(--color-leaf); }
-.own-region-k { grid-column:1; color:var(--color-text-muted); font-size:var(--t-meta); }
-.own-region-v { grid-column:1; font-weight:600; color:var(--color-text-primary); }
-.own-region-go { grid-column:2; grid-row:1 / span 2; align-self:center;
-  font-size:var(--t-meta); font-weight:600; color:var(--color-leaf); }
-.own-region:hover .own-region-go { color:var(--color-leaf-deep); }
+.own-region:hover .own-region-go { color:var(--color-leaf-deep); text-decoration:underline; text-underline-offset:2px; }
+.own-region-k { color:var(--color-text-secondary); }
+.own-region-v { font-weight:600; color:var(--color-text-primary); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.own-region-k, .own-region-v { flex:0 1 auto; }
+.own-region-go { flex:0 0 auto; margin-left:auto; font-size:var(--t-ui); font-weight:600; color:var(--color-leaf); }
+/* on a phone the line stacks: what it is about on one line, the region and Change on the next */
+@media (max-width:720px){
+  .own-region { flex-wrap:wrap; row-gap:.1rem; }
+  .own-region-k { flex:1 1 100%; }
+  .own-region-v { flex:1 1 auto; }
+}
 .own-region-warn {
   margin:.35rem 0 0; font-size:var(--t-meta); color:var(--color-sindoor-deep);
 }
