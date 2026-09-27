@@ -558,3 +558,42 @@
   box-shadow:0 4px 18px rgba(36,33,29,.22);
 }
 
+
+/* ---------- Open data layers, as a sheet ----------
+   The wizard's step 3 again, for a built atlas: the same grouped rows, the
+   same tags. The rules mirror atlas/setup/index.html's .cat block so a layer
+   reads the same on the day an atlas is set up and on the day one is added. */
+
+/* a line in the Owner menu whose act is not on offer says why, in Meta type */
+.own-panel-note { flex:0 0 auto; font-size:var(--t-meta); color:var(--color-text-muted); text-align:right; }
+
+.own-od .own-od-given {
+  margin:.6rem 0 .8rem; padding:.6rem .8rem; background:var(--color-surface-alt);
+  border-radius:var(--radius-md); color:var(--color-text-secondary);
+}
+.own-od .own-od-given:empty { display:none; }
+.own-od .cat { border:1px solid var(--color-border); border-radius:var(--radius-md); margin-bottom:.6rem; }
+.own-od .cat > summary {
+  display:flex; justify-content:space-between; gap:.6rem; align-items:center;
+  min-height:2.75rem; padding:.55rem .9rem; cursor:pointer;
+  font-size:var(--t-label); letter-spacing:.12em; text-transform:uppercase; font-weight:700;
+  color:var(--color-text-secondary);
+}
+.own-od .cat > summary:hover { color:var(--color-text-primary); }
+.own-od .cat-row {
+  display:flex; gap:.6rem; align-items:flex-start; padding:.6rem .9rem;
+  border-top:1px solid var(--color-divider); cursor:pointer;
+}
+.own-od .cat-row-off { opacity:.55; cursor:not-allowed; }
+.own-od .cat-row-off input { cursor:not-allowed; }
+.own-od .cat-row input { margin-top:.2rem; width:1rem; height:1rem; accent-color:var(--color-leaf); flex:none; }
+.own-od .cat-row b { font-size:var(--t-ui); font-weight:600; }
+.own-od .cat-row .cost {
+  display:inline-block; margin-left:.35rem; padding:.05rem .4rem; border-radius:var(--radius-md);
+  font-size:var(--t-label); font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+}
+.own-od .cat-row .cost-ask { background:var(--color-sindoor-tint); color:var(--color-sindoor-deep); }
+.own-od .cat-row .src { display:block; font-size:var(--t-meta); color:var(--color-text-muted); max-width:60ch; }
+.own-od .own-od-sum { margin:.8rem 0 .4rem; color:var(--color-text-primary); }
+.own-od .own-row-tight { gap:.9rem; }
+@media (pointer:coarse) { .own-od .cat-row { min-height:44px; } }

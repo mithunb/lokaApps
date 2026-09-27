@@ -269,7 +269,7 @@ function pushLog(job, line) {
    the enrichment category sets, and the search index and its embedding
    binaries. manifest.local.json names its geojson by filename, so they have to
    travel together or the overlay points at nothing. */
-const CONTRIBUTED = [
+export const CONTRIBUTED = [
   /^manifest\.local\.json$/,
   /^user-[a-z0-9-]+\.geojson$/,
   /^categories\.local\.json$/,
@@ -277,7 +277,7 @@ const CONTRIBUTED = [
   /^search-[a-z0-9-]+\.vec$/,
   /^branding-logo\.png$/,        // re-emitted from the spec, but harmless to keep
 ];
-function carryContributed(fromDir, toDir, job) {
+export function carryContributed(fromDir, toDir, job) {
   let names;
   try { names = fs.readdirSync(fromDir); } catch { return; }   // first build: nothing to carry
   const carried = [];

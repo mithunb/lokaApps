@@ -80,8 +80,10 @@ console.log('\n  and the wizard never offers what will be dropped');
 check('it asks the catalogue about this width', /catalog\?iso3=" \+ encodeURIComponent\(S\.iso3\) \+\n\s*\(area > 0 \? "&areaDeg2="/.test(setup), true);
 check('the catalogue answers per layer', /feasible: feasibleAt\(l, areaDeg2\), estSecondsHere: layerSeconds\(l, areaDeg2\)/.test(server), true);
 check('asked without a width it answers as before', /Number\.isFinite\(areaDeg2\) && areaDeg2 > 0/.test(server), true);
-check('a layer it cannot build is disabled, not just unticked', /\(cannot \? " disabled" : ""\)/.test(setup), true);
-check('and says why', /too wide an area for this one/.test(setup), true);
+// the row itself lives in catalog-rows.js now, shared with the Owner menu's sheet
+const catalogRows = fs.readFileSync(path.join(ROOT, 'atlas/catalog-rows.js'), 'utf8');
+check('a layer it cannot build is disabled, not just unticked', /\(cannot \? " disabled" : ""\)/.test(catalogRows), true);
+check('and says why', /too wide an area for this one/.test(catalogRows), true);
 /* the cache used to key on country alone, so adding a place left the old
    answer on screen */
 check('the offer is refreshed when the region changes size',

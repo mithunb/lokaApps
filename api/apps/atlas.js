@@ -1350,10 +1350,16 @@ router.get('/admin/action', async (req, res) => {
       rebuildPrior: undefined, rebuildKeepPublished: undefined,
     });
     if (inst.email) {
+      // a change of layers is not a widening, and the mail should not call it one
+      const ch = prior.change || {};
+      const layersOnly = !ch.region && ((ch.added || []).length || (ch.removed || []).length);
+      const asked = layersOnly
+        ? ((ch.added || []).length ? 'adding ' + ch.added.join(', ') : 'that change of layers')
+        : 'covering more ground';
       await sendMail({
         to: inst.email,
-        subject: `[LOKA Atlas] not widened: ${inst.title}`,
-        text: `"${inst.title}" stays as it is for now — covering more ground wasn't approved this time.\nYour atlas and its data are untouched. Reply to this email if you'd like to talk it through.`,
+        subject: `[LOKA Atlas] ${layersOnly ? 'layers not changed' : 'not widened'}: ${inst.title}`,
+        text: `"${inst.title}" stays as it is for now — ${asked} wasn't approved this time.\nYour atlas and its data are untouched. Reply to this email if you'd like to talk it through.`,
       });
     }
     return res.send(page('Left as it was', `"${inst.title}" keeps its current map.`));
@@ -1432,15 +1438,37 @@ router.get('/admin/instances', (req, res) => {
    A rebuild of a LIVE atlas is the exception worth keeping: the build only
    swaps the data on success, so the published atlas was never touched and
    should stay published. */
+/* A rebuild that did not happen leaves the atlas exactly as it was. The rebuild
+   route records the NEW region and layers before the build runs (so an approval
+   needs no extra bookkeeping) and keeps the old ones in rebuildPrior; a build
+   that fails or is stranded puts them back, so the record never describes
+   layers the built files do not have — the Owner menu's "Open data layers"
+   sheet pre-ticks from this record, and would otherwise offer a layer that was
+   never built as though it were there. */
+function rebuildFailedPatch(inst, message) {
+  const prior = inst.rebuildPrior;
+  const keepPublished = !!inst.rebuildKeepPublished;
+  if (!prior) {
+    return keepPublished
+      ? { status: 'published', failReason: message, rebuildKeepPublished: undefined }
+      : { status: 'failed', failReason: message };
+  }
+  return {
+    // the files on disk are the old build, which was built (or live) — say so
+    status: keepPublished ? 'published' : (prior.status === 'published' ? 'published' : (prior.status || 'built')),
+    failReason: message, rebuildKeepPublished: undefined, rebuildPrior: undefined,
+    region: prior.region, regionLabel: prior.regionLabel, layers: prior.layers,
+    ...(prior.tier ? { tier: prior.tier } : {}),
+  };
+}
+
 setStrandedBuildHook((job) => {
   const inst = reg.getInstance(job.slug);
   if (!inst || inst.status !== 'building') return;
-  const keepPublished = !!inst.rebuildKeepPublished;
-  reg.updateInstance(job.slug, keepPublished
-    ? { status: 'published', failReason: job.message, rebuildKeepPublished: undefined }
-    : { status: 'failed', failReason: job.message });
+  const patch = rebuildFailedPatch(inst, job.message);
+  reg.updateInstance(job.slug, patch);
   console.warn(`[atlas] ${job.slug} was left mid-build by a restart — put back to ` +
-    (keepPublished ? 'published' : 'failed') + ' so it can be opened or removed');
+    patch.status + ' so it can be opened or removed');
 });
 
 setJobDoneHook((job) => {
@@ -1450,14 +1478,13 @@ setJobDoneHook((job) => {
   if (job.status === 'done') {
     reg.updateInstance(job.slug, {
       status: keepPublished ? 'published' : 'built',
-      sizeBytes: job.sizeBytes || 0, builtAt: Date.now(), rebuildKeepPublished: undefined,
+      sizeBytes: job.sizeBytes || 0, builtAt: Date.now(),
+      rebuildKeepPublished: undefined, rebuildPrior: undefined, failReason: undefined,
     });
-  } else if (keepPublished) {
-    // a published rebuild failed — the build only swaps on success, so the old
-    // dataset is untouched and still live; keep it published.
-    reg.updateInstance(job.slug, { status: 'published', failReason: job.message, rebuildKeepPublished: undefined });
   } else {
-    reg.updateInstance(job.slug, { status: 'failed', failReason: job.message });
+    // a rebuild failed — the build only swaps on success, so the old dataset
+    // is untouched (and still live if it was); the record goes back with it
+    reg.updateInstance(job.slug, rebuildFailedPatch(inst, job.message));
   }
 });
 
@@ -1727,47 +1754,80 @@ router.post('/instances/:slug/rebuild', async (req, res) => {
   }
   const b = req.body || {};
   const r = b.region;
-  const useR = (r && r.iso3 && Array.isArray(r.shapeIDs) && r.shapeIDs.length)
+  const cur = inst.region || {};
+  const regionSent = !!(r && r.iso3 && Array.isArray(r.shapeIDs) && r.shapeIDs.length);
+  /* An atlas with no region at all (see POST /instances) keeps having none:
+     asked only to change its open-data layers, it would otherwise be refused
+     for lacking the region it was built without. */
+  const worldwide = !regionSent && !!cur.worldwide;
+  const useR = regionSent
     ? { iso3: String(r.iso3).toUpperCase(), level: Number(r.level) || 1, shapeIDs: r.shapeIDs.map(String) }
-    : { iso3: inst.region.iso3, level: inst.region.level, shapeIDs: inst.region.shapeIDs };
-  if (!/^[A-Z]{3}$/.test(useR.iso3) || !useR.shapeIDs.length) return res.status(400).json({ error: 'region is required' });
-  const tooManyNow = tooManyUnits(useR.shapeIDs);
+    : { iso3: cur.iso3 || '', level: cur.level, shapeIDs: cur.shapeIDs || [] };
+  if (!worldwide && (!/^[A-Z]{3}$/.test(useR.iso3) || !useR.shapeIDs.length)) return res.status(400).json({ error: 'region is required' });
+  const tooManyNow = worldwide ? '' : tooManyUnits(useR.shapeIDs);
   if (tooManyNow) return res.status(400).json({ error: tooManyNow, tooManyUnits: useR.shapeIDs.length });
 
-  let regionDoc;
-  try { regionDoc = await loadAdmin(useR.iso3, useR.level); } catch (e) { return res.status(502).json({ error: 'boundary source unavailable: ' + e.message }); }
-  const picked = regionDoc.features.filter((f) => useR.shapeIDs.includes(f.properties.id));
-  if (!picked.length) return res.status(400).json({ error: 'no matching boundary units' });
+  let regionDoc = null, picked = [];
+  if (!worldwide) {
+    try { regionDoc = await loadAdmin(useR.iso3, useR.level); } catch (e) { return res.status(502).json({ error: 'boundary source unavailable: ' + e.message }); }
+    picked = regionDoc.features.filter((f) => useR.shapeIDs.includes(f.properties.id));
+    if (!picked.length) return res.status(400).json({ error: 'no matching boundary units' });
+  }
   let w = 180, s = 90, e = -180, n = -90;
+  if (worldwide) { w = -180; s = -85; e = 180; n = 85; }
   for (const f of picked) { w = Math.min(w, f.bbox[0]); s = Math.min(s, f.bbox[1]); e = Math.max(e, f.bbox[2]); n = Math.max(n, f.bbox[3]); }
   const bbox = [w, s, e, n];
   const areaDeg2 = (e - w) * (n - s);
 
   const tier = tierOf(useR.iso3);
   const allowed = new Map(layersForTier(tier).map((l) => [l.id, l]));
-  let layerIds = (Array.isArray(b.layers) ? b.layers.map(String) : inst.layers).filter((id) => allowed.has(id));
-  for (const l of allowed.values()) if (l.required && !layerIds.includes(l.id)) layerIds.unshift(l.id);
-  if (!layerIds.length) return res.status(400).json({ error: 'pick at least one layer' });
+  const priorLayers = Array.isArray(inst.layers) ? inst.layers : [];
+  let layerIds = (Array.isArray(b.layers) ? b.layers.map(String) : priorLayers).filter((id) => allowed.has(id));
+  if (!worldwide) {
+    for (const l of allowed.values()) if (l.required && !layerIds.includes(l.id)) layerIds.unshift(l.id);
+  }
+  if (!layerIds.length && !worldwide) return res.status(400).json({ error: 'pick at least one layer' });
   // the same rule as a first build, and for the same reason
   const fit = feasibleLayers(layerIds, allowed, areaDeg2);
   layerIds = fit.keep;
-  if (!layerIds.length) {
+  if (!layerIds.length && !worldwide) {
     return res.status(400).json({
       error: 'Nothing can be built across a region this wide except boundaries, and they were not asked for.',
       droppedLayers: fit.droppedLabels });
   }
+
+  /* What this rebuild actually changes, in words a person and the approval
+     mail can both use. The Owner menu's "Open data layers" sheet sends only
+     layers; Settings sends only a region; the mail used to call every rebuild
+     a "widen request", which is wrong for the first. */
+  const labelOf = (id) => (allowed.get(id) || {}).label || id;
+  const added = layerIds.filter((id) => !priorLayers.includes(id));
+  const removed = priorLayers.filter((id) => !layerIds.includes(id));
+  const regionChanged = regionSent && (useR.iso3 !== cur.iso3 || useR.level !== cur.level
+    || JSON.stringify([...useR.shapeIDs].sort()) !== JSON.stringify([...(cur.shapeIDs || [])].sort()));
+  const change = {
+    region: regionChanged,
+    added: added.map(labelOf), removed: removed.map(labelOf),
+  };
+  const changeWords = [];
+  if (regionChanged) changeWords.push('cover more ground');
+  if (added.length) changeWords.push('add ' + change.added.join(', '));
+  if (removed.length) changeWords.push('take off ' + change.removed.join(', '));
+  const changeLine = changeWords.length ? changeWords.join('; ') : 'rebuild as it is';
 
   // A rebuild that crosses into approval territory used to be refused outright
   // with "email us" — a dead end for the case that most needs it: widening an
   // atlas to cover data that turned out to sit outside it. It now enters the same
   // queue a first build uses. The live atlas keeps serving its existing files
   // throughout, because a build only swaps them on success.
-  const heavy = layerIds.some((id) => allowed.get(id).cost === 'approval');
+  const heavyIds = layerIds.filter((id) => allowed.get(id).cost === 'approval');
+  const heavy = heavyIds.length > 0;
   const buildSeconds = layerIds.reduce((t, id) => t + layerSeconds(allowed.get(id), areaDeg2), 0);
   const needsApproval = heavy || buildSeconds > BUILD_BUDGET_S / 2;
 
   const shapeNames = picked.map((f) => f.properties.name);
-  const regionLabel = shapeNames.slice(0, 3).join(' · ') + (shapeNames.length > 3 ? ` +${shapeNames.length - 3}` : '');
+  const regionLabel = worldwide ? 'Worldwide'
+    : shapeNames.slice(0, 3).join(' · ') + (shapeNames.length > 3 ? ` +${shapeNames.length - 3}` : '');
 
   // preserve org branding + logo across the rebuild (read the current logo back
   // into the spec so the builder re-emits it)
@@ -1781,24 +1841,26 @@ router.post('/instances/:slug/rebuild', async (req, res) => {
     slug: inst.slug, visibility: inst.visibility, tier,
     title: inst.title, subtitle: inst.subtitle, about: inst.about, branding,
     region: {
-      iso3: useR.iso3, level: useR.level, shapeIDs: useR.shapeIDs, shapeNames, bbox,
-      simplifiedFile: path.join(GEOCACHE_DIR, `${useR.iso3}-ADM${useR.level}.json`),
-      fullResUrl: regionDoc.fullResUrl,
+      iso3: useR.iso3, level: useR.level, shapeIDs: useR.shapeIDs, shapeNames, bbox, worldwide,
+      simplifiedFile: worldwide ? null : path.join(GEOCACHE_DIR, `${useR.iso3}-ADM${useR.level}.json`),
+      fullResUrl: regionDoc ? regionDoc.fullResUrl : null,
     },
     layers: layerIds,
   };
 
   const wasPublished = inst.status === 'published';
   reg.updateInstance(inst.slug, {
-    tier, region: { iso3: useR.iso3, level: useR.level, shapeIDs: useR.shapeIDs, shapeNames, bbox, areaDeg2 },
+    tier, region: { iso3: useR.iso3, level: useR.level, shapeIDs: useR.shapeIDs, shapeNames, bbox, areaDeg2, worldwide },
     regionLabel, layers: layerIds, spec,
     rebuildKeepPublished: wasPublished || undefined,
-    // The new region is recorded now so an approval needs no extra bookkeeping —
-    // but that makes the record describe an area the built files do not cover yet,
-    // so the whole prior state is kept and a denial puts every bit of it back.
-    rebuildPrior: needsApproval
-      ? { status: inst.status, region: inst.region, regionLabel: inst.regionLabel, layers: inst.layers }
-      : undefined,
+    // The new region and layers are recorded now so an approval needs no extra
+    // bookkeeping — but that makes the record describe an atlas the built files
+    // are not yet, so the whole prior state is kept: a denial puts every bit of
+    // it back, and so does a build that fails (the job-done hook). `change`
+    // says what was asked for, so the owner's page and the denial mail can
+    // name it while it waits.
+    rebuildPrior: { status: inst.status, tier: inst.tier, region: inst.region,
+      regionLabel: inst.regionLabel, layers: priorLayers, change },
     status: needsApproval ? 'pending-approval' : (wasPublished ? 'published' : 'building'),
   });
 
@@ -1807,22 +1869,25 @@ router.post('/instances/:slug/rebuild', async (req, res) => {
     const approve = `${base}/apps/atlas/api/admin/action?token=${auth.makeActionToken(inst.slug, 'approve')}`;
     const deny = `${base}/apps/atlas/api/admin/action?token=${auth.makeActionToken(inst.slug, 'deny')}`;
     const why = [];
-    if (heavy) why.push('heavy layers');
+    if (heavy) why.push('heavy layers: ' + heavyIds.join(', '));
     if (buildSeconds > BUILD_BUDGET_S / 2) {
       why.push(`a long build: ${regionLabel}, about ${Math.round(buildSeconds / 60)} minutes`);
     }
+    const layersOnly = !regionChanged;
     await sendMail({
       to: ADMIN_EMAIL,
-      subject: `[LOKA Atlas] widen request: ${inst.title}`,
-      text: `"${inst.title}" (${inst.slug}) asks to cover more ground.\n\n`
-        + `Reason: ${why.join('; ')}\nWould cover: ${regionLabel}\n\n`
+      subject: `[LOKA Atlas] ${layersOnly ? 'layer change' : 'widen request'}: ${inst.title}`,
+      text: `"${inst.title}" (${inst.slug}) asks to ${changeLine}.\n\n`
+        + `Reason: ${why.join('; ')}\nCovers: ${regionLabel}\nLayers: ${layerIds.join(', ')}\n\n`
         + `Approve: ${approve}\nDeny:    ${deny}\n\n`
         + `The atlas keeps serving its current map until this is approved.`,
     });
     return res.json({
-    droppedLayers: fit.droppedLabels.length ? fit.droppedLabels : undefined,
-      ok: true, pendingApproval: true, slug: inst.slug, regionLabel,
-      message: 'That covers a lot of ground, so the LOKA team takes a quick look first — '
+      droppedLayers: fit.droppedLabels.length ? fit.droppedLabels : undefined,
+      ok: true, pendingApproval: true, slug: inst.slug, regionLabel, layers: layerIds, change,
+      message: (layersOnly
+        ? 'Some of that is heavy to build, so the LOKA team takes a quick look first — '
+        : 'That covers a lot of ground, so the LOKA team takes a quick look first — ')
         + 'usually within a day. Your atlas carries on exactly as it is until then, and '
         + 'your data stays where it is.',
     });
@@ -1830,7 +1895,8 @@ router.post('/instances/:slug/rebuild', async (req, res) => {
 
   const jobId = enqueueBuild(spec);
   reg.updateInstance(inst.slug, { jobId });
-  res.json({ ok: true, jobId, slug: inst.slug, wasPublished });
+  res.json({ ok: true, jobId, slug: inst.slug, wasPublished, layers: layerIds, change,
+    droppedLayers: fit.droppedLabels.length ? fit.droppedLabels : undefined });
 });
 
 router.delete('/instances/:slug', (req, res) => {
