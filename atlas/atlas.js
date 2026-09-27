@@ -2253,19 +2253,9 @@
          an unanswered place holds no answer at all, so the old count read 0
          beside a question that had missed a third of the map. */
       if (opt.isQuestion) {
-        var answered = 0;
-        opt.kept.forEach(function (k) { answered += (tally[k] || 0); });
-        var silent = entries.length - answered;
-        if (silent > 0) {
-          /* The places this question has nothing to say about, and who they are.
-             The row used to be a number and nothing else — "no answer · 8" —
-             which tells a reader that something fell through and not what, so
-             the only way to find out was to hunt the map for grey pins. It opens
-             now, the same way a kind opens into its words, and says which places
-             and what they have in common. */
-          rows.push({ color: KEY_OTHER, label: "no answer", categorical: true, family: ROW_SHAPES[fi],
-                      n: silent, faint: true, silentOf: opt.col });
-        }
+        /* No "no answer" row (Mithun, September 2026): the share beside the
+           question already says how many places it speaks for, and a grey row
+           of the unanswered read as one more kind to choose. */
       } else if (opt.hasOther) {
         rows.push({ color: KEY_OTHER, label: "other", categorical: true, family: ROW_SHAPES[fi],
                     n: entries.length ? other : null });
@@ -2305,7 +2295,9 @@
          the gap is in their data. A question with nothing to say about this
          place is not a gap; it is an answer, and printing "left blank" under it
          reads as a fault. So the line simply does not appear. */
-      if (!vals.length && opt.isQuestion) return;
+      /* Nor for an empty column: no "no answer" or "left blank" lines anywhere
+         (Mithun, September 2026) — a card lists what a place says. */
+      if (!vals.length) return;
       /* Why this place got that answer, in its own words. A question's answer is
          a judgement; without the words behind it nobody can tell a good one from
          a counter. Only where the reading actually quoted something — a filing
@@ -2525,8 +2517,11 @@
         /* "88% answered", not a bare "88%": a lone number beside a switch was
            a riddle. The word costs a few pixels and says what is counted;
            the long form is one hover away. */
-        var reach = el("span", "key-reach", pct + "% answered");
-        reach.title = pct + " of every 100 places have an answer to this";
+        /* "from 88% of tags", in the layer's own word for its rows: what the
+           share counts is not the question but the places behind its answers. */
+        var nounK = layerNoun(L);
+        var reach = el("span", "key-reach", "from " + pct + "% of " + nounK);
+        reach.title = "Answers to this question come from " + pct + " of every 100 " + nounK;
         reach.setAttribute("aria-label", reach.title);
         lab.appendChild(reach);
       }

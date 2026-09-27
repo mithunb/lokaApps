@@ -134,8 +134,10 @@ check('(ii) created_at is "When it was added"', dateKeyName('created_at'), 'When
 check('updated_at is "When it was last changed"', dateKeyName('updated_at'), 'When it was last changed');
 check('any other date keeps its own name', dateKeyName('date_of_visit'), 'Date of visit');
 check('the grouping is said in brackets: "(by month)"', /if \(grain\) shown \+= " \(by " \+ grain \+ "\)";/.test(js), true);
-check('(iii) the share beside a question says what it counts: "88% answered"', /var reach = el\("span", "key-reach", pct \+ "% answered"\);/.test(js), true);
-check('with the long form one hover away', /reach\.title = pct \+ " of every 100 places have an answer to this";/.test(js), true);
+check('(iii) the share beside a question says whose answers they are: "from 88% of tags"', /var reach = el\("span", "key-reach", "from " \+ pct \+ "% of " \+ nounK\);/.test(js), true);
+check('with the long form one hover away, in the layer\'s own word', /reach\.title = "Answers to this question come from " \+ pct \+ " of every 100 " \+ nounK;/.test(js), true);
+check('no "no answer" row in a key', /label: "no answer"/.test(js), false);
+check('and no "left blank" line on a card', /if \(!vals\.length\) return;/.test(js), true);
 check('(iv) a one-colour layer\'s legend row that only repeats its name is dropped', /if \(collectionLayer\(L\) \|\| \(data\.length === 1 && repeats\(data\[0\]\)\)\) \{/.test(js), true);
 const plainName = lift(js, ['plainName']);
 check('(v) the gallery prints "Maharashtra · Bihar · Delhi"', plainName('Mah\u0101r\u0101shtra \u00b7 Bih\u0101r \u00b7 Delhi'), 'Maharashtra \u00b7 Bihar \u00b7 Delhi');
