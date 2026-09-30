@@ -2112,7 +2112,8 @@ router.get('/datasets/:slug/:file', (req, res) => {
 import { GoogleGenAI, Type } from '@google/genai';
 import { getFlashModel, getFlashLiteModel, getEmbedModel, getResolverStatus } from '../lib/models.js';
 import { profileColumns, bestNameColumn } from '../lib/tabular.js';
-import { norm, dice, joinByName, AUTO_ACCEPT } from '../lib/matching.js';
+import { norm, dice, joinByName, AUTO_ACCEPT, spellings, fallbackRequest, applyFallback } from '../lib/matching.js';
+import { hasDevanagari, skeleton } from '../lib/devanagari.js';
 import { PALETTES, PALETTE_ALIASES, MARKER_COLORS, buildFragment, sanitizeFeatures, justTheLinks } from '../lib/fragment.js';
 import * as imports from '../lib/atlas/imports.js';
 import * as enrich from '../lib/atlas/enrich.js';
@@ -2847,12 +2848,18 @@ function transform(session) {
     // one name index per layer on the ladder, so a miss can fall to the next
     const indexOf = (targets) => {
       const m = new Map();
+      // the lossy form a Devanagari cell is compared on (matching.js, stage 1c)
+      m.skel = new Map();
       for (const t of targets) {
         for (const nm of [t.name, ...(t.aliases || [])]) {
           const k = norm(nm);
           if (!k) continue;
           if (!m.has(k)) m.set(k, []);
           if (!m.get(k).includes(t)) m.get(k).push(t);
+          const s = skeleton(k);
+          if (!s) continue;
+          if (!m.skel.has(s)) m.skel.set(s, []);
+          if (!m.skel.get(s).includes(t)) m.skel.get(s).push(t);
         }
       }
       return m;
@@ -2873,6 +2880,22 @@ function transform(session) {
         for (const sp of aliasSpellings(text)) {
           const c = rungs[i].index.get(sp);
           if (c && c.length === 1) { hit = c[0]; break; }
+        }
+        /* A Devanagari cell gets the two further steps joinByName gives it on
+           the leading layer: each English spelling its letters are known to
+           take, then the lossy form both scripts reduce to — one target only,
+           as above; several is the fix list's question. */
+        if (!hit && hasDevanagari(text)) {
+          const keys = spellings(text);
+          for (const sp of keys) {
+            const c = rungs[i].index.get(sp);
+            if (c && c.length === 1) { hit = c[0]; break; }
+          }
+          if (!hit) {
+            const found = [];
+            for (const sp of keys) for (const t of (rungs[i].index.skel.get(skeleton(sp)) || [])) if (!found.includes(t)) found.push(t);
+            if (found.length === 1) hit = found[0];
+          }
         }
         if (!hit && /\s/.test(text.trim())) {
           const found = namesInside(text, look);
@@ -2931,12 +2954,20 @@ function transform(session) {
         }
         (res.candidates.length ? report.ambiguous : report.unmatched).push({
           row: res.row, name: res.name, candidates: res.candidates,
+          // the look-alikes below the candidate floor, for the model to pick from
+          ...(res.loose && res.loose.length ? { loose: res.loose } : {}),
         });
         return;
       }
       const target = lead.targets[Number(code)];
       if (!target) return;
       placeOn(target, res.row);
+      /* Placed by the model rather than by the rules: on the map, and listed
+         here for the owner to confirm or fix. A manual fix through
+         /layers/resolve takes the row off this list. */
+      if (session.suggested && session.suggested[res.row] === code) {
+        (report.suggested = report.suggested || []).push({ row: res.row, name: res.name, code, place: target.name });
+      }
     });
   }
 
@@ -3482,30 +3513,34 @@ async function ingestLayer(b, who) {
   try {
     let result = applyResult(session, false);
 
-    // Gemini adjudication for ambiguous joins (constrained: only offered candidates)
-    if (ai && result.matchReport.ambiguous.length && result.matchReport.ambiguous.length <= 40 && !b.manual) {
-      try {
-        const adj = await geminiJSON(getFlashLiteModel(), [
-          'Pick the right boundary for each source place name (Indian transliterations vary).',
-          'Only use chosenCode values from the candidates; use "" when none fits.',
-          JSON.stringify(result.matchReport.ambiguous.map((a) => ({
-            sourceName: a.name,
-            candidates: a.candidates.map((c) => ({ code: c.code, name: c.name, parent: c.parent })),
-          }))),
-        ].join('\n'), ADJUDICATE_SCHEMA);
-        let applied = 0;
-        for (const mt of adj.matches || []) {
-          const amb = result.matchReport.ambiguous.find((a) => a.name === mt.sourceName);
-          if (!amb || !mt.chosenCode) continue;
-          if (amb.candidates.some((c) => c.code === mt.chosenCode)) {
+    /* The model, only for what the rules could not place, and only to choose.
+       matching.js decides what it is asked (names and their candidates — never
+       a row) and what of its answer counts (a code that was offered for that
+       name — never one it made up). Each pick is placed as a SUGGESTION the
+       owner confirms or fixes; /layers/resolve clears it. One budgeted call,
+       charged to the account or address like any other; an install with no
+       key never reaches here, since `ai` is null. */
+    if (ai && !b.manual) {
+      const ask = fallbackRequest(result.matchReport);
+      if (ask.length && geminiAllowed(who)) {
+        try {
+          const adj = await geminiJSON(getFlashLiteModel(), [
+            'Pick the right boundary for each source place name. Names may be spelt in Devanagari',
+            'or in an English transliteration; Indian transliterations vary (Deoria / देवरिया / Devriya).',
+            'Only use chosenCode values from that name\'s candidates; use "" when none fits.',
+            JSON.stringify(ask),
+          ].join('\n'), ADJUDICATE_SCHEMA);
+          const chosen = applyFallback(result.matchReport, adj);
+          const rows = Object.keys(chosen);
+          if (rows.length) {
             session.matchState = session.matchState || {};
-            session.matchState[amb.row] = mt.chosenCode;
-            applied++;
+            session.suggested = session.suggested || {};
+            for (const row of rows) { session.matchState[row] = chosen[row]; session.suggested[row] = chosen[row]; }
+            result = applyResult(session, false);
           }
+        } catch (e) {
+          console.warn('[atlas] adjudication failed:', e.message);
         }
-        if (applied) result = applyResult(session, false);
-      } catch (e) {
-        console.warn('[atlas] adjudication failed:', e.message);
       }
     }
     return result;
@@ -4098,6 +4133,9 @@ router.post('/layers/resolve', (req, res) => {
     if (!Number.isInteger(f.row)) continue;
     if (f.skip) session.matchState[f.row] = 'skip';
     else if (typeof f.code === 'string') session.matchState[f.row] = f.code;
+    else continue;
+    // the owner has looked at this row: it is no longer the model's suggestion
+    if (session.suggested) delete session.suggested[f.row];
   }
   try {
     // no dataset folder before the build, so no draft to write — the styled
