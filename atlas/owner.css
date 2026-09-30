@@ -597,3 +597,52 @@
 .own-od .own-od-sum { margin:.8rem 0 .4rem; color:var(--color-text-primary); }
 .own-od .own-row-tight { gap:.9rem; }
 @media (pointer:coarse) { .own-od .cat-row { min-height:44px; } }
+
+
+/* ---------- the logo, in Settings (October 2026, release 2) ----------
+   The picture beside the name it goes with, the way the header shows them,
+   so what you are saving is what you will see. The file input is hidden; the
+   buttons are the way in. */
+
+.own-logo { display:flex; flex-direction:column; gap:.5rem; padding:.6rem .7rem;
+  border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface-alt); }
+.own-logo-now { display:flex; align-items:center; gap:.65rem; min-width:0; }
+.own-logo-now img { display:block; height:30px; max-width:9rem; width:auto; object-fit:contain; flex:none; }
+.own-logo-name { font-size:var(--t-label); font-weight:700; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--color-text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.own-logo-name:empty::before { content:"Your organisation"; color:var(--color-text-muted); font-weight:400; letter-spacing:0; text-transform:none; }
+.own-logo-acts { gap:.75rem; }
+
+
+/* ---------- the first look (October 2026, release 2) ----------
+   Once, on the atlas the wizard just built: a card docked where the place
+   card docks, at the right of the map under the header, in the owner's own
+   Sindoor — "this is yours" — with the two things worth doing next. On a
+   phone it sits across the top of the map, over the toolbar, so the map is
+   still there under it. Esc, × or either act put it away. */
+
+.own-first {
+  position:absolute; top:8px; right:8px; z-index:9;
+  width:340px; max-width:calc(100% - 16px);
+  padding:.9rem 1rem 1rem; box-sizing:border-box;
+  background:var(--color-surface); color:var(--color-text-primary);
+  border:1px solid var(--color-border); border-top:3px solid var(--color-sindoor);
+  border-radius:var(--radius-md); box-shadow:0 4px 18px rgba(36,33,29,.18);
+  font-size:var(--t-ui); line-height:1.5;
+  animation:own-first-in .28s cubic-bezier(.22,1,.36,1);
+}
+@keyframes own-first-in { from { opacity:0; transform:translateX(14px); } to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion: reduce) { .own-first { animation:none; } }
+.own-first p { margin:0 0 .5rem; }
+.own-first-k {
+  font-size:var(--t-label); font-weight:700; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--color-sindoor-deep); margin:0 1.6rem .45rem 0;
+}
+.own-first-x { position:absolute; top:.35rem; right:.4rem; }
+.own-first-warn { padding:.5rem .6rem; border-radius:var(--radius-md); background:var(--color-marigold-tint, rgba(233,162,55,.16)); }
+.own-first-warn a { color:var(--color-leaf-deep); font-weight:600; }
+.own-first-acts { margin:.8rem 0 .5rem; }
+.own-first .own-note { display:block; }
+@media (max-width:720px) {
+  .own-first { top:8px; right:8px; left:8px; width:auto; }
+}

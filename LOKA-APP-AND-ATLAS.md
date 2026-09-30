@@ -177,12 +177,16 @@ an unpublished atlas is still reachable by direct link while its record stays pr
   from Punjab to Kerala to Arunachal cost what 618 square degrees costs, which is 77% of India,
   even though the states themselves are 29% of its land.
 
-  Above **40 square degrees** any layer whose work grows with the area is refused, and the
-  refusal names it. Four layers are exempt because their cost is the same however wide the region
-  is — boundaries, labels, buildings, roads — and boundaries is the only compulsory one. **So a
-  map of outlines and your own places can be as wide as it needs, including a whole country;
-  anything with terrain, forest cover or land use on it cannot.** Above 6 square degrees a build
-  waits for the operator's approval whatever it is made of.
+  There is no area ceiling any more (corrected October 2026 — the old "approval above 6 square
+  degrees, refusal above 40" rule is gone from `api/apps/atlas.js`). Each layer's build time is
+  estimated for the width asked for; a layer whose estimate is over the **9-minute build budget**
+  at that width is **dropped from the build and named in the answer**, never refused. Five layers
+  cost the same however wide the region is (`fixedCost` in the catalogue) — boundaries, place-name
+  labels, named places, buildings, roads — and boundaries is the only compulsory one. **So a map of outlines and your own places can be as wide as it
+  needs, including a whole country; anything with terrain, forest cover or land use on it cannot
+  go that wide, and is left out with its name said.** A build waits for the operator's approval
+  when any chosen layer is marked `cost: "approval"` in the catalogue (today only Floodplain) **or**
+  its estimated build is over 270 seconds, whatever its size.
 
   Two things follow that are easy to get wrong. A single large state can exceed the ceiling on its
   own — Rajasthan's box is 63 square degrees, Maharashtra's 53 — so "one state" is not a safe

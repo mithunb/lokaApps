@@ -294,14 +294,37 @@
       .either-b .drop { padding:1rem; }
     }
     .fromfile { margin-top:0; }
-    /* the name screen's folded logo: a plain disclosure, not a field */
-    .fold > summary { cursor:pointer; font-size:var(--t-ui); font-weight:600; color:var(--color-leaf-deep);
-      min-height:2.75rem; display:flex; align-items:center; gap:.4rem; list-style:none; }
-    .fold > summary::-webkit-details-marker { display:none; }
-    .fold > summary::before { content:"+"; font-weight:700; width:1rem; text-align:center; }
-    .fold[open] > summary::before { content:"–"; }
-    .fold > summary .opt { font-weight:400; font-size:var(--t-meta); color:var(--color-text-muted); }
-    .fold > .logo-field { margin-top:.3rem; }
+    /* ---- what we found (release 2) ----
+       The words at the left, the small map at the right; on a phone the map
+       drops under the words at a height that keeps the buttons in reach. The
+       count is the one big thing on the screen: body face, tabular figures,
+       Lora would make a number look like a heading. */
+    .found { display:grid; grid-template-columns:minmax(0,1fr) minmax(16rem,22rem); gap:1rem 1.6rem;
+      align-items:start; margin-top:1rem; }
+    .found-n { margin:0; font-size:var(--t-body); color:var(--color-text-secondary); line-height:1.3; }
+    .found-n b { display:block; font-size:clamp(1.8rem,4vw,2.4rem); font-weight:700; letter-spacing:-.01em;
+      color:var(--color-text-primary); font-variant-numeric:tabular-nums; line-height:1.1; margin-bottom:.15rem; }
+    .found-say { margin:.75rem 0 0; font-size:var(--t-body); color:var(--color-text-secondary); max-width:52ch; text-wrap:pretty; }
+    .found-chips { margin-top:.8rem; }
+    .found-map { margin:0; }
+    .found-map svg { display:block; width:100%; height:auto; background:var(--map-ground);
+      border:1px solid var(--color-border); border-radius:var(--radius-md); }
+    .found-map figcaption { font-size:var(--t-meta); color:var(--color-text-muted); margin-top:.35rem; }
+    .fm-unit { fill:var(--color-leaf-tint); stroke:var(--map-boundary); stroke-width:.8; stroke-linejoin:round; }
+    .fm-unit-named { fill:rgba(42,107,65,.28); }
+    .fm-dot { fill:var(--color-sindoor); fill-opacity:.85; stroke:#fff; stroke-width:.6; }
+    .fm-name { font-family:var(--font-body); font-size:10.5px; font-weight:600; fill:var(--map-label);
+      text-anchor:middle; paint-order:stroke; stroke:var(--map-halo); stroke-width:3px; stroke-linejoin:round; }
+    .hint.low { max-width:60ch; margin-top:.9rem; padding:.6rem .8rem; border-radius:var(--radius-md);
+      background:var(--color-marigold-tint); color:var(--color-text-primary); font-size:var(--t-ui); }
+    @media (max-width:720px) {
+      .found { grid-template-columns:1fr; }
+      .found-map svg { max-height:200px; }
+    }
+    /* the bench's own forward and back buttons: on this screen the host's row
+       below is the way on and the way back, and "Change" at the top of the
+       bench already reaches the columns — a second pair read as rivals */
+    #bench #to-style, #bench #back-2 { display:none; }
     .drop { display:block; border:1px dashed var(--color-border); border-radius:var(--radius-lg);
       background:var(--color-surface-alt,#F0EDE4); padding:.85rem 1rem; text-align:center; cursor:pointer;
       font-size:var(--t-ui); color:var(--color-text-secondary,#5A5751); }
@@ -310,21 +333,6 @@
       color:var(--color-text-primary,#24211D); margin-bottom:.15rem; }
     .drop input { display:none; }
     .drop-note { display:block; font-size:var(--t-meta); color:var(--color-text-muted,#6E6A63); margin-top:.35rem; }
-    /* ---- logo (step 1) ---- */
-    .logo-field { display:flex; flex-direction:column; gap:.2rem; }
-    .logo-field .lf-label { font-size:var(--t-ui); font-weight:600; color:var(--color-text-secondary); }
-    .logo-field .lf-label .opt { font-weight:400; font-size:var(--t-meta); color:var(--color-text-muted); }
-    .logo-field .drop.working-on { opacity:.6; cursor:progress; }
-    .logo-card { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.75rem 1rem;
-      border:1px solid var(--color-border); border-radius:var(--radius-lg); background:var(--color-surface-alt);
-      padding:.75rem 1rem; }
-    .logo-card.over { border-color:var(--color-leaf); background:var(--color-leaf-tint); }
-    .logo-preview { display:flex; align-items:center; gap:.65rem; min-width:0; flex:1 1 14rem; }
-    .logo-preview img { display:block; max-height:2.75rem; max-width:9rem; width:auto; height:auto; object-fit:contain; flex:none; }
-    .logo-preview span { font-family:var(--font-display); font-weight:700; font-size:var(--t-section); line-height:1.2;
-      color:var(--color-text-primary); overflow-wrap:anywhere; }
-    .logo-preview span:empty::before { content:"Your organisation"; color:var(--color-text-muted); font-weight:400; }
-    .logo-actions { display:flex; gap:.4rem; flex-wrap:wrap; }
     /* The file, what it found, and one button — one act, one block. It used to be
        a card in a row with a bare ✕, and the places it found were loose chips
        elsewhere with ✕s of their own: two homes and two buttons for one thing. */
@@ -405,17 +413,17 @@
     <div id="flow" hidden>
       <span class="eyebrow">LOKA Atlas · Setup wizard</span>
       <h1>Set up your atlas</h1>
-      <p class="lede">Four steps: where your work is, what open data goes on it, what to call it.
-        Then we build it and hand you the map.</p>
+      <p class="lede">Four steps: where your work is, what we found there, what open data goes on it,
+        what to call it. Then we build it and hand you the map.</p>
 
       <nav class="stepper" aria-label="Steps">
         <button class="stp" data-s="2"><b>1</b> Where</button>
-        <!-- appears only when a file was dropped; numbering shifts with it. No
-             data-s: it is not part of the numeric step machinery, setup.js drives it -->
-        <button class="stp" id="stp-file" hidden><b>2</b> Your data</button>
-        <button class="stp" data-s="3" disabled><b>2</b> Open data</button>
-        <button class="stp" data-s="1" disabled><b>3</b> Name it</button>
-        <button class="stp" data-s="4" disabled><b>4</b> Build</button>
+        <!-- what we found: the region confirmed, and a file checked against it.
+             No data-s: it is not part of the numeric step machinery, setup.js drives it -->
+        <button class="stp" id="stp-found" disabled><b>2</b> What we found</button>
+        <button class="stp" data-s="3" disabled><b>3</b> Open data</button>
+        <button class="stp" data-s="1" disabled><b>4</b> Name it</button>
+        <button class="stp" data-s="4" disabled><b>5</b> Build</button>
       </nav>
 
       <!-- 1 · where -->
@@ -455,17 +463,30 @@
         <p class="chips-empty" id="chips-empty">No places yet. Search above, or drop a file.</p>
         <p class="verdict" id="verdict" hidden></p>
         <div class="btnrow">
-          <button class="btn" id="next-2">Choose open data →</button>
+          <button class="btn" id="next-2">See what we found →</button>
         </div>
         <div id="msg-2"></div>
       </section>
 
-      <!-- your data, when there is a file -->
+      <!-- 2 · what we found: the region, confirmed, and a file checked against
+           it on the same screen (release 2, October 2026). The number at the
+           top is the region-finding's until the check settles, then the check's. -->
       <section class="panel" id="s2b" hidden>
-        <h2>Your data — check it before it goes on</h2>
-        <p class="intro">Your file is matched against the places you just confirmed. Fix anything that
-          needs a second look now — after the atlas is built this list is gone.</p>
-        <p class="verdict" id="check-verdict"></p>
+        <h2>Here&rsquo;s what we found</h2>
+        <p class="intro" id="found-lede"></p>
+        <div class="found">
+          <div class="found-a">
+            <p class="found-n"><b id="found-num"></b> <span id="found-what"></span></p>
+            <p class="found-say" id="found-say"></p>
+            <div class="chips found-chips" id="found-chips"></div>
+          </div>
+          <figure class="found-map" id="found-map" hidden>
+            <svg viewBox="0 0 400 260" role="img" focusable="false"></svg>
+            <figcaption id="found-map-cap"></figcaption>
+          </figure>
+        </div>
+        <p class="hint low" id="found-low" hidden></p>
+        <p class="verdict" id="check-verdict" hidden></p>
         <!-- Shown only while the check is actually running. It does NOT claim a
              percentage: the work is one request to the server, which does not
              report its progress, so a filling bar would be an invented number.
@@ -473,9 +494,12 @@
              above says what it is running. -->
         <div class="working" id="check-working" hidden role="presentation"><i></i></div>
         <div id="bench"></div>
-        <div class="btnrow">
-          <button class="btn quiet" data-go="2">← Back</button>
-          <button class="btn" id="next-2b">Choose open data →</button>
+        <!-- two buttons, one green: which one is green follows the share of rows
+             placed (setup.js, the 60% rule) -->
+        <div class="btnrow" id="found-btns">
+          <button class="btn quiet" data-go="2" id="found-back">← Back</button>
+          <button class="btn" id="next-2b">Looks right →</button>
+          <button class="btn secondary" id="found-mine">Choose the places myself</button>
         </div>
         <div id="msg-2b"></div>
       </section>
@@ -493,7 +517,7 @@
         <p class="hint" id="cat-ask" hidden></p>
         <p class="hint">You can add any of these later from Owner ▾ → Open data layers.</p>
         <div class="btnrow">
-          <button class="btn quiet" data-go="check">← Back</button>
+          <button class="btn quiet" data-go="found">← Back</button>
           <button class="btn" id="next-3">Name it →</button>
         </div>
         <div id="msg-3"></div>
@@ -513,38 +537,16 @@
             <input type="text" id="f-org" maxlength="60" placeholder="Your organisation" required />
             <span class="fielderr" hidden></span>
           </label>
-          <!-- The logo, folded away. Any everyday picture file works: the browser
-               redraws it as a PNG small enough to send, so nobody has to know about
-               formats or sizes. It stays here until Settings can take it. -->
-          <details class="fold wide" id="logo-fold">
-            <summary>Add a logo <span class="opt">(optional)</span></summary>
-            <div class="logo-field" id="logo-field">
-              <input type="file" id="logo-file" hidden
-                accept="image/png,image/jpeg,image/webp,image/svg+xml,.png,.jpg,.jpeg,.webp,.svg" />
-              <label class="drop" id="logo-drop" for="logo-file" tabindex="0">
-                <b>Add your logo</b>
-                Drop a picture of it here, or click to choose one.
-                <span class="drop-note">A PNG, JPG, WEBP or SVG file. We resize it for you.</span>
-              </label>
-              <div class="logo-card" id="logo-card" hidden>
-                <div class="logo-preview" aria-label="How your logo will look beside your name">
-                  <img id="logo-img" alt="Your logo" />
-                  <span id="logo-org"></span>
-                </div>
-                <div class="logo-actions">
-                  <button type="button" class="btn secondary small" id="logo-change">Choose a different image</button>
-                  <button type="button" class="btn quiet small" id="logo-remove">Remove</button>
-                </div>
-              </div>
-              <span class="fielderr" id="logo-err" role="alert" hidden></span>
-            </div>
-          </details>
+          <!-- The logo used to sit here, folded (release 1). It moved to the
+               atlas's own Settings with the description (release 2): two
+               questions fewer before the map exists, and both are easier to
+               answer looking at it. -->
         </div>
         <div class="btnrow">
           <button class="btn quiet" data-go="3">← Back</button>
           <button class="btn" id="build-go">Build my atlas →</button>
-          <span class="hint">Only you can see it until you make it live. A description: later, under
-            Owner ▾ → Settings.</span>
+          <span class="hint">Only you can see it until you make it live. Add a logo and description
+            later, under Owner ▾ → Settings.</span>
         </div>
         <div id="msg-1"></div>
       </section>

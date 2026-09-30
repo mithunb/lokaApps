@@ -22,7 +22,8 @@
     // the person recognised (what we show them) — see the alias note in step 2
     chosen: [], iso3: "", level: 2, catalog: null, picked: {}, worldwide: false,
     slug: "", jobId: "",
-    logo: "",   // a PNG data URL, already small enough for the server, or ""
+    // the logo is not asked for here any more (release 2): it lives in the
+    // atlas's own Settings, with the description
   };
 
   function api(path, opts) {
@@ -237,22 +238,26 @@
      open data, 1 the name, 4 the build — so every message box, Back button
      and check that names a panel still holds; only this list says what comes
      after what. */
-  function order() { return GEO.canonical ? [2, "file", 3, 1, 4] : [2, 3, 1, 4]; }
+  /* "found" is the screen after the place: what we found — the region a file
+     turned out to cover, or the places that were typed — with the file checked
+     against it right there. Release 1 had this only when a file came along
+     (the "your data" rung); release 2 shows it to everyone, because a typed
+     region deserves one look too before open data is chosen for it. */
+  function order() { return [2, "found", 3, 1, 4]; }
   function pos(key) { return order().indexOf(key); }
 
   function step(n) {
     [1, 2, 3, 4].forEach(function (i) { $("#s" + i).hidden = i !== n; });
-    // the file panel is not in that numbered set, and forgetting it here left it
+    // the found panel is not in that numbered set, and forgetting it here left it
     // visible underneath whatever step you moved to — so checking your data looked
     // like it was happening under "Open data"
     if ($("#s2b")) $("#s2b").hidden = true;
     if (n === 2) loadCountries();
     if (n === 3) loadCatalog();
     if (n === 1) prefillName();
-    syncRungs();
     var here = pos(n);
     $$(".stp").forEach(function (b) {
-      var key = b.id === "stp-file" ? "file" : Number(b.dataset.s);
+      var key = b.id === "stp-found" ? "found" : Number(b.dataset.s);
       if (key === n) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
       // steps already passed stay pressable; the ones ahead wait their turn
       var there = pos(key);
@@ -263,9 +268,8 @@
   $$(".stp[data-s]").forEach(function (b) { b.onclick = function () { if (!b.disabled) step(Number(b.dataset.s)); }; });
   $$("[data-go]").forEach(function (b) {
     b.onclick = function () {
-      // "check" is the way back from the open data: to the look at your file
-      // when there is one, else to the place
-      if (b.dataset.go === "check") { if (GEO.canonical) showCheck(); else step(2); return; }
+      // "found" is the way back from the open data: to what we found
+      if (b.dataset.go === "found") { showFound(); return; }
       step(Number(b.dataset.go));
     };
   });
@@ -297,7 +301,6 @@
     var hint = $("#name-hint");
     if (hint) hint.textContent = (fromAccount ? "The organisation is filled in from your account. " : "") +
       "Both show on the map; change either any time.";
-    if ($("#logo-org")) $("#logo-org").textContent = o.value.trim();
   }
 
   function needField(id, what) {
@@ -331,158 +334,6 @@
       }
     });
   });
-
-  /* ---- 1 · the logo (optional) ----
-     The server takes a PNG under 200 KB and nothing else. People have JPGs from
-     their website, SVGs from a designer, photos of a letterhead — so the browser
-     redraws whatever they pick as a PNG no bigger than 512 × 512 (proportions and
-     see-through parts kept), and shrinks it again until it fits. Nobody is ever
-     asked about formats or sizes. */
-
-  var LOGO_MAX = 512, LOGO_BYTES = 200 * 1024, LOGO_MIN = 48;
-  var LOGO_UNREADABLE = "That file isn’t an image we can read — try a PNG or JPG.";
-
-  // how big to draw it: fit inside max × max, keep proportions. A drawing (SVG)
-  // has no real size, so it is drawn as large as allowed; a photo is never blown up.
-  function logoSize(w, h, max, grow) {
-    w = Number(w) || 0; h = Number(h) || 0;
-    if (w <= 0 || h <= 0) return { w: max, h: max };
-    var k = Math.min(max / w, max / h);
-    if (!grow) k = Math.min(1, k);
-    return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) };
-  }
-  function dataUrlBytes(u) {
-    var b64 = String(u).split(",")[1] || "";
-    return Math.floor(b64.length * 3 / 4) - (/==$/.test(b64) ? 2 : /=$/.test(b64) ? 1 : 0);
-  }
-  function isSvgFile(f) { return f.type === "image/svg+xml" || /\.svg$/i.test(f.name || ""); }
-  function looksLikeImage(f) {
-    return /^image\/(png|jpeg|pjpeg|webp|svg\+xml)$/.test(f.type || "") ||
-      /\.(png|jpe?g|webp|svg)$/i.test(f.name || "");
-  }
-
-  // An SVG often says only "viewBox", and then browsers disagree about its size
-  // (some draw nothing at all). Give it a real width and height before drawing.
-  function svgWithSize(text) {
-    var doc = new DOMParser().parseFromString(text, "image/svg+xml");
-    var el = doc.documentElement;
-    if (!el || el.nodeName.toLowerCase() !== "svg" || doc.getElementsByTagName("parsererror").length) return null;
-    var vb = (el.getAttribute("viewBox") || "").trim().split(/[\s,]+/).map(Number);
-    var w = parseFloat(el.getAttribute("width")), h = parseFloat(el.getAttribute("height"));
-    if (/%/.test(el.getAttribute("width") || "")) w = NaN;
-    if (/%/.test(el.getAttribute("height") || "")) h = NaN;
-    if (!(w > 0 && h > 0) && vb.length === 4 && vb[2] > 0 && vb[3] > 0) { w = vb[2]; h = vb[3]; }
-    if (!(w > 0 && h > 0)) { w = LOGO_MAX; h = LOGO_MAX; }
-    var sz = logoSize(w, h, LOGO_MAX, true);
-    if (!el.getAttribute("viewBox")) el.setAttribute("viewBox", "0 0 " + w + " " + h);
-    el.setAttribute("width", sz.w); el.setAttribute("height", sz.h);
-    return { text: new XMLSerializer().serializeToString(doc), w: sz.w, h: sz.h };
-  }
-
-  function drawLogo(img, w, h) {
-    var size = logoSize(w, h, LOGO_MAX, false);
-    for (var tries = 0; tries < 12; tries++) {
-      var c = document.createElement("canvas");
-      c.width = size.w; c.height = size.h;
-      var g = c.getContext("2d");
-      g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
-      g.drawImage(img, 0, 0, size.w, size.h);        // a clear canvas keeps see-through parts
-      var url = c.toDataURL("image/png");
-      if (!/^data:image\/png;base64,/.test(url)) return null;
-      if (dataUrlBytes(url) <= LOGO_BYTES) return url;
-      if (Math.max(size.w, size.h) <= LOGO_MIN) return null;
-      size = { w: Math.max(1, Math.round(size.w * 0.8)), h: Math.max(1, Math.round(size.h * 0.8)) };
-    }
-    return null;
-  }
-
-  function logoFromFile(file, cb) {
-    if (!file) return;
-    if (!looksLikeImage(file)) return cb(LOGO_UNREADABLE);
-    if (file.size > 25 * 1024 * 1024) return cb("That image is too big to use. Try a smaller copy of your logo.");
-    function fromUrl(src, w, h, done) {
-      var img = new Image();
-      img.onload = function () {
-        var out = null, err = null;
-        try { out = drawLogo(img, w || img.naturalWidth, h || img.naturalHeight); }
-        catch (e) { err = LOGO_UNREADABLE; }
-        done();
-        if (err) return cb(err);
-        if (!out) return cb("That logo has too much detail to fit. Try a simpler or smaller version.");
-        cb(null, out);
-      };
-      img.onerror = function () { done(); cb(LOGO_UNREADABLE); };
-      img.src = src;
-    }
-    if (isSvgFile(file)) {
-      var rd = new FileReader();
-      rd.onload = function () {
-        var fixed = null;
-        try { fixed = svgWithSize(String(rd.result || "")); } catch (e) { fixed = null; }
-        if (!fixed) return cb(LOGO_UNREADABLE);
-        var u = URL.createObjectURL(new Blob([fixed.text], { type: "image/svg+xml" }));
-        fromUrl(u, fixed.w, fixed.h, function () { URL.revokeObjectURL(u); });
-      };
-      rd.onerror = function () { cb(LOGO_UNREADABLE); };
-      rd.readAsText(file);
-    } else {
-      var u = URL.createObjectURL(file);
-      fromUrl(u, 0, 0, function () { URL.revokeObjectURL(u); });
-    }
-  }
-
-  function paintLogo() {
-    var has = !!S.logo;
-    $("#logo-drop").hidden = has;
-    $("#logo-card").hidden = !has;
-    if (has) $("#logo-img").src = S.logo; else $("#logo-img").removeAttribute("src");
-    $("#logo-org").textContent = $("#f-org").value.trim();
-  }
-  function sayLogo(text) {
-    var e = $("#logo-err");
-    e.textContent = text || ""; e.hidden = !text;
-  }
-  function takeLogo(file) {
-    if (!file) return;
-    var drop = $("#logo-drop");
-    drop.classList.add("working-on");
-    sayLogo("");
-    logoFromFile(file, function (err, url) {
-      drop.classList.remove("working-on");
-      if (err) { sayLogo(err); return; }   // a failed swap keeps the logo already there
-      S.logo = url;
-      paintLogo();
-    });
-  }
-  (function wireLogo() {
-    var input = $("#logo-file"), drop = $("#logo-drop"), card = $("#logo-card");
-    if (!input) return;
-    input.addEventListener("change", function () {
-      var f = input.files && input.files[0];
-      input.value = "";                              // picking the same file again still counts
-      takeLogo(f);
-    });
-    drop.addEventListener("keydown", function (e) {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); }
-    });
-    [drop, card].forEach(function (zone) {
-      ["dragenter", "dragover"].forEach(function (t) {
-        zone.addEventListener(t, function (e) { e.preventDefault(); zone.classList.add("over"); });
-      });
-      ["dragleave", "dragend"].forEach(function (t) {
-        zone.addEventListener(t, function () { zone.classList.remove("over"); });
-      });
-      zone.addEventListener("drop", function (e) {
-        e.preventDefault(); zone.classList.remove("over");
-        var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-        if (f) takeLogo(f);
-      });
-    });
-    $("#logo-change").onclick = function () { input.click(); };
-    $("#logo-remove").onclick = function () { S.logo = ""; sayLogo(""); paintLogo(); drop.focus(); };
-    $("#f-org").addEventListener("input", function () { $("#logo-org").textContent = this.value.trim(); });
-    paintLogo();
-  })();
 
   /* ---- 2 · geography: a text box, not a drill-down ---- */
 
@@ -722,7 +573,7 @@
   // addedIds: the places THIS FILE put on the list. The card's ✕ takes the file and
   // these, and nothing else — a place you typed yourself is yours, and a single
   // dismiss should never quietly undo your own typing.
-  var GEO = { file: null, canonical: null, rows: 0, addedIds: [] };
+  var GEO = { file: null, canonical: null, rows: 0, addedIds: [], infer: null, points: null, part: "" };
 
   // A representative point for any shape — the mean of its coordinates, which sits
   // inside a district where a single vertex might fall in its neighbour.
@@ -903,9 +754,9 @@
       FILE_STATE.name = ""; FILE_STATE.note = ""; FILE_STATE.pick = null;
       msg(2, "");
       GEO.file = null; GEO.canonical = null; GEO.rows = 0; GEO.addedIds = [];
+      GEO.infer = null; GEO.points = null; GEO.part = "";
       if (BENCH) { BENCH.destroy(); BENCH = null; BENCH_KEY = ""; }
       paintChips();          // redraws the chips and, through them, this block
-      syncRungs();
     };
     box.appendChild(kill);
     host.appendChild(box);
@@ -976,20 +827,19 @@
 
   function useCanonical(c, file, part) {
     var rows = (c.rows || []).length;
-    GEO.file = file; GEO.canonical = c; GEO.rows = rows;
+    GEO.file = file; GEO.canonical = c; GEO.rows = rows; GEO.part = part || "";
     var pts = pointsFrom(c);
+    GEO.points = pts; GEO.infer = null;   // what the found screen draws from
     var cols = pts ? null : nameColumns(c);
     if (!pts && !cols) {
       msg(2, "This file has no coordinates and no column that reads like place names, so it can’t " +
         "say where it belongs. Search for the place above instead.");
       showFileCard(file.name, rows + " rows · couldn’t find places");
-      syncRungs();   // the file is aboard even though it couldn't name places
       return;
     }
     if (!pts && !S.iso3) {
       msg(2, "Place names can’t say which country they are in — choose the country above, then drop the file again.");
       showFileCard(file.name, rows + " rows");
-      syncRungs();
       return;
     }
     showFileCard(file.name, rows + " rows" + (part ? " · " + part : "") + " · finding places…");
@@ -1033,6 +883,7 @@
      data step will then offer almost nothing, which is the truthful answer at
      that width rather than a second thing to choose. */
   function goWorldwide(d, file, rows) {
+    GEO.infer = d || null;
     S.worldwide = true;
     S.chosen = [];
     paintChips();
@@ -1046,11 +897,11 @@
       "and open on your own places. Base layers built from open data need a region, so there " +
       "will be very few to choose from.", "ok");
     showFileCard(file.name, rows + " rows \u00b7 worldwide");
-    syncRungs();
   }
 
   function applyInferred(d, file, rows, fromPoints) {
     if (d && d.worldwide) { goWorldwide(d, file, rows); return; }
+    GEO.infer = d || null;   // kept: the found screen says the same numbers and draws the places
     /* Which column was read is part of the answer, and when nothing is found it
        is the WHOLE answer: "no places found" sent somebody hunting for a fault
        in their data when the page had simply read the wrong column. */
@@ -1096,7 +947,6 @@
     var found = S.chosen.length;
     showFileCard(file.name, rows + " rows · " + found + " place" + (found === 1 ? "" : "s") +
       (added ? "" : " (already chosen)"));
-    syncRungs();
   }
 
   (function wireGeoDrop() {
@@ -1119,13 +969,28 @@
     });
   })();
 
-  /* ---- 2c · check the file against the places, before the atlas is built ----
-     The file goes to the server ONCE, here, as a pending piece of work: there is
-     no atlas yet to attach it to, so it carries the region instead and waits. This
-     is also the only moment the fix-list exists — after the build it is gone —
-     which is why checking happens before Open data rather than after. */
+  /* ---- 2c · what we found: the region confirmed, the file checked against it ----
+     One screen for two things that were two. Release 1 had a "your data" step
+     after the place, only when a file came along, where the file went to the
+     server once as pending work and was matched against the chosen places.
+     Release 2 folds that into a confirm screen everyone sees: what we found —
+     the places, how many rows landed in them, a small map of it — with the
+     file's check running underneath on the same page, so the number at the top
+     is the number the check settles on.
+
+     The file goes to the server ONCE, here: there is no atlas yet to attach it
+     to, so it carries the region instead and waits. This is also the only
+     moment the fix-list exists — after the build it is gone — which is why
+     checking happens before Open data rather than after. */
 
   var BENCH = null, BENCH_KEY = "";
+  // what the last look said: rows, rows placed, rows still open. Read by the
+  // buttons below (the 60% rule) and carried to the atlas for its first look.
+  var FOUND = { rows: 0, placed: 0, open: 0, settled: false };
+  // Under this share of rows placed, the first offer is to choose the places
+  // by hand: a file that mostly missed was read from the wrong column or the
+  // wrong country, and "continue" would build an atlas of somewhere else.
+  var LOW_COVER = 0.6;
 
   function chosenBbox() {
     var w = 180, so = 90, e = -180, n = -90, any = false;
@@ -1141,48 +1006,233 @@
     return any ? [w, so, e, n] : null;
   }
 
-  /* Checking a file IS a step, and pretending otherwise is what confused the owner:
-     the stepper said four questions, none of them "your data", while a data screen
-     sat inside Geography. So the file gets its own rung — but only when there is a
-     file. Someone mapping a region from public data still sees four. */
-  function syncRungs() {
-    var rung = $("#stp-file");
-    if (!rung) return;
-    var withFile = !!GEO.canonical;
-    rung.hidden = !withFile;
-    // The step button names where it actually goes. With a file aboard, the
-    // next stop is checking that file — a button still saying "Choose open
-    // data" walked you somewhere it didn't say.
-    var fwd = $("#next-2");
-    if (fwd) fwd.textContent = withFile ? "Check your data →" : "Choose open data →";
-    // ...and the page's own summary counts the same steps the rail shows
-    var lede = $("#flow .lede");
-    if (lede) lede.textContent = withFile
-      ? "Five steps: where your work is, a look at your data, what open data goes on it, what to call it. Then we build it and hand you the map."
-      : "Four steps: where your work is, what open data goes on it, what to call it. Then we build it and hand you the map.";
-    var order = withFile ? ["2", "file", "3", "1", "4"] : ["2", "3", "1", "4"];
-    order.forEach(function (key, i) {
-      var b = key === "file" ? rung : $('.stp[data-s="' + key + '"]');
-      if (b) b.querySelector("b").textContent = String(i + 1);
+  function placeList(names) {
+    if (names.length <= 1) return names.join("");
+    if (names.length === 2) return names[0] + " and " + names[1];
+    if (names.length <= 4) return names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+    return names.slice(0, 3).join(", ") + " and " + (names.length - 3) + " more";
+  }
+  function countryName() {
+    var o = $("#country") && $("#country").selectedOptions[0];
+    return o ? o.textContent : "";
+  }
+  function rowsWord(n) { return n === 1 ? " row" : " rows"; }
+
+  /* The screen's words, from what is known right now. Before the check runs
+     the count is the one the region-finding gave ("name a place we know");
+     once the check has settled it is the check's ("are on the map"), which
+     is the number that will be true of the atlas. */
+  function paintFound() {
+    var lede = $("#found-lede"), num = $("#found-num"), what = $("#found-what"), say = $("#found-say");
+    var d = GEO.infer || null;
+    var names = S.chosen.map(function (c) { return c.label; });
+    if (GEO.canonical) {
+      lede.textContent = "Read from " + GEO.file.name + (GEO.part ? " (" + GEO.part + ")" : "") + ". " +
+        "Your file is checked against these places here, before anything is built.";
+    } else {
+      lede.textContent = "The places you chose. Add or take out any of them on the Where step.";
+    }
+    var rows = GEO.canonical ? (FOUND.settled ? FOUND.rows : ((d && d.rows) || GEO.rows || 0)) : 0;
+    var placed = FOUND.settled ? FOUND.placed : (d && d.matchedRows) || 0;
+    if (S.worldwide) {
+      num.textContent = "Worldwide";
+      what.textContent = "";
+      say.textContent = "Your data is not in one country, so the atlas will cover the whole world and " +
+        "open on your own places. Base layers built from open data need a region, so there will be very few to choose from.";
+    } else if (!GEO.canonical) {
+      num.textContent = names.length + (names.length === 1 ? " place" : " places");
+      what.textContent = countryName() ? "in " + countryName() : "";
+      say.textContent = "Your atlas will cover " + placeList(names) + ".";
+    } else if (!rows) {
+      num.textContent = GEO.rows.toLocaleString() + rowsWord(GEO.rows);
+      what.textContent = "";
+      say.textContent = "We could not read places out of the file, so it is checked against " +
+        placeList(names) + " — the places you chose.";
+    } else {
+      num.textContent = placed.toLocaleString() + " of " + rows.toLocaleString();
+      what.textContent = FOUND.settled ? "rows are on the map" : "rows name a place we know";
+      var s = names.length ? "In " + placeList(names) + "." : "";
+      var left = Math.max(0, rows - placed);
+      if (d && !FOUND.settled) {
+        if (d.sharedRows) s += " " + d.sharedRows.toLocaleString() + rowsWord(d.sharedRows) +
+          (d.sharedRows > 1 ? " name" : " names") + " a place that exists in more than one part of the country — we took the ones nearest the rest of your data.";
+        if (d.unreadRows) s += " " + d.unreadRows.toLocaleString() + rowsWord(d.unreadRows) + " we couldn’t read.";
+        s += wholeCountryNote(d);
+      }
+      if (left) s += " " + left.toLocaleString() + rowsWord(left) + (left > 1 ? " name" : " names") + " no place yet" +
+        (FOUND.settled && FOUND.open ? " — " + FOUND.open.toLocaleString() + (FOUND.open > 1 ? " need" : " needs") +
+          " a second look below." : ".");
+      else if (FOUND.settled) s += " Nothing to fix.";
+      say.textContent = s;
+    }
+    var chips = $("#found-chips");
+    chips.innerHTML = "";
+    chips.hidden = !names.length;
+    S.chosen.forEach(function (c) {
+      var el = document.createElement("span");
+      el.className = "chip chip-static";
+      el.textContent = c.label;
+      chips.appendChild(el);
     });
+    drawFoundMap();
+    paintFoundButtons();
   }
 
-  function showCheck() {
+  // what share of the rows landed: the check's answer once it has one, else the
+  // region-finding's; null when there is no file to speak of
+  function foundShare() {
+    if (!GEO.canonical || S.worldwide) return null;
+    if (FOUND.settled) return FOUND.rows ? FOUND.placed / FOUND.rows : null;
+    var d = GEO.infer;
+    if (!d || !d.rows) return null;
+    return (d.matchedRows || 0) / d.rows;
+  }
+
+  /* The 60% rule. Above it the green button carries on and the other offers
+     the search; below it they swap: choosing the places is first, and carrying
+     on is allowed but plainly second. The two buttons keep their ids; only
+     their words, their weight and their order change. */
+  function paintFoundButtons() {
+    var on = $("#next-2b"), mine = $("#found-mine"), row = $("#found-btns"), back = $("#found-back");
+    var share = foundShare();
+    var low = share != null && share < LOW_COVER;
+    on.className = low ? "btn secondary" : "btn";
+    on.textContent = low ? "Continue anyway" : "Looks right →";
+    mine.className = low ? "btn" : "btn secondary";
+    mine.textContent = GEO.canonical ? "Choose the places myself" : "Change the places";
+    mine.dataset.low = low ? "1" : "";
+    // the primary act comes first in the row, whichever button it is
+    row.insertBefore(low ? mine : on, back.nextSibling);
+    var note = $("#found-low");
+    if (note) {
+      note.hidden = !low;
+      if (low) note.textContent = "Fewer than " + Math.round(LOW_COVER * 100) + "% of your rows landed in a place we know. " +
+        "The file may name places another way, or be of somewhere else — searching for the right places is the surer way on.";
+    }
+  }
+
+  /* ---- the small map: where the rows fall ----
+     Drawn once, as plain shapes, from what the region-finding already sent
+     back (the matched places' outlines ride along with the answer when there
+     are 60 or fewer) and the file's own coordinates when it had any. No map
+     library: the setup page does not load one, and a dot plot is what the
+     question needs — "is this the right part of the country?" — not a map
+     to pan. Rows placed by name have no point of their own, so those places
+     are shaded instead of dotted. */
+  function drawFoundMap() {
+    var fig = $("#found-map"), cap = $("#found-map-cap");
+    if (!fig) return;
+    var units = ((GEO.infer && GEO.infer.units) || []).filter(function (u) { return u.geometry && u.geometry.coordinates; });
+    var pts = (GEO.canonical && GEO.points) || [];
+    if (!units.length && !pts.length) { fig.hidden = true; return; }
+    fig.hidden = false;
+    var W = 400, H = 260, PAD = 14;
+    var bb = [180, 90, -180, -90];
+    function grow(x, y) {
+      if (x < bb[0]) bb[0] = x; if (y < bb[1]) bb[1] = y; if (x > bb[2]) bb[2] = x; if (y > bb[3]) bb[3] = y;
+    }
+    units.forEach(function (u) {
+      if (u.bbox && u.bbox.length === 4) { grow(u.bbox[0], u.bbox[1]); grow(u.bbox[2], u.bbox[3]); }
+      else (function walk(c) {
+        if (typeof c[0] === "number") { grow(c[0], c[1]); return; }
+        for (var i = 0; i < c.length; i++) walk(c[i]);
+      })(u.geometry.coordinates);
+    });
+    // the frame follows the places; dots outside them fall off the edge, which
+    // is what "not placed" looks like. Only when there are no places at all
+    // does the frame follow the dots.
+    if (!units.length) pts.forEach(function (p) { grow(p[0], p[1]); });
+    var cosL = Math.cos((bb[1] + bb[3]) / 2 * Math.PI / 180) || 1;
+    var dx = Math.max((bb[2] - bb[0]) * cosL, 1e-4), dy = Math.max(bb[3] - bb[1], 1e-4);
+    var k = Math.min((W - 2 * PAD) / dx, (H - 2 * PAD) / dy);
+    var ox = (W - dx * k) / 2, oy = (H - dy * k) / 2;
+    var px = function (lon) { return ox + (lon - bb[0]) * cosL * k; };
+    var py = function (lat) { return oy + (bb[3] - lat) * k; };
+    var out = [];
+    units.forEach(function (u) {
+      var d = "";
+      (function rings(c, depth) {
+        if (typeof c[0][0] === "number") {           // a ring
+          var lx = null, ly = null;
+          for (var i = 0; i < c.length; i++) {
+            var x = px(c[i][0]), y = py(c[i][1]);
+            // thin the ring to what a screen can show: a vertex under a pixel
+            // from the last one drawn adds nothing but bytes
+            if (lx != null && Math.abs(x - lx) < 0.7 && Math.abs(y - ly) < 0.7 && i < c.length - 1) continue;
+            d += (lx == null ? "M" : "L") + x.toFixed(1) + " " + y.toFixed(1);
+            lx = x; ly = y;
+          }
+          d += "Z";
+          return;
+        }
+        for (var j = 0; j < c.length; j++) rings(c[j], depth + 1);
+      })(u.geometry.coordinates, 0);
+      out.push('<path class="fm-unit' + (pts.length ? "" : " fm-unit-named") + '" d="' + d + '"/>');
+    });
+    // the dots: one per row with coordinates, thinned to the pixel so a
+    // thousand rows in one village are drawn once, not a thousand times
+    var seen = {}, drawn = 0;
+    for (var i = 0; i < pts.length && drawn < 3000; i++) {
+      var x = px(pts[i][0]), y = py(pts[i][1]);
+      if (x < -4 || y < -4 || x > W + 4 || y > H + 4) continue;
+      var cell = Math.round(x) + "," + Math.round(y);
+      if (seen[cell]) continue;
+      seen[cell] = true; drawn++;
+      out.push('<circle class="fm-dot" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2.6"/>');
+    }
+    // names, when there are few enough to read — and only on a place drawn
+    // wide enough to carry one: a far-off place makes the rest small, and a
+    // name on a smudge is a smudge
+    if (units.length <= 12) {
+      units.forEach(function (u) {
+        var c = geomCentre(u.geometry);
+        if (!c) return;
+        if (u.bbox && u.bbox.length === 4 && (px(u.bbox[2]) - px(u.bbox[0])) < 28) return;
+        out.push('<text class="fm-name" x="' + px(c[0]).toFixed(1) + '" y="' + py(c[1]).toFixed(1) + '">' + esc(u.name) + "</text>");
+      });
+    }
+    var svg = fig.querySelector("svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.innerHTML = out.join("");
+    if (cap) cap.textContent = pts.length
+      ? (units.length ? "Your rows as dots, over the places they landed in." : "Your rows as dots.")
+      : "The places your rows name, shaded.";
+    fig.setAttribute("aria-label", cap ? cap.textContent : "Map of what we found");
+  }
+
+  function showFound() {
     [1, 2, 3, 4].forEach(function (i) { $("#s" + i).hidden = true; });
     $("#s2b").hidden = false;
-    syncRungs();
     $$(".stp").forEach(function (b) { b.removeAttribute("aria-current"); });
-    var rung = $("#stp-file");
-    if (rung) { rung.hidden = false; rung.disabled = false; rung.setAttribute("aria-current", "step"); }
+    var rung = $("#stp-found");
+    if (rung) { rung.disabled = false; rung.setAttribute("aria-current", "step"); }
     window.scrollTo({ top: 0 });
+    msg("2b", "");
+    if (!GEO.canonical) { stopBench(); paintFound(); return; }
+    paintFound();
+    startBench();
+  }
 
+  function stopBench() {
+    if (BENCH) { BENCH.destroy(); BENCH = null; }
+    BENCH_KEY = "";
+    FOUND = { rows: 0, placed: 0, open: 0, settled: false };
+    var v = $("#check-verdict"), bar = $("#check-working");
+    if (v) { v.hidden = true; v.textContent = ""; }
+    if (bar) bar.hidden = true;
+  }
+
+  function startBench() {
     var key = S.iso3 + "|" + S.level + "|" +
       S.chosen.map(function (c) { return c.id; }).sort().join(",");
     if (BENCH && BENCH_KEY === key) return;        // already checked against these places
     if (BENCH) { BENCH.destroy(); BENCH = null; }
     BENCH_KEY = key;
-    $("#check-verdict").classList.remove("err");
-    $("#check-verdict").textContent = "Reading " + GEO.file.name + "…";
+    FOUND = { rows: 0, placed: 0, open: 0, settled: false };
+    var v = $("#check-verdict");
+    v.hidden = false;
+    v.classList.remove("err");
+    v.textContent = "Checking " + GEO.file.name + " against these places…";
     try {
       // window.__bench mirrors what the add-data page already exposes: a handle
       // on the bench from the console. It is how a wizard-only fault in the data
@@ -1213,15 +1263,21 @@
           v.textContent = text;
         },
         onReady: function (sum) {
-          var left = sum.needsAttention || 0;
           var bar = $("#check-working");
           if (bar) bar.hidden = true;      // the answer is in; the work is over
+          FOUND.rows = sum.rows || 0;
+          FOUND.placed = Math.min(sum.features || 0, FOUND.rows);
+          FOUND.open = sum.needsAttention || 0;
+          FOUND.settled = true;
+          // the headline takes the check's number; the line under the bench
+          // only stays when there is something below it to look at
           var v = $("#check-verdict");
           v.classList.remove("err");
-          v.textContent = left
-            ? sum.features + " of " + sum.rows + " rows are on the map — " + left +
-              " need a second look below."
-            : sum.rows + " rows, all placed. Nothing to fix.";
+          v.hidden = !FOUND.open;
+          v.textContent = FOUND.open
+            ? FOUND.open.toLocaleString() + rowsWord(FOUND.open) + " need a second look — pick the right place for each below."
+            : "";
+          paintFound();
         },
       });
       BENCH.start(GEO.canonical);
@@ -1233,19 +1289,38 @@
   }
 
   $("#next-2").onclick = function () {
-    if (!S.chosen.length) {
+    if (!S.chosen.length && !S.worldwide) {
       msg(2, "An atlas needs at least one place. Search above to add one.");
       $("#place").focus();
       return;
     }
     msg(2, "");
-    if (GEO.canonical) { showCheck(); return; }
-    step(3);
+    showFound();
   };
 
   $("#next-2b").onclick = function () { msg("2b", ""); step(3); };
+  /* Back to the search. When the file mostly missed, the places it put on the
+     list go with it — they are the wrong answer, and leaving them ticked
+     would carry the mistake forward. The file itself stays: it still goes on
+     the atlas, checked against whatever is chosen next. Anything typed by
+     hand stays too. Above the line this is only a way back to add or take
+     out a place, and nothing is touched. */
+  $("#found-mine").onclick = function () {
+    var low = this.dataset.low === "1";
+    if (low && (GEO.addedIds || []).length) {
+      S.chosen = S.chosen.filter(function (c) { return GEO.addedIds.indexOf(c.id) < 0; });
+      if (S.chosen.length) S.level = Math.max.apply(null, S.chosen.map(function (c) { return c.level || 2; }));
+      GEO.addedIds = [];
+      GEO.infer = null;
+      paintChips();
+    }
+    step(2);
+    if (low) msg(2, "Search for the places your data covers — a district, a few blocks, a state. " +
+      (GEO.file ? GEO.file.name + " stays with the atlas and is checked again against what you choose." : ""), "ok");
+    $("#place").focus();
+  };
   $("#next-3").onclick = function () { msg(3, ""); step(1); $("#f-title").focus(); };
-  if ($("#stp-file")) $("#stp-file").onclick = function () { if (GEO.canonical) showCheck(); };
+  if ($("#stp-found")) $("#stp-found").onclick = function () { if (!$("#stp-found").disabled) showFound(); };
 
   /* ---- 3 · open data ---- */
 
@@ -1409,8 +1484,7 @@
       body: {
         title: $("#f-title").value.trim(),
         org: $("#f-org").value.trim(),
-        branding: S.logo ? { orgName: $("#f-org").value.trim(), logoData: S.logo }
-                         : { orgName: $("#f-org").value.trim() },
+        branding: { orgName: $("#f-org").value.trim() },
         region: S.worldwide ? { worldwide: true } : {
           iso3: S.iso3,
           level: S.level,
@@ -1553,7 +1627,22 @@
     $("#fill").style.transform = "scaleX(1)";
     $("#build-title").textContent = "Your atlas is ready";
     $("#build-sub").textContent = "Built from open data just now.";
-    var go = "../?dataset=" + encodeURIComponent(S.slug);
+    /* The atlas's first look (owner.js) says what was just built — the rows
+       placed, the rows still without a place — and only this page knows those
+       numbers. They ride across in the browser's own storage, keyed to the
+       atlas; "built=1" on the address is what tells the atlas to look for them,
+       once, and it takes the flag off the address again. */
+    var look = {
+      slug: S.slug,
+      rows: FOUND.rows, placed: FOUND.placed, open: FOUND.open,
+      file: GEO.file ? GEO.file.name : "",
+      added: !!(BENCH && GEO.canonical),
+      places: S.worldwide ? [] : S.chosen.map(function (c) { return c.label; }),
+      layers: Object.keys(S.picked).filter(function (id) { return S.picked[id]; }).length,
+    };
+    function keepLook() { try { localStorage.setItem("loka-first-look", JSON.stringify(look)); } catch (e) { /* private mode: no first look */ } }
+    keepLook();
+    var go = "../?dataset=" + encodeURIComponent(S.slug) + "&built=1";
     $("#open-editor").href = go;
     // The atlas opens itself — a button saying "open your atlas" on a page whose
     // only remaining purpose is to open your atlas is a step for its own sake. It
@@ -1570,7 +1659,9 @@
         $("#prog-msg").textContent = "Your data is on it — opening your atlas…";
         location.href = go;
       }).catch(function () {
-        // stay put: this needs reading, and the button is the way on
+        // stay put: this needs reading, and the button is the way on. The first
+        // look must not claim rows that never arrived.
+        look.added = false; look.placed = 0; look.open = 0; keepLook();
         $("#prog-msg").textContent = "Your atlas is built, but your file couldn’t be added " +
           "automatically. Open the atlas and drop it there — it takes a minute.";
         $("#done-row").hidden = false;

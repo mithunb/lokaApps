@@ -449,6 +449,109 @@
       toast("Layer added — it is on the map now");
       history.replaceState(null, "", location.pathname + "?dataset=" + encodeURIComponent(SLUG));
     }
+    // straight from the wizard: one look at what was built, then never again
+    if (/(^|[?&])built=1/.test(location.search)) {
+      history.replaceState(null, "", location.pathname + "?dataset=" + encodeURIComponent(SLUG));
+      firstLook();
+    }
+  }
+
+  /* ================= the first look =================
+     Shown once, to the owner, on the atlas the wizard just built: what is on
+     it, the rows that made it and the rows that did not, and the two things
+     worth doing next. The numbers come from the wizard by way of the browser's
+     own storage (setup.js, finish); "built=1" on the address is the cue, and
+     mount() has already taken it off the address, so a reload shows a plain
+     atlas. Owner-only by construction — this file is only loaded for whoever
+     may edit. */
+
+  /* How many of the owner's own rows are actually drawn, counted from the
+     layers themselves once their data is in. The wizard's number is what the
+     region check matched; a row can match a place and still not land (a
+     village named against district outlines), and the card must not say a
+     row is on the map when it is not. null until the data has arrived. */
+  function rowsOnMap() {
+    var A = window.LokaAtlas, M = A && A.manifest;
+    if (!M || !A.dataFor) return null;
+    var n = 0, mine = 0, loaded = 0;
+    (M.layers || []).forEach(function (L) {
+      if (!L.userLayer) return;
+      mine++;
+      var d = A.dataFor(L.id);
+      if (d && d.features) { loaded++; n += d.features.length; }
+    });
+    return mine && loaded === mine ? n : (mine ? null : 0);
+  }
+  function firstLook() {
+    // wait (briefly) for the owner's layers to arrive, so the card counts
+    // what is drawn rather than what was hoped for
+    var tries = 0;
+    (function wait() {
+      if (rowsOnMap() === null && tries++ < 30) { setTimeout(wait, 300); return; }
+      showFirstLook();
+    })();
+  }
+  function showFirstLook() {
+    var look = null;
+    try {
+      look = JSON.parse(localStorage.getItem("loka-first-look") || "null");
+      localStorage.removeItem("loka-first-look");
+    } catch (e) { look = null; }
+    if (!look || look.slug !== SLUG) look = { rows: 0, placed: 0, open: 0, file: "", added: false, places: [], layers: 0 };
+    var stage = document.querySelector(".atlas-stage");
+    if (!stage) return;
+    var where = look.places && look.places.length
+      ? (look.places.length <= 3 ? look.places.join(", ") : look.places.slice(0, 2).join(", ") + " and " + (look.places.length - 2) + " more")
+      : (INST.regionLabel || (INST.region && INST.region.label) || "");
+    var layers = Number(look.layers) || 0;
+    var built = "Boundaries and place names" + (where ? " for " + where : "") +
+      (layers ? ", with " + layers + (layers === 1 ? " open data layer" : " open data layers") : "") + ".";
+    var rows = "";
+    var drawn = rowsOnMap();
+    if (look.file && look.added && look.rows && drawn != null) look.placed = Math.min(look.rows, drawn);
+    if (look.file && look.added && look.rows && look.placed === 0) {
+      rows = "None of the " + look.rows.toLocaleString() + " rows from " + look.file + " could be put on the map yet.";
+    } else if (look.file && look.added && look.rows) {
+      rows = look.placed.toLocaleString() + " of " + look.rows.toLocaleString() + " rows from " + look.file + " are on the map.";
+    } else if (look.file) {
+      rows = look.file + " is not on it yet — add it under Owner ▾ → Your data.";
+    } else {
+      rows = "Your own data is not on it yet. Add a spreadsheet or map file under Owner ▾ → Your data.";
+    }
+    var left = look.file && look.added ? Math.max(0, (look.rows || 0) - (look.placed || 0)) : 0;
+    var box = document.createElement("aside");
+    box.className = "own-first";
+    box.setAttribute("role", "dialog");
+    box.setAttribute("aria-label", "Your atlas is built");
+    box.innerHTML =
+      '<button class="own-x own-first-x" type="button" aria-label="Close">×</button>' +
+      '<div class="own-first-k">Your atlas is built</div>' +
+      "<p>" + esc(built) + "</p>" +
+      "<p>" + esc(rows) + "</p>" +
+      (left ? '<p class="own-first-warn">' + left.toLocaleString() + (left === 1 ? " row" : " rows") +
+        " still " + (left === 1 ? "needs" : "need") + " a place, and " + (left === 1 ? "was" : "were") +
+        " left off the map. Fix the place names in your file and " +
+        '<a href="./add-data/?dataset=' + encodeURIComponent(SLUG) + '">add it again under Your data</a>' +
+        " — the atlas then uses that copy.</p>" : "") +
+      '<div class="own-row own-first-acts">' +
+        '<button class="share-btn primary" type="button" id="own-first-live">Make it live</button>' +
+        '<button class="share-btn" type="button" id="own-first-open">Add open data</button>' +
+      "</div>" +
+      '<p class="own-note">Only you can see it until it is live. Both are in the Owner menu whenever you want them.</p>';
+    stage.appendChild(box);
+    function shut() { if (box.parentNode) box.parentNode.removeChild(box); document.removeEventListener("keydown", onKey); }
+    function onKey(e) { if (e.key === "Escape") shut(); }
+    document.addEventListener("keydown", onKey);
+    box.querySelector(".own-first-x").onclick = shut;
+    box.querySelector("#own-first-open").onclick = function () { shut(); openOpenData(); };
+    box.querySelector("#own-first-live").onclick = function () {
+      // the same act the Owner menu offers, through the same button, so the
+      // menu's own state (its dot, its words) follows
+      var b = $("#own-live");
+      if (b && !b.hidden) { shut(); toggleLive(); }
+      else { shut(); toast("Only the owner can make an atlas live"); }
+    };
+    box.querySelector(".own-first-x").focus();
   }
 
   /* GET /layers/list is the authority on WHICH layers are on this atlas, and on
@@ -1892,6 +1995,28 @@
         '<input type="text" id="own-title" maxlength="80" value="' + esc(INST.title || "") + '" /></label>' +
       '<label class="own-fld">What this atlas is for <span class="own-note">shown under the title</span>' +
         '<textarea id="own-desc" rows="3" maxlength="160">' + esc(INST.subtitle || "") + "</textarea></label>" +
+      '<label class="own-fld">Your organisation or project <span class="own-note">shown above the title</span>' +
+        '<input type="text" id="own-org" maxlength="60" value="' + esc(b.orgName || INST.org || "") + '" /></label>' +
+      /* The logo, where it can be seen beside the name it goes with. Any
+         everyday picture file works: the browser redraws it as a PNG small
+         enough to send (logo-tools.js), so nobody has to know about formats
+         or sizes. Nothing leaves this sheet until Save. */
+      '<div class="own-fld own-logo-fld"><span>Logo <span class="own-note">optional · beside the name in the header</span></span>' +
+        '<input type="file" id="own-logo-file" hidden accept="' + LOGO_ACCEPT + '" />' +
+        '<div class="own-logo" id="own-logo">' +
+          '<div class="own-logo-now" id="own-logo-now" hidden>' +
+            '<img id="own-logo-img" alt="" />' +
+            '<span class="own-logo-name" id="own-logo-name"></span>' +
+          "</div>" +
+          '<div class="own-row own-logo-acts">' +
+            '<button class="share-btn" type="button" id="own-logo-add">Add a logo</button>' +
+            '<button class="share-btn" type="button" id="own-logo-change" hidden>Change</button>' +
+            '<button class="own-linkish" type="button" id="own-logo-remove" hidden>Remove</button>' +
+          "</div>" +
+          '<span class="own-note" id="own-logo-note">A PNG, JPG, WEBP or SVG file. We resize it.</span>' +
+        "</div>" +
+        '<span class="own-err" id="own-logo-err" role="alert"></span>' +
+      "</div>" +
       '<label class="own-fld">Organisation website <span class="own-note">optional, https</span>' +
         '<input type="text" id="own-site" placeholder="https://example.org" value="' + esc(b.orgUrl || "") + '" /></label>' +
 
@@ -1941,7 +2066,81 @@
     var b = INST.branding || {};
     return t.value.trim() !== (INST.title || "") ||
       scrim.querySelector("#own-desc").value.trim() !== (INST.subtitle || "") ||
-      scrim.querySelector("#own-site").value.trim() !== (b.orgUrl || "");
+      scrim.querySelector("#own-org").value.trim() !== (b.orgName || INST.org || "") ||
+      scrim.querySelector("#own-site").value.trim() !== (b.orgUrl || "") ||
+      scrim.__logo !== undefined;
+  }
+
+  /* ---- the logo in Settings ----
+     scrim.__logo is what Save will send: undefined means untouched, "" means
+     take it off, a data URL means this new one. The picture shown is whichever
+     of those is current, so the sheet always shows what Save would leave. */
+  var LOGO_ACCEPT = "image/png,image/jpeg,image/webp,image/svg+xml,.png,.jpg,.jpeg,.webp,.svg";
+  var logoToolsP = null;
+  function logoTools() {
+    if (window.LokaLogoTools) return Promise.resolve(window.LokaLogoTools);
+    if (logoToolsP) return logoToolsP;
+    logoToolsP = new Promise(function (ok, no) {
+      // the same version stamp this file was fetched with, so a deploy that
+      // bumps one bumps the other
+      var mine = document.querySelector('script[src*="owner.js"]');
+      var v = (mine && (mine.src.match(/[?&]v=([^&]+)/) || [])[1]) || "dev";
+      var s = document.createElement("script");
+      s.src = "./logo-tools.js?v=" + v;
+      s.onload = function () { window.LokaLogoTools ? ok(window.LokaLogoTools) : no(new Error("logo tools did not load")); };
+      s.onerror = function () { logoToolsP = null; no(new Error("logo tools did not load")); };
+      document.head.appendChild(s);
+    });
+    return logoToolsP;
+  }
+  function currentLogoUrl() {
+    var LA = window.LokaAtlas, m = LA && LA.manifest, b = m && m.branding;
+    if (!b || !b.logo) return "";
+    return LA.fileUrl(b.logo);
+  }
+  function paintLogo(scrim) {
+    var has = scrim.__logo !== undefined ? !!scrim.__logo : !!(INST.branding && INST.branding.hasLogo);
+    var src = scrim.__logo !== undefined ? scrim.__logo : currentLogoUrl();
+    var now = scrim.querySelector("#own-logo-now"), img = scrim.querySelector("#own-logo-img");
+    now.hidden = !has;
+    if (has && src) img.src = src; else img.removeAttribute("src");
+    scrim.querySelector("#own-logo-name").textContent = scrim.querySelector("#own-org").value.trim();
+    scrim.querySelector("#own-logo-add").hidden = has;
+    scrim.querySelector("#own-logo-change").hidden = !has;
+    scrim.querySelector("#own-logo-remove").hidden = !has;
+    scrim.querySelector("#own-logo-note").hidden = has;
+  }
+  function wireLogo(scrim) {
+    var input = scrim.querySelector("#own-logo-file"), err = scrim.querySelector("#own-logo-err");
+    if (!input) return;
+    var pick = function () { input.click(); };
+    scrim.querySelector("#own-logo-add").onclick = pick;
+    scrim.querySelector("#own-logo-change").onclick = pick;
+    scrim.querySelector("#own-logo-remove").onclick = function () {
+      scrim.__logo = "";
+      err.textContent = "";
+      scrim.__warned = false;
+      paintLogo(scrim);
+      scrim.querySelector("#own-logo-add").focus();
+    };
+    input.addEventListener("change", function () {
+      var f = input.files && input.files[0];
+      input.value = "";                                  // the same file again still counts
+      if (!f) return;
+      err.textContent = "";
+      logoTools().then(function (T) {
+        T.logoFromFile(f, function (e, url) {
+          if (e) { err.textContent = e; return; }        // a failed swap keeps what was there
+          scrim.__logo = url;
+          scrim.__warned = false;
+          paintLogo(scrim);
+        });
+      }).catch(function () { err.textContent = "The logo tools didn’t load — reload the page and try again."; });
+    });
+    scrim.querySelector("#own-org").addEventListener("input", function () {
+      scrim.querySelector("#own-logo-name").textContent = this.value.trim();
+    });
+    paintLogo(scrim);
   }
 
   /* ================= region: search, chips, rebuild =================
@@ -2249,7 +2448,8 @@
       var rs = scrim.querySelector("#own-region-save");
       if (rs) rs.onclick = function () { rebuildRegion(scrim, this); };
       paintInvites(scrim);
-      ["#own-title", "#own-desc", "#own-site"].forEach(function (sel) {
+      wireLogo(scrim);
+      ["#own-title", "#own-desc", "#own-org", "#own-site"].forEach(function (sel) {
         scrim.querySelector(sel).addEventListener("input", function () {
           scrim.__warned = false;
           scrim.querySelector("#own-set-err").textContent = "";
@@ -2284,24 +2484,37 @@
       scrim.querySelector("#own-site").focus();
       return;
     }
+    var org = scrim.querySelector("#own-org").value.trim();
+    if (!org) { err.textContent = "Name the organisation or project this atlas belongs to."; scrim.querySelector("#own-org").focus(); return; }
     btn.disabled = true; err.textContent = "";
+    // the logo rides in the same request the server already takes for the
+    // words: a new picture as logoData, or removeLogo; untouched, neither
+    var branding = { orgName: org, orgUrl: site };
+    if (scrim.__logo) branding.logoData = scrim.__logo;
+    else if (scrim.__logo === "") branding.removeLogo = true;
     api("instances/" + encodeURIComponent(SLUG) + "/details", {
       method: "POST",
       body: {
         title: t.value.trim(),
         subtitle: scrim.querySelector("#own-desc").value.trim(),
-        branding: { orgUrl: site },
+        org: org,
+        branding: branding,
       },
     }).then(function () {
       INST.title = t.value.trim();
       INST.subtitle = scrim.querySelector("#own-desc").value.trim();
-      INST.branding = Object.assign({}, INST.branding, { orgUrl: site });
+      INST.org = org;
+      INST.branding = Object.assign({}, INST.branding, { orgName: org, orgUrl: site },
+        scrim.__logo !== undefined ? { hasLogo: !!scrim.__logo } : {});
       scrim.__warned = true;              // nothing left to lose
       closeDialog(scrim);
       toast("Settings saved");
       // the title and description are drawn from the atlas's own manifest, which
       // the server has just rewritten — so read it again rather than patching
-      // this page's copy and hoping the two agree
+      // this page's copy and hoping the two agree. The logo keeps one file
+      // name, so the reboot is told the files changed or the browser would
+      // show the old picture from its cache.
+      if (scrim.__logo !== undefined && window.LokaAtlas.dataChanged) window.LokaAtlas.dataChanged();
       preview(SLUG);
     }).catch(function (e) {
       err.textContent = errMsg(e);

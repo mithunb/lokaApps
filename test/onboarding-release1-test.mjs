@@ -37,22 +37,24 @@ const flow = page.slice(page.indexOf('id="flow"'));
 const panelAt = (id) => flow.indexOf('<section class="panel" id="' + id + '"');
 
 console.log('\n  the order of the screens');
-check('the panels come in the walked order: where, your data, open data, name, build',
+// release 2 (October 2026): the "your data" rung became "what we found", for
+// everyone — a typed region gets the same look as a file. Same panels, same order.
+check('the panels come in the walked order: where, what we found, open data, name, build',
   [panelAt('s2'), panelAt('s2b'), panelAt('s3'), panelAt('s1'), panelAt('s4')].every((v, i, a) => v > 0 && (i === 0 || v > a[i - 1])), true);
-check('setup.js walks them in that order', /return GEO\.canonical \? \[2, "file", 3, 1, 4\] : \[2, 3, 1, 4\];/.test(setup), true);
+check('setup.js walks them in that order, file or no file', /function order\(\) \{ return \[2, "found", 3, 1, 4\]; \}/.test(setup), true);
 check('the flow starts at the place, not the name', /\$\("#flow"\)\.hidden = false;\n    step\(2\);/.test(setup), true);
-check('the stepper reads Where · Open data · Name it · Build',
+check('the stepper reads Where · What we found · Open data · Name it · Build',
   [...flow.matchAll(/<button class="stp"[^>]*><b>\d<\/b> ([^<]+)<\/button>/g)].map((m) => m[1].trim()),
-  ['Where', 'Your data', 'Open data', 'Name it', 'Build']);
-check('the rungs are renumbered in that order when a file comes along',
-  /var order = withFile \? \["2", "file", "3", "1", "4"\] : \["2", "3", "1", "4"\];/.test(setup), true);
+  ['Where', 'What we found', 'Open data', 'Name it', 'Build']);
+check('the rungs are numbered 1 to 5 in the page itself, nothing renumbers them',
+  [...flow.matchAll(/<button class="stp"[^>]*><b>(\d)<\/b>/g)].map((m) => m[1]).join('') === '12345' && !/syncRungs/.test(setup), true);
 check('the page says what the steps are, in plain words',
-  /Four steps: where your work is, what open data goes on it, what to call it\./.test(page), true);
+  /Four steps: where your work is, what we found there, what open data goes on it,\s+what to call it\./.test(page), true);
 check('a rung already passed can be pressed; one ahead cannot',
   /if \(there >= 0 && there <= here\) b\.disabled = false;/.test(setup), true);
-check('Back from the open data goes to the file check when there is a file, else to the place',
-  /if \(b\.dataset\.go === "check"\) \{ if \(GEO\.canonical\) showCheck\(\); else step\(2\); return; \}/.test(setup) &&
-  /id="s3"[\s\S]*?data-go="check">← Back<\/button>/.test(flow), true);
+check('Back from the open data goes to what we found',
+  /if \(b\.dataset\.go === "found"\) \{ showFound\(\); return; \}/.test(setup) &&
+  /id="s3"[\s\S]*?data-go="found">← Back<\/button>/.test(flow), true);
 check('Back from the name goes to the open data', /id="s1"[\s\S]*?data-go="3">← Back<\/button>/.test(flow), true);
 check('a lapsed sign-in comes back to the name screen, where Build is',
   /step\(1\);\n        msg\(1, "Signed in again — press Build my atlas\.", "ok"\);/.test(setup), true);
@@ -68,7 +70,8 @@ check('the drop is a headline offer now', /<b>Drop a spreadsheet or map file<\/b
 check('it says what leaves the browser', /Only the place names are sent to find\s+your region &mdash; never the whole file\./.test(s2), true);
 check('the search asks for a district, block or state', /placeholder="Type a district, block or state…"/.test(s2), true);
 check('the first screen has no Back', /data-go=/.test(s2), false);
-check('the same file reading and inference as before', /api\("geo\/infer", \{/.test(setup) && /function showCheck\(\)/.test(setup), true);
+check('the same file reading and inference as before; the check now runs on the found screen',
+  /api\("geo\/infer", \{/.test(setup) && /function startBench\(\)/.test(setup) && /stages: "checkPlace"/.test(setup), true);
 check('the page stacks the two on a phone', /@media \(max-width:720px\) \{\n\s*\.either \{ grid-template-columns:1fr;/.test(page), true);
 
 console.log('\n  the open data: everything up front, nothing favoured');
@@ -134,13 +137,13 @@ check('the heading', /<h2>Name it<\/h2>/.test(s1), true);
 check('the two fields', /Atlas name <span class="req">required<\/span>/.test(s1) && /Your organisation or project <span class="req">required<\/span>/.test(s1), true);
 check('no description field in the flow', /id="f-desc"/.test(page) || /f-desc/.test(setup), false);
 check('and no subtitle in the build request', /subtitle:/.test(setup), false);
-check('the logo stays, folded behind "Add a logo (optional)"',
-  /<details class="fold wide" id="logo-fold">\s*<summary>Add a logo <span class="opt">\(optional\)<\/span><\/summary>[\s\S]*id="logo-file"[\s\S]*id="logo-drop"[\s\S]*<\/details>/.test(s1), true);
-check('the build request still carries it', /logoData: S\.logo/.test(setup), true);
+// release 2: the logo left the wizard for Settings (see logo-test.mjs)
+check('no logo fold on the Name screen any more', /id="logo-fold"/.test(s1) || /id="logo-file"/.test(page), false);
+check('and the build request carries only the organisation name', /branding: \{ orgName: \$\("#f-org"\)\.value\.trim\(\) \},/.test(setup) && !/logoData/.test(setup), true);
 check('Build is on this screen', /<button class="btn" id="build-go">Build my atlas →<\/button>/.test(s1), true);
 check('and checks the name before anything leaves', /\$\("#build-go"\)\.onclick = function \(\) \{\n\s*var btn = this;\n\s*if \(!nameIsComplete\(\)\) return;/.test(setup), true);
-check('it says who can see it and where the description went',
-  /Only you can see it until you make it live\. A description: later, under\s+Owner ▾ → Settings\./.test(s1), true);
+check('it says who can see it and where the logo and description went',
+  /Only you can see it until you make it live\. Add a logo and description\s+later, under Owner ▾ → Settings\./.test(s1), true);
 const { plainFileName } = new Function(fnFrom(setup, 'plainFileName') + '; return { plainFileName };')();
 check('a file name is made plain', plainFileName('village_survey-2026.csv'), 'Village survey 2026');
 check('a dotted one too', plainFileName('wards.final.v2.xlsx'), 'Wards final v2');

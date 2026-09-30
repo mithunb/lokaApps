@@ -126,6 +126,16 @@ is what the live flow uses. The code lasts 10 minutes, is single-use, and dies a
 Five code requests per internet address per hour. The sign-in lasts **30 days** (a cookie named
 `atlas_session`).
 
+**Order since October 2026 (onboarding releases 1 and 2):** the wizard asks the questions in the
+order a person has the answers — sign in; **Where is your work?** (a place search and a file drop,
+side by side); **Here's what we found** (the places, how many rows landed in them, a small map, and
+the file checked against those places, with "Choose the places myself" first when under 60% of the
+rows landed); **What open data goes on it?** (everything up front, nothing pre-ticked but the
+boundaries); **Name it** (title and organisation, filled in); Build. The description and the logo
+are no longer asked for here: both live under Owner ▾ → Settings on the finished atlas, which also
+shows a one-time first-look card saying what was built and what still needs a place. The step
+headings below describe the screens' contents and are older than that reorder.
+
 ### Step 1 — Identity (`/apps/atlas/setup/`)
 
 Asks for: **atlas title** (required, up to 80 characters), **the organisation or project this atlas
@@ -288,10 +298,12 @@ pickers a person then confirms.
   choosing from that row's own candidate list.
 - **Finding themes** (§9).
 
-Rate limit: **30 model calls per internet address per rolling hour**. Two holes in it, both read
-from the code: the tie-breaking pass does not check the limit at all, and one theme-finding
-allowance can spend up to ~126 calls (one to invent themes plus one per 40 rows to file them). So
-that number bounds neither total calls nor cost.
+Rate limit (corrected October 2026, from `api/apps/atlas.js` `AI_CALLS_PER_HOUR`,
+`AI_CALLS_PER_HOUR_IP`, `AI_CALLS_PER_READING`): **150 model calls per rolling hour for a
+signed-in account**, **40 per internet address when nobody is signed in**, and **no single reading
+of a table may spend more than 24 calls**. The older "30 per address" figure is gone. The
+per-reading cap is what closed the hole where one theme-finding pass could spend ~126 calls; the
+per-account cap is what makes the hour's total a real bound rather than a per-address one.
 
 If no key is configured, everything above is skipped and the plain-code path is used. Nothing
 breaks.
@@ -352,17 +364,27 @@ Imagery). The built map's top zoom is 15.
 - **One atlas is built at one depth.** Mixing depths is refused and explained.
 - **Up to 100 units** may be chosen for one atlas (anything beyond the hundredth is dropped without
   a message).
-- **Size ceiling.** Measured as the area of the **bounding box** around the chosen units, in square
-  degrees — not their true area, so a scattered handful of units can measure far larger than the land
-  they cover. Above **6 square degrees** (the code calls that roughly 73,800 km²) the build stops and
-  waits for the operator, who gets an email with approve and deny links. Above **40 square degrees**
-  (roughly 492,000 km²) it is refused outright: "That region is larger than a single atlas can cover
-  right now — open a unit on the map and pick smaller areas inside it." Both numbers can be changed
-  by an environment setting on the server; the live server reports the defaults, 6 and 40.
-- **Changing the region later** rebuilds in place, with no downtime for a live atlas (the new data
-  only replaces the old on success). But **any region change that would newly need approval is
-  refused outright**, with a message telling you to email the operator. So an atlas cannot grow past
-  the free ceiling through the editor at all.
+- **No size ceiling any more — the layers decide** (corrected October 2026; the old "approval above
+  6 square degrees, refusal above 40" rule is gone from the code, `api/apps/atlas.js` §feasibleLayers
+  and the build route). The region is still measured as the **bounding box** around the chosen
+  units, in square degrees, and each layer's build time is estimated for that width (its catalogue
+  `estSeconds`, quoted for 2 square degrees, scaled up with the area; the five layers whose cost does
+  not grow with the area — boundaries, place-name labels, named places, buildings, roads, marked
+  `fixedCost` in the catalogue — are flat). Then:
+  - a layer whose estimate is over the **9-minute build budget** at that width **cannot be built
+    there**: it is **dropped from the build and named in the answer** — the wizard's build screen
+    says "Too wide an area for Terrain & elevation, so that is left out. Everything else is being
+    built." — not refused. The wizard greys such rows at the end of their group. If nothing but boundaries could be built and boundaries were not asked for, the build is
+    refused with a plain sentence.
+  - the build **waits for the operator's OK** (email with approve and deny links) when **any chosen
+    layer is marked `cost: "approval"`** in the catalogue (today only Floodplain), **or when the
+    estimated build is over 270 seconds** — half the budget — whatever its size. A wide atlas of
+    outlines and pins is seconds of work and goes straight through; one district of terrain and
+    forest can be minutes and waits.
+- **Changing the region or the open data later** rebuilds in place, with no downtime for a live
+  atlas (the new data only replaces the old on success), under **the same rule as a first build**:
+  unbuildable layers dropped and named, and the rebuild parked for approval when an approval layer
+  or a long build is involved. Nothing is refused for being wide.
 - **Platform ceilings:** at most **50 atlases in total** across all accounts, and **3 new atlases per
   internet address per day**. Both are environment settings. The 50 is a whole-platform number, not
   per account — worth checking with the operator before proposing anything that would create many
@@ -376,9 +398,13 @@ Imagery). The built map's top zoom is 15.
 
 A "key" means: colour the places of one layer by the answers in one of its columns.
 
-- **Up to 5 keys can be on at once on one layer.** The pin itself carries the first; the other four
-  sit at the pin's four corners as small marks — square, triangle, diamond, bar. Turning on a sixth
-  is refused with: "Five keys are already on — the pin's four corners are all taken."
+- **Up to 5 keys can be on at once on one layer** (corrected October 2026, `atlas/atlas.js` KEYS
+  WEAR ROWS and `ROW_SHAPES`). The pin itself never changes: it is always the plain neutral circle
+  meaning "a place is here". Each key that is on draws **one row of small marks beside the pin**, in
+  that key's own shape — the first key circles, the second squares, then triangles, diamonds, bars —
+  and a row holds one mark for **every** answer the place carries, so a place that is Culture and
+  Nature wears two circles side by side. (The older corner-badge design, which showed one answer per
+  key at the pin's four corners, is gone.)
 - **Colour says which kind within a key; shape says which key.** Colours repeat between keys, on
   purpose: a measurement in the code shows that splitting the palette between keys collapses to
   near-identical colours for someone with colour-blindness.
@@ -396,6 +422,13 @@ A "key" means: colour the places of one layer by the answers in one of its colum
 - at most **9** different answers for a one-answer-per-place column, or **12** different *first*
   answers for a column holding lists;
 - the kept kinds must cover at least **60%** of the layer's places (blanks count against this);
+- **no single answer may cover more than 85% of the places** (`KEY_DOMINANCE = 0.85`, October
+  2026): a key exists to tell places apart, and one that paints nine in ten the same colour tells a
+  reader nothing. Measured on the live Bengaluru layer: "Creator" was offered, and 89% of its
+  places said "LOKA Finds". This rule is not applied to a question asked of the places, nor to the
+  marker column the owner committed to — both are somebody's decision, not an accident of a column;
+- a **question** whose commonest answer outweighs all the others put together (and that has at
+  least three answers) is still offered, but says so on its own row and waits at the bottom;
 - every kept kind must read as a word — a column of numbers, links, ID strings or timestamps is
   refused, because any one bad kind disqualifies the whole column;
 - answers are cut to 40 characters.
@@ -648,8 +681,8 @@ The table, as seen in a real layer of 66 places:
   rows lost. `address` is not needed and is not used for placement (§2 — address-to-coordinate
   conversion is not wired up).
 - **66 places is comfortably under 3,000**, so the layer is drawn as real pins and gets the whole key
-  system: icons, colours, up to five keys, corner badges, hover bubbles, fan-out for places on the
-  same spot.
+  system: icons, colours, up to five keys as rows of marks beside the pin, hover bubbles, fan-out
+  for places on the same spot.
 - **`description` and `labels` together are exactly what theme-finding wants.** 66 places is well
   above the 8-place minimum and well below the 400-place sampling threshold, so every place is read
   in full. The result is one new `themes` column, gated by a person, with the original columns
@@ -751,8 +784,8 @@ State these as out of scope, or as new work, in any proposal.
 | Countries offered | 249 |
 | Administrative depths | 1–4, one depth per atlas |
 | Units per atlas | 100 |
-| Region ceiling — approval | 6 square degrees (~73,800 km², bounding box) |
-| Region ceiling — refusal | 40 square degrees (~492,000 km², bounding box) |
+| Region ceiling | none — a layer whose estimated build is over the 9-minute budget at that width is dropped and named (§6) |
+| Build waits for the operator's OK when | any `cost: "approval"` layer is chosen, or the estimated build is over 270 s (§6) |
 | Atlases on the platform | 50 total |
 | New atlases per internet address per day | 3 |
 | Collaborators per atlas | 20 |
@@ -764,11 +797,12 @@ State these as out of scope, or as new work, in any proposal.
 | Characters per cell | 500 |
 | Upload request body / other request bodies | 10 MB / 2 MB |
 | Rows shown to the AI when guessing the setup | first 30 |
-| AI calls per internet address per hour | 30 (with two holes, §4) |
-| Keys on at once, per layer | 5 |
+| AI calls per hour | 150 per signed-in account; 40 per internet address signed out; 24 per reading of a table (§4) |
+| Keys on at once, per layer | 5, as rows of marks beside the pin |
 | Colours per key | 8, plus grey "other" |
 | Different answers a column may hold to be a key | 2–9 (2–12 for a list column) |
 | Share of places a key's kinds must cover | 60% |
+| Share of places one answer may cover before a column stops being a key | 85% (questions and the owner's marker column exempt) |
 | Places for a layer to be drawn as pins | 3,000 or fewer |
 | Grouping distance for nearby pins | 20 px (with keys on and zoomed in, the average width of the keyed pins) |
 | Pins in one fan-out | 100, 28 px apart (with keys on, the widest pin + 8 px if more) |

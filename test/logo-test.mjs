@@ -7,11 +7,16 @@ import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-/* An organisation can add its logo in the setup wizard. The browser turns any
-   picture into a PNG small enough to send; the server keeps its rule of "a PNG
-   under 200 KB". These checks hold the two ends to the same rule. No network. */
+/* An organisation can add its logo under Owner ▾ → Settings on its atlas
+   (release 2 of the onboarding, October 2026; the wizard asked for it until
+   then). The browser turns any picture into a PNG small enough to send —
+   atlas/logo-tools.js, one copy, loaded by owner.js — and the server keeps
+   its rule of "a PNG under 200 KB". These checks hold the two ends to the
+   same rule. No network. */
 
 const server = fs.readFileSync(ROOT + '/api/apps/atlas.js', 'utf8');
+const tools = fs.readFileSync(ROOT + '/atlas/logo-tools.js', 'utf8');
+const owner = fs.readFileSync(ROOT + '/atlas/owner.js', 'utf8');
 const setup = fs.readFileSync(ROOT + '/atlas/setup/setup.js', 'utf8');
 const page = fs.readFileSync(ROOT + '/atlas/setup/index.html', 'utf8');
 
@@ -75,30 +80,42 @@ check('something calling itself a PNG that is not one is refused',
   validLogo(asUrl(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'))), null);
 check('no logo at all is simply no logo', validLogo(undefined), null);
 
-console.log('\n  the wizard asks for the logo and sends it');
-// release 1 (October 2026): the logo moved to the last screen, "Name it", and
-// sits folded behind "Add a logo (optional)" until Settings can take it
-check('the Name screen has a logo field, folded', /id="logo-file"/.test(page) && /<summary>Add a logo <span class="opt">\(optional\)<\/span><\/summary>/.test(page), true);
-const accept = (page.match(/id="logo-file"[^>]*accept="([^"]+)"/) || page.match(/accept="([^"]+)"[^>]*id="logo-file"/) || [, ''])[1];
+console.log('\n  Settings asks for the logo and sends it');
+// release 2 (October 2026): the logo left the wizard for Owner ▾ → Settings
+check('the wizard no longer asks for a logo',
+  /id="logo-file"/.test(page) || /logoData/.test(setup) || /S\.logo\b/.test(setup), false);
+check('and its Name screen says where the logo went',
+  /Add a logo and description\s+later, under Owner ▾ → Settings\./.test(page), true);
+check('Settings has a logo field beside the organisation name',
+  /id="own-org"/.test(owner) && /id="own-logo-file"/.test(owner) && /id="own-logo-add"/.test(owner), true);
+const accept = (owner.match(/var LOGO_ACCEPT = "([^"]+)"/) || [, ''])[1];
 check('it takes PNG, JPG, WEBP and SVG',
   ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'].every((t) => accept.includes(t)), true);
-check('the logo field sits inside the Name screen (panel s1, before the build panel)',
-  page.indexOf('id="logo-file"') > page.indexOf('id="s1"') && page.indexOf('id="logo-file"') < page.indexOf('id="s4"'), true);
-check('the build request carries it as branding.logoData', /logoData:\s*S\.logo/.test(setup), true);
-check('it is sent as a PNG', /toDataURL\("image\/png"\)/.test(setup), true);
-check('the wizard aims for the same 200 KB the server allows', /LOGO_BYTES = 200 \* 1024/.test(setup), true);
+check('a new logo goes to the fast-edit route as branding.logoData, a removal as branding.removeLogo',
+  /if \(scrim\.__logo\) branding\.logoData = scrim\.__logo;\n\s*else if \(scrim\.__logo === ""\) branding\.removeLogo = true;/.test(owner) &&
+  /api\("instances\/" \+ encodeURIComponent\(SLUG\) \+ "\/details", \{\n\s*method: "POST",\n\s*body: \{\n\s*title:[^]*?org: org,\n\s*branding: branding,/.test(owner), true);
+check('the server reads them from there', /if \(bb\.removeLogo\)/.test(server) && /else if \(bb\.logoData\)/.test(server), true);
+check('the organisation name rides along as org and branding.orgName',
+  /var branding = \{ orgName: org, orgUrl: site \};/.test(owner), true);
+check('the resize is one shared piece, loaded by Settings — no second copy in owner.js or the wizard',
+  /s\.src = "\.\/logo-tools\.js\?v=" \+ v;/.test(owner) && !/function drawLogo\(/.test(owner) && !/function drawLogo\(/.test(setup), true);
+check('it is sent as a PNG', /toDataURL\("image\/png"\)/.test(tools), true);
+check('the browser aims for the same 200 KB the server allows', /LOGO_BYTES = 200 \* 1024/.test(tools), true);
 check('a picture that cannot be read gets a plain answer',
-  setup.includes('That file isn’t an image we can read — try a PNG or JPG.'), true);
+  tools.includes('That file isn’t an image we can read — try a PNG or JPG.'), true);
 const limit = (server.match(/const jsonStd = express\.json\(\{ limit: '(\d+)mb' \}\)/) || [, '0'])[1];
 check('a 200 KB logo, written out as text, fits in the request the server reads',
   Number(limit) * 1024 * 1024 > Math.ceil(200 * 1024 / 3) * 4 + 50 * 1024, true);
+check('the page can run the piece as a browser would (window.LokaLogoTools)',
+  (() => { const w = {}; new Function('window', tools)(w); return Object.keys(w.LokaLogoTools).sort(); })(),
+  ['ACCEPT', 'LOGO_BYTES', 'LOGO_MAX', 'LOGO_MIN', 'UNREADABLE', 'dataUrlBytes', 'drawLogo', 'logoFromFile', 'logoSize', 'looksLikeImage', 'svgWithSize']);
 
-console.log('\n  how big the wizard draws it');
+console.log('\n  how big the browser draws it');
 const grab = (name) => {
-  const start = setup.indexOf('\n  function ' + name + '(');
-  if (start < 0) throw new Error(name + ' not found in setup.js');
-  const end = setup.indexOf('\n  }\n', start);
-  return setup.slice(start, end + 5);
+  const start = tools.indexOf('\n  function ' + name + '(');
+  if (start < 0) throw new Error(name + ' not found in logo-tools.js');
+  const end = tools.indexOf('\n  }\n', start);
+  return tools.slice(start, end + 5);
 };
 const { logoSize, dataUrlBytes } = new Function(grab('logoSize') + grab('dataUrlBytes') +
   '; return { logoSize, dataUrlBytes };')();
@@ -108,7 +125,7 @@ check('a small photo is never blown up', logoSize(120, 80, 512, false), { w: 120
 check('a drawing (SVG) is drawn as large as allowed', logoSize(24, 12, 512, true), { w: 512, h: 256 });
 check('a picture with no size gets a square', logoSize(0, 0, 512, false), { w: 512, h: 512 });
 const buf = png(64, 64, false);
-check('the wizard measures a PNG the way the server does', dataUrlBytes(asUrl(buf)), buf.length);
+check('the browser measures a PNG the way the server does', dataUrlBytes(asUrl(buf)), buf.length);
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
