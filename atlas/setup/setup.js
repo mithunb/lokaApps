@@ -77,8 +77,8 @@
         $("#gate").hidden = true;
         $("#home").hidden = true;
         $("#flow").hidden = false;
-        step(3);
-        msg(3, "Signed in again — press Build my atlas.", "ok");
+        step(1);
+        msg(1, "Signed in again — press Build my atlas.", "ok");
         return;
       }
       if (/(^|[?&])new=1/.test(location.search)) startFlow();
@@ -225,10 +225,20 @@
     $("#home").hidden = true;
     $("#gate").hidden = true;
     $("#flow").hidden = false;
-    step(1);
+    step(2);
+    $("#place").focus();
   }
 
   /* ======================= steps ======================= */
+
+  /* The order the screens are walked in (release 1, October 2026): where the
+     work is → (your data, when a file came along) → the open data → the name
+     → the build. The panels keep their old numbers — 2 is the place, 3 the
+     open data, 1 the name, 4 the build — so every message box, Back button
+     and check that names a panel still holds; only this list says what comes
+     after what. */
+  function order() { return GEO.canonical ? [2, "file", 3, 1, 4] : [2, 3, 1, 4]; }
+  function pos(key) { return order().indexOf(key); }
 
   function step(n) {
     [1, 2, 3, 4].forEach(function (i) { $("#s" + i).hidden = i !== n; });
@@ -238,17 +248,57 @@
     if ($("#s2b")) $("#s2b").hidden = true;
     if (n === 2) loadCountries();
     if (n === 3) loadCatalog();
+    if (n === 1) prefillName();
+    syncRungs();
+    var here = pos(n);
     $$(".stp").forEach(function (b) {
-      var i = Number(b.dataset.s);
-      if (i === n) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
-      if (i <= n) b.disabled = false;
+      var key = b.id === "stp-file" ? "file" : Number(b.dataset.s);
+      if (key === n) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+      // steps already passed stay pressable; the ones ahead wait their turn
+      var there = pos(key);
+      if (there >= 0 && there <= here) b.disabled = false;
     });
     window.scrollTo({ top: 0 });
   }
-  $$(".stp").forEach(function (b) { b.onclick = function () { if (!b.disabled) step(Number(b.dataset.s)); }; });
-  $$("[data-go]").forEach(function (b) { b.onclick = function () { step(Number(b.dataset.go)); }; });
+  $$(".stp[data-s]").forEach(function (b) { b.onclick = function () { if (!b.disabled) step(Number(b.dataset.s)); }; });
+  $$("[data-go]").forEach(function (b) {
+    b.onclick = function () {
+      // "check" is the way back from the open data: to the look at your file
+      // when there is one, else to the place
+      if (b.dataset.go === "check") { if (GEO.canonical) showCheck(); else step(2); return; }
+      step(Number(b.dataset.go));
+    };
+  });
 
-  /* ---- 1 · identity ---- */
+  /* ---- 3 · name it (panel 1) ----
+     Last, and filled in: the name from the place or the file, the organisation
+     from the account when it has one. Whatever was typed here is kept when
+     you go Back and come forward again; only an untouched suggestion is
+     replaced by a better one. */
+
+  var NAME_AUTO = "";   // the last name this page filled in itself
+  function plainFileName(name) {
+    var s = String(name || "").replace(/\.[a-z0-9]+$/i, "").replace(/[_\-.]+/g, " ")
+      .replace(/\s+/g, " ").trim();
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
+  }
+  function suggestedTitle() {
+    if (GEO.file && GEO.file.name) return plainFileName(GEO.file.name);
+    if (S.chosen.length) return (S.chosen[0].label || S.chosen[0].name) + " atlas";
+    return "";
+  }
+  function prefillName() {
+    var t = $("#f-title"), o = $("#f-org");
+    var want = suggestedTitle();
+    if (want && (!t.value.trim() || t.value === NAME_AUTO)) { t.value = want; NAME_AUTO = want; }
+    var fromAccount = false;
+    if (!o.value.trim() && S.me && S.me.org) { o.value = S.me.org; fromAccount = true; }
+    else if (S.me && S.me.org && o.value === S.me.org) fromAccount = true;
+    var hint = $("#name-hint");
+    if (hint) hint.textContent = (fromAccount ? "The organisation is filled in from your account. " : "") +
+      "Both show on the map; change either any time.";
+    if ($("#logo-org")) $("#logo-org").textContent = o.value.trim();
+  }
 
   function needField(id, what) {
     var input = $("#" + id), lab = input.closest("label.f"), err = lab.querySelector(".fielderr");
@@ -262,15 +312,15 @@
     if (!n) { msg(1, ""); return; }
     msg(1, (n === 1 ? "One thing is still needed" : n + " things are needed") + " before we can build anything.");
   }
-  $("#next-1").onclick = function () {
-    var okTitle = needField("f-title", "Your atlas needs a title. It is what people will see.");
+  // the name screen is the last question, so its check happens on Build itself
+  function nameIsComplete() {
+    var okTitle = needField("f-title", "Your atlas needs a name. It is what people will see.");
     var okOrg = needField("f-org", "Name the organisation or project this atlas belongs to.");
     var missing = (okTitle ? 0 : 1) + (okOrg ? 0 : 1);
-    if (missing) { sayMissing(missing); (okTitle ? $("#f-org") : $("#f-title")).focus(); return; }
+    if (missing) { sayMissing(missing); (okTitle ? $("#f-org") : $("#f-title")).focus(); return false; }
     sayMissing(0);
-    step(2);
-    $("#place").focus();
-  };
+    return true;
+  }
   ["f-title", "f-org"].forEach(function (id) {
     $("#" + id).addEventListener("input", function () {
       var lab = this.closest("label.f");
@@ -1108,9 +1158,9 @@
     // ...and the page's own summary counts the same steps the rail shows
     var lede = $("#flow .lede");
     if (lede) lede.textContent = withFile
-      ? "Five steps: who you are, where it is, a look at your data, what open data goes on it. Then we build it and hand you the map."
-      : "Four steps: who you are, where it is, what open data goes on it. Then we build it and hand you the map.";
-    var order = withFile ? ["1", "2", "file", "3", "4"] : ["1", "2", "3", "4"];
+      ? "Five steps: where your work is, a look at your data, what open data goes on it, what to call it. Then we build it and hand you the map."
+      : "Four steps: where your work is, what open data goes on it, what to call it. Then we build it and hand you the map.";
+    var order = withFile ? ["2", "file", "3", "1", "4"] : ["2", "3", "1", "4"];
     order.forEach(function (key, i) {
       var b = key === "file" ? rung : $('.stp[data-s="' + key + '"]');
       if (b) b.querySelector("b").textContent = String(i + 1);
@@ -1194,6 +1244,7 @@
   };
 
   $("#next-2b").onclick = function () { msg("2b", ""); step(3); };
+  $("#next-3").onclick = function () { msg(3, ""); step(1); $("#f-title").focus(); };
   if ($("#stp-file")) $("#stp-file").onclick = function () { if (GEO.canonical) showCheck(); };
 
   /* ---- 3 · open data ---- */
@@ -1246,18 +1297,27 @@
      added to it. */
   function paintCatalog() {
     var CR = window.LokaCatalogRows;
-    // required layers are not a choice; say what always comes rather than
-    // showing a checkbox nobody may untick
-    $("#given").innerHTML = CR.givenLine(S.catalog);
+    /* The layers every atlas gets are not a choice. The required one (the
+       boundaries) is shown as the first row, ticked and locked, so the whole
+       list is in view; place names stay in the line above, as they were. */
+    var required = S.catalog.filter(function (l) { return l.required; });
+    $("#given").innerHTML = CR.givenLine(S.catalog.filter(function (l) { return !l.required; }));
     S.catalog.filter(CR.isGiven).forEach(function (l) { S.picked[l.id] = true; });
 
     var host = $("#cats");
     host.innerHTML = "";
-    CR.groups(S.catalog).forEach(function (g, gi) {
+    // every group open: the whole list up front, nothing favoured (the owner's rule)
+    CR.groups(S.catalog).forEach(function (g) {
       var d = document.createElement("details");
       d.className = "cat";
-      if (gi === 0) d.open = true;
+      d.open = true;
       d.innerHTML = "<summary>" + esc(g.label) + '<span class="cat-n"></span></summary>';
+      if (g.id === "base") required.forEach(function (l) {
+        var lab = document.createElement("label");
+        lab.className = "cat-row cat-row-given";
+        lab.innerHTML = CR.rowHTML(l, true, { locked: true });
+        d.appendChild(lab);
+      });
       g.layers.forEach(function (l) {
         var cannot = CR.cannotBuild(l);
         if (cannot) S.picked[l.id] = false;
@@ -1275,27 +1335,61 @@
     });
     paintCounts();
   }
+  /* How long a build takes, said the way a person would: the catalogue's
+     estimate per layer for a region this wide, added up over what is ticked
+     (the given layers included — they are built too). */
+  function aboutTime(seconds) {
+    if (seconds < 45) return "about half a minute";
+    if (seconds < 90) return "about a minute";
+    var m = Math.round(seconds / 60);
+    if (m < 60) return "about " + m + " minutes";
+    var h = Math.round(m / 6) / 10;
+    return "about " + (h === 1 ? "an hour" : h + " hours");
+  }
+  function pickedSeconds() {
+    var CR = window.LokaCatalogRows;
+    return (S.catalog || []).reduce(function (t, l) {
+      var on = CR.isGiven(l) || (S.picked[l.id] && !CR.cannotBuild(l));
+      return t + (on ? Number(l.estSecondsHere != null ? l.estSecondsHere : l.estSeconds) || 0 : 0);
+    }, 0);
+  }
   function paintCounts() {
-    var picked = 0;
+    var CR = window.LokaCatalogRows;
+    var picked = 0, asks = [];
     $$("details.cat").forEach(function (d) {
-      var boxes = d.querySelectorAll('.cat-row input[type="checkbox"]');
+      var boxes = d.querySelectorAll('.cat-row:not(.cat-row-given) input[type="checkbox"]');
       var on = 0;
       boxes.forEach(function (b) { if (b.checked) on++; });
       picked += on;
       d.querySelector(".cat-n").textContent = on + " of " + boxes.length;
     });
-    $("#cat-total").textContent = picked
-      ? picked + (picked === 1 ? " open-data layer" : " open-data layers") + " will be added."
-      : "No open data chosen. You can add layers any time after the atlas is built.";
+    (S.catalog || []).forEach(function (l) {
+      if (S.picked[l.id] && !CR.isGiven(l) && !CR.cannotBuild(l) && CR.needsApproval(l)) asks.push(l.label);
+    });
+    $("#cat-total").textContent = (picked
+      ? picked + (picked === 1 ? " layer" : " layers")
+      : "Nothing chosen yet") + " · " + aboutTime(pickedSeconds()) + " to build";
+    /* a ticked layer the LOKA team must OK first: say once, here, what that
+       means for the build — the whole atlas waits for the OK today (a later release
+       builds the rest first) */
+    var ask = $("#cat-ask");
+    if (ask) {
+      ask.hidden = !asks.length;
+      ask.textContent = asks.length
+        ? asks.join(" and ") + (asks.length > 1 ? " are" : " is") +
+          " checked by the LOKA team first, so your atlas waits for a quick OK — usually the same day."
+        : "";
+    }
   }
 
   /* ---- 4 · build for real ---- */
 
   $("#build-go").onclick = function () {
     var btn = this;
+    if (!nameIsComplete()) return;
     var layers = Object.keys(S.picked).filter(function (k) { return S.picked[k]; });
-    if (!layers.length) { msg(3, "Something has gone wrong: not even the boundaries are selected."); return; }
-    btn.disabled = true; msg(3, "");
+    if (!layers.length) { msg(1, "Something has gone wrong: not even the boundaries are selected."); return; }
+    btn.disabled = true; msg(1, "");
     step(4);
     // "you can safely leave this page" stops being true when a file is riding
     // along: the page is what hands it over once the atlas exists
@@ -1315,7 +1409,6 @@
       body: {
         title: $("#f-title").value.trim(),
         org: $("#f-org").value.trim(),
-        subtitle: $("#f-desc").value.trim(),
         branding: S.logo ? { orgName: $("#f-org").value.trim(), logoData: S.logo }
                          : { orgName: $("#f-org").value.trim() },
         region: S.worldwide ? { worldwide: true } : {
@@ -1360,8 +1453,9 @@
         $("#g-email").focus();
         return;
       }
-      step(3);
-      msg(3, errMsg(e));
+      // back to the screen Build was pressed on, with the reason beside it
+      step(1);
+      msg(1, errMsg(e));
     });
   };
 
@@ -1395,7 +1489,15 @@
     var sub = $("#build-sub");
     if (sub) {
       sub.hidden = false;
-      sub.textContent = "A region this size is checked by the LOKA team first. " +
+      // the wait is for a layer the team must OK, or for a region past the
+      // free tier — say which, rather than blaming the region for a layer
+      var CR = window.LokaCatalogRows;
+      var asks = (S.catalog || []).filter(function (l) {
+        return S.picked[l.id] && CR && CR.needsApproval(l) && !CR.isGiven(l);
+      }).map(function (l) { return l.label; });
+      sub.textContent = (asks.length
+          ? asks.join(" and ") + (asks.length > 1 ? " are" : " is") + " checked by the LOKA team first. "
+          : "A region this size is checked by the LOKA team first. ") +
         "They have been emailed, and you will be too once it is built.";
     }
     $("#prog-msg").textContent = GEO.canonical

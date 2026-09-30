@@ -73,8 +73,9 @@ const catalog = [
 ];
 check('what every atlas gets is said in plain words',
   CR.givenLine(catalog), 'Included in every atlas: <b>your region’s boundaries</b> and <b>place names</b>. Sources are credited on the map.');
-check('the given layers are not offered as a choice',
-  CR.groups(catalog).map((g) => g.layers.map((l) => l.id)), [['rivers-wris', 'floodplain-ndem'], ['terrain'], ['health']]);
+// release 1 (October 2026): A to Z inside a group, so the order carries no opinion
+check('the given layers are not offered as a choice, and the rest read A to Z',
+  CR.groups(catalog).map((g) => g.layers.map((l) => l.id)), [['floodplain-ndem', 'rivers-wris'], ['terrain'], ['health']]);
 check('groups carry their plain names', CR.groups(catalog).map((g) => g.label),
   ['Ecological landscape', 'Context & infrastructure', 'People & services']);
 check('a ticked free layer', CR.rowHTML(catalog[2], true),

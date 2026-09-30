@@ -76,12 +76,14 @@ check('something calling itself a PNG that is not one is refused',
 check('no logo at all is simply no logo', validLogo(undefined), null);
 
 console.log('\n  the wizard asks for the logo and sends it');
-check('step 1 has a logo field', /id="logo-file"/.test(page) && /Your logo <span class="opt">\(optional\)<\/span>/.test(page), true);
+// release 1 (October 2026): the logo moved to the last screen, "Name it", and
+// sits folded behind "Add a logo (optional)" until Settings can take it
+check('the Name screen has a logo field, folded', /id="logo-file"/.test(page) && /<summary>Add a logo <span class="opt">\(optional\)<\/span><\/summary>/.test(page), true);
 const accept = (page.match(/id="logo-file"[^>]*accept="([^"]+)"/) || page.match(/accept="([^"]+)"[^>]*id="logo-file"/) || [, ''])[1];
 check('it takes PNG, JPG, WEBP and SVG',
   ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'].every((t) => accept.includes(t)), true);
-check('the logo field sits inside step 1',
-  page.indexOf('id="logo-file"') > page.indexOf('id="s1"') && page.indexOf('id="logo-file"') < page.indexOf('id="s2"'), true);
+check('the logo field sits inside the Name screen (panel s1, before the build panel)',
+  page.indexOf('id="logo-file"') > page.indexOf('id="s1"') && page.indexOf('id="logo-file"') < page.indexOf('id="s4"'), true);
 check('the build request carries it as branding.logoData', /logoData:\s*S\.logo/.test(setup), true);
 check('it is sent as a PNG', /toDataURL\("image\/png"\)/.test(setup), true);
 check('the wizard aims for the same 200 KB the server allows', /LOGO_BYTES = 200 \* 1024/.test(setup), true);

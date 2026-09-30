@@ -82,7 +82,7 @@ check('the catalogue answers per layer', /feasible: feasibleAt\(l, areaDeg2\), e
 check('asked without a width it answers as before', /Number\.isFinite\(areaDeg2\) && areaDeg2 > 0/.test(server), true);
 // the row itself lives in catalog-rows.js now, shared with the Owner menu's sheet
 const catalogRows = fs.readFileSync(path.join(ROOT, 'atlas/catalog-rows.js'), 'utf8');
-check('a layer it cannot build is disabled, not just unticked', /\(cannot \? " disabled" : ""\)/.test(catalogRows), true);
+check('a layer it cannot build is disabled, not just unticked', /\(cannot \|\| locked \? " disabled" : ""\)/.test(catalogRows), true);
 check('and says why', /too wide an area for this one/.test(catalogRows), true);
 /* the cache used to key on country alone, so adding a place left the old
    answer on screen */

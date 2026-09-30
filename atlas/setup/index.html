@@ -197,7 +197,20 @@
     .cat-row .cost { display:inline-block; margin-left:.35rem; padding:.05rem .4rem; border-radius:var(--radius-md);
       font-size:var(--t-label); font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
     .cat-row .cost-ask { background:var(--color-sindoor-tint); color:var(--color-sindoor-deep); }
+    /* the one layer every atlas gets: ticked, locked, and it says so in the leaf wash */
+    .cat-row .cost-given { background:var(--color-leaf-tint); color:var(--color-leaf-deep); }
+    .cat-row-given { cursor:default; }
+    .cat-row-given input { cursor:default; }
     .cat-row .src { display:block; font-size:var(--t-meta); color:var(--color-text-muted); max-width:60ch; }
+    /* the foot: layers ticked and the build time they add up to, in body type
+       with tabular figures so the number can be read as it changes */
+    .cat-foot { font-size:var(--t-body); color:var(--color-text-secondary); margin:.9rem 0 .2rem;
+      font-variant-numeric:tabular-nums; }
+    /* on a phone the whole list is one long scroll; a group's name stays at the
+       top so you always know which part of it you are in */
+    @media (max-width:720px) {
+      .cat > summary { position:sticky; top:0; background:var(--color-surface); z-index:2; }
+    }
 
     /* ---- build ---- */
     .prog { height:.4rem; background:var(--color-surface-alt); border-radius:var(--radius-pill); overflow:hidden; margin-top:1rem; }
@@ -262,7 +275,33 @@
        empty, which is exactly how it read to the owner */
     .f-chosen { font-weight:600; color:var(--color-leaf); }
     .f-chosen:not(:empty)::before { content:"— "; color:var(--color-text-muted,#6E6A63); font-weight:400; }
-    .fromfile { margin-top:.9rem; }
+    /* "Where is your work?" — the search and the file drop are two equal ways
+       to answer one question, so they sit side by side with an "or" between
+       them, and stack on a phone with the "or" as a rule across. The drop used
+       to sit under the search as a low-key afterthought, and people with a
+       spreadsheet in hand never saw it. */
+    .either { display:grid; grid-template-columns:1fr auto 1fr; gap:0 1.1rem; align-items:start; margin-top:1rem; }
+    .either .fgroup.one { grid-template-columns:1fr; }
+    .either-a .hint { margin-top:.6rem; }
+    .either-or { align-self:stretch; display:flex; flex-direction:column; align-items:center; gap:.5rem;
+      font-size:var(--t-meta); color:var(--color-text-muted); }
+    .either-or::before, .either-or::after { content:""; flex:1; width:1px; background:var(--color-divider); }
+    .either-b .drop { padding:1.35rem 1rem; min-height:100%; }
+    @media (max-width:720px) {
+      .either { grid-template-columns:1fr; gap:.2rem; }
+      .either-or { flex-direction:row; height:2.5rem; }
+      .either-or::before, .either-or::after { width:auto; height:1px; }
+      .either-b .drop { padding:1rem; }
+    }
+    .fromfile { margin-top:0; }
+    /* the name screen's folded logo: a plain disclosure, not a field */
+    .fold > summary { cursor:pointer; font-size:var(--t-ui); font-weight:600; color:var(--color-leaf-deep);
+      min-height:2.75rem; display:flex; align-items:center; gap:.4rem; list-style:none; }
+    .fold > summary::-webkit-details-marker { display:none; }
+    .fold > summary::before { content:"+"; font-weight:700; width:1rem; text-align:center; }
+    .fold[open] > summary::before { content:"–"; }
+    .fold > summary .opt { font-weight:400; font-size:var(--t-meta); color:var(--color-text-muted); }
+    .fold > .logo-field { margin-top:.3rem; }
     .drop { display:block; border:1px dashed var(--color-border); border-radius:var(--radius-lg);
       background:var(--color-surface-alt,#F0EDE4); padding:.85rem 1rem; text-align:center; cursor:pointer;
       font-size:var(--t-ui); color:var(--color-text-secondary,#5A5751); }
@@ -358,107 +397,70 @@
     </section>
 
     <!-- the four steps -------------------------------------------------- -->
+    <!-- Order (release 1, October 2026): where the work is (a place search and a
+         file drop, side by side) → a look at your data, when there is a file →
+         the open data → the name → the build. The panels keep the ids they had
+         (s2 place, s3 open data, s1 name, s4 build) so the messages and checks
+         that name them still hold; setup.js's ORDER is what walks them. -->
     <div id="flow" hidden>
       <span class="eyebrow">LOKA Atlas · Setup wizard</span>
       <h1>Set up your atlas</h1>
-      <p class="lede">Four steps: who you are, where it is, what open data goes on it. Then we build it
-        and hand you the map.</p>
+      <p class="lede">Four steps: where your work is, what open data goes on it, what to call it.
+        Then we build it and hand you the map.</p>
 
       <nav class="stepper" aria-label="Steps">
-        <button class="stp" data-s="1"><b>1</b> Org &amp; branding</button>
-        <button class="stp" data-s="2" disabled><b>2</b> Geography</button>
+        <button class="stp" data-s="2"><b>1</b> Where</button>
         <!-- appears only when a file was dropped; numbering shifts with it. No
              data-s: it is not part of the numeric step machinery, setup.js drives it -->
-        <button class="stp" id="stp-file" hidden><b>3</b> Your data</button>
-        <button class="stp" data-s="3" disabled><b>3</b> Open data</button>
+        <button class="stp" id="stp-file" hidden><b>2</b> Your data</button>
+        <button class="stp" data-s="3" disabled><b>2</b> Open data</button>
+        <button class="stp" data-s="1" disabled><b>3</b> Name it</button>
         <button class="stp" data-s="4" disabled><b>4</b> Build</button>
       </nav>
 
-      <!-- 1 -->
-      <section class="panel" id="s1" hidden>
-        <h2>Your organisation &amp; atlas</h2>
-        <p class="hint" style="margin-bottom:1.25rem">The title and the organisation show on the map.
-          Everything else can be changed later, on the atlas itself.</p>
-        <div class="fgroup">
-          <label class="f" id="lbl-title">Atlas title <span class="req">required</span>
-            <input type="text" id="f-title" maxlength="80" placeholder="Kilifi Coastal Atlas" required />
-            <span class="fielderr" hidden></span>
-          </label>
-          <label class="f" id="lbl-org">Organisation / project name <span class="req">required</span>
-            <input type="text" id="f-org" maxlength="60" placeholder="Your organisation" required />
-            <span class="fielderr" hidden></span>
-          </label>
-          <label class="f wide">Description <span class="opt">(optional, shown under the title)</span>
-            <textarea id="f-desc" rows="3" maxlength="160" placeholder="What this atlas is for, in a sentence."></textarea>
-          </label>
-          <!-- The logo. Any everyday picture file works: the browser redraws it as a
-               PNG small enough to send, so nobody has to know about formats or sizes. -->
-          <div class="logo-field wide" id="logo-field">
-            <span class="lf-label">Your logo <span class="opt">(optional)</span></span>
-            <input type="file" id="logo-file" hidden
-              accept="image/png,image/jpeg,image/webp,image/svg+xml,.png,.jpg,.jpeg,.webp,.svg" />
-            <label class="drop" id="logo-drop" for="logo-file" tabindex="0">
-              <b>Add your logo</b>
-              Drop a picture of it here, or click to choose one.
-              <span class="drop-note">A PNG, JPG, WEBP or SVG file. We resize it for you.</span>
-            </label>
-            <div class="logo-card" id="logo-card" hidden>
-              <div class="logo-preview" aria-label="How your logo will look beside your name">
-                <img id="logo-img" alt="Your logo" />
-                <span id="logo-org"></span>
-              </div>
-              <div class="logo-actions">
-                <button type="button" class="btn secondary small" id="logo-change">Choose a different image</button>
-                <button type="button" class="btn quiet small" id="logo-remove">Remove</button>
-              </div>
+      <!-- 1 · where -->
+      <section class="panel" id="s2" hidden>
+        <h2>Where is your work?</h2>
+        <p class="intro">Search for the places your atlas covers, or drop a file of your own and
+          we&rsquo;ll work out where it belongs.</p>
+        <div class="either">
+          <div class="either-a">
+            <div class="fgroup one">
+              <label class="f">Country
+                <select id="country"></select>
+              </label>
+              <label class="f combo">Place <span id="place-chosen" class="f-chosen"></span>
+                <input type="text" id="place" placeholder="Type a district, block or state…"
+                  autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list"
+                  aria-controls="sugg" />
+                <ul class="sugg" id="sugg" role="listbox" aria-label="Matching places" hidden></ul>
+              </label>
             </div>
-            <span class="fielderr" id="logo-err" role="alert" hidden></span>
+            <p class="hint">Add as many as you need: a district, a few blocks, a whole state.</p>
+          </div>
+          <div class="either-or" aria-hidden="true"><span>or</span></div>
+          <div class="either-b fromfile">
+            <label class="drop" id="geo-drop">
+              <b>Drop a spreadsheet or map file</b>
+              We&rsquo;ll work out where it belongs &mdash; or click to choose one.
+              <input type="file" id="geo-file"
+                accept=".csv,.tsv,.txt,.xlsx,.xls,.json,.geojson,.kml,.gpx" />
+              <span class="drop-note">Read in your browser. Only the place names are sent to find
+                your region &mdash; never the whole file. Your data goes on the atlas at the end.</span>
+            </label>
+            <div id="geo-file-card"></div>
           </div>
         </div>
-        <div class="btnrow"><button class="btn" id="next-1">Choose your region →</button></div>
-        <div id="msg-1"></div>
-      </section>
-
-      <!-- 2 -->
-      <section class="panel" id="s2" hidden>
-        <h2>Where is it?</h2>
-        <p class="intro">Search for the places your atlas covers. Add as many as you need: a district,
-          a few blocks, a whole state.</p>
-        <p class="hint">Every atlas is drawn from public maps — its boundaries and place names are
-          always included. Your own data is welcome too, now or whenever you have it.</p>
-        <div class="fgroup" style="margin-top:1rem">
-          <label class="f">Country
-            <select id="country"></select>
-          </label>
-          <label class="f combo">Place <span id="place-chosen" class="f-chosen"></span>
-            <input type="text" id="place" placeholder="Start typing a district or state…"
-              autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list"
-              aria-controls="sugg" />
-            <ul class="sugg" id="sugg" role="listbox" aria-label="Matching places" hidden></ul>
-          </label>
-        </div>
-        <div class="fromfile">
-          <label class="drop" id="geo-drop">
-            <b>Not sure which places your data covers?</b>
-            Drop a file here and we&rsquo;ll work out where it belongs &mdash; or click to choose one.
-            <input type="file" id="geo-file"
-              accept=".csv,.tsv,.txt,.xlsx,.xls,.json,.geojson,.kml,.gpx" />
-            <span class="drop-note">Read in your browser to find the places &mdash; the file itself is
-              not sent. You add the data to the atlas afterwards.</span>
-          </label>
-          <div id="geo-file-card"></div>
-        </div>
         <div class="chips" id="chips"></div>
-        <p class="chips-empty" id="chips-empty">No places yet. Search above to add one.</p>
+        <p class="chips-empty" id="chips-empty">No places yet. Search above, or drop a file.</p>
         <p class="verdict" id="verdict" hidden></p>
         <div class="btnrow">
-          <button class="btn quiet" data-go="1">← Back</button>
           <button class="btn" id="next-2">Choose open data →</button>
         </div>
         <div id="msg-2"></div>
       </section>
 
-      <!-- 3 -->
+      <!-- your data, when there is a file -->
       <section class="panel" id="s2b" hidden>
         <h2>Your data — check it before it goes on</h2>
         <p class="intro">Your file is matched against the places you just confirmed. Fix anything that
@@ -477,21 +479,77 @@
         </div>
         <div id="msg-2b"></div>
       </section>
+
+      <!-- 2 · open data -->
       <section class="panel" id="s3" hidden>
         <h2>What open data goes on it?</h2>
-        <p class="intro">Your atlas is always drawn with its boundaries and place names. Everything
-          below is optional, and you can add or remove any of it later.</p>
+        <p class="intro">Everything this region can have. Tick what you want; add or remove any of it
+          later.</p>
         <p class="given" id="given"></p>
         <div id="cats"></div>
-        <p class="hint" id="cat-total" aria-live="polite"></p>
+        <!-- the foot: how long the build will take with what is ticked (numbers,
+             not warnings), and the way back to this list once the atlas exists -->
+        <p class="cat-foot" id="cat-total" aria-live="polite"></p>
+        <p class="hint" id="cat-ask" hidden></p>
+        <p class="hint">You can add any of these later from Owner ▾ → Open data layers.</p>
         <div class="btnrow">
-          <button class="btn quiet" data-go="2">← Back</button>
-          <button class="btn" id="build-go">Build my atlas →</button>
+          <button class="btn quiet" data-go="check">← Back</button>
+          <button class="btn" id="next-3">Name it →</button>
         </div>
         <div id="msg-3"></div>
       </section>
 
-      <!-- 4 -->
+      <!-- 3 · name it -->
+      <section class="panel" id="s1" hidden>
+        <h2>Name it</h2>
+        <p class="hint" id="name-hint" style="margin-bottom:1.25rem">Both show on the map; change either
+          any time.</p>
+        <div class="fgroup">
+          <label class="f" id="lbl-title">Atlas name <span class="req">required</span>
+            <input type="text" id="f-title" maxlength="80" placeholder="Village survey 2026" required />
+            <span class="fielderr" hidden></span>
+          </label>
+          <label class="f" id="lbl-org">Your organisation or project <span class="req">required</span>
+            <input type="text" id="f-org" maxlength="60" placeholder="Your organisation" required />
+            <span class="fielderr" hidden></span>
+          </label>
+          <!-- The logo, folded away. Any everyday picture file works: the browser
+               redraws it as a PNG small enough to send, so nobody has to know about
+               formats or sizes. It stays here until Settings can take it. -->
+          <details class="fold wide" id="logo-fold">
+            <summary>Add a logo <span class="opt">(optional)</span></summary>
+            <div class="logo-field" id="logo-field">
+              <input type="file" id="logo-file" hidden
+                accept="image/png,image/jpeg,image/webp,image/svg+xml,.png,.jpg,.jpeg,.webp,.svg" />
+              <label class="drop" id="logo-drop" for="logo-file" tabindex="0">
+                <b>Add your logo</b>
+                Drop a picture of it here, or click to choose one.
+                <span class="drop-note">A PNG, JPG, WEBP or SVG file. We resize it for you.</span>
+              </label>
+              <div class="logo-card" id="logo-card" hidden>
+                <div class="logo-preview" aria-label="How your logo will look beside your name">
+                  <img id="logo-img" alt="Your logo" />
+                  <span id="logo-org"></span>
+                </div>
+                <div class="logo-actions">
+                  <button type="button" class="btn secondary small" id="logo-change">Choose a different image</button>
+                  <button type="button" class="btn quiet small" id="logo-remove">Remove</button>
+                </div>
+              </div>
+              <span class="fielderr" id="logo-err" role="alert" hidden></span>
+            </div>
+          </details>
+        </div>
+        <div class="btnrow">
+          <button class="btn quiet" data-go="3">← Back</button>
+          <button class="btn" id="build-go">Build my atlas →</button>
+          <span class="hint">Only you can see it until you make it live. A description: later, under
+            Owner ▾ → Settings.</span>
+        </div>
+        <div id="msg-1"></div>
+      </section>
+
+      <!-- 4 · build -->
       <section class="panel" id="s4" hidden>
         <h2 id="build-title" aria-live="polite">Building your atlas…</h2>
         <p class="hint" id="build-sub">Layers are assembled from open data on the fly, usually a minute
