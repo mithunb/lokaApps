@@ -18,6 +18,7 @@ import * as auth from '../lib/atlas/auth.js';
 import { sendMail } from '../lib/mailer.js';
 import { noteTrouble, noteOk, setTroubleNotifier, openTroubles } from '../lib/atlas/trouble.js';
 import * as owed from '../lib/atlas/owed.js';
+import { queue as QUESTIONS, signatureOf, NEVER_READ } from '../lib/atlas/questions-queue.js';
 import {
   enqueueBuild, getJob, setJobDoneHook, setStrandedBuildHook, DATASETS_ROOT, PRIVATE_ROOT,
 } from '../lib/atlas/jobs.js';
@@ -2120,6 +2121,19 @@ import * as enrich from '../lib/atlas/enrich.js';
 import { geocodeOne, markCollisions } from '../lib/atlas/geocode.js';
 
 const ai = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) : null;
+
+/* A stand-in for the model, for checking the whole road on a machine with no
+   key: ATLAS_FAKE_READING=1 makes a reading return the same plain questions
+   every time, worked out by counting words rather than asking anybody.
+
+   It must never be on where real people read their places, so it needs all four
+   at once: the flag itself, the local-only static mode (LOKA_DEV_STATIC, which
+   the live server never sets), no model key at all, and not production. Any one
+   missing and it is off — which is also how it starts. */
+const FAKE_READING = process.env.ATLAS_FAKE_READING === '1' &&
+  !!process.env.LOKA_DEV_STATIC && !process.env.GEMINI_API_KEY &&
+  process.env.NODE_ENV !== 'production';
+if (FAKE_READING) console.warn('[atlas] ATLAS_FAKE_READING is on — readings are made up locally, not asked of a model');
 imports.sweepImports();
 setInterval(imports.sweepImports, 3600 * 1000).unref();
 
@@ -2199,6 +2213,12 @@ function aiWho(req) {
   // work the server is finishing on an owner's behalf keeps its own allowance,
   // so a retry neither eats their share nor runs without a limit
   if (req === 'server') return { key: 'server', cap: AI_CALLS_PER_HOUR };
+  /* A reading the server starts on an owner's behalf the moment their layer is
+     added. Nobody is holding a page open, but it is theirs, so it comes out of
+     their account's hour exactly as it did when their browser started it. */
+  if (req && typeof req === 'object' && req.payer) {
+    return { key: 'acct:' + req.payer, cap: AI_CALLS_PER_HOUR };
+  }
   const session = auth.sessionFromReq(req);
   if (session && session.email) return { key: 'acct:' + session.email, cap: AI_CALLS_PER_HOUR };
   return { key: 'ip:' + clientIp(req), cap: AI_CALLS_PER_HOUR_IP };
@@ -2220,17 +2240,21 @@ function aiTake(req) {
    questions mode stopped guessing at the places it could not read, that now
    means the reading is simply not saved. Nothing is invented to fill the gap
    and nothing half-done is kept. */
-function aiCaller(req, perReading) {
+function aiCaller(req, perReading, stub) {
   const cap = perReading || AI_CALLS_PER_READING;
   let spent = 0;
-  return function (model, prompt, schema, o) {
+  const call = function (model, prompt, schema, o) {
     if (spent >= cap) throw new Error('this reading has used its share of the model');
     if (!aiTake(req)) throw new Error('too many readings in the last hour — try again shortly');
     spent += 1;
+    // the stand-in reading (FAKE_READING) pays the same way and asks nobody
+    if (stub) return stub(model, prompt, schema, o);
     if (o && o.think) return geminiJSONDeep(model, prompt, schema);
     if (o && o.file) return geminiJSONFile(model, prompt, schema);
     return geminiJSON(model, prompt, schema);
   };
+  call.spent = () => spent;
+  return call;
 }
 
 // a single call, budgeted: for the one-shot uses that are not a whole reading
@@ -3775,8 +3799,8 @@ const questionsOn = (layer, rows) => RULES.settledQuestions(layer, rows);
    read its places, work out what they can be asked, answer it, and write the
    result. Returns what happened rather than throwing on a reading that simply
    had nothing to find — only a fault throws. */
-async function runReading(dataset, layerId, afresh) {
-  if (!ai) throw refuse(503, 'there is no model configured');
+async function runReading(dataset, layerId, afresh, opts = {}) {
+  if (!ai && !FAKE_READING) throw refuse(503, 'there is no model configured');
   // readManifest hands back the base, the org's overlay and the directory
   const m = imports.readManifest(dataset);
   if (!m) throw refuse(404, 'unknown atlas');
@@ -3801,14 +3825,28 @@ async function runReading(dataset, layerId, afresh) {
      two places: the owner's own "Ask again" button, which asks them to confirm
      first because it throws the settled questions away, and the operator's
      /admin/reread. Everything else reads with the questions already settled. */
-  const asked = afresh ? [] : questionsOn(layer, rows);
+  /* A layer put back from rows that never carried its answers has lost them
+     from its own record; the server's copy of what it was last asked
+     (opts.keep) stands in, so the keys on the map do not change under it. */
+  const settled = questionsOn(layer, rows);
+  const asked = afresh ? [] : (settled.length ? settled : (opts.keep || []));
   const inst = reg.getInstance(dataset);
-  const ask = (missed) => enrich.enrichRows({
+  // the version of the places this reading is about, so it can tell if they move under it
+  const sigAtStart = signatureOf(rows, RULES.isAnswerColumn);
+  // charged to the owner when the server reads on their behalf (questions-queue.js)
+  const payer = opts.payer ? { payer: opts.payer } : 'server';
+  const callers = [];
+  const caller = () => {
+    const c = aiCaller(payer, null, FAKE_READING ? async () => ({}) : null);
+    callers.push(c);
+    return c;
+  };
+  const ask = (missed) => FAKE_READING ? fakeReading(rows, fields, asked, caller()) : enrich.enrichRows({
     rows, fields, title: (inst && inst.title) || dataset,
     mode: 'questions',
     keepQuestions: asked,
     seedSet: keptCatSet(dataset),
-    callJSON: aiCaller('server'),
+    callJSON: caller(),
     models: { flash: getFlashModel(), flashLite: getFlashLiteModel() },
     missed,
   });
@@ -3896,7 +3934,18 @@ async function runReading(dataset, layerId, afresh) {
   if (out.verdict !== 'questions' || !(out.questions || []).length) {
     return { wrote: false, verdict: out.verdict, unread: out.unread || 0,
              read: out.read, batches: out.batches, trouble: out.trouble || '',
-             note: out.note || '' };
+             note: out.note || '', sig: sigAtStart, calls: spentBy(callers) };
+  }
+  /* Somebody put new places on this layer while it was being read. Writing now
+     would lay these answers over the old places and throw their change away, so
+     nothing is written; the newer version is read in its own turn. */
+  if (opts.guard) {
+    let now = null;
+    try {
+      const again = JSON.parse(fs.readFileSync(file, 'utf8'));
+      now = signatureOf(((again && again.features) || []).map((f) => f.properties || {}), RULES.isAnswerColumn);
+    } catch { /* gone: refused below as changed */ }
+    if (now !== sigAtStart) return { wrote: false, verdict: 'changed', sig: sigAtStart, calls: spentBy(callers) };
   }
   await writeReading({
     dataset, layerId, rows, questions: out.questions,
@@ -3908,13 +3957,247 @@ async function runReading(dataset, layerId, afresh) {
     reading: out.reading || '', facts: out.facts || [],
   });
   return {
-    wrote: true, verdict: 'questions', places: rows.length,
+    wrote: true, verdict: 'questions', places: rows.length, sig: sigAtStart, calls: spentBy(callers),
     questions: out.questions.map((q) => ({
       question: q.question,
       answered: (q.categories || []).filter((c) => c && c !== 'other').length,
       withWords: (q.why || []).filter((w) => w && w.length).length,
     })),
   };
+}
+
+/* The stand-in reading (see FAKE_READING). Same shape as enrich.enrichRows
+   gives back, so everything after it — the shaping, the write, the keys on the
+   map — is the real thing. Two questions: how much was written about each
+   place, and whether it mentions water. A layer that already settled on
+   questions gets those back, answered the same simple way. */
+async function fakeReading(rows, fields, asked, pay) {
+  // long enough to watch the owner's note come and go; ATLAS_FAKE_READING_MS changes it
+  const wait = Number(process.env.ATLAS_FAKE_READING_MS || 15000);
+  if (wait > 0) await new Promise((r) => setTimeout(r, Math.min(wait, 120000)));
+  // one call for finding the questions, one for answering them, both paid for
+  // out of the same allowance a real reading would use
+  await pay('fake', 'find', null, {});
+  await pay('fake', 'answer', null, {});
+  const textOf = (r) => fields.map((f) => String((r && r[f]) || '')).join(' ').trim();
+  const firstWords = (t) => t.split(/\s+/).filter(Boolean).slice(0, 2);
+  const LONG = 'A few lines', SHORT = 'A short note', WATER = 'Mentions water';
+  const wet = /\b(water|river|lake|pond|well|stream|tank)s?\b/i;
+  const q1 = {
+    question: (asked[0] && asked[0].question) || 'How much is written about this place?',
+    counts: [{ name: LONG, definition: 'forty letters or more' }, { name: SHORT, definition: 'fewer than forty letters' }],
+    categories: rows.map((r) => textOf(r).length >= 40 ? LONG : SHORT),
+    why: rows.map((r) => firstWords(textOf(r))),
+  };
+  const q2 = {
+    question: (asked[1] && asked[1].question) || 'Does it mention water?',
+    counts: [{ name: WATER, definition: 'names a river, lake, pond, well or the like' }],
+    categories: rows.map((r) => wet.test(textOf(r)) ? WATER : 'other'),
+    why: rows.map((r) => { const m = textOf(r).match(wet); return m ? [m[0]] : []; }),
+  };
+  const questions = [q1, q2].map((q) => {
+    const answered = q.categories.filter((c) => c && c !== 'other').length;
+    q.counts = q.counts.map((c) => Object.assign({}, c, { count: q.categories.filter((x) => x === c.name).length }));
+    q.coverage = rows.length ? answered / rows.length : 0;
+    return q;
+  }).filter((q) => q.categories.some((c) => c && c !== 'other'));
+  if (!questions.length) return { verdict: 'no_clear_questions', note: 'nothing written to count' };
+  return { verdict: 'questions', questions, reading: 'Made up locally for checking, not by a model.', facts: [] };
+}
+
+/* "Asked, and nothing found", written onto the layer so it is not asked again.
+   What the owner's browser used to do (rememberNothingHere), done here now. */
+async function writeNothingHere(dataset, layer, rows) {
+  const out = RULES.withoutAnswers(rows);
+  const ing = await ingestLayer({
+    dataset, replaceLayerId: layer.id, filename: layer.label || layer.id,
+    patternsNone: true,
+    schema: RULES.schemaFor(out),
+    rows: out,
+    meta: { sourceName: layer.source, rowCount: out.length },
+  }, 'server');
+  if (!ing || !ing.importId) throw refuse(500, 'the layer could not be prepared');
+  return commitLayer({ importId: ing.importId, dataset }, 'server', { fromReading: true });
+}
+
+const spentBy = (callers) => callers.reduce((n, c) => n + c.spent(), 0);
+
+/* A contributed layer's places, as the reading would see them. */
+function layerAndRows(dataset, layerId) {
+  const m = imports.readManifest(dataset);
+  if (!m) return null;
+  const layer = ((m.local && m.local.layers) || []).find((L) => L.id === layerId);
+  if (!layer || !layer.source) return null;
+  const file = path.join(m.dir, layer.source);
+  if (!fs.existsSync(file)) return null;
+  const gj = JSON.parse(fs.readFileSync(file, 'utf8'));
+  return { layer, rows: ((gj && gj.features) || []).map((f) => f.properties || {}) };
+}
+
+/* The answers now on a layer, copied beside the list (questions-queue.js says
+   why). Only the answer columns and the question wording travel. */
+function keepAnswers(dataset, layer, rows, sig) {
+  const cols = Object.keys(rows[0] || {}).filter((k) => RULES.isAnswerColumn(k));
+  if (!cols.length) return;
+  const only = (o) => {
+    const out = {};
+    for (const k of Object.keys(o || {})) if (RULES.isQuestionColumn(k)) out[k] = o[k];
+    return out;
+  };
+  QUESTIONS.saveAnswers(dataset, layer.id, {
+    sig, keyLabels: only(layer.keyLabels), keyKinds: only(layer.keyKinds),
+    reading: layer.reading || '', facts: layer.facts || [],
+    answers: rows.map((r) => { const a = {}; for (const c of cols) if (r[c] !== undefined) a[c] = r[c]; return a; }),
+  });
+}
+
+/* The questions a layer was last asked, from that copy, for a layer that has
+   lost its own. */
+function keptQuestions(kept) {
+  if (!kept) return [];
+  return Object.keys(kept.keyLabels || {}).filter((c) => RULES.isQuestionColumn(c))
+    .sort((a, b) => Number(a.split('_')[1]) - Number(b.split('_')[1]))
+    .map((c) => ({ question: kept.keyLabels[c], kinds: (kept.keyKinds || {})[c] || [] }))
+    .filter((q) => q.question && q.kinds.length);
+}
+
+/* Put the kept answers back on the same places. No model, no cost. */
+async function restoreAnswers(dataset, layerId) {
+  const got = layerAndRows(dataset, layerId);
+  const kept = QUESTIONS.loadAnswers(dataset, layerId);
+  if (!got || !kept) return false;
+  const sig = signatureOf(got.rows, RULES.isAnswerColumn);
+  if (kept.sig !== sig || (kept.answers || []).length !== got.rows.length) return false;
+  const out = RULES.withoutAnswers(got.rows).map((r, i) => Object.assign(r, kept.answers[i]));
+  const ing = await ingestLayer({
+    dataset, replaceLayerId: layerId, filename: got.layer.label || layerId,
+    schema: RULES.schemaFor(out),
+    rows: out,
+    keyLabels: kept.keyLabels, keyKinds: kept.keyKinds,
+    reading: kept.reading || undefined,
+    facts: (kept.facts || []).length ? kept.facts : undefined,
+    meta: { sourceName: got.layer.source, rowCount: out.length },
+  }, 'server');
+  if (!ing || !ing.importId) throw refuse(500, 'the layer could not be prepared');
+  commitLayer({ importId: ing.importId, dataset }, 'server', { fromReading: true });
+  return true;
+}
+
+/* Should this layer be read, now that it has just been written? The same tests
+   the owner's browser used to make before it started a reading (patternsDoor in
+   owner.js), plus the one it could never make: has THIS version of the places
+   been read already.
+
+     - points only, contributed, with places, with words worth reading
+     - not the operator's own atlas (NEVER_READ)
+     - no model key: nothing (as before — nothing is invented without one)
+     - a layer that already carries questions, or was already found to have
+       none, and that the list has never seen: it was read in a browser before
+       this existed. Noted as read and left exactly as it is.
+     - the reading's own write: the version it wrote is noted as read */
+function considerReading(dataset, layerId, opts) {
+  if (NEVER_READ.has(dataset)) return 'never';
+  const got = layerAndRows(dataset, layerId);
+  if (!got) return 'no layer';
+  const { layer, rows } = got;
+  if (layer.type !== 'marker') return 'not points';
+  if (!rows.length || !wordColumnsOf(rows).length) return 'no words';
+  const sig = signatureOf(rows, RULES.isAnswerColumn);
+  const hasQuestions = questionsOn(layer, rows).length > 0 ||
+    Object.keys(rows[0] || {}).some((k) => RULES.isQuestionColumn(k));
+  if (opts && opts.fromReading) {
+    QUESTIONS.remember(dataset, layerId, { sig, state: layer.patternsNone ? 'none' : 'done', reason: '' });
+    keepAnswers(dataset, layer, rows, sig);
+    return 'written by a reading';
+  }
+  const had = QUESTIONS.get(dataset, layerId);
+  if (had && had.sig === sig) {
+    if (hasQuestions || layer.patternsNone) return 'already read';
+    /* The same places, put back without their answers (a repair, the same file
+       again). Their answers are copied back on; nothing is read. Only if that
+       copy is missing — it is kept for every layer read since this list began,
+       so that means lost — are they read again, because leaving a layer that
+       had questions with none and no way back is worse than one reading. */
+    if (had.state === 'done') {
+      QUESTIONS.offer({ dataset, layerId, sig, restore: true });
+      return 'answers put back';
+    }
+    return 'already read';
+  }
+  if (!had && (hasQuestions || layer.patternsNone)) {
+    QUESTIONS.remember(dataset, layerId, { sig, state: layer.patternsNone ? 'none' : 'done', reason: '', adopted: true });
+    keepAnswers(dataset, layer, rows, sig);
+    return 'read before';
+  }
+  if (!ai && !FAKE_READING) return 'no model';
+  const inst = reg.getInstance(dataset);
+  const payer = (inst && inst.email) || '';
+  return QUESTIONS.offer({ dataset, layerId, sig, payer }) ? 'queued' : 'not queued';
+}
+
+/* One reading off the list. Answers what to write on the list about it. */
+async function readingJob(job) {
+  const { dataset, layerId } = job;
+  const where = dataset + '/' + layerId;
+  // no model key: nothing is invented without one, and nothing is said about it
+  if (job.restore) {
+    try {
+      if (await restoreAnswers(dataset, layerId)) {
+        console.log('[questions] ' + where + ' — the same places again: answers put back, nothing read');
+        const now = layerAndRows(dataset, layerId);
+        return { state: 'done', reason: '', calls: 0, restore: false,
+          sig: now ? signatureOf(now.rows, RULES.isAnswerColumn) : job.sig };
+      }
+    } catch (e) {
+      return { state: 'failed', restore: false, reason: ('the answers could not be put back — ' + (e && e.message)).slice(0, 160) };
+    }
+    // the copy no longer fits these places: read them instead, as below
+  }
+  if (!ai && !FAKE_READING) return { state: 'skipped', reason: 'no model on this server' };
+  console.log('[questions] reading ' + where);
+  let out;
+  try {
+    out = await runReading(dataset, layerId, false, { payer: job.payer || '', guard: true,
+      keep: keptQuestions(QUESTIONS.loadAnswers(dataset, layerId)) });
+  } catch (e) {
+    console.warn('[questions] ' + where + ' — ' + (e && e.message));
+    return { state: 'failed', reason: String((e && e.message) || 'something went wrong').slice(0, 160) };
+  }
+  if (out.wrote) {
+    console.log('[questions] ' + where + ' — ' + out.questions.length + ' question' +
+      (out.questions.length === 1 ? '' : 's') + ' written');
+    // the version on disk now, answers and all; its fingerprint is the one noted
+    const now = layerAndRows(dataset, layerId);
+    return { state: 'done', reason: '', calls: out.calls,
+      sig: now ? signatureOf(now.rows, RULES.isAnswerColumn) : out.sig };
+  }
+  if (out.verdict === 'changed') {
+    return { state: 'failed', reason: 'the places changed while they were being read' };
+  }
+  if (cannotReach(out.verdict)) {
+    /* The model could not be reached. That already has a patient list of its
+       own — tried again on a backing-off timer, and the owner written to when it
+       lands — so it is handed there rather than retried here. */
+    const inst = reg.getInstance(dataset);
+    owed.owe({ dataset, layerId, email: (inst && inst.email) || '',
+      kind: troubleKind(out.trouble), trouble: out.trouble || '' });
+    return { state: 'failed', unreachable: true,
+      reason: ('the AI could not be reached' + (out.trouble ? ' — ' + out.trouble : '')).slice(0, 160) };
+  }
+  if (out.verdict === 'no_clear_questions') {
+    const got = layerAndRows(dataset, layerId);
+    // a layer answering questions it settled on keeps them; only an unasked one is marked
+    if (got && !questionsOn(got.layer, got.rows).length) {
+      try { await writeNothingHere(dataset, got.layer, got.rows); } catch (e) {
+        return { state: 'failed', reason: 'nothing found, and that could not be noted — ' + (e && e.message) };
+      }
+      const now = layerAndRows(dataset, layerId);
+      return { state: 'none', reason: (out.note || 'no clear question').slice(0, 160),
+        sig: now ? signatureOf(now.rows, RULES.isAnswerColumn) : out.sig };
+    }
+    return { state: 'none', reason: (out.note || 'no clear question').slice(0, 160) };
+  }
+  return { state: 'failed', reason: ('no questions could be found (' + out.verdict + ')').slice(0, 160) };
 }
 
 /* Coming back to a reading that could not be finished.
@@ -4042,13 +4325,20 @@ export function startBackgroundWork() {
     }
   }, 5 * 60 * 1000).unref();
   setInterval(sweepOwed, RETRY_EVERY).unref();
+  /* Finding the questions in layers as they are added. Whatever was waiting,
+     or was being read when the server last stopped, starts moving again. */
+  QUESTIONS.start(readingJob, { recheck: (d, l) => considerReading(d, l) });
+  // and once a minute, so a reading put on the list from outside (the one-off
+  // deploy/queue-question-readings.mjs) is picked up without a restart
+  setInterval(() => QUESTIONS.pump(), 60 * 1000).unref();
   const waiting = owed.all().length;
   if (waiting) console.log('[owed] ' + waiting + ' reading' + (waiting === 1 ? '' : 's') + ' still owed');
 }
 
-/* The operator's way to start a reading by hand. It exists because the reading
-   otherwise only begins when an owner opens their atlas signed in, which is no
-   use for one that failed while nobody was there. */
+/* The operator's way to start a reading by hand. The reading otherwise begins
+   on its own when a layer is added (considerReading), once per version of its
+   places; this is for one that needs reading again regardless — one that
+   failed, or one that needs a fresh set (afresh). */
 router.post('/admin/reread', async (req, res) => {
   if (!auth.isAdmin(req) && !auth.isAdminSession(req)) {
     return res.status(404).json({ error: 'not found' });
@@ -4097,7 +4387,8 @@ async function writeReading({ dataset, layerId, rows, questions, label, source, 
     meta: { sourceName: source, rowCount: out.length },
   }, 'server');
   if (!ing || !ing.importId) throw refuse(500, 'the layer could not be prepared');
-  return commitLayer({ importId: ing.importId, dataset }, 'server');
+  // a reading's own write: it adds answers, it does not ask for another reading
+  return commitLayer({ importId: ing.importId, dataset }, 'server', { fromReading: true });
 }
 
 router.post('/layers/ingest', async (req, res) => {
@@ -4920,7 +5211,7 @@ function refuse(status, message, extra) {
 /* Write a prepared layer onto an atlas. `who` is the caller for the permission
    check: the request, or the literal 'server' for work the server is finishing
    on an owner's behalf — a retry of a reading it already accepted from them. */
-function commitLayer({ importId, dataset }, who) {
+function commitLayer({ importId, dataset }, who, opts) {
   const session = imports.getImport(String(importId || ''));
   if (!session) throw refuse(404, 'import expired or unknown');
 
@@ -4987,6 +5278,15 @@ function commitLayer({ importId, dataset }, who) {
       imports.keepForRepair(session, layerId || pointsLayerId, open, [layerId, pointsLayerId]);
     } else {
       imports.discardImport(session.id);
+    }
+    /* Every way a layer reaches an atlas comes through here — the wizard's
+       hand-off, adding data, a re-commit, a repair — so this is where its
+       questions are asked for. Never allowed to stop the commit itself. */
+    for (const id of [layerId, pointsLayerId]) {
+      if (!id) continue;
+      try { considerReading(session.dataset, id, opts); } catch (e) {
+        console.warn('[questions] could not look at ' + session.dataset + '/' + id + ' — ' + (e && e.message));
+      }
     }
     return { ok: true, layerId: layerId || pointsLayerId, pointsLayerId, dataset: session.dataset };
   } catch (e) {
@@ -5207,8 +5507,11 @@ router.get('/layers/list', (req, res) => {
   let m = null;
   try { m = imports.readManifest(dataset); } catch { /* dataset dir missing */ }
   const who = auth.sessionFromReq(req);
+  // where the server has got to finding each layer's questions (see questions-queue.js)
+  const reading = QUESTIONS.forDataset(dataset);
   const layers = ((m && m.local && m.local.layers) || []).map((l) => ({
     id: l.id, label: l.label || l.id,
+    questions: reading[l.id] || null,
     addedBy: l.addedBy ? { email: l.addedBy.email, name: l.addedBy.name || '', org: l.addedBy.org || '' } : null,
     addedAt: l.addedAt || null,
     /* Two different questions, which were one flag for too long.
@@ -5502,6 +5805,9 @@ router.post('/layers/remove', (req, res) => {
      owner: taking it off takes both layers. */
   const partner = layer.sameFileAs && ((m.local.layers || []).find((l) => l.id === layer.sameFileAs));
   const also = partner && imports.removeLayer(dataset, partner.id) ? [partner.id] : [];
+  // a layer that is gone has nothing left to be read
+  QUESTIONS.forget(dataset, layerId);
+  for (const id of also) QUESTIONS.forget(dataset, id);
   res.json({ ok: gone, also });
 });
 

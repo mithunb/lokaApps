@@ -36,9 +36,6 @@
   var INST = null;         // the instance record: title, status, region, collaborators
   var MINE = [];           // GET /layers/list — the authority on which layers exist
   var MOUNTED = false;
-  // layers whose reading is in flight this visit — a row is redrawn on every
-  // toggle, and without this each redraw would start the reading again
-  var RUNNING = {};
 
   function api(path, opts) {
     opts = opts || {};
@@ -187,10 +184,10 @@
      readings of the same 66 places are sitting on disk to prove it. Offering
      that choice would be asking a question we already know the answer to.
 
-     The loop runs on endpoints that already exist: the layer's own file gives
-     the rows, /layers/enrich proposes, keeping sends the table back with one
-     new column and commits it in place. The column is the point — once it is
-     in the data the viewer offers it as a key of its own accord. */
+     The reading itself runs on the server, started when the layer is added
+     (questions-queue.js); this row only reports on it. The column is the
+     point — once it is in the data the viewer offers it as a key of its own
+     accord. */
 
   /* Which columns hold words worth reading — reading-rules.js has the rule and
      the reasons. The viewer holds places as features, so this hands their
@@ -210,7 +207,7 @@
 
     var wrap = el("div", "own-door");
     /* Directly under the layer's keys, not at the foot of the box. The reading
-       below runs for half a minute or more after an atlas first opens, and
+       runs on the server for half a minute or more after a layer is added, and
        its keys arrive when it lands; said at the bottom, under the list of
        places, an owner saw one key where there would soon be five and nothing
        saying more were on the way. */
@@ -269,193 +266,79 @@
 
     var cols = wordColumns(feats);
     if (!cols.length) return;            // nothing written here to read
-    askQuestions(L, feats, false, wrap);
+    showReading(L, feats, cols, wrap);
   }
 
-  /* Read these places and put the answers on the layer.
+  /* The questions are found on the server now, not here.
 
-     `afresh` decides the one thing that matters here: whether the questions
-     this layer already settled on are handed back to be answered again, or
-     thrown away so a new set can be found. Everything else is the same either
-     way, which is why it is one function and not two.
+     They used to be found by this page: the reading started the first time
+     somebody who may change the layer opened the atlas, ran for half a minute
+     or more, and was lost if they left before it landed. A visitor never
+     started it at all. Now the server starts it the moment a layer is added
+     (questions-queue.js), once per version of the places, and this page only
+     says where it has got to — which GET /layers/list carries per layer — and
+     puts the questions on the map when they land, without a reload.
 
-     Nothing here passes it true any more. Throwing a settled set away was a
-     door an owner could open, and it is closed — a question is put right where
-     it sits instead. The operator's own route can still ask for a fresh set,
-     for an atlas that needs one, and that is the only way in now. */
-  function askQuestions(L, feats, afresh, host) {
-    var cols = wordColumns(feats);
-    if (!cols.length) return;
-    var wrap = host || document.createElement("div");
+     Nothing here can start a reading, so a reading cannot run twice. */
+  function readingOf(id) {
+    var m = mineFor(id);
+    return (m && m.questions) || null;
+  }
+  function busyReading(q) { return !!q && (q.state === "queued" || q.state === "running"); }
 
-    /* No press. The questions a place can answer are the same questions
-       everywhere, so asking permission to ask them was ceremony — the reading
-       starts the moment somebody who may change this layer opens the atlas,
-       and says what it is doing while it runs rather than before.
-
-       Once only: the guard is the answered columns themselves, which exist as
-       soon as the reading lands, so the next visit finds them and does nothing.
-       RUNNING stops one layer starting twice inside a visit, because its row is
-       redrawn every time the layer is switched or the panel rebuilt. */
-    var panel = el("div", "own-door-body");
-    wrap.appendChild(panel);
-    /* What the reading is doing lives here, not in the panel: the row is
-       redrawn while it runs (the map reboots, a layer is switched), and a
-       redrawn row used to come back saying it was still reading long after
-       the reading had stopped, because its answer went to the panel it had
-       replaced. Every drawing of the row reads the same record. */
-    var run = RUNNING[L.id];
-    var fresh = !run;
-    if (fresh) {
-      run = RUNNING[L.id] = {
-        busy: true, text: "", warn: false, views: [],
-        cost: "Reading " + esc(cols.slice(0, 3).join(", ")) + " across " + feats.length + " places.",
-      };
+  function showReading(L, feats, cols, wrap) {
+    var q = readingOf(L.id);
+    if (!q) return;
+    if (busyReading(q)) {
+      // the one line an owner needs while it runs: more is coming, and when
+      wrap.appendChild(el("p", "own-note",
+        "Finding questions in your data\u2026 more will appear here in about half a minute."));
+      wrap.appendChild(el("p", "own-note own-door-cost",
+        "Reading " + esc(cols.slice(0, 3).join(", ")) + " across " + feats.length + " places."));
+      watchReadings();
+      return;
     }
-    // the one line an owner needs while it runs: more is coming, and when
-    var work = el("p", "own-note",
-      "Finding questions in your data\u2026 more will appear here in about half a minute. " +
-      "Keep this page open until they do.");
-    var cost = el("p", "own-note own-door-cost", run.cost);
-    var msg = el("p", "own-note");
-    panel.appendChild(work);
-    panel.appendChild(cost);
-    panel.appendChild(msg);
-    run.views.push({ work: work, cost: cost, msg: msg });
-    function paint(v) {
-      v.work.hidden = v.cost.hidden = !run.busy;
-      v.msg.hidden = !run.text; v.msg.textContent = run.text || "";
-      v.msg.classList.toggle("warnish", !!run.warn);
+    if (q.state === "failed") {
+      /* Two different answers, and they should not share one sentence. "The AI
+         could not be reached" is a fault on our side, and the owner should not
+         be left thinking their data was the problem. */
+      wrap.appendChild(el("p", "own-note warnish", q.unreachable
+        ? "The AI that reads your places could not be reached, so nothing was added. " +
+          "Your data is untouched. This will be tried again on its own, and " +
+          "you will get an email when it is done."
+        : "No questions could be found just now. Nothing was added."));
     }
-    paint(run.views[run.views.length - 1]);
-    if (!fresh) return;
-    // a warning is where a reading ends: nothing more is coming this visit
-    function say(t, warn) {
-      run.text = t || ""; run.warn = !!warn;
-      if (warn) run.busy = false;
-      run.views.forEach(paint);
-    }
-
-    (function () {
-        fetch(window.LokaAtlas.fileUrl(L))
-          .then(function (r) { return r.json(); })
-          .then(function (d) {
-            var rows = (d.features || []).map(function (f) { return f.properties || {}; });
-            return api("layers/enrich", { method: "POST", body: {
-              dataset: SLUG, layerId: L.id, rows: rows, fields: cols, mode: "questions",
-              /* The questions this layer already settled on. Sent back so a
-                 reading after new places are added answers the same questions
-                 rather than inventing a fresh set — the keys on a map somebody
-                 has linked to should not move under them. */
-              keepQuestions: afresh ? [] : settledQuestions(L, rows),
-              title: (window.LokaAtlas.manifest && window.LokaAtlas.manifest.title) || "",
-            } }).then(function (r) { return { r: r, rows: rows }; });
-          })
-          .then(function (out) {
-            var qs = out.r.questions || [];
-            if (out.r.verdict !== "questions" || !qs.length) {
-              /* Three different answers, and they used to share one sentence.
-                 "These places have nothing to be asked" is a finding. "The AI
-                 could not be reached" is a fault on our side, and the person
-                 should not be left thinking their data was the problem. */
-              /* The promise is kept by the waiting list on the server: the
-                 reading is written down, tried again on a backing-off timer,
-                 and whoever asked is written to when it lands or when it is
-                 given up on. So the line can say so again. */
-              if (out.r.verdict === "unread") {
-                var read = out.r.read || 0, all = out.r.batches || 0;
-                say("The AI that reads your places could not be reached" +
-                  (read && read < all
-                    ? " part-way through, so nothing was kept — reading half a set would leave the rest looking like places with nothing to say."
-                    : ", so nothing was added.") +
-                  " Your data is untouched. This will be tried again on its own, and " +
-                  "you will get an email when it is done.", true);
-                return;
-              }
-              say(out.r.verdict === "no_clear_questions"
-                ? "These places do not clearly answer a question" +
-                  (out.r.note ? ": " + out.r.note : ".") + " Nothing was added."
-                : "No questions could be found just now. Nothing was added.", true);
-              // remember a considered "nothing here" so it is not rediscovered on
-              // every visit; a passing failure is not remembered, only a real no
-              if (out.r.verdict === "no_clear_questions") rememberNothingHere(L, out.rows);
-              return;
-            }
-            say("Adding " + qs.length + (qs.length === 1 ? " question" : " questions") + "…");
-            // anything that arrives here was read whole; a short reading never
-            // reaches this point, it is refused above and nothing is written
-            return keepQuestions(L, out.rows, qs).catch(function (e) {
-              say(errMsg(e), true);
-            });
-          })
-          .catch(function (e) { say(errMsg(e), true); });
-    }());
   }
 
-  /* Every question is kept. There is no asking: the questions a place can answer
-     are universal, so the owner is not made to approve each one — they arrive as
-     keys, each carrying the share of places it can speak for, and any that is
-     not wanted is simply left switched off.
-
-     One column per question, pattern_1, pattern_2 …, with the question itself
-     stored as the key's name so a reader meets "What can you do here?" rather
-     than a column named after how it was made. */
-  /* Writes the layer back unchanged but for one mark on it: asked, nothing
-     found. One reading's cost once, instead of a small cost for ever. */
-  function rememberNothingHere(L, rows) {
-    /* Cleared through the shared rule, which also drops any previous answer.
-       This used to clear only the engine's own column, so a layer that had once
-       been read and now reads as nothing would have kept its old answers —
-       the same omission that produced "Pattern 4", one path over. */
-    var out = RULES.withoutAnswers(rows);
-    return api("layers/ingest", { method: "POST", body: {
-      dataset: SLUG, replaceLayerId: L.id, filename: L.label || L.id,
-      patternsNone: true,
-      schema: RULES.schemaFor(out),
-      rows: out,
-      meta: { sourceName: L.source, rowCount: out.length },
-    } })
-      .then(function (ing) {
-        return api("layers/commit", { method: "POST", body: { importId: ing.importId, dataset: SLUG } });
-      })
-      .catch(function () { /* not worth troubling anyone with — it retries next visit */ });
-  }
-
-  // what this layer has already been asked, wording and kinds together
-  function settledQuestions(L, rows) {
-    return RULES.settledQuestions(L, rows || []);
-  }
-
-  function keepQuestions(L, rows, questions) {
-    /* The shaping is the shared rule's — one column per question, its words
-       beside it, every previous answer cleared first. All that is left here is
-       sending it, which is the one thing the browser and the server genuinely
-       do differently. */
-    var shaped = RULES.shapeReading(rows, questions);
-    var out = shaped.rows, labels = shaped.keyLabels, kinds = shaped.keyKinds;
-    return api("layers/ingest", { method: "POST", body: {
-      dataset: SLUG, replaceLayerId: L.id, filename: L.label || L.id,
-      schema: shaped.schema,
-      rows: out,
-      keyLabels: labels, keyKinds: kinds,
-      meta: { sourceName: L.source, rowCount: out.length },
-    } })
-      .then(function (ing) {
-        return api("layers/commit", { method: "POST", body: { importId: ing.importId, dataset: SLUG } });
-      })
-      .then(function () {
-        toast(questions.length + (questions.length === 1 ? " question" : " questions") +
-              " added — the map can be coloured by any of them.");
-        // the columns are on the server; this page still holds the copy it
-        // loaded, and which columns may become a key is worked out once as a
-        // layer's data arrives — so the map has to read the layer again
-        return preview(SLUG).then(refreshLayers).then(function () {
-          // the file was rewritten under the same name; say so before rebooting
-          // or the reboot reads the copy the browser already had
-          if (window.LokaAtlas.dataChanged) window.LokaAtlas.dataChanged();
-          if (window.LokaAtlas.reboot) window.LokaAtlas.reboot(SLUG);
+  /* While any layer is being read, ask the server every few seconds how it is
+     going. When one lands, the map reads the layer again so its new keys
+     appear; nothing else on the page is disturbed. */
+  var WATCH = null;
+  var WATCH_EVERY = 5000;
+  function watchReadings() {
+    if (WATCH) return;
+    WATCH = setInterval(function () {
+      var before = {};
+      MINE.forEach(function (m) { if (busyReading(m.questions)) before[m.id] = true; });
+      api("layers/list?dataset=" + encodeURIComponent(SLUG)).then(function (r) {
+        var now = (r && r.layers) || [];
+        var landed = 0, ended = 0;
+        now.forEach(function (m) {
+          if (!before[m.id] || busyReading(m.questions)) return;
+          ended += 1;
+          if (m.questions && (m.questions.state === "done" || m.questions.state === "none")) landed += 1;
         });
-      });
+        if (!now.some(function (m) { return busyReading(m.questions); })) {
+          clearInterval(WATCH); WATCH = null;
+        }
+        if (!ended) return;
+        if (!landed) return refreshLayers();
+        // the file was rewritten under the same name; say so before rebooting
+        // or the reboot reads the copy the browser already had
+        if (window.LokaAtlas.dataChanged) window.LokaAtlas.dataChanged();
+        return preview(SLUG).then(refreshLayers);
+      }).catch(function () { /* a missed look; the next one tries again */ });
+    }, WATCH_EVERY);
   }
 
   function mount(inst) {

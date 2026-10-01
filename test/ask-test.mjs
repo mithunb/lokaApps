@@ -126,8 +126,12 @@ check('the door is gone', /Ask different questions/.test(ownerCode), false);
 check('and so is its confirmation', /"Ask again"/.test(ownerCode), false);
 check('and nothing asks for a fresh set from the map',
   /askQuestions\(L, feats, true\)/.test(owner), false);
-check('the only call left keeps the settled questions',
-  (owner.match(/askQuestions\(L, feats, (true|false)/g) || []), ['askQuestions(L, feats, false']);
+/* The map no longer starts a reading at all: the server reads each layer as
+   it is added (questions-queue.js), always with the settled questions. */
+check('the map starts no reading of its own any more',
+  /askQuestions|layers\/enrich/.test(ownerCode), false);
+check('the server\'s reading keeps the settled questions',
+  /runReading\(dataset, layerId, false, \{ payer: job\.payer \|\| '', guard: true,/.test(server), true);
 check('the operator can still ask for one',
   /b\.afresh === true/.test(server), true);
 check('each step says what it is waiting for',

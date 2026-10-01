@@ -164,12 +164,16 @@ check('outlined when most rows landed, green when under 60% did',
 console.log('\n  5 · questions that are still coming say so');
 check('the note sits under the layer’s keys, not at the foot of the row',
   /var keys = box\.querySelector\("\.key-chips"\);\n\s*if \(keys && keys\.parentNode === box\) box\.insertBefore\(wrap, keys\.nextSibling\);/.test(owner), true);
+/* The reading moved to the server, so "Keep this page open" is no longer true
+   and is gone; the rest of the line stands (server-questions-test has more). */
 check('it says more are coming, and roughly when',
-  /Finding questions in your data\\u2026 more will appear here in about half a minute\. " \+\n\s*"Keep this page open until they do\./.test(owner), true);
+  /"Finding questions in your data\\u2026 more will appear here in about half a minute\."\)/.test(owner), true);
+check('and no longer asks the owner to keep the page open', /Keep this page open until they do/.test(owner), false);
 check('the old wording is gone', /patterns underneath/.test(owner), false);
-check('a redrawn row reads the same record, so it never says "still reading" after the end',
-  /run\.views\.push\(\{ work: work, cost: cost, msg: msg \}\);/.test(owner) &&
-  /if \(warn\) run\.busy = false;\n\s*run\.views\.forEach\(paint\);/.test(owner), true);
+/* The record a redrawn row reads is now the server's, carried on /layers/list,
+   so a redrawn row says what the server says and nothing older. */
+check('a redrawn row reads the server\'s record, so it never says "still reading" after the end',
+  /var q = readingOf\(L\.id\);/.test(owner) && /return \(m && m\.questions\) \|\| null;/.test(owner), true);
 
 console.log('\n  the design notes');
 check('DESIGN.md has the review fixes', /### The setup wizard, review fixes \(October 2026\)/.test(design), true);
