@@ -451,3 +451,39 @@ export function applyFallback(report, answer) {
   }
   return chosen;
 }
+
+/* ---------- points alongside the outlines ----------
+
+   A sheet can name blocks and villages side by side. The blocks join to
+   outlines; the villages have none, and are looked up by name and put on as
+   points. Mithun's rule (October 2026): the points go on ALONGSIDE the
+   outlines, never instead of them. Release 3 had turned the whole layer into
+   points, so every block row that was not also ticked came off the map.
+
+   Given the outline join's report and the rows chosen as points
+   ({ row: { lat, lng } }), this says which rows go on as points — only those
+   the outlines did NOT place — and gives back the report with those rows
+   taken off its lists of rows still needing a place. A row the outlines
+   placed keeps its outline even when it was ticked too: one row, one place.
+   Pure, so it can be checked on paper. */
+export function splitPointRows(report, pointRows) {
+  const rep = report || {};
+  const chosen = pointRows || {};
+  const open = new Set();
+  for (const k of ['unmatched', 'ambiguous', 'skipped']) {
+    for (const e of (rep[k] || [])) if (Number.isInteger(e.row)) open.add(e.row);
+  }
+  const rows = Object.keys(chosen).map(Number)
+    .filter((i) => Number.isInteger(i) && open.has(i) && chosen[i] &&
+      chosen[i].lat != null && chosen[i].lng != null &&
+      Number.isFinite(Number(chosen[i].lat)) && Number.isFinite(Number(chosen[i].lng)))
+    .sort((a, b) => a - b);
+  const asPoint = new Set(rows);
+  const out = { ...rep };
+  for (const k of ['unmatched', 'ambiguous', 'skipped']) {
+    if (Array.isArray(rep[k])) out[k] = rep[k].filter((e) => !asPoint.has(e.row));
+  }
+  out.matched = (rep.matched || 0) + rows.length;
+  out.points = rows.length;
+  return { rows, report: out };
+}

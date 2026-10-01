@@ -1862,10 +1862,16 @@
        also says "Remove" before you are told what it does is a step that
        teaches nothing. The sentence is what this fold is for. */
     confirm.hidden = false;
+    // a file that went on as outlines and points both comes off as one
+    var M0 = window.LokaAtlas && window.LokaAtlas.manifest;
+    var pair = L.sameFileAs && M0 && (M0.layers || []).filter(function (x) { return x.id === L.sameFileAs; })[0];
+    function pairedNote() {
+      return pair ? " “" + (pair.label || pair.id) + "” came from the same file and comes off with it." : "";
+    }
     var n = countPlaces(L);
     confirm.appendChild(el("p", null, "Remove “" + (L.label || L.id) + "”? " +
       (n != null ? "Its " + n + (n === 1 ? " place comes" : " places come") : "Its places come") +
-      " off the map and the public atlas. Your original file stays with you."));
+      " off the map and the public atlas." + pairedNote() + " Your original file stays with you."));
     var rmErr = el("p", "own-err");
     rmErr.setAttribute("role", "alert");
     rmErr.hidden = true;
@@ -1888,7 +1894,7 @@
       api("layers/remove", { method: "POST", body: { dataset: SLUG, layerId: L.id } })
         .then(function () {
           closeFold(false);
-          toast("“" + (L.label || L.id) + "” is off the map.");
+          toast("“" + (L.label || L.id) + "”" + (pair ? " and “" + (pair.label || pair.id) + "” are" : " is") + " off the map.");
           return preview(SLUG).then(refreshLayers);
         })
         .catch(function (e) {

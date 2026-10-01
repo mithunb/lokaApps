@@ -74,15 +74,17 @@ check('under names nothing else has taken', /while \(\(session\.columnsRaw \|\| 
 console.log('\n  a session lives on disk, so what was found is written down');
 /* Without this the second request reads a session that never heard of the
    first, and answers "nothing has been looked up yet" — which it did. */
-check('the lookup saves', /looked, results: locateSoFar\(session\) \}\);/.test(server) &&
-  /imports\.saveImport\(session\);\n  const done = Object\.keys\(held\)\.length;/.test(server), true);
+// October 2026: the lookup can be asked about some rows only (the setup page
+// asks only about the rows no outline holds), so what it answers is filtered to them
+check('the lookup saves', /looked, results: locateSoFar\(session\)\.filter\(\(r\) => want\(r\.row\)\) \}\);/.test(server) &&
+  /imports\.saveImport\(session\);\n  const total = only \? only\.size : rows\.length;/.test(server), true);
 
 console.log('\n  and it is paced and bounded, because the providers are somebody else’s');
 check('twenty fresh lookups per request', /const LOCATE_BATCH = 20;/.test(server), true);
 check('five hundred rows at most', /const LOCATE_MAX_ROWS = 500;/.test(server), true);
 check('a bigger file is turned away with the arithmetic',
   /looking up ' \+ rows\.length \+ ' addresses one at a time would take '/.test(server), true);
-check('asking again resumes rather than restarting', /if \(held\[i\]\) continue;/.test(server), true);
+check('asking again resumes rather than restarting', /if \(held\[i\] \|\| !want\(i\)\) continue;/.test(server), true);
 // release 3: the question is the column plus any context columns (district, state) added to each lookup
 check('a different column is a different question',
   /if \(!session\.located \|\| \(session\.located\.asked \|\| session\.located\.column\) !== asked\) \{\s*session\.located = \{ column: col, asked, byRow: \{\} \};/.test(server), true);

@@ -45,9 +45,11 @@ const ownerCodeLines = owner
   .split('\n').filter((l) => l.trim() && !l.trim().startsWith('//')).length;
 /* 1700 was the ceiling until the Owner menu grew its "Open data layers" sheet
    (September 2026, ~150 lines that are a second use of the wizard's step 3,
-   not a card); the guard above still says the card itself is gone. */
+   not a card); the guard above still says the card itself is gone.
+   2300: raised with Mithun's approval, October 2026, after onboarding
+   release 3 (the first-look card and its follow-ups had reached 1899). */
 check('and the code is still lighter than it was with the card',
-  ownerCodeLines < 1900, true);
+  ownerCodeLines < 2300, true);
 
 console.log('\n  renaming happens on the row');
 check('there is a pencil beside the name', /function addRenamePencil/.test(owner), true);
@@ -99,8 +101,10 @@ check('and the old title-only control is gone', /Call each place by/.test(owner)
 /* The link that used to sit in front of the sentence is gone: the control on
    the row already says Remove, so a second thing also saying Remove before you
    are told what happens teaches nothing. The sentence itself is unchanged. */
+// October 2026: a file that went on as outlines and points both names the
+// other layer between the two sentences (pairedNote); the words are otherwise as they were
 check('the remove is still worded as it was',
-  /off the map and the public atlas\. Your original file stays with you\./.test(owner), true);
+  /off the map and the public atlas\." \+ pairedNote\(\) \+ " Your original file stays with you\./.test(owner), true);
 check('and the sentence is what the fold shows', /confirm\.hidden = false;/.test(owner), true);
 check('with the keyboard on the answer that keeps it',
   /var first = showCard \? host\.querySelector\("input, button"\) : no;/.test(owner), true);

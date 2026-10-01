@@ -200,8 +200,12 @@ export function listImports(dataset) {
 }
 
 // Keep a committed import for its rows that still need a place (see REPAIR_TTL_MS).
-export function keepForRepair(session, layerId, open) {
-  session.repair = { layerId, open, touchedAt: Date.now() };
+// One upload can be two layers — outlines, and the rows put on as points
+// beside them — so the import names every layer it is kept for.
+export function keepForRepair(session, layerId, open, layerIds) {
+  const ids = (Array.isArray(layerIds) ? layerIds : []).filter(Boolean);
+  if (layerId && !ids.includes(layerId)) ids.unshift(layerId);
+  session.repair = { layerId, layerIds: ids, open, touchedAt: Date.now() };
   saveImport(session);
 }
 
@@ -215,13 +219,15 @@ export function repairsFor(dataset) {
   } catch { return []; }
 }
 
-// the layer a kept import was for is no longer on its atlas
+// the layer a kept import was for is no longer on its atlas — every one of
+// them, when the upload went on as outlines and points both
 function layerGone(s) {
   if (!s.repair || !s.dataset) return false;
   let m;
   try { m = readManifest(s.dataset); } catch { return false; }   // unreadable is not gone
   if (!m) return true;
-  return !((m.local && m.local.layers) || []).some((l) => l.id === s.repair.layerId);
+  const ids = (s.repair.layerIds && s.repair.layerIds.length) ? s.repair.layerIds : [s.repair.layerId];
+  return !((m.local && m.local.layers) || []).some((l) => ids.includes(l.id));
 }
 export function sweepImports() {
   try {
@@ -444,6 +450,22 @@ export function relabelLayer(datasetId, layerId, { label, titleColumn, hiddenKey
   return { label: layer.label, titleColumn: (layer.popup && layer.popup.title) || '',
     hiddenKeys: layer.hiddenKeys || [],
     cardColumns: ((layer.popup && layer.popup.fields) || []).map((f) => f.property) };
+}
+
+/* The two layers one upload became — its outlines and the rows put on as
+   points beside them — each name the other, so the owner's list can say they
+   belong together and removing one takes both. One layer alone names nobody. */
+export function pairLayers(datasetId, a, b) {
+  const m = readManifest(datasetId);
+  if (!m || !m.local) return;
+  let changed = false;
+  for (const l of (m.local.layers || [])) {
+    const other = l.id === a ? b : l.id === b ? a : undefined;
+    if (other === undefined || (!a && !b)) continue;
+    if (other && l.sameFileAs !== other) { l.sameFileAs = other; changed = true; }
+    if (!other && l.sameFileAs) { delete l.sameFileAs; changed = true; }
+  }
+  if (changed) fs.writeFileSync(path.join(m.dir, 'manifest.local.json'), JSON.stringify(m.local, null, 1));
 }
 
 export function removeLayer(datasetId, layerId) {

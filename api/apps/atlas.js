@@ -2112,7 +2112,7 @@ router.get('/datasets/:slug/:file', (req, res) => {
 import { GoogleGenAI, Type } from '@google/genai';
 import { getFlashModel, getFlashLiteModel, getEmbedModel, getResolverStatus } from '../lib/models.js';
 import { profileColumns, bestNameColumn } from '../lib/tabular.js';
-import { norm, dice, joinByName, AUTO_ACCEPT, spellings, fallbackRequest, applyFallback } from '../lib/matching.js';
+import { norm, dice, joinByName, AUTO_ACCEPT, spellings, fallbackRequest, applyFallback, splitPointRows } from '../lib/matching.js';
 import { hasDevanagari, skeleton } from '../lib/devanagari.js';
 import { PALETTES, PALETTE_ALIASES, MARKER_COLORS, buildFragment, sanitizeFeatures, justTheLinks } from '../lib/fragment.js';
 import * as imports from '../lib/atlas/imports.js';
@@ -3186,8 +3186,67 @@ function recoverCategoryColumn(rows, columns) {
   return best ? best.name : undefined;
 }
 
+/* ---------- points alongside the outlines ----------
+
+   Rows naming places no outline holds — villages, on an atlas whose finest
+   outlines are blocks — can be looked up by name on OpenStreetMap and put on
+   as points (/layers/locate, then /layers/locate/keep with `alongside`). They
+   go on BESIDE the outlines, never instead of them: a layer here is one kind
+   of shape (the viewer draws a layer as areas or as pins, not both), so one
+   upload becomes two layers — "<name>" with its outlines and "<name> · as
+   points" — sharing the file's columns, card and keys. splitPointRows (in
+   lib/matching.js) says which rows are points: the chosen ones the outlines
+   did not place. Every reading of an import goes through here, so the
+   wizard's numbers, the commit and the fix list can never disagree. */
+const OSM_POINTS_CREDIT = { name: '© OpenStreetMap contributors', note: 'Places found by name', license: 'ODbL' };
+function pointsLabel(label) {
+  return String(label || 'Your data').slice(0, 46).trim() + ' · as points';
+}
+function pointsSession(session, rowIdx) {
+  const taken = new Set(session.columnsRaw || []);
+  const free = (base) => { let c = base, k = 2; while (taken.has(c)) c = base + ' ' + (k++); taken.add(c); return c; };
+  const lat = free('latitude'), lng = free('longitude');
+  const rows = rowIdx.map((i) => ({ ...session.rows[i],
+    [lat]: Number(session.pointRows[i].lat), [lng]: Number(session.pointRows[i].lng) }));
+  return {
+    ...session,
+    rows,
+    strategy: 'coordinates',
+    columnsRaw: (session.columnsRaw || []).concat([lat, lng]),
+    columns: (session.columns || []).filter((c) => c.role !== 'latitude' && c.role !== 'longitude')
+      .concat([{ name: lat, role: 'latitude' }, { name: lng, role: 'longitude' }]),
+    /* Pins, or pins coloured by the same column when the outlines are
+       coloured by kind. Not sized circles: the viewer searches pins and
+       areas, not circles, and a village that cannot be found by its name in
+       the search box is half on the map. */
+    spec: { ...(session.spec || {}), label: pointsLabel(session.spec && session.spec.label),
+      kind: (session.spec && session.spec.kind === 'category' && session.spec.categoryColumn) ? 'category' : 'markers' },
+    replacingLayerId: session.pointsLayerId || null,
+    replacingCredits: null, replacingAttribution: null,
+  };
+}
+function placeAll(session) {
+  const outline = transform(session);
+  if (!session.pointRows || session.strategy !== 'adminJoin') {
+    return { outline, points: null, pointsSession: null, report: outline.report };
+  }
+  const split = splitPointRows(outline.report, session.pointRows);
+  if (!split.rows.length) return { outline, points: null, pointsSession: null, report: split.report };
+  const ps = pointsSession(session, split.rows);
+  const points = transform(ps);
+  // the places were found on OpenStreetMap, and the page says so — once: the
+  // viewer folds credits of the same name together
+  points.frag.stanza.credits = [OSM_POINTS_CREDIT];
+  points.frag.stanza.attribution = OSM_POINTS_CREDIT.name;
+  return { outline, points, pointsSession: ps, report: split.report };
+}
+
 function applyResult(session, withDraft) {
-  const { frag, features, report } = transform(session);
+  const parts = placeAll(session);
+  const { frag } = parts.outline;
+  const report = parts.report;   // with the rows put on as points taken off its lists
+  const features = parts.outline.features;
+  const pointCount = parts.points ? parts.points.features.length : 0;
   let draftId = null;
   if (withDraft) {
     draftId = imports.writeDraft(session.dataset, session.id, frag.stanza,
@@ -3216,7 +3275,8 @@ function applyResult(session, withDraft) {
     matchReport: report,
     fragment: frag.stanza,
     draftDataset: draftId,
-    stats: { features: features.length, kind: frag.kindUsed },
+    // the outlines and the points beside them, both: every row on the map
+    stats: { features: features.length + pointCount, outlines: features.length, points: pointCount, kind: frag.kindUsed },
     duplicateOf: (function () {
       const hit = findLayerByContent(session.dataset, hashRows(session.rows),
         frag.stanza && frag.stanza.label, null);
@@ -4125,10 +4185,17 @@ router.post('/layers/locate', async (req, res) => {
      at least honest. The bias is worth having and it is not the safeguard —
      the safeguard is that a person reads the answers. */
   const opts = locateBias(session);
+  /* Only some rows, when asked: the setup page looks up just the rows no
+     outline holds — the blocks already have their place, and asking the map
+     for them would cost time and could only offer a second place for a row
+     that has one. */
+  const only = Array.isArray(b.rows)
+    ? new Set(b.rows.map(Number).filter((i) => Number.isInteger(i) && i >= 0 && i < rows.length)) : null;
+  const want = (i) => !only || only.has(i);
   let fresh = 0, looked = 0;
   try {
     for (let i = 0; i < rows.length && fresh < LOCATE_BATCH; i++) {
-      if (held[i]) continue;
+      if (held[i] || !want(i)) continue;
       const cell = (c) => String(rows[i][c] == null ? '' : rows[i][c]).trim();
       const name = cell(col);
       if (!name) { held[i] = { query: '', lat: null, lng: null, reason: 'empty' }; continue; }
@@ -4146,9 +4213,10 @@ router.post('/layers/locate', async (req, res) => {
   // A session lives on disk and is re-read on every request, so what was found
   // has to be written down before the next one asks for the rest of it.
   imports.saveImport(session);
-  const done = Object.keys(held).length;
-  res.json({ column: col, total: rows.length, done, more: Math.max(0, rows.length - done),
-             looked, results: locateSoFar(session) });
+  const total = only ? only.size : rows.length;
+  const done = only ? [...only].filter((i) => held[i]).length : Object.keys(held).length;
+  res.json({ column: col, total, done, more: Math.max(0, total - done),
+             looked, results: locateSoFar(session).filter((r) => want(r.row)) });
 });
 
 /* The second request: these rows, the ones somebody looked at and kept.
@@ -4167,6 +4235,31 @@ router.post('/layers/locate/keep', (req, res) => {
 
   const wanted = new Set((Array.isArray(b.rows) ? b.rows : []).map(Number).filter(Number.isFinite));
   const rows = session.rows || [];
+
+  /* Beside the outlines (the setup page, from October 2026): the ticked rows
+     are noted as points and the layer stays a join to outlines, so every row
+     an outline holds keeps it. placeAll makes the second layer from these. */
+  if (b.alongside) {
+    if (session.strategy !== 'adminJoin') {
+      return res.status(400).json({ error: 'these rows are not placed by name, so there are no outlines to keep' });
+    }
+    session.pointRows = {};
+    for (const i of wanted) {
+      const p = held[i];
+      if (!Number.isInteger(i) || i < 0 || i >= rows.length || !p || p.lat == null) continue;
+      session.pointRows[i] = { lat: p.lat, lng: p.lng, label: p.label || '' };
+    }
+    imports.saveImport(session);
+    try {
+      const parts = placeAll(session);
+      return res.json({
+        placed: parts.points ? parts.points.features.length : 0,
+        outlines: parts.outline.features.length, of: rows.length,
+      });
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
+  }
   const free = (base) => {
     let n = base, k = 2;
     while ((session.columnsRaw || []).includes(n)) n = base + ' ' + (k++);
@@ -4794,143 +4887,171 @@ function commitLayer({ importId, dataset }, who) {
   if (!ok) throw refuse(403, 'sign in as this atlas’s owner to change it', { needsAuth: true });
 
   try {
-    const { frag, features, report } = (function () {
-      const t = transform(session);
-      return { frag: t.frag, features: t.features, report: t.report || {} };
-    })();
+    /* Outlines, and — when rows were chosen to go on as points beside them —
+       a second layer of points (placeAll has the rule). */
+    const parts = placeAll(session);
+    const report = parts.report || {};
+    const outFeats = parts.outline.features;
+    const ptFeats = parts.points ? parts.points.features : [];
     /* A layer with nothing on it is not added. It used to be: a sheet of
        village names joined to district outlines placed none of its rows, and
        an empty layer went onto the atlas as if it had worked. */
-    if (!features.length && (session.rows || []).length) {
+    if (!outFeats.length && !ptFeats.length && (session.rows || []).length) {
       throw refuse(400, 'none of the rows found a place on the map, so nothing was added', { nothingPlaced: true });
     }
-    // Same data twice is almost always a mistake (a re-upload, or the wizard's
-    // auto-add racing a manual one). Fingerprint the resulting features and
-    // refuse a second copy — the authoritative check, since every path (bench,
-    // data-first auto-add) commits through here.
-    const contentHash = hashRows(session.rows);
-    const hit = findLayerByContent(session.dataset, contentHash, frag.stanza.label,
-      session.replacingLayerId || frag.stanza.id);
-    if (hit && hit.exact) {
-      throw refuse(409, 'this data is already on the atlas as “' + (hit.layer.label || hit.layer.id) +
-        '” — remove that layer first if you want to add it again',
-        { duplicate: true, layerId: hit.layer.id });
+    let layerId = null, pointsLayerId = null, stanza = null;
+    if (outFeats.length) {
+      const c = commitPart(session, parts.outline.frag, outFeats);
+      layerId = c.layerId; stanza = c.stanza;
+    } else if (session.replacingLayerId && session.pointRows) {
+      // every row the outlines held has since been put on as a point
+      imports.removeLayer(session.dataset, session.replacingLayerId);
     }
-    frag.stanza.contentHash = contentHash;
-    frag.stanza.spec = session.spec || undefined;   // so "edit this layer" can start from it
-    /* The file somebody actually sent. Nothing recorded it before, and the gap
-       showed the day a layer's name went wrong: the name is derived from the
-       rows by the model, the derivation ran again on every reading, and when it
-       drifted there was nothing left saying where the data had come from.
-
-       A name and a provenance are different things and were being asked to be
-       one. The name is for reading; this is for knowing which upload you are
-       looking at — telling two similar layers apart, recognising your own file
-       a month later, and having something true to fall back on.
-
-       Only a real file name is kept. A reading replaces a layer by handing back
-       its own label as the "filename", which is not one, so the extension is
-       what tells them apart. Once set it travels with the layer; it describes
-       the upload, and a re-reading is not a new upload. */
-    const sentAs = String(session.filename || '').trim();
-    const wasAFile = /\.[A-Za-z0-9]{1,8}$/.test(sentAs);
-    const keptFile = session.replacingUploadedAs || '';
-    if (wasAFile) frag.stanza.uploadedAs = sentAs.slice(0, 120);
-    else if (keptFile) frag.stanza.uploadedAs = keptFile;
-    /* Credit the contributor: which org, and which person, added this layer.
-       The session is carried on the import rather than read from a request,
-       because the request may be long gone — a reading retried an hour later
-       still belongs to whoever asked for it, not to nobody. */
-    const by = session.addedBy || null;
-    if (by && by.email) {
-      const acc = reg.getAccount(by.email);
-      frag.stanza.addedBy = { email: by.email, name: (acc && acc.name) || '', org: (acc && acc.org) || '' };
-      frag.stanza.addedAt = Date.now();
+    if (ptFeats.length) {
+      const c = commitPart(parts.pointsSession, parts.points.frag, ptFeats);
+      pointsLayerId = c.layerId; if (!stanza) stanza = c.stanza;
+    } else if (session.pointsLayerId) {
+      // and every point has since been given an outline, or left off
+      imports.removeLayer(session.dataset, session.pointsLayerId);
     }
-    // Editing a committed layer replaces it in place: same id (so the atlas's
-    // manifest identity and any links to it survive a restyle), same source
-    // file, and the original contributor keeps the credit.
-    if (session.replacingLayerId) {
-      frag.stanza.id = session.replacingLayerId;
-      frag.sourceFile = 'user-' + session.replacingLayerId + '.geojson';
-      frag.stanza.source = frag.sourceFile;   // the stanza must name the file we write
-      // Restyling is not contributing. The credit above is unconditional, so a
-      // layer that carried NO addedBy used to acquire the editor's — and since
-      // canRemove keys off addedBy, that quietly handed out removal rights to
-      // whoever last changed a colour. An edit leaves authorship exactly as it
-      // found it, including absent.
-      frag.stanza.addedBy = session.replacingAddedBy || undefined;
-      frag.stanza.addedAt = session.replacingAddedBy
-        ? (session.replacingAddedAt || Date.now()) : undefined;
-      /* And whose shapes these are, when this reading is in no position to say.
-
-         Credits are worked out while rows are joined to borrowed outlines. A
-         layer reopened for editing skips that entirely — its shapes are already
-         there, so there is nothing to join and nothing to notice — and the
-         credits would have been dropped on the floor. Re-committing a layer to
-         fix its wording would quietly have stopped naming the mountain
-         inventory, the reserve register and OpenStreetMap as the source of the
-         outlines it draws, which is the thing those licences actually ask for.
-
-         So a replace keeps what it cannot re-derive. A reading that DID work
-         them out wins, because it has looked at the data and this has not. */
-      if (!frag.stanza.credits && session.replacingCredits && session.replacingCredits.length) {
-        frag.stanza.credits = session.replacingCredits;
-      }
-      if (!frag.stanza.attribution && session.replacingAttribution) {
-        frag.stanza.attribution = session.replacingAttribution;
-      }
-    }
-    if (session.patternsNone) frag.stanza.patternsNone = true;
-    /* Merge, so a name an owner gave some other key survives — but a question's
-       own labels are replaced wholesale, not merged. A fresh set with fewer
-       questions would otherwise leave the old fourth question's name on the
-       layer, naming a key that no longer exists. */
-    const dropStale = (was, now) => {
-      const keep = {};
-      for (const k of Object.keys(was || {})) if (!/^pattern_\d+$/.test(k)) keep[k] = was[k];
-      return Object.assign(keep, now);
-    };
-    if (session.keyLabels && Object.keys(session.keyLabels).length) {
-      frag.stanza.keyLabels = dropStale(frag.stanza.keyLabels, session.keyLabels);
-    }
-    if (session.keyKinds && Object.keys(session.keyKinds).length) {
-      frag.stanza.keyKinds = dropStale(frag.stanza.keyKinds, session.keyKinds);
-    }
-    // this reading's account if it made one, otherwise the one already there
-    const account = session.reading || session.replacingReading;
-    const sorts = (session.facts && session.facts.length) ? session.facts : session.replacingFacts;
-    if (account) frag.stanza.reading = account;
-    if (sorts && sorts.length) frag.stanza.facts = sorts;
-    if (session.replacingHidden && session.replacingHidden.length) {
-      frag.stanza.hiddenKeys = session.replacingHidden;
-    }
-    const out = imports.commitLayer(session.dataset, frag.stanza, frag.sourceFile,
-      { type: 'FeatureCollection', features });
+    imports.pairLayers(session.dataset, layerId, pointsLayerId);
     /* Rows that still need a place — skipped, not found, or put by their
        neighbours and not yet checked — stay fixable from the finished atlas.
-       The import is kept for them, pointed at the layer it just made so the
-       next commit replaces that layer in place (imports.keepForRepair has the
+       The import is kept for them, pointed at the layers it just made so the
+       next commit replaces them in place (imports.keepForRepair has the
        rule for letting it go). Nothing left to look at: it goes, as before. */
-    const open = toFix(report).length;
+    const open = toFix(report, session).length;
     if (open) {
-      session.replacingLayerId = out.layerId;
-      session.replacingAddedBy = session.replacingAddedBy || frag.stanza.addedBy || null;
-      session.replacingAddedAt = session.replacingAddedAt || frag.stanza.addedAt || null;
-      session.replacingUploadedAs = session.replacingUploadedAs || frag.stanza.uploadedAs || '';
-      if (frag.stanza.credits) session.replacingCredits = frag.stanza.credits;
-      if (frag.stanza.attribution) session.replacingAttribution = frag.stanza.attribution;
-      imports.keepForRepair(session, out.layerId, open);
+      // null: the next row given an outline (or a point) starts that layer afresh
+      session.replacingLayerId = layerId;
+      session.pointsLayerId = pointsLayerId;
+      session.replacingAddedBy = session.replacingAddedBy || stanza.addedBy || null;
+      session.replacingAddedAt = session.replacingAddedAt || stanza.addedAt || null;
+      session.replacingUploadedAs = session.replacingUploadedAs || stanza.uploadedAs || '';
+      const os = parts.outline.frag.stanza;
+      if (layerId && os.credits) session.replacingCredits = os.credits;
+      if (layerId && os.attribution) session.replacingAttribution = os.attribution;
+      imports.keepForRepair(session, layerId || pointsLayerId, open, [layerId, pointsLayerId]);
     } else {
       imports.discardImport(session.id);
     }
-    // embed this layer's tag vocabulary for semantic search (non-blocking)
-    embedAndStoreVocab(session.dataset, out.layerId, frag.stanza, features).catch(() => {});
-    return { ok: true, layerId: out.layerId, dataset: session.dataset };
+    return { ok: true, layerId: layerId || pointsLayerId, pointsLayerId, dataset: session.dataset };
   } catch (e) {
     if (e && e.status) throw e;
     throw refuse(400, e.message);
   }
+}
+
+/* One layer onto the atlas: the outlines, or the points beside them. Takes
+   the import (or, for the points, placeAll's copy of it) and what transform
+   made of it, and answers with the layer it wrote. */
+function commitPart(session, frag, features) {
+  // Same data twice is almost always a mistake (a re-upload, or the wizard's
+  // auto-add racing a manual one). Fingerprint the resulting features and
+  // refuse a second copy — the authoritative check, since every path (bench,
+  // data-first auto-add) commits through here.
+  const contentHash = hashRows(session.rows);
+  const hit = findLayerByContent(session.dataset, contentHash, frag.stanza.label,
+    session.replacingLayerId || frag.stanza.id);
+  if (hit && hit.exact) {
+    throw refuse(409, 'this data is already on the atlas as “' + (hit.layer.label || hit.layer.id) +
+      '” — remove that layer first if you want to add it again',
+      { duplicate: true, layerId: hit.layer.id });
+  }
+  frag.stanza.contentHash = contentHash;
+  frag.stanza.spec = session.spec || undefined;   // so "edit this layer" can start from it
+  /* The file somebody actually sent. Nothing recorded it before, and the gap
+     showed the day a layer's name went wrong: the name is derived from the
+     rows by the model, the derivation ran again on every reading, and when it
+     drifted there was nothing left saying where the data had come from.
+
+     A name and a provenance are different things and were being asked to be
+     one. The name is for reading; this is for knowing which upload you are
+     looking at — telling two similar layers apart, recognising your own file
+     a month later, and having something true to fall back on.
+
+     Only a real file name is kept. A reading replaces a layer by handing back
+     its own label as the "filename", which is not one, so the extension is
+     what tells them apart. Once set it travels with the layer; it describes
+     the upload, and a re-reading is not a new upload. */
+  const sentAs = String(session.filename || '').trim();
+  const wasAFile = /\.[A-Za-z0-9]{1,8}$/.test(sentAs);
+  const keptFile = session.replacingUploadedAs || '';
+  if (wasAFile) frag.stanza.uploadedAs = sentAs.slice(0, 120);
+  else if (keptFile) frag.stanza.uploadedAs = keptFile;
+  /* Credit the contributor: which org, and which person, added this layer.
+     The session is carried on the import rather than read from a request,
+     because the request may be long gone — a reading retried an hour later
+     still belongs to whoever asked for it, not to nobody. */
+  const by = session.addedBy || null;
+  if (by && by.email) {
+    const acc = reg.getAccount(by.email);
+    frag.stanza.addedBy = { email: by.email, name: (acc && acc.name) || '', org: (acc && acc.org) || '' };
+    frag.stanza.addedAt = Date.now();
+  }
+  // Editing a committed layer replaces it in place: same id (so the atlas's
+  // manifest identity and any links to it survive a restyle), same source
+  // file, and the original contributor keeps the credit.
+  if (session.replacingLayerId) {
+    frag.stanza.id = session.replacingLayerId;
+    frag.sourceFile = 'user-' + session.replacingLayerId + '.geojson';
+    frag.stanza.source = frag.sourceFile;   // the stanza must name the file we write
+    // Restyling is not contributing. The credit above is unconditional, so a
+    // layer that carried NO addedBy used to acquire the editor's — and since
+    // canRemove keys off addedBy, that quietly handed out removal rights to
+    // whoever last changed a colour. An edit leaves authorship exactly as it
+    // found it, including absent.
+    frag.stanza.addedBy = session.replacingAddedBy || undefined;
+    frag.stanza.addedAt = session.replacingAddedBy
+      ? (session.replacingAddedAt || Date.now()) : undefined;
+    /* And whose shapes these are, when this reading is in no position to say.
+
+       Credits are worked out while rows are joined to borrowed outlines. A
+       layer reopened for editing skips that entirely — its shapes are already
+       there, so there is nothing to join and nothing to notice — and the
+       credits would have been dropped on the floor. Re-committing a layer to
+       fix its wording would quietly have stopped naming the mountain
+       inventory, the reserve register and OpenStreetMap as the source of the
+       outlines it draws, which is the thing those licences actually ask for.
+
+       So a replace keeps what it cannot re-derive. A reading that DID work
+       them out wins, because it has looked at the data and this has not. */
+    if (!frag.stanza.credits && session.replacingCredits && session.replacingCredits.length) {
+      frag.stanza.credits = session.replacingCredits;
+    }
+    if (!frag.stanza.attribution && session.replacingAttribution) {
+      frag.stanza.attribution = session.replacingAttribution;
+    }
+  }
+  if (session.patternsNone) frag.stanza.patternsNone = true;
+  /* Merge, so a name an owner gave some other key survives — but a question's
+     own labels are replaced wholesale, not merged. A fresh set with fewer
+     questions would otherwise leave the old fourth question's name on the
+     layer, naming a key that no longer exists. */
+  const dropStale = (was, now) => {
+    const keep = {};
+    for (const k of Object.keys(was || {})) if (!/^pattern_\d+$/.test(k)) keep[k] = was[k];
+    return Object.assign(keep, now);
+  };
+  if (session.keyLabels && Object.keys(session.keyLabels).length) {
+    frag.stanza.keyLabels = dropStale(frag.stanza.keyLabels, session.keyLabels);
+  }
+  if (session.keyKinds && Object.keys(session.keyKinds).length) {
+    frag.stanza.keyKinds = dropStale(frag.stanza.keyKinds, session.keyKinds);
+  }
+  // this reading's account if it made one, otherwise the one already there
+  const account = session.reading || session.replacingReading;
+  const sorts = (session.facts && session.facts.length) ? session.facts : session.replacingFacts;
+  if (account) frag.stanza.reading = account;
+  if (sorts && sorts.length) frag.stanza.facts = sorts;
+  if (session.replacingHidden && session.replacingHidden.length) {
+    frag.stanza.hiddenKeys = session.replacingHidden;
+  }
+  const out = imports.commitLayer(session.dataset, frag.stanza, frag.sourceFile,
+    { type: 'FeatureCollection', features });
+  // embed this layer's tag vocabulary for semantic search (non-blocking)
+  embedAndStoreVocab(session.dataset, out.layerId, frag.stanza, features).catch(() => {});
+  return { layerId: out.layerId, stanza: frag.stanza };
 }
 
 router.post('/layers/commit', (req, res) => {
@@ -5324,7 +5445,11 @@ router.post('/layers/remove', (req, res) => {
     }
   }
   const gone = imports.removeLayer(dataset, layerId);
-  res.json({ ok: gone });
+  /* One file that went on as outlines and points both is one thing to the
+     owner: taking it off takes both layers. */
+  const partner = layer.sameFileAs && ((m.local.layers || []).find((l) => l.id === layer.sameFileAs));
+  const also = partner && imports.removeLayer(dataset, partner.id) ? [partner.id] : [];
+  res.json({ ok: gone, also });
 });
 
 router.post('/layers/discard', (req, res) => {
@@ -5340,11 +5465,20 @@ router.post('/layers/discard', (req, res) => {
    atlas (commitLayer keeps their import; imports.keepForRepair says for how
    long). The list is worked out afresh from the import each time, so it can
    never disagree with the layer it describes. */
-function toFix(report) {
+function toFix(report, session) {
   const out = [];
+  /* What the map lookup found for a row, when it was looked up and not put
+     on — left unticked, or not offered — so the fix page can offer it as a
+     point without asking the map again. */
+  const held = (session && session.located && session.located.byRow) || {};
+  const foundFor = (row) => {
+    const h = held[row];
+    return h && h.lat != null ? { find: { label: h.label || '', lat: h.lat, lng: h.lng } } : {};
+  };
   const take = (list, kind) => {
     for (const e of (list || [])) {
       out.push({
+        ...(kind === 'byNeighbours' || kind === 'suggested' ? {} : foundFor(e.row)),
         row: e.row, name: e.name, kind,
         code: e.code != null ? String(e.code) : null, place: e.place || '', parent: e.parent || '', area: e.area || '',
         sameName: !!e.sameName,
@@ -5370,9 +5504,12 @@ router.get('/layers/repair', (req, res) => {
   const out = [];
   for (const s of imports.repairsFor(dataset)) {
     try {
-      const rows = toFix(transform(s).report || {});
+      const rows = toFix(placeAll(s).report || {}, s);
       if (!rows.length) continue;
-      out.push({ importId: s.id, layerId: s.repair.layerId, label: (s.spec && s.spec.label) || s.repair.layerId,
+      out.push({ importId: s.id, layerId: s.repair.layerId, pointsLayerId: s.pointsLayerId || null,
+        label: (s.spec && s.spec.label) || s.repair.layerId,
+        // a row can be given a point only where the rows are placed by name
+        canPoint: s.strategy === 'adminJoin',
         file: s.filename || '', total: (s.rows || []).length, rows });
     } catch (e) { console.warn('[atlas] repair list for', s.id, 'failed:', e.message); }
   }
@@ -5397,6 +5534,41 @@ router.get('/layers/repair/find', (req, res) => {
   res.json({ matches: scored.map((x) => ({ code: x.t.code, name: x.t.name, parent: x.t.parent || '', area: x.t.area || '' })) });
 });
 
+/* Look one row up on the map, for the fix page — a row nobody looked up
+   while setting up, or one whose first answer was not the place. The name
+   and the columns that say where it is (a district, a state) go together,
+   the way the setup page asked; nothing goes on the map until the owner
+   says "put it here". */
+router.post('/layers/repair/locate', async (req, res) => {
+  const b = req.body || {};
+  const session = imports.getImport(String(b.importId || ''));
+  if (!session || !session.repair) return res.status(404).json({ error: 'that list of rows has been closed' });
+  if (!requireDatasetEditor(req, res, session.dataset)) return;
+  if (session.strategy !== 'adminJoin') return res.status(400).json({ error: 'these rows are placed by coordinates, not by name' });
+  const row = Number(b.row);
+  const r = Number.isInteger(row) ? (session.rows || [])[row] : null;
+  if (!r) return res.status(400).json({ error: 'which row?' });
+  const roles = rolesMap(session.columns || []);
+  const asked = session.located && session.located.asked ? String(session.located.asked).split('|') : [];
+  const col = asked[0] || roles.placeName;
+  const context = asked.length ? asked.slice(1)
+    : (session.columns || []).filter((c) => c.role === 'adminParent').map((c) => c.name).slice(0, 2);
+  const cell = (c) => String(r[c] == null ? '' : r[c]).trim();
+  const name = cell(col);
+  if (!name) return res.status(400).json({ error: 'this row has no name to look up' });
+  const query = [name].concat(context.map(cell).filter((v) => v && norm(v) !== norm(name))).join(', ');
+  let got;
+  try { got = await geocodeOne(query, locateBias(session)); } catch (e) {
+    return res.status(502).json({ error: 'the map lookup could not be reached: ' + e.message });
+  }
+  if (!session.located) session.located = { column: col, asked: [col].concat(context).join('|'), byRow: {} };
+  session.located.byRow[row] = { query, lat: got.lat, lng: got.lng, label: got.label || '',
+    confidence: got.confidence, provider: got.provider, reason: got.reason };
+  session.repair.touchedAt = Date.now();
+  imports.saveImport(session);
+  res.json(got.lat != null ? { find: { label: got.label || '', lat: got.lat, lng: got.lng } } : { find: null });
+});
+
 /* Fix rows on the finished atlas: the same fixes /layers/resolve takes, then
    the layer is committed again in place. `dismiss` lets the list go without
    changing anything — the owner has seen it and is done with it. */
@@ -5410,9 +5582,21 @@ router.post('/layers/repair', (req, res) => {
   let n = 0;
   for (const f of (Array.isArray(b.fixes) ? b.fixes : [])) {
     if (!f || !Number.isInteger(f.row) || f.row < 0 || f.row >= (session.rows || []).length) continue;
-    if (f.skip) session.matchState[f.row] = 'skip';
+    /* A point: the row is held off the outlines and put on the points layer
+       beside them, where the map lookup found it (/layers/repair/locate). An
+       outline, or leaving it off: it comes off the points layer if it was
+       there. Each fix lands in the layer it belongs to; commitLayer writes
+       both. */
+    if (f.point) {
+      const h = session.located && session.located.byRow && session.located.byRow[f.row];
+      if (session.strategy !== 'adminJoin' || !h || h.lat == null) continue;
+      session.pointRows = session.pointRows || {};
+      session.pointRows[f.row] = { lat: h.lat, lng: h.lng, label: h.label || '' };
+      session.matchState[f.row] = 'skip';
+    } else if (f.skip) session.matchState[f.row] = 'skip';
     else if (typeof f.code === 'string') session.matchState[f.row] = f.code;
     else continue;
+    if (!f.point && session.pointRows) delete session.pointRows[f.row];
     if (session.suggested) delete session.suggested[f.row];
     n++;
   }
@@ -5421,8 +5605,8 @@ router.post('/layers/repair', (req, res) => {
   try {
     const out = commitLayer({ importId: session.id, dataset: session.dataset }, req);
     const still = imports.getImport(session.id);
-    const rows = still && still.repair ? toFix(transform(still).report || {}) : [];
-    res.json({ ok: true, layerId: out.layerId, rows });
+    const rows = still && still.repair ? toFix(placeAll(still).report || {}, still) : [];
+    res.json({ ok: true, layerId: out.layerId, pointsLayerId: out.pointsLayerId || null, rows });
   } catch (e) {
     res.status(e.status || 400).json({ error: e.message });
   }

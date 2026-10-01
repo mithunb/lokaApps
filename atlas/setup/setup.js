@@ -1586,7 +1586,13 @@
      cannot be made finer here; what can be done is to look each village up by
      name (and district) on OpenStreetMap and put it on the map as a point —
      the same lookup "By address" uses on an atlas's own Add data page. The
-     person sees what was found before anything moves. */
+     person sees what was found before anything moves.
+
+     The points go on BESIDE the outlines (Mithun, October 2026). Release 3
+     turned the whole file into points, so a block row that matched its
+     outline but was not also ticked came off the map. Now only the rows with
+     no outline are looked up, the ticked ones become a second layer of
+     points, and every outline match stays (placeAll, api/apps/atlas.js). */
 
   var PTS = { running: false, results: [], column: "", context: [] };
 
@@ -1619,16 +1625,17 @@
       return;
     }
     var none = (rep.unmatched || []).length, pc = placeColumns();
-    var secs = Math.max(5, Math.round(FOUND.rows * 1.2));
+    var secs = Math.max(5, Math.round(none * 1.2));
     box.hidden = false;
     box.innerHTML =
       "<h3>" + n(none) + " of " + n(FOUND.rows) + " rows name places we have no outline for</h3>" +
       "<p>Villages, most likely: the outlines on this atlas go down to blocks, not villages, so a village name has nothing to match. " +
-      "We can look each row up by name on OpenStreetMap, a free public map, and put it on your atlas as a point instead of an outline.</p>" +
+      "We can look each of them up by name on OpenStreetMap, a free public map, and put it on your atlas as a point. " +
+      (FOUND.placed ? "The " + n(FOUND.placed) + rowsWord(FOUND.placed) + " that matched an outline keep it." : "") + "</p>" +
       '<p class="hint">Only the ' + esc([pc.name || "place"].concat(pc.context).join(" and ")) +
       (pc.context.length ? " columns are" : " column is") + " sent, one row a second — about " + (secs < 90 ? secs + " seconds" : Math.round(secs / 60) + " minutes") +
       ". You see what was found before anything goes on the map.</p>" +
-      '<div class="btnrow"><button class="btn" type="button" id="pts-go">Put every row on as a point</button>' +
+      '<div class="btnrow"><button class="btn" type="button" id="pts-go">Look them up</button>' +
       '<button class="btn quiet" type="button" id="pts-no">Keep outlines only</button></div>';
     $("#pts-go").onclick = lookUpPoints;
     $("#pts-no").onclick = function () { box.hidden = true; FOUND.noPoints = true; paintFound(); };
@@ -1637,11 +1644,13 @@
   function lookUpPoints() {
     var box = $("#found-points"), pc = placeColumns();
     if (!pc.name || !benchImport()) return;
+    // only the rows no outline holds; the rest already have their place
+    var only = ((FOUND.rep && FOUND.rep.unmatched) || []).map(function (u) { return u.row; });
     PTS = { running: true, results: [], column: pc.name, context: pc.context };
     box.innerHTML = "<h3>Looking up your places…</h3>" +
       '<p id="pts-progress">Starting.</p><div class="working"><i></i></div>';
     (function round() {
-      api("layers/locate", { method: "POST", body: { importId: benchImport(), column: pc.name, context: pc.context } })
+      api("layers/locate", { method: "POST", body: { importId: benchImport(), column: pc.name, context: pc.context, rows: only } })
         .then(function (r) {
           PTS.results = r.results || [];
           var p = $("#pts-progress");
@@ -1688,16 +1697,19 @@
       var rows = $$("#found-points .pts-list input:checked").map(function (i) { return Number(i.value); });
       if (!rows.length) return;
       keepBtn.disabled = true;
-      api("layers/locate/keep", { method: "POST", body: { importId: benchImport(), rows: rows } })
+      // alongside: the outline matches stay; these go on beside them
+      api("layers/locate/keep", { method: "POST", body: { importId: benchImport(), rows: rows, alongside: true } })
         .then(function () { return resolve([]); })
         .then(function (r) {
           FOUND.asPoints = true;
-          // the dots on the small map are the rows now
+          // the dots on the small map are the points; the shaded places are the outlines
           GEO.points = PTS.results.filter(function (x) { return x.lat != null && rows.indexOf(x.row) >= 0; })
             .map(function (x) { return [x.lng, x.lat]; });
-          // the table below still shows the outline check; it is not what goes on the map now
+          // the table below was drawn before the points were chosen, and still lists them as unmatched
           $("#bench").hidden = true;
-          box.innerHTML = "<h3>" + n((r.stats && r.stats.features) || 0) + " rows go on the map as points</h3>" +
+          var st = r.stats || {};
+          box.innerHTML = "<h3>" + (st.outlines ? n(st.outlines) + rowsWord(st.outlines) + " go on the map as outlines, and " +
+              n(st.points || 0) + " as points" : n(st.points || 0) + rowsWord(st.points || 0) + " go on the map as points") + "</h3>" +
             "<p>" + (FOUND.rows - FOUND.placed > 0
               ? n(FOUND.rows - FOUND.placed) + rowsWord(FOUND.rows - FOUND.placed) + " wait on the finished atlas under “rows that need a place”."
               : "Every row has a place.") + "</p>";
@@ -2175,6 +2187,20 @@
     box.innerHTML = "<h4>" + head + "</h4><p class=\"hint\">" + now + "</p>";
     var opts = document.createElement("div");
     opts.className = "q-opts";
+    /* A row with no place yet can also go on as a point, where OpenStreetMap
+       finds it by name — beside the outlines, in the file's points layer. */
+    var canPoint = !placed && imp.canPoint && r0.reason !== "bad coordinates";
+    var ptFind = canPoint ? r0.find || null : null;
+    function pointOpt(on) {
+      if (!ptFind) return;
+      var lab = document.createElement("label");
+      lab.className = "q-opt";
+      lab.innerHTML = '<input type="radio" name="' + name + '" value="__point"' + (on ? " checked" : "") + ">" +
+        '<span class="q-what"><b>As a point: ' + esc(ptFind.label || r0.name) + "</b>" +
+        '<span class="q-meta">found by name on OpenStreetMap</span></span>';
+      lab.querySelector("input").onchange = function () { use.textContent = "Put it here"; };
+      opts.appendChild(lab);
+    }
     function paintOpts(list) {
       opts.innerHTML = "";
       list.forEach(function (c, i) {
@@ -2192,9 +2218,38 @@
         };
         opts.appendChild(lab);
       });
+      pointOpt(!list.length);
     }
     paintOpts(cands);
     box.appendChild(opts);
+    // not looked up yet, or not found the first time: ask the map now
+    if (canPoint && !ptFind) {
+      var ask = document.createElement("div");
+      ask.className = "btnrow";
+      ask.innerHTML = '<button class="btn secondary" type="button">Look it up on the map</button>';
+      ask.firstChild.onclick = function () {
+        var b = this;
+        b.disabled = true;
+        b.textContent = "Looking…";
+        // every row of this name, one after another: each is its own place
+        rows.reduce(function (p, x) {
+          return p.then(function () {
+            return api("layers/repair/locate", { method: "POST", body: { importId: imp.importId, row: x.row } })
+              .then(function (res) { if (x.row === r0.row) ptFind = res.find || null; });
+          });
+        }, Promise.resolve()).then(function () {
+          if (!ptFind) {
+            b.textContent = "Not found on the map";
+            box.querySelector(".hint").textContent = "OpenStreetMap does not know this name either. Correct it in your file and add the file again under Your data.";
+            return;
+          }
+          ask.hidden = true;
+          paintOpts(cands);
+          use.hidden = false;
+        }).catch(function (e) { b.disabled = false; b.textContent = "Look it up on the map"; msg("fixes", errMsg(e)); });
+      };
+      box.appendChild(ask);
+    }
     // a row with nothing to choose from can be given a place by name
     if (!cands.length && r0.reason !== "bad coordinates") {
       var find = document.createElement("div");
@@ -2209,7 +2264,7 @@
             cands = res.matches || [];
             paintOpts(cands);
             if (!cands.length) box.querySelector(".hint").textContent = "Nothing on the map is called that. Try another spelling.";
-            use.hidden = !cands.length;
+            use.hidden = !cands.length && !ptFind;
           }).catch(function (e) { msg("fixes", errMsg(e)); });
       }
       find.querySelector("button").onclick = go;
@@ -2221,11 +2276,13 @@
     btns.innerHTML = '<button class="btn" type="button">' + (placed ? "Keep this" : "Put it here") + "</button>" +
       (placed || r0.kind !== "skipped" ? '<button class="btn quiet" type="button">Leave ' + (rows.length > 1 ? "them" : "it") + " off the map</button>" : "");
     var use = btns.children[0], off = btns.children[1];
-    use.hidden = !cands.length;
+    use.hidden = !cands.length && !ptFind;
     use.onclick = function () {
       var r = box.querySelector('input[type="radio"]:checked');
       if (!r) return;
-      send(imp, rows.map(function (x) { return { row: x.row, code: r.value }; }), box);
+      send(imp, rows.map(function (x) {
+        return r.value === "__point" ? { row: x.row, point: true } : { row: x.row, code: r.value };
+      }), box);
     };
     if (off) off.onclick = function () { send(imp, rows.map(function (x) { return { row: x.row, skip: true }; }), box); };
     box.appendChild(btns);

@@ -115,7 +115,9 @@ check('it comes after what we found, only when needed', /if \(Q\.list\.length\) 
 check('"same for all rows" starts ticked', /id="q-all" checked/.test(page), true);
 check('skip for now is there', />Skip for now</.test(page), true);
 check('the model\'s guesses are listed to check', /We guessed these spellings — check them/.test(setup), true);
-check('villages can go on as points', /Put every row on as a point/.test(setup), true);
+// the offer used to say "Put every row on as a point"; since October 2026 the
+// points go on beside the outlines, and only the rows no outline holds are looked up
+check('villages can go on as points', /id="pts-go">Look them up</.test(setup), true);
 check('with the district sent alongside the name', /context: pc\.context/.test(setup), true);
 check('the bench\'s own fix list stands aside on this page', /#bench #card-fixes \{ display:none; \}/.test(page), true);
 check('the first look links to the rows that need a place', /\.\/setup\/\?fix=/.test(owner), true);
