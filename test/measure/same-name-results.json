@@ -1,0 +1,109 @@
+{
+ "measuredOn": "2026-09-30",
+ "results": {
+  "ADM3": {
+   "units": 6822,
+   "namesUsedMoreThanOnce": 221,
+   "unitsSharingAName": 526,
+   "mostRepeated": [
+    "Ramgarh ×7",
+    "Narayanpur ×6",
+    "Fatehpur ×6",
+    "Sadar ×6",
+    "Ramnagar ×5",
+    "Mohanpur ×5"
+   ],
+   "sheets": {
+    "15": {
+     "trials": 300,
+     "rows": 4500,
+     "sharedRows": 330,
+     "settled": 291,
+     "wrongPicks": 2,
+     "asked": 39,
+     "settledShare": 0.882,
+     "sheetsWithAQuestion": 32,
+     "medianQuestions": 0,
+     "p90Questions": 1
+    },
+    "40": {
+     "trials": 300,
+     "rows": 12000,
+     "sharedRows": 971,
+     "settled": 804,
+     "wrongPicks": 3,
+     "asked": 167,
+     "settledShare": 0.828,
+     "sheetsWithAQuestion": 94,
+     "medianQuestions": 0,
+     "p90Questions": 2
+    },
+    "100": {
+     "trials": 300,
+     "rows": 30000,
+     "sharedRows": 2205,
+     "settled": 1664,
+     "wrongPicks": 1,
+     "asked": 541,
+     "settledShare": 0.755,
+     "sheetsWithAQuestion": 199,
+     "medianQuestions": 1,
+     "p90Questions": 3
+    }
+   },
+   "seconds": 39
+  },
+  "ADM4": {
+   "units": 7143,
+   "namesUsedMoreThanOnce": 246,
+   "unitsSharingAName": 590,
+   "mostRepeated": [
+    "Ramnagar ×10",
+    "Patan ×6",
+    "Kalyanpur ×6",
+    "Rajnagar ×6",
+    "Ramgarh ×6",
+    "Rajgarh ×6"
+   ],
+   "sheets": {
+    "15": {
+     "trials": 300,
+     "rows": 4500,
+     "sharedRows": 355,
+     "settled": 318,
+     "wrongPicks": 0,
+     "asked": 37,
+     "settledShare": 0.896,
+     "sheetsWithAQuestion": 34,
+     "medianQuestions": 0,
+     "p90Questions": 1
+    },
+    "40": {
+     "trials": 300,
+     "rows": 12000,
+     "sharedRows": 1037,
+     "settled": 894,
+     "wrongPicks": 0,
+     "asked": 143,
+     "settledShare": 0.862,
+     "sheetsWithAQuestion": 108,
+     "medianQuestions": 0,
+     "p90Questions": 1
+    },
+    "100": {
+     "trials": 300,
+     "rows": 30000,
+     "sharedRows": 2368,
+     "settled": 1726,
+     "wrongPicks": 4,
+     "asked": 642,
+     "settledShare": 0.729,
+     "sheetsWithAQuestion": 226,
+     "medianQuestions": 1,
+     "p90Questions": 5
+    }
+   },
+   "seconds": 41
+  }
+ }
+}

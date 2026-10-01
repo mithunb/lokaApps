@@ -122,7 +122,8 @@ console.log('\n  a row finds the most specific boundary that knows its name');
    layer loses whichever half you did not pick. */
 check('every boundary layer goes on the ladder', /for \(const opt of \(boundaryOptions\(session\.dataset\)\.options \|\| \[\]\)\)/.test(server), true);
 check('ordered by how small its shapes are', /ladder\.sort\(\(a, b\) => a\._size - b\._size\);/.test(server), true);
-check('a layer somebody chose by hand still leads', /if \(session\.joinLayerExplicit\) \{/.test(server), true);
+// release 3: a hand-chosen layer and a lead fixed before the build share one pin
+check('a layer somebody chose by hand still leads', /const pin = session\.joinLayerExplicit \? bt\.opt\.id : session\.leadLayer;/.test(server), true);
 check('and choosing one is recorded as a choice', /session\.joinLayerExplicit = true;/.test(server), true);
 check('a miss falls to the next layer', /const other = elsewhere\(res\.name\);/.test(server), true);
 /* a name meaning several places on a rung is a question, not an answer */

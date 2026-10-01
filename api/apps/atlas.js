@@ -2348,7 +2348,7 @@ function bboxOverlap(a, b) { // [w,s,e,n]
 // than the atlas was built at — so village / locality names the atlas's own
 // boundary layers don't carry can still be placed. Fetched once (cached) and
 // materialised into the import side-file; returns option metadata + targets.
-async function geoBoundaryOptions(region) {
+async function geoBoundaryOptions(region, before) {
   if (!region || !region.iso3) return [];
   const iso3 = String(region.iso3).toUpperCase();
   const baseLevel = Number(region.level) || 1;
@@ -2357,8 +2357,15 @@ async function geoBoundaryOptions(region) {
   try { avail = JSON.parse(fs.readFileSync(path.join(GEOCACHE_DIR, `${iso3}-levels.json`), 'utf8')).levels; } catch {}
   let parents = null;   // atlas's own level, clipped to the region — for parent disambiguation
   const out = [];
-  for (const L of [baseLevel + 1, baseLevel + 2]) {
-    if (L > MAX_LEVEL) break;
+  /* Before the atlas exists it has no outlines of its own, and a file whose
+     rows name the very places the atlas is built from — a list of blocks
+     that became a region of blocks — had nothing to be checked against at
+     all ("no joinable boundary layer"). So before a build the region's own
+     level is offered too, after the finer ones; once the atlas is built its
+     own boundary layer is that level. */
+  const levels = [baseLevel + 1, baseLevel + 2].concat(before ? [baseLevel] : []);
+  for (const L of levels) {
+    if (L > MAX_LEVEL) continue;
     if (avail && !avail.includes(L)) continue;
     let doc;
     try { doc = await loadAdmin(iso3, L); } catch { continue; }
@@ -2371,14 +2378,31 @@ async function geoBoundaryOptions(region) {
         parents = rbb ? pf.filter((p) => bboxOverlap(p.bbox, rbb)) : pf;
       } catch { parents = []; }
     }
+    /* The district a block or locality sits in, whatever level the atlas is
+       at. Two places called Raghopur in one state are told apart by their
+       districts — on the question screen, and by a district column in the
+       sheet — and `parent` only names the atlas's own level, which for a
+       state atlas is the state both of them are in. */
+    let districts = null;
+    if (L >= 3 && baseLevel !== 2) {
+      try {
+        const df = (await loadAdmin(iso3, 2)).features;
+        districts = rbb ? df.filter((p) => bboxOverlap(p.bbox, rbb)) : df;
+      } catch { districts = null; }
+    } else if (L >= 3) districts = parents;
     const targets = feats.map((f, i) => {
-      let parent = '';
-      if (parents.length > 1) {   // only worth disambiguating when >1 parent overlaps
-        const c = centroidOf(f.geometry);
+      let parent = '', area = '';
+      const c = centroidOf(f.geometry);
+      // (a unit of the region's own level is its own parent: nothing to say)
+      if (parents.length > 1 && L !== baseLevel) {   // only worth disambiguating when >1 parent overlaps
         const hit = parents.find((p) => bboxOverlap(p.bbox, f.bbox) && pointInGeom(c[0], c[1], p.geometry));
         if (hit) parent = hit.properties.name || '';
       }
-      return { code: String(i), name: String(f.properties.name || ''), parent, geometry: f.geometry };
+      if (districts && districts.length) {
+        const d = districts.find((p) => bboxOverlap(p.bbox, f.bbox) && pointInGeom(c[0], c[1], p.geometry));
+        if (d && (d.properties.name || '') !== parent) area = d.properties.name || '';
+      }
+      return { code: String(i), name: String(f.properties.name || ''), parent, ...(area ? { area } : {}), geometry: f.geometry };
     });
     out.push({
       id: `geo:ADM${L}`, level: L, group: 'geo', count: targets.length,
@@ -2805,6 +2829,13 @@ function transform(session) {
       const b = t && t.geometry && bboxOfGeom(t.geometry);
       return b ? (b[2] - b[0]) * (b[3] - b[1]) : Infinity;
     };
+    /* The finer levels fetched for this import (geo:ADM3, geo:ADM4 — blocks
+       and localities the atlas does not draw) are rungs too. They used to be
+       reachable only before the atlas existed, and then only the first of
+       them: a sheet of village names was checked against sub-districts, and
+       once the atlas was built it was joined again against the atlas's own
+       district outlines alone — so rows the check had placed came out on no
+       layer at all, and a layer file with nothing in it was committed. */
     const ladder = [];
     for (const opt of (boundaryOptions(session.dataset).options || [])) {
       const o = (opt.id === bt.opt.id) ? bt : boundaryTargets(session, opt.id);
@@ -2813,19 +2844,36 @@ function transform(session) {
       o._size = sample.length ? sample[Math.floor(sample.length / 2)] : Infinity;
       ladder.push(o);
     }
-    if (!ladder.length) ladder.push(bt);
     ladder.sort((a, b) => a._size - b._size);
-    if (session.joinLayerExplicit) {
-      const i = ladder.findIndex((x) => x.opt.id === bt.opt.id);
+    // the atlas's own outlines first, as before; the finer levels after them
+    // (the level the guess chose, when it chose one of these, first among them)
+    const geoIds = Object.keys(imports.readGeoTargets(session.id) || {})
+      .sort((a, b) => (b === bt.opt.id) - (a === bt.opt.id));
+    for (const id of geoIds) {
+      const o = (id === bt.opt.id) ? bt : boundaryTargets(session, id);
+      if (o && o.targets.length && o.opt.id === id && !ladder.includes(o)) ladder.push(o);
+    }
+    if (!ladder.length) ladder.push(bt);
+    /* The layer a row's fix points into must not change under it. A fix is
+       remembered as a place's number on the leading layer, and a file checked
+       before its atlas existed was checked against a finer level — building
+       the atlas adds outlines of its own, and one of them leading at commit
+       would read "row 4 → place 17" off the wrong list. So a lead chosen
+       before the build is kept for the life of the import. */
+    const pin = session.joinLayerExplicit ? bt.opt.id : session.leadLayer;
+    if (pin) {
+      const i = ladder.findIndex((x) => x.opt.id === pin);
       if (i > 0) ladder.unshift(ladder.splice(i, 1)[0]);
     }
     const lead = ladder[0];
+    if (!session.dataset) session.leadLayer = lead.opt.id;
     session.joinLayer = lead.opt.id;
     report.joinLayer = lead.opt.id;
     report.joinLabel = lead.opt.label;
     report.joinLadder = ladder.map((x) => x.opt.label);
 
     const results = joinByName(rows, nameCol, roles.adminParent || null, lead.targets);
+    if (results.home) report.home = results.home;
     session.matchState = session.matchState || {};   // row -> code | 'skip' (manual fixes)
     // area kinds keep the joined polygon; point kinds (markers / category /
     // bubble) collapse it to its centroid — one symbol per admin unit
@@ -2921,7 +2969,13 @@ function transform(session) {
     results.forEach((res) => {
       const manual = session.matchState[res.row];
       const code = manual === 'skip' ? null : (manual || res.match);
-      if (manual === 'skip') return;
+      if (manual === 'skip') {
+        // left for later ("Skip for now"): off the map, but still on the list
+        // of rows that need a place, with what it could have been
+        (report.skipped = report.skipped || []).push({ row: res.row, name: res.name, candidates: res.candidates || [],
+          ...(res.sameName ? { sameName: true } : {}) });
+        return;
+      }
       if (!code) {
         // a single word has already been looked up as itself; only sentences here
         const inside = /\s/.test(String(res.name == null ? '' : res.name).trim())
@@ -2954,6 +3008,8 @@ function transform(session) {
         }
         (res.candidates.length ? report.ambiguous : report.unmatched).push({
           row: res.row, name: res.name, candidates: res.candidates,
+          // one spelling, several places: the question screen asks which
+          ...(res.sameName ? { sameName: true } : {}),
           // the look-alikes below the candidate floor, for the model to pick from
           ...(res.loose && res.loose.length ? { loose: res.loose } : {}),
         });
@@ -2966,7 +3022,17 @@ function transform(session) {
          here for the owner to confirm or fix. A manual fix through
          /layers/resolve takes the row off this list. */
       if (session.suggested && session.suggested[res.row] === code) {
-        (report.suggested = report.suggested || []).push({ row: res.row, name: res.name, code, place: target.name });
+        (report.suggested = report.suggested || []).push({ row: res.row, name: res.name, code, place: target.name,
+          parent: target.parent || '', area: target.area || '',
+          // what the model chose among — the owner changes it to one of these
+          candidates: (res.candidates && res.candidates.length ? res.candidates : res.loose) || [] });
+      } else if (res.byNeighbours && !manual) {
+        /* Put by its neighbours (matching.js, settleByNeighbours): the one
+           place of that name inside the area the other rows cover. Placed,
+           and listed so the owner can check it — the other places of the
+           same name ride along, so changing it is one tap. */
+        (report.byNeighbours = report.byNeighbours || []).push({ row: res.row, name: res.name, code, place: target.name,
+          parent: target.parent || '', area: target.area || '', candidates: res.candidates || [] });
       }
     });
   }
@@ -3385,7 +3451,7 @@ async function ingestLayer(b, who) {
   // them without a refetch.
   const inst = dataset ? reg.getInstance(dataset) : null;
   let geoOpts = [];
-  try { geoOpts = await geoBoundaryOptions(pendingRegion || (inst && inst.region)); }
+  try { geoOpts = await geoBoundaryOptions(pendingRegion || (inst && inst.region), !!pendingRegion); }
   catch (e) { console.warn('[atlas] geo boundary options failed:', e.message); }
   if (geoOpts.length) {
     const byOpt = {};
@@ -3480,6 +3546,33 @@ async function ingestLayer(b, who) {
         if (g.column && (!nameGuess || g.rate > nameGuess.rate)) { nameGuess = g; joinGuess = opt.id; }
       } catch {}
     }
+    /* The column that matches best is not always the place. A sheet of
+       villages with a district column matches perfectly on the district —
+       every row says "Deoria" — and all eleven rows went onto one outline.
+       When the best match says the same thing on nearly every row and another
+       column is headed like a place and names a different one on most, that
+       column is the place and the first is where it sits. */
+    let parentGuess = null;
+    if (nameGuess && nameGuess.column && rows.length >= 5) {
+      const distinct = (c) => new Set(rows.map((r) => norm(String(r[c] == null ? '' : r[c]))).filter(Boolean)).size;
+      if (distinct(nameGuess.column) <= Math.max(2, rows.length * 0.2)) {
+        const alt = profiles.find((p) => p.type === 'string' && p.name !== nameGuess.column &&
+          /village|gram|gaon|place|location|locality|settlement|habitation|town|site/i.test(p.name) &&
+          distinct(p.name) >= rows.length * 0.5);
+        if (alt) {
+          parentGuess = nameGuess.column;
+          nameGuess = { column: alt.name, rate: 0 };
+          // and the outlines to try first are the ones THIS column matches best
+          let best = -1;
+          for (const opt of allOptions.slice(0, 8)) {
+            try {
+              const g = bestNameColumn([alt], rows, boundaryTargets(session, opt.id).targets.map((t) => t.name), norm);
+              if (g.rate > best) { best = g.rate; joinGuess = opt.id; }
+            } catch {}
+          }
+        }
+      }
+    }
     const numeric = profiles.find((p) => p.type === 'number' && !p.looksLikeLat && !p.looksLikeLng);
     const catCol = pickCategoryColumn(profiles, nameGuess && nameGuess.column);
     const imgCol = profiles.find((p) => p.looksLikeImage);
@@ -3490,6 +3583,7 @@ async function ingestLayer(b, who) {
       role: lat && c === lat.name ? 'latitude'
         : lng && c === lng.name ? 'longitude'
         : nameGuess && c === nameGuess.column ? 'placeName'
+        : parentGuess && c === parentGuess ? 'adminParent'
         : numeric && c === numeric.name ? 'value' : 'text',
     }));
     session.spec = {
@@ -4008,8 +4102,16 @@ router.post('/layers/locate', async (req, res) => {
       Math.round(rows.length / 60) + ' minutes or more — the limit is ' + LOCATE_MAX_ROWS + ' rows. ' +
       'Split the file, or give it latitude and longitude columns.' });
   }
+  /* Columns that say where the place is — a district, a state — added to
+     each lookup after the name, the way an address is written. A village name
+     alone is one of many Rampurs; "Rampur, Deoria" is one. */
+  const context = (Array.isArray(b.context) ? b.context : [])
+    .map(String).filter((c) => c !== col && (session.columnsRaw || []).includes(c)).slice(0, 2);
+  const asked = [col].concat(context).join('|');
   // a different column means a different question: start the answers again
-  if (!session.located || session.located.column !== col) session.located = { column: col, byRow: {} };
+  if (!session.located || (session.located.asked || session.located.column) !== asked) {
+    session.located = { column: col, asked, byRow: {} };
+  }
   const held = session.located.byRow;
 
   /* Bias the lookup to the atlas's own patch of the world. An import made
@@ -4027,8 +4129,10 @@ router.post('/layers/locate', async (req, res) => {
   try {
     for (let i = 0; i < rows.length && fresh < LOCATE_BATCH; i++) {
       if (held[i]) continue;
-      const query = String(rows[i][col] == null ? '' : rows[i][col]).trim();
-      if (!query) { held[i] = { query: '', lat: null, lng: null, reason: 'empty' }; continue; }
+      const cell = (c) => String(rows[i][c] == null ? '' : rows[i][c]).trim();
+      const name = cell(col);
+      if (!name) { held[i] = { query: '', lat: null, lng: null, reason: 'empty' }; continue; }
+      const query = [name].concat(context.map(cell).filter((v) => v && norm(v) !== norm(name))).join(', ');
       const r = await geocodeOne(query, opts);
       if (!r.cached) fresh++;
       looked++;
@@ -4105,9 +4209,14 @@ router.post('/layers/apply', (req, res) => {
   if (b.strategy && ['coordinates', 'adminJoin'].includes(b.strategy)) session.strategy = b.strategy;
   if (b.joinLayer) { session.joinLayer = String(b.joinLayer); session.joinLayerExplicit = true; }
   if (Array.isArray(b.columns)) {
+    const placeWas = rolesMap(session.columns || []).placeName;
     session.columns = b.columns
       .filter((c) => c && session.columnsRaw.includes(c.name))
       .map((c) => ({ name: c.name, role: String(c.role) }));
+    // a different place column is a different question: let its lead be found
+    // afresh, unless a row has already been fixed against the old one
+    if (rolesMap(session.columns).placeName !== placeWas &&
+        !Object.keys(session.matchState || {}).length) delete session.leadLayer;
   }
   try {
     // no dataset folder before the build, so no draft to write — the styled
@@ -4685,10 +4794,16 @@ function commitLayer({ importId, dataset }, who) {
   if (!ok) throw refuse(403, 'sign in as this atlas’s owner to change it', { needsAuth: true });
 
   try {
-    const { frag, features } = (function () {
+    const { frag, features, report } = (function () {
       const t = transform(session);
-      return { frag: t.frag, features: t.features };
+      return { frag: t.frag, features: t.features, report: t.report || {} };
     })();
+    /* A layer with nothing on it is not added. It used to be: a sheet of
+       village names joined to district outlines placed none of its rows, and
+       an empty layer went onto the atlas as if it had worked. */
+    if (!features.length && (session.rows || []).length) {
+      throw refuse(400, 'none of the rows found a place on the map, so nothing was added', { nothingPlaced: true });
+    }
     // Same data twice is almost always a mistake (a re-upload, or the wizard's
     // auto-add racing a manual one). Fingerprint the resulting features and
     // refuse a second copy — the authoritative check, since every path (bench,
@@ -4792,7 +4907,23 @@ function commitLayer({ importId, dataset }, who) {
     }
     const out = imports.commitLayer(session.dataset, frag.stanza, frag.sourceFile,
       { type: 'FeatureCollection', features });
-    imports.discardImport(session.id);
+    /* Rows that still need a place — skipped, not found, or put by their
+       neighbours and not yet checked — stay fixable from the finished atlas.
+       The import is kept for them, pointed at the layer it just made so the
+       next commit replaces that layer in place (imports.keepForRepair has the
+       rule for letting it go). Nothing left to look at: it goes, as before. */
+    const open = toFix(report).length;
+    if (open) {
+      session.replacingLayerId = out.layerId;
+      session.replacingAddedBy = session.replacingAddedBy || frag.stanza.addedBy || null;
+      session.replacingAddedAt = session.replacingAddedAt || frag.stanza.addedAt || null;
+      session.replacingUploadedAs = session.replacingUploadedAs || frag.stanza.uploadedAs || '';
+      if (frag.stanza.credits) session.replacingCredits = frag.stanza.credits;
+      if (frag.stanza.attribution) session.replacingAttribution = frag.stanza.attribution;
+      imports.keepForRepair(session, out.layerId, open);
+    } else {
+      imports.discardImport(session.id);
+    }
     // embed this layer's tag vocabulary for semantic search (non-blocking)
     embedAndStoreVocab(session.dataset, out.layerId, frag.stanza, features).catch(() => {});
     return { ok: true, layerId: out.layerId, dataset: session.dataset };
@@ -5200,6 +5331,101 @@ router.post('/layers/discard', (req, res) => {
   const session = imports.getImport(String((req.body || {}).importId || ''));
   if (session) imports.discardImport(session.id);
   res.json({ ok: true });
+});
+
+/* ---------- rows that need a place, after the build ----------
+
+   A row the setup flow skipped, one no outline was found for, and one put by
+   its neighbours that nobody has checked yet all stay listed on the finished
+   atlas (commitLayer keeps their import; imports.keepForRepair says for how
+   long). The list is worked out afresh from the import each time, so it can
+   never disagree with the layer it describes. */
+function toFix(report) {
+  const out = [];
+  const take = (list, kind) => {
+    for (const e of (list || [])) {
+      out.push({
+        row: e.row, name: e.name, kind,
+        code: e.code != null ? String(e.code) : null, place: e.place || '', parent: e.parent || '', area: e.area || '',
+        sameName: !!e.sameName,
+        candidates: (e.candidates || []).slice(0, 8).map((c) => ({
+          code: String(c.code), name: c.name || '', parent: c.parent || '', area: c.area || '',
+          ...(c.km != null ? { km: c.km } : {}), ...(c.inside ? { inside: true } : {}), ...(c.at ? { at: c.at } : {}),
+        })),
+        ...(e.reason ? { reason: e.reason } : {}),
+      });
+    }
+  };
+  take(report.ambiguous, 'question');
+  take(report.skipped, 'skipped');
+  take(report.unmatched, 'unplaced');
+  take(report.byNeighbours, 'byNeighbours');
+  take(report.suggested, 'suggested');
+  return out;
+}
+
+router.get('/layers/repair', (req, res) => {
+  const dataset = String(req.query.dataset || '');
+  if (!requireDatasetEditor(req, res, dataset)) return;
+  const out = [];
+  for (const s of imports.repairsFor(dataset)) {
+    try {
+      const rows = toFix(transform(s).report || {});
+      if (!rows.length) continue;
+      out.push({ importId: s.id, layerId: s.repair.layerId, label: (s.spec && s.spec.label) || s.repair.layerId,
+        file: s.filename || '', total: (s.rows || []).length, rows });
+    } catch (e) { console.warn('[atlas] repair list for', s.id, 'failed:', e.message); }
+  }
+  res.json({ imports: out });
+});
+
+/* Places of a typed name on the layer the rows were joined to — for a row no
+   place was found for, so the owner can give it one by name. Only places the
+   atlas already has; nothing is looked up elsewhere. */
+router.get('/layers/repair/find', (req, res) => {
+  const session = imports.getImport(String(req.query.importId || ''));
+  if (!session || !session.repair) return res.status(404).json({ error: 'that list of rows has been closed' });
+  if (!requireDatasetEditor(req, res, session.dataset)) return;
+  const q = String(req.query.q || '').trim();
+  if (q.length < 2) return res.json({ matches: [] });
+  const bt = session.strategy === 'adminJoin' ? boundaryTargets(session, session.joinLayer) : null;
+  if (!bt) return res.json({ matches: [], note: 'these rows are placed by coordinates, not by name' });
+  const k = norm(q);
+  const scored = bt.targets
+    .map((t) => ({ t, s: norm(t.name).startsWith(k) ? 1.01 : dice(q, t.name) }))
+    .filter((x) => x.s >= 0.5).sort((a, b) => b.s - a.s).slice(0, 6);
+  res.json({ matches: scored.map((x) => ({ code: x.t.code, name: x.t.name, parent: x.t.parent || '', area: x.t.area || '' })) });
+});
+
+/* Fix rows on the finished atlas: the same fixes /layers/resolve takes, then
+   the layer is committed again in place. `dismiss` lets the list go without
+   changing anything — the owner has seen it and is done with it. */
+router.post('/layers/repair', (req, res) => {
+  const b = req.body || {};
+  const session = imports.getImport(String(b.importId || ''));
+  if (!session || !session.repair) return res.status(404).json({ error: 'that list of rows has been closed' });
+  if (!requireDatasetEditor(req, res, session.dataset)) return;
+  if (b.dismiss) { imports.discardImport(session.id); return res.json({ ok: true, rows: [] }); }
+  session.matchState = session.matchState || {};
+  let n = 0;
+  for (const f of (Array.isArray(b.fixes) ? b.fixes : [])) {
+    if (!f || !Number.isInteger(f.row) || f.row < 0 || f.row >= (session.rows || []).length) continue;
+    if (f.skip) session.matchState[f.row] = 'skip';
+    else if (typeof f.code === 'string') session.matchState[f.row] = f.code;
+    else continue;
+    if (session.suggested) delete session.suggested[f.row];
+    n++;
+  }
+  if (!n) return res.status(400).json({ error: 'which rows, and where do they go?' });
+  imports.saveImport(session);
+  try {
+    const out = commitLayer({ importId: session.id, dataset: session.dataset }, req);
+    const still = imports.getImport(session.id);
+    const rows = still && still.repair ? toFix(transform(still).report || {}) : [];
+    res.json({ ok: true, layerId: out.layerId, rows });
+  } catch (e) {
+    res.status(e.status || 400).json({ error: e.message });
+  }
 });
 
 router.get('/layers/imports', (req, res) => {

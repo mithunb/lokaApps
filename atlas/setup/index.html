@@ -358,6 +358,76 @@
       background:none; border:1px solid var(--color-border); border-radius:var(--radius-md);
       color:var(--color-text-muted,#6E6A63); }
     .filecard-kill:hover { border-color:var(--color-sindoor,#C9402B); color:var(--color-sindoor-deep,#9E3220); }
+    /* ---- release 3: which place did you mean? ----
+       One question at a time: the places with that name as a list you can
+       read top to bottom, the suggested one first and marked, and beside it a
+       small map of where each one is against the area the other rows cover.
+       On a phone the map goes under the list. */
+    .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+    .q-count { margin:0 0 .35rem; font-size:var(--t-label); font-weight:700; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--color-text-muted); }
+    .q-body { display:grid; grid-template-columns:minmax(0,1fr) minmax(14rem,20rem); gap:1rem 1.4rem;
+      align-items:start; margin-top:1rem; }
+    .q-opts { border:0; margin:0; padding:0; display:flex; flex-direction:column; gap:.5rem; min-width:0; }
+    .q-opt { display:flex; align-items:flex-start; gap:.65rem; padding:.7rem .85rem; cursor:pointer;
+      border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-page); }
+    .q-opt:hover { border-color:var(--color-leaf); }
+    .q-opt:has(input:checked) { border-color:var(--color-leaf); background:var(--color-leaf-tint); }
+    .q-opt input { margin:.3rem 0 0; accent-color:var(--color-leaf); }
+    .q-num { flex:0 0 auto; width:1.5rem; height:1.5rem; border-radius:50%; display:inline-flex;
+      align-items:center; justify-content:center; font-size:var(--t-meta); font-weight:700;
+      background:var(--color-text-primary); color:var(--color-surface); font-variant-numeric:tabular-nums; }
+    .q-opt:first-of-type .q-num { background:var(--color-leaf); }
+    .q-what { display:flex; flex-direction:column; gap:.1rem; min-width:0; }
+    .q-what b { font-weight:600; }
+    .q-tag { display:inline-block; font-size:var(--t-label); font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+      color:var(--color-leaf-deep); }
+    .q-meta { font-size:var(--t-meta); color:var(--color-text-muted); }
+    .q-all { display:flex; align-items:center; gap:.5rem; margin-top:1rem; font-size:var(--t-ui); cursor:pointer; }
+    .q-all input { accent-color:var(--color-leaf); width:1.05rem; height:1.05rem; }
+    .qm-home { fill:var(--color-leaf-tint); stroke:var(--color-leaf); stroke-width:1.2; stroke-dasharray:4 3; }
+    .qm-home-t { fill:var(--color-leaf-deep); font-size:10px; }
+    .qm-dot { fill:var(--color-text-primary); stroke:#fff; stroke-width:1.5; }
+    .qm-first { fill:var(--color-leaf); }
+    .qm-num { font-family:var(--font-body); font-size:13px; font-weight:700; fill:#fff; text-anchor:middle; }
+    .g-list { list-style:none; margin:1rem 0 0; padding:0; display:flex; flex-direction:column; gap:.5rem; }
+    .g-list li { display:flex; flex-wrap:wrap; align-items:center; gap:.4rem .8rem; padding:.6rem .8rem;
+      border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-page); }
+    .g-name { font-weight:600; min-width:8rem; }
+    .g-pick select { font:inherit; font-size:var(--t-ui); min-height:2.5rem; padding:.3rem .5rem; max-width:100%;
+      border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface); }
+    /* villages as points: the offer, the looking-up, and what was found */
+    .pts { margin-top:1rem; padding:.9rem 1rem; border:1px solid var(--color-border); border-radius:var(--radius-md);
+      background:var(--color-marigold-tint); }
+    .pts h3 { font-family:var(--font-body); font-size:var(--t-body); font-weight:700; margin:0 0 .35rem; }
+    .pts p { margin:.3rem 0; max-width:62ch; font-size:var(--t-ui); }
+    .pts .btnrow { margin-top:.7rem; }
+    .pts-list { list-style:none; margin:.6rem 0 0; padding:0; max-height:18rem; overflow:auto;
+      background:var(--color-surface); border:1px solid var(--color-divider); border-radius:var(--radius-md); }
+    .pts-list li { border-top:1px solid var(--color-divider); }
+    .pts-list li:first-child { border-top:0; }
+    .pts-list label { display:flex; gap:.6rem; align-items:flex-start; padding:.45rem .7rem; font-size:var(--t-ui); cursor:pointer; }
+    .pts-list input { margin-top:.25rem; accent-color:var(--color-leaf); }
+    .pts-found { color:var(--color-text-secondary); }
+    .pts-miss { color:var(--color-sindoor-deep); }
+    /* the bench's own "Needs your eye" list: on this page the question screen asks instead */
+    #bench #card-fixes { display:none; }
+    /* the rows that still need a place, on a built atlas (setup/?fix=) */
+    .fix-group { margin-top:1.4rem; }
+    .fix-group > h3 { font-size:var(--t-body); margin:0 0 .2rem; }
+    .fix-item { margin-top:.6rem; padding:.75rem .9rem; border:1px solid var(--color-border);
+      border-radius:var(--radius-md); background:var(--color-page); }
+    .fix-item h4 { font-family:var(--font-body); font-size:var(--t-ui); font-weight:700; margin:0 0 .25rem; }
+    .fix-item .q-opts { margin-top:.5rem; }
+    .fix-item .btnrow { margin-top:.6rem; }
+    .fix-find { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.5rem; }
+    .fix-find input { font:inherit; min-height:2.5rem; padding:.3rem .6rem; flex:1 1 12rem;
+      border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface); }
+    .fix-done { color:var(--color-leaf-deep); font-weight:600; }
+    @media (max-width:720px) {
+      .q-body { grid-template-columns:1fr; }
+      .q-map svg { max-height:190px; }
+    }
   </style>
 </head>
 <body>
@@ -402,6 +472,19 @@
       <div class="msg ok" id="deleted-note" hidden></div>
       <div class="mine" id="mine"></div>
       <div class="btnrow"><button class="btn" id="new-atlas">Build a new atlas</button></div>
+    </section>
+
+    <!-- a built atlas's rows that still need a place (release 3): reached
+         from the atlas's first look, setup/?fix=<atlas> -->
+    <section class="panel" id="fixes" hidden>
+      <h2>Rows that need a place</h2>
+      <p class="intro" id="fixes-intro"></p>
+      <div id="fixes-list"></div>
+      <div class="btnrow">
+        <a class="btn secondary" id="fixes-open" href="../">← Back to the atlas</a>
+        <button class="btn quiet" type="button" id="fixes-done" hidden>I’ve seen these — stop listing them</button>
+      </div>
+      <div id="msg-fixes"></div>
     </section>
 
     <!-- the four steps -------------------------------------------------- -->
@@ -493,6 +576,9 @@
              A travelling stripe says "this is running" truthfully, and the line
              above says what it is running. -->
         <div class="working" id="check-working" hidden role="presentation"><i></i></div>
+        <!-- rows no outline can hold (villages): offered as points, looked up
+             by name — release 3, setup.js paintPointsOffer -->
+        <div class="pts" id="found-points" hidden aria-live="polite"></div>
         <div id="bench"></div>
         <!-- two buttons, one green: which one is green follows the share of rows
              placed (setup.js, the 60% rule) -->
@@ -502,6 +588,39 @@
           <button class="btn secondary" id="found-mine">Choose the places myself</button>
         </div>
         <div id="msg-2b"></div>
+      </section>
+
+      <!-- 2 · a question, only when one is needed (release 3): a name that
+           means more than one place, which the file's other rows could not
+           settle; then any spelling the model guessed. setup.js drives it. -->
+      <section class="panel" id="s2q" hidden>
+        <p class="q-count" id="q-count"></p>
+        <h2 id="q-title"></h2>
+        <p class="intro" id="q-intro"></p>
+        <div id="q-ask">
+          <div class="q-body">
+            <fieldset class="q-opts" id="q-opts"><legend class="sr">The places with this name</legend></fieldset>
+            <figure class="found-map q-map" id="q-map" hidden>
+              <svg viewBox="0 0 400 240" role="img" focusable="false"></svg>
+              <figcaption></figcaption>
+            </figure>
+          </div>
+          <label class="q-all" id="q-all-wrap"><input type="checkbox" id="q-all" checked /> <span id="q-all-text"></span></label>
+          <div class="btnrow">
+            <button class="btn quiet" type="button" id="q-back">← Back</button>
+            <button class="btn" type="button" id="q-use">Use this →</button>
+            <button class="btn secondary" type="button" id="q-skip">Skip for now</button>
+          </div>
+        </div>
+        <div id="q-guess" hidden>
+          <ul class="g-list" id="q-guess-list"></ul>
+          <div class="btnrow">
+            <button class="btn quiet" type="button" id="g-back">← Back</button>
+            <button class="btn" type="button" id="g-ok">These are right →</button>
+          </div>
+        </div>
+        <p class="hint" id="q-next"></p>
+        <div id="msg-2q"></div>
       </section>
 
       <!-- 2 · open data -->

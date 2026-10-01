@@ -82,7 +82,9 @@
         msg(1, "Signed in again — press Build my atlas.", "ok");
         return;
       }
-      if (/(^|[?&])new=1/.test(location.search)) startFlow();
+      var fix = /(^|[?&])fix=([^&]+)/.exec(location.search);
+      if (fix) showFixes(decodeURIComponent(fix[2]));
+      else if (/(^|[?&])new=1/.test(location.search)) startFlow();
       else showHome();
     }).catch(function () {
       $("#gate").hidden = false;
@@ -252,6 +254,7 @@
     // visible underneath whatever step you moved to — so checking your data looked
     // like it was happening under "Open data"
     if ($("#s2b")) $("#s2b").hidden = true;
+    if ($("#s2q")) $("#s2q").hidden = true;
     if (n === 2) loadCountries();
     if (n === 3) loadCatalog();
     if (n === 1) prefillName();
@@ -986,7 +989,7 @@
   var BENCH = null, BENCH_KEY = "";
   // what the last look said: rows, rows placed, rows still open. Read by the
   // buttons below (the 60% rule) and carried to the atlas for its first look.
-  var FOUND = { rows: 0, placed: 0, open: 0, settled: false };
+  var FOUND = { rows: 0, placed: 0, open: 0, settled: false, rep: null };
   // Under this share of rows placed, the first offer is to choose the places
   // by hand: a file that mostly missed was read from the wrong column or the
   // wrong country, and "continue" would build an atlas of somewhere else.
@@ -1059,10 +1062,8 @@
         if (d.unreadRows) s += " " + d.unreadRows.toLocaleString() + rowsWord(d.unreadRows) + " we couldn’t read.";
         s += wholeCountryNote(d);
       }
-      if (left) s += " " + left.toLocaleString() + rowsWord(left) + (left > 1 ? " name" : " names") + " no place yet" +
-        (FOUND.settled && FOUND.open ? " — " + FOUND.open.toLocaleString() + (FOUND.open > 1 ? " need" : " needs") +
-          " a second look below." : ".");
-      else if (FOUND.settled) s += " Nothing to fix.";
+      if (FOUND.settled && FOUND.rep) s += " " + checkSays(FOUND.rep);
+      else if (left) s += " " + left.toLocaleString() + rowsWord(left) + (left > 1 ? " name" : " names") + " no place yet.";
       say.textContent = s;
     }
     var chips = $("#found-chips");
@@ -1095,7 +1096,9 @@
   function paintFoundButtons() {
     var on = $("#next-2b"), mine = $("#found-mine"), row = $("#found-btns"), back = $("#found-back");
     var share = foundShare();
-    var low = share != null && share < LOW_COVER;
+    // rows that are villages are not a wrong region: the offer to put them
+    // on as points speaks for them, and searching again would not help
+    var low = share != null && share < LOW_COVER && !pointsOfferWanted(FOUND.rep) && !FOUND.asPoints;
     on.className = low ? "btn secondary" : "btn";
     on.textContent = low ? "Continue anyway" : "Looks right →";
     mine.className = low ? "btn" : "btn secondary";
@@ -1202,6 +1205,7 @@
 
   function showFound() {
     [1, 2, 3, 4].forEach(function (i) { $("#s" + i).hidden = true; });
+    $("#s2q").hidden = true;
     $("#s2b").hidden = false;
     $$(".stp").forEach(function (b) { b.removeAttribute("aria-current"); });
     var rung = $("#stp-found");
@@ -1216,7 +1220,8 @@
   function stopBench() {
     if (BENCH) { BENCH.destroy(); BENCH = null; }
     BENCH_KEY = "";
-    FOUND = { rows: 0, placed: 0, open: 0, settled: false };
+    FOUND = { rows: 0, placed: 0, open: 0, settled: false, rep: null };
+    paintPointsOffer();
     var v = $("#check-verdict"), bar = $("#check-working");
     if (v) { v.hidden = true; v.textContent = ""; }
     if (bar) bar.hidden = true;
@@ -1228,7 +1233,7 @@
     if (BENCH && BENCH_KEY === key) return;        // already checked against these places
     if (BENCH) { BENCH.destroy(); BENCH = null; }
     BENCH_KEY = key;
-    FOUND = { rows: 0, placed: 0, open: 0, settled: false };
+    FOUND = { rows: 0, placed: 0, open: 0, settled: false, rep: null };
     var v = $("#check-verdict");
     v.hidden = false;
     v.classList.remove("err");
@@ -1269,14 +1274,17 @@
           FOUND.placed = Math.min(sum.features || 0, FOUND.rows);
           FOUND.open = sum.needsAttention || 0;
           FOUND.settled = true;
-          // the headline takes the check's number; the line under the bench
-          // only stays when there is something below it to look at
+          FOUND.rep = benchReport();
+          FOUND.asPoints = false;
+          $("#bench").hidden = false;
+          paintPointsOffer();
+          // the headline takes the check's number. Rows to look at are no
+          // longer picked from a list under the table (release 3): the words
+          // above say how many, and the question screen after this one asks.
           var v = $("#check-verdict");
           v.classList.remove("err");
-          v.hidden = !FOUND.open;
-          v.textContent = FOUND.open
-            ? FOUND.open.toLocaleString() + rowsWord(FOUND.open) + " need a second look — pick the right place for each below."
-            : "";
+          v.hidden = true;
+          v.textContent = "";
           paintFound();
         },
       });
@@ -1298,7 +1306,406 @@
     showFound();
   };
 
-  $("#next-2b").onclick = function () { msg("2b", ""); step(3); };
+  $("#next-2b").onclick = function () { msg("2b", ""); afterFound(); };
+
+  /* ================= release 3: same-name places, and villages =================
+
+     The check (the bench above) has joined the file's rows to the places it
+     can see. Three things can be left over, and each gets said plainly:
+       · a name that means more than one place, which the rows around it could
+         not settle — asked on the next screen, one name at a time;
+       · a place the model guessed a spelling for (release 4) — listed there
+         to confirm or change;
+       · a row whose place has no outline at all, usually a village, which the
+         outlines stop short of — offered as a point, looked up by name.
+     Rows put by their neighbours need nothing now; they are listed on the
+     finished atlas to check. */
+
+  function benchReport() {
+    var r = BENCH && BENCH.state && BENCH.state.result;
+    return (r && r.matchReport) || null;
+  }
+  function benchImport() {
+    var r = BENCH && BENCH.state && BENCH.state.result;
+    return (r && r.importId) || "";
+  }
+  // a fresh answer from the server becomes the bench's answer too, so the
+  // file it adds to the atlas at the end is the one fixed here
+  function takeResult(r) {
+    if (BENCH && BENCH.state) BENCH.state.result = r;
+    var rep = r.matchReport || {};
+    FOUND.rep = rep;
+    FOUND.placed = Math.min((r.stats && r.stats.features) || 0, FOUND.rows);
+    FOUND.open = (rep.ambiguous || []).length + (rep.unmatched || []).length;
+  }
+  function n(x) { return Number(x || 0).toLocaleString(); }
+  function plural(k, one, many) { return k === 1 ? one : many; }
+  // where a place is, in words: "Raghopur, Vaishali" — its district when the
+  // boundary knows it, else what it sits in
+  function whereIs(c) {
+    var up = c.area || c.parent || "";
+    return up && up !== c.name ? c.name + ", " + up : c.name;
+  }
+
+  function checkSays(rep) {
+    var bits = [];
+    var nb = (rep.byNeighbours || []).length;
+    var ql = questionsFrom(rep), qs = ql.length;
+    var same = ql.filter(function (q) { return q.sameName; }).length, spell = qs - same;
+    var guess = (rep.suggested || []).length;
+    var none = (rep.unmatched || []).length;
+    if (nb) bits.push(n(nb) + plural(nb, " row was", " rows were") + " put by their neighbours: the name is shared, " +
+      "and only one of those places is among your other rows. You can check " + plural(nb, "it", "them") + " on the finished atlas.");
+    if (qs) bits.push([
+      same ? n(same) + plural(same, " name could", " names could") + " mean more than one place" : "",
+      spell ? n(spell) + plural(spell, " name is", " names are") + " spelled unlike any place we know" : "",
+    ].filter(Boolean).join(", and ") + " — " + plural(qs, "one question follows.", n(qs) + " questions follow."));
+    if (guess) bits.push("We guessed the spelling of " + n(guess) + plural(guess, " place", " places") + " — check " +
+      plural(guess, "it", "them") + " next.");
+    if (none && rep.strategy === "coordinates") bits.push(n(none) + rowsWord(none) + plural(none, " has", " have") +
+      " no point yet; " + plural(none, "it waits", "they wait") + " on the finished atlas to be given one.");
+    else if (none) bits.push(n(none) + rowsWord(none) + " name no place we have an outline for" +
+      (pointsOfferWanted(rep) ? " — see below." : "; they wait on the finished atlas to be given one."));
+    if (!bits.length) bits.push("Nothing to fix.");
+    return bits.join(" ");
+  }
+
+  /* ---- the question screen ---- */
+
+  // one question per name, in the order the rows first say it
+  function questionsFrom(rep) {
+    var by = {}, out = [];
+    ((rep && rep.ambiguous) || []).forEach(function (a) {
+      if (!a.candidates || !a.candidates.length) return;
+      var k = String(a.name || "").trim().toLowerCase();
+      if (!by[k]) {
+        by[k] = { name: String(a.name || "").trim(), rows: [], sameName: !!a.sameName,
+                  candidates: a.candidates.slice(0, 4) };
+        out.push(by[k]);
+      }
+      by[k].rows.push(a.row);
+    });
+    return out;
+  }
+
+  var Q = { list: [], at: 0, guesses: [], home: null };
+
+  function afterFound() {
+    var rep = FOUND.rep;
+    if (!GEO.canonical || !rep || !benchImport()) { step(3); return; }
+    Q.list = questionsFrom(rep);
+    Q.guesses = (rep.suggested || []).slice();
+    Q.home = rep.home || null;
+    Q.at = 0;
+    if (Q.list.length) showQuestion();
+    else if (Q.guesses.length) showGuesses();
+    else step(3);
+  }
+
+  function showQPanel() {
+    [1, 2, 3, 4].forEach(function (i) { $("#s" + i).hidden = true; });
+    $("#s2b").hidden = true;
+    $("#s2q").hidden = false;
+    var rung = $("#stp-found");
+    if (rung) { rung.disabled = false; rung.setAttribute("aria-current", "step"); }
+    window.scrollTo({ top: 0 });
+    msg("2q", "");
+  }
+
+  function showQuestion() {
+    var q = Q.list[Q.at];
+    if (!q) { if (Q.guesses.length) showGuesses(); else step(3); return; }
+    showQPanel();
+    $("#q-ask").hidden = false;
+    $("#q-guess").hidden = true;
+    var many = Q.list.length > 1;
+    $("#q-count").textContent = many ? "Question " + (Q.at + 1) + " of " + Q.list.length : "One question";
+    var rows = q.rows.length;
+    $("#q-title").textContent = q.sameName ? "Which " + q.name + " did you mean?" : "Which place is “" + q.name + "”?";
+    var home = q.candidates.some(function (c) { return c.km != null; });
+    $("#q-intro").textContent = (rows > 1 ? n(rows) + " rows say “" + q.name + "”. " : "One row says “" + q.name + "”. ") +
+      (q.sameName
+        ? n(q.candidates.length) + " places have that name" + (home ? ". The one nearest your other places is first." : ".")
+        : "No place is spelled quite like that. " + (q.candidates.length === 1 ? "This is the closest one."
+          : "These are the closest" + (home ? ", nearest your other places first." : ".")));
+    var box = $("#q-opts");
+    box.innerHTML = "";
+    q.candidates.forEach(function (c, i) {
+      var lab = document.createElement("label");
+      lab.className = "q-opt";
+      var meta = c.inside ? "inside the area your other places cover"
+        : c.km != null ? "about " + n(c.km) + " km from your other places" : "";
+      lab.innerHTML = '<input type="radio" name="q-pick" value="' + esc(c.code) + '"' + (i === 0 ? " checked" : "") + ">" +
+        '<span class="q-num" aria-hidden="true">' + (i + 1) + "</span>" +
+        '<span class="q-what"><b>' + esc(whereIs(c)) + "</b>" +
+        (i === 0 ? ' <span class="q-tag">suggested</span>' : "") +
+        (meta ? '<span class="q-meta">' + esc(meta) + "</span>" : "") + "</span>";
+      lab.querySelector("input").onchange = paintUse;
+      box.appendChild(lab);
+    });
+    $("#q-all-wrap").hidden = rows < 2;
+    $("#q-all").checked = true;
+    $("#q-all-text").textContent = "Same for all " + n(rows) + " rows that say “" + q.name + "”";
+    var nextQ = Q.list[Q.at + 1];
+    $("#q-next").textContent = (nextQ ? "Next: “Which " + nextQ.name + " did you mean?” · " : "") +
+      "Skipped rows wait on the finished atlas under “rows that need a place”.";
+    drawQMap(q);
+    paintUse();
+  }
+  function picked() {
+    var r = document.querySelector('#q-opts input[name="q-pick"]:checked');
+    var q = Q.list[Q.at];
+    if (!r || !q) return null;
+    for (var i = 0; i < q.candidates.length; i++) if (String(q.candidates[i].code) === r.value) return q.candidates[i];
+    return null;
+  }
+  function paintUse() {
+    var c = picked();
+    $("#q-use").textContent = c ? "Use " + whereIs(c) + " →" : "Use this →";
+  }
+
+  // fixes go to the same place the bench's own list sent them
+  function resolve(fixes) {
+    return api("layers/resolve", { method: "POST", body: { importId: benchImport(), fixes: fixes, draft: false } })
+      .then(function (r) { takeResult(r); return r; });
+  }
+  function answer(skip) {
+    var q = Q.list[Q.at], c = picked();
+    if (!q || (!skip && !c)) return;
+    var all = rows1(q);
+    var fixes = all.map(function (row) { return skip ? { row: row, skip: true } : { row: row, code: String(c.code) }; });
+    var btns = [$("#q-use"), $("#q-skip")];
+    btns.forEach(function (b) { b.disabled = true; });
+    resolve(fixes).then(function () {
+      q.rows = q.rows.filter(function (r) { return all.indexOf(r) < 0; });
+      if (!q.rows.length) Q.at++;
+      showQuestion();
+    }).catch(function (e) { msg("2q", errMsg(e)); })
+      .then(function () { btns.forEach(function (b) { b.disabled = false; }); });
+  }
+  // every row with this name, or only the first when "same for all" is off
+  function rows1(q) { return $("#q-all").checked || q.rows.length < 2 ? q.rows.slice() : [q.rows[0]]; }
+  $("#q-use").onclick = function () { answer(false); };
+  $("#q-skip").onclick = function () { answer(true); };
+  $("#q-back").onclick = function () {
+    if ($("#q-guess").hidden && Q.at > 0) { Q.at--; showQuestion(); return; }
+    if (!$("#q-guess").hidden && Q.list.length) { Q.at = Q.list.length - 1; showQuestion(); return; }
+    showFound();
+  };
+  $("#g-back").onclick = function () { $("#q-back").onclick(); };
+
+  /* The model's spellings (release 4): placed, and marked as a guess until
+     somebody looks. Keeping one is confirming it; changing it picks another
+     place from the same short list. Either way it stops being a guess. */
+  function showGuesses() {
+    showQPanel();
+    $("#q-ask").hidden = true;
+    $("#q-guess").hidden = false;
+    $("#q-count").textContent = Q.list.length ? "Last check" : "One check";
+    $("#q-title").textContent = "We guessed these spellings — check them";
+    $("#q-intro").textContent = "These names matched no place exactly, so we picked the closest. " +
+      "Keep the ones that are right; change the rest, or leave them off the map for now.";
+    var list = $("#q-guess-list");
+    list.innerHTML = "";
+    Q.guesses.forEach(function (g) {
+      var li = document.createElement("li");
+      var opts = [{ code: g.code, name: g.place, parent: g.parent, area: g.area }].concat((g.candidates || []).filter(function (c) {
+        return String(c.code) !== String(g.code);
+      }));
+      li.innerHTML = '<span class="g-name">“' + esc(g.name) + "”</span>" +
+        '<label class="g-pick"><span class="sr">Place for ' + esc(g.name) + "</span><select data-row=\"" + g.row + "\">" +
+        opts.map(function (c, i) {
+          return '<option value="' + esc(c.code) + '">' + esc(whereIs(c)) + (i === 0 ? " (our guess)" : "") + "</option>";
+        }).join("") + '<option value="">Leave it off for now</option></select></label>';
+      list.appendChild(li);
+    });
+    $("#q-next").textContent = "Anything left off waits on the finished atlas under “rows that need a place”.";
+    $("#q-map").hidden = true;
+  }
+  $("#g-ok").onclick = function () {
+    var fixes = $$("#q-guess-list select").map(function (s) {
+      var row = Number(s.dataset.row);
+      return s.value ? { row: row, code: s.value } : { row: row, skip: true };
+    });
+    var b = this;
+    b.disabled = true;
+    resolve(fixes).then(function () { Q.guesses = []; step(3); })
+      .catch(function (e) { msg("2q", errMsg(e)); })
+      .then(function () { b.disabled = false; });
+  };
+
+  /* A small map for the question: the area the other rows cover, and each
+     place of that name as a numbered dot. Only drawn when the places have a
+     position and there are few enough to tell apart. */
+  function drawQMap(q) {
+    var fig = $("#q-map");
+    var pts = q.candidates.filter(function (c) { return c.at; });
+    if (pts.length < 2) { fig.hidden = true; return; }
+    fig.hidden = false;
+    var W = 400, H = 240, PAD = 22;
+    var bb = [180, 90, -180, -90];
+    function grow(x, y) {
+      if (x < bb[0]) bb[0] = x; if (y < bb[1]) bb[1] = y; if (x > bb[2]) bb[2] = x; if (y > bb[3]) bb[3] = y;
+    }
+    pts.forEach(function (c) { grow(c.at[0], c.at[1]); });
+    if (Q.home) { grow(Q.home[0], Q.home[1]); grow(Q.home[2], Q.home[3]); }
+    var cosL = Math.cos((bb[1] + bb[3]) / 2 * Math.PI / 180) || 1;
+    var dx = Math.max((bb[2] - bb[0]) * cosL, 0.05), dy = Math.max(bb[3] - bb[1], 0.05);
+    var k = Math.min((W - 2 * PAD) / dx, (H - 2 * PAD) / dy);
+    var ox = (W - dx * k) / 2, oy = (H - dy * k) / 2;
+    var px = function (lon) { return ox + (lon - bb[0]) * cosL * k; };
+    var py = function (lat) { return oy + (bb[3] - lat) * k; };
+    var out = [];
+    if (Q.home) {
+      var x0 = px(Q.home[0]), y0 = py(Q.home[3]), x1 = px(Q.home[2]), y1 = py(Q.home[1]);
+      out.push('<rect class="qm-home" x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + (x1 - x0).toFixed(1) +
+        '" height="' + (y1 - y0).toFixed(1) + '" rx="4"/>');
+      out.push('<text class="fm-name qm-home-t" x="' + ((x0 + x1) / 2).toFixed(1) + '" y="' + (y1 + 13 > H - 2 ? y0 - 5 : y1 + 13).toFixed(1) +
+        '">your other places</text>');
+    }
+    pts.forEach(function (c) {
+      var i = q.candidates.indexOf(c) + 1, x = px(c.at[0]), y = py(c.at[1]);
+      out.push('<circle class="qm-dot' + (i === 1 ? " qm-first" : "") + '" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="12"/>' +
+        '<text class="qm-num" x="' + x.toFixed(1) + '" y="' + (y + 4.5).toFixed(1) + '">' + i + "</text>");
+    });
+    var svg = fig.querySelector("svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.innerHTML = out.join("");
+    var cap = "Each place called " + q.name + ", numbered as in the list" + (Q.home ? ", and the area your other rows cover." : ".");
+    fig.querySelector("figcaption").textContent = cap;
+    fig.setAttribute("aria-label", cap);
+  }
+
+  /* ---- rows no outline can hold: offer them as points ----
+
+     Found in release 2's testing: a sheet of village names, with a district
+     column, on an atlas of districts. The region check read the district
+     column and said most rows named a place we know; the rows were then joined
+     to outlines by the village name, and the finest outlines there are blocks,
+     not villages. Nothing landed, and an empty layer was added. The outlines
+     cannot be made finer here; what can be done is to look each village up by
+     name (and district) on OpenStreetMap and put it on the map as a point —
+     the same lookup "By address" uses on an atlas's own Add data page. The
+     person sees what was found before anything moves. */
+
+  var PTS = { running: false, results: [], column: "", context: [] };
+
+  function pointsOfferWanted(rep) {
+    if (!rep || rep.strategy !== "adminJoin" || FOUND.asPoints || FOUND.noPoints) return false;
+    var none = (rep.unmatched || []).length;
+    return none >= 3 && FOUND.rows && none / FOUND.rows >= 0.25;
+  }
+  function placeColumns() {
+    var cols = (BENCH && BENCH.state && BENCH.state.result && BENCH.state.result.columns) || [];
+    var name = "", ctx = [];
+    cols.forEach(function (c) {
+      if (c.role === "placeName") name = c.name;
+      else if (c.role === "adminParent") ctx.push(c.name);
+    });
+    // a district or state column the check did not use as the parent still says where
+    if (!ctx.length) cols.forEach(function (c) {
+      if (c.name !== name && /district|zila|jila|tehsil|taluk|block|state/i.test(c.name)) ctx.push(c.name);
+    });
+    return { name: name, context: ctx.slice(0, 2) };
+  }
+
+  function paintPointsOffer() {
+    var box = $("#found-points");
+    if (!box) return;
+    var rep = FOUND.rep;
+    if (PTS.running) return;
+    if (!FOUND.settled || !pointsOfferWanted(rep)) {
+      if (!FOUND.asPoints) { box.hidden = true; box.innerHTML = ""; }
+      return;
+    }
+    var none = (rep.unmatched || []).length, pc = placeColumns();
+    var secs = Math.max(5, Math.round(FOUND.rows * 1.2));
+    box.hidden = false;
+    box.innerHTML =
+      "<h3>" + n(none) + " of " + n(FOUND.rows) + " rows name places we have no outline for</h3>" +
+      "<p>Villages, most likely: the outlines on this atlas go down to blocks, not villages, so a village name has nothing to match. " +
+      "We can look each row up by name on OpenStreetMap, a free public map, and put it on your atlas as a point instead of an outline.</p>" +
+      '<p class="hint">Only the ' + esc([pc.name || "place"].concat(pc.context).join(" and ")) +
+      (pc.context.length ? " columns are" : " column is") + " sent, one row a second — about " + (secs < 90 ? secs + " seconds" : Math.round(secs / 60) + " minutes") +
+      ". You see what was found before anything goes on the map.</p>" +
+      '<div class="btnrow"><button class="btn" type="button" id="pts-go">Put every row on as a point</button>' +
+      '<button class="btn quiet" type="button" id="pts-no">Keep outlines only</button></div>';
+    $("#pts-go").onclick = lookUpPoints;
+    $("#pts-no").onclick = function () { box.hidden = true; FOUND.noPoints = true; paintFound(); };
+  }
+
+  function lookUpPoints() {
+    var box = $("#found-points"), pc = placeColumns();
+    if (!pc.name || !benchImport()) return;
+    PTS = { running: true, results: [], column: pc.name, context: pc.context };
+    box.innerHTML = "<h3>Looking up your places…</h3>" +
+      '<p id="pts-progress">Starting.</p><div class="working"><i></i></div>';
+    (function round() {
+      api("layers/locate", { method: "POST", body: { importId: benchImport(), column: pc.name, context: pc.context } })
+        .then(function (r) {
+          PTS.results = r.results || [];
+          var p = $("#pts-progress");
+          if (p) p.textContent = n(r.done) + " of " + n(r.total) + " looked up.";
+          if (r.more > 0) { round(); return; }
+          PTS.running = false;
+          showPoints();
+        })
+        .catch(function (e) {
+          PTS.running = false;
+          box.innerHTML = '<p class="msg err">' + esc(errMsg(e)) + "</p>" +
+            '<div class="btnrow"><button class="btn secondary" type="button" id="pts-again">Try again</button></div>';
+          $("#pts-again").onclick = lookUpPoints;
+        });
+    })();
+  }
+
+  function showPoints() {
+    var box = $("#found-points");
+    var found = PTS.results.filter(function (r) { return r.lat != null; });
+    var sure = found.filter(function (r) { return r.agrees && !r.collided; });
+    box.innerHTML =
+      "<h3>Found " + n(found.length) + " of " + n(PTS.results.length) + "</h3>" +
+      "<p>Ticked are the ones whose name matches what the map found. Untick anything that is not the place you meant; " +
+      "anything unticked or not found waits on the finished atlas under “rows that need a place”.</p>" +
+      '<ul class="pts-list">' + PTS.results.map(function (r) {
+        var ok = r.lat != null;
+        return "<li><label>" + '<input type="checkbox" value="' + r.row + '"' + (ok ? "" : " disabled") +
+          (ok && r.agrees && !r.collided ? " checked" : "") + ">" +
+          '<span><b>' + esc(r.query.split(",")[0]) + "</b> " +
+          (ok ? '<span class="pts-found">' + esc(r.label || "") + "</span>" : '<span class="pts-miss">not found</span>') +
+          "</span></label></li>";
+      }).join("") + "</ul>" +
+      '<div class="btnrow"><button class="btn" type="button" id="pts-keep">Use the ticked ones (' + n(sure.length) + ")</button>" +
+      '<button class="btn quiet" type="button" id="pts-cancel">Keep outlines only</button></div>';
+    var keepBtn = $("#pts-keep");
+    $$("#found-points .pts-list input").forEach(function (i) {
+      i.onchange = function () {
+        keepBtn.textContent = "Use the ticked ones (" + $$("#found-points .pts-list input:checked").length + ")";
+      };
+    });
+    $("#pts-cancel").onclick = function () { box.hidden = true; FOUND.noPoints = true; paintFound(); };
+    keepBtn.onclick = function () {
+      var rows = $$("#found-points .pts-list input:checked").map(function (i) { return Number(i.value); });
+      if (!rows.length) return;
+      keepBtn.disabled = true;
+      api("layers/locate/keep", { method: "POST", body: { importId: benchImport(), rows: rows } })
+        .then(function () { return resolve([]); })
+        .then(function (r) {
+          FOUND.asPoints = true;
+          // the dots on the small map are the rows now
+          GEO.points = PTS.results.filter(function (x) { return x.lat != null && rows.indexOf(x.row) >= 0; })
+            .map(function (x) { return [x.lng, x.lat]; });
+          // the table below still shows the outline check; it is not what goes on the map now
+          $("#bench").hidden = true;
+          box.innerHTML = "<h3>" + n((r.stats && r.stats.features) || 0) + " rows go on the map as points</h3>" +
+            "<p>" + (FOUND.rows - FOUND.placed > 0
+              ? n(FOUND.rows - FOUND.placed) + rowsWord(FOUND.rows - FOUND.placed) + " wait on the finished atlas under “rows that need a place”."
+              : "Every row has a place.") + "</p>";
+          paintFound();
+        })
+        .catch(function (e) { keepBtn.disabled = false; msg("2b", errMsg(e)); });
+    };
+  }
   /* Back to the search. When the file mostly missed, the places it put on the
      list go with it — they are the wrong answer, and leaving them ticked
      would carry the mistake forward. The file itself stays: it still goes on
@@ -1652,7 +2059,11 @@
     // the file has waited on the server since the check step; the atlas exists
     // now, so it is told where it belongs and added BEFORE we leave the page —
     // this page is what hands it over, so navigating early would lose it
-    if (BENCH && GEO.canonical) {
+    // a file none of whose rows found a place is not added as an empty layer
+    // (the server refuses one since release 3); the first look says so
+    if (BENCH && GEO.canonical && FOUND.settled && !FOUND.placed) {
+      look.added = false; keepLook();
+    } else if (BENCH && GEO.canonical) {
       $("#prog-msg").textContent = "Adding " + GEO.file.name + " to your atlas…";
       BENCH.bindDataset(S.slug);
       BENCH.commit().then(function () {
@@ -1672,6 +2083,178 @@
     $("#prog-msg").textContent = "Opening your atlas…";
     location.href = go;
   }
+
+  /* ================= rows that need a place, on a built atlas =================
+
+     Reached from the atlas's first look. Everything here is worked out by the
+     server from the import it kept for these rows (GET /layers/repair), and
+     each answer is committed straight onto the atlas (POST /layers/repair),
+     which then says what is still open. Three kinds of row, three groups:
+     the ones with no place yet, the ones put by their neighbours to check,
+     and the spellings the model guessed. */
+  var FIX = { slug: "", imports: [] };
+
+  function showFixes(slug) {
+    FIX.slug = slug;
+    $("#home").hidden = true; $("#gate").hidden = true; $("#flow").hidden = true;
+    $("#fixes").hidden = false;
+    $("#fixes-open").href = "../?dataset=" + encodeURIComponent(slug);
+    $("#fixes-intro").textContent = "Loading…";
+    loadFixes();
+  }
+  function loadFixes() {
+    api("layers/repair?dataset=" + encodeURIComponent(FIX.slug)).then(function (r) {
+      FIX.imports = r.imports || [];
+      paintFixes();
+    }).catch(function (e) {
+      $("#fixes-intro").textContent = "";
+      msg("fixes", errMsg(e));
+    });
+  }
+  function paintFixes() {
+    var list = $("#fixes-list");
+    list.innerHTML = "";
+    var total = 0;
+    FIX.imports.forEach(function (imp) { total += imp.rows.length; });
+    $("#fixes-done").hidden = !total;
+    if (!total) {
+      $("#fixes-intro").textContent = FIX.dismissed ? "Nothing is listed here any more."
+        : "Nothing is waiting: every row has a place, and every one put by its neighbours has been checked.";
+      return;
+    }
+    $("#fixes-intro").textContent = "Your atlas is built and these rows are on it, or waiting to be. " +
+      "Each answer here goes straight onto the map.";
+    FIX.imports.forEach(function (imp) {
+      var groups = [
+        { kinds: ["question", "skipped", "unplaced"], title: "Still need a place",
+          say: "Left off the map for now. Pick the right place, or leave a row off." },
+        { kinds: ["byNeighbours"], title: "Put by their neighbours — check them",
+          say: "These names belong to more than one place. We chose the one among your other rows; keep it or change it." },
+        { kinds: ["suggested"], title: "We guessed these spellings — check them",
+          say: "No place was spelled quite like these, so we picked the closest." },
+      ];
+      if (FIX.imports.length > 1) {
+        var h = document.createElement("p");
+        h.className = "hint";
+        h.textContent = "From " + (imp.file || imp.label);
+        list.appendChild(h);
+      }
+      groups.forEach(function (g) {
+        var rows = imp.rows.filter(function (r) { return g.kinds.indexOf(r.kind) >= 0; });
+        if (!rows.length) return;
+        var sec = document.createElement("section");
+        sec.className = "fix-group";
+        sec.innerHTML = "<h3>" + esc(g.title) + " · " + rows.length + "</h3><p class=\"hint\">" + esc(g.say) + "</p>";
+        // rows with the same name are answered together
+        var byName = {}, order = [];
+        rows.forEach(function (r) {
+          var k = String(r.name || "").trim().toLowerCase() + "|" + r.kind;
+          if (!byName[k]) { byName[k] = []; order.push(k); }
+          byName[k].push(r);
+        });
+        order.forEach(function (k) { sec.appendChild(fixItem(imp, byName[k])); });
+        list.appendChild(sec);
+      });
+    });
+  }
+  function fixItem(imp, rows) {
+    var r0 = rows[0], box = document.createElement("div");
+    box.className = "fix-item";
+    var name = "fx-" + imp.importId + "-" + r0.row;
+    var placed = r0.kind === "byNeighbours" || r0.kind === "suggested";
+    var cands = (r0.candidates || []).slice(0, 4);
+    if (placed && !cands.some(function (c) { return String(c.code) === String(r0.code); })) {
+      cands.unshift({ code: r0.code, name: r0.place, parent: r0.parent, area: r0.area });
+    }
+    var head = "“" + esc(r0.name) + "”" + (rows.length > 1 ? " · " + rows.length + " rows" : "");
+    var now = placed ? "On the map at " + esc(whereIs({ name: r0.place, parent: r0.parent, area: r0.area })) + "."
+      : r0.kind === "skipped" ? "Skipped while setting up."
+      : r0.reason === "bad coordinates" ? "No point for it yet: the map lookup did not find it, or it was left unticked. " +
+        "To place it, correct the name in your file and add the file again under Your data."
+      : cands.length ? "Could be more than one place." : "No place of this name in the atlas’s outlines.";
+    box.innerHTML = "<h4>" + head + "</h4><p class=\"hint\">" + now + "</p>";
+    var opts = document.createElement("div");
+    opts.className = "q-opts";
+    function paintOpts(list) {
+      opts.innerHTML = "";
+      list.forEach(function (c, i) {
+        var meta = c.inside ? "inside the area your other places cover"
+          : c.km != null ? "about " + n(c.km) + " km from your other places" : "";
+        var on = placed ? String(c.code) === String(r0.code) : i === 0;
+        var lab = document.createElement("label");
+        lab.className = "q-opt";
+        lab.innerHTML = '<input type="radio" name="' + name + '" value="' + esc(c.code) + '"' + (on ? " checked" : "") + ">" +
+          '<span class="q-what"><b>' + esc(whereIs(c)) + "</b>" +
+          (placed && String(c.code) === String(r0.code) ? ' <span class="q-tag">on the map now</span>' : "") +
+          (meta ? '<span class="q-meta">' + esc(meta) + "</span>" : "") + "</span>";
+        lab.querySelector("input").onchange = function () {
+          use.textContent = !placed ? "Put it here" : this.value === String(r0.code) ? "Keep this" : "Move it here";
+        };
+        opts.appendChild(lab);
+      });
+    }
+    paintOpts(cands);
+    box.appendChild(opts);
+    // a row with nothing to choose from can be given a place by name
+    if (!cands.length && r0.reason !== "bad coordinates") {
+      var find = document.createElement("div");
+      find.className = "fix-find";
+      find.innerHTML = '<label class="sr" for="' + name + '-q">Find a place for ' + esc(r0.name) + "</label>" +
+        '<input type="search" id="' + name + '-q" placeholder="Type the place’s name as the map spells it" />' +
+        '<button class="btn secondary" type="button">Find</button>';
+      var inp = find.querySelector("input");
+      function go() {
+        api("layers/repair/find?importId=" + encodeURIComponent(imp.importId) + "&q=" + encodeURIComponent(inp.value))
+          .then(function (res) {
+            cands = res.matches || [];
+            paintOpts(cands);
+            if (!cands.length) box.querySelector(".hint").textContent = "Nothing on the map is called that. Try another spelling.";
+            use.hidden = !cands.length;
+          }).catch(function (e) { msg("fixes", errMsg(e)); });
+      }
+      find.querySelector("button").onclick = go;
+      inp.addEventListener("keydown", function (e) { if (e.key === "Enter") go(); });
+      box.appendChild(find);
+    }
+    var btns = document.createElement("div");
+    btns.className = "btnrow";
+    btns.innerHTML = '<button class="btn" type="button">' + (placed ? "Keep this" : "Put it here") + "</button>" +
+      (placed || r0.kind !== "skipped" ? '<button class="btn quiet" type="button">Leave ' + (rows.length > 1 ? "them" : "it") + " off the map</button>" : "");
+    var use = btns.children[0], off = btns.children[1];
+    use.hidden = !cands.length;
+    use.onclick = function () {
+      var r = box.querySelector('input[type="radio"]:checked');
+      if (!r) return;
+      send(imp, rows.map(function (x) { return { row: x.row, code: r.value }; }), box);
+    };
+    if (off) off.onclick = function () { send(imp, rows.map(function (x) { return { row: x.row, skip: true }; }), box); };
+    box.appendChild(btns);
+    return box;
+  }
+  function send(imp, fixes, box) {
+    $$("#fixes-list button").forEach(function (b) { b.disabled = true; });
+    api("layers/repair", { method: "POST", body: { importId: imp.importId, fixes: fixes } }).then(function (r) {
+      imp.rows = r.rows || [];
+      paintFixes();
+      msg("fixes", "Saved — it is on the atlas now.", "ok");
+    }).catch(function (e) {
+      $$("#fixes-list button").forEach(function (b) { b.disabled = false; });
+      msg("fixes", errMsg(e));
+    });
+  }
+  $("#fixes-done").onclick = function () {
+    var b = this;
+    b.disabled = true;
+    Promise.all(FIX.imports.map(function (imp) {
+      return api("layers/repair", { method: "POST", body: { importId: imp.importId, dismiss: true } });
+    })).then(function () {
+      FIX.imports = [];
+      FIX.dismissed = true;
+      paintFixes();
+      msg("fixes", "Done. Rows still off the map stay off it; add the file again under Your data to change that.", "ok");
+    }).catch(function (e) { msg("fixes", errMsg(e)); })
+      .then(function () { b.disabled = false; });
+  };
 
   boot();
 })();

@@ -20,6 +20,17 @@ import { trimFeatureCollection } from './coords.js';
 
 const IMPORTS_DIR = path.join(DATA_DIR, 'imports');
 const TTL_MS = 24 * 3600 * 1000;
+/* An import whose layer went onto an atlas with rows still needing a place
+   (skipped, not found, or put by their neighbours and not yet checked) is
+   kept after the commit, so those rows can be fixed from the finished atlas.
+   It is let go when the owner has settled or dismissed them, when its layer
+   is taken off the atlas, or thirty days after it was last touched —
+   whichever comes first. Everything else keeps the plain 24 hours. */
+export const REPAIR_TTL_MS = 30 * 24 * 3600 * 1000;
+function expired(s) {
+  if (s && s.repair) return Date.now() - (s.repair.touchedAt || s.createdAt) > REPAIR_TTL_MS;
+  return Date.now() - s.createdAt > TTL_MS;
+}
 
 // A built atlas lives under ONE of two roots: public ones the web server can
 // serve as static files, private ones outside the web root that only the keyed
@@ -86,7 +97,7 @@ export function getImport(id) {
   if (!/^imp_[a-f0-9]{16}$/.test(String(id))) return null;
   try {
     const s = JSON.parse(fs.readFileSync(path.join(IMPORTS_DIR, id + '.json'), 'utf8'));
-    if (Date.now() - s.createdAt > TTL_MS) { discardImport(id); return null; }
+    if (expired(s)) { discardImport(id); return null; }
     return s;
   } catch { return null; }
 }
@@ -182,24 +193,52 @@ export function listImports(dataset) {
     return fs.readdirSync(IMPORTS_DIR)
       .filter((f) => f.endsWith('.json'))
       .map((f) => { try { return JSON.parse(fs.readFileSync(path.join(IMPORTS_DIR, f), 'utf8')); } catch { return null; } })
-      .filter((s) => s && s.dataset === dataset && Date.now() - s.createdAt <= TTL_MS)
-      .map((s) => ({ id: s.id, filename: s.filename || '', createdAt: s.createdAt, label: (s.spec && s.spec.label) || '' }));
+      .filter((s) => s && s.dataset === dataset && !expired(s))
+      .map((s) => ({ id: s.id, filename: s.filename || '', createdAt: s.createdAt, label: (s.spec && s.spec.label) || '',
+        ...(s.repair ? { repair: { layerId: s.repair.layerId, open: s.repair.open || 0 } } : {}) }));
   } catch { return []; }
+}
+
+// Keep a committed import for its rows that still need a place (see REPAIR_TTL_MS).
+export function keepForRepair(session, layerId, open) {
+  session.repair = { layerId, open, touchedAt: Date.now() };
+  saveImport(session);
+}
+
+// The imports kept for one atlas's rows to fix, whole — the caller checks access.
+export function repairsFor(dataset) {
+  try {
+    return fs.readdirSync(IMPORTS_DIR)
+      .filter((f) => /^imp_[a-f0-9]{16}\.json$/.test(f))
+      .map((f) => { try { return JSON.parse(fs.readFileSync(path.join(IMPORTS_DIR, f), 'utf8')); } catch { return null; } })
+      .filter((s) => s && s.repair && s.dataset === dataset && !expired(s) && !layerGone(s));
+  } catch { return []; }
+}
+
+// the layer a kept import was for is no longer on its atlas
+function layerGone(s) {
+  if (!s.repair || !s.dataset) return false;
+  let m;
+  try { m = readManifest(s.dataset); } catch { return false; }   // unreadable is not gone
+  if (!m) return true;
+  return !((m.local && m.local.layers) || []).some((l) => l.id === s.repair.layerId);
 }
 export function sweepImports() {
   try {
     for (const f of fs.readdirSync(IMPORTS_DIR)) {
       const p = path.join(IMPORTS_DIR, f);
-      if (f.endsWith('.geom.json')) {
-        // orphaned geometry side files (session gone) are swept here
-        if (!fs.existsSync(path.join(IMPORTS_DIR, f.replace('.geom.json', '.json')))) {
+      const side = f.match(/^(imp_[a-f0-9]{16})\.(geom|targets)\.json$/);
+      if (side) {
+        // orphaned side files (session gone) are swept here
+        if (!fs.existsSync(path.join(IMPORTS_DIR, side[1] + '.json'))) {
           fs.rmSync(p, { force: true });
         }
         continue;
       }
+      if (!f.endsWith('.json')) continue;
       try {
         const s = JSON.parse(fs.readFileSync(p, 'utf8'));
-        if (Date.now() - s.createdAt > TTL_MS) discardImport(s.id);
+        if (expired(s) || layerGone(s)) discardImport(s.id);
       } catch { fs.rmSync(p, { force: true }); }
     }
   } catch {}

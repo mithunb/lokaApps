@@ -528,11 +528,12 @@
       '<div class="own-first-k">Your atlas is built</div>' +
       "<p>" + esc(built) + "</p>" +
       "<p>" + esc(rows) + "</p>" +
-      (left ? '<p class="own-first-warn">' + left.toLocaleString() + (left === 1 ? " row" : " rows") +
+      (left ? '<p class="own-first-warn" id="own-first-left">' + left.toLocaleString() + (left === 1 ? " row" : " rows") +
         " still " + (left === 1 ? "needs" : "need") + " a place, and " + (left === 1 ? "was" : "were") +
         " left off the map. Fix the place names in your file and " +
         '<a href="./add-data/?dataset=' + encodeURIComponent(SLUG) + '">add it again under Your data</a>' +
         " — the atlas then uses that copy.</p>" : "") +
+      '<div id="own-first-fix"></div>' +
       '<div class="own-row own-first-acts">' +
         '<button class="share-btn primary" type="button" id="own-first-live">Make it live</button>' +
         '<button class="share-btn" type="button" id="own-first-open">Add open data</button>' +
@@ -552,6 +553,26 @@
       else { shut(); toast("Only the owner can make an atlas live"); }
     };
     box.querySelector(".own-first-x").focus();
+    firstLookFixes(box);
+  }
+
+  /* Release 3: the rows still waiting, from the server's own list rather
+     than the wizard's numbers — rows that need a place link to the page that
+     gives them one, and rows put by their neighbours are named so they can
+     be checked. When the list is there, it replaces the "fix your file and
+     add it again" advice, which was the only way before. */
+  function firstLookFixes(box) {
+    api("layers/repair?dataset=" + encodeURIComponent(SLUG)).then(function (r) {
+      var need = 0, to = { byNeighbours: [], suggested: [] }, href = "./setup/?fix=" + encodeURIComponent(SLUG), html = "", old = box.querySelector("#own-first-left");
+      ((r && r.imports) || []).forEach(function (imp) { (imp.rows || []).forEach(function (x) { var l = to[x.kind]; if (!l) need++; else if (l.indexOf(x.name) < 0) l.push(x.name); }); });
+      if (need) html += '<p class="own-first-warn">' + need.toLocaleString() + (need === 1 ? " row still needs" : " rows still need") +
+        ' a place — <a href="' + href + '">give ' + (need === 1 ? "it" : "them") + " one</a>.</p>";
+      [["byNeighbours", " was put by its neighbours", " were put by their neighbours"], ["suggested", " was guessed from its spelling", " were guessed from their spelling"]].forEach(function (k) {
+        var nb = to[k[0]], one = nb.length === 1; if (nb.length) html += "<p>" + nb.length + (one ? " place" + k[1] : " places" + k[2]) + " (" + esc(nb.slice(0, 3).join(", ") +
+          (nb.length > 3 ? " and " + (nb.length - 3) + " more" : "")) + '). <a href="' + href + '">Check ' + (one ? "it" : "them") + "</a>.</p>";
+      });
+      if (old && need) old.parentNode.removeChild(old); box.querySelector("#own-first-fix").innerHTML = html;
+    }).catch(function () { /* no list: the wizard's numbers above stand */ });
   }
 
   /* GET /layers/list is the authority on WHICH layers are on this atlas, and on

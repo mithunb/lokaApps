@@ -154,7 +154,8 @@ check('the call is budgeted like every other', /if \(ask\.length && geminiAllowe
 check('the model is sent what fallbackRequest built, nothing else', /JSON\.stringify\(ask\),\s*\n\s*\]\.join/.test(server), true);
 check('its answer goes through applyFallback', /const chosen = applyFallback\(result\.matchReport, adj\);/.test(server), true);
 check('each pick is recorded as a suggestion', /session\.suggested\[row\] = chosen\[row\];/.test(server), true);
-check('and listed for the owner with the place it chose', /report\.suggested = report\.suggested \|\| \[\]\)\.push\(\{ row: res\.row, name: res\.name, code, place: target\.name \}\)/.test(server), true);
+// release 3: the entry also carries the place's parent and what it was chosen from, for the question screen
+check('and listed for the owner with the place it chose', /report\.suggested = report\.suggested \|\| \[\]\)\.push\(\{ row: res\.row, name: res\.name, code, place: target\.name,/.test(server), true);
 check('a manual fix takes the row off that list', /if \(session\.suggested\) delete session\.suggested\[f\.row\];/.test(server), true);
 check('look-alikes ride on the unmatched entry for the model to see', /\.\.\.\(res\.loose && res\.loose\.length \? \{ loose: res\.loose \} : \{\}\)/.test(server), true);
 

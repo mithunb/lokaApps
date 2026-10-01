@@ -83,8 +83,9 @@ check('five hundred rows at most', /const LOCATE_MAX_ROWS = 500;/.test(server), 
 check('a bigger file is turned away with the arithmetic',
   /looking up ' \+ rows\.length \+ ' addresses one at a time would take '/.test(server), true);
 check('asking again resumes rather than restarting', /if \(held\[i\]\) continue;/.test(server), true);
+// release 3: the question is the column plus any context columns (district, state) added to each lookup
 check('a different column is a different question',
-  /if \(!session\.located \|\| session\.located\.column !== col\) session\.located = \{ column: col, byRow: \{\} \};/.test(server), true);
+  /if \(!session\.located \|\| \(session\.located\.asked \|\| session\.located\.column\) !== asked\) \{\s*session\.located = \{ column: col, asked, byRow: \{\} \};/.test(server), true);
 check('the lookup is biased to the atlas’s own region', /function locateBias\(session\)/.test(server), true);
 
 console.log('\n  the page offers it as a third way to place rows');
