@@ -67,9 +67,8 @@
 
   var STEPS234_HTML = `    <section class="panel step" id="db-step-2" hidden>
       <h2 id="check-title">Check your table</h2>
-      <p class="hint db-prose">Here's every column we found, with the kind of thing it holds and the role it'll play on
-        the map. Untick anything you don't want, or hit <b>✎</b> to rename one or change what it holds. Switch to
-        <b>Preview rows</b> to see a sample of the data and fix entries by hand.</p>
+      <p class="hint db-prose" id="check-sub">Untick any you don't want on the map. <b>✎</b> renames one or changes what it holds;
+        <b>Preview rows</b> lets you fix entries by hand.</p>
       <div id="sheet-pick" hidden>
         <p id="sheet-pick-title">That workbook has several sheets — which one holds the table?</p>
         <div class="sheet-list" id="sheet-list"></div>
@@ -622,7 +621,7 @@
       $("#to-place").textContent = "Looks right — preview the layer";
     } else {
       gs.hidden = true;
-      $("#check-title").textContent = "Choose the columns for your map" +
+      $("#check-title").textContent = "Columns the atlas will use" +
         (canonical.meta.sheet ? " — sheet “" + canonical.meta.sheet + "”" : "");
       showLocationFirst(canonical);
       $("#to-place").textContent = "Looks right — place it on the map";
@@ -951,6 +950,9 @@
       meta: S.canonical.meta,
     };
     if (S.spatial) { body.geoms = S.canonical.geoms; body.geomIdx = S.canonical.geomIdx; }
+    // a token the server files its progress under, so the wait can be told in
+    // steps rather than shown as a stripe (api/apps/atlas.js, /layers/progress)
+    body.progress = "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
     // Progress and errors for this step go where the person is looking: a
     // host with its own verdict line (the wizard's, top of the page) takes
     // them; otherwise they sit beside the button that was just pressed.
@@ -959,7 +961,9 @@
       msg("#msg-check", text ? esc(text) : "", cls);
     }
     $("#to-place").disabled = true;
-    say(S.spatial ? "Placing your shapes on the map…" : "Reading your table and matching it to the atlas…", "ok");
+    var total = rows.length;
+    say(S.spatial ? "Placing your shapes on the map…" : "Sending your " + countRows(total) + "…", "ok");
+    var watch = watchProgress(body.progress, total, say);
     // Whoever needs the server to be holding THIS table waits on this. Keeping
     // themes rewrites the table and sends it again; the build that follows must
     // not commit the copy from before that, or the themes are real on screen and
@@ -968,6 +972,7 @@
       api("layers/options?dataset=" + encodeURIComponent(S.dataset)),
       api("layers/ingest", { method: "POST", body: body }),
     ]).then(function (out) {
+      watch.stop();
       S.options = out[0];
       S.names = names;
       if (S.spatial) {
@@ -992,6 +997,7 @@
       warnDuplicate(out[1]);
       if (STAGES === "checkPlace") readyCheck();
     }).catch(function (e) {
+      watch.stop();
       $("#to-place").disabled = false;
       if (e.needsAuth) say("Sign in first — it's on the previous step, under the drop zone.", "err");
       else say(errMsg(e), "err");
@@ -1000,6 +1006,45 @@
     return S.sending;
   }
   $("#to-place").onclick = function () { sendRows().catch(function () {}); };
+
+  function countRows(n) { return n.toLocaleString() + (n === 1 ? " row" : " rows"); }
+
+  /* What the server says it is doing, in words, while the rows are with it.
+     Asked every 700 ms; each step is named as it starts, with a running count
+     of seconds so a long step still visibly moves. Nothing here guesses a
+     share done — the server does not know one, so neither does this. */
+  function watchProgress(token, total, say) {
+    var t0 = Date.now(), last = "", live = true, timer = null;
+    var WORDS = {
+      sending: "Sending your " + countRows(total) + "…",
+      outlines: "Getting the outlines of your places…",
+      reading: "Reading what each column holds…",
+      matching: "Matching your " + countRows(total) + " to places…",
+      placing: "Placing your shapes on the map…",
+    };
+    function words(p) {
+      if (p.step === "spelling") {
+        var n = p.names || 0;
+        return "Checking the spelling of " + n.toLocaleString() + (n === 1 ? " place name" : " place names") + "…";
+      }
+      return WORDS[p.step] || "";
+    }
+    function tick() {
+      if (!live) return;
+      api("layers/progress?id=" + encodeURIComponent(token)).then(function (p) {
+        if (!live) return;
+        var w = words(p || {}) || last;
+        if (w) {
+          last = w;
+          var secs = Math.round((Date.now() - t0) / 1000);
+          say(w + (secs >= 3 ? " " + secs + " seconds so far." : ""), "ok");
+        }
+      }, function () { /* a missed poll is not a fault; the next one will say */ })
+        .then(function () { if (live) timer = setTimeout(tick, 700); });
+    }
+    timer = setTimeout(tick, 400);
+    return { stop: function () { live = false; if (timer) clearTimeout(timer); } };
+  }
   $("#addr-find").onclick = addrFind;
   $("#addr-keep").onclick = addrKeep;
   $("#s-addr").addEventListener("change", function () { addrReset(); updatePlaceSummary(); });

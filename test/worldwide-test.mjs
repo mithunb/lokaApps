@@ -85,7 +85,8 @@ check('the same question is asked of names',
 check('the wizard acts on it without asking anything', /if \(d && d\.worldwide\) \{ goWorldwide\(d, file, rows\); return; \}/.test(setup), true);
 check('and says what it found and why', /This data is not of one country, so the atlas will cover the whole world/.test(setup), true);
 check('it warns that open data needs a region', /Base layers built from open data need a region/.test(setup), true);
-check('the region step counts as answered', /Your atlas will cover the whole world and open on your own places\. Ready to build\./.test(setup), true);
+// "Ready to build" was dropped in the review fixes: open data and a name still follow
+check('the region step counts as answered', /Your atlas will cover the whole world and open on your own places\.";/.test(setup), true);
 check('the catalogue is asked about the world', /if \(S\.worldwide\) return 360 \* 170;/.test(setup), true);
 check('and the build sends no region', /region: S\.worldwide \? \{ worldwide: true \} :/.test(setup), true);
 /* picking a place by hand is the one thing that overrides it, because it says

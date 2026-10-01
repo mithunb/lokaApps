@@ -317,6 +317,12 @@
       text-anchor:middle; paint-order:stroke; stroke:var(--map-halo); stroke-width:3px; stroke-linejoin:round; }
     .hint.low { max-width:60ch; margin-top:.9rem; padding:.6rem .8rem; border-radius:var(--radius-md);
       background:var(--color-marigold-tint); color:var(--color-text-primary); font-size:var(--t-ui); }
+    /* the region's own correction, under the region rather than the table */
+    .btnrow.found-fix { margin:.9rem 0 1rem; }
+    .btnrow.check-retry { margin:.5rem 0 1rem; }
+    /* the way on while the check runs: it says why it waits, so it must not
+       look like a fault — the leaf stays, only faded */
+    #next-2b:disabled { opacity:.6; cursor:progress; }
     @media (max-width:720px) {
       .found { grid-template-columns:1fr; }
       .found-map svg { max-height:200px; }
@@ -546,7 +552,7 @@
         <p class="chips-empty" id="chips-empty">No places yet. Search above, or drop a file.</p>
         <p class="verdict" id="verdict" hidden></p>
         <div class="btnrow">
-          <button class="btn" id="next-2">See what we found →</button>
+          <button class="btn" id="next-2">Continue →</button>
         </div>
         <div id="msg-2"></div>
       </section>
@@ -569,7 +575,17 @@
           </figure>
         </div>
         <p class="hint low" id="found-low" hidden></p>
+        <!-- the way to put the region right sits with the region, not under the
+             columns: below the table it read as part of that box and was
+             missed. Outlined beside the green button when most rows landed,
+             green itself when under 60% did (setup.js paintFoundButtons). -->
+        <div class="btnrow found-fix">
+          <button class="btn secondary" id="found-mine">Choose the places myself</button>
+        </div>
         <p class="verdict" id="check-verdict" hidden></p>
+        <div class="btnrow check-retry" id="check-retry" hidden>
+          <button class="btn secondary" type="button" id="check-again">Try again</button>
+        </div>
         <!-- Shown only while the check is actually running. It does NOT claim a
              percentage: the work is one request to the server, which does not
              report its progress, so a filling bar would be an invented number.
@@ -580,12 +596,11 @@
              by name — release 3, setup.js paintPointsOffer -->
         <div class="pts" id="found-points" hidden aria-live="polite"></div>
         <div id="bench"></div>
-        <!-- two buttons, one green: which one is green follows the share of rows
-             placed (setup.js, the 60% rule) -->
+        <!-- the way on; it waits, and says so, while the check is running.
+             Green unless under 60% of rows landed (setup.js, the 60% rule) -->
         <div class="btnrow" id="found-btns">
           <button class="btn quiet" data-go="2" id="found-back">← Back</button>
           <button class="btn" id="next-2b">Looks right →</button>
-          <button class="btn secondary" id="found-mine">Choose the places myself</button>
         </div>
         <div id="msg-2b"></div>
       </section>

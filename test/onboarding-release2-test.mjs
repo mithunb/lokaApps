@@ -53,9 +53,13 @@ check('the setup page loads no map library', /maplibre|leaflet/i.test(page), fal
 check('the file check (release 1’s own step) is folded into this screen: the bench sits under the summary',
   s2b.indexOf('id="found-chips"') < s2b.indexOf('id="check-verdict"') && s2b.indexOf('id="check-verdict"') < s2b.indexOf('id="bench"') &&
   s2b.indexOf('id="bench"') < s2b.indexOf('id="found-btns"'), true);
+/* the review fixes (October 2026) moved "Choose the places myself" up beside
+   the region it changes, and gave Where a plain forward label — see
+   onboarding-review-fixes-test.mjs */
 check('the two buttons keep their ids; which is green is decided in code',
-  /<button class="btn" id="next-2b">Looks right →<\/button>\s*<button class="btn secondary" id="found-mine">Choose the places myself<\/button>/.test(s2b), true);
-check('the forward button on Where names this screen', /<button class="btn" id="next-2">See what we found →<\/button>/.test(flow), true);
+  /<button class="btn" id="next-2b">Looks right →<\/button>/.test(s2b) &&
+  /<button class="btn secondary" id="found-mine">Choose the places myself<\/button>/.test(s2b), true);
+check('the forward button on Where is a plain one', /<button class="btn" id="next-2">Continue →<\/button>/.test(flow), true);
 check('Where goes here whether or not there is a file',
   /\$\("#next-2"\)\.onclick = function \(\) \{[\s\S]*?msg\(2, ""\);\n\s*showFound\(\);\n\s*\};/.test(setup), true);
 check('a typed region gets the screen without a check to run',
@@ -75,9 +79,10 @@ check('on a phone the map drops under the words, no taller than 200px',
 
 console.log('\n  the 60% rule');
 check('the line is 60%', /var LOW_COVER = 0\.6;/.test(setup), true);
-check('under it the buttons swap: choosing the places goes green and first, continuing goes second',
-  /on\.className = low \? "btn secondary" : "btn";\n\s*on\.textContent = low \? "Continue anyway" : "Looks right →";\n\s*mine\.className = low \? "btn" : "btn secondary";/.test(setup) &&
-  /row\.insertBefore\(low \? mine : on, back\.nextSibling\);/.test(setup), true);
+check('under it the buttons swap: choosing the places goes green, continuing goes second',
+  /on\.className = \(low \|\| FOUND\.failed\) \? "btn secondary" : "btn";/.test(setup) &&
+  /: \(low \|\| FOUND\.failed\) \? "Continue anyway" : "Looks right →";/.test(setup) &&
+  /mine\.className = low \? "btn" : "btn secondary";/.test(setup), true);
 check('and a line says why', /Fewer than " \+ Math\.round\(LOW_COVER \* 100\) \+ "% of your rows landed in a place we know\./.test(setup), true);
 check('the share is the check’s once it has one, else the region-finding’s, and nothing without a file',
   /function foundShare\(\) \{\n\s*if \(!GEO\.canonical \|\| S\.worldwide\) return null;\n\s*if \(FOUND\.settled\) return FOUND\.rows \? FOUND\.placed \/ FOUND\.rows : null;/.test(setup), true);

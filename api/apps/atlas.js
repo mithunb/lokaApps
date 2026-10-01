@@ -3309,7 +3309,55 @@ router.get('/layers/options', (req, res) => {
 /* Preparing a layer, like committing it, was only ever the body of a handler.
    A retry needs it with no browser present, so it takes plain input and a
    `who`, and refuses by throwing rather than by writing a response. */
+/* How far a check has got, for the page that is waiting on it.
+
+   Checking a file is one request, and on a real file it can take half a
+   minute: the outlines of the chosen places are fetched, the model reads what
+   the columns hold, the rows are matched, and the names the rules could not
+   place are sent back to the model to choose between. The setup page used to
+   show a moving stripe for all of it, which says "something is happening" and
+   nothing else.
+
+   So the page sends a token with the rows and asks after it while it waits.
+   What comes back is only the name of the step running and two counts — no
+   rows, no names — and it is forgotten a minute after the check ends. A step
+   is reported when it starts; the matching itself is one synchronous pass
+   over the rows, so there is no honest "80 of 134" to give mid-way, and none
+   is invented. */
+const PROGRESS = new Map();
+const PROGRESS_KEEP = 60 * 1000;
+function progressFor(token, rows) {
+  const id = typeof token === 'string' && /^[A-Za-z0-9_-]{8,48}$/.test(token) ? token : '';
+  if (!id) return Object.assign(() => {}, { end() {} });
+  const tell = (step, extra) => {
+    PROGRESS.set(id, Object.assign({ step, rows, at: Date.now() }, extra || {}));
+  };
+  tell('sending');
+  tell.end = (failed) => {
+    PROGRESS.set(id, { step: failed ? 'failed' : 'done', rows, at: Date.now() });
+    setTimeout(() => PROGRESS.delete(id), PROGRESS_KEEP).unref();
+  };
+  return tell;
+}
+
+router.get('/layers/progress', (req, res) => {
+  const id = String(req.query.id || '');
+  res.json(PROGRESS.get(id) || { step: '' });
+});
+
 async function ingestLayer(b, who) {
+  const tell = progressFor(b && b.progress, Array.isArray(b && b.rows) ? b.rows.length : 0);
+  try {
+    const out = await ingestLayerSteps(b, who, tell);
+    tell.end(false);
+    return out;
+  } catch (e) {
+    tell.end(true);
+    throw e;
+  }
+}
+
+async function ingestLayerSteps(b, who, tell) {
   const dataset = String(b.dataset || '');
   // Two callers: the workbench working on a built atlas, and the setup wizard
   // setting data up BEFORE the atlas exists. The second has no dataset to read,
@@ -3497,6 +3545,7 @@ async function ingestLayer(b, who) {
       popupTitleColumn: pickTitleColumn(profiles, columns),
       popupColumns: pickPopupColumns(profiles, { title: pickTitleColumn(profiles, columns), image: imgCol && imgCol.name }),
     };
+    tell('placing');
     try {
       return applyResult(session, false);
     } catch (e) {
@@ -3511,6 +3560,7 @@ async function ingestLayer(b, who) {
   // them without a refetch.
   const inst = dataset ? reg.getInstance(dataset) : null;
   let geoOpts = [];
+  tell('outlines');
   try { geoOpts = await geoBoundaryOptions(pendingRegion || (inst && inst.region), !!pendingRegion); }
   catch (e) { console.warn('[atlas] geo boundary options failed:', e.message); }
   if (geoOpts.length) {
@@ -3523,6 +3573,7 @@ async function ingestLayer(b, who) {
 
   let inference = null;
   if (ai && !b.manual && geminiAllowed(who)) {
+    tell('reading');
     try {
       const prompt = [
         'You are helping map a tabular dataset onto an interactive atlas. Infer its schema.',
@@ -3664,6 +3715,7 @@ async function ingestLayer(b, who) {
     };
   }
 
+  tell('matching');
   try {
     let result = applyResult(session, false);
 
@@ -3677,6 +3729,7 @@ async function ingestLayer(b, who) {
     if (ai && !b.manual) {
       const ask = fallbackRequest(result.matchReport);
       if (ask.length && geminiAllowed(who)) {
+        tell('spelling', { names: ask.length });
         try {
           const adj = await geminiJSON(getFlashLiteModel(), [
             'Pick the right boundary for each source place name. Names may be spelt in Devanagari',

@@ -209,7 +209,14 @@
     if (!feats.length) return;
 
     var wrap = el("div", "own-door");
-    box.appendChild(wrap);
+    /* Directly under the layer's keys, not at the foot of the box. The reading
+       below runs for half a minute or more after an atlas first opens, and
+       its keys arrive when it lands; said at the bottom, under the list of
+       places, an owner saw one key where there would soon be five and nothing
+       saying more were on the way. */
+    var keys = box.querySelector(".key-chips");
+    if (keys && keys.parentNode === box) box.insertBefore(wrap, keys.nextSibling);
+    else box.insertBefore(wrap, box.firstChild);
 
     /* Questions already answered? Then the door has done its work: each one is
        a key in the list above, so there is nothing here to press. Their columns
@@ -292,26 +299,44 @@
        redrawn every time the layer is switched or the panel rebuilt. */
     var panel = el("div", "own-door-body");
     wrap.appendChild(panel);
-    if (RUNNING[L.id]) {
-      panel.appendChild(el("p", "own-note", "Reading every place…"));
-      return;
+    /* What the reading is doing lives here, not in the panel: the row is
+       redrawn while it runs (the map reboots, a layer is switched), and a
+       redrawn row used to come back saying it was still reading long after
+       the reading had stopped, because its answer went to the panel it had
+       replaced. Every drawing of the row reads the same record. */
+    var run = RUNNING[L.id];
+    var fresh = !run;
+    if (fresh) {
+      run = RUNNING[L.id] = {
+        busy: true, text: "", warn: false, views: [],
+        cost: "Reading " + esc(cols.slice(0, 3).join(", ")) + " across " + feats.length + " places.",
+      };
     }
-    RUNNING[L.id] = true;
-
-    panel.appendChild(el("p", "own-note own-door-cost",
-      "Analysing your data to find the patterns underneath \u2014 reading " +
-      esc(cols.slice(0, 3).join(", ")) + " across " + feats.length +
-      " places \u00b7 about half a minute"));
+    // the one line an owner needs while it runs: more is coming, and when
+    var work = el("p", "own-note",
+      "Finding questions in your data\u2026 more will appear here in about half a minute. " +
+      "Keep this page open until they do.");
+    var cost = el("p", "own-note own-door-cost", run.cost);
     var msg = el("p", "own-note");
-    msg.hidden = true;
+    panel.appendChild(work);
+    panel.appendChild(cost);
     panel.appendChild(msg);
+    run.views.push({ work: work, cost: cost, msg: msg });
+    function paint(v) {
+      v.work.hidden = v.cost.hidden = !run.busy;
+      v.msg.hidden = !run.text; v.msg.textContent = run.text || "";
+      v.msg.classList.toggle("warnish", !!run.warn);
+    }
+    paint(run.views[run.views.length - 1]);
+    if (!fresh) return;
+    // a warning is where a reading ends: nothing more is coming this visit
     function say(t, warn) {
-      msg.hidden = !t; msg.textContent = t || "";
-      msg.classList.toggle("warnish", !!warn);
+      run.text = t || ""; run.warn = !!warn;
+      if (warn) run.busy = false;
+      run.views.forEach(paint);
     }
 
     (function () {
-        say("Reading every place…");
         fetch(window.LokaAtlas.fileUrl(L))
           .then(function (r) { return r.json(); })
           .then(function (d) {

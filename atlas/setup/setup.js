@@ -550,17 +550,36 @@
         : S.chosen[0].label + " +" + (S.chosen.length - 1) + " more";
     }
     var v = $("#verdict");
-    // an atlas of data that is not in one country covers the world, and is as
-    // ready to build as any other
+    /* One line, not two. A dropped file used to get a sentence of its own
+       under the button ("From coordinates: your file's places sit in …")
+       while this line above it said the same places again, ending "Ready to
+       build" — which it was not: open data and a name still follow. Now this
+       is the only line, it says where the places came from when a file found
+       them, and it follows the chips as they are taken out or added. */
+    // an atlas of data that is not in one country covers the world; when a
+    // file decided that, the message under the drop zone has already said so
     if (S.worldwide) {
-      v.hidden = false;
-      v.textContent = "Your atlas will cover the whole world and open on your own places. Ready to build.";
+      v.hidden = !!GEO.file;
+      v.textContent = "Your atlas will cover the whole world and open on your own places.";
       return;
     }
     if (!S.chosen.length) { v.hidden = true; return; }
     v.hidden = false;
-    v.textContent = "Your atlas will cover " + S.chosen.map(function (c) { return c.label; }).join(", ") +
-      (S.chosen.length > 1 ? " — " + S.chosen.length + " places" : "") + ". Ready to build.";
+    v.textContent = foundLine() || ("Your atlas will cover " + placeList(S.chosen.map(function (c) { return c.label; })) + ".");
+  }
+
+  /* "Found: Bangalore and Bangalore Rural, from the coordinates in 134 of 134
+     rows. Take any out, or search to add more." — only while at least one of
+     the places the file found is still chosen; otherwise the file's numbers
+     describe a list that is no longer there. */
+  function foundLine() {
+    var f = GEO.said;
+    if (!f || !GEO.file) return "";
+    var ids = GEO.foundIds || [];
+    if (!S.chosen.some(function (c) { return ids.indexOf(c.id) >= 0; })) return "";
+    return "Found: " + placeList(S.chosen.map(function (c) { return c.label; })) + ", from " + f.how +
+      " in " + f.matched.toLocaleString() + " of " + f.rows.toLocaleString() + " rows." +
+      f.notes + " Take any out, or search to add more.";
   }
 
   /* ---- 2b · let a file answer "where is it?" ----
@@ -576,7 +595,7 @@
   // addedIds: the places THIS FILE put on the list. The card's ✕ takes the file and
   // these, and nothing else — a place you typed yourself is yours, and a single
   // dismiss should never quietly undo your own typing.
-  var GEO = { file: null, canonical: null, rows: 0, addedIds: [], infer: null, points: null, part: "" };
+  var GEO = { file: null, canonical: null, rows: 0, addedIds: [], infer: null, points: null, part: "", said: null, foundIds: [] };
 
   // A representative point for any shape — the mean of its coordinates, which sits
   // inside a district where a single vertex might fall in its neighbour.
@@ -757,7 +776,7 @@
       FILE_STATE.name = ""; FILE_STATE.note = ""; FILE_STATE.pick = null;
       msg(2, "");
       GEO.file = null; GEO.canonical = null; GEO.rows = 0; GEO.addedIds = [];
-      GEO.infer = null; GEO.points = null; GEO.part = "";
+      GEO.infer = null; GEO.points = null; GEO.part = ""; GEO.said = null;
       if (BENCH) { BENCH.destroy(); BENCH = null; BENCH_KEY = ""; }
       paintChips();          // redraws the chips and, through them, this block
     };
@@ -767,6 +786,7 @@
 
   function placesFromFile(file) {
     if (!window.LokaIngest) { msg(2, "The file reader didn’t load — reload the page and try again."); return; }
+    GEO.said = null;
     msg(2, "Reading " + file.name + "…", "ok");
     GEO.file = file;               // a part may be chosen after this returns
     FILE_STATE.pick = null;
@@ -920,6 +940,11 @@
       return;
     }
     var had = S.chosen.map(function (c) { return c.id; });
+    // what the one line on this step says (foundLine), set before the chips
+    // are painted so it is there the moment they are
+    GEO.foundIds = units.map(function (u) { return u.id; });
+    GEO.said = { how: fromPoints ? "the coordinates" : (d.column ? "the “" + shortCol(d.column) + "” column" : "the place names"),
+      matched: d.matchedRows || 0, rows: d.rows || rows, notes: "" };
     units.forEach(function (u) { add({ id: u.id, name: u.name, level: d.level, bbox: u.bbox }, u.name); });
     GEO.addedIds = S.chosen.map(function (c) { return c.id; })
       .filter(function (id) { return had.indexOf(id) < 0; });
@@ -929,10 +954,7 @@
     // place only.
     paintChips();
     var added = GEO.addedIds.length;
-    var shownNames = S.chosen.slice(0, 3).map(function (c) { return c.label; }).join(", ");
-    var more = S.chosen.length > 3 ? " and " + (S.chosen.length - 3) + " more" : "";
-    var said = "From " + how + ": your file’s places sit in " + shownNames + more +
-      " — " + (d.matchedRows || 0).toLocaleString() + " of " + (d.rows || rows).toLocaleString() + " rows.";
+    var said = "";
     if (d.sharedRows) {
       said += " " + d.sharedRows.toLocaleString() + " row" + (d.sharedRows > 1 ? "s name" : " names") +
         " a place that exists in more than one part of the country — we took the ones nearest the rest of your data.";
@@ -941,8 +963,9 @@
       said += " " + d.unreadRows.toLocaleString() + " row" + (d.unreadRows > 1 ? "s" : "") + " we couldn’t read.";
     }
     said += wholeCountryNote(d);
-    said += " Take any out, or search to add more.";
-    msg(2, said, "ok");
+    GEO.said.notes = said;
+    msg(2, "");          // "Reading all 134 rows…" is over; the line above says what was found
+    paintChips();
     /* The card used to count only the places this file ADDED to the selection,
        so a file whose places you had already chosen read "0 places found"
        directly under a sentence saying they had been found. Two lines of the
@@ -1089,23 +1112,28 @@
     return (d.matchedRows || 0) / d.rows;
   }
 
-  /* The 60% rule. Above it the green button carries on and the other offers
-     the search; below it they swap: choosing the places is first, and carrying
-     on is allowed but plainly second. The two buttons keep their ids; only
-     their words, their weight and their order change. */
+  /* The 60% rule. Above it the green button carries on and "Choose the places
+     myself" is outlined; below it they swap: choosing the places is green, and
+     carrying on is allowed but plainly second. The two buttons keep their ids;
+     only their words and their weight change. "Choose the places myself" is on
+     this screen whatever the share, under the region it would change.
+
+     While the check is running the way on waits, and its own words say why:
+     pressing it early used to go straight past the questions the check was
+     about to ask, because they had not arrived yet. */
   function paintFoundButtons() {
-    var on = $("#next-2b"), mine = $("#found-mine"), row = $("#found-btns"), back = $("#found-back");
+    var on = $("#next-2b"), mine = $("#found-mine");
     var share = foundShare();
     // rows that are villages are not a wrong region: the offer to put them
     // on as points speaks for them, and searching again would not help
     var low = share != null && share < LOW_COVER && !pointsOfferWanted(FOUND.rep) && !FOUND.asPoints;
-    on.className = low ? "btn secondary" : "btn";
-    on.textContent = low ? "Continue anyway" : "Looks right →";
+    var checking = !!(GEO.canonical && BENCH && !FOUND.settled && !FOUND.failed);
+    on.disabled = checking;
+    on.className = (low || FOUND.failed) ? "btn secondary" : "btn";
+    on.textContent = checking ? "Checking your rows…" : (low || FOUND.failed) ? "Continue anyway" : "Looks right →";
     mine.className = low ? "btn" : "btn secondary";
     mine.textContent = GEO.canonical ? "Choose the places myself" : "Change the places";
     mine.dataset.low = low ? "1" : "";
-    // the primary act comes first in the row, whichever button it is
-    row.insertBefore(low ? mine : on, back.nextSibling);
     var note = $("#found-low");
     if (note) {
       note.hidden = !low;
@@ -1213,8 +1241,10 @@
     window.scrollTo({ top: 0 });
     msg("2b", "");
     if (!GEO.canonical) { stopBench(); paintFound(); return; }
-    paintFound();
+    // the check first: a fresh one clears the last one's numbers, which the
+    // words below would otherwise repeat as if they were about this file
     startBench();
+    paintFound();
   }
 
   function stopBench() {
@@ -1225,6 +1255,17 @@
     var v = $("#check-verdict"), bar = $("#check-working");
     if (v) { v.hidden = true; v.textContent = ""; }
     if (bar) bar.hidden = true;
+    if ($("#check-retry")) $("#check-retry").hidden = true;
+  }
+
+  // the check went wrong: say so plainly, offer it again, and let the person
+  // carry on without it — the file can still be added from the atlas itself
+  function checkFailed() {
+    FOUND.failed = true;
+    var bar = $("#check-working");
+    if (bar) bar.hidden = true;
+    if ($("#check-retry")) $("#check-retry").hidden = false;
+    paintFoundButtons();
   }
 
   function startBench() {
@@ -1234,6 +1275,7 @@
     if (BENCH) { BENCH.destroy(); BENCH = null; }
     BENCH_KEY = key;
     FOUND = { rows: 0, placed: 0, open: 0, settled: false, rep: null };
+    if ($("#check-retry")) $("#check-retry").hidden = true;
     var v = $("#check-verdict");
     v.hidden = false;
     v.classList.remove("err");
@@ -1265,6 +1307,15 @@
           var v = $("#check-verdict");
           v.hidden = false;
           v.classList.toggle("err", kind === "err");
+          // a fault before the check has answered is the check failing; one
+          // after it (a later re-send) is said here but changes nothing else
+          if (kind === "err" && !FOUND.settled) {
+            v.textContent = "Your rows couldn’t be checked. " + text.charAt(0).toUpperCase() + text.slice(1) +
+              (/[.!?]$/.test(text) ? "" : ".") +
+              " Try again, or carry on and add the file from the atlas afterwards.";
+            checkFailed();
+            return;
+          }
           v.textContent = text;
         },
         onReady: function (sum) {
@@ -1274,6 +1325,8 @@
           FOUND.placed = Math.min(sum.features || 0, FOUND.rows);
           FOUND.open = sum.needsAttention || 0;
           FOUND.settled = true;
+          FOUND.failed = false;
+          if ($("#check-retry")) $("#check-retry").hidden = true;
           FOUND.rep = benchReport();
           FOUND.asPoints = false;
           $("#bench").hidden = false;
@@ -1288,13 +1341,26 @@
           paintFound();
         },
       });
+      paintFoundButtons();          // the way on waits from here until the check answers
       BENCH.start(GEO.canonical);
     } catch (e) {
       BENCH = null; BENCH_KEY = "";
       msg("2b", "Your file couldn’t be checked here: " + e.message +
         " — build the atlas anyway, then add the file from the atlas’s own page.");
+      v.hidden = true;
+      checkFailed();
     }
   }
+
+  // the same check, from the start, against the same places
+  if ($("#check-again")) $("#check-again").onclick = function () {
+    if (BENCH) { BENCH.destroy(); BENCH = null; }
+    BENCH_KEY = "";
+    var v = $("#check-verdict");
+    if (v) v.classList.remove("err");
+    startBench();
+    paintFound();
+  };
 
   $("#next-2").onclick = function () {
     if (!S.chosen.length && !S.worldwide) {
@@ -1306,7 +1372,11 @@
     showFound();
   };
 
-  $("#next-2b").onclick = function () { msg("2b", ""); afterFound(); };
+  $("#next-2b").onclick = function () {
+    if (this.disabled) return;      // still checking: the questions it finds come first
+    msg("2b", "");
+    afterFound();
+  };
 
   /* ================= release 3: same-name places, and villages =================
 
@@ -1730,7 +1800,7 @@
       S.chosen = S.chosen.filter(function (c) { return GEO.addedIds.indexOf(c.id) < 0; });
       if (S.chosen.length) S.level = Math.max.apply(null, S.chosen.map(function (c) { return c.level || 2; }));
       GEO.addedIds = [];
-      GEO.infer = null;
+      GEO.infer = null; GEO.said = null;
       paintChips();
     }
     step(2);
