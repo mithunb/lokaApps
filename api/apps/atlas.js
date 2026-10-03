@@ -3611,7 +3611,13 @@ async function ingestLayerSteps(b, who, tell) {
         'numeric valueColumn; otherwise "markers". Pick popupTitleColumn = the place/name column.',
         'notes: 1-2 sentences for the user about your reading of the data and any caveats.',
       ].join('\n');
-      inference = await geminiJSON(getFlashModel(), prompt, INFER_SCHEMA);
+      /* Choosing columns is not reasoning. With thinking left on, the model
+         spent its 8,192-token allowance thinking on a 134-row, 20-column file
+         (Bengaluru, Oct 2026) and the answer stopped early, so the setup fell
+         back to plain code without saying so. The filing call's settings —
+         thinking off, room to answer, temperature 0 — measured on the live
+         server: same answer, 1.4 s against 4.9 s. */
+      inference = await geminiJSONFile(getFlashModel(), prompt, INFER_SCHEMA);
     } catch (e) {
       console.warn('[atlas] infer failed:', e.message);
     }
@@ -3620,7 +3626,10 @@ async function ingestLayerSteps(b, who, tell) {
   if (inference) {
     session.inference = { rowSubject: inference.rowSubject, notes: inference.notes || '' };
     session.strategy = inference.strategy;
-    session.joinLayer = inference.joinLayer || (allOptions[0] && allOptions[0].id);
+    // only a layer that was actually offered; a stray id from the model would
+    // send the rows to a join that does not exist
+    const offered = inference.joinLayer && allOptions.some((o) => o.id === inference.joinLayer);
+    session.joinLayer = offered ? inference.joinLayer : (allOptions[0] && allOptions[0].id);
     // the model's read of each column is kept for placement, but 'ignore' is
     // downgraded on the way in: nothing it says should be able to delete data
     /* The model's read of the columns is a HINT about roles, never the list of
