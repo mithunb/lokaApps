@@ -1649,6 +1649,7 @@
      asked of these places, nor to the marker column an owner committed to —
      both are somebody's decision rather than an accident of a column. */
   var KEY_DOMINANCE = 0.85;
+  var QUESTION_MIN_REACH = 0.30;   // a discovered question must speak for 30% of places to be a key
   /* Reach and shape are two different things, and a question can be fine on one
      and useless on the other. Measured on one live map: two questions reached
      the same 42 of 66 places, and one split them 20/7/7/4/4 while the other
@@ -1778,6 +1779,12 @@
          only place it is still visible. */
       if (isQuestion && (L.hiddenKeys || []).indexOf(col) >= 0) return;
       if (!committed && !isQuestion && named / feats.length < 0.6) return;
+      /* A question answered by fewer than 30% of the places is not offered as
+         a key (Mithun, October 2026): switched on, it leaves most of the map
+         grey, and "from 13% of places" beside it is a warning, not a key. It
+         stays on the list marked tooFew, so the places that did answer still
+         show it on their cards; only the panel's tick is left out. */
+      var tooFew = Boolean(isQuestion && !committed && named / feats.length < QUESTION_MIN_REACH);
       // and a key that does not tell places apart is not a key — see KEY_DOMINANCE
       if (!committed && !isQuestion && counts.length &&
           counts[0].n / feats.length > KEY_DOMINANCE) return;
@@ -1802,7 +1809,7 @@
       var outweighs = Boolean(top && top.n > (named - top.n));
       var kindsHere = 0;
       counts.forEach(function (c) { if (kept.indexOf(c.kind) >= 0 && c.n > 0) kindsHere += 1; });
-      opts.push({ col: col, label: shown, delim: delim, committed: committed, grain: grain,
+      opts.push({ col: col, label: shown, delim: delim, committed: committed, grain: grain, tooFew: tooFew,
         // what share of the places this key can actually speak for; shown beside
         // a discovered question, whose whole point is that it may not reach all
         reach: feats.length ? named / feats.length : 0, isQuestion: isQuestion,
@@ -2486,6 +2493,7 @@
     note.hidden = !st.note;
     if (st.note) note.textContent = st.note;
     L._keyOptions.forEach(function (opt) {
+      if (opt.tooFew) return;   // under 30% of places: on cards, not offered as a key
       /* A flat question needs two lines, not one, so it gets a wrapper. Every
          other key keeps the single row it always had. */
       var host = opt.flat ? el("div", "key-flatwrap") : null;

@@ -148,5 +148,10 @@ console.log('\n  the design notes');
 check('DESIGN.md says the card docks at the right', /docked at the right/i.test(design), true);
 check('and that discs are ink', /counted disc[^\n]*ink/i.test(design), true);
 
+console.log('\n  a question needs 30% of places to be a key');
+check('the threshold is 30%', /var QUESTION_MIN_REACH = 0\.30;/.test(js), true);
+check('a question under it is marked, not dropped, so cards keep its answer', /var tooFew = Boolean\(isQuestion && !committed && named \/ feats\.length < QUESTION_MIN_REACH\);/.test(js), true);
+check('and the panel leaves its tick out', /if \(opt\.tooFew\) return;/.test(js), true);
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
