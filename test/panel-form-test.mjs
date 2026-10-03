@@ -110,5 +110,11 @@ check('the map is framed again, or nudged, when the sheet grows or shrinks',
 check('the About panel\'s line under the title lines up on a phone', /\.sources-head, \.sources-sub, \.sources-lead, \.sources-foot \{ padding-left:1rem;/.test(html), true);
 check('an old CARTO basemap credit is shown as OpenFreeMap', /name: "OpenStreetMap contributors & OpenFreeMap", url: "https:\/\/openfreemap\.org"/.test(js), true);
 
+console.log('\n  an atlas is drawn in its own shape from the first paint');
+const headEnd = html.indexOf('</head>');
+const early = html.indexOf('document.documentElement.classList.add("atlas-full")');
+check('the full-page class is set in the head, before anything is drawn', early > 0 && early < headEnd, true);
+check('and only for an atlas address, so the gallery keeps its shape', /if \(\/\[\?&\]dataset=\[\^&\]\/\.test\(location\.search\)\)/.test(html), true);
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

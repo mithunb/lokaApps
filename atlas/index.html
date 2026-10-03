@@ -3,6 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <!-- An atlas takes the whole page (.atlas-full). atlas.js loads last, after
+       the map library, so waiting for it drew the gallery's page shape first
+       and then jumped; deciding here, before anything is drawn, means the
+       first paint is already the atlas. atlas.js sets the same class again. -->
+  <script>if (/[?&]dataset=[^&]/.test(location.search)) document.documentElement.classList.add("atlas-full");</script>
   <title>LOKA Atlas</title>
   <meta name="description" content="LOKA Atlas — layered, shareable maps for any geography, built from open data. Pick a region, choose layers, add your own data, and publish." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
