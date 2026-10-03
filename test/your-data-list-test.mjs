@@ -1,10 +1,12 @@
 /* Run me with: node test/run.mjs — or on my own with node.
  *
  * Map Browser. A contributed layer's row used to be a switch and a swatch
- * repeating the layer's name; now it says what the layer holds ("11 people"),
- * opens into the names, and each name is a way in. Twins — two rows drawn as
- * the same shape — get a chooser in the card and share one written name on
- * the map. A first visitor gets one line and one pulse, once per device.
+ * repeating the layer's name; now it says what the layer holds ("11 people")
+ * as plain text. The list of names it once opened into is gone (October
+ * 2026, one mark for every place: the map carries every name). Twins — two
+ * rows drawn as the same shape — get a chooser in the card and share one
+ * written name on the map. A first visitor gets one line and one pulse, once
+ * per device.
  * These checks lift the pure functions out of atlas.js and read the rest of
  * the source statically. No network, no browser.
  */
@@ -64,19 +66,18 @@ check('one person, not one people', countWords(1, 'people'), '1 person');
 check('one place, one area', [countWords(1, 'places'), countWords(1, 'areas')], ['1 place', '1 area']);
 check('the search line reads the same noun', /var n = L\.noun \|\| \(markersByLayer\[L\.id\] \? "places" : "areas"\);/.test(js), true);
 
-console.log('\n  Map Browser: the list');
-check('long lists show the first thirty and offer the rest', /var COLL_CAP = 30;/.test(js) && /"Show all " \+ shown\.length/.test(js), true);
-check('a search narrows the list with the map', /function applyRowVisibility\(L\) \{[\s\S]*?syncCollection\(L\);/.test(js), true);
-check('and the line says how many matched', /shown\.length \+ " of " \+ items\.length \+ " " \+ noun \+ " match"/.test(js), true);
-check('a name is a button that goes there and opens the card', /b\.onclick = function \(\) \{ goToItem\(L, it\); \};/.test(js) && /function goToItem\(L, it\) \{/.test(js), true);
-check('the chosen name and the ring on the map read from one selection', /function selectRow\(L, row, ref\) \{[\s\S]*?syncCollection\(L\);/.test(js) && /selectRow\(top\.L, row != null \? row : null/.test(js), true);
-check('the chosen name wears Sindoor', /\.coll-item\.sel \{ color:var\(--color-sindoor\);/.test(html), true);
+console.log('\n  Map Browser: the count (the list is gone — one mark for every place, October 2026)');
+check('no list, no cap, no "Show all"', !/COLL_CAP/.test(js) && !/"Show all " \+ shown/.test(js) && !/coll-list/.test(js) && !/function goToItem\(/.test(js), true);
+check('a search narrows the count with the map', /function applyRowVisibility\(L\) \{[\s\S]*?syncCollection\(pairedPrimary\(L\) \|\| L\);/.test(js), true);
+check('and the line says how many matched', /shown \+ " of " \+ items\.length \+ " " \+ noun \+ " match"/.test(js), true);
+check('the count is plain text, not a button', /var head = el\("div", "coll-head"\);/.test(js) && !/head\.onclick/.test(js), true);
+check('the chosen place rings on the map; the panel no longer repeats it', /function selectRow\(L, row, ref\) \{\s*clearSelection\(\);\s*SEL\.L = L; SEL\.row = row; SEL\.ref = ref \|\| null;\s*if \(ref\)[^\n]*\n\s*markSelPin\(\);\s*\}/.test(js) && /selectRow\(top\.L, row != null \? row : null/.test(js), true);
+check('no list styles are left in the sheet', !/\.coll-item/.test(html) && !/\.coll-more/.test(html) && !/\.coll-chev/.test(html), true);
 // (widened in the viewer-ux batch: any one-colour layer drops its repeating row, not only a collection)
 check('the legend row that only repeated the layer\'s name is gone from such a layer', /if \(collectionLayer\(L\) \|\| \(data\.length === 1 && repeats\(data\[0\]\)\)\) \{[\s\S]*?return !repeats\(it\)/.test(js), true);
 check('a name without a title still has one ("person 4")', /if \(!it\.name\) it\.name = nounOne\(layerNoun\(L\)\) \+ " " \+ \(it\.row \+ 1\);/.test(js), true);
-check('on a phone the sheet folds so the card can be seen', /function goToItem\(L, it\) \{[\s\S]*?if \(TRAY\) openTray\(null\);/.test(js), true);
-check('the phone\'s tab counts the people, not the one layer', /function tabCount\(sec\) \{[\s\S]*?rows\[0\]\.hasAttribute\("data-count"\)/.test(js) && /L\._row\.setAttribute\("data-count", String\(shown\.length\)\)/.test(js), true);
-check('thumb-sized rows on a phone', /\.coll-head, \.coll-item \{ min-height:44px;/.test(html), true);
+check('the phone\'s tab counts the people, not the one layer', /function tabCount\(sec\) \{[\s\S]*?rows\[0\]\.hasAttribute\("data-count"\)/.test(js) && /L\._row\.setAttribute\("data-count", String\(shown\)\)/.test(js), true);
+check('the count line reads at the phone\'s size', /\.coll-head \{ min-height:32px; font-size:var\(--t-ui\);/.test(html), true);
 check('the design notes name it', /### Map Browser/.test(design), true);
 
 console.log('\n  Map Browser: twins — two rows drawn as one shape');
@@ -101,7 +102,7 @@ check('on the map each twin\'s label carries both names, so the survivor says th
 check('a tap that lands on several rows opens the card with a chooser', /openPopup\(top\.L, top\.f, e\.lngLat, null, null, rowsUnder\(e\.point, top\)\);/.test(js), true);
 check('the chooser says how many are here and names each', /countWords\(rows\.length, layerNoun\(L\)\)\) \+ " here<\/span>"/.test(js) && /class="pop-twin" data-row=/.test(js), true);
 check('pressing a name swaps the card and moves the ring', /function wireChooser\(pop, L, rows\) \{[\s\S]*?selectRow\(L, r,[\s\S]*?pop\.setHTML\(chooserHTML\(L, rows, r\) \+ popupHTML\(L, f\.properties\)\);/.test(js), true);
-check('a name in the list opens its twins\' chooser too', /openPopup\(L, f, at \|\| map\.getCenter\(\), null, null, twinRowsOf\(L, f\)\);/.test(js), true);
+check('twins on the map fold into one disc and fan like co-located pins — the chooser stays for a tap on the shading', /function twinRowsOf\(L, f\)/.test(js) && /rowsUnder\(e\.point, top\)/.test(js), true);
 check('the chip the card is showing is lit Sindoor', /\.pop-twin\[aria-pressed="true"\] \{ background:var\(--color-sindoor-tint\); border-color:var\(--color-sindoor\);/.test(html), true);
 check('only a contributed shape layer gets a chooser; pins fan out as before', /if \(!collectionLayer\(L\) \|\| L\.type === "marker"\) return null;/.test(js), true);
 check('while a search is on, the matching twin\'s name is the one written', /"symbol-sort-key", any \? \["\+", \["case", hit, 0, 1e9\], base\] : L\._searchSort/.test(js), true);
@@ -114,7 +115,7 @@ check('a manifest can say it its own way', cueText({ type: 'fill', noun: 'people
 check('not in an embed, not twice on one device', /if \(EMBED \|\| CUE\.seen \|\| cueSeen\(\) \|\| CUE\.el\) return;/.test(js), true);
 check('the device remembers behind a try/catch', /try \{ return localStorage\.getItem\("atlas-cue-seen"\) === "1"; \} catch \(e\) \{ return false; \}/.test(js) && /try \{ localStorage\.setItem\("atlas-cue-seen", "1"\); \} catch \(e\) \{\}/.test(js), true);
 check('no pulse for anyone who asked for less motion', /stage\.appendChild\(CUE\.el\);\n\s*if \(reducedMotion\(\)\) return;/.test(js) && /prefers-reduced-motion:reduce\) \{ \.atlas-pulse \{ animation:none;/.test(html), true);
-check('gone at the first tap on the map, on a name, or when any card opens', /map\.on\("click", function \(e\) \{[\s\S]*?dismissCue\(\);/.test(js) && /function goToItem\(L, it\) \{\n\s*dismissCue\(\);/.test(js) && /function openPopup\([\s\S]*?dismissCue\(\);/.test(js), true);
+check('gone at the first tap on the map or when any card opens', /map\.on\("click", function \(e\) \{[\s\S]*?dismissCue\(\);/.test(js) && /function openPopup\([\s\S]*?dismissCue\(\);/.test(js), true);
 check('the ring that grows lives under the element the map positions', /var ring = el\("div", "atlas-pulse-wrap"\);[\s\S]*?ring\.appendChild\(el\("div", "atlas-pulse"\)\);/.test(js), true);
 check('the line sits above the phone\'s sheet', /\.atlas-cue \{ position:absolute; left:50%; bottom:calc\(var\(--sheet-h, 0px\) \+ 52px\);/.test(html), true);
 

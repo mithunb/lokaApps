@@ -63,7 +63,7 @@ check('the hover and selection rings are left alone (a faded area still answers 
 check('while the drawn parts are faded', fadeRe && ['x-fill', 'x-line', 'x-mark', 'x-label'].map((id) => fadeRe.test(id)), [true, true, true, true]);
 check('the original paint is kept so clearing puts it back', /L\._searchPaint\[id \+ "\|" \+ p\] = v == null \? 1 : v;/.test(js) && /var v = any \? \["case"[^\n]*: orig;/.test(js), true);
 check('clearing restores every row on every layer', /function clearSearch\(\) \{[\s\S]*?searchRows\(L\)\.forEach\(function \(e\) \{ e\.hidden = false; \}\); applyRowVisibility\(L\);/.test(js), true);
-check('pins still re-draw the old way, shapes re-paint', /if \(markersByLayer\[L\.id\]\) applyMarkerVisibility\(L\); else applyShapeFade\(L\);/.test(js), true);
+check('pins re-draw, shapes re-paint, and an area wearing markers does both (one mark for every place)', /if \(hasPins\(L\)\) applyMarkerVisibility\(L\);\s*if \(!hasPins\(L\) \|\| areaPins\(L\)\) applyShapeFade\(L\);/.test(js), true);
 
 console.log('\n  the map goes to what matched');
 const seen = [];

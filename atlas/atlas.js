@@ -1099,9 +1099,139 @@
         L._ids.push(L.id + "-line");
       }
       addHighlight(L);
+      /* A contributed area layer wears the same mark as a pin layer — see ONE
+         MARK FOR EVERY PLACE. Its names are then the pins' names, drawn by the
+         map at the mark, so the area label layer is not added on top. */
+      if (areaPins(L)) { addAreaMarkers(L); return; }
       addCentreMarks(L);
       addLabel(L);
     });
+  }
+
+  /* ==================================================================
+     ONE MARK FOR EVERY PLACE
+
+     Every row in a contributed file is a place where somebody or something
+     is, and every one of them wears the same teardrop marker: a name beside
+     it, the same card on a tap, the key's marks beside it, folded into a
+     counted disc when crowded, hidden by a search that does not match it.
+     An area is a place that also says how far it reaches: its shading and
+     outline stay drawn, always, under its marker. A pin says "here, at this
+     spot"; the shading under an area's marker says "across all of this".
+
+     Before this the two were two pipelines. Areas drew a small round dot at
+     each centre (4d8892b) that the map's tap handler never registered, so a
+     shape too small to draw had a dot that did nothing when tapped; areas
+     could not wear keys, never folded, and twelve people across the same
+     three districts were twelve dots on top of one another. Now the area's
+     marker is built by the same code as a pin's, and registered in the same
+     list (markersByLayer), so everything written for pins serves areas too.
+
+     The marker stands at the shape's pole of inaccessibility — the point
+     furthest from any edge — not its centre of mass, so a crescent's marker
+     is on the crescent and a ring's is on the ring. Only contributed layers
+     get markers; the base map's districts, forests and rivers never do.
+  ================================================================== */
+  function areaPins(L) {
+    return !!(L && L.userLayer && L.centreMarks && (L.type === "fill" || L.type === "polygon"));
+  }
+  // whether a layer's places stand as markers right now (pins, or areas' marks)
+  function hasPins(L) { return !!(L && markersByLayer[L.id]); }
+
+  function addAreaMarkers(L) {
+    markersByLayer[L.id] = [];
+    var gj = DATA[L.id];
+    if (!gj) return;
+    gj.features.forEach(function (f) {
+      var at = poleOfInaccessibility(f.geometry) || labelAnchorPoint(f.geometry);
+      if (!at) return;
+      /* The marker's own feature is a point at the pole, sharing the shape's
+         properties and row number, so every piece of pin code (names, search,
+         folding, selection, the card) reads it as a pin. The shape itself
+         stays on the entry for the fit and the outline's ring. */
+      var shadow = { type: "Feature", geometry: { type: "Point", coordinates: at }, properties: f.properties, _row: f._row, _twins: f._twins };
+      makePinEntry(L, shadow, f);
+    });
+    ensurePinNames(L);
+    applyMarkerVisibility(L);
+    initLayerKeys(L);
+  }
+
+  /* The pole of inaccessibility: the point inside a polygon furthest from its
+     edges (Garcia-Castellanos & Lombardo; the "polylabel" method). The centre
+     of mass of a crescent lies outside it, and a marker outside its own area
+     says the wrong thing. A grid of cells is refined where a better point
+     could still be, down to a precision of about a hundredth of the shape's
+     size. For a MultiPolygon the largest part is taken. */
+  function poleOfInaccessibility(geom) {
+    if (!geom) return null;
+    var polygon = null;
+    if (geom.type === "Polygon") polygon = geom.coordinates;
+    else if (geom.type === "MultiPolygon") {
+      var bestA = -1;
+      geom.coordinates.forEach(function (p) { var a = ringArea(p[0]); if (a > bestA) { bestA = a; polygon = p; } });
+    } else return null;
+    if (!polygon || !polygon[0] || polygon[0].length < 3) return null;
+    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    polygon[0].forEach(function (c) { if (c[0] < x0) x0 = c[0]; if (c[0] > x1) x1 = c[0]; if (c[1] < y0) y0 = c[1]; if (c[1] > y1) y1 = c[1]; });
+    var w = x1 - x0, h = y1 - y0, size = Math.min(w, h);
+    if (!(size > 0)) return [x0, y0];
+    var precision = size / 100;
+    var cellSize = size, half = cellSize / 2;
+    function segDist(px, py, a, b) {
+      var x = a[0], y = a[1], dx = b[0] - x, dy = b[1] - y;
+      if (dx !== 0 || dy !== 0) {
+        var t = ((px - x) * dx + (py - y) * dy) / (dx * dx + dy * dy);
+        if (t > 1) { x = b[0]; y = b[1]; } else if (t > 0) { x += dx * t; y += dy * t; }
+      }
+      dx = px - x; dy = py - y;
+      return dx * dx + dy * dy;
+    }
+    // signed distance from the point to the polygon's edges: inside positive
+    function pointToPolygonDist(px, py) {
+      var inside = false, minSq = Infinity;
+      polygon.forEach(function (ring) {
+        for (var i = 0, len = ring.length, j = len - 1; i < len; j = i++) {
+          var a = ring[i], b = ring[j];
+          if ((a[1] > py) !== (b[1] > py) && px < (b[0] - a[0]) * (py - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside;
+          var d = segDist(px, py, a, b);
+          if (d < minSq) minSq = d;
+        }
+      });
+      return (inside ? 1 : -1) * Math.sqrt(minSq);
+    }
+    function cell(cx, cy, hh) {
+      var d = pointToPolygonDist(cx, cy);
+      return { x: cx, y: cy, h: hh, d: d, max: d + hh * Math.SQRT2 };
+    }
+    var queue = [];
+    for (var x = x0; x < x1; x += cellSize) for (var y = y0; y < y1; y += cellSize) queue.push(cell(x + half, y + half, half));
+    // the centre of mass is a fair first guess, and a point in the box's middle another
+    var c = labelAnchorPoint(geom);
+    var best = c ? cell(c[0], c[1], 0) : cell(x0 + w / 2, y0 + h / 2, 0);
+    var mid = cell(x0 + w / 2, y0 + h / 2, 0);
+    if (mid.d > best.d) best = mid;
+    var guard = 0;
+    while (queue.length && guard++ < 20000) {
+      // the most promising cell first
+      var bi = 0;
+      for (var i = 1; i < queue.length; i++) if (queue[i].max > queue[bi].max) bi = i;
+      var q = queue[bi]; queue[bi] = queue[queue.length - 1]; queue.pop();
+      if (q.d > best.d) best = q;
+      if (q.max - best.d <= precision) continue;
+      var hq = q.h / 2;
+      queue.push(cell(q.x - hq, q.y - hq, hq));
+      queue.push(cell(q.x + hq, q.y - hq, hq));
+      queue.push(cell(q.x - hq, q.y + hq, hq));
+      queue.push(cell(q.x + hq, q.y + hq, hq));
+    }
+    return best.d >= 0 ? [best.x, best.y] : (c || null);
+  }
+  function ringArea(ring) {
+    if (!ring || ring.length < 3) return 0;
+    var a = 0;
+    for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) a += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+    return Math.abs(a / 2);
   }
 
   /* A dot at the middle of every shape.
@@ -1120,7 +1250,12 @@
      The dot never yields. Text can be dropped when the map is crowded and
      nothing is lost but a name you can click for; a dropped dot loses the
      person. It rides on the same anchor points the labels use, so a dot and
-     its name always agree about where they are. */
+     its name always agree about where they are.
+
+     Superseded for contributed layers by ONE MARK FOR EVERY PLACE: their
+     shapes wear the teardrop marker instead (addAreaMarkers). This dot is
+     kept only for a curated layer that asks for centreMarks in its manifest
+     — none does today. */
   function addCentreMarks(L) {
     if (!L.centreMarks) return;
     var sid = labelPointSource(L);
@@ -1436,56 +1571,7 @@
     if (!gj) return;
     var pts = [];
     gj.features.forEach(function (f) {
-      var cfg = (L.markers && L.markers[f.properties[L.markerBy]]) || L.markerDefault || L.marker || {};
-      var wrap = el("div", "atlas-marker");
-      // pin + label live in an inner node: MapLibre owns the wrap's transform
-      // (true position), the node alone takes the spiderfy displacement — see
-      // the SPIDERFY section below.
-      var node = el("div", "atlas-mnode");
-      /* Every place now wears the standard location marker. `ring` and `glyph`
-         stop being read: a ring said which upload a place came from, which the
-         popup's Source row now says in words, and no contributed layer ever
-         declared a glyph. A declared icon still goes in the pin's head. */
-      /* A colour survives only where it tells two kinds apart. Deoria's sugar
-         mills and distilleries do that, so they keep sienna and moss; its survey
-         villages are all one kind, so their rust said nothing and they join every
-         other place at the one standard colour. */
-      var perKind = !!(L.markers && L.markerBy);
-      var pin = locPinEl((perKind && cfg.color) ? cfg.color : PIN_ONE, cfg.icon, perKind ? cfg.shape : null);
-      // Explicit icons and glyphs are an atlas's own bespoke styling (deoria's
-      // factory and flask) and stay exactly as declared. The DERIVED icon —
-      // guessed from a kind's words on contributed layers — is retired: those
-      // pins carry nothing inside, and the keys a layer can wear are drawn
-      // beside the pin instead (see KEYS WEAR ROWS below).
-      node.appendChild(pin);
-      // a pin's name is drawn by the map, not the marker — see PIN NAMES
-      wrap.appendChild(node);
-      var mk = new maplibregl.Marker({ element: wrap, anchor: "bottom" }).setLngLat(f.geometry.coordinates).addTo(map);
-      // keep the feature alongside its marker so search can gate it by content;
-      // node is kept so a key change can redraw the marks without touching the
-      // marker element MapLibre owns (or any wiring on it)
-      var entry = { mk: mk, f: f, color: cfg.color || "", node: node };
-      // clicks route through the spiderfy gate: a fanned pin opens its own
-      // popup, any other visible pin is a loner by construction and pops up
-      wrap.addEventListener("click", function (e) { e.stopPropagation(); spiderClick(L, entry); });
-      // A pin must be reachable without a pointer. The inner node is the
-      // button (the wrap belongs to MapLibre); a hidden or folded pin is
-      // display:none, so the tab order only ever holds what's visible.
-      node.setAttribute("role", "button");
-      node.tabIndex = 0;
-      var pinName = popupTitleText(L, f.properties);
-      node.setAttribute("aria-label", pinName || (L.label || "place") + " — details");
-      node.addEventListener("keydown", function (e) {
-        if (e.key !== "Enter" && e.key !== " ") return;
-        e.preventDefault();
-        e.stopPropagation();
-        spiderClick(L, entry);
-      });
-      // hovering names the pin without a click (see HOVER TOOLTIP), and when
-      // keys are on it also says what this place is under each of them
-      wireMarkerHint(node, function () { return popupTitleText(L, f.properties); },
-        function () { return keyRowsEl(L, f.properties); });
-      markersByLayer[L.id].push(entry);
+      makePinEntry(L, f, null);
       pts.push(f.geometry.coordinates);
     });
     L._pts = pts;
@@ -1493,6 +1579,64 @@
     ensurePinNames(L);
     applyMarkerVisibility(L);
     initLayerKeys(L);
+  }
+
+  /* One marker on the map for one row of a contributed layer — a pin's row,
+     or an area's (then `shape` is the area itself and `f` a point at its
+     pole; see ONE MARK FOR EVERY PLACE). The entry it registers is what every
+     later piece of pin code reads: { mk, f, shape, color, node }. */
+  function makePinEntry(L, f, shape) {
+    var cfg = (L.markers && L.markers[f.properties[L.markerBy]]) || L.markerDefault || L.marker || {};
+    var wrap = el("div", "atlas-marker");
+    // pin + label live in an inner node: MapLibre owns the wrap's transform
+    // (true position), the node alone takes the spiderfy displacement — see
+    // the SPIDERFY section below.
+    var node = el("div", "atlas-mnode");
+    /* Every place now wears the standard location marker. `ring` and `glyph`
+       stop being read: a ring said which upload a place came from, which the
+       popup's Source row now says in words, and no contributed layer ever
+       declared a glyph. A declared icon still goes in the pin's head. */
+    /* A colour survives only where it tells two kinds apart. Deoria's sugar
+       mills and distilleries do that, so they keep sienna and moss; its survey
+       villages are all one kind, so their rust said nothing and they join every
+       other place at the one standard colour. */
+    var perKind = !!(L.markers && L.markerBy);
+    var pin = locPinEl((perKind && cfg.color) ? cfg.color : PIN_ONE, cfg.icon, perKind ? cfg.shape : null);
+    // Explicit icons and glyphs are an atlas's own bespoke styling (deoria's
+    // factory and flask) and stay exactly as declared. The DERIVED icon —
+    // guessed from a kind's words on contributed layers — is retired: those
+    // pins carry nothing inside, and the keys a layer can wear are drawn
+    // beside the pin instead (see KEYS WEAR ROWS below).
+    node.appendChild(pin);
+    // a pin's name is drawn by the map, not the marker — see PIN NAMES
+    wrap.appendChild(node);
+    var mk = new maplibregl.Marker({ element: wrap, anchor: "bottom" }).setLngLat(f.geometry.coordinates).addTo(map);
+    // keep the feature alongside its marker so search can gate it by content;
+    // node is kept so a key change can redraw the marks without touching the
+    // marker element MapLibre owns (or any wiring on it)
+    var entry = { mk: mk, f: f, shape: shape || null, color: cfg.color || "", node: node };
+    // clicks route through the spiderfy gate: a fanned pin opens its own
+    // popup, any other visible pin is a loner by construction and pops up
+    wrap.addEventListener("click", function (e) { e.stopPropagation(); spiderClick(L, entry); });
+    // A pin must be reachable without a pointer. The inner node is the
+    // button (the wrap belongs to MapLibre); a hidden or folded pin is
+    // display:none, so the tab order only ever holds what's visible.
+    node.setAttribute("role", "button");
+    node.tabIndex = 0;
+    var pinName = popupTitleText(L, f.properties);
+    node.setAttribute("aria-label", pinName || (L.label || "place") + " — details");
+    node.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      e.stopPropagation();
+      spiderClick(L, entry);
+    });
+    // hovering names the pin without a click (see HOVER TOOLTIP), and when
+    // keys are on it also says what this place is under each of them
+    wireMarkerHint(node, function () { return popupTitleText(L, f.properties); },
+      function () { return keyRowsEl(L, f.properties); });
+    markersByLayer[L.id].push(entry);
+    return entry;
   }
 
   /* ==================================================================
@@ -1562,10 +1706,12 @@
     return prettyCol(col);
   }
 
-  // Marker layers contributed through the wizard may offer their qualifying
-  // columns as keys. Curated layers (Deoria's pins) never enter here.
+  // Layers contributed through the wizard may offer their qualifying columns
+  // as keys — pins, and areas now that they wear the same marker (the colour
+  // goes on the marker, never on the fill). Curated layers (Deoria's pins)
+  // never enter here.
   function initLayerKeys(L) {
-    if (!L.userLayer || L.type !== "marker" || L._keyOptions) return;
+    if (!L.userLayer || !hasPins(L) || L._keyOptions) return;
     var gj = DATA[L.id];
     if (!gj || !gj.features || !gj.features.length) return;
     var opts = computeKeyOptions(L, gj.features);
@@ -1686,6 +1832,11 @@
       // stays out of this path on purpose — it judges names, and a batch_id
       // column holding "first walk" / "second walk" is a perfectly good key.
       if (col.charAt(0) === "_") return;
+      /* An area layer's lowercase `name` is the region the row was matched to
+         (Western Ghats, Karnataka), written in by the join — not something the
+         person collected. Offered as a key it read "Name", and twice ("Name" /
+         "name") when the file had its own Name column. */
+      if (col === "name" && L.type !== "marker") return;
       var committed = committedCol === col;
       var nonEmpty = [];
       feats.forEach(function (f) {
@@ -2388,7 +2539,6 @@
     // a pressed kind whose key just went off has nothing left to filter by
     if (KINDFILTER && KINDFILTER.layer === L.id &&
         !act.some(function (o) { return o.col === KINDFILTER.col; })) clearSearch();
-    syncCollection(L);   // the names in the list wear the marks the pins now wear
   }
 
   // Fold distance follows the markers' true footprint. With nothing switched
@@ -2774,11 +2924,21 @@
     if (es.length === 1) {
       var e = es[0];
       var at = e.mk ? e.mk.getLngLat() : e.f.geometry.coordinates;
+      var opened = false;
+      var open = function () { if (opened) return; opened = true; spiderClick(L, e); };
+      map.once("moveend", open);
+      // an area is framed whole, with room left for the drawer and the sheet;
+      // a map already framed right may not move at all, so the card is
+      // opened on a timer as well
+      if (e.shape) {
+        var b = null;
+        walkCoords(e.shape.geometry, function (c) { if (!b) b = new maplibregl.LngLatBounds(c, c); else b.extend(c); });
+        if (b) { setTimeout(open, 900); try { map.fitBounds(b, { padding: viewPadding(), maxZoom: 10, duration: 600 }); return; } catch (err) {} }
+      }
       /* Close enough that the place stands on its own. Below this it can still
          be folded into a numbered disc, and a popup would open over a disc
          rather than over the place it belongs to. */
       map.easeTo({ center: at, zoom: Math.max(map.getZoom(), 16), duration: 600 });
-      map.once("moveend", function () { spiderClick(L, e); });
       return;
     }
     fitPoints(es.map(function (e) { return e.f.geometry.coordinates; }));
@@ -3473,7 +3633,8 @@
   function spiderClick(L, entry) {
     // the tapped pin is the chosen one: the Sindoor ring on the map, the
     // Sindoor name in the Map Browser, whichever way it was reached
-    if (entry.f && entry.f._row != null) selectRow(L, entry.f._row, null);
+    // an area's marker also rings its outline: the shape has a feature state
+    if (entry.f && entry.f._row != null) selectRow(L, entry.f._row, entry.shape ? shapeRef(L, entry.shape, entry.f._row) : null);
     if (SPIDER.items) {
       for (var i = 0; i < SPIDER.items.length; i++) {
         var it = SPIDER.items[i];
@@ -3929,6 +4090,40 @@
     if (L.type === "marker") return !!L.userLayer;
     return shapeSearchable(L);
   }
+  /* ONE FILE, ONE ROW. A file whose rows mostly named regions LOKA had
+     outlines for, with a few that only had a point, goes on as two layers —
+     the outlines, and "<name> · as points" (sameFileAs, cbe7356). In the
+     engine they stay two; in the Map Browser the visitor sees one row, one
+     switch and one count, because to them it is one file. The outlines
+     layer is the row; its points twin is folded into it. */
+  function layerById(id) {
+    return (MANIFEST && MANIFEST.layers || []).filter(function (x) { return x.id === id; })[0] || null;
+  }
+  // the "· as points" half of a split file: named so by the server (pointsLabel)
+  function looksLikeTwin(L) {
+    return !!(L && L.sameFileAs && (L.id === L.sameFileAs + "-as-points" || /·\s*as points$/.test(L.label || "")));
+  }
+  // the points twin of a layer, if the file split that way — the first half
+  // may itself be points (a category file puts each matched region's row at
+  // the region's middle), so the pair is told apart by the twin's name
+  function pairedTwin(L) {
+    if (!L || !L.sameFileAs || looksLikeTwin(L)) return null;
+    var t = layerById(L.sameFileAs);
+    return t && t.sameFileAs === L.id && looksLikeTwin(t) ? t : null;
+  }
+  // the layer a points twin belongs under
+  function pairedPrimary(L) {
+    if (!looksLikeTwin(L)) return null;
+    var p = layerById(L.sameFileAs);
+    return p && pairedTwin(p) === L ? p : null;
+  }
+  // how a split file's halves are said: "6 as areas · 5 as points", or, when
+  // the first half was placed at its regions' middles, "6 by region · 5 looked up"
+  function splitWords(n, P, twin) {
+    var areas = P.type === "fill" || P.type === "polygon";
+    if (twin) return n + (areas ? " as points" : " looked up");
+    return n + (areas ? (n === 1 ? " as area" : " as areas") : " by region");
+  }
   // What the rows are called: what the manifest says ("people"), else places
   // for pins and areas for shapes. One of them is a person, a place, an area.
   function layerNoun(L) {
@@ -4052,8 +4247,10 @@
   }
   // after a search touches a layer's rows: pins re-draw, shapes re-paint
   function applyRowVisibility(L) {
-    if (markersByLayer[L.id]) applyMarkerVisibility(L); else applyShapeFade(L);
-    syncCollection(L);   // the list in the panel narrows with the map
+    // an area layer with markers does both: its markers hide, its shading pales
+    if (hasPins(L)) applyMarkerVisibility(L);
+    if (!hasPins(L) || areaPins(L)) applyShapeFade(L);
+    syncCollection(pairedPrimary(L) || L);   // the count in the panel narrows with the map
   }
   // The corners of every matching area, so the map can fit them. A pin is a
   // point; a shape contributes every point on its outline.
@@ -4061,7 +4258,8 @@
     var b = null;
     searchRows(L).forEach(function (e) {
       if (e.hidden) return;
-      walkCoords(e.f.geometry, function (c) { if (!b) b = new maplibregl.LngLatBounds(c, c); else b.extend(c); });
+      // an area's marker entry keeps the whole shape on it (see makePinEntry)
+      walkCoords((e.shape || e.f).geometry, function (c) { if (!b) b = new maplibregl.LngLatBounds(c, c); else b.extend(c); });
     });
     return b;
   }
@@ -4170,10 +4368,11 @@
         var match = !!(q && text.indexOf(q) >= 0) || !!byRow[e.f._row];
         for (var i = 0; !match && i < terms.length; i++) match = termRe(terms[i]).test(text);
         e.hidden = !match;
-        if (match) { shown++; if (markersByLayer[L.id]) matchPts.push(e.f.geometry.coordinates); }
+        if (match) { shown++; if (hasPins(L) && !areaPins(L)) matchPts.push(e.f.geometry.coordinates); }
       });
       applyRowVisibility(L);
-      if (!markersByLayer[L.id]) {
+      // an area that matched is framed by its whole outline, marker or not
+      if (!hasPins(L) || areaPins(L)) {
         shapes = true;
         var sb = shapeBounds(L);
         if (sb) b = b ? b.extend(sb) : sb;
@@ -4434,6 +4633,9 @@
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", idVisible(L, id, show) ? "visible" : "none");
     });
     if (markersByLayer[L.id]) applyMarkerVisibility(L);
+    // one file, one switch: the rows that went on as points follow their outlines
+    var twin = pairedTwin(L);
+    if (twin) setLayerVisible(twin, show);
   }
 
   // Basemap + tile attributions, rendered in a strip BELOW the map (not overlaying
@@ -4708,7 +4910,8 @@
     var groupsShown = 0, layersShown = 0;
     groupList.forEach(function (g) {
       var layers = MANIFEST.layers.filter(function (L) {
-        return (L.group || "userdata") === g.id && !isBaseMapRow(L);
+        // a points twin has no row of its own: it sits under its outlines (ONE FILE, ONE ROW)
+        return (L.group || "userdata") === g.id && !isBaseMapRow(L) && !pairedPrimary(L);
       });
       if (!layers.length) return;
       groupsShown++; layersShown += layers.length;
@@ -5190,30 +5393,32 @@
     SEL.L = L; SEL.row = row; SEL.ref = ref || null;
     if (ref) { try { map.setFeatureState(ref, { selected: true }); } catch (e) {} }
     markSelPin();
-    syncCollection(L);
   }
   function clearSelection() {
     if (SEL.ref) { try { map.setFeatureState(SEL.ref, { selected: false }); } catch (e) {} }
-    var was = SEL.L;
     SEL.L = null; SEL.row = null; SEL.ref = null;
     markSelPin();
-    if (was) syncCollection(was);
   }
-  // a pin has no feature state: the chosen one wears the ring by class
+  // the feature-state handle of a shape, for the Sindoor ring on its outline
+  function shapeRef(L, f, row) {
+    return { source: srcId(L), id: f && f.id != null ? f.id : row };
+  }
+  // a pin has no feature state: the chosen one wears the ring by class (an
+  // area's marker too — its outline rings by feature state at the same time)
   function markSelPin() {
     document.querySelectorAll(".atlas-mnode.sel").forEach(function (n) { n.classList.remove("sel"); });
-    if (!SEL.L || SEL.L.type !== "marker" || SEL.row == null) return;
+    if (!SEL.L || !hasPins(SEL.L) || SEL.row == null) return;
     var es = markersByLayer[SEL.L.id] || [];
     for (var i = 0; i < es.length; i++) {
       if (es[i].f._row === SEL.row) { if (es[i].node) es[i].node.classList.add("sel"); return; }
     }
   }
 
-  // The items of a collection layer, in row order: the name the card would
-  // be headed by, the colour of its dot or pin, and the row that finds it.
+  // The items of a collection layer, in row order: the row, the colour of
+  // its mark, and whether a search has hidden it.
   function collectionItems(L) {
     var out = [];
-    if (L.type === "marker") {
+    if (hasPins(L)) {
       (markersByLayer[L.id] || []).forEach(function (e) {
         out.push({ row: e.f._row, name: popupTitleText(L, e.f.properties), color: e.color || oneColorOf(L), e: e, hidden: !!e.hidden });
       });
@@ -5226,135 +5431,54 @@
     return out.map(function (it) { if (!it.name) it.name = nounOne(layerNoun(L)) + " " + (it.row + 1); return it; });
   }
 
-  /* The row's block: a line that says how many ("11 people") and opens into
-     the names. Long lists show the first COLL_CAP and offer the rest in one
-     press — Bengaluru's 66 places would otherwise push every other layer off
-     the phone's sheet. A search narrows the list to the rows that matched,
-     the same rows the map keeps at full strength, and the line says so. */
-  var COLL_CAP = 30;
-  /* What sits before a name in the list. With no key on: the layer's dot (a
-     pin for a pin layer). With a key on: the same marks the place's pin wears
-     on the map — the key's shape in the kind's colour, grey for an answer the
-     key calls "other" — and a grey dot for a place the key has no answer
-     for, which is what the key's own "no answer" row shows. Nothing new to
-     tap; the list simply stops disagreeing with the map. */
-  function collMarkEl(L, it) {
-    var act = L.type === "marker" ? activeKeyOptions(L) : [];
-    if (!act.length) {
-      var d = el("span", "coll-dot" + (L.type === "marker" ? " pin" : ""));
-      d.style.setProperty("--c", it.color);
-      return d;
-    }
-    var box = el("span", "coll-marks");
-    var rows = keyMarkRows(L, it.e.f, act);
-    if (!rows.length) {
-      var none = el("span", "coll-dot");
-      none.style.setProperty("--c", KEY_OTHER);
-      box.appendChild(none);
-      return box;
-    }
-    rows.forEach(function (r) { box.appendChild(rowSvg(r.shape, r.colors)); });
-    return box;
-  }
+  /* The row's count: one line that says how many the layer holds ("11
+     people", "134 places"), as plain text. A search narrows it to the rows
+     that matched — the same rows the map keeps — and the line says so ("16
+     of 134 places match").
+
+     The list of names that used to open from here is gone. It was the index
+     an area needed when an area could be lost — under somebody else's shape,
+     its name dropped, its twin hidden. Every place now has a marker that
+     carries its name and folds into a counted disc, so the map is the index.
+     A file that went on as two layers (its outlines, and the rows that only
+     had a point — see sameFileAs) is counted as one here, with a second line
+     saying how it split: "6 as areas · 5 as points". */
   function collectionEl(L) {
     var wrap = el("div", "ctl-coll");
     wrap.setAttribute("data-layer", L.id);
     L._coll = wrap;
-    if (L._collOpen == null) L._collOpen = false;
     syncCollection(L);
     return wrap;
   }
   function syncCollection(L) {
     var wrap = L._coll; if (!wrap) return;   // the newest block; an older one is off the page
-    var items = collectionItems(L);
+    var parts = [L].concat(pairedTwin(L) ? [pairedTwin(L)] : []);
+    var items = [], shown = 0, split = [];
+    parts.forEach(function (P, i) {
+      var its = collectionItems(P);
+      var kept = its.filter(function (it) { return !it.hidden; }).length;
+      items = items.concat(its); shown += kept;
+      if (its.length) split.push(splitWords(its.length, L, i > 0));
+    });
     wrap.innerHTML = "";
     if (!items.length) return;
-    var noun = layerNoun(L);
-    var shown = items.filter(function (it) { return !it.hidden; });
-    var narrowed = shown.length !== items.length;
+    // a split file's rows are areas and points both, so they are "places"
+    // unless the manifest names them ("people")
+    var noun = L.noun || (parts.length > 1 ? "places" : layerNoun(L));
+    var narrowed = shown !== items.length;
     // the phone's tab reads this number instead of "1 layer" — see buildBar
-    if (L._row) L._row.setAttribute("data-count", String(shown.length));
+    if (L._row) L._row.setAttribute("data-count", String(shown));
 
-    var head = el("button", "coll-head");
-    head.type = "button";
-    head.setAttribute("aria-expanded", String(!!L._collOpen));
-    var dot = el("span", "coll-dot" + (L.type === "marker" ? " pin" : ""));
+    var head = el("div", "coll-head");
+    var dot = el("span", "coll-dot pin");
     dot.style.setProperty("--c", items[0].color);
     head.appendChild(dot);
     var words = narrowed
-      ? shown.length + " of " + items.length + " " + noun + " match"
+      ? shown + " of " + items.length + " " + noun + " match"
       : countWords(items.length, noun);
     head.appendChild(el("span", "coll-count", esc(words)));
-    head.appendChild(el("span", "coll-chev", ICONS.chevron));
-    head.onclick = function () {
-      L._collOpen = !L._collOpen;
-      syncCollection(L);
-    };
     wrap.appendChild(head);
-    if (!L._collOpen) return;
-
-    var list = el("ul", "coll-list");
-    list.setAttribute("aria-label", noun + " on this layer");
-    var cap = L._collAll ? shown.length : COLL_CAP;
-    shown.slice(0, cap).forEach(function (it) {
-      var li = el("li");
-      var b = el("button", "coll-item" + (SEL.L === L && SEL.row === it.row ? " sel" : ""));
-      b.type = "button";
-      b.appendChild(collMarkEl(L, it));
-      b.appendChild(el("span", "coll-name", esc(it.name)));
-      if (SEL.L === L && SEL.row === it.row) b.setAttribute("aria-current", "true");
-      b.onclick = function () { goToItem(L, it); };
-      li.appendChild(b);
-      list.appendChild(li);
-    });
-    wrap.appendChild(list);
-    if (shown.length > cap) {
-      var more = el("button", "coll-more", "Show all " + shown.length);
-      more.type = "button";
-      more.onclick = function () { L._collAll = true; syncCollection(L); };
-      wrap.appendChild(more);
-    }
-  }
-
-  /* A name is a way in. The map goes to the row and its card opens — the
-     same card a tap on the map gives, twins' chooser included. A pin uses the
-     move a search result already makes (goToWord); a shape is framed, with
-     room left for the drawer and the phone's sheet, and its card opens at
-     the spot its name is written. On a phone the sheet folds once the map
-     has arrived: a card under an open sheet is a card nobody sees. */
-  function goToItem(L, it) {
-    dismissCue();
-    /* The reader has chosen where to look, so the map is theirs from here:
-       without this the sheet folding on a phone re-framed all the data (see
-       watchSheetHeight) and undid the move a moment after it began. */
-    userMoved = true;
-    /* The sheet folds when the move ends, not before. Folding first shrinks
-       the sheet, and the nudge that keeps the map's middle still (see
-       watchSheetHeight) cancelled the move that had just begun — seen on a
-       phone as a card opening over a map that never went anywhere. Listeners
-       run in the order they were added, so the fold comes before the card. */
-    if (TRAY) map.once("moveend", function () { openTray(null); });
-    if (L.type === "marker") {
-      selectRow(L, it.row, null);
-      goToWord(L, [it.e]);
-      return;
-    }
-    var f = it.e.f;
-    selectRow(L, it.row, { source: srcId(L), id: f.id != null ? f.id : it.row });
-    var b = null;
-    walkCoords(f.geometry, function (c) { if (!b) b = new maplibregl.LngLatBounds(c, c); else b.extend(c); });
-    var at = labelAnchorPoint(f.geometry);
-    var opened = false;
-    var open = function () {
-      if (opened) return; opened = true;
-      if (TRAY) openTray(null);   // a move that never happened still folds the sheet
-      if (SEL.L !== L || SEL.row !== it.row) return;   // something else was chosen meanwhile
-      openPopup(L, f, at || map.getCenter(), null, null, twinRowsOf(L, f));
-    };
-    if (!b) { open(); return; }
-    map.once("moveend", open);
-    setTimeout(open, 900);   // a map already framed right may not move at all
-    try { map.fitBounds(b, { padding: viewPadding(), maxZoom: 10, duration: 600 }); } catch (e) { open(); }
+    if (parts.length > 1) wrap.appendChild(el("p", "coll-split", esc(split.join(" · "))));
   }
   // the rows a card should offer beside this one: its twins, if it has any
   function twinRowsOf(L, f) {
@@ -5422,7 +5546,7 @@
     // reader is most likely looking at already
     var c = map.getCenter(), best = null, bestD = Infinity;
     collectionItems(L).forEach(function (it) {
-      var p = L.type === "marker" ? it.e.f.geometry.coordinates : labelAnchorPoint(it.e.f.geometry);
+      var p = hasPins(L) ? it.e.f.geometry.coordinates : labelAnchorPoint(it.e.f.geometry);
       if (!p) return;
       var d = Math.pow(p[0] - c.lng, 2) + Math.pow(p[1] - c.lat, 2);
       if (d < bestD) { bestD = d; best = p; }
@@ -5433,8 +5557,8 @@
     var ring = el("div", "atlas-pulse-wrap");
     ring.setAttribute("aria-hidden", "true");
     ring.appendChild(el("div", "atlas-pulse"));
-    // a pin's head is 18px above the spot it marks; a shape's dot is on it
-    CUE.mk = new maplibregl.Marker({ element: ring, anchor: "center", offset: L.type === "marker" ? [0, -18] : [0, 0] }).setLngLat(best).addTo(map);
+    // a marker's head is 18px above the spot it marks; a shape without one is on it
+    CUE.mk = new maplibregl.Marker({ element: ring, anchor: "center", offset: hasPins(L) ? [0, -18] : [0, 0] }).setLngLat(best).addTo(map);
   }
   function dismissCue() {
     if (CUE.seen) return;

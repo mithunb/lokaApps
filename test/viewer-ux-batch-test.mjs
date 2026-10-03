@@ -70,7 +70,7 @@ check('the stage is told, and told again when the card closes', /stage\.classLis
 check('the pin is panned clear of the card and the toolbar', /function keepClearOfCard\(lngLat, offsetPx\) \{[\s\S]*?map\.panBy\(\[dx, dy\], \{ duration: 250 \}\);/.test(js), true);
 check('framing leaves room for the card while one is open', /if \(LAST_POP && cardDocked\(\)\) pad\.right = Math\.min\(mr\.width \* 0\.45, 340 \+ 8 \+ 24\);/.test(js), true);
 check('Esc puts the card away', /if \(e\.key === "Escape" && LAST_POP\) \{ try \{ LAST_POP\.remove\(\); \}/.test(js), true);
-check('a tapped pin is the chosen one, ring and list alike', /function spiderClick\(L, entry\) \{[\s\S]*?selectRow\(L, entry\.f\._row, null\);/.test(js), true);
+check('a tapped marker is the chosen one; an area\'s marker rings its outline with it', /function spiderClick\(L, entry\) \{[\s\S]*?selectRow\(L, entry\.f\._row, entry\.shape \? shapeRef\(L, entry\.shape, entry\.f\._row\) : null\);/.test(js), true);
 check('the chosen pin wears the Sindoor ring', /\.atlas-mnode\.sel \.atlas-pin\.loc::before \{[^}]*border:2px solid var\(--color-sindoor\);/.test(html) && /function markSelPin\(\) \{/.test(js), true);
 
 console.log('\n  2. a pressed kind says so where it was pressed');
@@ -81,7 +81,7 @@ check('the line sits after that key\'s kinds', /out\.push\(keyOnlyLine\(L, opt\)
 check('Show all clears the filter the way the count line does', /all\.onclick = function \(\) \{ clearSearch\(\); \};/.test(js), true);
 check('the line is hidden when nothing is pressed', /line\.hidden = !mine;/.test(js) && /\.key-only\[hidden\] \{ display:none; \}/.test(html), true);
 check('the hint says what a tap does, and what a second tap does', /Tap a kind to show only those places; tap it again, or Show all, to bring the rest back\. Tap a word on a place to see who else said it\./.test(js), true);
-check('(a) and (b) from dadd121 stand: list colours, list narrows', /function collMarkEl\(/.test(js) && /r\.onclick = function \(\) \{ filterByKind\(L, opt, which, it\.label\); \};/.test(js), true);
+check('(b) from dadd121 stands: a kind narrows the map; (a) the list it coloured is gone (October 2026)', !/function collMarkEl\(/.test(js) && /r\.onclick = function \(\) \{ filterByKind\(L, opt, which, it\.label\); \};/.test(js), true);
 
 console.log('\n  3. counted discs are ink, not Leaf');
 const inks = js.match(/var DISC_INK = \[("#[0-9A-F]{6}"), ("#[0-9A-F]{6}"), ("#[0-9A-F]{6}")\];/);

@@ -67,14 +67,13 @@ check('the per-layer "⋯" stays: it is a layer\'s own menu, not the atlas\'s', 
 check('the undeclared base group is called "Boundaries & places" — a declared one keeps its manifest\'s name',
   /base: "Boundaries & places"/.test(js) && /GROUP_LABELS\[gid\] \|\|/.test(js), true);
 
-console.log('\n  (a) with a key on, each name in the Map Browser wears its marks');
+console.log('\n  (a) the marks live on the map; the Map Browser is a count (one mark for every place, October 2026)');
 check('one builder gives the pin and the list their marks', /function keyMarkRows\(L, f, act\)/.test(js) && /var rows = keyMarkRows\(L, entry\.f, act\);/.test(js), true);
-check('the list row asks it instead of drawing a plain dot', /b\.appendChild\(collMarkEl\(L, it\)\);/.test(js), true);
-check('no key on: the dot as before', /if \(!act\.length\) \{\s*var d = el\("span", "coll-dot" \+ \(L\.type === "marker" \? " pin" : ""\)\);/.test(js), true);
-check('no answer under any key: the grey the key\'s own row uses', /none\.style\.setProperty\("--c", KEY_OTHER\);/.test(js), true);
-check('the marks are the map\'s own rows', /rows\.forEach\(function \(r\) \{ box\.appendChild\(rowSvg\(r\.shape, r\.colors\)\); \}\);/.test(js), true);
-check('toggling a key redraws the list', /syncCollection\(L\);   \/\/ the names in the list wear the marks the pins now wear/.test(js), true);
-check('the chosen name\'s Sindoor ring survives on the marks', /\.coll-item\.sel \.coll-marks \{[^}]*var\(--color-sindoor\)/.test(html), true);
+check('the list of names, and the marks it wore, are gone from the panel', !/function collMarkEl\(/.test(js) && !/coll-marks/.test(js) && !/coll-list/.test(js), true);
+check('the row is a plain count with the place mark before it', /var head = el\("div", "coll-head"\);[\s\S]*?var dot = el\("span", "coll-dot pin"\);/.test(js), true);
+check('a pin with no answer under a key still wears the grey its "no answer" row uses, on the map', /KEY_OTHER/.test(js) && /function keyMarkRows\(L, f, act\)/.test(js), true);
+check('toggling a key no longer redraws a list', !/syncCollection\(L\);   \/\/ the names in the list/.test(js), true);
+check('no list styles are left in the sheet', !/\.coll-item/.test(html) && !/\.coll-more/.test(html), true);
 
 console.log('\n  (b) a pressed kind narrows the list and the map together');
 check('a kind is a button that narrows', /var r = el\("button", "leg-item key-kind"/.test(js) && /r\.onclick = function \(\) \{ filterByKind\(L, opt, which, it\.label\); \};/.test(js), true);

@@ -485,43 +485,21 @@
     .leg-n { margin-left:auto; flex:0 0 auto; padding-left:.5rem; font-size:var(--t-meta); font-weight:700; color:var(--color-text-primary); font-variant-numeric:tabular-nums; }
 
     /* ---- Map Browser: a contributed layer's row says what it holds ----
-       "11 people" with the layer's colour beside it, where the swatch that
-       only repeated the layer's name used to be; the chevron opens the names.
-       Each name is a button: the map goes there and the card opens. The
-       chosen one wears Sindoor, the same as the ring on the map. */
+       "11 people" as plain text, with the place mark beside it, where the
+       swatch that only repeated the layer's name used to be. Not a control:
+       the map itself is the index now — every place has a marker that
+       carries its name and folds into a counted disc (see ONE MARK FOR EVERY
+       PLACE in atlas.js). A file that went on as outlines and points reads
+       as one row, with a second line saying how it split. */
     .ctl-coll { margin:.25rem 0 .2rem; }
-    .coll-head { display:flex; align-items:center; gap:.5rem; width:100%; min-height:24px; padding:.1rem 0;
-      font:inherit; font-size:var(--t-meta); color:var(--color-text-secondary); background:none; border:none; cursor:pointer; text-align:left; }
-    .coll-head:hover .coll-count { color:var(--color-text-primary); }
-    .coll-head:focus-visible { outline:2px solid var(--color-leaf); outline-offset:1px; border-radius:var(--radius-xs); }
+    .coll-head { display:flex; align-items:center; gap:.5rem; min-height:24px; padding:.1rem 0;
+      font-size:var(--t-meta); color:var(--color-text-secondary); }
     .coll-count { font-variant-numeric:tabular-nums; }
-    .coll-chev { display:inline-flex; margin-left:auto; color:var(--color-text-muted); transition:transform .18s cubic-bezier(.25,1,.5,1); }
-    .coll-chev svg { width:15px; height:15px; }
-    .coll-head[aria-expanded="true"] .coll-chev { transform:rotate(180deg); }
-    /* the dot is the map's own mark: the shape's centre dot with its white
-       ring, or a pin's head, at the panel's size */
+    .coll-split { margin:0 0 0 calc(11px + 3px + .5rem); padding:0; font-size:var(--t-meta); color:var(--color-text-muted); font-variant-numeric:tabular-nums; }
+    /* the mark is the map's own: a pin's head at the panel's size */
     .coll-dot { flex:0 0 auto; width:11px; height:11px; margin:0 1.5px; border-radius:50%; background:var(--c);
       box-shadow:0 0 0 1.5px #fff, 0 0 0 2.5px rgba(36,33,29,.12); }
     .coll-dot.pin { border-radius:50% 50% 50% 0; transform:rotate(-45deg); box-shadow:0 0 0 1.5px #fff; }
-    .coll-list { list-style:none; margin:.1rem 0 0; padding:0 0 0 .1rem; }
-    .coll-item { display:flex; align-items:center; gap:.5rem; width:100%; min-height:26px; padding:.15rem .1rem;
-      font:inherit; font-size:var(--t-meta); line-height:1.25; color:var(--color-text-primary);
-      background:none; border:none; border-radius:var(--radius-xs); cursor:pointer; text-align:left; }
-    .coll-item:hover { color:var(--color-leaf-deep); }
-    .coll-item:hover .coll-name { text-decoration:underline; text-underline-offset:2px; }
-    .coll-item:focus-visible { outline:2px solid var(--color-leaf); outline-offset:0; }
-    .coll-name { min-width:0; overflow-wrap:anywhere; }
-    .coll-item.sel { color:var(--color-sindoor); font-weight:600; }
-    .coll-item.sel .coll-dot { box-shadow:0 0 0 1.5px #fff, 0 0 0 3px var(--color-sindoor); }
-    /* With a key on, a name wears the marks its pin wears on the map — one row
-       per key, the key's shape in the kind's colour — instead of the plain dot
-       (collMarkEl). Sized to the pin's own rows at the panel's scale. */
-    .coll-marks { flex:0 0 auto; display:inline-flex; flex-direction:column; align-items:flex-start; gap:2px; min-width:14px; }
-    .coll-marks .atlas-keyrow { display:block; height:auto; max-height:12px; width:auto; overflow:visible; }
-    .coll-item.sel .coll-marks { border-radius:var(--radius-xs); box-shadow:0 0 0 2px var(--color-sindoor); }
-    .coll-more { display:block; margin:.2rem 0 0 1.4rem; padding:.15rem 0; font:inherit; font-size:var(--t-meta); font-weight:600;
-      color:var(--color-leaf); background:none; border:none; cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
-    .coll-more:hover { color:var(--color-leaf-deep); }
     /* a kind you can open, and the words it opens into */
     /* a kind sitting under its own switch, indented to belong to it */
     /* a kind sits under its key's own name, which is the strip again */
@@ -1333,9 +1311,8 @@
       .ctl-toggle input:checked + .ctl-switch.small::after { transform:translateX(12px); }
       .key-tname { font-size:var(--t-ui); }
       .ctl-sub-chev { min-width:40px; min-height:40px; align-items:center; justify-content:center; }
-      .coll-head, .coll-item { min-height:44px; font-size:var(--t-ui); font-weight:400; }
-      .coll-item.sel { font-weight:600; }
-      .coll-more { min-height:44px; }
+      .coll-head { min-height:32px; font-size:var(--t-ui); font-weight:400; }
+      .coll-split { font-size:var(--t-ui); }
       .pop-twin { min-height:38px; }
       .ctl-group-head { padding:.75rem .1rem; }
       .ctl-search-box { min-height:44px; }
