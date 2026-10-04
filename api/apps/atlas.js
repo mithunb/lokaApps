@@ -4245,7 +4245,8 @@ async function shortLabelsJob(job) {
   const call = aiCaller(job.payer ? { payer: job.payer } : 'server', 1, stub);
   let answer;
   try {
-    answer = await call(getFlashLiteModel(), shortLabels.promptFor(headings, (inst && inst.title) || ''), shortLabels.schemaFor(Type));
+    // naming is not reasoning: thinking off, room to answer (the setup guess's lesson, 2efd115)
+    answer = await call(getFlashLiteModel(), shortLabels.promptFor(headings, (inst && inst.title) || ''), shortLabels.schemaFor(Type), { file: true });
   } catch (e) {
     console.warn('[labels] ' + where + ' — ' + (e && e.message));
     return { state: 'failed', reason: String((e && e.message) || 'something went wrong').slice(0, 160) };

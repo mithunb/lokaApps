@@ -48,7 +48,7 @@ const TABLE = [
   // Multispecies Landscape Assessment 2026 — the survey's columns, verbatim
   ['Name of Organisation or Collective (if applicable)', true, 'Name of Organisation or Collective'],
   ['What best describes your work, profile, role or affiliation ? (Please select all that apply)', true, 'Work, profile, role or affiliation'],
-  ['How long have you been involved in this work? Is the work ongoing/complete?', true, 'How long involved in this work?'],
+  ['How long have you been involved in this work? Is the work ongoing/complete?', true, 'How long have you been involved…'],
   ['Which geographic areas do you work in? (Feel free to mention country, village, district, and state/province details.) You might be working in several geographical areas, so please mention all.', true, 'Geographic areas'],
   ['What languages do you primarily work in? Feel free to mention all if there is more than one.', true, 'Languages'],
   ['Please share links to any relevant resources to your work.', true, 'Links to any relevant resources…'],

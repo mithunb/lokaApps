@@ -152,9 +152,10 @@
        "Which geographic areas do you work in?"          → "geographic areas"
        "What best describes your work, profile, role?"  → "work, profile, role"
        "Please share links to any relevant resources."  → "links to any relevant resources"
-       "How long have you been involved in this work?"  → "How long involved in this work?"
        "Do you have access to a handpump?"              → "access to a handpump"
-     Anything else is kept as it is and cut at a word. */
+     Anything else ("How long have you been…?", and every heading not in
+     English — this is English question grammar) is kept as it is and cut at
+     a word; the model's short name replaces the cut where there is a key. */
   function unasked(q) {
     var t = q.replace(/^(what|which)\s+of\s+the\s+following\s+/i, function (m0) { return m0.slice(0, 5).trim() + " "; });
     var m = t.match(/^(what|which)\s+(kind of\s+|kinds of\s+|type of\s+|types of\s+|sort of\s+)?(.+?)\s+(do|does|did|are|is|was|were|have|has|had|would|will|can|could|should|might)\s+(you|your|they|it|we|the|this|that|there|these|those)\b/i);
@@ -171,9 +172,6 @@
     // "Is there a primary school in the village?" → "primary school in the village"
     m = t.match(/^(is|are)\s+there\s+(any\s+|a\s+|an\s+)?(.+?)[?]?$/i);
     if (m && m[3].length >= 3) return m[3];
-    // "How long have you been involved in this work?" → "How long involved in this work?"
-    m = t.match(/^(how\s+(?:long|often|many\s+times))\s+(have|has|had)\s+(you|they|it|we)\s+(been\s+)?(.+?)[?]?$/i);
-    if (m && m[5].length >= 3) return m[1] + " " + m[5] + "?";
     return t;
   }
 
