@@ -19,6 +19,7 @@ import { sendMail } from '../lib/mailer.js';
 import { noteTrouble, noteOk, setTroubleNotifier, openTroubles } from '../lib/atlas/trouble.js';
 import * as owed from '../lib/atlas/owed.js';
 import { queue as QUESTIONS, signatureOf, NEVER_READ } from '../lib/atlas/questions-queue.js';
+import * as shortLabels from '../lib/atlas/short-labels.js';
 import {
   enqueueBuild, getJob, setJobDoneHook, setStrandedBuildHook, DATASETS_ROOT, PRIVATE_ROOT,
 } from '../lib/atlas/jobs.js';
@@ -4206,6 +4207,59 @@ function considerReading(dataset, layerId, opts) {
   return QUESTIONS.offer({ dataset, layerId, sig, payer }) ? 'queued' : 'not queued';
 }
 
+/* ---------- short names for long column headings ---------- */
+
+/* Should this layer be asked for short names? The rules are in
+   api/lib/atlas/short-labels.js; this only finds the layer and its owner.
+   Any contributed layer with rows — points or areas, both wear keys now. */
+function considerShortLabels(dataset, layerId) {
+  if (NEVER_READ.has(dataset)) return 'never';
+  const got = layerAndRows(dataset, layerId);
+  if (!got || !got.rows.length) return 'no layer';
+  if (!shortLabels.headingsWanting(got.layer, got.rows).length) return 'none';
+  if (!ai && !FAKE_READING) return 'no model';   // the viewer's own plain cut serves; nothing to store
+  const inst = reg.getInstance(dataset);
+  const m = imports.readManifest(dataset);
+  return shortLabels.consider({ dataset, layerId, layer: got.layer, rows: got.rows,
+    dir: m && m.dir, payer: (inst && inst.email) || '' });
+}
+
+/* One layer off the short-names list: one call to the model for all of its
+   long headings, checked, written onto the stanza. Answers what to write on
+   the list — the names too, so a re-commit gets them back for nothing. */
+async function shortLabelsJob(job) {
+  const { dataset, layerId } = job;
+  const where = dataset + '/' + layerId;
+  if (!ai && !FAKE_READING) return { state: 'skipped', reason: 'no model on this server' };
+  const got = layerAndRows(dataset, layerId);
+  if (!got) return { state: 'failed', reason: 'the layer is gone' };
+  const headings = shortLabels.headingsWanting(got.layer, got.rows);
+  if (!headings.length) return { state: 'none', reason: 'no long headings' };
+  const inst = reg.getInstance(dataset);
+  const m = imports.readManifest(dataset);
+  console.log('[labels] naming ' + headings.length + ' heading' + (headings.length === 1 ? '' : 's') + ' on ' + where);
+  /* One call, out of the owner's hourly allowance. The stand-in (FAKE_READING)
+     answers with the plain cut, so the whole path — list, call, check, write
+     — runs locally without a model. */
+  const stub = FAKE_READING ? async () => ({ names: headings.map((h) => ({ heading: h, short: shortLabels.LABELS.shortHeading(h) })) }) : null;
+  const call = aiCaller(job.payer ? { payer: job.payer } : 'server', 1, stub);
+  let answer;
+  try {
+    answer = await call(getFlashLiteModel(), shortLabels.promptFor(headings, (inst && inst.title) || ''), shortLabels.schemaFor(Type));
+  } catch (e) {
+    console.warn('[labels] ' + where + ' — ' + (e && e.message));
+    return { state: 'failed', reason: String((e && e.message) || 'something went wrong').slice(0, 160) };
+  }
+  const { names, fromModel } = shortLabels.cleanNames(answer, headings);
+  const by = FAKE_READING ? 'stand-in' : 'model';
+  if (!m || !shortLabels.writeNames(m.dir, layerId, names, by)) {
+    return { state: 'failed', reason: 'the names could not be written onto the layer' };
+  }
+  console.log('[labels] ' + where + ' — ' + fromModel + ' of ' + headings.length + ' named by the ' + by +
+    (fromModel < headings.length ? ', the rest by the plain cut' : ''));
+  return { state: 'done', reason: '', calls: 1, names, by, sig: shortLabels.headingSig(headings) };
+}
+
 /* One reading off the list. Answers what to write on the list about it. */
 async function readingJob(job) {
   const { dataset, layerId } = job;
@@ -4402,6 +4456,11 @@ export function startBackgroundWork() {
   // and once a minute, so a reading put on the list from outside (the one-off
   // deploy/queue-question-readings.mjs) is picked up without a restart
   setInterval(() => QUESTIONS.pump(), 60 * 1000).unref();
+  /* Short names for long column headings, the same way: its own list, one at
+     a time, picked up within a minute when deploy/queue-short-labels.mjs adds
+     to it from outside. */
+  shortLabels.queue.start(shortLabelsJob, { recheck: (d, l) => considerShortLabels(d, l) });
+  setInterval(() => shortLabels.queue.pump(), 60 * 1000).unref();
   const waiting = owed.all().length;
   if (waiting) console.log('[owed] ' + waiting + ' reading' + (waiting === 1 ? '' : 's') + ' still owed');
 }
@@ -5357,6 +5416,10 @@ function commitLayer({ importId, dataset }, who, opts) {
       if (!id) continue;
       try { considerReading(session.dataset, id, opts); } catch (e) {
         console.warn('[questions] could not look at ' + session.dataset + '/' + id + ' — ' + (e && e.message));
+      }
+      // and, the same way, a short name for each of its long column headings
+      try { considerShortLabels(session.dataset, id); } catch (e) {
+        console.warn('[labels] could not look at ' + session.dataset + '/' + id + ' — ' + (e && e.message));
       }
     }
     return { ok: true, layerId: layerId || pointsLayerId, pointsLayerId, dataset: session.dataset };

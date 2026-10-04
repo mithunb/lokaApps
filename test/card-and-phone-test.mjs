@@ -90,8 +90,10 @@ console.log('\n  a card of questions stacks instead of squeezing');
 /* Measured before this: the question column took 222 pixels of a 338-pixel
    card and the answer got 56, so "Foundation for research on socio economic
    development" came out over eight lines with words split in the middle. */
+/* the label measured is the one printed — since October 2026 that is the short
+   name of a long heading (labText), not the heading the builder wrote */
 check('a long label turns the whole card stacked',
-  /if \(String\(fld\.label \|\| ""\)\.length > LONG_LABEL\) stacked = true;/.test(atlas), true);
+  /if \(String\(labText \|\| ""\)\.length > LONG_LABEL\) stacked = true;/.test(atlas), true);
 check('the whole card, not the one row that caused it',
   /The whole card, not the offending\n       row/.test(atlas), true);
 check('and the stacked card gives the answer the full width',

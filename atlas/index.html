@@ -338,6 +338,27 @@
     .ctl-info:hover { color:var(--color-leaf); }
     .ctl-info:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; border-radius:var(--radius-md); }
     .ctl-info[aria-expanded="true"] { color:var(--color-leaf); }
+    /* The ⓘ after a label that was shortened — a key's name, a card's field
+       name. Same idea as .ctl-info, smaller, and it sits in the run of text:
+       the whole heading opens under the label (.lbl-full) when pressed, and
+       is on the label's hover for anyone with a mouse. */
+    .lbl-wrap { display:inline; }
+    .lbl-info { display:inline-flex; align-items:center; justify-content:center; vertical-align:-2px;
+      background:none; border:0; padding:2px; margin-left:.15rem; cursor:pointer;
+      color:var(--color-text-muted); }
+    .lbl-info svg { width:13px; height:13px; }
+    .lbl-info:hover { color:var(--color-leaf); }
+    .lbl-info:focus-visible { outline:2px solid var(--color-leaf); outline-offset:1px; border-radius:var(--radius-md); }
+    .lbl-info[aria-expanded="true"] { color:var(--color-leaf); }
+    .lbl-full { display:block; font-size:var(--t-label); font-weight:400; line-height:1.45;
+      color:var(--color-text-muted); margin:.1rem 0 .3rem; }
+    /* In a key's row the ⓘ sits at the row's end, where the layer rows already
+       keep theirs; the name wraps as text if it must, exactly as it did; the
+       heading, when opened, is a line of its own under the row (a sibling of
+       the label, as a layer's own note is). */
+    .key-toggle .lbl-info { margin-left:auto; flex:0 0 auto; }
+    .key-list .lbl-full { margin:-.05rem 0 .3rem 1.6rem; }
+    .pop-lbl .lbl-full, .key-name .lbl-full { margin:.1rem 0 .2rem; }
     /* what the layer is, in its own words — on the panel's strip like everything else */
     .ctl-said { margin:.1rem 0 .35rem; padding-left:var(--panel-strip);
       font-size:var(--t-label); line-height:1.45; color:var(--color-text-secondary); }
@@ -1760,6 +1781,9 @@
   <!-- the rules a reading obeys, shared with the server so one rule cannot be
        two rules; must load before atlas.js, which fetches owner.js -->
   <script src="./reading-rules.js?v=dev"></script>
+  <!-- how a column heading becomes a label (short name, whole heading on
+       hover), shared with the server for the same reason -->
+  <script src="./label-rules.js?v=dev"></script>
   <script src="./iconkit.js?v=dev"></script>
   <script src="./share.js?v=dev"></script>
   <script src="./atlas.js?v=dev"></script>

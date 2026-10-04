@@ -129,6 +129,9 @@ check('nothing recorded says nothing', uploadKind(''), '');
 check('the info note reads "Added by Socratus, from a spreadsheet"', /var by = "Added by " \+ \(L\.addedBy\.org \|\| L\.addedBy\.name\) \+ \(kind \? ", from " \+ kind : ""\);/.test(js), true);
 check('and with nobody named, "From a spreadsheet someone shared"', /var from = "From " \+ kind \+ " someone shared";/.test(js), true);
 check('the filename never reaches the note', /"From " \+ L\.uploadedAs/.test(js), false);
+/* prettyCol is the shared rule now (atlas/label-rules.js, October 2026), so
+   the lifted copy needs that rule in scope, as the page has it. */
+globalThis.LokaLabelRules = (await import('node:module')).createRequire(import.meta.url)(ROOT + '/atlas/label-rules.js');
 const dateKeyName = lift(js, ['prettyCol', 'dateKeyName']);
 check('(ii) created_at is "When it was added"', dateKeyName('created_at'), 'When it was added');
 check('updated_at is "When it was last changed"', dateKeyName('updated_at'), 'When it was last changed');

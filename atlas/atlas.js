@@ -1733,10 +1733,58 @@
   function prettyCol(name) {
     /* A key list holding "categories", "creator" and "What is this place for?"
        is two grammars in one column. A column's own name cannot be made into a
-       question, but it can at least start like a sentence. */
-    var t = String(name).replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
-    return t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+       question, but it can at least start like a sentence.
+
+       How it reads is one rule, shared with the server (label-rules.js). It
+       used to be decided here, by lowercasing everything after the first
+       letter — which turned "What languages do you primarily work in? Feel
+       free to mention all" into "…work in? feel free…". A heading keeps its
+       own capitals now; only a slug (created_at) is opened out. */
+    return LokaLabelRules.headingCase(name);
   }
+
+  /* What to print for a column heading, and what it is short for.
+
+     A heading can be a whole survey question, and the drawer is 320 pixels
+     wide. label-rules.js decides the short name (a name the owner gave wins,
+     then the one the server stored on the layer, then its own plain cut); this
+     answers { text, full, shortened } and everything that prints a heading as
+     a label — the key list, the legend, a card's field names — prints text
+     and, when it was shortened, keeps full one hover or one ⓘ away. */
+  function colLabel(L, col) { return LokaLabelRules.labelFor(col, L || {}); }
+
+  /* The small ⓘ after a shortened label: a real button, so a phone (no hover)
+     and a keyboard can reach the whole heading. It opens the heading under
+     the label; pressing again puts it away. Built as HTML because a card's
+     contents are serialised on the way in and a listener wired here would be
+     lost — one delegated listener (below) works every ⓘ on the page. The
+     aria-label carries the whole heading, so a screen reader hears it without
+     pressing anything. */
+  var LBL_INFO_N = 0;
+  function labelInfoHTML(full) {
+    var id = "lbl-full-" + (++LBL_INFO_N);
+    return '<button type="button" class="lbl-info" aria-expanded="false" aria-controls="' + id +
+      '" aria-label="' + esc(full) + '" title="' + esc(full) + '">' + ICONS.info + "</button>" +
+      '<span class="lbl-full" id="' + id + '" hidden>' + esc(full) + "</span>";
+  }
+  /* The same two pieces as elements, for the key list, where the ⓘ sits on
+     the row and the heading opens UNDER it — as a layer's own note does. */
+  function labelInfo(full) {
+    var box = el("span", "lbl-wrap");
+    box.innerHTML = labelInfoHTML(full);
+    return { btn: box.firstChild, full: box.lastChild };
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target && e.target.closest && e.target.closest(".lbl-info[aria-controls]");
+    if (!b) return;
+    e.preventDefault();
+    e.stopPropagation();   // inside a key's label: the switch must not flip
+    var full = document.getElementById(b.getAttribute("aria-controls"));
+    if (!full) return;
+    var show = full.hidden;
+    full.hidden = !show;
+    b.setAttribute("aria-expanded", String(show));
+  }, true);
   // the plain name of a date column that is really the app's own bookkeeping
   function dateKeyName(col) {
     var t = String(col).replace(/[_-]+/g, " ").trim().toLowerCase();
@@ -1982,12 +2030,15 @@
          column is called "themes", which says how it was made rather than what
          it holds — and the switch lowercased it while the popup capitalised it,
          so a reader could meet "themes" and "Themes" in one sitting. */
-      var given = L.keyLabels && L.keyLabels[col];
       /* A date column grouped by month is named for what it means, not for
          the column: "Created at · by month" read like a database field. The
          app's own bookkeeping dates get plain names ("When it was added"),
-         any other date keeps its name, and the grouping is said in brackets. */
-      var shown = given ? String(given) : (grain ? dateKeyName(col) : prettyCol(col));
+         any other date keeps its name, and the grouping is said in brackets.
+         Anything else goes through colLabel: the owner's name, or the stored
+         short name, or the plain cut of a long heading — with the whole
+         heading kept beside it for the hover and the ⓘ. */
+      var lab = grain ? { text: dateKeyName(col), full: dateKeyName(col), shortened: false } : colLabel(L, col);
+      var shown = lab.text;
       if (grain) shown += " (by " + grain + ")";
       // the commonest answer, and how much of this key's own answers it takes
       var top = null;
@@ -1999,7 +2050,8 @@
       var outweighs = Boolean(top && top.n > (named - top.n));
       var kindsHere = 0;
       counts.forEach(function (c) { if (kept.indexOf(c.kind) >= 0 && c.n > 0) kindsHere += 1; });
-      opts.push({ col: col, label: shown, delim: delim, committed: committed, grain: grain, tooFew: tooFew,
+      opts.push({ col: col, label: shown, full: lab.full, shortened: lab.shortened,
+        delim: delim, committed: committed, grain: grain, tooFew: tooFew,
         // what share of the places this key can actually speak for; shown beside
         // a discovered question, whose whole point is that it may not reach all
         reach: feats.length ? named / feats.length : 0, isQuestion: isQuestion,
@@ -2414,7 +2466,7 @@
         });
         if (hitOther) other++;
       });
-      rows.push({ header: true, label: opt.label + " — " + ROW_WORDS[fi] });
+      rows.push({ header: true, label: opt.label + " — " + ROW_WORDS[fi], full: opt.shortened ? opt.full : "" });
       opt.kept.forEach(function (kind, i) {
         /* The words that gathered this kind's places, from their own text. Folded
            away until asked for: a key is read at a glance, and a list of words
@@ -2527,7 +2579,12 @@
          each: compact when they fit, and the answer wraps to the next line when
          it does not, so nothing is ever cut short. */
       var line = el("span", "key-line");
-      line.appendChild(el("span", "key-name", esc(opt.label)));
+      var kname = el("span", "key-name", esc(opt.label));
+      if (opt.shortened) {
+        kname.title = opt.full;
+        kname.innerHTML += " " + labelInfoHTML(opt.full);
+      }
+      line.appendChild(kname);
       line.appendChild(document.createTextNode(" "));
       line.appendChild(el("span", "key-word", vals.length ? esc(vals.join(", ")) : "left blank"));
       row.appendChild(line);
@@ -2705,7 +2762,19 @@
       cb._col = opt.col;
       lab.appendChild(cb);
       lab.appendChild(el("span", "key-tick"));
-      lab.appendChild(el("span", "key-tname", esc(opt.label)));
+      var tname = el("span", "key-tname", esc(opt.label));
+      lab.appendChild(tname);
+      /* A key named short says what it is short for: the whole heading on
+         hover, and behind a small ⓘ for a phone, where there is no hover. The
+         ⓘ sits at the row's end, where a layer's own ⓘ sits, and the heading
+         opens under the row (fullHeading, appended after the label below). */
+      var fullHeading = null;
+      if (opt.shortened) {
+        tname.title = opt.full;
+        var parts = labelInfo(opt.full);
+        lab.appendChild(parts.btn);
+        fullHeading = parts.full;
+      }
       /* A question says what share of the places it can answer. Without it a
          reader turns on "How old is it?" and meets a map that is mostly grey,
          with nothing telling them that is the answer rather than a fault. */
@@ -2779,6 +2848,8 @@
         applyLayerKeys(L);
       };
       list.appendChild(host || lab);
+      // the whole heading of a key named short, under its row, hidden until its ⓘ is pressed
+      if (fullHeading) list.appendChild(fullHeading);
       /* This key's kinds, directly beneath the switch that turns them on. They
          used to pool into one block below every switch, so flipping a switch put
          its result somewhere further down, past everything else — and knowing
@@ -5333,7 +5404,12 @@
       // skip these rows, do not leave the function: a bubble layer's reference
       // circles were added just above and still have to be appended
       if (!keyed) data.forEach(function (it) {
-        if (it.header) { leg.appendChild(el("div", "leg-head", esc(it.label))); return; }
+        if (it.header) {
+          var head = el("div", "leg-head", esc(it.label));
+          if (it.full) head.title = it.full;   // the whole heading, for a key named short
+          leg.appendChild(head);
+          return;
+        }
         var r = el("div", "leg-item" + (it.faint ? " faint" : ""));
         r.appendChild(swatch(it));
         r.appendChild(el("span", "leg-label", esc(it.label)));
@@ -6022,6 +6098,13 @@
     fields.forEach(function (fld) {
       var v = props[fld.property];
       if (v == null || v === "" || v === "[]") return;
+      /* The field's name, short when the heading is long. The card builder
+         wrote fld.label when the layer was made; a long heading is shown by
+         its short name here, with the whole heading on hover and behind ⓘ. */
+      var fl = colLabel(L, fld.property);
+      var labText = fl.shortened ? fl.text : (fld.label || fl.text);
+      var labHTML = '<span class="pop-lbl"' + (fl.shortened ? ' title="' + esc(fl.full) + '"' : "") + ">" +
+        esc(labText) + (fl.shortened ? " " + labelInfoHTML(fl.full) : "") + "</span>";
       if (keyCols[fld.property]) return;                          // the key rows said it
       if (/^pattern_\d+(_why)?$/.test(fld.property)) return;      // never show the machinery's name
       if (srcLine && String(v).trim() === String(srcLine).trim()) return;   // the Source line said it
@@ -6037,7 +6120,7 @@
            the largest thing on it. But each one filters the map, and a control
            you have to find first is a control most people never find. The
            height is worth it; the count stays as a heading. */
-        h += '<div class="pop-field"><span class="pop-lbl">' + esc(fld.label) + '</span> ' +
+        h += '<div class="pop-field">' + labHTML + " " +
           '<span class="pop-fold-n">' + arr.length + '</span>' +
           '<div class="pop-tags">' +
           arr.map(function (t) {
@@ -6070,7 +6153,7 @@
         var cp = Array.isArray(v) ? v : safeArr(v);
         if (!cp.length) return;
         flushFacts();
-        h += '<div class="pop-field"><span class="pop-lbl">' + esc(fld.label) + '</span><div class="pop-tags">' +
+        h += '<div class="pop-field">' + labHTML + '<div class="pop-tags">' +
           cp.map(function (c) { return '<span class="pop-tag">' + esc(c.crop) + ' <b>' + esc(c.blocks) + "</b></span>"; }).join("") + "</div></div>";
       } else {
         /* Label and value in one run of text. Stacked, "Creator / Sharang"
@@ -6093,9 +6176,9 @@
            trailing zeros: "1.5" stays, "v1.0" stays, "30.0 km" stays, and the
            stored data is not altered — this is how it reads, not what it is. */
         if (/^-?\d+\.0+$/.test(shown)) shown = shown.replace(/\.0+$/, "");
-        if (String(fld.label || "").length > LONG_LABEL) stacked = true;
-        facts += '<div class="pop-field pop-field-inline"><span class="pop-lbl">' + esc(fld.label) +
-          '</span> <span class="pop-val">' + esc(shown) + (fld.suffix || "") + "</span></div>";
+        if (String(labText || "").length > LONG_LABEL) stacked = true;
+        facts += '<div class="pop-field pop-field-inline">' + labHTML +
+          ' <span class="pop-val">' + esc(shown) + (fld.suffix || "") + "</span></div>";
       }
     });
     flushFacts();
