@@ -2,7 +2,8 @@
    and the viewer's Share button. Everything is client-side: the QR code comes from
    the vendored qrcode-generator lib (vendor/qrcode.js), nothing leaves the browser.
 
-   window.AtlasShare.open({ url, title, private: bool, viewKey?: string })
+   window.AtlasShare.open({ url, title, slug, state: 'private'|'link'|'listed', viewKey?, renew?: fn })
+   (older callers pass private: bool / notLive: bool, which map onto the three states)
    window.AtlasShare.panel(opts) -> HTMLElement (embed inline instead of a dialog)
 */
 (function () {
@@ -66,34 +67,72 @@
     return cv;
   }
 
-  function panel(opts) {
-    var url = opts.url;
-    var title = opts.title || "LOKA Atlas";
-    var isPrivate = !!opts.private;
-    var root = el("div", "shr");
+  /* Which of the three states the atlas is in decides what the panel says
+     and offers. The states are the Owner menu's own (owner.js):
+       private — files out of the web root; only the owner, their editors and
+                 anyone with the private link (the key in the address)
+       link    — anyone with the link; not on the LOKA Atlas page
+       listed  — anyone, and on the LOKA Atlas page
+     A page that knows less (the viewer alone) passes `private` from the
+     address; the owner's tools pass `state`, the key, and a way to make a new
+     link. The panel and the status line must never disagree. */
+  function stateOf(opts) {
+    if (opts.state) return opts.state;
+    if (opts.private) return "private";
+    if (opts.notLive) return "link";
+    return "listed";
+  }
+  function withKey(url, key) {
+    var u = new URL(url, location.href);
+    u.searchParams.delete("key");
+    u.searchParams.delete("via");
+    if (key) u.searchParams.set("key", key);
+    return u.href;
+  }
 
-    // A not-live atlas answers this link with "no atlas at that address" for
-    // everyone but its owner. Say so BEFORE offering WhatsApp buttons and a
-    // poster QR — the status pill and this panel must never disagree.
-    if (opts.notLive) {
+  function panel(opts) {
+    var state = stateOf(opts);
+    var isPrivate = state === "private";
+    var title = opts.title || "LOKA Atlas";
+    var root = el("div", "shr");
+    var url = isPrivate ? withKey(opts.url, opts.viewKey || "") : withKey(opts.url, "");
+
+    if (isPrivate && !opts.viewKey) {
+      /* No link to hand out: the viewer is on it by sign-in, or the key was
+         never kept (an atlas made private by hand has only a hash). The only
+         honest offer is a new link, when the caller can make one. */
       root.appendChild(el("p", "shr-note shr-warn",
-        "<b>This atlas isn't live yet</b> — the link and QR code below work only for you. " +
-        "Make it live first (the button at the top of the page), then share it."));
+        "<b>This atlas is private</b> — it has no private link yet" +
+        (opts.renew ? ", or the old one was not kept. Make one below and share that." : ". Ask its owner for one.")));
+      if (opts.renew) root.appendChild(renewBtn(opts, root, "Make a private link"));
+      return root;
     }
 
     // link row
     var linkRow = el("div", "shr-row");
     var input = el("input", "shr-link");
     input.type = "text"; input.readOnly = true; input.value = url;
+    input.setAttribute("aria-label", isPrivate ? "The private link" : "The link");
     input.onfocus = function () { input.select(); };
     linkRow.appendChild(input);
-    linkRow.appendChild(copyBtn(url, "Copy link"));
+    linkRow.appendChild(copyBtn(url, isPrivate ? "Copy private link" : "Copy link"));
     root.appendChild(linkRow);
 
     if (isPrivate) {
       root.appendChild(el("p", "shr-note",
-        "This atlas is <b>private</b> — the link includes its view key. Anyone who has the full link can see the map, so share it only with people who should."));
+        "This atlas is <b>private</b>. Anyone who has this link can open it — the key is in the address — so send it only to people who should see it."));
+      if (opts.renew) {
+        var row = el("div", "shr-row");
+        row.appendChild(renewBtn(opts, root, "Make a new link"));
+        row.appendChild(el("span", "shr-note", "The old link stops working for everyone who has it."));
+        root.appendChild(row);
+      }
     } else {
+      if (state === "link") {
+        root.appendChild(el("p", "shr-note",
+          "Anyone with this link can open it. It is not listed on the LOKA Atlas page" +
+          (opts.renew ? " — you can list it from the Owner menu." : ".")));
+      }
       // share intents (never for private maps)
       var intents = el("div", "shr-row shr-intents");
       var msg = encodeURIComponent(title + " — " + url);
@@ -114,14 +153,16 @@
       root.appendChild(intents);
     }
 
-    // QR
+    // QR — for a private atlas it carries the key, like the link does
     var cv = qrCanvas(url, 180);
     if (cv) {
       var qrBox = el("div", "shr-qr");
       qrBox.appendChild(cv);
       var qrCol = el("div", "shr-qr-col");
       qrCol.appendChild(el("b", null, "QR code"));
-      qrCol.appendChild(el("span", null, "For posters, flyers and field sheets — scans straight to the atlas."));
+      qrCol.appendChild(el("span", null, isPrivate
+        ? "Scans straight to the atlas, private link and all — so treat a printout like the link."
+        : "For posters, flyers and field sheets — scans straight to the atlas."));
       var dl = el("a", "shr-btn", ICONS.download + "<span>Download PNG</span>");
       dl.href = cv.toDataURL("image/png");
       dl.download = (opts.slug || "atlas") + "-qr.png";
@@ -130,7 +171,7 @@
       root.appendChild(qrBox);
     }
 
-    // embed snippet (public only)
+    // embed snippet (public only — a frame on somebody's website would publish the key)
     if (!isPrivate) {
       // the snippet lands on somebody else's page, so it names its own values
       var snippet = '<iframe src="' + url + '" width="100%" height="620" style="border:1px solid #26231F;border-radius:0" title="' + title.replace(/"/g, "&quot;") + '" loading="lazy"></iframe>';
@@ -142,9 +183,28 @@
       embed.appendChild(pre);
       embed.appendChild(copyBtn(snippet, "Copy embed code"));
       root.appendChild(embed);
+    } else {
+      root.appendChild(el("p", "shr-note", "Embedding on a website is for atlases that anyone with the link can open."));
     }
 
     return root;
+  }
+
+  /* The owner's way to a fresh private link. opts.renew() asks the server and
+     resolves with the new key; the panel is then drawn again around it. */
+  function renewBtn(opts, root, label) {
+    var b = el("button", "shr-btn", ICONS.share + "<span>" + esc(label) + "</span>");
+    b.type = "button";
+    b.onclick = function () {
+      b.disabled = true;
+      Promise.resolve(opts.renew()).then(function (key) {
+        if (!key) return;
+        opts.viewKey = key;
+        var fresh = panel(opts);
+        if (root.parentNode) root.parentNode.replaceChild(fresh, root);
+      }).catch(function () {}).then(function () { b.disabled = false; });
+    };
+    return b;
   }
 
   var styleInjected = false;

@@ -92,9 +92,9 @@ function persistJobs() {
 }
 
 function cleanupBuildDir(slug) {
-  try {
-    fs.rmSync(path.join(DATASETS_ROOT, '.building-' + slug), { recursive: true, force: true });
-  } catch {}
+  for (const root of [DATASETS_ROOT, PRIVATE_ROOT]) {
+    try { fs.rmSync(path.join(root, '.building-' + slug), { recursive: true, force: true }); } catch {}
+  }
 }
 
 export function setJobDoneHook(fn) { onJobDone = fn; }
@@ -151,7 +151,12 @@ async function runJob(job) {
   const spec = job.spec;
   const isPrivate = spec.visibility === 'private';
   const targetRoot = isPrivate ? PRIVATE_ROOT : DATASETS_ROOT;
-  const buildDir = path.join(DATASETS_ROOT, '.building-' + spec.slug);
+  /* A private atlas is built where it will live. The build folder used to sit
+     in the public web root for every atlas and be moved across at the end —
+     and Apache serves a dot-folder like any other, so a private atlas's rows
+     were on the open web for the minutes its build took. Same root as the
+     target also keeps the final rename a rename (one filesystem). */
+  const buildDir = path.join(targetRoot, '.building-' + spec.slug);
   const targetDir = path.join(targetRoot, spec.slug);
 
   fs.rmSync(buildDir, { recursive: true, force: true });

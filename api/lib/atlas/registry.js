@@ -6,7 +6,10 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const DATA_DIR = path.join(__dirname, '..', '..', 'data', 'atlas');
+/* LOKA_DATA_DIR is for the checks in test/: a throwaway folder, so a check can
+   start a real server and make a real atlas private without touching the
+   registry this checkout keeps. Never set in production. */
+export const DATA_DIR = process.env.LOKA_DATA_DIR || path.join(__dirname, '..', '..', 'data', 'atlas');
 const REGISTRY_FILE = path.join(DATA_DIR, 'registry.json');
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;

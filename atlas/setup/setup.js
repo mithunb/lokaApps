@@ -153,8 +153,9 @@
       a.href = "../?dataset=" + encodeURIComponent(i.slug);
       a.innerHTML = '<span class="t"><b>' + esc(i.title || i.slug) + "</b><span>" +
           esc(i.regionLabel || "") + (i.role === "editor" ? " · you were invited to this" : "") + "</span></span>" +
-        '<span class="st' + (i.status === "published" ? " live" : "") + '">' +
-          (i.status === "published" ? "Live" : "Not live") + "</span>";
+        // the same three states the Owner menu names (owner.js): what the files are, not just the listing
+        '<span class="st' + (i.visibility !== "private" ? " live" : "") + '">' +
+          (i.visibility === "private" ? "Private" : i.status === "published" ? "Listed" : "Anyone with the link") + "</span>";
       wrap.appendChild(a);
 
       /* Delete lived only inside an atlas's own Settings — unreachable for the very

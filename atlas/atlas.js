@@ -50,6 +50,10 @@
   // and only its hash is kept, so no page can look it up later.
   var VIA_API = !!KEY || QS.get("via") === "api";
   var BASE = VIA_API ? "./api/datasets/" + DATASET + "/" : "./datasets/" + DATASET + "/";
+  /* True once the atlas has answered through the API — only a private atlas
+     does, so this is the viewer's own knowledge that it is drawing one, with
+     or without a key in the address (the owner arrives with neither). */
+  var PRIVATE = false;
   /* A layer's file keeps its name when its contents change — reading it rewrites
      user-<layer>.geojson in place — so its address has to change when its
      contents do, or a browser answers the next request out of its own cache.
@@ -208,10 +212,39 @@
     return m;
   }
 
+  /* The manifest, from wherever the atlas lives. A public atlas is a folder of
+     static files; a private one has left the web root and answers only through
+     the API — to its owner and editors by their sign-in, to anyone else by the
+     key in a private link. Nothing in the address says which it is, and the
+     owner opens their own private atlas from the same plain link as everyone
+     else, so a 404 from the static path is followed by one question to the
+     API: 200 means private and allowed (so every later file goes the same way),
+     403 means private and not allowed, 404 means there is no such atlas. */
+  function fetchManifest() {
+    return fetch(dataUrl("manifest.json")).then(function (r) {
+      if (r.ok && VIA_API) PRIVATE = true;
+      if (r.ok || VIA_API || r.status !== 404) return r;
+      VIA_API = true;
+      BASE = "./api/datasets/" + DATASET + "/";
+      return fetch(dataUrl("manifest.json"), { credentials: "same-origin" }).then(function (r2) {
+        if (r2.status === 404) { VIA_API = false; BASE = "./datasets/" + DATASET + "/"; return r; }
+        if (r2.ok) PRIVATE = true;
+        return r2;
+      });
+    });
+  }
+
   function draw() {
     showLoading(true);
-    return fetch(dataUrl("manifest.json"))
+    return fetchManifest()
       .then(function (r) {
+        if (r.status === 403) {
+          var e = new Error(KEY
+            ? "This private link no longer works — the owner has made a new one. Ask them for the current link."
+            : "Only its owner, the people they invited, and anyone with its private link can open it. If someone sent you a link, open that one — it carries the key.");
+          e.privateAtlas = true;
+          throw e;
+        }
         if (!r.ok) throw new Error(r.status === 404
           ? "There's no atlas at that address — it may have been removed, or it's still being built."
           : "The atlas data couldn't be loaded (error " + r.status + "). Try again in a moment.");
@@ -235,12 +268,17 @@
         /* A small panel that says what happened in words and offers one thing
            to try. The title is the same every time; the line under it is the
            reason, which is the part a reader can act on. */
+        /* A private atlas is not a fault, and "try again" would not change the
+           answer: it gets its own title and the way in, in words. */
         $("#atlas-map").innerHTML =
           '<div class="atlas-error"><div class="atlas-error-box" role="alert">' +
-            '<h2>The map could not be loaded</h2>' +
-            '<p>' + esc(plainReason(err)) + '</p>' +
-            '<button type="button" class="share-btn atlas-error-retry">Try again</button>' +
+            '<h2>' + (err && err.privateAtlas ? "This atlas is private" : "The map could not be loaded") + '</h2>' +
+            '<p>' + esc(err && err.privateAtlas ? err.message : plainReason(err)) + '</p>' +
+            (err && err.privateAtlas
+              ? '<p>If it is yours, <a class="atlas-error-signin" href="./setup/?signin=1">sign in</a> and come back to this page.</p>'
+              : '<button type="button" class="share-btn atlas-error-retry">Try again</button>') +
           '</div></div>';
+        if (err && err.privateAtlas) document.title = "A private atlas \u2014 LOKA Atlas";
         var again = $(".atlas-error-retry");
         if (again) again.onclick = function () { location.reload(); };
         return false;
@@ -602,7 +640,8 @@
       url: location.href,
       title: manifest.title + " — LOKA Atlas",
       slug: DATASET,
-      private: !!KEY,
+      private: !!KEY || PRIVATE,
+      viewKey: KEY || "",
     };
     btn.onclick = function () { window.AtlasShare.open(btn.__shareOpts); };
   }

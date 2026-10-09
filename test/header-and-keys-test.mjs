@@ -51,15 +51,15 @@ check('the drawer no longer waits under a strip', /--strip-h,48px\) \+ 8px/.test
 
 console.log('\n  the owner\'s tools fold into one Owner menu');
 check('one button, outlined in Sindoor, that says Owner', /class="own-btn" id="own-btn"[^>]*aria-haspopup="true"[^>]*aria-controls="own-panel"/.test(own) && /\.own-btn \{[^}]*border:1px solid var\(--color-sindoor\);/.test(ownCss), true);
-check('it is named for a screen reader', /aria-label="Owner menu — live status, region, open data layers, add data, settings"/.test(own), true);
+check('it is named for a screen reader', /aria-label="Owner menu — who can see it, region, open data layers, add data, settings"/.test(own), true);
 check('line 1: live status and the switch for it', /class="own-status" id="own-status"[^]*?id="own-live"/.test(own), true);
 check('line 2: the region line, placed there by owner.js itself', /var slot = \$\("#own-panel-region"\);\s*if \(slot\) slot\.appendChild\(wrap\);/.test(own), true);
 check('line 3: Your data · + Add data — the page\'s own link, moved in', /\$\("#own-panel-data"\)\.appendChild\(add\);/.test(own), true);
 check('line 4: Title, logo, about · Settings', /Title, logo, about<\/span>[^]*?id="own-settings"[^>]*>Settings<\/button>/.test(own), true);
-check('the buttons keep their ids, so toggleLive and openSettings are untouched', /\$\("#own-live"\)\.onclick = toggleLive;\s*\$\("#own-settings"\)\.onclick = function \(\) \{ openSettings\(\); \};/.test(own), true);
+check('the buttons keep their ids, so openVisibility and openSettings are untouched', /\$\("#own-live"\)\.onclick = openVisibility;\s*\$\("#own-settings"\)\.onclick = function \(\) \{ openSettings\(\); \};/.test(own), true);
 check('a press outside or Esc shuts it', /function away\(e\) \{ if \(!panel\.contains\(e\.target\) && !btn\.contains\(e\.target\)\) shut\(\); \}\s*function onKey\(e\) \{ if \(e\.key === "Escape"\) \{ shut\(\); btn\.focus\(\); \} \}/.test(own), true);
 check('a line that opens something else puts the menu away first', /closest\("#own-settings, #own-region, #own-open-data, #add-data-btn"\);\s*if \(t\) shut\(\);/.test(own), true);
-check('the button\'s dot says live before the menu opens', /ob\.classList\.toggle\("live", live\)/.test(own) && /\.own-btn\.live \.own-dot \{ background:var\(--color-leaf\); \}/.test(ownCss), true);
+check('the button\'s dot says "anyone can open it" before the menu opens', /ob\.classList\.toggle\("live", open\)/.test(own) && /\.own-btn\.live \.own-dot \{ background:var\(--color-leaf\); \}/.test(ownCss), true);
 check('on a phone the button is its dot and the menu a sheet under the header', /@media \(max-width:720px\)\{\s*\.own-btn-word, \.own-btn-chev \{ display:none; \}[^]*?\.own-panel \{ position:fixed; top:calc\(52px \+ 6px\); left:8px; right:8px;/.test(ownCss), true);
 check('and the region line stacks there, after the rule it overrides', ownCss.indexOf('.own-region-k { flex:1 1 100%; }') > ownCss.indexOf('.own-region-k, .own-region-v { flex:0 1 auto; }'), true);
 check('atlas.js no longer moves the region row around the page', /if \(region\) strip\.appendChild\(region\);/.test(js) || /foot\.appendChild\(region\)/.test(js), false);

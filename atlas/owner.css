@@ -428,6 +428,18 @@
    is never something you have to scroll to find. */
 
 
+/* ---------- Who can see it: three choices, one sheet ---------- */
+
+.own-choices { display:flex; flex-direction:column; gap:.4rem; margin-top:.6rem; }
+.own-choice {
+  display:flex; gap:.6rem; align-items:flex-start; cursor:pointer;
+  padding:.55rem .65rem; border:1px solid var(--color-border); border-radius:var(--radius-md);
+}
+.own-choice:has(input:checked) { border-color:var(--color-leaf); background:var(--color-leaf-tint); }
+.own-choice input { margin:.2rem 0 0; accent-color:var(--color-leaf); flex:none; }
+.own-choice b { display:block; font-weight:600; color:var(--color-text-primary); }
+.own-choice-p { display:block; font-size:var(--t-meta); color:var(--color-text-secondary); }
+
 /* ---------- Settings, as a sheet ---------- */
 
 .own-scrim {

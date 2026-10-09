@@ -51,12 +51,16 @@ check('and no bare "Card" is left', /btn\.textContent = "Card";/.test(owner), fa
 check('Remove opens a question, and shows it', /del\.textContent = "Remove…";/.test(owner), true);
 check('it says so to a screen reader too',
   /aria-label", "Remove " \+ \(L\.label \|\| L\.id\) \+ " from the map — asks first"/.test(owner), true);
-check('"Take it off" became "Make it private"',
-  /act\.textContent = live \? "Make it private" : "Make it live";/.test(owner), true);
+/* "Make it private" was itself a lie — it only unlisted the atlas and left
+   its files on the open web — so the pair became one line that names the
+   state and a Change that opens the three honest choices (private-atlas-test). */
+check('"Take it off" and "Make it private" are both gone; the act is "Change"',
+  /act\.textContent = "Change";/.test(owner), true);
 check('and nothing on screen still says "Take it off"',
   /textContent = ("|')?[^\n]*Take it off/.test(owner), false);
-check('the note afterwards says what happened',
-  /toast\(live \? "Private now — only you can see it"/.test(owner), true);
+check('the note afterwards says what happened, for each of the three states',
+  /"Private now — its files are off the open web\. Share has the private link\."/.test(owner) &&
+  /"Anyone with the link can open it now\. It is not listed\."/.test(owner), true);
 
 console.log('\n  a credit is not printed twice on one row');
 /* The owner’s row shows "added by X" in its own words, so the same credit is

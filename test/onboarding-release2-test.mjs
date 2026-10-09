@@ -112,8 +112,8 @@ check('it says what was built, what of the file is on the map, and what still ne
   /"Boundaries and place names" \+ \(where \? " for " \+ where : ""\)/.test(owner) &&
   /rows from " \+ look\.file \+ " are on the map\."/.test(owner) &&
   /add it again under Your data<\/a>/.test(owner) && /\.\/add-data\/\?dataset=/.test(owner), true);
-check('its two acts are the Owner menu’s own', /id="own-first-live">Make it live</.test(owner) && /id="own-first-open">Add open data</.test(owner) &&
-  /openOpenData\(\); \};/.test(owner) && /\{ shut\(\); toggleLive\(\); \}/.test(owner), true);
+check('its two acts are the Owner menu’s own', /id="own-first-live">Who can see it</.test(owner) && /id="own-first-open">Add open data</.test(owner) &&
+  /openOpenData\(\); \};/.test(owner) && /\{ shut\(\); openVisibility\(\); \}/.test(owner), true);
 check('× and Esc put it away', /if \(e\.key === "Escape"\) shut\(\);/.test(owner) && /\.own-first-x"\)\.onclick = shut;/.test(owner), true);
 check('it docks where the place card docks, and spans the map on a phone',
   /\.own-first \{\n\s*position:absolute; top:8px; right:8px;/.test(ownerCss) && /width:340px;/.test(ownerCss) &&

@@ -1287,6 +1287,7 @@ router.post('/instances', async (req, res) => {
     layers: layerIds, visibility,
     tokenHash: reg.hashToken(editToken),
     viewKeyHash: viewKey ? reg.hashToken(viewKey) : null,
+    viewKey: viewKey || null,
     status: needsApproval ? 'pending-approval' : 'building',
     createdAt: Date.now(), publishedAt: null, sizeBytes: 0, createdByIp: ip,
     jobId: null, spec,
@@ -1553,6 +1554,9 @@ router.get('/instances/:slug', (req, res) => {
   }
   const role = callerRole(req, inst);
   if (role) {
+    /* The private link's key (viewKey) stays in: it is how the owner's Share
+       panel shows the link again. Only people who may already read every file
+       of the atlas get here, so the key tells them nothing they could not do. */
     const { tokenHash, viewKeyHash, spec, ...rest } = inst;
     return res.json({ ...rest, canEdit: true, role });
   }
@@ -1575,6 +1579,11 @@ router.post('/instances/:slug/publish', (req, res) => {
   }
   if (inst.status === 'published') return res.json({ ok: true, already: true });
   if (inst.status !== 'built') return res.status(409).json({ error: `cannot publish while ${inst.status}` });
+  // Listing is for atlases anyone may open. A private one is reachable only
+  // with its private link, so putting it on the public page would be a lie.
+  if (inst.visibility === 'private') {
+    return res.status(409).json({ error: 'a private atlas cannot be listed — open it to anyone with the link first' });
+  }
   if (session) {
     reg.bindInstance(session.email, inst.slug);
     if (!inst.email) reg.updateInstance(inst.slug, { email: session.email });
@@ -1620,7 +1629,7 @@ router.post('/instances/:slug/email-token', async (req, res) => {
   linkRate.set(ip, hits);
 
   const link = inst.visibility === 'private'
-    ? `(private atlas — use the view link from the wizard)`
+    ? `(private atlas — its private link is under Share, in the Owner menu)`
     : `${siteBase(req)}/apps/atlas/a/${inst.slug}`;
   const result = await sendMail({
     to: email,
@@ -1721,26 +1730,63 @@ router.post('/instances/:slug/details', (req, res) => {
     } catch { return res.status(500).json({ error: 'could not save the logo' }); }
   }
 
-  // visibility change moves the dataset between the web root and the private root
+  /* Who can see it. 'private' moves the whole dataset folder out of the web
+     root into PRIVATE_ROOT, where only GET /datasets/:slug/:file can reach it
+     (owner, editors, or the private link's key); 'public' moves it back. This
+     is the ONLY thing that makes an atlas private — publish/unpublish is the
+     gallery listing and leaves the files where they are. The decision is the
+     owner's, like taking an atlas off the public page, and it also unlists
+     the atlas: a private atlas on the public page would be a dead row. */
   let viewKey;
   const newVis = b.visibility === 'private' ? 'private' : b.visibility === 'public' ? 'public' : inst.visibility;
   if (newVis !== inst.visibility) {
-    if (newVis === 'private' && !session) return res.status(401).json({ error: 'making an atlas private needs a verified email', needsAuth: true });
+    if (callerRole(req, inst) !== 'owner') return res.status(403).json({ error: 'only the owner can change who may see this atlas' });
+    if (newVis === 'private' && !session && !auth.isAdmin(req)) return res.status(401).json({ error: 'making an atlas private needs a verified email', needsAuth: true });
+    if (inst.status === 'building' || inst.status === 'pending-approval') {
+      return res.status(409).json({ error: 'wait for the build to finish before changing who can see this atlas' });
+    }
     const fromDir = datasetDirFor(inst);
     const toRoot = newVis === 'private' ? PRIVATE_ROOT : DATASETS_ROOT;
     const toDir = path.join(toRoot, inst.slug);
     try {
       fs.mkdirSync(toRoot, { recursive: true });
       if (fs.existsSync(fromDir)) fs.renameSync(fromDir, toDir);
+      // a draft preview (<slug>--draft-<import>) sits beside its parent and must follow it
+      for (const d of fs.readdirSync(path.dirname(fromDir))) {
+        if (d.startsWith(inst.slug + '--draft-')) {
+          try { fs.renameSync(path.join(path.dirname(fromDir), d), path.join(toRoot, d)); } catch { /* best effort */ }
+        }
+      }
     } catch { return res.status(500).json({ error: 'could not change who can see this atlas' }); }
     patch.visibility = newVis;
-    if (newVis === 'private') { viewKey = reg.newToken(); patch.viewKeyHash = reg.hashToken(viewKey); }
-    else patch.viewKeyHash = null;
+    if (newVis === 'private') {
+      viewKey = reg.newToken();
+      patch.viewKeyHash = reg.hashToken(viewKey);
+      patch.viewKey = viewKey;
+      if (inst.status === 'published') { patch.status = 'built'; patch.publishedAt = null; }
+    } else {
+      patch.viewKeyHash = null;
+      patch.viewKey = null;
+    }
   }
 
   const updated = reg.updateInstance(inst.slug, patch);
   rewriteManifest(updated);
-  res.json({ ok: true, visibility: updated.visibility, viewKey: viewKey || undefined });
+  res.json({ ok: true, visibility: updated.visibility, status: updated.status, viewKey: viewKey || undefined });
+});
+
+/* A new private link. The old one stops working the moment this answers —
+   that is the point: a link that reached the wrong hands, or one made before
+   the key was kept on record (an atlas made private by hand has a hash and no
+   key), is replaced rather than recovered. Owner only, private atlases only. */
+router.post('/instances/:slug/view-key', (req, res) => {
+  const inst = reg.getInstance(String(req.params.slug));
+  if (!inst) return res.status(404).json({ error: 'not found' });
+  if (callerRole(req, inst) !== 'owner') return res.status(403).json({ error: 'only the owner can make a new private link' });
+  if (inst.visibility !== 'private') return res.status(409).json({ error: 'this atlas is not private, so it has no private link' });
+  const viewKey = reg.newToken();
+  reg.updateInstance(inst.slug, { viewKey, viewKeyHash: reg.hashToken(viewKey) });
+  res.json({ ok: true, viewKey });
 });
 
 // Rebuild — change layers and/or region, then rebuild into the same slug. The
@@ -2096,7 +2142,12 @@ router.get('/datasets/:slug/:file', (req, res) => {
   if (!full.startsWith(path.join(PRIVATE_ROOT, folder) + path.sep)) return res.status(400).json({ error: 'bad path' });
   if (!fs.existsSync(full)) return res.status(404).json({ error: 'not found' });
 
-  res.setHeader('Cache-Control', 'private, max-age=60');
+  /* Never kept by the browser: with max-age the owner's copy answered the next
+     person on the same device for a minute, signed out and keyless (seen in a
+     hand check). Layers are content-addressed (?v=) so nothing is re-fetched
+     needlessly within a page; across page loads a private file is asked for
+     again, which is the point. */
+  res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Robots-Tag', 'noindex');
   res.type(MIME[path.extname(full)] || 'application/octet-stream');
   fs.createReadStream(full).pipe(res);

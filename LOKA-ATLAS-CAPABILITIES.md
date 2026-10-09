@@ -83,15 +83,14 @@ Everything in sections 3 to 12 of this document, unless a paragraph says otherwi
   writes the coordinates of the rows a person ticked. Its confidence mark turned out **not** to be
   usable as the gate — it graded a wrong answer and a right one identically — so what arrives ticked
   is decided by whether the answer is named after the question.
-- **Private atlases.** The server can make an atlas private, mints a view key for it, moves its data
-  outside the web root, and serves it behind that key. But no screen in the shipped product creates
-  a private atlas or shows a view key: the setup wizard never sends a visibility choice (so the
-  server defaults to public), and the editor's settings sheet has no public/private control.
-  Private is an API-only capability today. Two further consequences, read from the code and **not
-  observed at runtime**: (a) the routes that accept uploaded data resolve the atlas only inside the
-  public data folder, so a private atlas would refuse an upload with "unknown dataset"; (b) the
-  editor builds its own data paths without the key, so a private atlas would probably fail to open
-  in the editor.
+- **Private atlases.** Owner ▾ → **Change** (on the "who can see it" line) offers three states:
+  **Private**, **Anyone with the link**, **Listed**. Private is the server's real private mode (the
+  details route with `visibility`): the dataset folder leaves the web root, and its files are served
+  only to the owner and editors by their sign-in, or to anyone holding the **private link** (the key
+  in the address). Share shows that link, with a QR of it and **Make a new link**, which stops the
+  old one working. The setup wizard still builds every atlas as "anyone with the link" and offers
+  no choice (see §11 and the open decision there). Before October 2026 the Owner menu's "Make it
+  private" only unlisted the atlas and left its files on the open web; that pair is gone.
 - **A prettier web address.** `/apps/atlas/a/<slug>` exists, but only as a redirect to
   `/apps/atlas/?dataset=<slug>` — the tidy form never stays in the address bar, and the dev-server
   version of the redirect drops any `?key=`.
@@ -589,14 +588,39 @@ There is no third role, no read-only role, and no per-layer permission beyond "w
 
 ## 11. Publishing, sharing, embeds, privacy
 
-- **Public or private.** Public is the default and, today, effectively the only option through the
-  screens (see §2). A public atlas's data is plain static files under
-  `/apps/atlas/datasets/<slug>/`. A private atlas's data is moved outside the web root and served
-  only to someone holding its view key, with `noindex` set. The key is shown **once**, in the reply
-  to the call that created or changed the atlas, and never again — only a hash of it is stored.
-- **Live or not live.** "Make it live" requires being signed in and the atlas to have finished
-  building. "Take it off" returns it to built: the data stays exactly where it is, it stops being
-  listed, and it stops answering to anyone not invited. Owner only.
+- **Who can see it — three states, one control.** The Owner menu's first line names the state and
+  **Change** opens a sheet with three choices (owner only, not while a build runs):
+  - **Private** — "Only you, the people you invite as editors, and anyone you give the private link
+    to. Its files leave the open web." The server moves `atlas/datasets/<slug>/` (and any draft
+    preview beside it) to `api/data/atlas/private-datasets/`, mints a key, keeps the key on the
+    owner's record and its hash for checking, and unlists the atlas if it was listed. Every file is
+    then served only by `GET /api/atlas/datasets/<slug>/<file>` — to the owner and editors by their
+    sign-in, or with `?key=` — with `noindex` and no shared caching. Search (`/layers/search`) is
+    gated the same way. A private atlas is **built** inside the private root too, never in the web
+    root first (jobs.js).
+  - **Anyone with the link** — "Not listed anywhere, but anyone who has the address can open it and
+    download its data." Plain static files under `/apps/atlas/datasets/<slug>/`. This is what every
+    atlas is the moment the wizard builds it, and the first-look card now says so.
+  - **Listed** — anyone with the link, and on the LOKA Atlas page (`publish`). Needs a sign-in. A
+    private atlas cannot be listed (409) — open it to the link first.
+
+  Moving between states returns the owner to the page fresh with a note of what happened; after
+  Private the Share panel opens on the private link. Making an atlas public again moves the folder
+  back and forgets the key.
+- **The viewer on a private atlas.** The address is the same plain `?dataset=<slug>` for everyone.
+  The viewer tries the static path, and on a 404 asks the API once: 200 (owner by sign-in, or a
+  key in the address) and every later file — manifest, local overlay, layers, logo, images, search
+  — goes through the same key-aware helper (`dataUrl`); 403 shows "This atlas is private" with the
+  way in; a wrong or revoked key says the link no longer works. `?via=api` is no longer needed.
+  Owner tools (Settings, logo, Add data and its draft preview, fix page, open-data layers, layer
+  commits and repairs, rebuilds, question readings) resolve the folder through
+  `datasetDirFor` / `imports.datasetDir`, which look in both roots. Verified at runtime for: the
+  three moves, the file routes, search, the viewer, Share and the Owner menu
+  (`test/private-atlas-test.mjs` and a hand check); the add-data and rebuild paths on a private
+  atlas are read from the code only.
+- **Open decision.** A fresh atlas is "anyone with the link" until its owner changes it. For a survey
+  with people's names in it that is the wrong default; the wizard could ask, or default to private.
+  Not changed here.
 - **Sharing.** The viewer's Share dialog gives: the link with a **Copy link** button, a **QR code**
   drawn in the browser with a **Download PNG** button, offered for posters and flyers, share
   buttons for WhatsApp / X / email, and an **embed snippet**. The exact snippet:
@@ -609,12 +633,14 @@ There is no third role, no read-only role, and no per-layer permission beyond "w
   embedded straight from that snippet carries the full page furniture. A proposal wanting a clean
   embed should hand-edit the address (below).
 
-  A private atlas gets no QR, no social buttons and no embed snippet — just the link and a warning
-  that the link contains the key.
-
-  Separately, the **editor's** Share button is a simpler sheet of its own: one sentence, the link,
-  and "Copy the link". It has no QR, no embed and no social buttons — and, verified in the code, it
-  omits the view key, so for a private atlas the editor hands out a link that will not load.
+  The panel follows the three states. **Private**: the private link (key in the address) with
+  **Copy private link**, a QR of that link ("treat a printout like the link"), no WhatsApp / Post /
+  Email buttons, no embed snippet (a frame on a website would publish the key), and for the owner
+  **Make a new link** — "The old link stops working for everyone who has it." An atlas made private
+  by hand before the key was kept (only a hash on record) is offered **Make a private link**
+  instead of a dead one. **Anyone with the link**: one line saying it is not listed, then the usual
+  panel. **Listed**: the usual panel. The old "This atlas isn't live yet — the link works only for
+  you" warning is gone: it was false (the files were on the open web).
 - **Embed modes** (add to the address):
   - `?embed=1` — hides the site header, the "build your own" call-to-action and the site footer.
     The atlas's own title, credits and map stay.
@@ -757,7 +783,8 @@ State these as out of scope, or as new work, in any proposal.
 9. **Show more than one photo per place.**
 10. **Grow an atlas's region past the free size ceiling through the editor.** Refused; requires an
     email to the operator.
-11. **Create a private atlas from any screen**, or add data to a private atlas (§2).
+11. **Create a private atlas from the wizard** — every atlas is built "anyone with the link" and
+    made private afterwards from the Owner menu (§11).
 12. **Meaning-based search on a private atlas**, or on any atlas when the server has no AI key.
 13. **Edit or export the data through Atlas.** There is no table editor and no download button on a
     published atlas; the data files are static and fetchable by address, but no export UI exists.
@@ -829,9 +856,8 @@ State these as out of scope, or as new work, in any proposal.
   `labels` and `image_urls` actually behave depends on the separators and counts in the real file.
   The 40%-of-cells list-detection rule and the photo-detection rule are the two places where the
   real data decides the outcome. **Measure them before committing to a plan.**
-- **Anything I marked "not observed at runtime"**: the theme-finding request-size mismatch, private
-  atlases refusing uploads, the editor failing to open a private atlas. These are code readings, not
-  tests.
+- **Anything I marked "not observed at runtime"**: the theme-finding request-size mismatch, and
+  adding data to or rebuilding a private atlas (§11 says which private-atlas paths were run).
 - **Whether the web server keeps a `?key=` when redirecting the tidy `/a/<slug>` address.** The
   development version definitely drops it.
 - **Whether the web server configuration in the repo is the one actually in force**, including its

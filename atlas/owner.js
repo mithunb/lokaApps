@@ -357,6 +357,18 @@
       toast("Layer added — it is on the map now");
       history.replaceState(null, "", location.pathname + "?dataset=" + encodeURIComponent(SLUG));
     }
+    var who = /(^|[?&])who=(private|link|listed)/.exec(location.search);
+    if (who) {
+      history.replaceState(null, "", location.pathname + "?dataset=" + encodeURIComponent(SLUG));
+      toast(who[2] === "private" ? "Private now — its files are off the open web. Share has the private link."
+        : who[2] === "listed" ? "Listed — anyone can open it, and it is on the LOKA Atlas page"
+        : "Anyone with the link can open it now. It is not listed.");
+      // a private atlas is no use to anyone until its link is handed on: show it
+      if (who[2] === "private") setTimeout(function () {
+        var share = $("#share-btn");
+        if (share && share.__shareOpts && window.AtlasShare) { paintShare(); window.AtlasShare.open(share.__shareOpts); }
+      }, 400);
+    }
     // straight from the wizard: one look at what was built, then never again
     if (/(^|[?&])built=1/.test(location.search)) {
       history.replaceState(null, "", location.pathname + "?dataset=" + encodeURIComponent(SLUG));
@@ -443,10 +455,12 @@
         " — the atlas then uses that copy.</p>" : "") +
       '<div id="own-first-fix"></div>' +
       '<div class="own-row own-first-acts">' +
-        '<button class="share-btn primary" type="button" id="own-first-live">Make it live</button>' +
+        '<button class="share-btn primary" type="button" id="own-first-live">Who can see it</button>' +
         '<button class="share-btn" type="button" id="own-first-open">Add open data</button>' +
       "</div>" +
-      '<p class="own-note">Only you can see it until it is live. Both are in the Owner menu whenever you want them.</p>';
+      /* Said plainly, because it is the fact that matters most about a fresh
+         atlas: its files are on the web from the moment it is built. */
+      '<p class="own-note">Right now anyone with the link can open it, and it is not listed on the LOKA Atlas page. Both are in the Owner menu whenever you want them.</p>';
     stage.appendChild(box);
     function shut() { if (box.parentNode) box.parentNode.removeChild(box); document.removeEventListener("keydown", onKey); }
     function onKey(e) { if (e.key === "Escape") shut(); }
@@ -454,11 +468,11 @@
     box.querySelector(".own-first-x").onclick = shut;
     box.querySelector("#own-first-open").onclick = function () { shut(); openOpenData(); };
     box.querySelector("#own-first-live").onclick = function () {
-      // the same act the Owner menu offers, through the same button, so the
-      // menu's own state (its dot, its words) follows
+      // the same sheet the Owner menu opens, so the menu's own state (its
+      // dot, its words) follows
       var b = $("#own-live");
-      if (b && !b.hidden) { shut(); toggleLive(); }
-      else { shut(); toast("Only the owner can make an atlas live"); }
+      if (b && !b.hidden) { shut(); openVisibility(); }
+      else { shut(); toast("Only the owner can change who sees an atlas"); }
     };
     box.querySelector(".own-first-x").focus();
     firstLookFixes(box);
@@ -515,7 +529,7 @@
      owner's tools are one press away.
 
      Each line of the menu pairs what it is about with what you can do:
-       Live · anyone with the link            Make it private
+       Private · only people with the link    Change
        Boundaries & place names for Deoria    Change
        Your data                              + Add data
        Title, logo, about                     Settings
@@ -529,7 +543,7 @@
     var box = document.createElement("div");
     box.className = "own-acts";
     box.innerHTML =
-      '<button class="own-btn" id="own-btn" type="button" aria-expanded="false" aria-haspopup="true" aria-controls="own-panel" aria-label="Owner menu — live status, region, open data layers, add data, settings">' +
+      '<button class="own-btn" id="own-btn" type="button" aria-expanded="false" aria-haspopup="true" aria-controls="own-panel" aria-label="Owner menu — who can see it, region, open data layers, add data, settings">' +
         '<span class="own-dot" aria-hidden="true"></span><span class="own-btn-word">Owner</span>' +
         '<svg class="own-btn-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>' +
       "</button>" +
@@ -552,7 +566,7 @@
           '<button class="own-act" id="own-settings" type="button">Settings</button></div>' +
       "</div>";
     row.insertBefore(box, row.firstChild);
-    $("#own-live").onclick = toggleLive;
+    $("#own-live").onclick = openVisibility;
     $("#own-settings").onclick = function () { openSettings(); };
     $("#own-open-data").onclick = function () { openOpenData(); };
 
@@ -600,31 +614,146 @@
     });
   }
 
-  // Two things, said as one sentence. `published` is what makes an atlas listed
-  // and openable by anyone with the link; `private` moves it out of the web root
-  // entirely, so only invited people can reach it at all.
+  /* ================= who can see it =================
+     Two separate facts about an atlas used to be shown as one switch, "Make it
+     live / Make it private", and the switch only ever moved the LISTING: the
+     files stayed on the open web, downloadable by anyone with the address,
+     while the menu said "private". A survey with people's names in it was
+     left that way. So the menu now says the one thing that matters, in three
+     states a person can choose between:
+
+       private — the files leave the web root (the server's real private mode:
+                 POST details {visibility}); only the owner, their editors and
+                 anyone with the private link can open it
+       link    — anyone with the link; not on the LOKA Atlas page
+       listed  — anyone with the link, and on the LOKA Atlas page (publish)
+
+     Nothing the owner can press is called "private" unless the files are
+     actually out of reach. */
+  var STATES = {
+    private: ["Private", "— only you, your editors and people with the private link"],
+    link: ["Anyone with the link", "— not listed on the LOKA Atlas page"],
+    listed: ["Listed", "— anyone with the link, and on the LOKA Atlas page"],
+  };
+  function stateOf() {
+    if (INST.visibility === "private") return "private";
+    return INST.status === "published" ? "listed" : "link";
+  }
   function paintStatus() {
-    var live = INST.status === "published";
-    var priv = INST.visibility === "private";
-    $("#own-status").classList.toggle("live", live);
-    var ob = $("#own-btn"); if (ob) ob.classList.toggle("live", live);   // the dot on the button says it too
-    $("#own-what").textContent = live ? "Live" : "Not live";
-    $("#own-who").textContent = live
-      ? (priv ? "— only invited people" : "— anyone with the link")
-      : "— only you can see it";
+    var st = stateOf();
+    var open = st !== "private";
+    // the Leaf dot means "anyone can open this"
+    $("#own-status").classList.toggle("live", open);
+    var ob = $("#own-btn"); if (ob) ob.classList.toggle("live", open);
+    $("#own-what").textContent = STATES[st][0];
+    $("#own-who").textContent = STATES[st][1];
     var act = $("#own-live");
-    // only the owner decides whether an atlas is on the air
-    act.hidden = INST.role !== "owner" || INST.status === "building";
-    /* "Take it off" said what was being taken away rather than what you would
-       have afterwards, and left it open where the atlas went. Its opposite is
-       "Make it live", so the pair now reads as the two states it moves between. */
-    act.textContent = live ? "Make it private" : "Make it live";
-    act.classList.toggle("primary", !live);
-    // the Share panel must say when a link and QR will only work for the
-    // owner — a printed poster of a not-live atlas is a dead poster
-    var share = $("#share-btn");
-    if (share && share.__shareOpts) share.__shareOpts.notLive = !live;
+    // only the owner decides who sees an atlas, and not while it is being built
+    act.hidden = INST.role !== "owner" || INST.status === "building" || INST.status === "pending-approval";
+    act.textContent = "Change";
+    act.setAttribute("aria-label", "Change who can see this atlas");
+    paintShare();
     paintOpenDataLine();
+  }
+
+  /* The Share panel says the same thing the status line does, and for a
+     private atlas it is where the private link lives: the key is kept on the
+     record, so the owner can copy the link again any day, and "Make a new
+     link" is the way to stop an old one working. */
+  function paintShare() {
+    var share = $("#share-btn");
+    if (!share || !share.__shareOpts) return;
+    var o = share.__shareOpts;
+    o.state = stateOf();
+    o.private = o.state === "private";
+    o.notLive = o.state === "link";
+    o.viewKey = INST.viewKey || "";
+    o.renew = INST.role === "owner" ? renewLink : null;
+  }
+  function renewLink() {
+    return api("instances/" + encodeURIComponent(SLUG) + "/view-key", { method: "POST" })
+      .then(function (j) {
+        INST.viewKey = j.viewKey || "";
+        paintShare();
+        toast("New private link made — the old one no longer works");
+        return INST.viewKey;
+      })
+      .catch(function (e) { toast(errMsg(e)); return ""; });
+  }
+
+  function visibilityHTML() {
+    var st = stateOf();
+    function opt(id, head, body) {
+      return '<label class="own-choice">' +
+        '<input type="radio" name="own-vis" value="' + id + '"' + (st === id ? " checked" : "") + ' />' +
+        '<span><b>' + head + '</b><span class="own-choice-p">' + body + '</span></span></label>';
+    }
+    return '<div class="own-sheet" role="dialog" aria-labelledby="own-vis-h">' +
+      '<h2 id="own-vis-h">Who can see this atlas?</h2>' +
+      '<p class="own-set-p">Everything on it — the map, every layer, every row of your data.</p>' +
+      '<div class="own-choices">' +
+        opt("private", "Private",
+          "Only you, the people you invite as editors, and anyone you give the private link to. Its files leave the open web.") +
+        opt("link", "Anyone with the link",
+          "Not listed anywhere, but anyone who has the address can open it and download its data.") +
+        opt("listed", "Listed",
+          "Anyone with the link, and it appears on the LOKA Atlas page for everyone to find.") +
+      "</div>" +
+      '<p class="own-set-p" id="own-vis-note"></p>' +
+      '<div class="own-row own-row-top">' +
+        '<button class="share-btn primary" id="own-vis-save">Save</button>' +
+        '<button class="share-btn" data-close>Cancel</button>' +
+        '<span class="own-err" id="own-vis-err" role="alert"></span></div>' +
+    "</div>";
+  }
+
+  function openVisibility() {
+    if (INST.role !== "owner") { toast("Only the owner can change who sees an atlas"); return; }
+    openDialog(visibilityHTML(), function (scrim) {
+      var note = scrim.querySelector("#own-vis-note");
+      function sayNote() {
+        var v = (scrim.querySelector('input[name="own-vis"]:checked') || {}).value;
+        note.textContent = v === "private"
+          ? "You will find the private link under Share. Making a new link later stops the old one working."
+          : v === "link" ? "Share gives you the link, a QR code and the code to embed it on a website."
+          : "";
+      }
+      sayNote();
+      Array.prototype.forEach.call(scrim.querySelectorAll('input[name="own-vis"]'), function (r) { r.onchange = sayNote; });
+      scrim.querySelector("#own-vis-save").onclick = function () {
+        var want = (scrim.querySelector('input[name="own-vis"]:checked') || {}).value;
+        if (!want || want === stateOf()) { closeDialog(scrim); return; }
+        var btn = this, err = scrim.querySelector("#own-vis-err");
+        btn.disabled = true; err.textContent = "";
+        setVisibility(want)
+          .then(function () {
+            /* The viewer fetched every file from where the atlas WAS. Rather
+               than teach every fetch to switch roots mid-page, come back to
+               the page fresh and say what happened on arrival (see mount). */
+            location.href = location.pathname + "?dataset=" + encodeURIComponent(SLUG) + "&who=" + want;
+          })
+          .catch(function (e) { err.textContent = errMsg(e); btn.disabled = false; });
+      };
+    });
+  }
+
+  /* The moves between states, as the server offers them: visibility is the
+     details route (it also unlists); listing is publish/unpublish. */
+  function setVisibility(want) {
+    var slug = encodeURIComponent(SLUG);
+    var p = Promise.resolve();
+    if (want === "private") {
+      return api("instances/" + slug + "/details", { method: "POST", body: { visibility: "private" } });
+    }
+    if (INST.visibility === "private") {
+      p = p.then(function () { return api("instances/" + slug + "/details", { method: "POST", body: { visibility: "public" } }); });
+    }
+    if (want === "listed") {
+      p = p.then(function () { return api("instances/" + slug + "/publish", { method: "POST" }); });
+    } else if (INST.status === "published") {
+      p = p.then(function () { return api("instances/" + slug + "/unpublish", { method: "POST" }); });
+    }
+    return p;
   }
 
   /* ================= open data layers =================
@@ -879,20 +1008,6 @@
     scrim.querySelector("#own-od-yes").focus();
   }
 
-  function toggleLive() {
-    var btn = $("#own-live"), live = INST.status === "published";
-    btn.disabled = true;
-    api("instances/" + encodeURIComponent(SLUG) + "/" + (live ? "unpublish" : "publish"), { method: "POST" })
-      .then(function () {
-        INST.status = live ? "built" : "published";
-        paintStatus();
-        toast(live ? "Private now — only you can see it"
-                   : "Live — anyone with the link can open it");
-      })
-      .catch(function (e) { toast(errMsg(e)); })
-      .then(function () { btn.disabled = false; });
-  }
-
   /* ================= adding to the viewer's panel =================
      Two additions and nothing more: the region, which the panel had no reason
      to show a reader, and a way into each layer this caller may change. The
@@ -908,8 +1023,7 @@
     (LA.manifest.layers || []).forEach(addChangeButton);
     // a reboot rebuilds the viewer's Share wiring too — restate what only
     // the owner knows (see paintStatus)
-    var share = $("#share-btn");
-    if (share && share.__shareOpts && INST) share.__shareOpts.notLive = INST.status !== "published";
+    if (INST) paintShare();
   }
 
   // What the base map actually draws, rather than what we would like to claim:

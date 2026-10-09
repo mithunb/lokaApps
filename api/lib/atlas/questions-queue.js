@@ -31,7 +31,7 @@ import { fileURLToPath } from 'node:url';
 /* The same folder registry.js keeps its files in. Worked out here rather than
    imported, because importing the registry loads (and may tidy and re-save)
    it, and the one-off script that also uses this file must not do that. */
-const DATA_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'data', 'atlas');
+const DATA_DIR = process.env.LOKA_DATA_DIR || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'data', 'atlas');
 
 /* Never read, whatever happens: the operator's own hand-made atlas. */
 export const NEVER_READ = new Set(['deoria-bioregion']);
