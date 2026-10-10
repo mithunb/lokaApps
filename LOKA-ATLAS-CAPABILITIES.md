@@ -421,6 +421,17 @@ A "key" means: colour the places of one layer by the answers in one of its colum
   and a row holds one mark for **every** answer the place carries, so a place that is Culture and
   Nature wears two circles side by side. (The older corner-badge design, which showed one answer per
   key at the pin's four corners, is gone.)
+- **Every key the layer offers is listed as a row under "Mark each place by"** (October 2026),
+  questions and spreadsheet columns alike, showing only its name and a caret. There is no tick box:
+  opening the row (`buildKeyToggles`, a button with `aria-expanded`) switches the key on and shows
+  its reach ("Answers come from 39% of the tags"), any "mostly one answer" note and its kinds with
+  counts; closing it switches the key off. **Rows are ordered by reach** — the share of the layer's
+  places that have an answer for that key (`reach` in `computeKeyOptions`) — widest first, ties
+  keeping the older order (the owner's colouring column, then the rest, flat questions last). The
+  owner's colouring column keeps its own colours wherever it lands in the list. **The first row
+  starts open** (`initLayerKeys`), so the map is marked by the widest-reaching key from the start;
+  every other row starts closed. The sixth row pressed is refused with "Up to five at once — close
+  one to open this." under that row (`KEY_STACK_NOTE`), cleared when any row closes.
 - **Colour says which kind within a key; shape says which key.** Colours repeat between keys, on
   purpose: a measurement in the code shows that splitting the palette between keys collapses to
   near-identical colours for someone with colour-blindness.

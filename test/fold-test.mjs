@@ -177,23 +177,25 @@ check('part-on still beats on', html.indexOf('.ctl-sub-toggle input:indeterminat
 
 console.log('\n  two orders of control, two marks');
 check('a layer is a switch', /var sw = el\("span", "ctl-switch"\)/.test(viewer3), true);
-check('a key is a tick', /lab\.appendChild\(el\("span", "key-tick"\)\)/.test(viewer3), true);
-check('and no longer wears the layer\'s switch',
-  /lab\.appendChild\(el\("span", "ctl-switch small"\)\)/.test(viewer3), false);
-check('the tick is styled where a visitor will actually get it',
-  /\.key-tick \{/.test(html2) && !/\.key-tick \{/.test(css), true);
-check('its ring is a control\'s, not a hint\'s', /border:1px solid #82907f/.test(html2), true);
+/* A key is a row you open (October 2026): no tick, no switch — the button
+   that unfolds it is the control, and unfolding is what marks the map. */
+check('a key is a row that unfolds', /var btn = el\("button", "key-toggle"\);\s*\n\s*btn\.type = "button";\s*\n\s*btn\.setAttribute\("aria-expanded", open \? "true" : "false"\);/.test(viewer3), true);
+check('and wears neither a tick nor the layer\'s switch',
+  /key-tick|el\("span", "ctl-switch small"\)|cb\.type = "checkbox"/.test(
+    viewer3.slice(viewer3.indexOf('\n  function buildKeyToggles('), viewer3.indexOf('\n  }\n', viewer3.indexOf('\n  function buildKeyToggles(')))), false);
+check('the row is styled where a visitor will actually get it',
+  /\.key-entry \{/.test(html2) && /\.key-caret \{/.test(html2) && !/\.key-entry \{|\.key-tick \{/.test(css), true);
 check('both switches say they are switches, in speech too',
   (viewer3.match(/setAttribute\("role", "switch"\)/g) || []).length, 2);
-check('the caption says what a tick does', /"Mark each place by"/.test(viewer3), true);
-check('and the cap talks about ticks', /Untick one to add/.test(viewer3), true);
+check('the caption says what a row does', /"Mark each place by"/.test(viewer3), true);
+check('and the cap talks about closing a row, not unticking', /Untick/.test(viewer3) === false && /close one to open this/.test(viewer3), true);
 
 console.log('\n  a layer nobody is showing');
-check('keeps its ticks but loses its legend',
-  /if \(cb\.checked && L\._visible !== false\) \{\s*\n\s*keyKindRows/.test(viewer3), true);
-check('and its ticked names drop to the off voice',
-  /if \(cb\.checked && L\._visible === false\) lab\.classList\.add\("key-held"\)/.test(viewer3), true);
-check('which is styled', /\.key-toggle\.key-held \.key-tname/.test(html2), true);
+check('keeps its open rows but loses its legend',
+  /if \(showing\) keyKindRows\(L, opt\)\.forEach/.test(viewer3), true);
+check('and its open names drop to the off voice',
+  /else row\.classList\.add\("key-held"\);/.test(viewer3), true);
+check('which is styled', /\.key-entry\.key-held > \.key-toggle \.key-tname/.test(html2), true);
 /* a legend decoding marks that are not on the map is worse than no legend */
 check('the disc note stays quiet too', /L\._visible !== false\) \? foldedCount\(L\) : 0/.test(viewer3), true);
 

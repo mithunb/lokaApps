@@ -430,54 +430,56 @@
     .key-hint { display:block; font-size:var(--t-label); font-weight:400; line-height:1.45; color:var(--color-text-muted);
       margin:0 0 .3rem; max-width:28ch; }
     .key-list { display:flex; flex-direction:column; }
-    .key-toggle { padding:.1rem 0; gap:.5rem; min-height:24px; }
     .ctl-switch.small { width:26px; height:15px; }
     .ctl-switch.small::after { width:11px; height:11px; }
     .ctl-toggle input:checked + .ctl-switch.small::after { transform:translateX(11px); }
-    /* a key's name is a thing you can act on — it keeps its ink and weight
-       whichever way its switch points; the switch alone says the state */
-    .key-tname { font-size:var(--t-meta); font-weight:600; line-height:1.25; color:var(--color-text-primary); }
-    /* the share of places a discovered question can answer — quiet, because it
-       is a caveat on the switch beside it, not a number to read first */
-    .key-reach { margin-left:auto; font-size:var(--t-label); color:var(--color-text-muted);
-      font-variant-numeric:tabular-nums; }
-    .key-note { font-size:var(--t-label); font-weight:400; color:var(--color-text-muted); line-height:1.45; margin:.3rem 0 .05rem; }
-    /* A question that barely sorts anything is still offered, and says why in
-       the panels quietest voice: the label rung, muted ink, indented to the
-       switch it belongs to so it reads as a note on that row rather than a new
-       one. No colour, no icon — it is a caveat, not a warning. */
-    /* A key is a tick. The layer above it is a switch, and the two must not be
-       one shape doing two jobs: a switch is a thing on or off by itself, a tick
-       is a thing chosen from a list — and five can be ticked at once.
+    /* A key is a row you open. Folded, it is the key's name and a caret;
+       opened, the name turns Leaf Deep, the caret turns up, the slot before
+       the name shows the mark the key wears on the map, and the row's body
+       (reach, note, kinds) follows. No tick: opening the row is what marks the
+       map by it, so there is no second control to find (October 2026).
 
        It lives here and not in owner.css because owner.css is fetched only once
        the API has confirmed somebody may edit. A visitor never downloads a byte
-       of it, and a visitor is who these ticks are for.
-
-       The ring is #82907f rather than the ink-at-14% the owner's own tick list
-       uses: that comes out near 1.3 against white, which is a hint rather than a
-       control. This is 3.36, which is what a thing you can click should be. */
-    .key-toggle { display:flex; align-items:center; gap:.5rem; cursor:pointer;
-      padding:.1rem 0; min-height:24px; }
-    .key-toggle input { position:absolute; opacity:0; width:0; height:0; }
-    .key-tick { flex:0 0 auto; width:16px; height:16px; position:relative;
-      border:1px solid #82907f; border-radius:var(--radius-xs);
-      background:var(--color-surface); transition:background .2s, border-color .2s; }
-    .key-toggle input:checked + .key-tick {
-      background:var(--color-leaf); border-color:var(--color-leaf); }
-    .key-toggle input:checked + .key-tick::after {
-      content:''; position:absolute; left:5px; top:1px; width:4px; height:9px;
-      border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg); }
-    .key-toggle input:focus-visible + .key-tick {
-      outline:2px solid var(--color-leaf); outline-offset:2px; }
-    .key-toggle:hover .key-tick { border-color:var(--color-leaf); }
-    /* ticked, on a layer nobody is showing: the choice holds, the voice drops */
-    .key-toggle.key-held .key-tname { color:var(--color-text-muted); font-weight:400; }
-    @media (prefers-reduced-motion:reduce) { .key-tick { transition:none; } }
-
-    .key-flatwrap { display:block; }
+       of it, and a visitor is who these rows are for. */
+    .key-entry { border-top:1px solid var(--color-divider); }
+    .key-entry:first-child { border-top:0; }
+    .key-toggle { display:flex; align-items:center; gap:.5rem; width:100%; min-height:32px;
+      padding:.35rem 4px .35rem 0; margin:0; background:none; border:0; font:inherit; text-align:left;
+      cursor:pointer; color:var(--color-text-primary); border-radius:var(--radius-xs); }
+    /* only where there is a pointer to hover with: on a phone the tapped row
+       would otherwise keep the hover wash until the next tap (seen at 375px) */
+    @media (hover:hover) { .key-toggle:hover { background:var(--color-surface-alt); } }
+    .key-toggle:focus-visible { outline:2px solid var(--color-leaf); outline-offset:0; }
+    .key-slot { flex:0 0 auto; width:16px; display:flex; justify-content:center; align-items:center; }
+    .key-slot .leg-sat { width:12px; height:12px; }
+    .key-dash { width:8px; height:2px; background:var(--color-border); border-radius:1px; }
+    /* a key's name is a thing you can act on — it keeps its ink and weight
+       whether open or closed; the caret and the slot say the state */
+    .key-tname { flex:1 1 auto; min-width:0; font-size:var(--t-meta); font-weight:600; line-height:1.25; color:var(--color-text-primary); }
+    .key-entry.open > .key-toggle .key-tname { color:var(--color-leaf-deep); }
+    .key-caret { flex:0 0 auto; margin-left:auto; width:8px; height:8px; border:solid var(--color-text-muted);
+      border-width:0 1.5px 1.5px 0; transform:rotate(45deg); margin-bottom:4px; transition:transform .15s; }
+    .key-toggle .lbl-info + .key-caret { margin-left:0; }
+    .key-entry.open > .key-toggle .key-caret { transform:rotate(-135deg); margin-bottom:-2px; }
+    @media (prefers-reduced-motion:reduce) { .key-caret { transition:none; } }
+    .key-body { padding:0 0 .35rem; }
+    /* the share of places a discovered question can answer — first in the
+       open body, quiet, because it is a caveat on the key, not a number to
+       read first; set in under the name, where everything in the body sits */
+    .key-reach { font-size:var(--t-label); color:var(--color-text-muted); line-height:1.4;
+      padding:0 0 .25rem 1.5rem; font-variant-numeric:tabular-nums; }
+    /* the sixth key refused: said under the row that was pressed, in Sindoor */
+    .key-note { font-size:var(--t-label); font-weight:400; color:var(--color-sindoor-deep); line-height:1.4;
+      padding:.1rem 0 .4rem 1.5rem; }
+    .key-note[hidden] { display:none; }
+    /* open, on a layer nobody is showing: the choice holds, the voice drops */
+    .key-entry.key-held > .key-toggle .key-tname { color:var(--color-text-muted); font-weight:400; }
+    /* A question that barely sorts anything is still offered, and says why in
+       the panel's quietest voice: the label rung, muted ink, under the reach
+       line. No colour, no icon — it is a caveat, not a warning. */
     .key-flat { font-size:var(--t-label); color:var(--color-text-muted); line-height:1.4;
-      padding-left:var(--panel-strip); margin:-.05rem 0 .25rem; }
+      padding:0 0 .3rem 1.5rem; }
     /* where the folded places went — kept current by updateFoldNote */
     .key-fold { font-size:var(--t-label); font-weight:400; color:var(--color-text-muted); line-height:1.45; margin:.3rem 0 .05rem; }
     /* keys wear rows: each switched-on key is one row of small marks beside
@@ -537,13 +539,10 @@
     /* a kind sitting under its own switch, indented to belong to it */
     /* a kind sits under its key's own name, which is the strip again */
     .key-kind { padding-left:var(--panel-strip); }
-    /* Air between one key and the next. With four keys on, twenty-two rows read
-       as a single list — the switch that starts each key has to be findable
-       without counting shapes. */
-    .key-list .key-kind + .key-toggle,
-    .key-list .leg-why + .key-toggle {
-      margin-top:.6rem; padding-top:.45rem; border-top:1px solid var(--color-divider);
-    }
+    /* Inside an open row the kinds sit under the key's name — the slot and
+       its gap, 1.5rem — not out on the layer's strip. Between one key and the
+       next the row's own hairline (.key-entry) draws the line. */
+    .key-body .key-kind { padding-left:1.5rem; }
     /* The kinds of the key that is on, two to a row where the names allow it.
        A plain column of them is 96px longer on this atlas (MEASURED in the
        drawing), and listing every key at rest already spends height — so the
@@ -1356,6 +1355,9 @@
       .ctl-switch.small::after { width:14px; height:14px; }
       .ctl-toggle input:checked + .ctl-switch.small::after { transform:translateX(12px); }
       .key-tname { font-size:var(--t-ui); }
+      /* a key's row is a thumb target: 44px tall, the whole row the target */
+      .key-toggle { min-height:44px; }
+      .key-body .key-kind { min-height:32px; }
       .ctl-sub-chev { min-width:40px; min-height:40px; align-items:center; justify-content:center; }
       .coll-head { min-height:32px; font-size:var(--t-ui); font-weight:400; }
       .coll-split { font-size:var(--t-ui); }

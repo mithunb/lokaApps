@@ -1813,14 +1813,20 @@
     // a layer whose committed colouring we cannot mirror is left untouched
     if (L.markerBy && !committedOpt) return;
     L._keyOptions = opts;
-    // the map opens with nothing switched on: every pin the plain neutral
-    // circle, the panel saying only the layer's name — the reader turns
-    // keys on, and the committed colouring is simply the first key offered
-    keyState[L.id] = { active: [], note: null };
-    (markersByLayer[L.id] || []).forEach(function (e) { renderMarks(L, e, []); });
-    L._legend = keyLegendRows(L, []);
+    /* The map opens marked by the first key offered — the one that reaches the
+       most places (opts are sorted by reach) — with its row unfolded in the
+       panel; every other row starts folded (Mithun, October 2026). Before this
+       the map opened with nothing on and every pin plain, and a reader had to
+       find the ticks to learn that colouring was on offer at all. */
+    var first = null;
+    opts.forEach(function (o) { if (!first && !o.tooFew && !o.scattered) first = o; });
+    keyState[L.id] = { active: first ? [first.col] : [], note: null, noteCol: null };
+    var act = activeKeyOptions(L);
+    (markersByLayer[L.id] || []).forEach(function (e) { renderMarks(L, e, act); });
+    L._legend = keyLegendRows(L, act);
     wireRowFlips();
-    renderExtra(L);   // the switches exist only once the data has said which columns qualify
+    renderExtra(L);   // the rows exist only once the data has said which columns qualify
+    if (act.length) applyMarkerVisibility(L);   // discs read the rows' footprint from the start
   }
 
 /* A column of dates.
@@ -2106,12 +2112,20 @@
                       kindsHere >= KEY_LOPSIDED_MIN_KINDS),
                   kept: kept, hasOther: named < feats.length });
     });
-    /* Committed key first, then anything that sorts, then the questions that
-       barely do. A flat question is not hidden — a reader may want exactly the
-       thing that is true of most of the map — but it should not be the first
-       switch a newcomer reaches for. */
+    /* Questions first, each family widest reach first (Mithun, October 2026).
+       The questions found in the data lead, the one answered by the most
+       places on top; then the spreadsheet columns, the same way. The first
+       row is the one the map opens marked by (initLayerKeys), so a layer with
+       questions opens on its most-answered question — never on a bookkeeping
+       column such as the date a row was added, which every row has. A layer
+       with no questions opens on its widest column. One rule for every atlas.
+       The owner's committed column still colours the pins in its own colours
+       wherever it lands. Ties keep the older order: committed first, then
+       anything that sorts, then the questions that barely do. */
     opts.sort(function (a, b) {
-      return (b.committed ? 1 : 0) - (a.committed ? 1 : 0)
+      return (b.isQuestion ? 1 : 0) - (a.isQuestion ? 1 : 0)
+          || (b.reach - a.reach)
+          || (b.committed ? 1 : 0) - (a.committed ? 1 : 0)
           || (a.flat ? 1 : 0) - (b.flat ? 1 : 0);
     });
     return opts;
@@ -2125,10 +2139,11 @@
 
   // Colour slots: every family counts from the front of the palette — colours
   // repeat freely between keys and the shape says which key, so the far-end
-  // trick the two-key row used is gone. The committed key, always the anchor
-  // family, keeps its committed colours untouched.
+  // trick the two-key row used is gone. The committed key keeps its committed
+  // colours untouched wherever it sits in the list — the list is ordered by
+  // reach now (computeKeyOptions), so it is no longer always the first family.
   function keyKindColor(L, opt, familyIndex, slot) {
-    if (opt.committed && familyIndex === 0) {
+    if (opt.committed) {
       var m = L.markers && L.markers[opt.kept[slot]];
       if (m && m.color) return m.color;
     }
@@ -2264,11 +2279,10 @@
     // plain pin distance — keyedFoldRadius — so tall stacks can overlap there:
     // the accepted price of keys-on no longer emptying the city view.)
     var KEY_STACK_CAP = 5;
-    // Reader-facing, and it must speak the same language as the heading it sits
-    // under ("Show key"). It says "keys" for that reason, not "colourings":
-    // colour is not what tells two keys apart — each key wears its own shape,
-    // and colours repeat between them.
-    var KEY_STACK_NOTE = "The map can mark places by five things at once, and five are ticked. Untick one to add {name}.";
+    // Reader-facing, shown inline under the row that was refused (so it does
+    // not need to name the key), in the words of the control: a key is a row
+    // you open and close, not a tick.
+    var KEY_STACK_NOTE = "Up to five at once — close one to open this.";
   var SVG_NS = "http://www.w3.org/2000/svg";
   function markPathD(shape, cx, cy) {
     if (shape === "square") { var s = 10.6 / 2; return "M" + (cx - s) + " " + (cy - s) + "h" + (2 * s) + "v" + (2 * s) + "h" + (-2 * s) + "z"; }
@@ -2744,198 +2758,181 @@
     box.hidden = false;
   }
 
-  // Each key the layer offers is a switch, the same control a layer itself
-  // is turned on with — one vocabulary for "this can be switched on" — a
-  // size down and indented under its layer, because a key belongs to its
-  // layer rather than standing beside it. Keys stack (up to KEY_STACK_CAP),
-  // and every switch shows its own state, so nothing here can read as a
-  // pick-one row the way the old chips did. The old "one colour" chip is
-  // gone with the chips: it was a reset dressed as a colour choice — with
-  // switches, all-off is visible on the switches themselves, and the legend
-  // already names the layer's one colour when nothing is on.
+  /* Each key the layer offers is a row you open. Folded, the row is the key's
+     name and a caret; opened, it shows how far the key reaches, any "mostly
+     one answer" note, and its kinds with their counts — and opening it is
+     what marks the map by it. Folding takes the marks off. No tick, no
+     switch: a reader learns what a key holds by opening it, which is also the
+     act of using it (Mithun, October 2026). A question and a spreadsheet
+     column get the same row.
+
+     The rows stack: up to KEY_STACK_CAP open at once, each wearing its own
+     shape on the map (ROW_SHAPES, in offered order), and the sixth is refused
+     with a note under the row that was pressed. The old "one colour" chip is
+     gone with the chips: all-closed is visible on the rows themselves. */
   function buildKeyToggles(L) {
     var st = keyState[L.id];
     var wrap = el("div", "key-chips");
-    // the switches are one named group to a screen reader, as they are to the eye
+    // the rows are one named group to a screen reader, as they are to the eye
     wrap.setAttribute("role", "group");
-    // "Show key", not "Colour by": what a mark belongs to is said by its SHAPE
-    // (circles, squares, triangles…), and colours repeat between keys, so a
-    // heading promising colour described the wrong half of the system. The
-    // legend below already names both — "categories — circles".
-    /* The caption had to change with the control. "Show key" described a switch
-       that revealed something; these are a list you mark places by, and up to
-       five can be marked at once. */
+    /* "Mark each place by", not "Colour by": what a mark belongs to is said
+       by its SHAPE (circles, squares, triangles…), and colours repeat between
+       keys. These are a list you mark places by, up to five at once. */
     wrap.setAttribute("aria-label", "Mark each place by");
     wrap.appendChild(el("span", "key-chips-lbl", "Mark each place by"));
-    /* Two ways of finding things live side by side in this panel, and until now
-       neither said which it was. A key COLOURS the map; a word you tap NARROWS
-       it. One sentence, said once per layer, so a reader meeting "Culture" as a
-       colour here and as a tappable word on a place knows they are the same
-       word doing two different jobs. */
-    wrap.appendChild(el("span", "key-hint",
-      "Keys colour the map — each wears its own shape. Tap a kind to show only those places; tap it again, or Show all, to bring the rest back. Tap a word on a place to see who else said it."));
+    /* One line. The six-line hint it replaces explained ticks, kinds and
+       tags at once; with a row that opens, the only thing worth saying up
+       front is what opening one does. */
+    wrap.appendChild(el("span", "key-hint", "Open one to colour the map by its answers."));
     var list = el("div", "key-list");
-    // The cap message, when it has something to say (kept in st.note so a
-    // rebuild mid-conversation does not eat it). role=status: the refused
-    // switch snaps back visually — a screen reader must hear why.
-    var note = el("div", "key-note");
-    note.setAttribute("role", "status");
-    note.hidden = !st.note;
-    if (st.note) note.textContent = st.note;
+    var act = activeKeyOptions(L);
+    var showing = L._visible !== false;
     L._keyOptions.forEach(function (opt) {
       if (opt.tooFew) return;   // under 30% of places: on cards, not offered as a key
       if (opt.scattered) return;   // answers mostly one of a kind: on cards, not offered as a key
-      /* A flat question needs two lines, not one, so it gets a wrapper. Every
-         other key keeps the single row it always had. */
-      var host = opt.flat ? el("div", "key-flatwrap") : null;
-      /* A tick, not a switch, and the difference is the point.
-
-         A switch is the mark of a thing that is on or off by itself: show these
-         places, or hide them. A tick is the mark of a thing CHOSEN FROM A LIST —
-         mark each place by this, and by up to four others at once. Wearing one
-         shape for both meanings, a switch above and switches indented under it,
-         asked a reader to learn from context that the indented ones meant
-         something else entirely. A 16px square beside a 32×18 pill says it
-         without a word.
-
-         Not the key's own shape, tempting as that was: a key is given its shape
-         by its place among the keys that are ON (see ROW_SHAPES over
-         activeKeyOptions), so a key nobody has ticked has no shape to wear. */
-      var lab = el("label", "key-toggle");
-      var cb = el("input"); cb.type = "checkbox";
-      cb.checked = st.active.indexOf(opt.col) >= 0;
-      cb._col = opt.col;
-      lab.appendChild(cb);
-      lab.appendChild(el("span", "key-tick"));
+      var open = st.active.indexOf(opt.col) >= 0;
+      var fi = act.indexOf(opt);   // which row of marks this key wears, when open
+      var row = el("div", "key-entry" + (open ? " open" : ""));
+      row.setAttribute("data-col", opt.col);
+      /* A button with aria-expanded, which is what a row that unfolds is. Its
+         name is the key's name alone; the state is read from aria-expanded. */
+      var btn = el("button", "key-toggle");
+      btn.type = "button";
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+      btn._col = opt.col;
+      /* The slot before the name: the mark this key wears on the map while it
+         is open (the same shape its kinds wear below), a quiet dash while it is
+         closed — so an open row says at a glance which row of marks is its. */
+      var slot = el("span", "key-slot");
+      if (open && fi >= 0) {
+        var sv = markEl(ROW_SHAPES[fi], "#5A5751");
+        sv.setAttribute("class", "leg-sat");
+        sv.setAttribute("viewBox", "1 1 18 18");
+        slot.appendChild(sv);
+      } else slot.appendChild(el("span", "key-dash"));
+      btn.appendChild(slot);
       var tname = el("span", "key-tname", esc(opt.label));
-      lab.appendChild(tname);
+      btn.appendChild(tname);
       /* A key named short says what it is short for: the whole heading on
          hover, and behind a small ⓘ for a phone, where there is no hover. The
          ⓘ sits at the row's end, where a layer's own ⓘ sits, and the heading
-         opens under the row (fullHeading, appended after the label below). */
+         opens under the row (fullHeading, appended after the button below) —
+         reachable whether the row is open or not. */
       var fullHeading = null;
       if (opt.shortened) {
         tname.title = opt.full;
         var parts = labelInfo(opt.full);
-        lab.appendChild(parts.btn);
+        btn.appendChild(parts.btn);
         fullHeading = parts.full;
       }
-      /* A question says what share of the places it can answer. Without it a
-         reader turns on "How old is it?" and meets a map that is mostly grey,
-         with nothing telling them that is the answer rather than a fault. */
-      if (opt.isQuestion) {
-        var pct = Math.round(opt.reach * 100);
-        /* "88% answered", not a bare "88%": a lone number beside a switch was
-           a riddle. The word costs a few pixels and says what is counted;
-           the long form is one hover away. */
-        /* "from 88% of tags", in the layer's own word for its rows: what the
-           share counts is not the question but the places behind its answers. */
-        var nounK = layerNoun(L);
-        var reach = el("span", "key-reach", "from " + pct + "% of " + nounK);
-        reach.title = "Answers to this question come from " + pct + " of every 100 " + nounK;
-        reach.setAttribute("aria-label", reach.title);
-        lab.appendChild(reach);
-      }
-      /* And, for a question that barely sorts anything, why. Said in the
-         panel's quietest voice, under the name, in the plainest words there
-         are: most of what it answers says the same thing. A reader can then
-         decide whether that is what they came for, instead of spending a
-         click to find out. */
-      if (host) {
-        host.appendChild(lab);
-        /* The kind is deliberately not named here. Measured in a 320px panel:
-           naming it runs the note onto a second line, and the name is on the
-           legend the moment the switch goes on, so saying it twice costs a line
-           of the panel to tell a reader something they are about to see. */
-        var why = el("div", "key-flat",
-          "Mostly one answer — " + opt.biggestN + " of its " + opt.answered + " say the same");
-        why.title = "Its commonest answer is “" + opt.biggest + "”, on " + opt.biggestN +
-          " of the " + opt.answered + " places it can speak for";
-        host.appendChild(why);
-      }
-      cb.onchange = function () {
-        /* Turning a colouring on turns its layer on with it. The keys are listed
-           while the layer is off, so a reader can reach one from cold — and
-           asking them to find the layer's own switch first would make the listing
-           pointless: they would still need two acts, and the second one is the
-           one nobody thinks of. Turning a key OFF leaves the layer alone; it is
-           not a way of hiding places. */
-        if (cb.checked && L._visible === false) {
-          setLayerVisible(L, true);
-          if (L._cb) L._cb.checked = true;
-          if (L._row) L._row.classList.remove("off");
-          if (L._onVisible) L._onVisible();
-        }
+      btn.appendChild(el("span", "key-caret"));
+      /* The cap message, under the row that was refused (kept in st.note and
+         st.noteCol so a rebuild mid-conversation does not eat it). One per
+         row, there from the start, so the live region exists before it
+         speaks: role=status — the row stays closed and a screen reader must
+         hear why. */
+      var note = el("div", "key-note");
+      note.setAttribute("role", "status");
+      var refused = !!st.note && st.noteCol === opt.col;
+      note.hidden = !refused;
+      if (refused) note.textContent = st.note;
+      btn.onclick = function () {
+        /* Opening a key turns its layer on with it. The keys are listed while
+           the layer is off, so a reader can reach one from cold — and asking
+           them to find the layer's own switch first would make the listing
+           pointless. Closing a key leaves the layer alone; it is not a way of
+           hiding places. */
         var i = st.active.indexOf(opt.col);
-        if (cb.checked && i < 0) {
+        if (i < 0) {
           if (st.active.length >= KEY_STACK_CAP) {
             // the cap is vertical: rows stack, and past this many the
             // stack hangs further below a pin than the folding rule keeps
-            // pins apart — measured, see the KEYS WEAR ROWS block. The
-            // switch snaps back rather than lying about what the map wears.
-            cb.checked = false;
-            st.note = KEY_STACK_NOTE.replace("{name}", opt.label);
+            // pins apart — measured, see the KEYS WEAR ROWS block. The row
+            // stays closed and says why, right under itself.
+            st.note = KEY_STACK_NOTE;
+            st.noteCol = opt.col;
             note.textContent = st.note;
             note.hidden = false;
             return;
           }
+          if (L._visible === false) {
+            setLayerVisible(L, true);
+            if (L._cb) L._cb.checked = true;
+            if (L._row) L._row.classList.remove("off");
+            if (L._onVisible) L._onVisible();
+          }
           st.active.push(opt.col);
-          // row order follows the offered order, not tap order, so the
-          // committed key keeps its circles and its colours, and each key
-          // keeps its own shape
+          // row order follows the offered order, not tap order, so each key
+          // keeps its own shape while it is open
           st.active = L._keyOptions.filter(function (o) { return st.active.indexOf(o.col) >= 0; })
             .map(function (o) { return o.col; });
-        } else if (!cb.checked && i >= 0) {
+        } else {
           st.active.splice(i, 1);
-        } else return;
+        }
         st.note = null;
+        st.noteCol = null;
         st._focus = opt.col;   // the rebuild below must hand the keyboard back
         applyLayerKeys(L);
       };
-      list.appendChild(host || lab);
+      row.appendChild(btn);
       // the whole heading of a key named short, under its row, hidden until its ⓘ is pressed
-      if (fullHeading) list.appendChild(fullHeading);
-      /* This key's kinds, directly beneath the switch that turns them on. They
-         used to pool into one block below every switch, so flipping a switch put
-         its result somewhere further down, past everything else — and knowing
-         what a switch had just added meant hunting for its header. The header is
-         gone with the move: the switch already carries that name, and every kind
-         row already wears the key's shape. */
-      /* A ticked key on a layer nobody is showing keeps its tick and loses its
-         legend. Listing the keys while the layer is off — which is the whole of
-         this panel — meant the kinds came with them, so hiding a layer left a
-         legend on screen decoding marks that were not on the map. A legend for
-         nothing is worse than no legend: it is a lie about what you are seeing.
-
-         The choice survives, because it is a choice and not a picture, and the
-         name drops to the off voice so the row reads "chosen, not showing"
-         rather than "on". Two channels, the same two the layer's own row uses
-         when it is off. */
-      if (cb.checked && L._visible !== false) {
-        keyKindRows(L, opt).forEach(function (r) { list.appendChild(r); });
+      if (fullHeading) row.appendChild(fullHeading);
+      row.appendChild(note);
+      /* What the row unfolds into, built only while it is open: the reach
+         line, the note for a flat question, then its kinds — directly beneath
+         the name that opened them, each row wearing the key's shape. */
+      if (open) {
+        var body = el("div", "key-body");
+        /* A question says what share of the places it can answer. Without it a
+           reader opens "How old is it?" and meets a map that is mostly grey,
+           with nothing telling them that is the answer rather than a fault.
+           "from 88% of tags", in the layer's own word for its rows. */
+        if (opt.isQuestion) {
+          var pct = Math.round(opt.reach * 100);
+          var nounK = layerNoun(L);
+          var reach = el("div", "key-reach", "Answers come from " + pct + "% of the " + nounK);
+          reach.title = "Answers to this question come from " + pct + " of every 100 " + nounK;
+          body.appendChild(reach);
+        }
+        /* And, for a question that barely sorts anything, why. In the plainest
+           words there are: most of what it answers says the same thing. The
+           kind is not named — it is first in the list right below. */
+        if (opt.flat) {
+          var why = el("div", "key-flat",
+            "Mostly one answer — " + opt.biggestN + " of its " + opt.answered + " say the same");
+          why.title = "Its commonest answer is “" + opt.biggest + "”, on " + opt.biggestN +
+            " of the " + opt.answered + " places it can speak for";
+          body.appendChild(why);
+        }
+        /* An open key on a layer nobody is showing keeps its place and loses
+           its legend: a legend decoding marks that are not on the map is worse
+           than none. The name drops to the off voice so the row reads "open,
+           not showing" rather than "on". */
+        if (showing) keyKindRows(L, opt).forEach(function (r) { body.appendChild(r); });
+        else row.classList.add("key-held");
+        row.appendChild(body);
       }
-      if (cb.checked && L._visible === false) lab.classList.add("key-held");
+      list.appendChild(row);
     });
     wrap.appendChild(list);
-    wrap.appendChild(note);
     // "N places are inside the discs" — filled in by updateFoldNote once
     // renderExtra has attached this block (and on every camera rest after).
     // Deliberately NOT a live region: the count moves on every pan and zoom,
     // and announcing each change would talk over a screen reader's whole
-    // visit. It sits in reading order right under the switches instead.
+    // visit. It sits in reading order right under the rows instead.
     var fold = el("div", "key-fold");
     fold.hidden = true;
     wrap.appendChild(fold);
     L._foldEl = fold;
     // applyLayerKeys rebuilds this whole block, which would drop keyboard
-    // focus on the floor mid-tabbing — put it back on the switch just flipped
+    // focus on the floor mid-tabbing — put it back on the row just pressed
     if (st._focus != null) {
       var want = st._focus;
       st._focus = null;
       setTimeout(function () {
-        var ins = wrap.querySelectorAll("input");
-        for (var i = 0; i < ins.length; i++) {
-          if (ins[i]._col === want) { ins[i].focus({ preventScroll: true }); break; }
+        var btns = wrap.querySelectorAll(".key-toggle");
+        for (var i = 0; i < btns.length; i++) {
+          if (btns[i]._col === want) { btns[i].focus({ preventScroll: true }); break; }
         }
       }, 0);
     }
@@ -5322,7 +5319,7 @@
        every choice a reader might want is on the first level, and the only thing
        left behind a second act is the words that gathered a kind.
 
-       A key switch turns its layer on with it (see buildKeyToggles), so flipping
+       Opening a key turns its layer on with it (see buildKeyToggles), so opening
        one from cold is a single act rather than two. */
     /* Only when at least one key is actually offered: a layer whose every
        column is on cards only (tooFew, scattered) would otherwise show

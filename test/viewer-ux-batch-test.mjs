@@ -80,7 +80,9 @@ check('under the key: "Showing only Culture (32) · Show all"', /t\.textContent 
 check('the line sits after that key\'s kinds', /out\.push\(keyOnlyLine\(L, opt\)\);\s*return out;/.test(js), true);
 check('Show all clears the filter the way the count line does', /all\.onclick = function \(\) \{ clearSearch\(\); \};/.test(js), true);
 check('the line is hidden when nothing is pressed', /line\.hidden = !mine;/.test(js) && /\.key-only\[hidden\] \{ display:none; \}/.test(html), true);
-check('the hint says what a tap does, and what a second tap does', /Tap a kind to show only those places; tap it again, or Show all, to bring the rest back\. Tap a word on a place to see who else said it\./.test(js), true);
+// (October 2026: the hint is one line about opening a row; the second tap is
+// explained by the "Showing only … · Show all" line under the pressed kind)
+check('the hint is one line, and the second tap is said under the pressed kind', /"Open one to colour the map by its answers\."/.test(js) && /Showing only " \+ what/.test(js), true);
 check('(b) from dadd121 stands: a kind narrows the map; (a) the list it coloured is gone (October 2026)', !/function collMarkEl\(/.test(js) && /r\.onclick = function \(\) \{ filterByKind\(L, opt, which, it\.label\); \};/.test(js), true);
 
 console.log('\n  3. counted discs are ink, not Leaf');
@@ -137,7 +139,8 @@ check('(ii) created_at is "When it was added"', dateKeyName('created_at'), 'When
 check('updated_at is "When it was last changed"', dateKeyName('updated_at'), 'When it was last changed');
 check('any other date keeps its own name', dateKeyName('date_of_visit'), 'Date of visit');
 check('the grouping is said in brackets: "(by month)"', /if \(grain\) shown \+= " \(by " \+ grain \+ "\)";/.test(js), true);
-check('(iii) the share beside a question says whose answers they are: "from 88% of tags"', /var reach = el\("span", "key-reach", "from " \+ pct \+ "% of " \+ nounK\);/.test(js), true);
+// (October 2026: the share moved inside the row's open body, as a sentence)
+check('(iii) the share under an open question says whose answers they are: "Answers come from 88% of the tags"', /var reach = el\("div", "key-reach", "Answers come from " \+ pct \+ "% of the " \+ nounK\);/.test(js), true);
 check('with the long form one hover away, in the layer\'s own word', /reach\.title = "Answers to this question come from " \+ pct \+ " of every 100 " \+ nounK;/.test(js), true);
 check('no "no answer" row in a key', /label: "no answer"/.test(js), false);
 check('and no "left blank" line on a card', /if \(!vals\.length\) return;/.test(js), true);
