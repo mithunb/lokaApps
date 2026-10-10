@@ -4143,7 +4143,7 @@ function layerAndRows(dataset, layerId) {
   const file = path.join(m.dir, layer.source);
   if (!fs.existsSync(file)) return null;
   const gj = JSON.parse(fs.readFileSync(file, 'utf8'));
-  return { layer, rows: ((gj && gj.features) || []).map((f) => f.properties || {}) };
+  return { layer, layers: m.local.layers, rows: ((gj && gj.features) || []).map((f) => f.properties || {}) };
 }
 
 /* A layer's own shapes, for a reading's write to carry.
@@ -4238,8 +4238,9 @@ function considerReading(dataset, layerId, opts) {
   if (NEVER_READ.has(dataset)) return 'never';
   const got = layerAndRows(dataset, layerId);
   if (!got) return 'no layer';
-  const { layer, rows } = got;
+  const { layer, layers, rows } = got;
   if (!RULES.wearsMarks(layer)) return 'no marks';
+  if (RULES.readByItsTwin(layer, layers)) return 'read through its pins';
   if (!rows.length || !RULES.worthReading(layer, rows)) return 'no words';
   const sig = signatureOf(rows, RULES.isAnswerColumn);
   const hasQuestions = questionsOn(layer, rows).length > 0 ||

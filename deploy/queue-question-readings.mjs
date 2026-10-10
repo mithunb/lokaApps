@@ -61,6 +61,7 @@ export function survey(roots) {
       for (const L of (local && local.layers) || []) {
         const where = { dataset: slug, layerId: L.id, label: L.label || L.id };
         if (!RULES.wearsMarks(L)) continue;                 // no marker, nowhere to show a key
+        if (RULES.readByItsTwin(L, local.layers)) continue; // the same rows, read through its pins
         if (L.patternsNone) continue;                       // already looked, nothing there
         const gj = L.source ? readJSON(path.join(dir, L.source)) : null;
         const rows = ((gj && gj.features) || []).map((f) => f.properties || {});

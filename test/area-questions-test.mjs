@@ -125,7 +125,8 @@ function mkAtlas(slug, title, layers, files) {
 // one: ten areas with notes; and the same ten without the mark at their middle (an old layer)
 const names = (dx) => NOTES.map((_, i) => 'Ward ' + (dx ? 'B' : 'A') + (i + 1));
 mkAtlas(ONE, 'Area check one',
-  [stanza('wards', 'Wards'), stanza('old-wards', 'Old wards', { centreMarks: undefined })],
+  [stanza('wards', 'Wards', { credits: [{ name: 'geoBoundaries', url: 'https://www.geoboundaries.org', license: 'CC BY 4.0' }], attribution: 'geoBoundaries' }),
+   stanza('old-wards', 'Old wards', { centreMarks: undefined })],
   { 'user-wards.geojson': fc(squares(10, 0), NOTES.map((n, i) => ({ name: names(0)[i], notes: n }))),
     'user-old-wards.geojson': fc(squares(10, 0.3), NOTES.map((n, i) => ({ name: names(1)[i], notes: n }))) });
 // two: outlines joined by name carrying nothing else; and areas with notes that have a twin of points
@@ -162,11 +163,11 @@ async function road() {
     [ROOT + '/deploy/queue-question-readings.mjs', PRIV, '--registry', path.join(DATA, 'registry.json'), '--queue', qf, ...extra], { encoding: 'utf8' });
   const dry = run();
   check('one: the wards with the mark, as areas', new RegExp(ONE + '/wards — Wards — 10 areas, reading ').test(dry.stdout), true);
-  check('two: the zones, and their twin of points', new RegExp(TWO + '/zones — Zones — 10 areas').test(dry.stdout) &&
+  check('two: the zones are read once, through their twin of points', new RegExp(TWO + '/zones — ').test(dry.stdout) === false &&
     new RegExp(TWO + '/zones-points — ').test(dry.stdout), true);
   check('not the old wards, not the bare outlines', /old-wards|\/bare /.test(dry.stdout), false);
   const wet = run('--apply');
-  check('--apply puts the three on the list', /3 added/.test(wet.stdout), true);
+  check('--apply puts the two on the list', /2 added/.test(wet.stdout), true);
 
   console.log('\n  the server reads them with the stand-in, and the shapes survive');
   if (!fs.existsSync(path.join(ROOT, 'api', 'node_modules'))) {
@@ -187,12 +188,12 @@ async function road() {
     if (Date.now() - t0 > 15000 || child.exitCode != null) { check('the server started', out.slice(-600), 'listening'); return; }
     await sleep(100);
   }
-  check('the server started, with three readings waiting', /\[questions\] 3 readings waiting/.test(out), true);
+  check('the server started, with two readings waiting', /\[questions\] 2 readings waiting/.test(out), true);
   const done = () => { try { const q = JSON.parse(fs.readFileSync(qf, 'utf8')); return Object.values(q).every((r) => r.state !== 'queued' && r.state !== 'running'); } catch { return false; } };
   const t1 = Date.now();
   while (!done() && Date.now() - t1 < 30000) await sleep(200);
   const q = JSON.parse(fs.readFileSync(qf, 'utf8'));
-  check('all three were read', Object.values(q).map((r) => r.state), ['done', 'done', 'done']);
+  check('both were read', Object.values(q).map((r) => r.state), ['done', 'done']);
   if (Object.values(q).some((r) => r.state !== 'done')) console.log(out.split('\n').filter((l) => /questions|atlas\]/.test(l)).slice(-12).join('\n'));
 
   const wards = readLocal(ONE).find((l) => l.id === 'wards');
@@ -206,18 +207,34 @@ async function road() {
   check('the layer came back as it was: areas, with the mark, its colour, its card',
     [wards.type, wards.centreMarks, wards.paint && wards.paint.fillColor, wards.popup && wards.popup.title, wards.label],
     ['fill', true, '#3A7FA1', 'name', 'Wards']);
+  check('and kept the credit for whose outlines these are', [(wards.credits || []).map((c) => c.name), wards.attribution], [['geoBoundaries'], 'geoBoundaries']);
   const old = readLocal(ONE).find((l) => l.id === 'old-wards');
   check('the old wards were left exactly alone', [old.keyLabels, old.patternsNone, Object.keys(readFile(ONE, old.source).features[0].properties)],
     [undefined, undefined, ['name', 'notes']]);
 
   const zones = readLocal(TWO).find((l) => l.id === 'zones');
   const twin = readLocal(TWO).find((l) => l.id === 'zones-points');
-  check('the zones were read and are still polygons', [Object.keys(zones.keyLabels || {}).length > 0,
-    readFile(TWO, zones.source).features.every((f) => f.geometry.type === 'Polygon')], [true, true]);
+  check('the zones were left to their pins: not read again, still polygons', [Object.keys(zones.keyLabels || {}).length, q[TWO + '|zones'],
+    readFile(TWO, zones.source).features.every((f) => f.geometry.type === 'Polygon')], [0, undefined, true]);
+  check('their twin of points carries the questions', Object.keys(twin.keyLabels || {}).length > 0, true);
   check('the zones kept their twin, and the twin kept them', [zones.sameFileAs, twin.sameFileAs], ['zones-points', 'zones']);
-  check('and kept the credit for whose outlines these are', [(zones.credits || []).map((c) => c.name), zones.attribution], [['geoBoundaries'], 'geoBoundaries']);
+  check('and the zones kept their credit', [(zones.credits || []).map((c) => c.name), zones.attribution], [['geoBoundaries'], 'geoBoundaries']);
   const bareL = readLocal(TWO).find((l) => l.id === 'bare');
   check('the bare outlines were not read, not even to find nothing', [bareL.keyLabels, bareL.patternsNone, q[TWO + '|bare']], [undefined, undefined, undefined]);
+}
+
+console.log('\n  one file added as two layers is read once, through its pins');
+{
+  const outlines = { id: 'wards', type: 'fill', centreMarks: true, sameFileAs: 'wards-pts' };
+  const pins = { id: 'wards-pts', type: 'marker', sameFileAs: 'wards' };
+  const both = [outlines, pins];
+  check('the outlines twin is left to its pins', RULES.readByItsTwin(outlines, both), true);
+  check('the pins twin is read', RULES.readByItsTwin(pins, both), false);
+  check('an area layer with no twin is read', RULES.readByItsTwin({ id: 'a', type: 'fill', centreMarks: true }, [{ id: 'a' }]), false);
+  check('a twin record pointing nowhere does not stop a reading', RULES.readByItsTwin({ id: 'a', type: 'fill', sameFileAs: 'gone' }, [{ id: 'a' }]), false);
+  check('the server and the one-off script both ask it',
+    /RULES\.readByItsTwin\(layer, layers\)/.test(fs.readFileSync(ROOT + '/api/apps/atlas.js', 'utf8')) &&
+    /RULES\.readByItsTwin\(L, local\.layers\)/.test(fs.readFileSync(ROOT + '/deploy/queue-question-readings.mjs', 'utf8')), true);
 }
 
 await road();

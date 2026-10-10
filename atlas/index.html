@@ -1315,7 +1315,9 @@
       .atlas-panel.collapsed .panel-head strong, .atlas-panel.collapsed .panel-count { display:inline; }
       .atlas-panel.collapsed .atlas-bar, .atlas-panel.collapsed .sheet-body, .atlas-panel.collapsed .sheet-foot { display:none; }
       .loka-badge-float { display:none; }
-      .atlas-panel.collapsed ~ .loka-badge-float { display:inline-flex; bottom:calc(8px + env(safe-area-inset-bottom)); }
+      .atlas-panel.collapsed ~ .loka-badge-float,
+      /* the empty drawer is not drawn (loading, the private page), so the badge stands on its own */
+      .atlas-full .atlas-panel:has(#atlas-controls:empty) ~ .loka-badge-float { display:inline-flex; bottom:calc(8px + env(safe-area-inset-bottom)); }
       /* the sheet at rest: its foot carries Map/Satellite and the badge */
       .sheet-foot-words { flex-direction:row; align-items:center; }
       /* the chips sit just above the sheet, with the map's own buttons */

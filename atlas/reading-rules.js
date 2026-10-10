@@ -111,6 +111,16 @@
     return Boolean((L.type === "fill" || L.type === "polygon") && L.centreMarks);
   }
 
+  /* One file added as two layers — outlines and the same rows as pins
+     (sameFileAs) — is read once, through its pins. Both twins hold the same
+     rows, so reading the outlines too would charge the owner twice and could
+     settle on different questions for one file. */
+  function readByItsTwin(L, layers) {
+    if (!L || L.type === "marker" || !L.sameFileAs) return false;
+    var twin = (layers || []).filter(function (o) { return o && o.id === L.sameFileAs; })[0];
+    return Boolean(twin && twin.type === "marker");
+  }
+
   /* Does this layer carry words worth reading — its own words, not just the
      names of the places it was joined to?
 
@@ -223,6 +233,7 @@
     isQuestionColumn: isQuestionColumn,
     wordColumns: wordColumns,
     wearsMarks: wearsMarks,
+    readByItsTwin: readByItsTwin,
     worthReading: worthReading,
     schemaFor: schemaFor,
     withoutAnswers: withoutAnswers,
