@@ -1144,7 +1144,12 @@ router.post('/instances', async (req, res) => {
   const org = cap(b.org, 60);
   // the signed-in account is the owner and the contact (admin token may pass one)
   const email = reg.normEmail(session ? session.email : b.email);
-  const visibility = b.visibility === 'private' ? 'private' : 'public';
+  /* A new atlas starts private (owner decision, 2026-10-09): its files sit
+     outside the web root until its owner opens it from the Owner menu. Only a
+     request that asks for 'public' in so many words gets a public one. The
+     wizard sends nothing, so every atlas it builds is private — one rule here,
+     not a choice per screen. Existing atlases keep whatever they have. */
+  const visibility = b.visibility === 'public' ? 'public' : 'private';
   if (!title) return res.status(400).json({ error: 'give your atlas a title' });
   if (!org) return res.status(400).json({ error: 'add the organisation or project this atlas belongs to' });
 
@@ -1207,6 +1212,12 @@ router.post('/instances', async (req, res) => {
      layer on would ask the builder to draw a selection that does not exist. */
   if (!worldwide) {
     for (const l of allowed.values()) if (l.required && !layerIds.includes(l.id)) layerIds.unshift(l.id);
+  } else {
+    /* The wizard ticks the compulsory boundary layer for every atlas, and a
+       worldwide one has no region document to draw it from — the builder then
+       stopped with "Invalid URL 'None'" (seen, 2026-10-09). Taken out here, in
+       the one place that already knows the rule, rather than in each screen. */
+    layerIds = layerIds.filter((id) => !allowed.get(id).required);
   }
   if (!layerIds.length && !worldwide) return res.status(400).json({ error: 'no valid layers chosen' });
 

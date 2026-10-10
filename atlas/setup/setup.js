@@ -82,6 +82,12 @@
         msg(1, "Signed in again — press Build my atlas.", "ok");
         return;
       }
+      /* Sent here by a private atlas's "sign in" line (atlas.js): once signed
+         in, straight back to that atlas rather than to this page's list. A
+         slug and nothing else, so the address cannot lead anywhere but an
+         atlas on this site. */
+      var back = /(^|[?&])back=([a-z0-9][a-z0-9-]{0,60})(&|$)/.exec(location.search);
+      if (back) { location.replace("../?dataset=" + encodeURIComponent(back[2])); return; }
       var fix = /(^|[?&])fix=([^&]+)/.exec(location.search);
       if (fix) showFixes(decodeURIComponent(fix[2]));
       else if (/(^|[?&])new=1/.test(location.search)) startFlow();

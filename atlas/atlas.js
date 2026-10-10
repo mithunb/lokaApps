@@ -275,7 +275,7 @@
             '<h2>' + (err && err.privateAtlas ? "This atlas is private" : "The map could not be loaded") + '</h2>' +
             '<p>' + esc(err && err.privateAtlas ? err.message : plainReason(err)) + '</p>' +
             (err && err.privateAtlas
-              ? '<p>If it is yours, <a class="atlas-error-signin" href="./setup/?signin=1">sign in</a> and come back to this page.</p>'
+              ? '<p>If it is yours, <a class="atlas-error-signin" href="./setup/?back=' + encodeURIComponent(DATASET) + '">sign in</a> and it opens for you.</p>'
               : '<button type="button" class="share-btn atlas-error-retry">Try again</button>') +
           '</div></div>';
         if (err && err.privateAtlas) document.title = "A private atlas \u2014 LOKA Atlas";

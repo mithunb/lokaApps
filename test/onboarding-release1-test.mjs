@@ -142,8 +142,8 @@ check('no logo fold on the Name screen any more', /id="logo-fold"/.test(s1) || /
 check('and the build request carries only the organisation name', /branding: \{ orgName: \$\("#f-org"\)\.value\.trim\(\) \},/.test(setup) && !/logoData/.test(setup), true);
 check('Build is on this screen', /<button class="btn" id="build-go">Build my atlas →<\/button>/.test(s1), true);
 check('and checks the name before anything leaves', /\$\("#build-go"\)\.onclick = function \(\) \{\n\s*var btn = this;\n\s*if \(!nameIsComplete\(\)\) return;/.test(setup), true);
-check('it says who can see it (truthfully: anyone with the link) and where the logo and description went',
-  /Once built, anyone with the link can open it — choose who can see it under\s+Owner ▾\. Add a logo and description later, under Owner ▾ → Settings\./.test(s1), true);
+check('it says who can see it (truthfully: a new atlas is private) and where the logo and description went',
+  /It starts private — only you can open it; share it or open it to everyone under\s+Owner ▾\. Add a logo and description later, under Owner ▾ → Settings\./.test(s1), true);
 const { plainFileName } = new Function(fnFrom(setup, 'plainFileName') + '; return { plainFileName };')();
 check('a file name is made plain', plainFileName('village_survey-2026.csv'), 'Village survey 2026');
 check('a dotted one too', plainFileName('wards.final.v2.xlsx'), 'Wards final v2');

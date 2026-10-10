@@ -459,8 +459,12 @@
         '<button class="share-btn" type="button" id="own-first-open">Add open data</button>' +
       "</div>" +
       /* Said plainly, because it is the fact that matters most about a fresh
-         atlas: its files are on the web from the moment it is built. */
-      '<p class="own-note">Right now anyone with the link can open it, and it is not listed on the LOKA Atlas page. Both are in the Owner menu whenever you want them.</p>';
+         atlas. A new one starts private (the server's rule since October
+         2026); an atlas made before then, or one opened by hand, says the
+         other truth. The sentence follows the record, never a guess. */
+      '<p class="own-note">' + (INST.visibility === "private"
+        ? "Right now it is private — only you can open it. Share has a private link to send to people, and the Owner menu can open it to everyone."
+        : "Right now anyone with the link can open it, and it is not listed on the LOKA Atlas page. Both are in the Owner menu whenever you want them.") + '</p>';
     stage.appendChild(box);
     function shut() { if (box.parentNode) box.parentNode.removeChild(box); document.removeEventListener("keydown", onKey); }
     function onKey(e) { if (e.key === "Escape") shut(); }

@@ -28,6 +28,8 @@ const server = fs.readFileSync(ROOT + '/api/apps/atlas.js', 'utf8');
 const jobs = fs.readFileSync(ROOT + '/api/lib/atlas/jobs.js', 'utf8');
 const bench = fs.readFileSync(ROOT + '/atlas/databench.js', 'utf8');
 const addData = fs.readFileSync(ROOT + '/atlas/add-data/index.html', 'utf8');
+const setupPage = fs.readFileSync(ROOT + '/atlas/setup/index.html', 'utf8');
+const setupJs = fs.readFileSync(ROOT + '/atlas/setup/setup.js', 'utf8');
 
 let pass = 0, fail = 0;
 function check(label, got, want) {
@@ -59,8 +61,15 @@ check('a new private link is its own route, and the old one is said to stop work
   /\/view-key", \{ method: "POST" \}/.test(owner) && /The old link stops working for everyone who has it\./.test(share), true);
 check('the first-look card no longer promises "only you can see it"',
   /Only you can see it until it is live/.test(owner), false);
-check('it says what is true of a fresh atlas instead',
-  /Right now anyone with the link can open it, and it is not listed on the LOKA Atlas page/.test(owner), true);
+check('it says what is true of a fresh atlas instead, following the record',
+  /INST\.visibility === "private"\n\s*\? "Right now it is private — only you can open it\. Share has a private link to send to people, and the Owner menu can open it to everyone\."/.test(owner) &&
+  /: "Right now anyone with the link can open it, and it is not listed on the LOKA Atlas page/.test(owner), true);
+check('the wizard says a new atlas is private, before the build and after it',
+  /It starts private — only you can open it; share it or open it to everyone under\s+Owner ▾\./.test(setupPage) && /It is private — only you can open it\. Share has a private link/.test(setupPage), true);
+check('and never claims the old default', /anyone with the link can open it/.test(setupPage), false);
+check('the private page’s sign-in line comes back to the atlas',
+  /href="\.\/setup\/\?back=' \+ encodeURIComponent\(DATASET\) \+ '">sign in<\/a> and it opens for you/.test(viewer) &&
+  /var back = \/\(\^\|\[\?&\]\)back=\(\[a-z0-9\]\[a-z0-9-\]\{0,60\}\)\(&\|\$\)\/\.exec\(location\.search\);\n\s*if \(back\) \{ location\.replace\("\.\.\/\?dataset=" \+ encodeURIComponent\(back\[2\]\)\); return; \}/.test(setupJs), true);
 check('only the owner is offered the change (not editors), and not mid-build',
   /act\.hidden = INST\.role !== "owner" \|\| INST\.status === "building" \|\| INST\.status === "pending-approval";/.test(owner), true);
 
@@ -103,6 +112,11 @@ check('details with visibility moves the folder, owner only, and unlists',
   /if \(callerRole\(req, inst\) !== 'owner'\) return res\.status\(403\)\.json\(\{ error: 'only the owner can change who may see this atlas' \}\);/.test(server) &&
   /if \(inst\.status === 'published'\) \{ patch\.status = 'built'; patch\.publishedAt = null; \}/.test(server), true);
 check('a private atlas cannot be listed', /a private atlas cannot be listed/.test(server), true);
+check('a new atlas is private unless the request says public, in one place on the server',
+  /const visibility = b\.visibility === 'public' \? 'public' : 'private';/.test(server) &&
+  /b\.visibility === 'private' \? 'private' : 'public'/.test(server) === false, true);
+check('the wizard sends no visibility at all, so it gets the server’s rule',
+  /visibility/.test(setupJs.slice(setupJs.indexOf('api("instances", {'), setupJs.indexOf('api("instances", {') + 600)), false);
 check('there is a route for a new private link, owner only, private only',
   /router\.post\('\/instances\/:slug\/view-key'/.test(server) && /only the owner can make a new private link/.test(server), true);
 check('the key is kept so the link can be shown again; the hash is what is checked',
@@ -145,7 +159,8 @@ function cleanup() {
   try { if (child) child.kill('SIGKILL'); } catch {}
   for (const d of [PUB, PRIV, DATA]) { try { fs.rmSync(d, { recursive: true, force: true }); } catch {} }
   for (const d of fs.readdirSync(path.join(ROOT, 'atlas', 'datasets'))) {
-    if (d.startsWith(SLUG)) { try { fs.rmSync(path.join(ROOT, 'atlas', 'datasets', d), { recursive: true, force: true }); } catch {} }
+    // the throwaway atlas, and the two the create checks make (their slugs carry SLUG)
+    if (d.includes(SLUG)) { try { fs.rmSync(path.join(ROOT, 'atlas', 'datasets', d), { recursive: true, force: true }); } catch {} }
   }
 }
 process.on('exit', cleanup);
@@ -236,6 +251,41 @@ try {
   check('a public atlas can be listed', (await call('POST', `/api/atlas/instances/${SLUG}/publish`, { cookie: ownerC })).status, 200);
   check('and then it is in the gallery', ((await call('GET', '/api/atlas/instances')).j.instances || []).some((i) => i.slug === SLUG), true);
   check('a new-link request on a public atlas is refused', (await call('POST', `/api/atlas/instances/${SLUG}/view-key`, { cookie: ownerC })).status, 409);
+
+  /* A brand-new atlas from the create route, exactly as the wizard asks for
+     one — no visibility in the request. The build itself is not the point
+     (it needs the Python builder, which this check does not assume); what is
+     checked is the record, where its files may be, and who is turned away. */
+  console.log('\n  a new atlas starts private');
+  const fresh = await call('POST', '/api/atlas/instances', { cookie: ownerC, body: { title: 'Fresh ' + SLUG, org: 'Check', region: { worldwide: true }, layers: [] } });
+  const FRESH = fresh.j && fresh.j.slug;
+  check('the wizard’s request is taken and answered with a private link', [fresh.status, typeof FRESH, typeof (fresh.j && fresh.j.viewKey)], [200, 'string', 'string']);
+  const freshRec = (await call('GET', `/api/atlas/instances/${FRESH}`, { cookie: ownerC })).j;
+  check('the record says private and carries the key', [freshRec && freshRec.visibility, freshRec && freshRec.viewKey === fresh.j.viewKey], ['private', true]);
+  check('a stranger is turned away from its files before any file exists', (await call('GET', `/apps/atlas/api/datasets/${FRESH}/manifest.json`)).status, 403);
+  check('and a signed-in stranger too', (await call('GET', `/apps/atlas/api/datasets/${FRESH}/manifest.json`, { cookie: otherC })).status, 403);
+  check('a stranger asking about it is told nothing', (await call('GET', `/api/atlas/instances/${FRESH}`, { cookie: otherC })).status, 404);
+  // wait briefly for the build to settle one way or the other, then look at the disk
+  const t0 = Date.now();
+  let job = null;
+  while (Date.now() - t0 < 20000) {
+    job = (await call('GET', `/api/atlas/jobs/${fresh.j.jobId}`)).j;
+    if (job && (job.status === 'done' || job.status === 'failed')) break;
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  const pubRoot = path.join(ROOT, 'atlas', 'datasets');
+  const inPublic = fs.readdirSync(pubRoot).filter((d) => d === FRESH || d === '.building-' + FRESH);
+  check('nothing of it is under the public root, built or building', inPublic, []);
+  if (job && job.status === 'done') {
+    check('its files are under the private root', fs.existsSync(path.join(DATA, 'private-datasets', FRESH, 'manifest.json')), true);
+    check('the owner opens it by sign-in alone', (await call('GET', `/apps/atlas/api/datasets/${FRESH}/manifest.json`, { cookie: ownerC })).status, 200);
+    check('so does the private link, signed out', (await call('GET', `/apps/atlas/api/datasets/${FRESH}/manifest.json?key=` + encodeURIComponent(fresh.j.viewKey))).status, 200);
+    check('the public address does not serve it', (await call('GET', `/apps/atlas/datasets/${FRESH}/manifest.json`)).status, 404);
+  } else {
+    console.log('  (the build did not finish here — ' + (job ? job.status + ': ' + job.message : 'no job') + ' — so the built-files checks are not run)');
+  }
+  check('asking for public in so many words still gets a public atlas',
+    (await call('POST', '/api/atlas/instances', { cookie: ownerC, body: { title: 'Open ' + SLUG, org: 'Check', region: { worldwide: true }, layers: [], visibility: 'public' } })).j.viewKey, undefined);
 } catch (e) {
   fail++;
   console.log('  FAIL  the route checks could not run: ' + e.message);
