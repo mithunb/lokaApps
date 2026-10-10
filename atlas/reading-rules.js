@@ -97,6 +97,37 @@
     });
   }
 
+  /* Which layers a reading is for: the ones whose places wear a marker.
+
+     A question's answer is shown as a mark beside the place's marker, so a
+     layer whose places have no marker has nowhere to show what it was asked.
+     Pins wear one; since October 2026 so does a contributed area, at the
+     point of its shape furthest from any edge (the viewer's areaPins test,
+     which this mirrors: the server must not pay for questions the viewer
+     cannot show). A line has no marker yet, so it is not read. */
+  function wearsMarks(L) {
+    if (!L) return false;
+    if (L.type === "marker") return true;
+    return Boolean((L.type === "fill" || L.type === "polygon") && L.centreMarks);
+  }
+
+  /* Does this layer carry words worth reading — its own words, not just the
+     names of the places it was joined to?
+
+     A sheet of district names joined to the district outlines is a layer of
+     areas with one column of words, and that column is the place's name. The
+     name column passes wordColumns when the names have spaces in them ("North
+     Goa"), so on its own it would send a layer of bare outlines to the model,
+     which would find nothing and charge the owner for finding it. The same
+     is true of a layer of pins with nothing but a name beside each. So: words
+     worth reading means at least one word column that is not the column that
+     names the place (the card's title column, else "name"). The name is still
+     handed to the reading as evidence when there is more beside it. */
+  function worthReading(L, rows) {
+    var nameCol = (L && L.popup && L.popup.title) || "name";
+    return wordColumns(rows).some(function (c) { return c !== nameCol; });
+  }
+
   /* What the columns are, for whoever is about to save them. Only the two the
      map needs as numbers are numbers; everything else is words. */
   function schemaFor(rows) {
@@ -191,6 +222,8 @@
     isAnswerColumn: isAnswerColumn,
     isQuestionColumn: isQuestionColumn,
     wordColumns: wordColumns,
+    wearsMarks: wearsMarks,
+    worthReading: worthReading,
     schemaFor: schemaFor,
     withoutAnswers: withoutAnswers,
     shapeReading: shapeReading,

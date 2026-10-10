@@ -10,11 +10,15 @@
  * Questions are found on the server now, as each layer is added
  * (api/lib/atlas/questions-queue.js). Before that they were found in the
  * owner's browser, the first time the owner opened the atlas signed in, so a
- * layer whose owner never came back has no questions. This finds those: in
- * every <root>/<slug>/manifest.local.json of the two folders the server reads
- * atlases from, a contributed layer of points, with places, with a column of
- * words worth reading (the same rule the reading uses, atlas/reading-rules.js),
- * with no questions and not already found to have none.
+ * layer whose owner never came back has no questions. And until October 2026
+ * only a layer of pins was read at all, so every layer of areas has none.
+ * This finds both: in every <root>/<slug>/manifest.local.json of the two
+ * folders the server reads atlases from, a contributed layer whose places
+ * wear a marker (pins, and areas with a mark at their middle), with places,
+ * with words of its own worth reading (the rules the reading uses,
+ * atlas/reading-rules.js: wearsMarks and worthReading — a layer of outlines
+ * that carries nothing but the names it was joined by is not read), with no
+ * questions and not already found to have none.
  *
  * A layer that already has questions is never listed and never touched.
  * The deoria-bioregion atlas is never touched — a standing rule. It is listed
@@ -56,17 +60,17 @@ export function survey(roots) {
       const local = readJSON(path.join(dir, 'manifest.local.json'));
       for (const L of (local && local.layers) || []) {
         const where = { dataset: slug, layerId: L.id, label: L.label || L.id };
-        if (L.type !== 'marker') continue;                  // the reading only ever read points
+        if (!RULES.wearsMarks(L)) continue;                 // no marker, nowhere to show a key
         if (L.patternsNone) continue;                       // already looked, nothing there
         const gj = L.source ? readJSON(path.join(dir, L.source)) : null;
         const rows = ((gj && gj.features) || []).map((f) => f.properties || {});
         if (!rows.length) continue;
         if (RULES.settledQuestions(L, rows).length ||
             Object.keys(rows[0] || {}).some((k) => RULES.isQuestionColumn(k))) continue;   // has questions
+        if (!RULES.worthReading(L, rows)) continue;         // nothing beyond the places' names
         const cols = RULES.wordColumns(rows);
-        if (!cols.length) continue;
         want.push(Object.assign(where, { places: rows.length, columns: cols,
-          sig: signatureOf(rows, RULES.isAnswerColumn) }));
+          shapes: L.type !== 'marker', sig: signatureOf(rows, RULES.isAnswerColumn) }));
       }
     }
   }
@@ -92,8 +96,8 @@ function main(argv) {
     const owner = (instances[w.dataset] && instances[w.dataset].email) || '';
     const had = queue.get(w.dataset, w.layerId);
     const note = had && had.sig === w.sig ? ' (already on the list: ' + had.state + ')' : '';
-    console.log('  ' + w.dataset + '/' + w.layerId + ' — ' + w.label + ' — ' + w.places + ' places, reading ' +
-      w.columns.slice(0, 3).join(', ') + (owner ? '' : ' — no owner on record, charged to the server') + note);
+    console.log('  ' + w.dataset + '/' + w.layerId + ' — ' + w.label + ' — ' + w.places + (w.shapes ? ' areas' : ' places') +
+      ', reading ' + w.columns.slice(0, 3).join(', ') + (owner ? '' : ' — no owner on record, charged to the server') + note);
     if (apply && queue.offer({ dataset: w.dataset, layerId: w.layerId, sig: w.sig, payer: owner })) added += 1;
   }
   for (const s of skipped) console.log('  skipped ' + s.dataset + ' — ' + s.why);

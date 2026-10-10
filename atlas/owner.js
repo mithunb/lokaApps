@@ -199,7 +199,8 @@
   }
 
   function patternsDoor(L, box) {
-    if (!L || L.type !== "marker" || !L.userLayer) return;
+    // pins, and areas since they wear the same marker — the rule the server reads by
+    if (!L || !RULES.wearsMarks(L) || !L.userLayer) return;
     if (!MINE.some(function (m) { return m.id === L.id; })) return;   // not yours to change
     var gj = window.LokaAtlas.dataFor && window.LokaAtlas.dataFor(L.id);
     var feats = (gj && gj.features) || [];

@@ -64,7 +64,8 @@ check('commit writes the outlines and the points both',
   /commitPart\(session, parts\.outline\.frag, outFeats\)[\s\S]{0,600}commitPart\(parts\.pointsSession, parts\.points\.frag, ptFeats\)/.test(server), true);
 check('the points are pins, which the search box can find, not sized circles',
   /kind: \(session\.spec && session\.spec\.kind === 'category' && session\.spec\.categoryColumn\) \? 'category' : 'markers'/.test(server), true);
-check('the two layers are marked as one file', /imports\.pairLayers\(session\.dataset, layerId, pointsLayerId\)/.test(server), true);
+check('the two layers are marked as one file, and a layer put back alone keeps its twin',
+  /imports\.pairLayers\(session\.dataset, layerId, pointsLayerId \|\| twinBefore\)/.test(server), true);
 check('OpenStreetMap is credited under the same name the outlines use, so it shows once',
   /OSM_POINTS_CREDIT = \{ name: '© OpenStreetMap contributors'/.test(server), true);
 check('the wizard\'s numbers, the commit and the fix list read the same split',
