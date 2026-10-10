@@ -163,9 +163,10 @@ check('so does a repair', /const out = commitLayer\(\{ importId: session\.id, da
 check('a reading\'s own write says so, and is noted as read',
   /return commitLayer\(\{ importId: ing\.importId, dataset \}, 'server', \{ fromReading: true \}\);/.test(server) &&
   /if \(opts && opts\.fromReading\) \{\n\s*QUESTIONS\.remember\(/.test(server), true);
-check('the same tests the browser made: points only, words worth reading',
-  /if \(layer\.type !== 'marker'\) return 'not points';/.test(server) &&
-  /if \(!rows\.length \|\| !wordColumnsOf\(rows\)\.length\) return 'no words';/.test(server), true);
+check('the same tests the browser made, by the shared rule: places that wear a marker, words of their own',
+  /if \(!RULES\.wearsMarks\(layer\)\) return 'no marks';/.test(server) &&
+  /if \(!rows\.length \|\| !RULES\.worthReading\(layer, rows\)\) return 'no words';/.test(server), true);
+check('nothing is gated on "marker" by hand any more', /layer\.type !== 'marker'\) return 'not points'/.test(server), false);
 check('a layer already read in a browser is noted and left untouched',
   /if \(!had && \(hasQuestions \|\| layer\.patternsNone\)\) \{\n\s*QUESTIONS\.remember\(dataset, layerId, \{ sig, state: layer\.patternsNone \? 'none' : 'done', reason: '', adopted: true \}\);/.test(server), true);
 check('the list starts with the server', /QUESTIONS\.start\(readingJob, \{ recheck: \(d, l\) => considerReading\(d, l\) \}\);/.test(server), true);
@@ -230,9 +231,15 @@ console.log('\n  the one-off for atlases read before this');
     }
   };
   const words = [{ name: 'A', description: 'a pond by the old school' }, { name: 'B', description: 'busy market square at dawn' }];
+  // u2: areas with words and the mark at their middle — read, since October 2026
+  // u3: areas without the mark (an old layer) — the viewer gives them no marker, so no key could show
+  // u4: outlines joined by name and carrying nothing else — no words of their own
+  const bare = [{ name: 'North Ward' }, { name: 'South Ward' }];
   mk('unread-one', [{ id: 'u1', type: 'marker', label: 'Ponds', source: 'user-u1.geojson' },
-                    { id: 'u2', type: 'fill', label: 'Outlines', source: 'user-u2.geojson' }],
-     { 'user-u1.geojson': words, 'user-u2.geojson': words });
+                    { id: 'u2', type: 'fill', label: 'Outlines', source: 'user-u2.geojson', centreMarks: true },
+                    { id: 'u3', type: 'fill', label: 'Old outlines', source: 'user-u3.geojson' },
+                    { id: 'u4', type: 'fill', label: 'Wards', source: 'user-u4.geojson', centreMarks: true, popup: { title: 'name', fields: [] } }],
+     { 'user-u1.geojson': words, 'user-u2.geojson': words, 'user-u3.geojson': words, 'user-u4.geojson': bare });
   mk('read-one', [{ id: 'r1', type: 'marker', label: 'Read', source: 'user-r1.geojson', keyLabels: { pattern_1: 'Q?' } }],
      { 'user-r1.geojson': words.map((w) => Object.assign({ pattern_1: 'x' }, w)) });
   mk('none-one', [{ id: 'n1', type: 'marker', label: 'Nothing', source: 'user-n1.geojson', patternsNone: true }],
@@ -246,16 +253,18 @@ console.log('\n  the one-off for atlases read before this');
     [ROOT + '/deploy/queue-question-readings.mjs', roots, '--registry', reg, '--queue', qf, ...extra], { encoding: 'utf8' });
   const dry = run();
   check('a dry run lists the unread layer of points', /unread-one\/u1 — Ponds — 2 places, reading /.test(dry.stdout), true);
-  check('not the outlines, not one with questions, not one already found empty',
-    /u2|read-one|none-one/.test(dry.stdout.replace(/unread-one/g, '')), false);
+  check('and the unread layer of areas, said as areas', /unread-one\/u2 — Outlines — 2 areas, reading /.test(dry.stdout), true);
+  check('not areas with no mark, not bare outlines, not one with questions, not one already found empty',
+    /u3|u4|read-one|none-one/.test(dry.stdout.replace(/unread-one/g, '')), false);
   check('it says it skipped Deoria, by name', /skipped deoria-bioregion — never touched/.test(dry.stdout), true);
   check('and lists nothing from it', /deoria-bioregion\/d1/.test(dry.stdout), false);
   check('a dry run writes nothing', fs.existsSync(qf), false);
   const wet = run('--apply');
-  check('--apply puts it on the list', /1 added/.test(wet.stdout), true);
+  check('--apply puts both on the list', /2 added/.test(wet.stdout), true);
   const list = JSON.parse(fs.readFileSync(qf, 'utf8'));
   check('queued, charged to the owner', [list['unread-one|u1'].state, list['unread-one|u1'].payer], ['queued', 'owner@example.org']);
-  check('only that one', Object.keys(list), ['unread-one|u1']);
+  check('the areas too, to the same owner', [list['unread-one|u2'].state, list['unread-one|u2'].payer], ['queued', 'owner@example.org']);
+  check('only those two', Object.keys(list).sort(), ['unread-one|u1', 'unread-one|u2']);
   check('a second --apply adds nothing', /0 added/.test(run('--apply').stdout), true);
   check('the atlas folders are untouched by it',
     JSON.parse(fs.readFileSync(path.join(roots, 'unread-one', 'manifest.local.json'), 'utf8')).layers[0].keyLabels, undefined);

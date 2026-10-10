@@ -600,6 +600,20 @@ Between **2 and 7** themes, plus "other" — which is exactly the 8-colour palet
 clusterer. A keyword version existed and was deleted: on real data it produced the city's own name
 and a stray verb as "themes", and could never say "these places don't split".
 
+**Questions, and areas (added 2026-10-10).** The themes button above was succeeded by the
+questions-and-keys feature `LOKA-APP-AND-ATLAS.md` describes: the server reads a layer's words the
+moment it is added and writes the questions it answers onto the layer as keys. Until 2026-10-10 that
+reading ran only for layers of pins. It now runs for layers of areas as well, by one rule for every
+atlas (`atlas/reading-rules.js`, `wearsMarks` and `worthReading`): a contributed layer is read when
+its places wear a marker — pins, and areas, which wear the same marker — and it carries at least one
+column of words that is not the column naming the place. A layer of outlines joined by name and
+carrying nothing else is not read; nor is a layer of lines, which has no marker to show a key on.
+The cost per layer is unchanged: about two model calls plus one per forty places, at most 24, from
+the owner's hourly allowance. An area's shapes travel with its rows when the answers are written, so
+a reading never moves or re-joins an area. Existing atlases get their area layers read by
+`node deploy/queue-question-readings.mjs --apply` on the server, which lists them first on a dry
+run. The design notes are in `DESIGN.md`, "Questions for areas too".
+
 ---
 
 ## 10. Working with other people

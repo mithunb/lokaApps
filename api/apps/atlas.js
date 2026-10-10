@@ -3540,7 +3540,7 @@ async function ingestLayerSteps(b, who, tell) {
     const id = String(b.replaceLayerId);
     const prior = imports.mergedLayers(imports.readManifest(dataset)).find((L) => L.id === id);
     if (!prior) throw refuse(404, 'there is no layer here called ' + id);
-    replacing = { id, addedBy: prior.addedBy || null, addedAt: prior.addedAt || null,
+    replacing = { id, prior, addedBy: prior.addedBy || null, addedAt: prior.addedAt || null,
       label: prior.label || '', uploadedAs: prior.uploadedAs || '',
       spec: (prior.spec && typeof prior.spec === 'object') ? prior.spec : null,
       /* Written only when questions are freshly FOUND, and a layer is read many
@@ -3549,7 +3549,14 @@ async function ingestLayerSteps(b, who, tell) {
          and lost on the very next reading. Same for the questions an owner has
          taken off the map. */
       reading: prior.reading || '', facts: prior.facts || null,
-      hiddenKeys: prior.hiddenKeys || null };
+      hiddenKeys: prior.hiddenKeys || null,
+      /* Whose outlines these are. Worked out when rows are joined to borrowed
+         shapes, and nowhere else — a reading handing an area layer's own
+         shapes back has nothing to join, so without this the credit the
+         licence asks for would go with the first question found. commitPart
+         keeps them only where the new stanza has none of its own. */
+      credits: Array.isArray(prior.credits) && prior.credits.length ? prior.credits : null,
+      attribution: prior.attribution || '' };
   }
 
   const session = imports.newImport({
@@ -3631,7 +3638,7 @@ async function ingestLayerSteps(b, who, tell) {
       name: c,
       role: nameCol && c === nameCol.name ? 'placeName' : numeric && c === numeric.name ? 'value' : 'text',
     }));
-    session.spec = {
+    const fresh = {
       // a low-cardinality column classes the map better than any default colour
       kind: catCol ? 'category'
         : cls === 'line' ? 'line'
@@ -3650,6 +3657,19 @@ async function ingestLayerSteps(b, who, tell) {
       popupTitleColumn: pickTitleColumn(profiles, columns),
       popupColumns: pickPopupColumns(profiles, { title: pickTitleColumn(profiles, columns), image: imgCol && imgCol.name }),
     };
+    /* On a replace the layer's own choices win, as they do on the joined path
+       below: a reading handing an area layer's shapes back with its answers is
+       not a new upload, and must not come back with a new colour, a new card
+       or a new name. Only what the layer never settled is filled in fresh. */
+    const kept = session.replacingSpec ||
+      (replacing ? specOfLayer(replacing.prior, replacing.id, rows, columns) : null);
+    session.spec = kept ? Object.assign({}, fresh, kept) : fresh;
+    if (session.replacingLabel) session.spec.label = session.replacingLabel;
+    if (kept && session.spec.popupTitleColumn) {
+      session.columns.forEach((c) => {
+        c.role = c.name === session.spec.popupTitleColumn ? 'placeName' : (c.role === 'placeName' ? 'text' : c.role);
+      });
+    }
     tell('placing');
     try {
       return applyResult(session, false);
@@ -4038,7 +4058,7 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
     if (now !== sigAtStart) return { wrote: false, verdict: 'changed', sig: sigAtStart, calls: spentBy(callers) };
   }
   await writeReading({
-    dataset, layerId, rows, questions: out.questions,
+    dataset, layer, layerId, rows, questions: out.questions,
     label: layer.label || layerId, source: layer.source,
     /* What the model made of this set before it asked anything — one line on
        what these records are, and the sorts of fact it found in them. It was
@@ -4099,12 +4119,14 @@ async function fakeReading(rows, fields, asked, pay) {
    What the owner's browser used to do (rememberNothingHere), done here now. */
 async function writeNothingHere(dataset, layer, rows) {
   const out = RULES.withoutAnswers(rows);
+  const shapes = shapesFor(layer, dataset);
   const ing = await ingestLayer({
     dataset, replaceLayerId: layer.id, filename: layer.label || layer.id,
     patternsNone: true,
     schema: RULES.schemaFor(out),
     rows: out,
-    meta: { sourceName: layer.source, rowCount: out.length },
+    geoms: shapes.geoms, geomIdx: shapes.geomIdx,
+    meta: { sourceName: layer.source, rowCount: out.length, geometry: shapes.geometry },
   }, 'server');
   if (!ing || !ing.importId) throw refuse(500, 'the layer could not be prepared');
   return commitLayer({ importId: ing.importId, dataset }, 'server', { fromReading: true });
@@ -4122,6 +4144,28 @@ function layerAndRows(dataset, layerId) {
   if (!fs.existsSync(file)) return null;
   const gj = JSON.parse(fs.readFileSync(file, 'utf8'));
   return { layer, rows: ((gj && gj.features) || []).map((f) => f.properties || {}) };
+}
+
+/* A layer's own shapes, for a reading's write to carry.
+
+   A reading writes its answers by handing the layer's rows back to ingest, and
+   ingest places rows afresh. A pin's row carries its coordinates, so it lands
+   where it was. An area's row carries nothing of its shape — the shape was
+   drawn in a file somebody uploaded, or borrowed from the outlines its name
+   matched — so handed back as rows alone it would be re-joined by name, or
+   lost. The reading did not move anything, and must not look as if it had:
+   its write carries the shapes exactly as they are, row for row, the way
+   /layers/reopen does when an owner edits an area layer. Pins keep the path
+   they have always had. */
+function shapesFor(layer, dataset) {
+  if (!layer || layer.type === 'marker') return {};
+  const m = imports.readManifest(dataset);
+  let feats;
+  try { feats = JSON.parse(fs.readFileSync(path.join(m.dir, layer.source), 'utf8')).features || []; } catch { return {}; }
+  const geoms = feats.map((f) => f.geometry);
+  const cls = /Polygon/.test(geoms[0] && geoms[0].type) ? 'polygon'
+    : /LineString/.test(geoms[0] && geoms[0].type) ? 'line' : 'point';
+  return { geoms, geomIdx: feats.map((_, i) => i), geometry: { class: cls, count: feats.length, vertices: 0 } };
 }
 
 /* The answers now on a layer, copied beside the list (questions-queue.js says
@@ -4159,14 +4203,16 @@ async function restoreAnswers(dataset, layerId) {
   const sig = signatureOf(got.rows, RULES.isAnswerColumn);
   if (kept.sig !== sig || (kept.answers || []).length !== got.rows.length) return false;
   const out = RULES.withoutAnswers(got.rows).map((r, i) => Object.assign(r, kept.answers[i]));
+  const shapes = shapesFor(got.layer, dataset);
   const ing = await ingestLayer({
     dataset, replaceLayerId: layerId, filename: got.layer.label || layerId,
     schema: RULES.schemaFor(out),
     rows: out,
+    geoms: shapes.geoms, geomIdx: shapes.geomIdx,
     keyLabels: kept.keyLabels, keyKinds: kept.keyKinds,
     reading: kept.reading || undefined,
     facts: (kept.facts || []).length ? kept.facts : undefined,
-    meta: { sourceName: got.layer.source, rowCount: out.length },
+    meta: { sourceName: got.layer.source, rowCount: out.length, geometry: shapes.geometry },
   }, 'server');
   if (!ing || !ing.importId) throw refuse(500, 'the layer could not be prepared');
   commitLayer({ importId: ing.importId, dataset }, 'server', { fromReading: true });
@@ -4178,7 +4224,10 @@ async function restoreAnswers(dataset, layerId) {
    owner.js), plus the one it could never make: has THIS version of the places
    been read already.
 
-     - points only, contributed, with places, with words worth reading
+     - contributed, its places wearing a marker (pins, and areas since they
+       wear the same one — RULES.wearsMarks), with places, with words of its
+       own worth reading (RULES.worthReading: not just the names of the
+       outlines it was joined to)
      - not the operator's own atlas (NEVER_READ)
      - no model key: nothing (as before — nothing is invented without one)
      - a layer that already carries questions, or was already found to have
@@ -4190,8 +4239,8 @@ function considerReading(dataset, layerId, opts) {
   const got = layerAndRows(dataset, layerId);
   if (!got) return 'no layer';
   const { layer, rows } = got;
-  if (layer.type !== 'marker') return 'not points';
-  if (!rows.length || !wordColumnsOf(rows).length) return 'no words';
+  if (!RULES.wearsMarks(layer)) return 'no marks';
+  if (!rows.length || !RULES.worthReading(layer, rows)) return 'no words';
   const sig = signatureOf(rows, RULES.isAnswerColumn);
   const hasQuestions = questionsOn(layer, rows).length > 0 ||
     Object.keys(rows[0] || {}).some((k) => RULES.isQuestionColumn(k));
@@ -4523,21 +4572,24 @@ router.post('/admin/reread', async (req, res) => {
    a reading finished an hour late, by the server, lands exactly the same way a
    reading finished in front of somebody does — one path, one result, rather
    than a second implementation quietly drifting from the first. */
-async function writeReading({ dataset, layerId, rows, questions, label, source, reading, facts }) {
+async function writeReading({ dataset, layer, layerId, rows, questions, label, source, reading, facts }) {
   /* The shaping is the shared rule's — one column per question, its words
      beside it, every previous answer cleared first. What is left here is the
      saving, which is the one thing this side and the browser genuinely do
      differently: it calls ingest directly where the browser posts to it. */
   const shaped = RULES.shapeReading(rows, questions);
   const out = shaped.rows, labels = shaped.keyLabels, kinds = shaped.keyKinds;
+  // an area's shapes travel with its rows (shapesFor); a pin's coordinates already do
+  const shapes = shapesFor(layer, dataset);
   const ing = await ingestLayer({
     dataset, replaceLayerId: layerId, filename: label || layerId,
     schema: shaped.schema,
     rows: out,
+    geoms: shapes.geoms, geomIdx: shapes.geomIdx,
     keyLabels: labels, keyKinds: kinds,
     reading: reading || undefined,
     facts: (facts || []).length ? facts : undefined,
-    meta: { sourceName: source, rowCount: out.length },
+    meta: { sourceName: source, rowCount: out.length, geometry: shapes.geometry },
   }, 'server');
   if (!ing || !ing.importId) throw refuse(500, 'the layer could not be prepared');
   // a reading's own write: it adds answers, it does not ask for another reading
@@ -5443,6 +5495,11 @@ function commitLayer({ importId, dataset }, who, opts) {
   if (!ok) throw refuse(403, 'sign in as this atlas’s owner to change it', { needsAuth: true });
 
   try {
+    // the twin a replaced layer had, read before the write takes the name off (pairing, below)
+    const twinBefore = session.replacingLayerId && !session.pointRows && !session.pointsLayerId
+      ? ((((imports.readManifest(session.dataset) || {}).local || {}).layers || [])
+          .find((l) => l.id === session.replacingLayerId) || {}).sameFileAs || null
+      : null;
     /* Outlines, and — when rows were chosen to go on as points beside them —
        a second layer of points (placeAll has the rule). */
     const parts = placeAll(session);
@@ -5470,7 +5527,14 @@ function commitLayer({ importId, dataset }, who, opts) {
       // and every point has since been given an outline, or left off
       imports.removeLayer(session.dataset, session.pointsLayerId);
     }
-    imports.pairLayers(session.dataset, layerId, pointsLayerId);
+    /* A layer put back in place keeps its twin. One upload can be two layers,
+       its outlines and the rows that went on as points beside them, each
+       naming the other (sameFileAs). A reading writes one of the two back on
+       its own, and pairing it with nobody used to take the name off it — so a
+       question landing on the outlines quietly split the owner's "one file,
+       one row" into two. The twin it had before is the twin it keeps, unless
+       this commit is itself re-deciding the split (a repair with pointRows). */
+    imports.pairLayers(session.dataset, layerId, pointsLayerId || twinBefore);
     /* Rows that still need a place — skipped, not found, or put by their
        neighbours and not yet checked — stay fixable from the finished atlas.
        The import is kept for them, pointed at the layers it just made so the
@@ -5640,6 +5704,42 @@ router.post('/layers/commit', (req, res) => {
    The style step then works unchanged, and commit replaces the layer in place.
    Permission is the same rule as removal: the owner may edit any layer, an
    invited editor only the ones they added. */
+/* What a committed layer was built with: the spec it was built with when we
+   have it; otherwise read back off the stanza as faithfully as the stanza
+   allows. Two callers start from it — an owner reopening a layer to edit it,
+   and a reading handing an area layer's shapes back with its answers — so
+   that both put the layer back as it was rather than as a fresh upload. */
+function specOfLayer(layer, layerId, rows, columns) {
+  if (layer.spec && typeof layer.spec === 'object') return layer.spec;
+  const matchCol = columnFromMatch(layer.paint && layer.paint.color, columns);
+  const catCol = layer.markerBy === '_category'
+    ? recoverCategoryColumn(rows, columns)
+    : (layer.markerBy || matchCol || undefined);
+  // a plain colour on the stanza is one of the named ones; read the name back
+  // so the layer keeps its colour, rather than the default for its kind
+  const named = (hex) => typeof hex === 'string' &&
+    Object.keys(MARKER_COLORS).find((k) => MARKER_COLORS[k].toLowerCase() === hex.toLowerCase());
+  const p = layer.paint || {};
+  return {
+    kind: layer.type === 'marker' || layer.type === 'circle'
+      ? (catCol ? 'category'
+        : layer.paint && Array.isArray(layer.paint.radius) ? 'bubble'   // data-driven radius = proportional symbols
+        : 'markers')
+      : layer.type === 'fill' ? (layer.paint && layer.paint.fillColor && Array.isArray(layer.paint.fillColor) ? 'choropleth' : 'polygon')
+      : layer.type === 'line' ? 'line' : 'markers',
+    label: layer.label || layerId,
+    group: layer.group || 'userdata',
+    categoryColumn: catCol,
+    popupTitleColumn: layer.popup && layer.popup.title,
+    popupColumns: ((layer.popup && layer.popup.fields) || []).map((f) => f.property),
+    imageColumn: (((layer.popup && layer.popup.fields) || []).find((f) => f.type === 'image') || {}).property,
+    palette: 'marigold',
+    markerColor: named(p.color) || 'rust',
+    lineColor: (layer.type === 'line' && named(p.color)) || 'slate',
+    fillColor: named(p.fillColor) || 'moss',
+  };
+}
+
 router.post('/layers/reopen', (req, res) => {
   const b = req.body || {};
   const dataset = String(b.dataset || '');
@@ -5670,27 +5770,7 @@ router.post('/layers/reopen', (req, res) => {
   const cls = /Polygon/.test(geoms[0] && geoms[0].type) ? 'polygon'
     : /LineString/.test(geoms[0] && geoms[0].type) ? 'line' : 'point';
 
-  // the spec it was built with when we have it; otherwise read it back off the
-  // stanza as faithfully as the stanza allows
-  const matchCol = columnFromMatch(layer.paint && layer.paint.color, columns);
-  const catCol = layer.markerBy === '_category'
-    ? recoverCategoryColumn(rows, columns)
-    : (layer.markerBy || matchCol || undefined);
-  const spec = layer.spec || {
-    kind: layer.type === 'marker' || layer.type === 'circle'
-      ? (catCol ? 'category'
-        : layer.paint && Array.isArray(layer.paint.radius) ? 'bubble'   // data-driven radius = proportional symbols
-        : 'markers')
-      : layer.type === 'fill' ? (layer.paint && layer.paint.fillColor && Array.isArray(layer.paint.fillColor) ? 'choropleth' : 'polygon')
-      : layer.type === 'line' ? 'line' : 'markers',
-    label: layer.label || layerId,
-    group: layer.group || 'userdata',
-    categoryColumn: catCol,
-    popupTitleColumn: layer.popup && layer.popup.title,
-    popupColumns: ((layer.popup && layer.popup.fields) || []).map((f) => f.property),
-    imageColumn: (((layer.popup && layer.popup.fields) || []).find((f) => f.type === 'image') || {}).property,
-    palette: 'marigold', markerColor: 'rust', lineColor: 'slate', fillColor: 'moss',
-  };
+  const spec = specOfLayer(layer, layerId, rows, columns);
 
   const session = imports.newImport({
     dataset, filename: (layer.label || layerId) + ' (existing layer)',
