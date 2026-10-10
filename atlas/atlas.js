@@ -265,6 +265,8 @@
       })
       .catch(function (err) {
         showLoading(false);
+        // no atlas to name: the header may say "LOKA Atlas" again
+        document.documentElement.classList.remove("atlas-pending");
         /* A small panel that says what happened in words and offers one thing
            to try. The title is the same every time; the line under it is the
            reason, which is the part a reader can act on. */
@@ -396,6 +398,9 @@
     renderBranding(manifest.branding);
     renderCollaborators(manifest);
     wireShare(manifest);
+    // The header now carries this atlas's own words, so the head's "not yet"
+    // mark (index.html, .atlas-pending) comes off: the title shows in place.
+    document.documentElement.classList.remove("atlas-pending");
 
     // activeBasemap is chosen in draw(), before the style is fetched — the style
     // that gets fetched depends on which basemap is active, so it cannot wait

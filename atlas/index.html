@@ -6,8 +6,20 @@
   <!-- An atlas takes the whole page (.atlas-full). atlas.js loads last, after
        the map library, so waiting for it drew the gallery's page shape first
        and then jumped; deciding here, before anything is drawn, means the
-       first paint is already the atlas. atlas.js sets the same class again. -->
-  <script>if (/[?&]dataset=[^&]/.test(location.search)) document.documentElement.classList.add("atlas-full");</script>
+       first paint is already the atlas. atlas.js sets the same class again.
+       Every way into an atlas lands on ?dataset= (the gallery's cards, Share
+       and the private link, embeds, the pretty /a/<slug> address and the
+       sign-in return all redirect or link to it), so this one test covers
+       them all.
+       .atlas-pending says the atlas's own words have not arrived yet. The
+       shape was right from the first frame, but the frame was filled with the
+       gallery's words — "LOKA Atlas" where the title goes, an empty Layers
+       drawer — for as long as the manifest took (measured on the live site:
+       about a second; longer on a private atlas, which is asked for twice).
+       Under the mark the title slot says nothing and the drawer is not drawn;
+       atlas.js lifts it the moment the manifest has named the atlas, or when
+       it has to say why the atlas could not open. -->
+  <script>if (/[?&]dataset=[^&]/.test(location.search)) { document.documentElement.classList.add("atlas-full"); document.documentElement.classList.add("atlas-pending"); }</script>
   <title>LOKA Atlas</title>
   <meta name="description" content="LOKA Atlas — layered, shareable maps for any geography, built from open data. Pick a region, choose layers, add your own data, and publish." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -1166,6 +1178,17 @@
     .atlas-full .atlas-stage { flex:1 1 auto; min-height:0; width:100%; height:auto; margin:0;
       border:none; outline:none; }
     .atlas-full .org-head { min-width:min(100%, 14rem); }
+    /* Before the manifest arrives (html.atlas-pending, set in the head): the
+       title slot keeps its height and says nothing — the markup's "LOKA Atlas"
+       is the gallery's heading, not this atlas's name — and the stage says
+       "Loading the map" from the first frame (the line is not hidden in the
+       markup; the gallery never shows it, see below). A drawer with nothing
+       in it is not drawn at all: before the layers are built, and on the page
+       that says why the atlas could not open. Built, it always holds
+       something — an atlas with no layers gets a line saying so. */
+    .atlas-pending #atlas-title { visibility:hidden; }
+    html:not(.atlas-full) .atlas-loading { display:none; }
+    .atlas-full .atlas-panel:has(#atlas-controls:empty) { display:none; }
     /* Between a phone and a wide screen (about 721–1100px) the header's pieces
        did not fit one row, and "all atlases" and "sign in" wrapped under it.
        Here Share is its icon, and only sign in / sign out stay among the links
@@ -1578,7 +1601,9 @@
 
   <div class="atlas-stage">
     <div id="atlas-map"></div>
-    <div class="atlas-loading" id="atlas-loading" hidden aria-live="polite"><span>Loading the map</span></div>
+    <!-- shown from the first frame on an atlas; atlas.js takes it away once
+         the map has drawn (showLoading). The gallery never shows it. -->
+    <div class="atlas-loading" id="atlas-loading" aria-live="polite"><span>Loading the map</span></div>
     <aside class="atlas-panel" id="atlas-panel">
       <!-- open: the drawer's head. Folded: this same head is the
            "Layers · N" button that opens it again. -->
