@@ -1902,6 +1902,42 @@
      want exactly the thing most of the map has in common. It only says so on
      its own row, and waits at the bottom. */
   var KEY_LOPSIDED_MIN_KINDS = 3;
+  /* A key groups places, so at least half of the places that answered a column
+     must share their answer with at least one other place (Mithun, October
+     2026). In the Multispecies atlas 11 people answered and 9 gave an
+     organisation's name, all different: few enough kinds to slip under the cap,
+     and a key that put every place in a group of its own.
+
+     Such a column is not offered as a key, but it stays on the list marked
+     `scattered`, exactly as a question marked tooFew does, so every place still
+     shows its answer on its card. Never applied to the column the owner chose
+     to colour by, nor to a discovered question. */
+  var KEY_MIN_SHARED = 0.5;
+
+  /* What share of the places that answered share an answer with another place.
+     A list cell ("Culture; Nature") shares if any of its answers is shared; each
+     answer is cut and trimmed the same way the kinds are counted, and a date
+     column is compared by the month or year it is grouped into. */
+  function sharedShare(nonEmpty, delim, grain) {
+    var perPlace = [], tally = {};
+    nonEmpty.forEach(function (v) {
+      var parts = delim ? String(v).split(delim) : [v], mine = {};
+      parts.forEach(function (s) {
+        if (grain) { s = dateBucket(s, grain); if (!s) return; }
+        s = unquotePiece(s).slice(0, 40);
+        if (s) mine[s] = 1;
+      });
+      var ks = Object.keys(mine);
+      if (!ks.length) return;
+      ks.forEach(function (k) { tally[k] = (tally[k] || 0) + 1; });
+      perPlace.push(ks);
+    });
+    if (!perPlace.length) return 1;
+    var shared = perPlace.filter(function (ks) {
+      return ks.some(function (k) { return tally[k] >= 2; });
+    }).length;
+    return shared / perPlace.length;
+  }
 
   function computeKeyOptions(L, feats) {
     var committedCol = null;
@@ -2026,6 +2062,9 @@
       // and a key that does not tell places apart is not a key — see KEY_DOMINANCE
       if (!committed && !isQuestion && counts.length &&
           counts[0].n / feats.length > KEY_DOMINANCE) return;
+      // and a key whose answers are mostly one of a kind groups nothing — see KEY_MIN_SHARED
+      var scattered = Boolean(!committed && !isQuestion &&
+        sharedShare(nonEmpty, delim, grain) < KEY_MIN_SHARED);
       /* A name the owner gave this key wins over the column's own name. The
          column is called "themes", which says how it was made rather than what
          it holds — and the switch lowercased it while the popup capitalised it,
@@ -2051,7 +2090,7 @@
       var kindsHere = 0;
       counts.forEach(function (c) { if (kept.indexOf(c.kind) >= 0 && c.n > 0) kindsHere += 1; });
       opts.push({ col: col, label: shown, full: lab.full, shortened: lab.shortened,
-        delim: delim, committed: committed, grain: grain, tooFew: tooFew,
+        delim: delim, committed: committed, grain: grain, tooFew: tooFew, scattered: scattered,
         // what share of the places this key can actually speak for; shown beside
         // a discovered question, whose whole point is that it may not reach all
         reach: feats.length ? named / feats.length : 0, isQuestion: isQuestion,
@@ -2740,6 +2779,7 @@
     if (st.note) note.textContent = st.note;
     L._keyOptions.forEach(function (opt) {
       if (opt.tooFew) return;   // under 30% of places: on cards, not offered as a key
+      if (opt.scattered) return;   // answers mostly one of a kind: on cards, not offered as a key
       /* A flat question needs two lines, not one, so it gets a wrapper. Every
          other key keeps the single row it always had. */
       var host = opt.flat ? el("div", "key-flatwrap") : null;
@@ -5279,7 +5319,11 @@
 
        A key switch turns its layer on with it (see buildKeyToggles), so flipping
        one from cold is a single act rather than two. */
-    if (L._keyOptions && keyState[L.id]) {
+    /* Only when at least one key is actually offered: a layer whose every
+       column is on cards only (tooFew, scattered) would otherwise show
+       "Mark each place by" with nothing under it. */
+    if (L._keyOptions && keyState[L.id] &&
+        L._keyOptions.some(function (o) { return !o.tooFew && !o.scattered; })) {
       box.appendChild(buildKeyToggles(L));
       updateFoldNote(L);
     }

@@ -443,6 +443,17 @@ A "key" means: colour the places of one layer by the answers in one of its colum
   reader nothing. Measured on the live Bengaluru layer: "Creator" was offered, and 89% of its
   places said "LOKA Finds". This rule is not applied to a question asked of the places, nor to the
   marker column the owner committed to — both are somebody's decision, not an accident of a column;
+- **at least half of the places that answered must share their answer with at least one other
+  place** (`KEY_MIN_SHARED = 0.5`, October 2026): a key exists to group places. In the
+  Multispecies atlas 11 people answered and 9 gave an organisation's name, all different — few
+  enough kinds to pass the rules above, and a key that put every place in a group of its own. Only
+  the places that answered are counted, so a blank is not a one-of-a-kind answer. In a column
+  holding lists, a place shares if any one of its answers is shared. A column that fails this is
+  not offered as a key, but every place still shows its answer on its card. Not applied to the
+  marker column the owner committed to, nor to a question asked of the places (questions keep
+  their own 30% reach rule). Checked on the local copies of the atlases: Tumakuru's "description"
+  (six different descriptions on six places) and the Basket sample's three-zone "zone_type" stop
+  being keys; every other key stays;
 - a **question** whose commonest answer outweighs all the others put together (and that has at
   least three answers) is still offered, but says so on its own row and waits at the bottom;
 - every kept kind must read as a word — a column of numbers, links, ID strings or timestamps is
@@ -866,6 +877,7 @@ State these as out of scope, or as new work, in any proposal.
 | Different answers a column may hold to be a key | 2–9 (2–12 for a list column) |
 | Share of places a key's kinds must cover | 60% |
 | Share of places one answer may cover before a column stops being a key | 85% (questions and the owner's marker column exempt) |
+| Share of answering places that must share an answer with another place for a column to be a key | at least half (questions and the owner's marker column exempt) |
 | Places for a layer to be drawn as pins | 3,000 or fewer |
 | Grouping distance for nearby pins | 20 px (with keys on and zoomed in, the average width of the keyed pins) |
 | Pins in one fan-out | 100, 28 px apart (with keys on, the widest pin + 8 px if more) |
