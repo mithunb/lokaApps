@@ -73,6 +73,32 @@ check('the private page’s sign-in line comes back to the atlas',
 check('only the owner is offered the change (not editors), and not mid-build',
   /act\.hidden = INST\.role !== "owner" \|\| INST\.status === "building" \|\| INST\.status === "pending-approval";/.test(owner), true);
 
+console.log('\n  search by meaning takes one road, whichever folder the atlas is in');
+const imports = fs.readFileSync(ROOT + '/api/lib/atlas/imports.js', 'utf8');
+const deployScript = fs.readFileSync(ROOT + '/deploy/queue-meaning-index.mjs', 'utf8');
+const capabilities = fs.readFileSync(ROOT + '/LOKA-ATLAS-CAPABILITIES.md', 'utf8');
+check('an atlas is looked up in both folders, by one function', /const DATASET_ROOTS = \[DATASETS_ROOT, PRIVATE_ROOT\];/.test(imports) &&
+  /export function datasetDir\(id\) \{[\s\S]*?for \(const root of DATASET_ROOTS\)/.test(imports), true);
+check('every gate on the embedding model is one test, so a stand-in can take the same road',
+  (server.match(/embedReady\(\)/g) || []).length >= 5 && /if \(Object\.keys\(rowVecs\)\.length && embedReady\(\) && geminiAllowed\(req\)\)/.test(server), true);
+check('the stand-in’s vectors are labelled as its own, so a real model never trusts them',
+  /const embedModelName = \(\) => \(FAKE_EMBED \? 'stand-in' : getEmbedModel\(\)\);/.test(server) &&
+  /h\.model !== embedModelName\(\)/.test(server) && /model: embedModelName\(\)/.test(server), true);
+check('a draft is searched under its parent’s permission, as its files are read',
+  /const searchInst = reg\.getInstance\(dataset\.split\('--draft-'\)\[0\]\);/.test(server) && /const slug = folder\.split\('--draft-'\)\[0\];/.test(server), true);
+check('the meaning index has an operator’s list the server works, like the questions and the short names',
+  /const meaningQueue = createQueue\(\{ file: MEANING_INDEX_FILE \}\);/.test(server) && /meaningQueue\.start\(meaningIndexJob\);/.test(server) &&
+  /setInterval\(\(\) => meaningQueue\.pump\(\), 60 \* 1000\)\.unref\(\);/.test(server), true);
+check('the list is filled by a deploy script that dries by default, applies on request and never touches deoria',
+  /argv\.includes\('--apply'\)/.test(deployScript) && /NEVER_READ\.has\(slug\)/.test(deployScript) && /DEFAULT_ROOTS = \[\n\s*path\.join\(REPO, 'atlas', 'datasets'\),\n\s*path\.join\(REPO, 'api', 'data', 'atlas', 'private-datasets'\),/.test(deployScript), true);
+check('a private file is kept as a copy the browser must ask about, as a public one is — never as one it may reuse unasked',
+  [/res\.setHeader\('Cache-Control', 'private, no-cache, must-revalidate'\);/.test(server) && /if \(req\.headers\['if-none-match'\] === etag\) return res\.status\(304\)\.end\(\);/.test(server),
+   /Cache-Control', 'no-store'/.test(server.slice(server.indexOf("router.get('/datasets/:slug/:file'"), server.indexOf("DATA-TO-LAYER MODULE")))], [true, false]);
+check('the edit-token email carries the atlas’s address whichever kind it is',
+  /const link = `\$\{siteBase\(req\)\}\/apps\/atlas\/a\/\$\{inst\.slug\}` \+ \(inst\.visibility === 'private'/.test(server), true);
+check('the capabilities note no longer calls meaning search a public-only thing, and states the rule',
+  [/a private atlas gets word matching only/.test(capabilities), /The parity rule/.test(capabilities)], [false, true]);
+
 console.log('\n  the Share panel agrees with the status line');
 check('it takes the three states', /function stateOf\(opts\)/.test(share) && /if \(opts\.state\) return opts\.state;/.test(share), true);
 check('a private link carries the key', /u\.searchParams\.set\("key", key\)/.test(share), true);
@@ -128,6 +154,39 @@ check('a private atlas is BUILT inside the private root, never in the web root f
   /path\.join\(DATASETS_ROOT, '\.building-'/.test(jobs), false);
 check('and a stranded build is cleaned from both roots', /for \(const root of \[DATASETS_ROOT, PRIVATE_ROOT\]\) \{\n\s*try \{ fs\.rmSync\(path\.join\(root, '\.building-'/.test(jobs), true);
 
+/* ---------------- the operator's script, on a throwaway folder ---------------- */
+
+console.log('\n  the deploy script finds layers without a meaning index in both folders, and never deoria');
+{
+  const { survey } = await import('../deploy/queue-meaning-index.mjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'loka-meaning-check-'));
+  const pub = path.join(tmp, 'datasets'), priv = path.join(tmp, 'private-datasets');
+  const mk = (root, slug, withVec) => {
+    const d = path.join(root, slug);
+    fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(path.join(d, 'manifest.json'), JSON.stringify({ title: slug, layers: [] }));
+    fs.writeFileSync(path.join(d, 'manifest.local.json'), JSON.stringify({ layers: [{ id: 'rows', label: 'Rows', type: 'geojson', source: 'user-rows.geojson', userLayer: true }] }));
+    fs.writeFileSync(path.join(d, 'user-rows.geojson'), JSON.stringify({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: null, properties: { name: 'x' } }] }));
+    if (withVec) {
+      const st = fs.statSync(path.join(d, 'user-rows.geojson'));
+      fs.writeFileSync(path.join(d, 'search-rows.vec'), JSON.stringify({ v: 1, sig: st.size + ':' + Math.round(st.mtimeMs), model: 'gemini-embedding-001', dim: 768, count: 1 }) + '\n');
+    }
+  };
+  mk(pub, 'open-one', false); mk(priv, 'closed-one', false); mk(priv, 'closed-done', true); mk(pub, 'deoria-bioregion', false);
+  const r = survey([pub, priv], 'gemini-embedding-001');
+  check('it lists the public and the private layer alike, and not the one already built',
+    r.want.map((w) => w.dataset + ':' + w.where + ':' + w.state).sort(), ['closed-one:private:missing', 'open-one:public:missing']);
+  check('deoria is skipped out loud', r.skipped.map((x) => x.dataset), ['deoria-bioregion']);
+  check('a side-file from another model counts as stale', survey([pub, priv], 'some-newer-model').want.some((w) => w.dataset === 'closed-done' && /stale/.test(w.state)), true);
+  const q = path.join(tmp, 'meaning-index.json');
+  const run = () => spawn(process.execPath, [path.join(ROOT, 'deploy', 'queue-meaning-index.mjs'), '--apply', '--queue', q, pub, priv], { encoding: 'utf8' });
+  const runOut = (p) => new Promise((ok) => { let o = ''; p.stdout.on('data', (d) => { o += d; }); p.on('close', () => ok(o)); });
+  const o1 = await runOut(run());
+  check('--apply puts both on the list', [/2 added\./.test(o1), Object.keys(JSON.parse(fs.readFileSync(q, 'utf8'))).sort()], [true, ['closed-one|rows', 'open-one|rows']]);
+  check('and running it again adds nothing', /0 added\./.test(await runOut(run())), true);
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
 /* ---------------- the routes, against a real server ---------------- */
 
 const PORT = 8600 + Math.floor(Math.random() * 300);
@@ -145,8 +204,16 @@ function manifest() {
 fs.mkdirSync(PUB, { recursive: true });
 fs.writeFileSync(path.join(PUB, 'manifest.json'), JSON.stringify(manifest()));
 fs.writeFileSync(path.join(PUB, 'user-rows.geojson'), JSON.stringify({ type: 'FeatureCollection', features: [
-  { type: 'Feature', geometry: { type: 'Point', coordinates: [77, 12] }, properties: { name: 'Asha', answer: 'yes' } }] }));
+  { type: 'Feature', geometry: { type: 'Point', coordinates: [77, 12] }, properties: { name: 'Asha', answer: 'yes', note: 'handloom weaving cooperative' } },
+  { type: 'Feature', geometry: { type: 'Point', coordinates: [77, 13] }, properties: { name: 'Kabir', answer: 'no', note: 'terracotta pottery kiln' } }] }));
 fs.mkdirSync(DATA, { recursive: true });
+/* The operator's list (deploy/queue-meaning-index.mjs writes it; the server
+   works it). The throwaway layer is put on it before the server starts, the
+   way a live server finds it after a deploy, so the first search already has
+   the index — what the script is for. */
+const fileSig = (() => { const st = fs.statSync(path.join(PUB, 'user-rows.geojson')); return st.size + ':' + Math.round(st.mtimeMs); })();
+fs.writeFileSync(path.join(DATA, 'meaning-index.json'), JSON.stringify({
+  [SLUG + '|rows']: { dataset: SLUG, layerId: 'rows', sig: fileSig, payer: 'server', state: 'queued', reason: '', queuedAt: 1, at: 1 } }));
 fs.writeFileSync(path.join(DATA, 'registry.json'), JSON.stringify({
   instances: { [SLUG]: { slug: SLUG, title: 'Private check', visibility: 'public', status: 'published', publishedAt: 1,
     ownerAccount: OWNER, email: OWNER, tier: 'india', layers: [], tokenHash: 'x', viewKeyHash: null, createdAt: 1 } },
@@ -168,7 +235,10 @@ process.on('exit', cleanup);
 async function startServer() {
   child = spawn(process.execPath, [path.join(ROOT, 'api', 'server.js')], {
     env: { ...process.env, LOKA_PORT: String(PORT), LOKA_DATA_DIR: DATA, LOKA_DEV_STATIC: '1', MAIL_TRANSPORT: 'log',
-      GEMINI_API_KEY: '', ATLAS_OWNER_EMAILS: 'nobody@example.test' },
+      GEMINI_API_KEY: '', ATLAS_OWNER_EMAILS: 'nobody@example.test',
+      // no model here: the stand-in embeds by letter-triples so the ROAD a
+      // search by meaning takes can be checked on both kinds of atlas
+      ATLAS_FAKE_EMBED: '1' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout.on('data', (d) => { out += d; });
@@ -213,6 +283,29 @@ try {
   check('a public atlas’s rows are a static file anyone can fetch', (await call('GET', STATIC)).status, 200);
   check('and the private route does not serve a public atlas', (await call('GET', API)).status, 404);
 
+  /* Search by meaning, on the public atlas first. The query shares no word
+     with any row — "zhandloom zweaving zcooperative" is nowhere in the data —
+     so word matching finds nothing and only the meaning pass can answer. */
+  console.log('\n  search by meaning is the same road for both kinds of atlas');
+  const MEANING_Q = 'zhandloom zweaving zcooperative';
+  const search = (opts) => call('POST', '/api/atlas/layers/search', { body: Object.assign({ dataset: SLUG, q: MEANING_Q }, opts && opts.body), cookie: opts && opts.cookie });
+  const untilSemantic = async (opts) => {
+    const t0 = Date.now();
+    let r = await search(opts);
+    while (!(r.j && r.j.semantic) && Date.now() - t0 < 6000) { await new Promise((x) => setTimeout(x, 150)); r = await search(opts); }
+    return r;
+  };
+  const titlesOf = (r) => ((r.j && r.j.hits) || []).flatMap((h) => h.features.map((f) => f.title + (f.score != null ? '*' : '')));
+  const t1 = Date.now();
+  while (!fs.existsSync(path.join(PUB, 'search-rows.vec')) && Date.now() - t1 < 6000) await new Promise((x) => setTimeout(x, 100));
+  check('the operator’s list built the layer’s index before anyone searched', fs.existsSync(path.join(PUB, 'search-rows.vec')), true);
+  const listed = JSON.parse(fs.readFileSync(path.join(DATA, 'meaning-index.json'), 'utf8'))[SLUG + '|rows'];
+  check('and the list says so', listed && listed.state, 'done');
+  const pubAnswer = await search();
+  check('a public atlas answers by meaning: scoring ran, and only the close row is found',
+    [pubAnswer.status, pubAnswer.j.semantic, pubAnswer.j.matched, titlesOf(pubAnswer)], [200, true, 1, ['asha · yes · handloom weaving cooperative*']]);
+  check('words still win when they match', titlesOf(await call('POST', '/api/atlas/layers/search', { body: { dataset: SLUG, q: 'kabir' } })), ['kabir · no · terracotta pottery kiln*']);
+
   check('a stranger cannot make it private', (await call('POST', `/api/atlas/instances/${SLUG}/details`, { cookie: otherC, body: { visibility: 'private' } })).status, 403);
   check('nor can nobody', (await call('POST', `/api/atlas/instances/${SLUG}/details`, { body: { visibility: 'private' } })).status, 403);
   const made = await call('POST', `/api/atlas/instances/${SLUG}/details`, { cookie: ownerC, body: { visibility: 'private' } });
@@ -227,6 +320,51 @@ try {
   check('the key opens it, signed out', (await call('GET', API + '?key=' + encodeURIComponent(key1))).status, 200);
   check('so does the manifest, and it is the atlas', (await call('GET', `/apps/atlas/api/datasets/${SLUG}/manifest.json?key=` + encodeURIComponent(key1))).j.title, 'Private check');
   check('the owner opens it by sign-in alone', (await call('GET', API, { cookie: ownerC })).status, 200);
+
+  /* Caching: the same bargain as the public folder. A copy may be kept, but
+     every use asks the server first, and the server checks who is asking
+     before it says "unchanged". */
+  const headed = (p, h) => fetch(BASEURL + p, { headers: h || {} });
+  const r1 = await headed(API + '?key=' + encodeURIComponent(key1));
+  const tag = r1.headers.get('etag');
+  check('a private file comes with a tag and a must-ask cache rule', [r1.status, !!tag, r1.headers.get('cache-control'), r1.headers.get('content-length') != null], [200, true, 'private, no-cache, must-revalidate', true]);
+  check('asking again with the tag gets "unchanged", not the bytes', (await headed(API + '?key=' + encodeURIComponent(key1), { 'If-None-Match': tag })).status, 304);
+  check('a stranger with the same tag gets the refusal, never "unchanged"', (await headed(API, { 'If-None-Match': tag })).status, 403);
+  check('nor can a signed-in stranger', (await headed(API, { 'If-None-Match': tag, Cookie: otherC })).status, 403);
+  check('and in dev the data folder is not a static address either', (await headed('/apps/api/data/atlas/registry.json')).status, 403);
+  /* A draft of a private atlas (<slug>--draft-<import>) is read under its
+     parent's permission — for its files already, and now for search too. */
+  const DRAFT = SLUG + '--draft-abc123';
+  fs.mkdirSync(path.join(DATA, 'private-datasets', DRAFT), { recursive: true });
+  fs.writeFileSync(path.join(DATA, 'private-datasets', DRAFT, 'manifest.json'), JSON.stringify(manifest()));
+  fs.copyFileSync(path.join(PRIV, 'user-rows.geojson'), path.join(DATA, 'private-datasets', DRAFT, 'user-rows.geojson'));
+  check('a private atlas’s draft cannot be searched without the key', (await call('POST', '/api/atlas/layers/search', { body: { dataset: DRAFT, q: 'kabir' } })).status, 403);
+  check('and can be with it', (await call('POST', '/api/atlas/layers/search', { body: { dataset: DRAFT, q: 'kabir', key: key1 } })).j.matched, 1);
+  // the search just now wrote the draft's own index files in the background; give them a moment
+  for (let i = 0; i < 20 && fs.existsSync(path.join(DATA, 'private-datasets', DRAFT)); i++) {
+    try { fs.rmSync(path.join(DATA, 'private-datasets', DRAFT), { recursive: true, force: true }); } catch { await new Promise((x) => setTimeout(x, 100)); }
+  }
+
+  /* Now private. The index moved with the folder, so the very first search
+     with the key answers exactly as the public atlas did — same rows, same
+     scores. Then the index is taken away, and the private atlas builds it
+     again on the first search, the way a public one does: word matching
+     first, meaning a moment later. */
+  check('the index moved with the folder', fs.existsSync(path.join(PRIV, 'search-rows.vec')), true);
+  const privAnswer = await search({ body: { key: key1 } });
+  check('the private atlas answers by meaning to the key, and the answer is the public one', [privAnswer.status, privAnswer.j], [200, pubAnswer.j]);
+  check('and to the owner’s sign-in alone', (await search({ cookie: ownerC })).j, pubAnswer.j);
+  check('a stranger gets no answer at all, not a wordier one', (await search({ cookie: otherC })).status, 403);
+  // the places change (a re-commit rewrites the layer's file): the index is stale
+  const gj = JSON.parse(fs.readFileSync(path.join(PRIV, 'user-rows.geojson'), 'utf8'));
+  gj.features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [77, 14] }, properties: { name: 'Meera', answer: 'yes', note: 'bamboo basket makers' } });
+  fs.writeFileSync(path.join(PRIV, 'user-rows.geojson'), JSON.stringify(gj));
+  const first = await search({ body: { key: key1 } });
+  check('when the places change, the first search is words only — on a private atlas as on a public one', [first.status, first.j.semantic, first.j.matched, first.j.total], [200, false, 0, 3]);
+  const again = await untilSemantic({ body: { key: key1 } });
+  const vecHeader = (() => { try { return JSON.parse(fs.readFileSync(path.join(PRIV, 'search-rows.vec')).toString('utf8').split('\n')[0]); } catch { return null; } })();
+  check('and the private atlas builds its own index from that search, for the new version of the file',
+    [vecHeader && vecHeader.count, again.j.semantic, again.j.hits], [3, true, pubAnswer.j.hits]);
 
   check('the gallery does not list it', ((await call('GET', '/api/atlas/instances')).j.instances || []).some((i) => i.slug === SLUG), false);
   check('a stranger asking about it is told nothing', (await call('GET', `/api/atlas/instances/${SLUG}`, { cookie: otherC })).status, 404);

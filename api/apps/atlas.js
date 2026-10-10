@@ -18,7 +18,7 @@ import * as auth from '../lib/atlas/auth.js';
 import { sendMail } from '../lib/mailer.js';
 import { noteTrouble, noteOk, setTroubleNotifier, openTroubles } from '../lib/atlas/trouble.js';
 import * as owed from '../lib/atlas/owed.js';
-import { queue as QUESTIONS, signatureOf, NEVER_READ } from '../lib/atlas/questions-queue.js';
+import { queue as QUESTIONS, createQueue, signatureOf, NEVER_READ } from '../lib/atlas/questions-queue.js';
 import * as shortLabels from '../lib/atlas/short-labels.js';
 import {
   enqueueBuild, getJob, setJobDoneHook, setStrandedBuildHook, DATASETS_ROOT, PRIVATE_ROOT,
@@ -1412,7 +1412,7 @@ router.get('/admin/models', (req, res) => {
   if (!auth.isAdmin(req) && !auth.isAdminSession(req)) {
     return res.status(404).json({ error: 'not found' });
   }
-  res.json({ models: getResolverStatus(), trouble: openTroubles(), owed: owed.all() });
+  res.json({ models: getResolverStatus(), trouble: openTroubles(), owed: owed.all(), meaningIndex: meaningQueue.all() });
 });
 
 router.get('/admin/instances', (req, res) => {
@@ -1640,9 +1640,11 @@ router.post('/instances/:slug/email-token', async (req, res) => {
   hits.push(now);
   linkRate.set(ip, hits);
 
-  const link = inst.visibility === 'private'
-    ? `(private atlas — its private link is under Share, in the Owner menu)`
-    : `${siteBase(req)}/apps/atlas/a/${inst.slug}`;
+  // the same address for both kinds: this email goes to someone who may edit
+  // the atlas, and a private one opens for them once they sign in
+  const link = `${siteBase(req)}/apps/atlas/a/${inst.slug}` + (inst.visibility === 'private'
+    ? `  (private — it opens for you once you sign in; the private link for other people is under Share, in the Owner menu)`
+    : '');
   const result = await sendMail({
     to: email,
     subject: `[LOKA Atlas] your edit token for “${inst.title}”`,
@@ -2154,15 +2156,31 @@ router.get('/datasets/:slug/:file', (req, res) => {
   if (!full.startsWith(path.join(PRIVATE_ROOT, folder) + path.sep)) return res.status(400).json({ error: 'bad path' });
   if (!fs.existsSync(full)) return res.status(404).json({ error: 'not found' });
 
-  /* Never kept by the browser: with max-age the owner's copy answered the next
-     person on the same device for a minute, signed out and keyless (seen in a
-     hand check). Layers are content-addressed (?v=) so nothing is re-fetched
-     needlessly within a page; across page loads a private file is asked for
-     again, which is the point. */
-  res.setHeader('Cache-Control', 'no-store');
+  /* Kept by the browser only as a copy it must ASK about before using, which
+     is what the public folder's files get too (deploy/lokaApps.conf sends
+     no-cache, must-revalidate, and Apache answers an unchanged file with a
+     304). Here the asking comes through this route, so the owner, editor or
+     key check above runs BEFORE anything is answered: a signed-out, keyless
+     person on the same device gets the 403, never the copy — the fault that
+     max-age had (seen in a hand check) and that no-store was the blunt fix
+     for. no-store made every visit re-download every layer in full; a
+     private atlas was slower to open than a public one for no reason of
+     privacy. `private` keeps the proxy in front from storing it. */
+  let st = null;
+  try { st = fs.statSync(full); } catch { return res.status(404).json({ error: 'not found' }); }
+  const etag = '"' + st.size.toString(16) + '-' + Math.round(st.mtimeMs).toString(16) + '"';
+  res.setHeader('Cache-Control', 'private, no-cache, must-revalidate');
   res.setHeader('X-Robots-Tag', 'noindex');
+  res.setHeader('ETag', etag);
+  res.setHeader('Last-Modified', st.mtime.toUTCString());
+  if (req.headers['if-none-match'] === etag) return res.status(304).end();
+  res.setHeader('Content-Length', String(st.size));
   res.type(MIME[path.extname(full)] || 'application/octet-stream');
-  fs.createReadStream(full).pipe(res);
+  const stream = fs.createReadStream(full);
+  // a rebuild can take the file away between the stat and the read; a stream
+  // error must end THIS answer, not the whole server
+  stream.on('error', () => { if (!res.headersSent) res.status(404).json({ error: 'not found' }); else res.destroy(); });
+  stream.pipe(res);
 });
 
 /* ==================================================================
@@ -4462,6 +4480,10 @@ export function startBackgroundWork() {
      to it from outside. */
   shortLabels.queue.start(shortLabelsJob, { recheck: (d, l) => considerShortLabels(d, l) });
   setInterval(() => shortLabels.queue.pump(), 60 * 1000).unref();
+  /* And the meaning index, for layers put on its list by
+     deploy/queue-meaning-index.mjs — public and private atlases alike. */
+  meaningQueue.start(meaningIndexJob);
+  setInterval(() => meaningQueue.pump(), 60 * 1000).unref();
   const waiting = owed.all().length;
   if (waiting) console.log('[owed] ' + waiting + ' reading' + (waiting === 1 ? '' : 's') + ' still owed');
 }
@@ -4876,8 +4898,37 @@ const EMBED_DIM = 768;
 // and why I was wrong to call this fixed from a log that turned out to be stale.
 const EMBED_BATCH = 64;
 
+/* A stand-in for the embedding model, for checking the road a search by
+   meaning takes on a machine with no key: ATLAS_FAKE_EMBED=1 turns a text into
+   a vector of its letter-triples, so two spellings of one word land close and
+   two unrelated words do not. It knows nothing of meaning. What it lets the
+   checks prove is that a public atlas and a private one take the SAME road —
+   rows embedded, a query embedded, rows scored — with nothing to tell them
+   apart but where the files sit. Its vectors are labelled as the stand-in's,
+   so a server with a real model never trusts a side-file one of these wrote. */
+// the same three locks as FAKE_READING: a dev server, no model key, not production
+const FAKE_EMBED = process.env.ATLAS_FAKE_EMBED === '1' &&
+  !!process.env.LOKA_DEV_STATIC && !process.env.GEMINI_API_KEY &&
+  process.env.NODE_ENV !== 'production';
+if (FAKE_EMBED) console.warn('[atlas] ATLAS_FAKE_EMBED is on — search by meaning uses letter-triples, not a model');
+function fakeEmbed(text) {
+  const v = new Array(EMBED_DIM).fill(0);
+  const s = ' ' + String(text || '').toLowerCase().replace(/[^a-z0-9ऀ-ॿ]+/g, ' ') + ' ';
+  for (let i = 0; i + 3 <= s.length; i++) {
+    let h = 0;
+    for (let j = i; j < i + 3; j++) h = (h * 31 + s.charCodeAt(j)) >>> 0;
+    v[h % EMBED_DIM] += 1;
+  }
+  return v;
+}
+// which model answers for meaning: the real one, the stand-in, or nobody
+const embedModelName = () => (FAKE_EMBED ? 'stand-in' : getEmbedModel());
+const embedReady = () => !!ai || FAKE_EMBED;
+
 async function embedTexts(texts) {
-  if (!ai || !texts.length) return null;
+  if (!texts.length) return null;
+  if (FAKE_EMBED) return texts.map(fakeEmbed);
+  if (!ai) return null;
   try {
     const r = await ai.models.embedContent({ model: getEmbedModel(), contents: texts, config: { outputDimensionality: EMBED_DIM } });
     const embs = r && (r.embeddings || r.embedding);
@@ -5065,7 +5116,7 @@ function writeRowVectors(dir, layerId, sig, vecs) {
     scales.writeFloatLE(scale, i * 4);
     body.set(q, i * EMBED_DIM);   // Int8Array → Buffer keeps two's complement
   }
-  const header = Buffer.from(JSON.stringify({ v: 1, sig, model: getEmbedModel(), dim: EMBED_DIM, count }) + '\n');
+  const header = Buffer.from(JSON.stringify({ v: 1, sig, model: embedModelName(), dim: EMBED_DIM, count }) + '\n');
   const tmp = file + '.tmp';
   fs.writeFileSync(tmp, Buffer.concat([header, scales, body]));
   fs.renameSync(tmp, file);
@@ -5085,7 +5136,7 @@ function readRowVectors(dir, layerId, sig) {
   try { h = JSON.parse(buf.subarray(0, nl).toString('utf8')); } catch { return null; }
   // stale or foreign vectors are worse than none: the query embedding they
   // would be compared against comes from today's model, dim and geojson
-  if (!h || h.v !== 1 || h.sig !== sig || h.model !== getEmbedModel() || h.dim !== EMBED_DIM) return null;
+  if (!h || h.v !== 1 || h.sig !== sig || h.model !== embedModelName() || h.dim !== EMBED_DIM) return null;
   const count = h.count | 0;
   const scalesEnd = nl + 1 + count * 4;
   if (count < 0 || buf.length !== scalesEnd + count * EMBED_DIM) return null;
@@ -5104,7 +5155,7 @@ function readRowVectors(dir, layerId, sig) {
 // partial file would silently mis-align feature indices, so any failed batch
 // abandons the whole layer (a later search queues it again).
 async function embedRowsForLayer(dir, layerId, sig, texts) {
-  if (!ai) return false;
+  if (!embedReady()) return false;
   const vecs = new Array(texts.length).fill(null);
   const idxs = [];
   for (let i = 0; i < texts.length; i++) if (texts[i]) idxs.push(i);
@@ -5154,7 +5205,7 @@ function ensureSearchIndex(dataset) {
 // stampede the API, it just takes a few searches' worth of background time.
 const embedInFlight = new Set();
 function queueRowEmbeddings(dataset, layerIds) {
-  if (!ai || !layerIds.length || embedInFlight.has(dataset)) return;
+  if (!embedReady() || !layerIds.length || embedInFlight.has(dataset)) return;
   embedInFlight.add(dataset);
   (async () => {
     try {
@@ -5173,6 +5224,34 @@ function queueRowEmbeddings(dataset, layerIds) {
   })();
 }
 
+/* The meaning index, asked for from outside. A layer's vectors are normally
+   built the first time somebody searches it (queueRowEmbeddings above), which
+   is the same for a public atlas and a private one. What that cannot do is
+   build them BEFORE anyone searches — for the atlases that were already live
+   when search by meaning arrived, or after the embedding model changes and
+   every side-file goes stale at once. This list is how an operator asks for
+   that: deploy/queue-meaning-index.mjs puts layers on it, and the server works
+   through them one at a time, picked up within a minute. It is the same
+   waiting list the questions and the short names use, with the same rules —
+   once per version of a layer's file, never deoria-bioregion, survives a
+   restart — and the work it does is the one function the search already
+   uses, so there is one way to build a layer's vectors and not two. */
+export const MEANING_INDEX_FILE = path.join(reg.DATA_DIR, 'meaning-index.json');
+const meaningQueue = createQueue({ file: MEANING_INDEX_FILE });
+async function meaningIndexJob(job) {
+  if (!embedReady()) return { state: 'failed', reason: 'there is no embedding model configured' };
+  const m = imports.readManifest(job.dataset);
+  if (!m) return { state: 'failed', reason: 'no such atlas' };
+  const L = searchLayers(m).find((l) => l.id === job.layerId);
+  if (!L) return { state: 'failed', reason: 'no such layer, or not one the search covers' };
+  const sig = layerSig(m.dir, L);
+  if (readRowVectors(m.dir, L.id, sig)) return { state: 'done', reason: 'already built' };
+  const rows = layerSearchRows(m.dir, L, sig);
+  if (!rows.length) return { state: 'done', reason: 'nothing to index' };
+  const ok = await embedRowsForLayer(m.dir, L.id, sig, rows.map((r) => r.text));
+  return ok ? { state: 'done', reason: '' } : { state: 'failed', reason: 'the embedding model did not answer' };
+}
+
 // After a commit: store the layer's vocabulary immediately (lexical, always)
 // and embed its rows if the model answers. No embeddings → search still works.
 // (Named for the vocabulary it has always written; row vectors ride along now.)
@@ -5181,7 +5260,7 @@ async function embedAndStoreVocab(dataset, layerId, stanza, features) {
   const sig = dir ? layerSig(dir, stanza) : '';
   const terms = layerVocabTerms(stanza, features);
   if (terms.length) imports.writeSearchIndex(dataset, layerId, { v: 2, sig, terms: terms.map((t) => ({ t })) });
-  if (!dir || !ai) return;
+  if (!dir || !embedReady()) return;
   await embedRowsForLayer(dir, layerId, sig, features.map((f) => featureSearchText((f && f.properties) || {})));
 }
 
@@ -5235,7 +5314,9 @@ router.post('/layers/search', async (req, res) => {
   // above failed for them and THAT was the protection. It resolves now, so the
   // gate has to be explicit: a private atlas answers only to its view key, or to
   // someone who may edit it. Same test as GET /datasets/:slug/:file.
-  const searchInst = reg.getInstance(dataset);
+  // A draft (<slug>--draft-<import>) has no record of its own and is read
+  // under its PARENT's permission, exactly as the file route reads it.
+  const searchInst = reg.getInstance(dataset.split('--draft-')[0]);
   if (searchInst && searchInst.visibility === 'private') {
     const k = String(b.key || req.query.key || req.headers['x-atlas-key'] || '');
     const kOk = k && reg.hashToken(k) === searchInst.viewKeyHash;
@@ -5280,7 +5361,7 @@ router.post('/layers/search', async (req, res) => {
   // scoring RAN, not whether it hit — the useful fact when a curl of a thin
   // result has to distinguish "no vectors yet" from "floor filtered it all".
   let qv = null;
-  if (Object.keys(rowVecs).length && ai && geminiAllowed(req)) {
+  if (Object.keys(rowVecs).length && embedReady() && geminiAllowed(req)) {
     const got = await embedTexts([q]);           // embedTexts swallows its own errors
     if (got && got[0]) qv = got[0];
   }

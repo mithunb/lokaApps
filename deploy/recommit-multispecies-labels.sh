@@ -17,6 +17,8 @@ REPO=/home/mithun/loka.place/lokaApps
 SLUG=multispecies-landscape-assessment-2026
 LAYER=where-the-respondents-work
 D=$REPO/atlas/datasets/$SLUG
+# a private atlas lives under the API's data folder instead; same script either way
+[ -d "$D" ] || D=$REPO/api/data/atlas/private-datasets/$SLUG
 API=http://127.0.0.1:8181/api/atlas
 BK=/root/msla-before-$(date +%Y%m%d-%H%M%S)
 TOKEN=$(grep -E '^ATLAS_ADMIN_TOKEN=' "$REPO/api/.env" | head -1 | cut -d= -f2- | tr -d "\"'")

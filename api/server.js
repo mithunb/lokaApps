@@ -29,6 +29,9 @@ app.use((req, res, next) => {
 if (process.env.LOKA_DEV_STATIC) {
   const repoRoot = path.join(__dirname, '..');
   app.use((req, res, next) => {
+    // Apache denies the api/ folder outright (lokaApps.conf); so does this,
+    // or a private atlas's files would be a static URL away in dev only
+    if (/^\/apps\/api(\/|$)/.test(req.url)) return res.status(403).type('text/plain').send('Forbidden');
     const a = req.url.match(/^\/apps\/atlas\/a\/([a-z0-9-]+)\/?$/);
     if (a) return res.redirect(302, `/apps/atlas/?dataset=${a[1]}`);
     const m = req.url.match(/^\/apps\/([^/]+)\/api(\/.*|$)/);

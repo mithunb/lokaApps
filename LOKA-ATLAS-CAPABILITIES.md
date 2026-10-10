@@ -96,6 +96,18 @@ Everything in sections 3 to 12 of this document, unless a paragraph says otherwi
   (open it to everyone) as the two ways on. Atlases made before that day keep whatever they had.
   Before October 2026 the Owner menu's "Make it private" only unlisted the atlas and left its files
   on the open web; that pair is gone.
+  **The parity rule** (owner decision, 10 October 2026): a private atlas and a public one are the
+  same product. Everything — search by words and by meaning, question reading, short names,
+  rebuilds, drafts and previews, the owner tools, caching — works the same on both; the only
+  differences allowed are WHERE the files sit (the private root instead of the web root) and WHO may
+  read them (owner, editors, or the private link). Any feature that works only because a file is
+  reachable at a public address is a fault. Checked by `test/private-atlas-test.mjs`, which runs
+  the same search by meaning on one atlas before and after it is made private and expects the same
+  answer, and which reads a private file twice and expects "unchanged" the second time, as the
+  public folder gives. Private files are kept by the browser only as a copy it must ask about
+  (`private, no-cache, must-revalidate` with an ETag, answered 304 after the owner/editor/key check),
+  the same bargain Apache gives the public folder — not `no-store`, which made every visit download
+  every layer again.
 - **A prettier web address.** `/apps/atlas/a/<slug>` exists, but only as a redirect to
   `/apps/atlas/?dataset=<slug>` — the tidy form never stays in the address bar, and the dev-server
   version of the redirect drops any `?key=`.
@@ -510,12 +522,22 @@ The conditions, plainly:
 
 - It needs **an AI key configured on the server**. Without one, nothing is built and search stays at
   word matching. Nothing breaks and nothing is announced.
-- It needs the atlas to live in the **public data folder**. The route resolves an atlas only there,
-  so **a private atlas gets word matching only** — the server returns an empty answer for it.
+- It works the same for a **private atlas** as for a public one (the parity rule, above): the
+  route finds an atlas in either folder, the side-file sits beside the layer's file wherever that
+  is and moves with it, and the search endpoint stays gated for a private atlas — owner, editor or
+  the private link's key, including for a draft of it. An earlier version of this note said a private
+  atlas got word matching only; that was never the code once private atlases could hold data, and
+  the checks now prove it (`test/private-atlas-test.mjs`, with `ATLAS_FAKE_EMBED=1` standing in for
+  the model on a machine with no key — it embeds by letter-triples, so it proves the road, not the
+  meaning).
 - The side-file is built **in the background, after the fact**: the first search on a new layer
   triggers the work and answers with word matching alone; later searches get meaning matching. A
   5,000-row layer is about 50 batched calls. Editing or re-adding a layer invalidates the file and
-  the work is redone.
+  the work is redone. To build it BEFORE anyone searches — for atlases that were live before this,
+  or after the embedding model changes — `node deploy/queue-meaning-index.mjs` lists every layer
+  whose side-file is missing or stale in both folders (dry run), and `--apply` puts them on the
+  server's list (`api/data/atlas/meaning-index.json`), worked one layer at a time within a minute
+  with the same code a search uses. It never touches deoria-bioregion.
 - The similarity threshold of 0.50 was chosen by reasoning, not measured on real traffic — the code
   says so.
 - It never *narrows* a search. Word matches and meaning matches are added together.
