@@ -64,6 +64,11 @@ sudo -u mithun pm2 reload lokaApps --update-env   # after editing api/.env
 sudo -u mithun pm2 restart lokaApps
 ```
 
+The process runs with `--exp-backoff-restart-delay=100` (a growing pause between crash restarts; set 2026-10-14,
+saved with `pm2 save`) and pm2-logrotate keeps 90 days of logs (`pm2 set pm2-logrotate:retain 90`). If the process
+is ever recreated with `pm2 start`, pass the backoff flag again. Without it, a crash on 26 Aug 2026 restarted about
+800 times in six minutes.
+
 ## LOKA Atlas — a generic, data-driven map app
 
 LOKA Atlas is a self-serve map publishing platform — organisations pick a region, choose layers built from open data, add their own, and publish a shareable atlas in minutes.
