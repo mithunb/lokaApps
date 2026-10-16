@@ -216,5 +216,8 @@ check('and sends the second column', /popupTitleAlso: \(\$\("#s-poptitle"\)\.val
 check('a layer handed back for a reading keeps its naming on every path',
   (server.match(/Object\.assign\(\{\}, (fresh|session\.spec|inference\.layer), (kept|session\.replacingSpec)\)/g) || []).length, 3);
 
+check('search shows a renamed place at once: the naming columns are in its cache key',
+  /const key = dir \+ '\|' \+ stanza\.source \+ '\|' \+ sig \+ '\|' \+\s*\(\(stanza\.popup && stanza\.popup\.title\) \|\| ''\) \+ '\|' \+ \(\(stanza\.popup && stanza\.popup\.titleAlso\) \|\| ''\);/.test(server), true);
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

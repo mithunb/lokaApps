@@ -5347,7 +5347,10 @@ function layerSig(dir, stanza) {
 }
 const layerTextCache = new Map();   // dir|source|sig -> [{ i, title, text }]
 function layerSearchRows(dir, stanza, sig) {
-  const key = dir + '|' + stanza.source + '|' + sig;
+  // the naming columns are part of the key: a rename rewrites only the
+  // manifest, not the file, and search must show the new names at once
+  const key = dir + '|' + stanza.source + '|' + sig + '|' +
+    ((stanza.popup && stanza.popup.title) || '') + '|' + ((stanza.popup && stanza.popup.titleAlso) || '');
   const hit = layerTextCache.get(key);
   if (hit) return hit;
   let gj = null;
