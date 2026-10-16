@@ -54,12 +54,12 @@ check('and stores it the way the rest of the product says several',
 
 console.log('\n  every place a value is read, not just where tags are drawn');
 check('the words a place shows under a key', /var text = unbrace\(v\);/.test(src), true);
-check('and the kinds the key itself lists', /nonEmpty\.push\(unbrace\(v\)\)/.test(src), true);
+check('and the kinds the key itself lists', /v = unbrace\(v\); if \(v\) nonEmpty\.push\(v\)/.test(src), true);
 check('no raw trim survives where a piece is taken',
   /s = String\(s\)\.trim\(\)\.slice\(0, 40\)/.test(src), false);
 
 check('and a field typed as plain words, which is how labels arrived',
-  /var shown = unbrace\(v\);/.test(src), true);
+  /var shown = cellShown\(v\);/.test(src), true);
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -314,6 +314,132 @@ console.log('\n  a reading LOKA turned down says why, in plain words');
   check('the bare stand-in is left out, not said', [plainWhy('no clear question'), plainWhy('')], ['', '']);
 }
 
+/* A reading the AI could not be reached for is retried later, off the owed
+   list. Whatever the retry finds, it must end exactly as a first reading
+   would: the record the owner's page reads says so, with the reason. It used
+   to keep saying "could not be reached ... will be tried again" for ever once
+   a retry kept nothing. Played out on a real server with the stand-in reading,
+   in a throwaway data folder, told by ATLAS_FAKE_READING_PLAN to be out of
+   reach first. Needs api/node_modules; where that is missing these count as
+   failed rather than being quietly skipped. */
+console.log('\n  a retry after an unreachable first try ends the way a first reading would');
+await (async () => {
+  const want = ['the server started', 'the first tries were out of reach', 'the retries ran'];
+  if (!fs.existsSync(path.join(ROOT, 'api', 'node_modules'))) {
+    for (const w of want) check(w + ' (api/node_modules is missing, so this could not run)', false, true);
+    return;
+  }
+  const { spawn } = await import('node:child_process');
+  const DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'loka-owed-retry-'));
+  const SLUG = 'retry-check', OWNER = 'owner@example.test';
+  const dir = path.join(DATA, 'private-datasets', SLUG);
+  fs.mkdirSync(dir, { recursive: true });
+  const NOTES = ['a pond by the old school, dry by March', 'busy market square at dawn', 'the lake path is walked every evening',
+    'a row of old houses and a temple', 'the well is shared by six families', 'a stream runs under the main road'];
+  const rowsOf = (tag) => NOTES.map((n, i) => ({ name: tag + ' ' + (i + 1), notes: n }));
+  // three layers of pins: kept nothing on retry, found questions on retry, still out of reach
+  const IDS = ['ponds', 'wells', 'lakes'];
+  fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({ title: 'Retry check', center: [77.6, 12.95], zoom: 10,
+    groups: [{ id: 'userdata', label: 'Your data', open: true }],
+    basemaps: [{ id: 'plain', label: 'Plain', default: true, type: 'raster', tiles: [] }], layers: [] }));
+  fs.writeFileSync(path.join(dir, 'manifest.local.json'), JSON.stringify({ layers: IDS.map((id) => ({
+    id, group: 'userdata', type: 'marker', source: 'user-' + id + '.geojson', label: id, default: true, userLayer: true,
+    popup: { title: 'name', fields: [{ label: 'Notes', property: 'notes' }] } })) }, null, 1));
+  for (const [k, id] of IDS.entries()) {
+    fs.writeFileSync(path.join(dir, 'user-' + id + '.geojson'), JSON.stringify({ type: 'FeatureCollection',
+      features: rowsOf(id).map((p, i) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [77.5 + i * 0.01, 12.9 + k * 0.01] },
+        properties: Object.assign({ latitude: 12.9 + k * 0.01, longitude: 77.5 + i * 0.01 }, p) })) }));
+  }
+  fs.writeFileSync(path.join(DATA, 'registry.json'), JSON.stringify({
+    instances: { [SLUG]: { slug: SLUG, title: 'Retry check', visibility: 'private', status: 'published', email: OWNER, tier: 'india', layers: [], createdAt: 1 } },
+    accounts: { [OWNER]: { email: OWNER, instances: [SLUG], verifiedAt: 1 } }, drafts: {} }));
+  // all three waiting on the list, as considerReading would have put them
+  const qf = path.join(DATA, 'question-readings.json');
+  const t = Date.now();
+  fs.writeFileSync(qf, JSON.stringify(Object.fromEntries(IDS.map((id, i) => [SLUG + '|' + id, {
+    dataset: SLUG, layerId: id, sig: signatureOf(rowsOf(id), RULES.isAnswerColumn), payer: OWNER,
+    state: 'queued', reason: '', queuedAt: t + i, at: t + i, restore: false }]))));
+  const of = path.join(DATA, 'owed.json');
+  const readJSON = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return {}; } };
+
+  const PORT = 8900 + Math.floor(Math.random() * 300);
+  let out = '';
+  const child = spawn(process.execPath, [path.join(ROOT, 'api', 'server.js')], {
+    env: { ...process.env, LOKA_PORT: String(PORT), LOKA_DATA_DIR: DATA, LOKA_DEV_STATIC: '1', MAIL_TRANSPORT: 'log',
+      GEMINI_API_KEY: '', ATLAS_FAKE_READING: '1', ATLAS_FAKE_READING_MS: '0', NODE_ENV: 'test',
+      ATLAS_FAKE_OWED_EVERY_MS: '150',
+      ATLAS_FAKE_READING_PLAN: JSON.stringify({ [SLUG + '|ponds']: ['unreachable', 'refused'],
+        [SLUG + '|wells']: ['unreachable'], [SLUG + '|lakes']: ['unreachable', 'unreachable'] }) },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  child.stdout.on('data', (d) => { out += d; });
+  child.stderr.on('data', (d) => { out += d; });
+  try {
+    const started = await until(() => /listening on/.test(out) || child.exitCode != null, 15000);
+    check('the server started', started && /listening on/.test(out), true);
+    if (!/listening on/.test(out)) { console.log(out.slice(-600)); return; }
+
+    // the first tries: all three out of reach, all three owed, the page says "will be tried again"
+    const firstDone = await until(() => {
+      const q = readJSON(qf);
+      return IDS.every((id) => q[SLUG + '|' + id] && q[SLUG + '|' + id].state === 'failed') && Object.keys(readJSON(of)).length === 3;
+    }, 15000);
+    check('the first tries were out of reach', firstDone, true);
+    const page1 = createQueue({ file: qf }).forDataset(SLUG);
+    check('each first try is recorded as out of reach, for the page to say it will be tried again',
+      IDS.map((id) => [page1[id].state, page1[id].unreachable, /^the AI could not be reached/.test(page1[id].reason)]),
+      IDS.map(() => ['failed', true, true]));
+
+    // due now, rather than in a minute
+    const owedNow = readJSON(of);
+    for (const o of Object.values(owedNow)) o.nextAt = 1;
+    fs.writeFileSync(of, JSON.stringify(owedNow, null, 2));
+    const retried = await until(() => {
+      const o = readJSON(of);
+      return !o[SLUG + '|ponds'] && !o[SLUG + '|wells'] && o[SLUG + '|lakes'] && o[SLUG + '|lakes'].attempts === 2;
+    }, 15000);
+    check('the retries ran', retried, true);
+    if (!retried) console.log(out.split('\n').filter((l) => /owed|questions/.test(l)).slice(-12).join('\n'));
+
+    const page2 = createQueue({ file: qf }).forDataset(SLUG);
+    const layers = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.local.json'), 'utf8')).layers;
+    const L = (id) => layers.find((l) => l.id === id) || {};
+
+    check('a retry that keeps nothing ends as "none", with the plain reason',
+      page2.ponds, { state: 'none', reason: "No questions were kept: most places didn't fit any theme.", unreachable: false });
+    check('and the layer is marked as looked at, as a first reading marks it', L('ponds').patternsNone, true);
+    check('it is off the owed list', !!readJSON(of)[SLUG + '|ponds'], false);
+    check('the owner is told it was read and nothing kept, with why',
+      /Subject: Your atlas has been read[\s\S]{0,400}no questions were kept for it[\s\S]{0,200}most places didn't fit any theme/.test(out), true);
+
+    check('a retry that finds questions ends as "done", no longer out of reach',
+      page2.wells, { state: 'done', reason: '', unreachable: false });
+    check('and the questions are on the layer',
+      Object.keys(L('wells').keyLabels || {}).filter((k) => /^pattern_\d+$/.test(k)).length > 0, true);
+    check('it is off the owed list too', !!readJSON(of)[SLUG + '|wells'], false);
+
+    check('a retry still out of reach stays owed, and the page still says it will be tried again',
+      [page2.lakes.state, page2.lakes.unreachable], ['failed', true]);
+  } finally {
+    try { child.kill('SIGTERM'); } catch {}
+    fs.rmSync(DATA, { recursive: true, force: true });
+  }
+})();
+
+console.log('\n  the retry\'s ending is the first reading\'s, read from the source');
+{
+  const code = server.replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const retry = code.slice(code.indexOf('async function retryOne'), code.indexOf('async function sweepOwed'));
+  check('the retry ends through the same endReading as the list', /const patch = await endReading\(o\.dataset, o\.layerId, out\);/.test(retry), true);
+  check('and writes that ending onto the record the page reads', /noteRetry\(o\.dataset, o\.layerId, patch, out\.sig\);/.test(retry), true);
+  check('the list ends through it too', /return endReading\(dataset, layerId, out\);/.test(code), true);
+  check('a reading given up on after a week stops promising another try',
+    /for \(const o of owed\.expired\(\)\) \{\s*owed\.settle\(o\.dataset, o\.layerId\);[\s\S]{0,120}?noteRetry\(/.test(code), true);
+  check('the stand-in plan and the quick sweep only exist with the stand-in on',
+    /const planned = FAKE_READING \? fakePlanFor\(dataset, layerId\) : '';/.test(code) &&
+    /const RETRY_EVERY = \(FAKE_READING && Number\(process\.env\.ATLAS_FAKE_OWED_EVERY_MS\)\) \|\| 60 \* 1000;/.test(code), true);
+}
+
 console.log('\n  the design notes');
 const design = fs.readFileSync(ROOT + '/DESIGN.md', 'utf8');
 check('DESIGN.md says where the questions are found now', /### Questions are found on the server \(October 2026\)/.test(design), true);

@@ -3985,7 +3985,9 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
     callers.push(c);
     return c;
   };
-  const ask = (missed) => FAKE_READING ? fakeReading(rows, fields, asked, caller()) : enrich.enrichRows({
+  // the stand-in's planned outcome for this reading, if a check planned one
+  const planned = FAKE_READING ? fakePlanFor(dataset, layerId) : '';
+  const ask = (missed) => FAKE_READING ? fakeReading(rows, fields, asked, caller(), planned) : enrich.enrichRows({
     rows, fields, title: (inst && inst.title) || dataset,
     mode: 'questions',
     keepQuestions: asked,
@@ -4116,10 +4118,27 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
    map — is the real thing. Two questions: how much was written about each
    place, and whether it mentions water. A layer that already settled on
    questions gets those back, answered the same simple way. */
-async function fakeReading(rows, fields, asked, pay) {
+/* A check can plan what the stand-in says, layer by layer and reading by
+   reading: ATLAS_FAKE_READING_PLAN is {"atlas|layer": ["unreachable",
+   "refused"]}, one word used up per reading, and once a layer's words run out
+   its readings go as usual. It is how a check plays out "the AI could not be
+   reached, then came back and kept nothing" without a model. Only ever read
+   when the stand-in itself is on (FAKE_READING). */
+let fakePlan = null;
+function fakePlanFor(dataset, layerId) {
+  if (!fakePlan) {
+    try { fakePlan = JSON.parse(process.env.ATLAS_FAKE_READING_PLAN || '{}') || {}; } catch { fakePlan = {}; }
+  }
+  const list = fakePlan[dataset + '|' + layerId];
+  return Array.isArray(list) && list.length ? String(list.shift()) : '';
+}
+
+async function fakeReading(rows, fields, asked, pay, planned) {
   // long enough to watch the owner's note come and go; ATLAS_FAKE_READING_MS changes it
   const wait = Number(process.env.ATLAS_FAKE_READING_MS || 15000);
   if (wait > 0) await new Promise((r) => setTimeout(r, Math.min(wait, 120000)));
+  // a planned "could not be reached": nothing is asked and nothing is paid
+  if (planned === 'unreachable') return { verdict: 'unavailable', trouble: '503 the stand-in is pretending to be busy' };
   // one call for finding the questions, one for answering them, both paid for
   // out of the same allowance a real reading would use
   await pay('fake', 'find', null, {});
@@ -4147,6 +4166,8 @@ async function fakeReading(rows, fields, asked, pay) {
     return q;
   }).filter((q) => q.categories.some((c) => c && c !== 'other'));
   if (!questions.length) return { verdict: 'no_clear_questions', note: 'nothing written to count' };
+  // a planned "LOKA's own check turned them down", as the gate would say it
+  if (planned === 'refused') return { verdict: 'refused', reason: "most places didn't fit any theme" };
   return { verdict: 'questions', questions, reading: 'Made up locally for checking, not by a model.', facts: [] };
 }
 
@@ -4392,6 +4413,17 @@ async function readingJob(job) {
     console.warn('[questions] ' + where + ' — ' + (e && e.message));
     return { state: 'failed', reason: String((e && e.message) || 'something went wrong').slice(0, 160) };
   }
+  return endReading(dataset, layerId, out);
+}
+
+/* How a reading ends, whoever ran it: the list as a layer is added
+   (readingJob), or the patient retry of one the AI could not be reached for
+   (retryOne). One ending for both, so a reading finished an hour late is
+   recorded exactly as one finished at once — questions, "looked and kept
+   nothing" with the reason, or handed to the owed list again. Answers what to
+   write on the list about it. */
+async function endReading(dataset, layerId, out) {
+  const where = dataset + '/' + layerId;
   if (out.wrote) {
     console.log('[questions] ' + where + ' — ' + out.questions.length + ' question' +
       (out.questions.length === 1 ? '' : 's') + ' written');
@@ -4461,7 +4493,8 @@ function cannotReach(verdict) { return verdict === 'unread' || verdict === 'unav
 // a refused key or a withdrawn model will not clear by waiting; busy will
 function troubleKind(why) { return /\b(404|400|401|403)\b/.test(String(why || '')) ? 'gone' : 'busy'; }
 
-const RETRY_EVERY = 60 * 1000;
+// a check running the stand-in may come back sooner (never on the live server)
+const RETRY_EVERY = (FAKE_READING && Number(process.env.ATLAS_FAKE_OWED_EVERY_MS)) || 60 * 1000;
 let retrying = false;
 
 async function tellTheOwner(o, subject, lines) {
@@ -4473,11 +4506,25 @@ async function tellTheOwner(o, subject, lines) {
   }
 }
 
+/* The record the owner's page reads (question-readings.json), brought up to
+   date by a retry — the same patch the list itself would have written after a
+   first reading. Left alone while the list is reading a newer version of the
+   same layer, or has already read one: that reading owns the record. */
+function noteRetry(dataset, layerId, patch, sig) {
+  if (QUESTIONS.isBusy(dataset, layerId)) return;
+  const had = QUESTIONS.get(dataset, layerId);
+  if (sig && had && had.sig && had.sig !== sig) return;
+  QUESTIONS.remember(dataset, layerId, Object.assign({ unreachable: false }, patch, { endedAt: Date.now() }));
+}
+
 async function retryOne(o) {
   const where = o.dataset + '/' + o.layerId;
   let out;
   try {
-    out = await runReading(o.dataset, o.layerId);
+    // read the way the list reads: the questions it last settled on, and not
+    // over places that changed while it was being read
+    out = await runReading(o.dataset, o.layerId, false, { guard: true,
+      keep: keptQuestions(QUESTIONS.loadAnswers(o.dataset, o.layerId)) });
   } catch (e) {
     // the layer or the atlas is gone: the debt goes with it
     if (e && (e.status === 404 || e.status === 400)) {
@@ -4489,8 +4536,14 @@ async function retryOne(o) {
     return;
   }
 
+  /* The same ending a first reading gets. Still out of reach: endReading has
+     put it back on the owed list, and the record keeps saying so. */
+  const patch = await endReading(o.dataset, o.layerId, out);
+  noteRetry(o.dataset, o.layerId, patch, out.sig);
+  if (patch.unreachable) return;
+  owed.settle(o.dataset, o.layerId);
+
   if (out.wrote) {
-    owed.settle(o.dataset, o.layerId);
     const waited = Math.max(1, Math.round((Date.now() - o.firstAt) / 60000));
     console.log('[owed] finished ' + where + ' after ' + o.attempts + ' tries');
     const inst = reg.getInstance(o.dataset);
@@ -4509,16 +4562,24 @@ async function retryOne(o) {
     return;
   }
 
-  if (cannotReach(out.verdict)) {
-    owed.owe({ dataset: o.dataset, layerId: o.layerId,
-      kind: troubleKind(out.trouble), trouble: out.trouble || '' });
-    return;
+  /* The reading ran and kept nothing. That is an answer, not a debt: the layer
+     and its record say so, with the reason, exactly as a first reading would.
+     The owner's page promised an email when it was done, so they get one. */
+  console.log('[owed] ' + where + ' — ' + patch.state + ': ' + (patch.reason || out.verdict));
+  if (patch.state === 'none') {
+    const inst = reg.getInstance(o.dataset);
+    const why = enrich.whyNothingKept(out);
+    await tellTheOwner(o, 'Your atlas has been read',
+      ['The AI could not be reached when you added this data, so nothing was written at the time.',
+       'It has been read now, and no questions were kept for it.',
+       '',
+       (inst && inst.title) || o.dataset,
+       ...(why ? ['', why] : []),
+       '',
+       'Your data is untouched.',
+       '',
+       'Open your atlas: https://loka.place/apps/atlas/?dataset=' + encodeURIComponent(o.dataset)]);
   }
-
-  /* The reading ran and found nothing to ask. That is an answer, not a debt —
-     and the layer records it, so it will not be rediscovered on every visit. */
-  owed.settle(o.dataset, o.layerId);
-  console.log('[owed] ' + where + ' has nothing to be asked (' + (enrich.whyNothingKept(out) || out.note || out.verdict) + ')');
 }
 
 async function sweepOwed() {
@@ -4527,6 +4588,9 @@ async function sweepOwed() {
   try {
     for (const o of owed.expired()) {
       owed.settle(o.dataset, o.layerId);
+      // the page stops saying it will be tried again; it no longer will be
+      noteRetry(o.dataset, o.layerId, { state: 'failed', unreachable: false,
+        reason: 'the AI could not be reached for a week, so this was stopped' });
       const days = Math.round(owed.GIVE_UP_MS / 86400000);
       console.warn('[owed] giving up on ' + o.dataset + '/' + o.layerId + ' after ' + days + ' days');
       await tellTheOwner(o, 'We could not read your atlas',
