@@ -409,8 +409,10 @@ await (async () => {
       page2.ponds, { state: 'none', reason: "No questions were kept: most places didn't fit any theme.", unreachable: false });
     check('and the layer is marked as looked at, as a first reading marks it', L('ponds').patternsNone, true);
     check('it is off the owed list', !!readJSON(of)[SLUG + '|ponds'], false);
-    check('the owner is told it was read and nothing kept, with why',
-      /Subject: Your atlas has been read[\s\S]{0,400}no questions were kept for it[\s\S]{0,200}most places didn't fit any theme/.test(out), true);
+    check('no email is sent when nothing is kept (waiting on Mithun\'s decision)',
+      /no questions were kept for it/.test(out), false);
+    check('the retry checks the record against this layer\'s own rows, so a split file is updated too',
+      /noteRetry\(o\.dataset, o\.layerId, patch, ownSig \|\| out\.sig\);/.test(fs.readFileSync(path.join(ROOT, 'api', 'apps', 'atlas.js'), 'utf8')), true);
 
     check('a retry that finds questions ends as "done", no longer out of reach',
       page2.wells, { state: 'done', reason: '', unreachable: false });
@@ -431,7 +433,7 @@ console.log('\n  the retry\'s ending is the first reading\'s, read from the sour
   const code = server.replace(/\/\*[\s\S]*?\*\//g, ' ');
   const retry = code.slice(code.indexOf('async function retryOne'), code.indexOf('async function sweepOwed'));
   check('the retry ends through the same endReading as the list', /const patch = await endReading\(o\.dataset, o\.layerId, out\);/.test(retry), true);
-  check('and writes that ending onto the record the page reads', /noteRetry\(o\.dataset, o\.layerId, patch, out\.sig\);/.test(retry), true);
+  check('and writes that ending onto the record the page reads', /noteRetry\(o\.dataset, o\.layerId, patch, ownSig \|\| out\.sig\);/.test(retry), true);
   check('the list ends through it too', /return endReading\(dataset, layerId, out\);/.test(code), true);
   check('a reading given up on after a week stops promising another try',
     /for \(const o of owed\.expired\(\)\) \{\s*owed\.settle\(o\.dataset, o\.layerId\);[\s\S]{0,120}?noteRetry\(/.test(code), true);
