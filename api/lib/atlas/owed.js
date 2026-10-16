@@ -23,7 +23,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FILE = path.join(__dirname, '..', '..', 'data', 'atlas', 'owed.json');
+// LOKA_DATA_DIR is for the checks in test/, as in registry.js; the live server never sets it
+const FILE = path.join(process.env.LOKA_DATA_DIR || path.join(__dirname, '..', '..', 'data', 'atlas'), 'owed.json');
 
 const MIN = 60 * 1000;
 const WAITS = [1 * MIN, 5 * MIN, 15 * MIN, 60 * MIN, 60 * MIN, 6 * 60 * MIN];
