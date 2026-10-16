@@ -227,6 +227,11 @@
     if (L.patternsNone) {
       wrap.appendChild(el("span", "own-door-said",
         "Analysed once \u2014 no pattern here runs through enough places to colour the map by."));
+      /* And why, when the server noted it: "most places didn't fit any theme"
+         is something an owner can act on; the line above alone is not. */
+      var said = readingOf(L.id);
+      var why = said && said.state === "none" ? plainWhy(said.reason) : "";
+      if (why) wrap.appendChild(el("p", "own-note", esc(why)));
       return;
     }
     var done = Object.keys(feats[0].properties || {})
@@ -286,6 +291,16 @@
     return (m && m.questions) || null;
   }
   function busyReading(q) { return !!q && (q.state === "queued" || q.state === "running"); }
+  /* The server's reason a reading kept nothing, as a line for the owner.
+     "No questions were kept: most places didn't fit any theme." becomes
+     "Why: most places didn't fit any theme." — the line above it already
+     says nothing was kept. The bare stand-in "no clear question" says
+     nothing the line above does not, so it is left out. */
+  function plainWhy(reason) {
+    var r = String(reason || "").replace(/^No questions were kept:\s*/, "").trim();
+    if (!r || r === "no clear question") return "";
+    return "Why: " + r;
+  }
 
   function showReading(L, feats, cols, wrap) {
     var q = readingOf(L.id);

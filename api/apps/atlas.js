@@ -4044,7 +4044,8 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
   if (out.verdict !== 'questions' || !(out.questions || []).length) {
     return { wrote: false, verdict: out.verdict, unread: out.unread || 0,
              read: out.read, batches: out.batches, trouble: out.trouble || '',
-             note: out.note || '', sig: sigAtStart, calls: spentBy(callers) };
+             note: out.note || '', reason: out.reason || '', withText: out.withText,
+             sig: sigAtStart, calls: spentBy(callers) };
   }
   /* Somebody put new places on this layer while it was being read. Writing now
      would lay these answers over the old places and throw their change away, so
@@ -4378,7 +4379,19 @@ async function readingJob(job) {
     return { state: 'failed', unreachable: true,
       reason: ('the AI could not be reached' + (out.trouble ? ' — ' + out.trouble : '')).slice(0, 160) };
   }
-  if (out.verdict === 'no_clear_questions') {
+  /* "We looked and kept nothing" is one outcome, whoever said no: the model
+     itself (no_clear_questions), or LOKA's own check turning down what the
+     model suggested (refused), or too few places with words to read
+     (too_thin). Each used to be its own thing — the last two ended as
+     'failed', with the reason dropped, which told the owner "nothing could be
+     found just now" as if it might come right by waiting. Nothing waits on a
+     failed reading; the same places are not read again either way. So all
+     three end the same way: noted on the layer as looked at, with the reason
+     in plain words where the owner, the record and the log can all see it. */
+  const nothingKept = enrich.whyNothingKept(out);
+  if (out.verdict === 'no_clear_questions' || nothingKept) {
+    const why = (nothingKept || out.note || 'no clear question').slice(0, 160);
+    console.log('[questions] ' + where + ' — ' + why);
     const got = layerAndRows(dataset, layerId);
     // a layer answering questions it settled on keeps them; only an unasked one is marked
     if (got && !questionsOn(got.layer, got.rows).length) {
@@ -4386,11 +4399,12 @@ async function readingJob(job) {
         return { state: 'failed', reason: 'nothing found, and that could not be noted — ' + (e && e.message) };
       }
       const now = layerAndRows(dataset, layerId);
-      return { state: 'none', reason: (out.note || 'no clear question').slice(0, 160),
+      return { state: 'none', reason: why,
         sig: now ? signatureOf(now.rows, RULES.isAnswerColumn) : out.sig };
     }
-    return { state: 'none', reason: (out.note || 'no clear question').slice(0, 160) };
+    return { state: 'none', reason: why };
   }
+  console.warn('[questions] ' + where + ' — no questions could be found (' + out.verdict + ')');
   return { state: 'failed', reason: ('no questions could be found (' + out.verdict + ')').slice(0, 160) };
 }
 
@@ -4470,7 +4484,7 @@ async function retryOne(o) {
   /* The reading ran and found nothing to ask. That is an answer, not a debt —
      and the layer records it, so it will not be rediscovered on every visit. */
   owed.settle(o.dataset, o.layerId);
-  console.log('[owed] ' + where + ' has nothing to be asked (' + out.verdict + ')');
+  console.log('[owed] ' + where + ' has nothing to be asked (' + (enrich.whyNothingKept(out) || out.note || out.verdict) + ')');
 }
 
 async function sweepOwed() {

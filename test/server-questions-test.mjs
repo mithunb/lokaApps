@@ -270,6 +270,50 @@ console.log('\n  the one-off for atlases read before this');
     JSON.parse(fs.readFileSync(path.join(roots, 'unread-one', 'manifest.local.json'), 'utf8')).layers[0].keyLabels, undefined);
 }
 
+console.log('\n  a reading LOKA turned down says why, in plain words');
+{
+  const enrich = await import('../api/lib/atlas/enrich.js');
+  const gate = enrich.gateShape({ counts: { Pond: 5, Lake: 4 }, other: 30, withText: 39 });
+  check('the check turns down a set most places did not fit', gate.verdict, 'refused');
+  check('and its reason becomes a sentence for the owner', enrich.whyNothingKept(gate),
+    "No questions were kept: most places didn't fit any theme.");
+  check('one theme taking nearly every place, said plainly',
+    enrich.whyNothingKept(enrich.gateShape({ counts: { Pond: 50, Lake: 4 }, other: 0, withText: 54 })),
+    'No questions were kept: one theme covered nearly every place.');
+  check('the counting reason is put in plainer words',
+    /^No questions were kept: once the places were answered, no question split them into enough groups/.test(
+      enrich.whyNothingKept({ verdict: 'refused', reason: 'no question survived the counting' })), true);
+  check('so is "kinds"', enrich.whyNothingKept({ verdict: 'refused', reason: 'no question had enough kinds that fit' }),
+    'No questions were kept: none of the suggested questions had enough answers that fit these places.');
+  check('a turned-down reading with no reason still gets a sentence',
+    enrich.whyNothingKept({ verdict: 'refused' }), 'No questions were kept: they did not pass LOKA’s own check.');
+  const thin = await enrich.enrichRows({ rows: [{ d: 'a pond' }, { d: '' }], fields: ['d'], title: 'T', mode: 'questions', callJSON: null, models: {} });
+  check('too few places with words is said too', [thin.verdict, enrich.whyNothingKept(thin)],
+    ['too_thin', 'No questions were kept: only 1 place has words written about it, too few to find a pattern in.']);
+  check('questions written, or a model out of reach, are not "kept nothing"',
+    [enrich.whyNothingKept({ verdict: 'questions' }), enrich.whyNothingKept({ verdict: 'unavailable' }),
+     enrich.whyNothingKept({ verdict: 'unread' }), enrich.whyNothingKept(null)], ['', '', '', '']);
+  const serverCode = server.replace(/\/\*[\s\S]*?\*\//g, ' ');
+  check('the reading hands the reason on to whoever ran it',
+    /reason: out\.reason \|\| '', withText: out\.withText,/.test(serverCode), true);
+  const job = serverCode.slice(serverCode.indexOf('async function readingJob'), serverCode.indexOf('function cannotReach'));
+  check('a turned-down reading ends as "looked, nothing kept", like the model\'s own no',
+    /const nothingKept = enrich\.whyNothingKept\(out\);\s*if \(out\.verdict === 'no_clear_questions' \|\| nothingKept\)/.test(job), true);
+  check('it is noted on the layer, so it is not read again for the same places',
+    /if \(out\.verdict === 'no_clear_questions' \|\| nothingKept\)[\s\S]*?writeNothingHere/.test(job), true);
+  check('the plain reason is what the record keeps', /return \{ state: 'none', reason: why,/.test(job), true);
+  check('and what the server log says', /console\.log\('\[questions\] ' \+ where \+ ' — ' \+ why\);/.test(job), true);
+  check('"failed" is left for what really went wrong',
+    (job.match(/state: 'failed'/g) || []).length >= 5 && !/'refused'/.test(job), true);
+  check('the owner sees why under "Analysed once"',
+    /said\.state === "none" \? plainWhy\(said\.reason\)/.test(ownerCode) &&
+    /replace\(\/\^No questions were kept:\\s\*\/, ""\)/.test(ownerCode), true);
+  const plainWhy = new Function(ownerCode.match(/function plainWhy\(reason\) \{[\s\S]*?\n  \}/)[0] + '; return plainWhy;')();
+  check('as "Why: …"', plainWhy("No questions were kept: most places didn't fit any theme."),
+    "Why: most places didn't fit any theme.");
+  check('the bare stand-in is left out, not said', [plainWhy('no clear question'), plainWhy('')], ['', '']);
+}
+
 console.log('\n  the design notes');
 const design = fs.readFileSync(ROOT + '/DESIGN.md', 'utf8');
 check('DESIGN.md says where the questions are found now', /### Questions are found on the server \(October 2026\)/.test(design), true);

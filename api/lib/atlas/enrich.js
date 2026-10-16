@@ -999,6 +999,38 @@ function keyKindsOf(rows, fields) {
   return out;
 }
 
+/* Why a reading kept no questions, in one sentence its owner can read.
+
+   The checks above turn a suggested set down in their own short words, and
+   those words used to stop at the server: the reading was recorded as "no
+   questions could be found (refused)", and when an atlas's layer was turned
+   down nobody could say why. This is the sentence that goes into the record,
+   the server's log and the owner's page instead.
+
+   Answers '' for anything that is not "we looked and kept nothing" — a reading
+   that wrote questions, or one that could not reach the model — so a caller
+   can use it to tell the two apart. The model's own "no" (no_clear_*) carries
+   its own sentence and is not reworded here. */
+const PLAINER = {
+  'no question had enough kinds that fit':
+    'none of the suggested questions had enough answers that fit these places',
+  'no question survived the counting':
+    'once the places were answered, no question split them into enough groups, or each only repeated a column the data already has',
+};
+export function whyNothingKept(out) {
+  if (!out) return '';
+  if (out.verdict === 'refused') {
+    const why = String(out.reason || '').trim();
+    return 'No questions were kept: ' + (PLAINER[why] || why || 'they did not pass LOKA’s own check') + '.';
+  }
+  if (out.verdict === 'too_thin') {
+    const n = Number(out.withText) || 0;
+    return 'No questions were kept: only ' + n + ' place' + (n === 1 ? ' has' : 's have') +
+      ' words written about ' + (n === 1 ? 'it' : 'them') + ', too few to find a pattern in.';
+  }
+  return '';
+}
+
 /* ---------------- the pipeline ----------------
    opts: { rows, fields, title, seedSet, callJSON, models: {flash, flashLite} }
    Resolves to ONE of:
