@@ -4577,6 +4577,11 @@ function noteRetry(dataset, layerId, patch, sig) {
 
 async function retryOne(o) {
   const where = o.dataset + '/' + o.layerId;
+  /* The fingerprint the record was written with is this layer's own rows. A
+     split file's reading fingerprints both halves together, which never
+     matches, so the record is checked against this layer's rows instead. */
+  const own = layerAndRows(o.dataset, o.layerId);
+  const ownSig = own ? signatureOf(own.rows, RULES.isAnswerColumn) : null;
   let out;
   try {
     // read the way the list reads: the questions it last settled on, and not
@@ -4597,7 +4602,7 @@ async function retryOne(o) {
   /* The same ending a first reading gets. Still out of reach: endReading has
      put it back on the owed list, and the record keeps saying so. */
   const patch = await endReading(o.dataset, o.layerId, out);
-  noteRetry(o.dataset, o.layerId, patch, out.sig);
+  noteRetry(o.dataset, o.layerId, patch, ownSig || out.sig);
   if (patch.unreachable) return;
   owed.settle(o.dataset, o.layerId);
 
@@ -4622,22 +4627,9 @@ async function retryOne(o) {
 
   /* The reading ran and kept nothing. That is an answer, not a debt: the layer
      and its record say so, with the reason, exactly as a first reading would.
-     The owner's page promised an email when it was done, so they get one. */
+     No email is sent for it until Mithun decides whether owners want one
+     (2026-10-16); the owner's page shows the reason. */
   console.log('[owed] ' + where + ' — ' + patch.state + ': ' + (patch.reason || out.verdict));
-  if (patch.state === 'none') {
-    const inst = reg.getInstance(o.dataset);
-    const why = enrich.whyNothingKept(out);
-    await tellTheOwner(o, 'Your atlas has been read',
-      ['The AI could not be reached when you added this data, so nothing was written at the time.',
-       'It has been read now, and no questions were kept for it.',
-       '',
-       (inst && inst.title) || o.dataset,
-       ...(why ? ['', why] : []),
-       '',
-       'Your data is untouched.',
-       '',
-       'Open your atlas: https://loka.place/apps/atlas/?dataset=' + encodeURIComponent(o.dataset)]);
-  }
 }
 
 async function sweepOwed() {
