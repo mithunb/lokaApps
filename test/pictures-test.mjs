@@ -66,7 +66,7 @@ check('read off the layer, not off the card',
 console.log('\n  several photographs become a carousel');
 const html = fs.readFileSync(ROOT + '/atlas/index.html', 'utf8');
 check('one photograph gets no arrows and no counter',
-  /if \(shots\.length === 1\) return '<div class="pop-shots">' \+ imgs/.test(src), true);
+  /if \(shots\.length === 1\) return '<div class="pop-shots is-waiting">' \+ SHOT_WAIT \+ imgs \+ "<\/div>"/.test(src), true);
 check('several get a strip that snaps',
   /scroll-snap-type:x mandatory/.test(html) && /scroll-snap-align:center/.test(html), true);
 check('and each fills the card rather than sharing it',

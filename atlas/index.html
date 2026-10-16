@@ -993,10 +993,23 @@
        a mouse and a keyboard. They used to sit two across at 120px each, which
        is a thumbnail of somewhere somebody actually stood. */
     .pop-shots { position:relative; margin:.1rem 0; }
-    .pop-shots .pop-img { margin:0; }
+    .pop-shots .pop-img { margin:0; position:relative; }
+    /* While a photograph is on its way, its room is a quiet panel that says
+       so — never an empty box. The picture paints over the panel as it
+       arrives; if it never does, the script takes the room away. */
+    .pop-shots.is-waiting { min-height:180px; }
+    .pop-shot-wait {
+      position:absolute; inset:0; display:none; flex-direction:column;
+      align-items:center; justify-content:center; gap:.35rem;
+      background:var(--color-surface-alt); color:var(--color-text-muted);
+      font-size:var(--t-meta); border-radius:var(--radius-md);
+    }
+    .pop-shots.is-waiting .pop-shot-wait { display:flex; }
+    .pop-strip .pop-img { background:var(--color-surface-alt); }
     .pop-strip {
       display:flex; gap:.25rem; overflow-x:auto; scroll-snap-type:x mandatory;
       scrollbar-width:none; -ms-overflow-style:none; border-radius:var(--radius-md);
+      position:relative;
     }
     .pop-strip::-webkit-scrollbar { display:none; }
     .pop-strip .pop-img { flex:0 0 100%; scroll-snap-align:center; }
