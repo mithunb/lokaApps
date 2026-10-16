@@ -222,7 +222,7 @@ check('the owner\'s own question is asked of both halves and written to both',
 check('each half\'s write carries its own layer, so an area layer keeps its shapes', /dataset, layer: h\.layer, layerId: h\.layer\.id, rows: h\.rows, questions: mine,/.test(server), true);
 check('a reading\'s write on either half is noted and its answers kept, before the twin rule', server.indexOf("if (opts && opts.fromReading) {") < server.indexOf("if (RULES.readByItsTwin(layer, layers)) return 'read through its pins';") &&
   server.indexOf("if (RULES.readByItsTwin(layer, layers)) return 'read through its pins';") < server.indexOf("if (!ai && !FAKE_READING) return 'no model';"), true);
-check('switching a question off on one half switches it off on the other', /if \(Array\.isArray\(b\.hiddenKeys\) && layer\.sameFileAs\) \{\s*imports\.relabelLayer\(dataset, layer\.sameFileAs, \{ hiddenKeys: b\.hiddenKeys \}\);/.test(server), true);
+check('switching a question off on one half switches it off on the other', /if \(layer\.sameFileAs\) \{[\s\S]{0,400}if \(Array\.isArray\(b\.hiddenKeys\)\) twin\.hiddenKeys = b\.hiddenKeys;[\s\S]{0,300}imports\.relabelLayer\(dataset, layer\.sameFileAs, twin\);/.test(server), true);
 check('the rule\'s own note no longer claims the halves hold the same rows', /Both twins hold the same\s*rows/.test(rules), false);
 check('the one-off list counts every row the reading will cover', /const places = rows\.length \+ \(\(\(twinGJ && twinGJ\.features\) \|\| \[\]\)\.length\);/.test(script), true);
 

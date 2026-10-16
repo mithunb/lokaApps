@@ -101,7 +101,7 @@ check('twins are found as the data lands', /if \(shape\) findTwins\(L, gj\);/.te
 check('on the map each twin\'s label carries both names, so the survivor says the whole truth', /props\[t\.property\] = joinNames\(f\._twins\.map/.test(js), true);
 check('a tap that lands on several rows opens the card with a chooser', /openPopup\(top\.L, top\.f, e\.lngLat, null, null, rowsUnder\(e\.point, top\)\);/.test(js), true);
 check('the chooser says how many are here and names each', /countWords\(rows\.length, layerNoun\(L\)\)\) \+ " here<\/span>"/.test(js) && /class="pop-twin" data-row=/.test(js), true);
-check('pressing a name swaps the card and moves the ring', /function wireChooser\(pop, L, rows\) \{[\s\S]*?selectRow\(L, r,[\s\S]*?pop\.setHTML\(chooserHTML\(L, rows, r\) \+ popupHTML\(L, f\.properties\)\);/.test(js), true);
+check('pressing a name swaps the card and moves the ring', /function wireChooser\(pop, L, rows\) \{[\s\S]*?selectRow\(L, r,[\s\S]*?pop\.setHTML\(chooserHTML\(L, rows, r\) \+ popupHTML\(L, f\.properties, f\)\);/.test(js), true);
 check('twins on the map fold into one disc and fan like co-located pins — the chooser stays for a tap on the shading', /function twinRowsOf\(L, f\)/.test(js) && /rowsUnder\(e\.point, top\)/.test(js), true);
 check('the chip the card is showing is lit Sindoor', /\.pop-twin\[aria-pressed="true"\] \{ background:var\(--color-sindoor-tint\); border-color:var\(--color-sindoor\);/.test(html), true);
 check('only a contributed shape layer gets a chooser; pins fan out as before', /if \(!collectionLayer\(L\) \|\| L\.type === "marker"\) return null;/.test(js), true);

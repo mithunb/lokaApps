@@ -397,6 +397,28 @@
 }
 .own-note { font-size:var(--t-label); color:var(--color-text-muted); font-weight:400; }
 .own-note.warnish { color:var(--color-sindoor-deep); }
+
+/* "Identify each place by" — first in the layer's fold: the question, its one
+   quiet line, the optional second column, four real names cut the way the map
+   cuts them, the count of places left nameless, and the wait while the map is
+   renamed. The Add-data step draws the same control (databench.css, .name-*). */
+.own-name { margin-bottom:.9rem; }
+.own-name-lbl { font-weight:600; color:var(--color-text-secondary); }
+.own-name-also { display:flex; flex-direction:column; gap:.25rem; margin-top:.45rem;
+  font-weight:600; color:var(--color-text-secondary); }
+.own-name-also .own-note { display:inline; }
+.own-name-peek { list-style:none; margin:.45rem 0 0; padding:0; display:flex; flex-direction:column; gap:.2rem; }
+.own-name-row { display:flex; align-items:baseline; gap:.45rem; min-width:0;
+  font-size:var(--t-meta); color:var(--color-text-primary); font-weight:400; }
+.own-name-pin { flex:0 0 auto; width:8px; height:8px; border-radius:50% 50% 50% 0;
+  transform:rotate(-45deg) translateY(1px); background:var(--color-leaf);
+  box-shadow:0 0 0 1.5px var(--color-surface); }
+.own-name-n { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.own-name-n.is-row { color:var(--color-text-muted); font-style:italic; }
+.own-name-why { font-size:var(--t-label); color:var(--color-text-muted); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.own-name-empty, .own-name-state { margin:.2rem 0 0; }
+.own-name-state:empty { display:none; }
 .own-err { font-size:var(--t-meta); color:var(--color-sindoor-deep); margin:0; }
 
 

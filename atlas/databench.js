@@ -222,6 +222,21 @@
              so the person who wanted it isn't left staring at an absence -->
         <p class="tag-note" id="tag-note" hidden></p>
 
+        <!-- which column identifies a place: the same question, in the same
+             words, as the layer's Settings fold on the atlas (owner.js). Four
+             real names show what the choice does before it is made. -->
+        <div class="f name-by" id="w-poptitle">
+          <label for="s-poptitle">Identify each place by</label>
+          <select id="s-poptitle"></select>
+          <span class="note">The name each place is known by — shown beside its pin, at the top of its card and in search. Choose which column it comes from.</span>
+          <label class="name-also" id="w-poptitle2" for="s-poptitle2"><span>Add a second column <span class="hint">(optional)</span></span>
+            <select id="s-poptitle2"></select>
+          </label>
+          <ul class="name-peek" id="poptitle-peek"></ul>
+          <p class="note warnish" id="poptitle-empty" role="status" hidden></p>
+          <p class="note" id="poptitle-left" hidden></p>
+        </div>
+
         <label class="f" id="w-palette" hidden>Colour ramp<select id="s-palette"></select></label>
 
         <div class="f" id="w-onecolour" hidden><span id="one-colour-lbl">Which colour</span>
@@ -240,11 +255,6 @@
         </div>
         <div class="key-block"><ul class="key" id="key-rows"></ul></div>
         <p class="hint" id="style-state" role="status"></p>
-
-        <label class="f" id="w-poptitle">Call each place by
-          <select id="s-poptitle"></select>
-          <span class="note">The name shown when someone points at or opens a place.</span>
-        </label>
 
         <label class="f" id="w-image" hidden><span>Show photos from <span class="hint">(optional)</span></span>
           <select id="s-image"></select>
@@ -2131,22 +2141,119 @@
     return (stem && label === stem) ? prettyName(stem) : label;
   }
 
-  // the columns a popup could be titled by, and the server's own preference
-  // when the spec names none — the edit screen's rule, word for word
+  /* The columns a place could be identified by — words, not pictures; not an
+     id for each row, not a column that says the same thing for every place,
+     not the answers to the questions (the key shows those). Each says what it
+     holds, so the choice is between things and not between names. The same
+     rule, in the same words, runs in the layer's Settings fold (owner.js,
+     nameChoicesOf) — one on the server's profiles, one on the loaded places. */
   var NAMEISH = /^(name|title|label|place|description|desc|site|spot)s?$/i;
-  function titleColumns() {
+  var ID_LIKE = /(^|_)(id|uuid|guid)$/i;
+  function nameChoices() {
+    var total = (S.result && S.result.rowCount) || 0;
     return resultProfiles().filter(function (p) {
-      return p.type === "string" && !p.looksLikeImage && p.name.charAt(0) !== "_";
-    }).map(function (p) { return p.name; });
+      if (p.type !== "string" || p.looksLikeImage) return false;
+      if (p.name.charAt(0) === "_" || /^pattern_/.test(p.name) || ID_LIKE.test(p.name)) return false;
+      if (!p.filled || p.kinds <= 1) return false;
+      // every entry different, on a long list: an id, whatever it is called
+      if (p.kinds === p.filled && p.filled > 20 && !p.multiValue && !p.looksLikeName) return false;
+      return true;
+    }).map(function (p) {
+      return { name: p.name, filled: p.filled, total: total, kinds: p.kinds, shared: !!p.categorical,
+        label: nameChoiceLabel(p.name, p.filled, total, p.kinds, !!p.categorical) };
+    });
   }
+  function nameChoiceLabel(name, filled, total, kinds, shared) {
+    var t = name + " — " + (total && filled >= total ? "every place" : filled + " of " + total + " places");
+    if (shared) t += ", " + kinds + " kinds, shared";
+    return t;
+  }
+  function nameChoiceNames() { return nameChoices().map(function (c) { return c.name; }); }
+  function titleColumns() { return nameChoiceNames(); }
   function guessTitle() {
     var cols = titleColumns();
     var byName = cols.filter(function (n) { return NAMEISH.test(n.trim()); })[0];
     if (byName) return byName;
     var nameish = resultProfiles().filter(function (p) {
-      return p.type === "string" && p.looksLikeName && !p.looksLikeImage && p.name.charAt(0) !== "_";
+      return p.type === "string" && p.looksLikeName && !p.looksLikeImage && cols.indexOf(p.name) >= 0;
     })[0];
     return (nameish && nameish.name) || cols[0] || null;
+  }
+  // a name cut the way the map cuts it beside a pin: at a word, with an ellipsis
+  var MAP_CUT = 32;
+  function mapCut(s, max) {
+    s = String(s || "").trim();
+    if (s.length <= max) return s;
+    var cut = s.slice(0, max - 1);
+    var sp = cut.lastIndexOf(" ");
+    if (sp > max * 0.5) cut = cut.slice(0, sp);   // the map's own rule (atlas.js shortName)
+    return cut.replace(/[\s,;:–—-]+$/, "") + "…";
+  }
+  /* Four real places, named the way the choice would name them; then how many
+     places the choice leaves with no name, which are called by their row. */
+  function syncNamePeek() {
+    var col = $("#s-poptitle").value;
+    var peek = $("#poptitle-peek"), rows = (S.result && S.result.peekRows) || [];
+    if (!col) { peek.innerHTML = ""; $("#poptitle-empty").hidden = true; return; }
+    // the second list offers everything but the first choice — refilled
+    // first, so a second that just became the first is no longer a second
+    var second = $("#s-poptitle2"), was = second.value;
+    fillSelect("#s-poptitle2", nameChoices().filter(function (c) { return c.name !== col; })
+      .map(function (c) { return { value: c.name, label: c.label }; }), null, true);
+    second.value = (was && was !== col) ? was : "";
+    second.options[0].textContent = "— none —";
+    var also = second.value;
+    var cell = function (r, c) { return c ? String(r[c] == null ? "" : r[c]).trim() : ""; };
+    peek.innerHTML = rows.map(function (r, i) {
+      var name = [cell(r, col), cell(r, also)].filter(Boolean).join(" · ");
+      if (!name) {
+        return '<li class="name-peek-row"><span class="name-peek-pin" aria-hidden="true"></span>' +
+          '<span class="name-peek-n is-row">Place ' + (i + 1) + "</span>" +
+          '<span class="name-peek-why">nothing in ' + esc(also ? col + " or " + also : col) + " for this row</span></li>";
+      }
+      var short = mapCut(name, MAP_CUT);
+      return '<li class="name-peek-row"><span class="name-peek-pin" aria-hidden="true"></span>' +
+        '<span class="name-peek-n"' + (short !== name ? ' title="' + esc(name) + '"' : "") + ">" + esc(short) + "</span></li>";
+    }).join("");
+    var empty = (S.result && S.result.emptyRows) || {};
+    var blank = empty[col] || [];
+    if (also) {
+      var inAlso = {};
+      (empty[also] || []).forEach(function (i) { inAlso[i] = true; });
+      blank = blank.filter(function (i) { return inAlso[i]; });
+    }
+    var line = $("#poptitle-empty");
+    var choice = nameChoices().filter(function (c) { return c.name === col; })[0];
+    if (blank.length) {
+      line.hidden = false;
+      line.textContent = blank.length + (blank.length === 1 ? " place has" : " places have") + " nothing in " +
+        (also ? col + " or " + also : col) + ". " + (blank.length === 1 ? "It" : "They") + " will be called by " +
+        (blank.length === 1 ? "its" : "their") + " row: " +
+        blank.slice(0, 3).map(function (i) { return "Place " + (i + 1); }).join(", ") + (blank.length > 3 ? "…" : "") + ".";
+    } else if (choice && choice.shared && !also) {
+      line.hidden = false;
+      line.textContent = "Only " + choice.kinds + " different names for " + choice.total +
+        " places, so many pins will carry the same one. This column may suit “Colour places by” better.";
+    } else {
+      line.hidden = true;
+    }
+  }
+  // what is not offered, said once so nobody hunts for an absent column
+  function syncNameLeftOut() {
+    var offered = {};
+    nameChoiceNames().forEach(function (n) { offered[n] = true; });
+    var out = [];
+    var qs = 0;
+    resultProfiles().forEach(function (p) {
+      if (offered[p.name] || p.name.charAt(0) === "_" || p.type !== "string" || p.looksLikeImage) return;
+      if (/^pattern_/.test(p.name)) { qs++; return; }
+      if (ID_LIKE.test(p.name) || (p.kinds === p.filled && p.filled > 20 && !p.multiValue && !p.looksLikeName)) out.push(p.name + " (an id for each row)");
+      else if (p.filled && p.kinds <= 1) out.push(p.name + " (the same for every place)");
+    });
+    if (qs) out.push("the answers to your questions (the key shows those)");
+    var el = $("#poptitle-left");
+    el.hidden = !out.length;
+    el.textContent = out.length ? "Not offered: " + out.join(", ") + "." : "";
   }
   function imageColumns() {
     return resultProfiles().filter(function (p) { return p.looksLikeImage; })
@@ -2181,12 +2288,22 @@
       if (spec.lineWidth) $("#s-linewidth").value = String(spec.lineWidth);
       $("#s-linedash").checked = !!spec.lineDash;
       if (spec.fillOpacity) $("#s-fillopacity").value = String(spec.fillOpacity);
-      var titles = titleColumns();
+      var choices = nameChoices(), titles = choices.map(function (c) { return c.name; });
       var seedTitle = (spec.popupTitleColumn && titles.indexOf(spec.popupTitleColumn) >= 0 && spec.popupTitleColumn) ||
         (role(result, "placeName") && titles.indexOf(role(result, "placeName")) >= 0 && role(result, "placeName")) ||
         guessTitle();
-      if (titles.length) fillSelect("#s-poptitle", titles, seedTitle || titles[0]);
+      if (titles.length) {
+        fillSelect("#s-poptitle", choices.map(function (c) { return { value: c.name, label: c.label }; }), seedTitle || titles[0]);
+        fillSelect("#s-poptitle2", [], "", true);
+        if (spec.popupTitleAlso && titles.indexOf(spec.popupTitleAlso) >= 0 && spec.popupTitleAlso !== $("#s-poptitle").value) {
+          fillSelect("#s-poptitle2", choices.filter(function (c) { return c.name !== $("#s-poptitle").value; })
+            .map(function (c) { return { value: c.name, label: c.label }; }), spec.popupTitleAlso, true);
+        }
+        syncNamePeek();
+        syncNameLeftOut();
+      }
       $("#w-poptitle").hidden = !titles.length;
+      $("#w-poptitle2").hidden = titles.length < 2;
       S.styleReady = true;
     }
     syncStyleVisibility();
@@ -2271,9 +2388,12 @@
       lineDash: $("#s-linedash").checked || undefined,
       fillOpacity: Number($("#s-fillopacity").value) || undefined,
       popupTitleColumn: $("#s-poptitle").value || undefined,
+      popupTitleAlso: ($("#s-poptitle").value && $("#s-poptitle2").value) || undefined,
       outsideAction: outsideChoice(),
     });
-    $("#style-state").innerHTML = LokaWait.html("Updating the preview…");
+    var renaming = spec.popupTitleColumn !== (S.result.spec || {}).popupTitleColumn ||
+      (spec.popupTitleAlso || "") !== ((S.result.spec || {}).popupTitleAlso || "");
+    $("#style-state").innerHTML = LokaWait.html(renaming ? "Renaming the places on the map…" : "Updating the preview…");
     return api("layers/apply", { method: "POST", body: applyBody(true, spec) }).then(function (r) {
       S.result = r;
       $("#style-state").textContent = "";
@@ -2285,9 +2405,11 @@
     });
   }
 
-  ["#s-label", "#s-shape", "#s-colour", "#s-image", "#s-palette", "#s-poptitle",
+  ["#s-label", "#s-shape", "#s-colour", "#s-image", "#s-palette", "#s-poptitle", "#s-poptitle2",
    "#s-linewidth", "#s-linedash", "#s-fillopacity"].forEach(function (sel) {
     $(sel).addEventListener("change", function () {
+      // the four names change at once — they come from the rows in hand
+      if (sel === "#s-poptitle" || sel === "#s-poptitle2") syncNamePeek();
       syncStyleVisibility();
       scheduleApply(applyStyle);
     });

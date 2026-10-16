@@ -230,6 +230,32 @@
     .tag-note { font-size:var(--t-meta); color:var(--color-text-muted); margin:-.4rem 0 .9rem;
       max-width:46ch; text-wrap:pretty; }
 
+    /* "Identify each place by": the question, its one quiet line, the optional
+       second column, four real names cut the way the map cuts them, and the
+       count of places the choice leaves nameless. The same shape as the
+       layer's Settings fold on the atlas (owner.css, .own-name-*). */
+    .name-by > label[for] { flex:1 0 100%; }
+    .name-by > .note { flex:1 0 100%; font-weight:400; font-size:var(--t-meta);
+      color:var(--color-text-muted); margin-top:.3rem; max-width:46ch; text-wrap:pretty; }
+    .name-by > .note.warnish { color:var(--color-sindoor-deep); }
+    .name-also { display:flex; flex-wrap:wrap; gap:.15rem .4rem; flex:1 0 100%; margin-top:.55rem;
+      font-size:var(--t-meta); font-weight:600; color:var(--color-text-secondary); }
+    .name-also > span { flex:1 0 100%; }
+    .name-also .hint { font-weight:400; }
+    .name-also > select { flex:1 0 100%; margin-top:.15rem; }
+    .name-peek { list-style:none; margin:.6rem 0 0; padding:0; flex:1 0 100%;
+      display:flex; flex-direction:column; gap:.25rem; font-weight:400; }
+    .name-peek-row { display:flex; align-items:baseline; gap:.45rem; min-width:0;
+      font-size:var(--t-ui); color:var(--color-text-primary); }
+    .name-peek-pin { flex:0 0 auto; width:9px; height:9px; border-radius:50% 50% 50% 0;
+      transform:rotate(-45deg) translateY(1px); background:var(--color-leaf);
+      box-shadow:0 0 0 1.5px var(--color-surface); }
+    .name-peek-n { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+    .name-peek-n.is-row { color:var(--color-text-muted); font-style:italic; }
+    .name-peek-why { font-size:var(--t-meta); color:var(--color-text-muted); white-space:nowrap;
+      overflow:hidden; text-overflow:ellipsis; min-width:0; }
+    .name-by > .note + .name-also, .name-peek + .note { margin-top:.5rem; }
+
     /* the five named colours, picked by eye rather than by name */
     .swatches { display:flex; gap:.35rem; margin-top:.45rem; flex-wrap:wrap; flex:1 0 100%; }
     .sw { width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center;

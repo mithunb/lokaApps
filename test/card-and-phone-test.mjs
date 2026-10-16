@@ -79,7 +79,7 @@ check('and so does a hyphenated slug with no spaces', prettify('place-tags'), 'P
 
 console.log('\n  the rule has one home');
 check('the import path uses it rather than keeping a copy',
-  /import \{ detectDelimiter, prettify \} from '\.\.\/fragment\.js';/.test(imports), true);
+  /import \{ detectDelimiter, prettify, pinNamesFor \} from '\.\.\/fragment\.js';/.test(imports), true);
 check('and no second copy of the old cut survives there',
   /slice\(0, 40\)[\s\S]{0,40}\n\s*const f = \{ label/.test(imports), false);
 

@@ -136,18 +136,34 @@ export function splitTokens(value, delim) {
   return String(value).split(delim).map((t) => t.trim()).filter(Boolean);
 }
 
-// Only SHORT, single-line, name-like values belong drawn on the map face.
-// Long/descriptive text (a `description` column) must stay in the popup — on the
-// map it overlaps into an unreadable mess. Decides whether a title column may be
-// used as an on-map label_text.
-export function isMapLabelColumn(feats, col) {
-  if (!col) return false;
-  const vals = feats.map((f) => (f.properties ? f.properties[col] : undefined))
-    .filter((v) => v !== undefined && v !== null && v !== '').map(String);
-  if (!vals.length) return false;
-  const avg = vals.reduce((a, s) => a + s.length, 0) / vals.length;
-  const anyLong = vals.some((s) => s.length > 40 || /[\r\n]/.test(s));
-  return avg <= 25 && !anyLong;
+/* What a place is called, from its popup stanza: the chosen column, and the
+   second one joined after a middle dot when there is one — "Asha Rao · Western
+   Ghats Collective". An empty part is dropped, so a person with no
+   organisation is just their name; nothing in either is "". The viewer's
+   popupTitleText applies the same rule to the same stanza. */
+export function placeNameOf(props, popup) {
+  if (!popup || !props) return '';
+  const cell = (c) => {
+    if (!c) return '';
+    const v = props[c];
+    if (v === undefined || v === null) return '';
+    const s = String(v).trim();
+    return (s === 'null' || s === 'undefined') ? '' : s;
+  };
+  return [cell(popup.title), cell(popup.titleAlso)].filter(Boolean).join(' · ');
+}
+
+/* The name beside a pin follows the owner's choice, whatever its length — the
+   map cuts a sentence at a word (maxChars) and drops a name that would
+   collide, so a long column is noisy, never a mess. It used to be written only
+   for short, name-like columns (an average under 25 letters, none over 40),
+   which left the pins of a layer whose only names were descriptions bare, and
+   left an owner choosing a column with no way to see it beside the pin. A
+   layer whose rows hold no name at all is still left bare. */
+export function pinNamesFor(feats, popup) {
+  if (!popup || !popup.title) return undefined;
+  const any = feats.some((f) => placeNameOf(f.properties || {}, popup));
+  return any ? { property: popup.title } : undefined;
 }
 
 // Above this many points a layer is drawn as plain circles instead of pins, which
@@ -229,10 +245,16 @@ export function buildFragment(spec, feats, existingIds) {
   const colsAboard = Object.keys((feats[0] && feats[0].properties) || {});
   const hasCol = (c) => c && colsAboard.includes(String(c)) && sampleVals(String(c)).length > 0;
   if (hasCol(spec.popupTitleColumn)) popup.title = String(spec.popupTitleColumn);
+  /* A place may be identified by two columns joined — a person and their
+     organisation — so the second travels beside the first as `titleAlso`, and
+     the viewer joins them (see placeNameOf). Only ever beside a first. */
+  if (popup.title && hasCol(spec.popupTitleAlso) && String(spec.popupTitleAlso) !== popup.title) {
+    popup.titleAlso = String(spec.popupTitleAlso);
+  }
   // a photo column renders as an image at the top of the popup
   if (spec.imageColumn) popup.fields.push({ label: prettify(spec.imageColumn), property: String(spec.imageColumn), type: 'image' });
   for (const c of (spec.popupColumns || []).filter((c) => !isAnswerColumn(c)).slice(0, 6)) {
-    if (c === popup.title || c === spec.imageColumn) continue;
+    if (c === popup.title || c === popup.titleAlso || c === spec.imageColumn) continue;
     if (!hasCol(c)) continue;   // a field the data no longer carries says nothing
     const fld = { label: prettify(c), property: String(c) };
     // ';'-delimited columns (labels, categories) render as tag chips — ';' is a
@@ -331,7 +353,7 @@ export function buildFragment(spec, feats, existingIds) {
       kept.forEach((v, i) => { markers[v] = { color: CATEGORY_COLORS[i % CATEGORY_COLORS.length], shape: shapeAt(i) }; });
       stanza = { ...base, type: 'marker', markerBy: matchProp, markers,
         markerDefault: { color: CATEGORY_OTHER }, categoryIcons: true,
-        label_text: (popup.title && isMapLabelColumn(feats, popup.title)) ? { property: popup.title } : undefined };
+        label_text: pinNamesFor(feats, popup) };
     } else if (/Point/.test(gt)) {
       stanza = { ...base, type: 'circle',
         paint: { radius: 5, color, strokeColor: '#F5F1E6', strokeWidth: 1.2 } };
@@ -472,7 +494,7 @@ export function buildFragment(spec, feats, existingIds) {
         label: String(spec.label).slice(0, 60), default: true,
         marker: { color },
         // long/descriptive titles stay in the popup, never drawn on the map
-        label_text: (popup.title && isMapLabelColumn(feats, popup.title)) ? { property: popup.title } : undefined,
+        label_text: pinNamesFor(feats, popup),
         legend: [{ color, label: String(spec.label).slice(0, 40), shape: 'dot' }],
         popup: { title: popup.title || 'name', fields: popup.fields },
         userLayer: true,
@@ -480,6 +502,7 @@ export function buildFragment(spec, feats, existingIds) {
     }
   }
   if (spec.subgroup) stanza.subgroup = String(spec.subgroup).slice(0, 30);
+  if (popup.titleAlso && stanza.popup) stanza.popup.titleAlso = popup.titleAlso;
   return { stanza, sourceFile, kindUsed: stanza.type, derivedKeys };
 }
 

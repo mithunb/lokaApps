@@ -62,8 +62,11 @@ check('a braced title reads as words', popupTitleText(L, { labels: '{a,b}' }), '
 console.log('\n  every place a value reaches a visitor goes through the same rule');
 check('a card row is left out when it says nothing', /if \(!cellShown\(v\)\) return;/.test(src), true);
 check('a card row reads as words', /var shown = cellShown\(v\);/.test(src), true);
-check('a pin’s name on the map', /var v = cellShown\(e\.f\.properties\[t\.property\]\);/.test(src), true);
-check('a shape’s name on the map', /var nm = cellShown\(props\[t\.property\]\);/.test(src), true);
+// both go through labelNameOf, which reads a plain column with cellShown and
+// the naming column through popupTitleText (itself cellShown on each part)
+check('a pin’s name on the map', /var v = labelNameOf\(L, e\.f, t\);/.test(src), true);
+check('a shape’s name on the map', /var nm = labelNameOf\(L, f, t\);/.test(src), true);
+check('and a labelled column reads as words', /function labelNameOf\(L, f, t\) \{[\s\S]*?return cellShown\(f\.properties\[t\.property\]\);/.test(src), true);
 check('the words under an answer', /cellShown\(why\)\.split/.test(src), true);
 check('the line under a card title', /cellShown\(props\[spec\.subtitleProperty\]\)/.test(src), true);
 check('a key never counts "{}" as an answer', /v = unbrace\(v\); if \(v\) nonEmpty\.push\(v\)/.test(src), true);

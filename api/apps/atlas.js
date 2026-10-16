@@ -2228,6 +2228,23 @@ function pickCategoryColumn(profiles, placeNameCol) {
   return profiles.find((p) => p.categorical && p.name !== placeNameCol && !ADMINISH_RE.test(p.name.trim()));
 }
 
+// row numbers (from 0) with nothing in each column that holds words anywhere
+function emptyRowsByColumn(columns, rows) {
+  const out = {};
+  for (const c of columns) {
+    if (String(c).charAt(0) === '_') continue;
+    const blank = [];
+    let words = false;
+    rows.forEach((r, i) => {
+      const v = r ? r[c] : undefined;
+      if (v === null || v === undefined || String(v).trim() === '') blank.push(i);
+      else if (typeof v === 'string' && Number.isNaN(Number(v))) words = true;
+    });
+    if (words && blank.length) out[c] = blank;
+  }
+  return out;
+}
+
 const NAMEISH_RE = /^(name|title|label|place|description|desc|site|spot)s?$/i;
 // A human-readable title beats an id/coordinate. Prefer an explicit name/desc
 // column, then any short-text name-like column, else the first column.
@@ -2557,6 +2574,7 @@ const LAYER_SPEC_SCHEMA = {
     fillOpacity: { type: Type.NUMBER },
     outline: { type: Type.BOOLEAN },
     popupTitleColumn: { type: Type.STRING },
+    popupTitleAlso: { type: Type.STRING },
     popupColumns: { type: Type.ARRAY, items: { type: Type.STRING } },
   },
 };
@@ -3393,6 +3411,24 @@ function applyResult(session, withDraft) {
       categorical: !!p.categorical, multiValue: !!p.multiValue,
       tagList: !!p.tagList, looksLikeName: !!p.looksLikeName, looksLikeImage: !!p.looksLikeImage,
     })),
+    rowCount: (session.rows || []).length,
+    /* Which rows have nothing in each column of words, so the naming choice
+       can say "9 places have nothing in Labels — they will be called Place 10,
+       Place 14…" for one column or for two together, without the rows. */
+    emptyRows: emptyRowsByColumn(session.columnsRaw || [], session.rows || []),
+    /* Four real rows, so "Identify each place by" can show what a choice
+       does before it is made — the same four whichever column is picked. The
+       owner's own data, back to the owner; cut so a long note stays short. */
+    peekRows: (session.rows || []).slice(0, 4).map((r) => {
+      const o = {};
+      for (const k of Object.keys(r || {})) {
+        if (k.charAt(0) === '_') continue;
+        const v = r[k];
+        if (v === null || v === undefined || typeof v === 'object') continue;
+        o[k] = String(v).slice(0, 120);
+      }
+      return o;
+    }),
     joinLayer: session.joinLayer || null,
     boundaries: session.boundaryOptions || null,
     columns: session.columns,
@@ -3881,6 +3917,20 @@ async function ingestLayerSteps(b, who, tell) {
       popupTitleColumn: nameGuess ? nameGuess.column : pickTitleColumn(profiles, columns),
       popupColumns: pickPopupColumns(profiles, { title: nameGuess ? nameGuess.column : pickTitleColumn(profiles, columns), image: imgCol && imgCol.name }),
     };
+    /* On a replace the layer's own choices win here too — the rule the model
+       path and the shapes path already keep. Without it a reading on a server
+       with no model (or a layer handed back for any other reason) came back
+       with a guessed name column, a guessed colour and a fresh card, undoing
+       what the owner had chosen under "Identify each place by". */
+    if (session.replacingSpec) {
+      session.spec = Object.assign({}, session.spec, session.replacingSpec);
+      if (session.spec.popupTitleColumn) {
+        session.columns.forEach((c) => {
+          c.role = c.name === session.spec.popupTitleColumn ? 'placeName' : (c.role === 'placeName' ? 'text' : c.role);
+        });
+      }
+    }
+    if (session.replacingLabel) session.spec.label = session.replacingLabel;
   }
 
   tell('matching');
@@ -5297,12 +5347,16 @@ function layerSearchRows(dir, stanza, sig) {
   let gj = null;
   try { gj = JSON.parse(fs.readFileSync(path.join(dir, String(stanza.source)), 'utf8')); } catch { return []; }
   const titleProp = (stanza.popup && stanza.popup.title) || '';
+  const alsoProp = (stanza.popup && stanza.popup.titleAlso) || '';
   const rows = ((gj && gj.features) || []).map((f, i) => {
     const p = (f && f.properties) || {};
     const text = featureSearchText(p);
     // the stanza's title property can be missing from the data (older layers) —
-    // fall back to the head of the searchable text so a hit is still legible
-    const title = (searchCellText(p[titleProp]).trim() || text).slice(0, 120);
+    // fall back to the head of the searchable text so a hit is still legible.
+    // A second naming column is joined the way the card joins it.
+    const named = [searchCellText(p[titleProp]).trim(), alsoProp ? searchCellText(p[alsoProp]).trim() : '']
+      .filter(Boolean).join(' · ');
+    const title = (named || text).slice(0, 120);
     return { i, title, text };
   });
   if (layerTextCache.size >= 8) layerTextCache.delete(layerTextCache.keys().next().value);
@@ -5915,6 +5969,7 @@ function specOfLayer(layer, layerId, rows, columns) {
     group: layer.group || 'userdata',
     categoryColumn: catCol,
     popupTitleColumn: layer.popup && layer.popup.title,
+    popupTitleAlso: (layer.popup && layer.popup.titleAlso) || undefined,
     popupColumns: ((layer.popup && layer.popup.fields) || []).map((f) => f.property),
     imageColumn: (((layer.popup && layer.popup.fields) || []).find((f) => f.type === 'image') || {}).property,
     palette: 'marigold',
@@ -6248,6 +6303,7 @@ router.post('/layers/relabel', (req, res) => {
   const onlyHiding = Array.isArray(b.hiddenKeys)
     && typeof b.label !== 'string'
     && typeof b.titleColumn !== 'string'
+    && typeof b.titleAlso !== 'string'
     && !Array.isArray(b.cardColumns);
   if (role !== 'owner' && !onlyHiding) {
     const who = auth.sessionFromReq(req);
@@ -6255,18 +6311,25 @@ router.post('/layers/relabel', (req, res) => {
       return res.status(403).json({ error: 'you can only change layers your organisation added' });
     }
   }
-  const out = imports.relabelLayer(dataset, layerId, {
-    label: typeof b.label === 'string' ? b.label : undefined,
+  const naming = {
     titleColumn: typeof b.titleColumn === 'string' ? b.titleColumn : undefined,
+    titleAlso: typeof b.titleAlso === 'string' ? b.titleAlso : undefined,
+  };
+  const out = imports.relabelLayer(dataset, layerId, Object.assign({
+    label: typeof b.label === 'string' ? b.label : undefined,
     hiddenKeys: Array.isArray(b.hiddenKeys) ? b.hiddenKeys : undefined,
     cardColumns: Array.isArray(b.cardColumns) ? b.cardColumns : undefined,
-  });
+  }, naming));
   if (!out) return res.status(404).json({ error: 'layer not found' });
   /* One file, one set of keys: a question switched off on one half of a split
      file is off on the other too, or the Map Browser's one row — whose keys
-     read both halves — would keep offering it. */
-  if (Array.isArray(b.hiddenKeys) && layer.sameFileAs) {
-    imports.relabelLayer(dataset, layer.sameFileAs, { hiddenKeys: b.hiddenKeys });
+     read both halves — would keep offering it. And one file, one way of naming
+     its places: the column that identifies a place names it on both halves. */
+  if (layer.sameFileAs) {
+    const twin = {};
+    if (Array.isArray(b.hiddenKeys)) twin.hiddenKeys = b.hiddenKeys;
+    if (naming.titleColumn !== undefined || naming.titleAlso !== undefined) Object.assign(twin, naming);
+    if (Object.keys(twin).length) imports.relabelLayer(dataset, layer.sameFileAs, twin);
   }
   res.json(Object.assign({ ok: true }, out));
 });

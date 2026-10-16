@@ -1512,11 +1512,12 @@
          the whole truth. The dot is still one per row, on the same spot. */
       if (f._twins && t.property) {
         if (props === f.properties) { props = {}; for (var k2 in f.properties) props[k2] = f.properties[k2]; }
-        props[t.property] = joinNames(f._twins.map(function (r) { return popupTitleText(L, gj.features[r].properties) || cellShown(gj.features[r].properties[t.property]); }));
-      } else if (t.property && props[t.property] != null) {
-        // a name is written on the map as it reads on the card: "{}" writes nothing
-        var nm = cellShown(props[t.property]);
-        if (nm !== String(props[t.property]).trim()) {
+        props[t.property] = joinNames(f._twins.map(function (r) { return labelNameOf(L, gj.features[r], t); }));
+      } else if (t.property) {
+        // a name is written on the map as it reads on the card: "{}" writes
+        // nothing, two naming columns write both, an empty one writes the row
+        var nm = labelNameOf(L, f, t);
+        if (nm !== String(props[t.property] == null ? "" : props[t.property]).trim()) {
           if (props === f.properties) { props = {}; for (var k3 in f.properties) props[k3] = f.properties[k3]; }
           props[t.property] = nm;
         }
@@ -1747,7 +1748,7 @@
     // display:none, so the tab order only ever holds what's visible.
     node.setAttribute("role", "button");
     node.tabIndex = 0;
-    var pinName = popupTitleText(L, f.properties);
+    var pinName = placeName(L, f);
     node.setAttribute("aria-label", pinName || (L.label || "place") + " — details");
     node.addEventListener("keydown", function (e) {
       if (e.key !== "Enter" && e.key !== " ") return;
@@ -1757,7 +1758,7 @@
     });
     // hovering names the pin without a click (see HOVER TOOLTIP), and when
     // keys are on it also says what this place is under each of them
-    wireMarkerHint(node, function () { return popupTitleText(L, f.properties); },
+    wireMarkerHint(node, function () { return placeName(L, f); },
       function () { return keyRowsEl(L, f.properties); });
     markersByLayer[L.id].push(entry);
     return entry;
@@ -3121,7 +3122,7 @@
     if (L._visible !== false && !folded) {
       (markersByLayer[L.id] || []).forEach(function (e) {
         if (e.hidden || e._clustered || e._absorbed || e._fanned) return;
-        var v = cellShown(e.f.properties[t.property]);
+        var v = labelNameOf(L, e.f, t);
         if (!v) return;
         feats.push({ type: "Feature", geometry: e.f.geometry, properties: { _name: shortName(String(v), max) } });
       });
@@ -5827,12 +5828,12 @@
     var out = [];
     if (hasPins(L)) {
       (markersByLayer[L.id] || []).forEach(function (e) {
-        out.push({ row: e.f._row, name: popupTitleText(L, e.f.properties), color: e.color || oneColorOf(L), e: e, hidden: !!e.hidden });
+        out.push({ row: e.f._row, name: placeName(L, e.f), color: e.color || oneColorOf(L), e: e, hidden: !!e.hidden });
       });
     } else {
       var fill = (L.paint && L.paint.fillColor) || (L.paint && L.paint.color) || "#40573D";
       searchRows(L).forEach(function (e) {
-        out.push({ row: e.f._row, name: popupTitleText(L, e.f.properties), color: fill, e: e, hidden: !!e.hidden });
+        out.push({ row: e.f._row, name: placeName(L, e.f), color: fill, e: e, hidden: !!e.hidden });
       });
     }
     return out.map(function (it) { if (!it.name) it.name = nounOne(layerNoun(L)) + " " + (it.row + 1); return it; });
@@ -5905,7 +5906,7 @@
     h += '<span class="pop-twins-n">' + esc(countWords(rows.length, layerNoun(L))) + " here</span>";
     rows.forEach(function (r) {
       var f = feats[r]; if (!f) return;
-      var name = popupTitleText(L, f.properties) || (nounOne(layerNoun(L)) + " " + (r + 1));
+      var name = placeName(L, f) || (nounOne(layerNoun(L)) + " " + (r + 1));
       h += '<button type="button" class="pop-twin" data-row="' + r + '" aria-pressed="' + (r === at ? "true" : "false") + '">' + esc(name) + "</button>";
     });
     return h + "</div>";
@@ -5917,7 +5918,7 @@
         var r = +b.getAttribute("data-row");
         var f = DATA[L.id].features[r]; if (!f) return;
         selectRow(L, r, { source: srcId(L), id: f.id != null ? f.id : r });
-        pop.setHTML(chooserHTML(L, rows, r) + popupHTML(L, f.properties));
+        pop.setHTML(chooserHTML(L, rows, r) + popupHTML(L, f.properties, f));
         wireChooser(pop, L, rows);
       };
     });
@@ -6080,7 +6081,7 @@
   function openPopup(L, feature, lngLat, offsetPx, anchor, rows) {
     hideHint();   // the popup says everything the tooltip did, and more
     dismissCue(); // a card is open: the reader has found the way in
-    var html = popupHTML(L, feature.properties);
+    var html = popupHTML(L, feature.properties, feature);
     if (!html) return;
     var at = feature.properties && feature.properties._srow;
     if (rows && rows.length > 1) html = chooserHTML(L, rows, at != null ? at : feature._row) + html;
@@ -6197,9 +6198,42 @@
   function popupTitleText(L, props) {
     var spec = L && L.popup;
     if (!spec || !props) return "";
-    var t = spec.title ? cellShown(props[spec.title]) : "";
-    if (!t && spec.titleFallback) t = cellShown(props[spec.titleFallback]);
-    return (t && t !== "null" && t !== "undefined") ? t : "";
+    var clean = function (v) { return (v && v !== "null" && v !== "undefined") ? v : ""; };
+    var t = spec.title ? clean(cellShown(props[spec.title])) : "";
+    /* An owner may identify a place by two columns — a person and their
+       organisation — joined after a middle dot. An empty part is dropped, so
+       a person with no organisation is just their name. The second column
+       (`titleAlso`) is absent on every stanza nobody set it on, so an old
+       atlas reads exactly as it did. The server joins search hits the same
+       way (layerSearchRows). */
+    var also = spec.titleAlso ? clean(cellShown(props[spec.titleAlso])) : "";
+    if (also) t = t ? t + " \u00b7 " + also : also;
+    if (!t && spec.titleFallback) t = clean(cellShown(props[spec.titleFallback]));
+    return t;
+  }
+
+  /* What a place is called everywhere — beside its pin, when it is pointed
+     at, at the top of its card and in the list: its name, or, on a layer
+     someone added, its row ("Place 7") when the chosen column(s) hold nothing
+     for it. The owner is told how many places that is when choosing. Only the
+     added layers: a curated layer whose stanza names a column it does not
+     carry stays as quiet as it was. */
+  function placeName(L, f) {
+    var t = f ? popupTitleText(L, f.properties) : "";
+    if (t || !L || !L.userLayer || !f) return t;
+    // a loaded feature knows its row; one the map handed back carries it as _srow
+    var row = f._row != null ? f._row : (f.properties && f.properties._srow);
+    if (row == null) return t;
+    // the start of a name: "Place 7", "Tag 7"
+    var noun = nounOne(layerNoun(L));
+    return noun.charAt(0).toUpperCase() + noun.slice(1) + " " + (Number(row) + 1);
+  }
+  /* The name the map writes beside a place. When the layer's label follows
+     the naming column it is the whole name — both columns, or the row — and
+     any other labelled column is read as it is. */
+  function labelNameOf(L, f, t) {
+    if (t && L.popup && t.property === L.popup.title) return placeName(L, f);
+    return cellShown(f.properties[t.property]);
   }
 
   /* Three cases, in order of how much the upload can tell us: its own name; the
@@ -6321,7 +6355,7 @@
     return h;
   }
 
-  function popupHTML(L, props) {
+  function popupHTML(L, props, f) {
     POPUP_LAYER = L && L.id;   // the tag chips below belong to this layer
     var spec = L.popup;
     // the same key-by-key rows the hover bubble shows — a touch screen has
@@ -6330,7 +6364,7 @@
     var krows = keyRowsEl(L, props, true);   // a popup shows every answer, not only the marks
     if (!spec && !krows) return "";
     spec = spec || {};
-    var title = popupTitleText(L, props);
+    var title = f ? placeName(L, f) : popupTitleText(L, props);
     var sub = spec.subtitle || (spec.subtitleProperty ? cellShown(props[spec.subtitleProperty]) : "");
     var loka = isLoka(L);
     var shell = '<div class="pop">';

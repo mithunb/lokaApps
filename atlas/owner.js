@@ -1130,12 +1130,14 @@
        place's card says AND the way to take the layer off the map, and neither
        of those is how anything looks. */
     /* "Card" named the thing without saying you could do anything to it — it
-       read as a label for something, not as a way in. */
-    btn.textContent = "Edit card";
+       read as a label for something, not as a way in. "Edit card" said one of
+       the two things the fold now holds; since the column that names each
+       place is chosen here too, it is the layer's Settings (October 2026). */
+    btn.textContent = "Settings";
     btn.setAttribute("data-lid", L.id);
     btn.setAttribute("data-fold", "card");
     btn.setAttribute("aria-expanded", "false");
-    btn.setAttribute("aria-label", "Change what a place's card shows on " + (L.label || L.id));
+    btn.setAttribute("aria-label", "Settings for " + (L.label || L.id) + ": which column names each place, and what its card shows");
     btn.onclick = function (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -1288,9 +1290,6 @@
     polygon:    { swatch: "Fill colour" },
   };
   var NOTE_DEFAULT = "Only you see this until you save.";
-  // the server's own title preference (pickTitleColumn), for layers whose stored
-  // title is missing or points at a column the data does not have
-  var NAMEISH = /^(name|title|label|place|description|desc|site|spot)s?$/i;
 
   /* ================= one layer's own fold =================
 
@@ -1845,8 +1844,11 @@
     host.setAttribute("data-fold-kind", showCard ? "card" : "remove");
 
     /* The name is not here any more — it is edited from the row, where it is.
-       What is here is what a place's card says, which is the thing you cannot
-       do from anywhere else and which needs more than one tap. */
+       What is here is which column identifies each place, and what a place's
+       card says — the things you cannot do from anywhere else and which need
+       more than one tap. */
+    if (showCard) host.appendChild(buildNameChoice(L, save));
+
     var cardBox = el("div", "own-fld");
     cardBox.hidden = !showCard;
     cardBox.appendChild(document.createTextNode("On every place's card"));
@@ -1921,6 +1923,10 @@
           saving = false;
           err.textContent = errMsg(e);
           err.hidden = false;
+          // a wait that failed says nothing more; the error line says why
+          NAME_SAID = null;
+          var st = host.querySelector(".own-name-state");
+          if (st) st.textContent = "";
         });
     }
 
@@ -1988,6 +1994,201 @@
     if (first) first.focus();
   }
 
+  /* ================= which column identifies a place =================
+
+     The same question the Add-data step asks, in the same words, for a layer
+     that is already on the atlas: "Identify each place by", one column and an
+     optional second one joined after it ("Asha Rao · Western Ghats
+     Collective"). Choosing saves at once; the map is rebuilt and the fold
+     reopens on the same layer, saying so. The columns offered follow the
+     wizard's rule (databench.js, nameChoices): words, not pictures; not an id
+     for each row; not a column that is the same for every place; not the
+     answers to the questions. */
+  var ID_LIKE = /(^|_)(id|uuid|guid)$/i;
+  var MAP_CUT = 32;   // the map's own cut for a name beside a pin (label_text.maxChars)
+  var NAME_SAID = null;   // { lid, text } — a line for the fold rebuilt after a save
+  function cellOf(f, c) {
+    var v = c ? (f.properties || {})[c] : null;
+    if (v == null) return "";
+    if (typeof v === "object") return "";
+    v = String(v).trim();
+    return (v === "null" || v === "undefined") ? "" : v;
+  }
+  /* The layer's places: the ones the map already holds, or, in the moment
+     after a rebuild when the fold reopens before the map has read its file
+     again, the file itself. */
+  function placesOf(L, then) {
+    var gj = window.LokaAtlas.dataFor && window.LokaAtlas.dataFor(L.id);
+    if (gj && gj.features) { then(gj.features); return; }
+    var url = window.LokaAtlas.fileUrl && window.LokaAtlas.fileUrl(L);
+    if (!url) { then([]); return; }
+    fetch(url, { credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (g) { then((g && g.features) || []); })
+      .catch(function () { then([]); });
+  }
+  function nameChoicesOf(L, feats) {
+    if (!feats.length) return [];
+    var seen = {}, cols = [];
+    feats.forEach(function (f) {
+      Object.keys(f.properties || {}).forEach(function (k) { if (!seen[k]) { seen[k] = true; cols.push(k); } });
+    });
+    return cols.filter(function (k) {
+      if (k.charAt(0) === "_" || /^pattern_/.test(k) || ID_LIKE.test(k)) return false;
+      if (/^(lat|latitude|lon|lng|long|longitude|x|y)$/i.test(k)) return false;
+      return true;
+    }).map(function (k) {
+      var filled = 0, kinds = {}, words = false, pictures = 0;
+      feats.forEach(function (f) {
+        var v = cellOf(f, k);
+        if (!v) return;
+        filled++;
+        kinds[v.toLowerCase()] = true;
+        if (Number.isNaN(Number(v))) words = true;
+        if (/^https?:\/\/\S+\.(jpe?g|png|webp|gif)(\?\S*)?$/i.test(v)) pictures++;
+      });
+      var n = Object.keys(kinds).length;
+      return { name: k, filled: filled, total: feats.length, kinds: n, words: words,
+        picture: filled > 0 && pictures / filled >= 0.6,
+        idLike: n === filled && filled > 20,
+        shared: n >= 2 && n <= 12 && n < filled / 2 };
+    }).filter(function (c) {
+      return c.filled > 0 && c.words && !c.picture && c.kinds > 1 && !c.idLike;
+    }).map(function (c) {
+      c.label = c.name + " — " + (c.filled >= c.total ? "every place" : c.filled + " of " + c.total + " places") +
+        (c.shared ? ", " + c.kinds + " kinds, shared" : "");
+      return c;
+    });
+  }
+  // the row name the map writes for a place with no name: "Place 7", or
+  // "Tag 7" on a layer of tags (the viewer's placeName, same words)
+  function rowNoun(L) {
+    var noun = String(L.noun || (L.type === "marker" ? "places" : "areas"));
+    noun = noun === "people" ? "person" : noun.replace(/s$/, "");
+    return noun.charAt(0).toUpperCase() + noun.slice(1);
+  }
+  // a name cut the way the map cuts it beside a pin: at a word, with an ellipsis
+  function mapCut(s, max) {
+    s = String(s || "").trim();
+    if (s.length <= max) return s;
+    var cut = s.slice(0, max - 1);
+    var sp = cut.lastIndexOf(" ");
+    if (sp > max * 0.5) cut = cut.slice(0, sp);   // the map's own rule (atlas.js shortName)
+    return cut.replace(/[\s,;:–—-]+$/, "") + "…";
+  }
+  function buildNameChoice(L, save) {
+    var box = el("div", "own-fld own-name");
+    var lbl = el("label", "own-name-lbl");
+    lbl.textContent = "Identify each place by";
+    box.appendChild(lbl);
+    var waiting = el("p", "own-note");
+    waiting.innerHTML = LokaWait.html("Reading the places\u2026");
+    box.appendChild(waiting);
+    placesOf(L, function (feats) {
+      waiting.remove();
+      fillNameChoice(box, lbl, L, feats, save);
+    });
+    return box;
+  }
+  function fillNameChoice(box, lbl, L, feats, save) {
+    var choices = nameChoicesOf(L, feats);
+    var title = (L.popup && L.popup.title) || "";
+    var also = (L.popup && L.popup.titleAlso) || "";
+    if (!choices.length) {
+      box.appendChild(el("p", "own-note", "This layer has no column of names to choose from."));
+      NAME_SAID = null;
+      return;
+    }
+    var first = document.createElement("select");
+    first.setAttribute("aria-label", "Identify each place by");
+    lbl.htmlFor = first.id = "own-name-" + L.id;
+    var fill = function (sel, list, value, withNone) {
+      sel.innerHTML = "";
+      if (withNone) { var o0 = document.createElement("option"); o0.value = ""; o0.textContent = "— none —"; sel.appendChild(o0); }
+      list.forEach(function (c) { var o = document.createElement("option"); o.value = c.name; o.textContent = c.label; sel.appendChild(o); });
+      sel.value = value;
+      if (sel.value !== value) sel.value = withNone ? "" : (list[0] ? list[0].name : "");
+    };
+    fill(first, choices, choices.some(function (c) { return c.name === title; }) ? title : (choices[0] && choices[0].name));
+    box.appendChild(first);
+    var note = el("span", "own-note");
+    note.textContent = "The name each place is known by — shown beside its pin, at the top of its card and in search. Choose which column it comes from.";
+    box.appendChild(note);
+
+    var second = document.createElement("select");
+    var alsoLbl = el("label", "own-name-also");
+    var alsoText = el("span");
+    alsoText.textContent = "Add a second column ";
+    var opt = el("span", "own-note");
+    opt.textContent = "(optional)";
+    alsoText.appendChild(opt);
+    alsoLbl.appendChild(alsoText);
+    second.setAttribute("aria-label", "Add a second column (optional)");
+    alsoLbl.appendChild(second);
+    alsoLbl.hidden = choices.length < 2;
+    box.appendChild(alsoLbl);
+
+    var peek = el("ul", "own-name-peek");
+    box.appendChild(peek);
+    var warn = el("p", "own-note warnish own-name-empty");
+    warn.setAttribute("role", "status");
+    warn.hidden = true;
+    box.appendChild(warn);
+    var state = el("p", "own-note own-name-state");
+    state.setAttribute("role", "status");
+    box.appendChild(state);
+    if (NAME_SAID && NAME_SAID.lid === L.id) { state.textContent = NAME_SAID.text; NAME_SAID = null; }
+
+    function render() {
+      var col = first.value, two = second.value;
+      fill(second, choices.filter(function (c) { return c.name !== col; }), two === col ? "" : two, true);
+      two = second.value;
+      peek.innerHTML = "";
+      feats.slice(0, 4).forEach(function (f, i) {
+        var li = el("li", "own-name-row");
+        li.appendChild(el("span", "own-name-pin"));
+        var name = [cellOf(f, col), cellOf(f, two)].filter(Boolean).join(" · ");
+        var n = el("span", "own-name-n" + (name ? "" : " is-row"));
+        n.textContent = name ? mapCut(name, MAP_CUT) : rowNoun(L) + " " + (i + 1);
+        if (name && n.textContent !== name) n.title = name;
+        li.appendChild(n);
+        if (!name) {
+          var why = el("span", "own-name-why");
+          why.textContent = "nothing in " + (two ? col + " or " + two : col) + " for this row";
+          li.appendChild(why);
+        }
+        peek.appendChild(li);
+      });
+      var blank = [];
+      feats.forEach(function (f, i) { if (!cellOf(f, col) && !cellOf(f, two)) blank.push(i + 1); });
+      var choice = choices.filter(function (c) { return c.name === col; })[0];
+      if (blank.length) {
+        warn.hidden = false;
+        warn.textContent = blank.length + (blank.length === 1 ? " place has" : " places have") + " nothing in " +
+          (two ? col + " or " + two : col) + ". " + (blank.length === 1 ? "It" : "They") + " will be called by " +
+          (blank.length === 1 ? "its" : "their") + " row: " +
+          blank.slice(0, 3).map(function (r) { return rowNoun(L) + " " + r; }).join(", ") + (blank.length > 3 ? "…" : "") + ".";
+      } else if (choice && choice.shared && !two) {
+        warn.hidden = false;
+        warn.textContent = "Only " + choice.kinds + " different names for " + choice.total +
+          " places, so many pins will carry the same one. This column may suit “Colour places by” better.";
+      } else {
+        warn.hidden = true;
+      }
+    }
+    fill(second, choices.filter(function (c) { return c.name !== first.value; }), also, true);
+    render();
+    function changed() {
+      render();
+      if (first.value === title && (second.value || "") === also) return;
+      state.innerHTML = LokaWait.html("Renaming the places on the map…");
+      NAME_SAID = { lid: L.id, text: "Done. Everyone who opens the atlas sees the new names." };
+      save({ titleColumn: first.value, titleAlso: second.value || "" });
+    }
+    first.onchange = changed;
+    second.onchange = changed;
+  }
+
   /* What is on a card now. The stanza is the truth — the browser holds the
      manifest it loaded, and that is what the fold must agree with. */
   function cardColumnsNow(L) {
@@ -2001,12 +2202,12 @@
   function cardColumnCandidates(L) {
     var gj = window.LokaAtlas.dataFor && window.LokaAtlas.dataFor(L.id);
     var feats = (gj && gj.features) || [];
-    var title = (L.popup && L.popup.title) || "";
+    var naming = [L.popup && L.popup.title, L.popup && L.popup.titleAlso].filter(Boolean);
     var names = feats.length ? Object.keys(feats[0].properties || {})
       : cardColumnsNow(L);
     return names.filter(function (k) {
       if (k.charAt(0) === "_" || /^pattern_/.test(k)) return false;
-      if (k === title) return false;
+      if (naming.indexOf(k) >= 0) return false;
       if (/^(lat|latitude|lon|lng|long|longitude)$/i.test(k)) return false;
       if (/(^|_)(id|uuid|guid)$/i.test(k)) return false;
       if (!feats.length) return true;

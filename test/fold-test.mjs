@@ -120,7 +120,7 @@ check('it writes the name in all three places it is kept',
 check('a collaborator may only change what their own organisation added',
   /you can only change layers your organisation added/.test(server), true);
 check('the column that names a place is not also a line on its card',
-  /layer\.popup\.fields\.filter\(\(f\) => f && f\.property !== col\)/.test(imp2), true);
+  /layer\.popup\.fields\.filter\(\(f\) => f && naming\.indexOf\(f\.property\) < 0\)/.test(imp2), true);
 
 console.log('\n  hiding a question');
 check('the layer can carry a hidden list', /layer\.hiddenKeys = \[\.\.\.new Set\(clean\)\]/.test(imp2), true);

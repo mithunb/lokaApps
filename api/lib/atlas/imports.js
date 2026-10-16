@@ -15,7 +15,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { DATA_DIR } from './registry.js';
 import { DATASETS_ROOT, PRIVATE_ROOT } from './jobs.js';
-import { detectDelimiter, prettify } from '../fragment.js';
+import { detectDelimiter, prettify, pinNamesFor } from '../fragment.js';
 import { trimFeatureCollection } from './coords.js';
 
 const IMPORTS_DIR = path.join(DATA_DIR, 'imports');
@@ -373,11 +373,21 @@ function cardFieldFor(col, values, imageColumn) {
   return f;
 }
 
-export function relabelLayer(datasetId, layerId, { label, titleColumn, hiddenKeys, cardColumns } = {}) {
+export function relabelLayer(datasetId, layerId, { label, titleColumn, titleAlso, hiddenKeys, cardColumns } = {}) {
   const m = readManifest(datasetId);
   if (!m || !m.local) return null;
   const layer = (m.local.layers || []).find((l) => l.id === layerId);
   if (!layer) return null;
+  // the layer's own places, read once, for whichever change below needs them
+  let rowsCache = null;
+  const rows = () => {
+    if (rowsCache) return rowsCache;
+    try {
+      const gj = JSON.parse(fs.readFileSync(path.join(m.dir, layer.source), 'utf8'));
+      rowsCache = (gj.features || []).map((f) => ({ properties: f.properties || {} }));
+    } catch { rowsCache = []; }   // the file is unreadable; change nothing that needs it
+    return rowsCache;
+  };
 
   if (typeof label === 'string' && label.trim()) {
     const name = label.trim().slice(0, 60);
@@ -386,15 +396,46 @@ export function relabelLayer(datasetId, layerId, { label, titleColumn, hiddenKey
     // a marker layer's legend is one row, and that row is the layer's name
     if (Array.isArray(layer.legend) && layer.legend.length === 1) layer.legend[0].label = name;
   }
+  /* Which column names each place — and, when the owner wants two, which is
+     joined after it ("Asha Rao · Western Ghats Collective"). The first is the
+     stanza's `popup.title`, as it always was; the second is `popup.titleAlso`,
+     absent on every layer nobody has set it on, so an old stanza reads exactly
+     as before. An empty second column takes it off. */
   if (typeof titleColumn === 'string' && titleColumn.trim()) {
     const col = titleColumn.trim().slice(0, 60);
     layer.popup = layer.popup || {};
     layer.popup.title = col;
     if (layer.spec && typeof layer.spec === 'object') layer.spec.popupTitleColumn = col;
+    if (typeof titleAlso !== 'string') titleAlso = '';   // a new first column starts with no second
+  }
+  if (typeof titleAlso === 'string') {
+    const also = titleAlso.trim().slice(0, 60);
+    layer.popup = layer.popup || {};
+    if (also && layer.popup.title && also !== layer.popup.title) layer.popup.titleAlso = also;
+    else delete layer.popup.titleAlso;
+    if (layer.spec && typeof layer.spec === 'object') {
+      if (layer.popup.titleAlso) layer.spec.popupTitleAlso = layer.popup.titleAlso;
+      else delete layer.spec.popupTitleAlso;
+    }
+  }
+  if (typeof titleColumn === 'string' || typeof titleAlso === 'string') {
+    const naming = [layer.popup && layer.popup.title, layer.popup && layer.popup.titleAlso].filter(Boolean);
     /* A column cannot both name a place and be a line on its card — it would
        be printed twice, once as the heading and once beneath it. */
     if (layer.popup.fields) {
-      layer.popup.fields = layer.popup.fields.filter((f) => f && f.property !== col);
+      layer.popup.fields = layer.popup.fields.filter((f) => f && naming.indexOf(f.property) < 0);
+    }
+    /* The name beside each place on the map follows the choice too. An area's
+       name is always drawn; a pin's is drawn when any place has one. The rest
+       of the stanza — size, colour, halo, the cut — is kept as it was. */
+    if (layer.type === 'fill' || layer.type === 'polygon') {
+      layer.label_text = Object.assign({}, layer.label_text || {}, { property: layer.popup.title });
+    } else if (layer.type === 'marker') {
+      const want = pinNamesFor(rows(), layer.popup);
+      if (want) layer.label_text = Object.assign({}, layer.label_text || {}, want);
+      else delete layer.label_text;
+    } else if (layer.label_text && layer.label_text.property) {
+      layer.label_text.property = layer.popup.title;
     }
   }
 
@@ -408,24 +449,20 @@ export function relabelLayer(datasetId, layerId, { label, titleColumn, hiddenKey
      browser should get to assert. A question's own answers stay out, as they
      are everywhere else: they belong to the key. */
   if (Array.isArray(cardColumns)) {
-    let rows = [];
-    try {
-      const gj = JSON.parse(fs.readFileSync(path.join(m.dir, layer.source), 'utf8'));
-      rows = (gj.features || []).map((f) => f.properties || {});
-    } catch { /* the file is unreadable; fall through and change nothing */ }
-    if (rows.length) {
-      const has = new Set(Object.keys(rows[0]));
+    const props = rows().map((r) => r.properties);
+    if (props.length) {
+      const has = new Set(Object.keys(props[0]));
       const imageColumn = (layer.spec && layer.spec.imageColumn) || '';
-      const title = (layer.popup && layer.popup.title) || '';
+      const naming = [layer.popup && layer.popup.title, layer.popup && layer.popup.titleAlso].filter(Boolean);
       const wanted = cardColumns
         .map((c) => String(c || '').trim())
-        .filter((c) => c && has.has(c) && c !== title &&
+        .filter((c) => c && has.has(c) && naming.indexOf(c) < 0 &&
           c.charAt(0) !== '_' && !/^pattern_/.test(c))
         .slice(0, 40);
       const seen = new Set();
       layer.popup = layer.popup || {};
       layer.popup.fields = wanted.filter((c) => (seen.has(c) ? false : seen.add(c)))
-        .map((c) => cardFieldFor(c, rows.map((r) => String(r[c] == null ? '' : r[c])), imageColumn));
+        .map((c) => cardFieldFor(c, props.map((r) => String(r[c] == null ? '' : r[c])), imageColumn));
       if (layer.spec && typeof layer.spec === 'object') {
         layer.spec.popupColumns = layer.popup.fields.map((f) => f.property);
       }
@@ -448,6 +485,7 @@ export function relabelLayer(datasetId, layerId, { label, titleColumn, hiddenKey
 
   fs.writeFileSync(path.join(m.dir, 'manifest.local.json'), JSON.stringify(m.local, null, 1));
   return { label: layer.label, titleColumn: (layer.popup && layer.popup.title) || '',
+    titleAlso: (layer.popup && layer.popup.titleAlso) || '',
     hiddenKeys: layer.hiddenKeys || [],
     cardColumns: ((layer.popup && layer.popup.fields) || []).map((f) => f.property) };
 }

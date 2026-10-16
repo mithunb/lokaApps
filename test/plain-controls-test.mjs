@@ -46,7 +46,8 @@ console.log('\n  the switch is named by its layer, not by the row it sits on');
 check('named where it is made', /cb\.setAttribute\("aria-label", L\.label \|\| L\.id\)/.test(js), true);
 
 console.log('\n  the owner’s controls say what pressing them does');
-check('Card became Edit card', /btn\.textContent = "Edit card";/.test(owner), true);
+// "Edit card" in turn became "Settings" when the fold gained the naming choice (October 2026)
+check('Card became Edit card, then Settings', /btn\.textContent = "Settings";/.test(owner) && !/btn\.textContent = "Edit card";/.test(owner), true);
 check('and no bare "Card" is left', /btn\.textContent = "Card";/.test(owner), false);
 check('Remove opens a question, and shows it', /del\.textContent = "Remove…";/.test(owner), true);
 check('it says so to a screen reader too',

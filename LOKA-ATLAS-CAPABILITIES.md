@@ -218,9 +218,16 @@ Opening an uploaded layer asks **three questions**, in this order:
    "Shade areas by" (plus a "Colour ramp" chooser) for shaded areas, "Size circles by" for circles,
    or a plain colour swatch labelled "Line colour" / "Fill colour" / "Which colour". The column list
    is annotated with how many different answers each column holds ("categories — 9 kinds").
-3. **Call each place by** — which column supplies the name shown on hover and in the popup.
+3. **Identify each place by** — which column supplies the name shown beside the pin, on hover, at
+   the top of the card and in search; directly under the colour question, in the same words as the
+   layer's Settings fold on the atlas (October 2026). Each option says what it holds ("Labels — 24
+   of 33 places", "Categories — every place, 7 kinds, shared"); four real names from the file show
+   the choice, cut the way the map cuts them; ids, single-value columns and the questions' answers
+   are not offered. **Add a second column (optional)** joins two — "Asha Rao · Western Ghats
+   Collective" — and drops an empty part. A place with nothing in the chosen column(s) is called by
+   its row ("Place 7") everywhere, and the step says how many places that is before you choose.
 
-Between questions 2 and 3 the live map key is shown as *output*, with per-kind counts. Below sits
+Below question 3 the live map key is shown as *output*, with per-kind counts. Below sits
 "Remove this layer from the atlas…". Changes are held until you press **Save changes**; a note reads
 "Only you see this until you save."
 
@@ -532,6 +539,13 @@ slate.
   ending in `.jpg/.jpeg/.png/.webp/.gif`. Only one photo per place is rendered, and a broken link
   hides itself.
 - Columns separated by semicolons render as small chips. Comma-separated ones stay plain text.
+- The title is the column chosen under **Identify each place by** — or two columns joined with a
+  middle dot — and a place with nothing in them is called by its row, "Place 7". An owner or invited
+  editor changes it from the layer's Settings fold on the atlas (first thing in the fold); saving
+  says "Renaming the places on the map…" then "Done. Everyone who opens the atlas sees the new
+  names.", the pin names and area names on the map follow, and both halves of a split file are set
+  together. The server route is `POST layers/relabel` with `titleColumn` and `titleAlso` (an empty
+  `titleAlso` takes the second column off). In the stanza: `popup.title` and `popup.titleAlso`.
 - Hovering a place shows a small bubble: its name and one line per active key, which is how the
   badges are decoded. **Hover is switched off entirely on touch screens** — there the popup does that
   job.
@@ -846,10 +860,10 @@ The table, as seen in a real layer of 66 places:
 - **`description` may be truncated.** Cells are cut to **500 characters** on the server. Longer written
   notes lose their tails, everywhere — popup, search and theme-finding.
 - **`tag_id` is correctly ignored** for colour, key and search, but the pin's own name comes from
-  whatever column you pick in "Call each place by". This table has **no short name column** — the
-  natural candidates are `description` (long prose) and `address`. Expect hover labels and popup
-  titles to read awkwardly unless a name column is added to the export. Atlas will only draw a name
-  on the map face when it is short and name-like.
+  whatever column you pick in "Identify each place by". This table has **no short name column** —
+  the natural candidates are `description` (long prose) and `address`. Expect hover labels and popup
+  titles to read awkwardly unless a name column is added to the export. The name is drawn beside the
+  pin whatever its length, cut at a word to 32 letters; the card shows the whole of it.
 - **Adding more data means another upload.** There is no update-in-place and no matching on
   `tag_id`. Re-exporting after new places are tagged means uploading a new layer, or removing the old
   one and adding the new. Atlas does notice when the same data comes back — it fingerprints what was

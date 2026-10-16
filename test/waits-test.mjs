@@ -162,7 +162,7 @@ check('placing rows that need no decision, which was silent', /msg\("#msg-check"
 check('the code buttons, which allowed a second press', /LokaWait\.start\(this, "Sending the code…"\)/.test(bench) && /LokaWait\.start\(this, "Checking the code…"\)/.test(bench), true);
 check('finding themes, with how long it can take', /var done = LokaWait\.start\(btn, "Reading…", \{ delay: 0 \}\);/.test(bench) && /places… this can take a minute\.", "wait"\);/.test(bench), true);
 check('the old spinner is gone', /class="spin"/.test(bench), false);
-check('building and updating the preview', /msg\("#msg-place", "Building the preview…", "wait"\);/.test(bench) && /\$\("#style-state"\)\.innerHTML = LokaWait\.html\("Updating the preview…"\);/.test(bench), true);
+check('building and updating the preview', /msg\("#msg-place", "Building the preview…", "wait"\);/.test(bench) && /\$\("#style-state"\)\.innerHTML = LokaWait\.html\(renaming \? "Renaming the places on the map…" : "Updating the preview…"\);/.test(bench), true);
 check('looking up addresses, with the pace', /LokaWait\.html\(ADDR\.results\.length\n\s*\? "looked up " \+ ADDR\.results\.length \+ "…" : "looking them up… about one a second"\)/.test(bench), true);
 check('Add to the atlas, which was silent and allowed a second press', /var stop = LokaWait\.start\(this, "Adding it to the atlas…"\);/.test(bench), true);
 check('and taking the upload off', /LokaWait\.start\(this, "Taking it off…"\)/.test(bench), true);
