@@ -6275,16 +6275,33 @@
      script at all — the arrows are for a mouse and a keyboard, and they are the
      only part that needs wiring. A card with one photograph gets no arrows and
      no counter, because there is nothing to move between. */
+  /* A card never shows an empty box where a photograph should be.
+
+     A phone photo is most of a megabyte. The browser learns its size from the
+     first few hundred bytes and makes room for it straight away, then fills
+     that room over the next second or two — so a card opened on a slow line
+     used to open with a tall blank band above the words, which looked broken.
+     Now the room is held by a quiet panel that says a photo is coming, and
+     the photograph paints over it as it arrives. If the photograph never
+     comes, it is taken out, and when none is left the panel goes with it and
+     the card closes up. The first photograph is fetched at once: the card is
+     open, so it is wanted now. The rest of a carousel waits for a swipe. */
   var SHOTS_MAX = 12;
+  var SHOT_WAIT = '<span class="pop-shot-wait" aria-hidden="true">' +
+    '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" ' +
+    'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/>' +
+    '<path d="M21 16l-5-5-8 8"/></svg>Loading photo…</span>';
   function shotsHTML(urls) {
     var shots = (urls || []).slice(0, SHOTS_MAX);
     if (!shots.length) return "";
-    var imgs = shots.map(function (u) {
-      return '<img class="pop-img" src="' + esc(u) + '" alt="" loading="lazy" ' +
-        'referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" />';
+    var imgs = shots.map(function (u, i) {
+      return '<img class="pop-img" src="' + esc(u) + '" alt="" loading="' + (i ? "lazy" : "eager") + '" ' +
+        'referrerpolicy="no-referrer" onload="atlasShotSettled(this,true)" ' +
+        'onerror="atlasShotSettled(this,false)" />';
     }).join("");
-    if (shots.length === 1) return '<div class="pop-shots">' + imgs + "</div>";
-    return '<div class="pop-shots many" data-n="' + shots.length + '">' +
+    if (shots.length === 1) return '<div class="pop-shots is-waiting">' + SHOT_WAIT + imgs + "</div>";
+    return '<div class="pop-shots many is-waiting" data-n="' + shots.length + '">' + SHOT_WAIT +
       '<div class="pop-strip">' + imgs + "</div>" +
       '<button class="pop-shot-go back" type="button" data-dir="-1" aria-label="Previous photograph">\u2039</button>' +
       '<button class="pop-shot-go on" type="button" data-dir="1" aria-label="Next photograph">\u203a</button>' +
@@ -6319,6 +6336,36 @@
     try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
     catch (e) { return false; }
   }
+
+  /* A photograph on a card has arrived, or has not. Called from the picture
+     itself, because a picture already in the browser's memory can finish
+     before the card is on the page, and a listener on the page would miss it.
+     Arrived: the waiting panel steps aside. Failed: the picture is taken out;
+     the carousel counts what is left, loses its arrows when one remains, and
+     when none remains the whole photo area goes, so the card closes up. */
+  function shotSettled(img, ok) {
+    var box = img && img.closest && img.closest(".pop-shots");
+    if (!box) { if (!ok && img) img.style.display = "none"; return; }
+    if (ok) { box.classList.remove("is-waiting"); return; }
+    img.parentNode.removeChild(img);
+    var left = box.querySelectorAll(".pop-img");
+    if (!left.length) { box.parentNode && box.parentNode.removeChild(box); return; }
+    var n = left.length;
+    box.setAttribute("data-n", String(n));
+    var at = box.querySelector(".pop-shot-at");
+    if (n < 2) {
+      box.classList.remove("many");
+      box.querySelectorAll(".pop-shot-go, .pop-shot-at").forEach(function (el) { el.parentNode.removeChild(el); });
+    } else if (at) {
+      var strip = box.querySelector(".pop-strip");
+      var i = strip && strip.clientWidth ? Math.round(strip.scrollLeft / strip.clientWidth) + 1 : 1;
+      at.textContent = Math.min(n, Math.max(1, i)) + " / " + n;
+    }
+    for (var k = 0; k < n; k++) {
+      if (left[k].complete && left[k].naturalWidth) { box.classList.remove("is-waiting"); break; }
+    }
+  }
+  window.atlasShotSettled = shotSettled;
 
   function linksIn(v) {
     var out = [];
