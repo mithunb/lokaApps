@@ -172,6 +172,11 @@
   }
   initAuthNav();
 
+  /* The waiting words' timings. Set here, before the first draw() below: a
+     var further down is hoisted but still undefined when draw() runs, and a
+     setTimeout with no delay fired the "still on its way" note at once. */
+  var LONG_WAIT = 6000, WAIT_DELAY = 300, loadingMoreT = null;
+
   if (!DATASET) {
     renderHome();
   } else {
@@ -200,7 +205,7 @@
      arrive after the map does, and for a new basemap's tiles. Each caller
      waits WAIT_DELAY before asking, so a file that lands at once never
      flashes a label. showLoading(false) takes whichever is showing away. */
-  var LONG_WAIT = 6000, WAIT_DELAY = 300, loadingMoreT = null;
+  // LONG_WAIT, WAIT_DELAY and loadingMoreT are set above draw()'s first call
   function showLoading(on) {
     var n = $("#atlas-loading");
     if (!n) return;
@@ -230,7 +235,7 @@
      visitor a plain-looking map rather than no map. */
   function mapCssReady() {
     var link = document.getElementById("maplibre-css");
-    if (!link || link.rel === "stylesheet" && link.sheet) return Promise.resolve();
+    if (!link || link.rel === "stylesheet") return Promise.resolve();   // the swap happens only once the bytes have landed
     return new Promise(function (resolve) {
       var t = setTimeout(resolve, 4000);
       link.addEventListener("load", function () { clearTimeout(t); setTimeout(resolve, 0); });
@@ -4802,7 +4807,7 @@
   }
   /* The words pass answers at once; the pass by meaning is a round trip to
      the server. When it has taken longer than a blink, the count line gets
-     one more line under it — the mark and "Looking further, by meaning" —
+     one more line under it — the mark and "Looking for similar words" —
      taken away the moment the answer lands or a newer keystroke wins. The
      count line itself is left alone: it is redrawn by applySearch. */
   function meaningWait(seq) {
@@ -4810,7 +4815,7 @@
       if (seq !== searchSeq) return;
       var c = $("#atlas-search-count"); if (!c || !window.LokaWait) return;
       var line = el("div", "ctl-search-more");
-      line.innerHTML = LokaWait.html("Looking further, by meaning…");
+      line.innerHTML = LokaWait.html("Looking for similar words…");
       c.appendChild(line);
       c.hidden = false;
     }, WAIT_DELAY);
@@ -4936,7 +4941,7 @@
     var label = b && b.label ? b.label.toLowerCase() : "map";
     tilesWaitT = setTimeout(function () {
       if (!map || tilesWaitFor !== id || map.areTilesLoaded()) return;
-      showLoading("Loading the " + label + " tiles");
+      showLoading("Loading the " + label + " map");
       map.once("idle", function () { if (tilesWaitFor === id) showLoading(false); });
     }, WAIT_DELAY);
   }
@@ -6408,10 +6413,7 @@
      open, so it is wanted now. The rest of a carousel waits for a swipe. */
   var SHOTS_MAX = 12;
   var SHOT_WAIT = '<span class="pop-shot-wait" aria-hidden="true">' +
-    '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" ' +
-    'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
-    '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/>' +
-    '<path d="M21 16l-5-5-8 8"/></svg>Loading photo…</span>';
+    '<span class="wait-mark"><i></i><i></i><i></i></span>Loading photo…</span>';   // the one waiting mark (wait.js)
   function shotsHTML(urls) {
     var shots = (urls || []).slice(0, SHOTS_MAX);
     if (!shots.length) return "";

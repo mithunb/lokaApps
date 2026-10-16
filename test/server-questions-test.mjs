@@ -281,7 +281,7 @@ console.log('\n  a reading LOKA turned down says why, in plain words');
     enrich.whyNothingKept(enrich.gateShape({ counts: { Pond: 50, Lake: 4 }, other: 0, withText: 54 })),
     'No questions were kept: one theme covered nearly every place.');
   check('the counting reason is put in plainer words',
-    /^No questions were kept: once the places were answered, no question split them into enough groups/.test(
+    /^No questions were kept: no question sorted the places into enough groups/.test(
       enrich.whyNothingKept({ verdict: 'refused', reason: 'no question survived the counting' })), true);
   check('so is "kinds"', enrich.whyNothingKept({ verdict: 'refused', reason: 'no question had enough kinds that fit' }),
     'No questions were kept: none of the suggested questions had enough answers that fit these places.');

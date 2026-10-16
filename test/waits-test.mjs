@@ -110,7 +110,7 @@ check('with a plain link for a browser without scripts', /<noscript><link rel="s
 check('no other stylesheet is linked in the markup', (head.replace(/<script>[\s\S]*?<\/script>/g, '').replace(/<noscript>[\s\S]*?<\/noscript>/g, '').match(/<link rel="stylesheet"/g) || []).length, 0);
 check('the viewer waits for that stylesheet before it builds the map, so the map is never drawn unstyled',
   /Promise\.all\(\[baseStyle\(m\), mapCssReady\(\)\]\)\.then\(function \(r\) \{ start\(m, r\[0\]\); return true; \}\);/.test(js), true);
-check('— resolved at once if it is already in', /if \(!link \|\| link\.rel === "stylesheet" && link\.sheet\) return Promise\.resolve\(\);/.test(js), true);
+check('— resolved at once if it is already in', /if \(!link \|\| link\.rel === "stylesheet"\) return Promise\.resolve\(\);/.test(js), true);
 check('— and after a short cap regardless, so a CDN that never answers costs a plain map, not no map', /var t = setTimeout\(resolve, 4000\);/.test(js), true);
 
 console.log('\n  the gallery answers a press at once');
@@ -126,11 +126,11 @@ check('after six seconds it adds that this can take a minute', /LONG_WAIT = 6000
 check('the layer files, which come after the map, get a small label once they have taken longer than a blink',
   /var layersWait = setTimeout\(function \(\) \{ showLoading\("Drawing the layers"\); \}, WAIT_DELAY\);/.test(js) && /WAIT_DELAY = 300/.test(js), true);
 check('taken away when they land, and when they fail', (js.match(/clearTimeout\(layersWait\);\s*showLoading\(false\);/g) || []).length, 2);
-check('a new basemap\'s tiles get the same label until the map is idle', /showLoading\("Loading the " \+ label \+ " tiles"\);\n\s*map\.once\("idle", function \(\) \{ if \(tilesWaitFor === id\) showLoading\(false\); \}\);/.test(js), true);
+check('a new basemap gets the same label until the map is idle', /showLoading\("Loading the " \+ label \+ " map"\);\n\s*map\.once\("idle", function \(\) \{ if \(tilesWaitFor === id\) showLoading\(false\); \}\);/.test(js), true);
 check('asked for in switchBasemap', /function switchBasemap\(id\) \{\n\s*activeBasemap = id;\n\s*tilesWait\(id\);/.test(js), true);
 check('the label sits at the stage\'s foot, over the map, not across it', /\.atlas-loading\.aside \{ inset:auto auto \.75rem 50%; transform:translateX\(-50%\);/.test(html), true);
 check('and on a phone it steps up above the sheet', /\.atlas-loading\.aside \{ bottom:calc\(var\(--sheet-h, 0px\) \+ 52px\); \}/.test(html), true);
-check('search by meaning says it is looking further, under the count', /line\.innerHTML = LokaWait\.html\("Looking further, by meaning…"\);/.test(js) && /var stopWait = meaningWait\(seq\);/.test(js), true);
+check('search by meaning says it is looking further, under the count', /line\.innerHTML = LokaWait\.html\("Looking for similar words…"\);/.test(js) && /var stopWait = meaningWait\(seq\);/.test(js), true);
 check('and stops saying so whether the answer comes or not', /\.catch\(function \(\) \{ return null; \}\)\n\s*\.then\(function \(r\) \{\n\s*stopWait\(\);/.test(js), true);
 
 console.log('\n  the owner\'s buttons say what they are doing');
@@ -166,6 +166,14 @@ check('building and updating the preview', /msg\("#msg-place", "Building the pre
 check('looking up addresses, with the pace', /LokaWait\.html\(ADDR\.results\.length\n\s*\? "looked up " \+ ADDR\.results\.length \+ "…" : "looking them up… about one a second"\)/.test(bench), true);
 check('Add to the atlas, which was silent and allowed a second press', /var stop = LokaWait\.start\(this, "Adding it to the atlas…"\);/.test(bench), true);
 check('and taking the upload off', /LokaWait\.start\(this, "Taking it off…"\)/.test(bench), true);
+
+console.log('\n  the waiting timings exist before the atlas starts drawing');
+{
+  const src = readFileSync(path.join(ROOT, 'atlas', 'atlas.js'), 'utf8');
+  const decl = src.indexOf('var LONG_WAIT = 6000');
+  const firstDraw = src.indexOf('draw().then(');
+  check('LONG_WAIT is set before the first draw() call', decl > -1 && firstDraw > -1 && decl < firstDraw, true);
+}
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

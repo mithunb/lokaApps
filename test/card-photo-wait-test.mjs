@@ -44,7 +44,7 @@ console.log('\n  while a photograph is on its way');
 const one = shotsHTML([A]);
 check('its room starts out waiting', /class="pop-shots is-waiting"/.test(one), true);
 check('and says so in plain words', /Loading photo…/.test(one), true);
-check('with a picture of a photo, not a spinner', /<svg[^>]*>[\s\S]*<rect[\s\S]*<\/svg>Loading/.test(one), true);
+check('with the one waiting mark every other wait uses', /<span class="wait-mark"><i><\/i><i><\/i><i><\/i><\/span>Loading photo…/.test(one), true);
 check('which a screen reader is spared', /class="pop-shot-wait" aria-hidden="true"/.test(one), true);
 check('the room is held at photo height while it waits', /\.pop-shots\.is-waiting \{ min-height:180px; \}/.test(html), true);
 check('the panel shows only while waiting',

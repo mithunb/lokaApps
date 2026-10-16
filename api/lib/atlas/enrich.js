@@ -1015,7 +1015,7 @@ const PLAINER = {
   'no question had enough kinds that fit':
     'none of the suggested questions had enough answers that fit these places',
   'no question survived the counting':
-    'once the places were answered, no question split them into enough groups, or each only repeated a column the data already has',
+    'no question sorted the places into enough groups, or it only repeated a column the file already has',
 };
 export function whyNothingKept(out) {
   if (!out) return '';
