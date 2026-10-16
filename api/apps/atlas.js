@@ -255,6 +255,9 @@ function pointInGeom(x, y, geom) {
 
 // Which ADM depths does geoBoundaries actually have for this country? (cached probe)
 const MAX_LEVEL = 4;
+/* The bounds of an atlas with no region. Stops short of the poles, where the
+   map's projection runs to infinity — the builder (common.py) uses the same. */
+const WORLD_BBOX = [-180, -85, 180, 85];
 
 /* What the builders can actually honour, per country.
 
@@ -2905,6 +2908,22 @@ function transform(session) {
       feats.push({ type: 'Feature', properties: { ...r }, geometry: { type: 'Point', coordinates: [lng, lat] } });
       report.matched++;
     });
+  } else if (!boundaryTargets(session, session.joinLayer)) {
+    /* Names, and no outlines at all to match them against — a worldwide
+       atlas has none, before or after its build. That used to be refused
+       outright ("no joinable boundary layer"), so the file could not be
+       checked and never reached the atlas. Now every row is simply a row
+       without a place, which is the state the rest of the path already
+       handles: the wizard offers to look them up by name on OpenStreetMap
+       and put them on as points (layers/locate), and the finished atlas
+       lists the rest under "rows that need a place". */
+    const nameCol = roles.placeName;
+    if (!nameCol) throw new Error('place-name column not set');
+    report.noOutlines = true;
+    rows.forEach((r, i) => {
+      const name = String(r[nameCol] == null ? '' : r[nameCol]).trim();
+      report.unmatched.push({ row: i, name: name || ('row ' + (i + 1)), candidates: [], reason: 'no outlines' });
+    });
   } else {
     /* Every boundary layer this atlas has, the most specific first.
 
@@ -3468,21 +3487,29 @@ async function ingestLayerSteps(b, who, tell) {
   // setting data up BEFORE the atlas exists. The second has no dataset to read,
   // so it sends the region it just chose instead; the session stays "pending"
   // until the build finishes and the layer is committed against the new slug.
-  const pendingRegion = (!dataset && b.region && b.region.iso3) ? {
-    iso3: String(b.region.iso3).toUpperCase(),
-    level: Number(b.region.level) || 1,
-    shapeIDs: (Array.isArray(b.region.shapeIDs) ? b.region.shapeIDs : []).map(String),
-    bbox: Array.isArray(b.region.bbox) && b.region.bbox.length === 4 ? b.region.bbox.map(Number) : null,
+  /* A worldwide atlas has no country and no units, and its file is still
+     checked here before the build: the rows are placed by their own
+     coordinates, or looked up by name (layers/locate), and the bounds are
+     the world. Refusing it for want of a region is what left a worldwide
+     atlas built from a spreadsheet with no data on it. */
+  const worldwidePending = !dataset && !!(b.region && b.region.worldwide);
+  const pendingRegion = (!dataset && b.region && (b.region.iso3 || worldwidePending)) ? {
+    iso3: worldwidePending ? '' : String(b.region.iso3).toUpperCase(),
+    level: worldwidePending ? 0 : (Number(b.region.level) || 1),
+    shapeIDs: worldwidePending ? [] : (Array.isArray(b.region.shapeIDs) ? b.region.shapeIDs : []).map(String),
+    bbox: worldwidePending ? WORLD_BBOX.slice()
+      : (Array.isArray(b.region.bbox) && b.region.bbox.length === 4 ? b.region.bbox.map(Number) : null),
+    worldwide: worldwidePending || undefined,
   } : null;
   if (pendingRegion) {
-    const tooManyHere = tooManyUnits(pendingRegion.shapeIDs);
-    if (tooManyHere) return res.status(400).json({ error: tooManyHere, tooManyUnits: pendingRegion.shapeIDs.length });
+    const tooManyHere = pendingRegion.worldwide ? '' : tooManyUnits(pendingRegion.shapeIDs);
+    if (tooManyHere) throw refuse(400, tooManyHere, { tooManyUnits: pendingRegion.shapeIDs.length });
     // no instance to authorise against yet — building requires a session, so
     // that (or the admin token) is the gate
     if (who !== 'server' && !auth.sessionFromReq(who) && !auth.isAdmin(who)) {
       throw refuse(401, 'sign in to set up your data', { needsAuth: true });
     }
-    if (!/^[A-Z]{3}$/.test(pendingRegion.iso3) || !pendingRegion.shapeIDs.length) {
+    if (!pendingRegion.worldwide && (!/^[A-Z]{3}$/.test(pendingRegion.iso3) || !pendingRegion.shapeIDs.length)) {
       throw refuse(400, 'region iso3 and shapeIDs are required before the atlas exists');
     }
   } else {
@@ -3817,6 +3844,13 @@ async function ingestLayerSteps(b, who, tell) {
           }
         }
       }
+    }
+    /* No outlines were offered at all (a worldwide atlas has none), so no
+       column could be scored against them. The column that looks like a
+       name is still the place column: the rows are looked up by it. */
+    if (!nameGuess && !allOptions.length) {
+      const nameish = profiles.find((p) => p.type === 'string' && p.looksLikeName && !p.looksLikeImage);
+      if (nameish) nameGuess = { column: nameish.name, rate: 0 };
     }
     const numeric = profiles.find((p) => p.type === 'number' && !p.looksLikeLat && !p.looksLikeLng);
     const catCol = pickCategoryColumn(profiles, nameGuess && nameGuess.column);
@@ -4640,6 +4674,8 @@ const LOCATE_MAX_ROWS = 500;
 // the two kinds of import session this is.
 function locateBias(session) {
   const r = session.region || {};
+  // an atlas of the whole world has no patch to prefer: the lookup is asked plainly
+  if (r.worldwide) return {};
   if (r.iso3 || r.bbox) return { country: r.iso3 || undefined, bbox: r.bbox || undefined };
   if (!session.dataset) return {};
   /* readManifest answers { manifest, local, dir } — not the manifest. Reading
@@ -4649,6 +4685,7 @@ function locateBias(session) {
      same query is honestly not found. */
   let m; try { m = imports.readManifest(session.dataset); } catch { return {}; }
   const mf = (m && m.manifest) || null;
+  if (mf && mf.region && mf.region.worldwide) return {};
   const bounds = mf && mf.bounds;
   const flat = Array.isArray(bounds) && bounds.length === 2 && Array.isArray(bounds[0])
     ? [bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1]] : null;

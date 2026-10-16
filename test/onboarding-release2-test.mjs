@@ -109,7 +109,9 @@ check('it is the owner’s (owner.js), not the viewer’s', /firstLook|own-first
 check('the numbers are read once and cleared', /localStorage\.removeItem\("loka-first-look"\);/.test(owner), true);
 check('and only trusted for this atlas', /if \(!look \|\| look\.slug !== SLUG\) look = \{/.test(owner), true);
 check('it says what was built, what of the file is on the map, and what still needs a place, with the way to fix it',
-  /"Boundaries and place names" \+ \(where \? " for " \+ where : ""\)/.test(owner) &&
+  // what was built is read off the atlas itself since the worldwide fix: the
+  // boundaries and place names it has, where it is, and the layers beyond those
+  /hasAdmin && hasLabels \? "Boundaries and place names"/.test(owner) && /where \? " for " \+ where : ""/.test(owner) &&
   /rows from " \+ look\.file \+ " are on the map\."/.test(owner) &&
   /add it again under Your data<\/a>/.test(owner) && /\.\/add-data\/\?dataset=/.test(owner), true);
 check('its two acts are the Owner menu’s own', /id="own-first-live">Who can see it</.test(owner) && /id="own-first-open">Add open data</.test(owner) &&
