@@ -91,11 +91,12 @@ check('the sort is written as questions first, then reach, then the older order'
 
 console.log('\n  the first row starts open, marking the map');
 const init = section('initLayerKeys');
+// the keys live on the host (H): a split file's outlines, or the layer itself
 check('the first key offered (not one that is on cards only) is open from the start',
-  /opts\.forEach\(function \(o\) \{ if \(!first && !o\.tooFew && !o\.scattered\) first = o; \}\);\s*\n\s*keyState\[L\.id\] = \{ active: first \? \[first\.col\] : \[\], note: null, noteCol: null \};/.test(init), true);
+  /opts\.forEach\(function \(o\) \{ if \(!first && !o\.tooFew && !o\.scattered\) first = o; \}\);[^]*?: \(first \? \[first\.col\] : \[\]\);\s*\n\s*keyState\[H\.id\] = \{ active: active, note: null, noteCol: null \};/.test(init), true);
 check('and the marks and legend are drawn for it, not for nothing',
-  /var act = activeKeyOptions\(L\);\s*\n\s*\(markersByLayer\[L\.id\] \|\| \[\]\)\.forEach\(function \(e\) \{ renderMarks\(L, e, act\); \}\);\s*\n\s*L\._legend = keyLegendRows\(L, act\);/.test(init), true);
-check('the discs read the rows\' footprint from the start', /if \(act\.length\) applyMarkerVisibility\(L\);/.test(init), true);
+  /var act = activeKeyOptions\(H\);\s*\n\s*keyEntries\(H\)\.forEach\(function \(e\) \{ renderMarks\(H, e, act\); \}\);\s*\n\s*H\._legend = keyLegendRows\(H, act\);/.test(init), true);
+check('the discs read the rows\' footprint from the start', /if \(act\.length\) halves\.forEach\(function \(h\) \{ applyMarkerVisibility\(h\); \}\);/.test(init), true);
 check('nothing is left that opens the map with every key off', /renderMarks\(L, e, \[\]\)/.test(init), false);
 
 console.log('\n  a row that unfolds');
@@ -115,7 +116,7 @@ check('no tick box is built for a key (the layer\'s own switch is still a checkb
 
 console.log('\n  opening marks the map; closing takes the marks off');
 check('a press on a closed row adds its key and redraws', /if \(i < 0\) \{[\s\S]*?st\.active\.push\(opt\.col\);[\s\S]*?\} else \{\s*\n\s*st\.active\.splice\(i, 1\);\s*\n\s*\}\s*\n\s*st\.note = null;\s*\n\s*st\.noteCol = null;\s*\n\s*st\._focus = opt\.col;[^\n]*\n\s*applyLayerKeys\(L\);/.test(build), true);
-check('applyLayerKeys draws the marks of exactly the open keys', /function applyLayerKeys\(L\) \{\s*\n\s*var act = activeKeyOptions\(L\);\s*\n\s*\(markersByLayer\[L\.id\] \|\| \[\]\)\.forEach\(function \(e\) \{ renderMarks\(L, e, act\); \}\);/.test(js), true);
+check('applyLayerKeys draws the marks of exactly the open keys, on every half of a split file', /function applyLayerKeys\(L\) \{\s*\n\s*var act = activeKeyOptions\(L\);\s*\n[^\n]*\n\s*keyEntries\(L\)\.forEach\(function \(e\) \{ renderMarks\(L, e, act\); \}\);/.test(js), true);
 check('open keys keep the offered order, so each keeps its shape', /st\.active = L\._keyOptions\.filter\(function \(o\) \{ return st\.active\.indexOf\(o\.col\) >= 0; \}\)/.test(build), true);
 check('opening a key turns its layer on with it', /if \(L\._visible === false\) \{\s*\n\s*setLayerVisible\(L, true\);/.test(build), true);
 check('the keyboard lands back on the row that was pressed', /var btns = wrap\.querySelectorAll\("\.key-toggle"\);/.test(build), true);

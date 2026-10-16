@@ -70,7 +70,12 @@ export function survey(roots) {
             Object.keys(rows[0] || {}).some((k) => RULES.isQuestionColumn(k))) continue;   // has questions
         if (!RULES.worthReading(L, rows)) continue;         // nothing beyond the places' names
         const cols = RULES.wordColumns(rows);
-        want.push(Object.assign(where, { places: rows.length, columns: cols,
+        // a file that went on as pins beside its outlines is read as one file:
+        // the count says every row the reading will cover (atlas.js fileHalves)
+        const twin = L.sameFileAs && (local.layers || []).find((o) => o.id === L.sameFileAs && o.source);
+        const twinGJ = twin ? readJSON(path.join(dir, twin.source)) : null;
+        const places = rows.length + (((twinGJ && twinGJ.features) || []).length);
+        want.push(Object.assign(where, { places, columns: cols,
           shapes: L.type !== 'marker', sig: signatureOf(rows, RULES.isAnswerColumn) }));
       }
     }

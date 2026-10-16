@@ -82,7 +82,8 @@ check('the line reads "12 of 66 places are Market"', /shown \+ " of " \+ total \
 check('one place says "is"', /shown === 1 \? " is " : " are "/.test(js), true);
 check('and "other" and "no answer" are said in plain words', /if \(which === "silent"\) return "without an answer";\s*if \(which === "other"\) return "something else";/.test(js), true);
 check('pressing the lit kind again comes back', /if \(kindFilterIs\(L, opt, which, label\)\) \{ clearSearch\(\); return; \}/.test(js), true);
-check('it gates the rows the way a tag does and re-draws map and list through the same door', /e\.hidden = !has;[^]*?applyRowVisibility\(L\);\s*updateSearchCount\(shown, total, pts, \{ ofAll: kindWords\(label, which\) \}/.test(js), true);
+// over every half of a split file (KEYS OVER BOTH HALVES), each re-drawn through the same door
+check('it gates the rows the way a tag does and re-draws map and list through the same door', /e\.hidden = !has;[^]*?applyRowVisibility\(h\);\s*\}\);\s*updateSearchCount\(shown, total, pts, \{ ofAll: kindWords\(label, which\) \}/.test(js), true);
 check('the words behind a kind open from their own chevron, so the row is free to narrow', /var open = el\("button", "leg-open", ICONS\.chevron\);/.test(js), true);
 check('one filter at a time: a kind empties the box and orphans a search in flight', /var box = \$\("\.ctl-search-input"\);\s*if \(box\) box\.value = "";[^\n]*\n\s*searchWord = "";\s*searchSeq\+\+;/.test(js), true);
 check('typing replaces a pressed kind', /if \(KINDFILTER\) \{ KINDFILTER = null; markLitKinds\(\); \}   \/\/ a pressed kind, likewise/.test(js), true);

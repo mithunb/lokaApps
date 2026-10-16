@@ -3952,12 +3952,11 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
   if (!layer) throw refuse(404, 'there is no layer here called ' + layerId);
   if (!layer.source) throw refuse(400, 'that layer has no places of its own');
 
-  const file = path.join(m.dir, layer.source);
-  if (!fs.existsSync(file)) throw refuse(404, 'the layer\'s places are missing');
-  const gj = JSON.parse(fs.readFileSync(file, 'utf8'));
-  const feats = (gj && gj.features) || [];
-  if (!feats.length) throw refuse(400, 'that layer has no places');
-  const rows = feats.map((f) => f.properties || {});
+  // one file that went on as two layers is read as one file — see fileHalves
+  const halves = fileHalves(m, layer);
+  if (!halves) throw refuse(404, 'the layer\'s places are missing');
+  const rows = rowsOf(halves);
+  if (!rows.length) throw refuse(400, 'that layer has no places');
   const fields = wordColumnsOf(rows);
   if (!fields.length) throw refuse(400, 'none of those columns hold words to read');
 
@@ -3972,7 +3971,10 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
   /* A layer put back from rows that never carried its answers has lost them
      from its own record; the server's copy of what it was last asked
      (opts.keep) stands in, so the keys on the map do not change under it. */
-  const settled = questionsOn(layer, rows);
+  /* Settled on whichever half carries them. A file read before both halves
+     were read together has its questions on the pins alone, and a reading
+     started from the outlines must answer those, not invent a new set. */
+  const settled = halves.map((h) => questionsOn(h.layer, rows)).find((s) => s.length) || [];
   const asked = afresh ? [] : (settled.length ? settled : (opts.keep || []));
   const inst = reg.getInstance(dataset);
   // the version of the places this reading is about, so it can tell if they move under it
@@ -4087,14 +4089,13 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
   if (opts.guard) {
     let now = null;
     try {
-      const again = JSON.parse(fs.readFileSync(file, 'utf8'));
-      now = signatureOf(((again && again.features) || []).map((f) => f.properties || {}), RULES.isAnswerColumn);
+      const again = fileHalves(imports.readManifest(dataset), layer);
+      now = again ? signatureOf(rowsOf(again), RULES.isAnswerColumn) : null;
     } catch { /* gone: refused below as changed */ }
     if (now !== sigAtStart) return { wrote: false, verdict: 'changed', sig: sigAtStart, calls: spentBy(callers) };
   }
-  await writeReading({
-    dataset, layer, layerId, rows, questions: out.questions,
-    label: layer.label || layerId, source: layer.source,
+  await writeReadingToHalves({
+    dataset, halves, questions: out.questions,
     /* What the model made of this set before it asked anything — one line on
        what these records are, and the sorts of fact it found in them. It was
        produced on every reading and thrown away every time, which left nobody
@@ -4275,11 +4276,13 @@ function considerReading(dataset, layerId, opts) {
   if (!got) return 'no layer';
   const { layer, layers, rows } = got;
   if (!RULES.wearsMarks(layer)) return 'no marks';
-  if (RULES.readByItsTwin(layer, layers)) return 'read through its pins';
   if (!rows.length || !RULES.worthReading(layer, rows)) return 'no words';
   const sig = signatureOf(rows, RULES.isAnswerColumn);
   const hasQuestions = questionsOn(layer, rows).length > 0 ||
     Object.keys(rows[0] || {}).some((k) => RULES.isQuestionColumn(k));
+  /* Noted for either half of a split file: a reading started from the pins
+     writes the outlines too (writeReadingToHalves), and their answers are
+     kept here so a repair can put them back without reading again. */
   if (opts && opts.fromReading) {
     QUESTIONS.remember(dataset, layerId, { sig, state: layer.patternsNone ? 'none' : 'done', reason: '' });
     keepAnswers(dataset, layer, rows, sig);
@@ -4304,6 +4307,11 @@ function considerReading(dataset, layerId, opts) {
     keepAnswers(dataset, layer, rows, sig);
     return 'read before';
   }
+  /* The outlines half of a split file is never put on the list to be read:
+     its pins' reading covers both halves (fileHalves). Its own answers are
+     still noted and kept above, so a repair that puts the same places back
+     gets them back without a reading. */
+  if (RULES.readByItsTwin(layer, layers)) return 'read through its pins';
   if (!ai && !FAKE_READING) return 'no model';
   const inst = reg.getInstance(dataset);
   const payer = (inst && inst.email) || '';
@@ -4643,6 +4651,66 @@ async function writeReading({ dataset, layer, layerId, rows, questions, label, s
   if (!ing || !ing.importId) throw refuse(500, 'the layer could not be prepared');
   // a reading's own write: it adds answers, it does not ask for another reading
   return commitLayer({ importId: ing.importId, dataset }, 'server', { fromReading: true });
+}
+
+/* ONE FILE, READ AS ONE FILE.
+
+   A file whose rows mostly named outlines, with a few that only had a point,
+   goes on as two layers — the outlines, and "<name> · as points" — each naming
+   the other (sameFileAs). The two halves hold DIFFERENT rows: a row becomes a
+   point only when no outline placed it (matching.js splitPointRows), so "6 as
+   areas · 5 as points" is eleven rows, six in one file and five in the other.
+
+   Until October 2026 the pair was read through its pins alone (reading-rules
+   readByItsTwin keeps the outlines off the list, so the owner is not charged
+   twice), and the comment beside that rule said both halves held the same
+   rows. They do not — so the six outline rows were never read at all, their
+   places wore no mark under any question, and nothing could be copied across
+   to them because there was nothing to copy. In the Map Browser the two
+   layers are one row with one set of keys (atlas.js, KEYS OVER BOTH HALVES),
+   and a key that answers for five of eleven places is not a key.
+
+   So a reading now gathers both halves' rows, the layer it was started from
+   first, reads them as one set — one list of questions, one reach — and
+   writes each half back its own share of the answers, with the same question
+   names on both. Either half can start it: the list reaches the pins, the
+   owner's own door the outlines. A layer with no twin is one half. */
+function fileHalves(m, layer) {
+  if (!m || !layer || !layer.source) return null;
+  const partner = layer.sameFileAs
+    ? imports.mergedLayers(m).find((l) => l.id === layer.sameFileAs && l.source) : null;
+  const out = [];
+  for (const L of partner ? [layer, partner] : [layer]) {
+    let rows = null;
+    try {
+      const gj = JSON.parse(fs.readFileSync(path.join(m.dir, L.source), 'utf8'));
+      rows = ((gj && gj.features) || []).map((f) => f.properties || {});
+    } catch { /* missing or unreadable: the layer itself is refused below, a twin is left out */ }
+    if (rows) out.push({ layer: L, rows });
+    else if (L === layer) return null;
+  }
+  return out;
+}
+const rowsOf = (halves) => halves.flatMap((h) => h.rows);
+
+/* The answers for the whole file, written to each half: a question's answers
+   and words are one list over the halves' rows in order, so each half takes
+   its own slice. Every half keeps the same wording, kinds and reading note. */
+async function writeReadingToHalves({ dataset, halves, questions, reading, facts }) {
+  let at = 0, last = null;
+  for (const h of halves) {
+    const n = h.rows.length;
+    const mine = (questions || []).map((q) => Object.assign({}, q, {
+      categories: (q.categories || []).slice(at, at + n),
+      why: (q.why || []).slice(at, at + n),
+    }));
+    last = await writeReading({
+      dataset, layer: h.layer, layerId: h.layer.id, rows: h.rows, questions: mine,
+      label: h.layer.label || h.layer.id, source: h.layer.source, reading, facts,
+    });
+    at += n;
+  }
+  return last;
 }
 
 router.post('/layers/ingest', async (req, res) => {
@@ -5963,9 +6031,10 @@ router.post('/layers/ask', async (req, res) => {
     const m = imports.readManifest(dataset);
     const layer = m && imports.mergedLayers(m).find((L) => L.id === layerId);
     if (!layer || !layer.source) return res.status(404).json({ error: 'layer not found' });
-    const file = path.join(m.dir, layer.source);
-    const gj = JSON.parse(fs.readFileSync(file, 'utf8'));
-    const rows = (gj.features || []).map((f) => f.properties || {});
+    // a file that went on as two layers is asked as one file — see fileHalves
+    const halves = fileHalves(m, layer);
+    if (!halves) return res.status(404).json({ error: 'the layer\'s places are missing' });
+    const rows = rowsOf(halves);
     if (!rows.length) return res.status(400).json({ error: 'that layer has no places' });
     const fields = wordColumnsOf(rows);
     if (!fields.length) return res.status(400).json({ error: 'none of those columns hold words to read' });
@@ -5980,7 +6049,10 @@ router.post('/layers/ask', async (req, res) => {
        filed under heritage, and until now the only way out was to throw away
        every question on the map and read it again. This changes the one that is
        wrong and leaves the rest alone. */
-    const settled = questionsOn(layer, rows);
+    // settled on whichever half carries them (a file read before both halves
+    // were read together has its questions on the pins alone)
+    const settledOn = halves.find((h) => questionsOn(h.layer, rows).length) || halves[0];
+    const settled = questionsOn(settledOn.layer, rows);
     const putRight = RULES.isQuestionColumn(String(b.replacing || ''))
       ? Number(String(b.replacing).split('_')[1]) - 1
       : -1;
@@ -6073,12 +6145,10 @@ router.post('/layers/ask', async (req, res) => {
       const held = b.token && ASKING.get(String(b.token));
       const fresh = (held && held.dataset === dataset && held.layerId === layerId) ? held.q : q;
       if (b.token) ASKING.delete(String(b.token));
-      const all = questionsAsAnswered(layer, rows);
+      const all = questionsAsAnswered(settledOn.layer, rows);
       if (repairing) all[putRight] = fresh; else all.push(fresh);
-      await writeReading({
-        dataset, layerId, rows, questions: all,
-        label: layer.label || layerId, source: layer.source,
-      });
+      // each half of a split file takes its own share, and keeps its own shapes
+      await writeReadingToHalves({ dataset, halves, questions: all });
       return res.json(Object.assign({ wrote: true, questionsNow: all.length }, preview));
     }
 
@@ -6128,6 +6198,12 @@ router.post('/layers/relabel', (req, res) => {
     cardColumns: Array.isArray(b.cardColumns) ? b.cardColumns : undefined,
   });
   if (!out) return res.status(404).json({ error: 'layer not found' });
+  /* One file, one set of keys: a question switched off on one half of a split
+     file is off on the other too, or the Map Browser's one row — whose keys
+     read both halves — would keep offering it. */
+  if (Array.isArray(b.hiddenKeys) && layer.sameFileAs) {
+    imports.relabelLayer(dataset, layer.sameFileAs, { hiddenKeys: b.hiddenKeys });
+  }
   res.json(Object.assign({ ok: true }, out));
 });
 

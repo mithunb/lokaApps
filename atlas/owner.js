@@ -1332,8 +1332,20 @@
   var SHELF = "layers";
 
   function keyedLayers() {
-    return ((window.LokaAtlas.manifest || {}).layers || []).filter(function (L) {
+    var all = (window.LokaAtlas.manifest || {}).layers || [];
+    var keyed = function (L) {
+      return !!(L && L.keyLabels && Object.keys(L.keyLabels).some(function (c) { return /^pattern_\d+$/.test(c); }));
+    };
+    return all.filter(function (L) {
       var m = mineFor(L.id);
+      /* One file that went on as two layers carries its questions on both
+         halves (the server reads the halves together and writes each its
+         share), and the Map Browser shows the pair as one row. So the "· as
+         points" half is not listed here when its outlines are: one file, one
+         block, and hiding a question on one half hides it on the other. */
+      var primary = L.sameFileAs && /·\s*as points$/.test(L.label || "") &&
+        all.filter(function (x) { return x.id === L.sameFileAs; })[0];
+      if (primary && keyed(primary)) return false;
       /* Asking, not removing. These are different rights now: somebody invited
          to an atlas may ask questions of any layer on it, while taking a layer
          off the map stays with whoever put it there. Reading canRemove here is
