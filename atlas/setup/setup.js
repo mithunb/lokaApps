@@ -54,7 +54,10 @@
   }
   function msg(n, text, cls) {
     var box = $("#msg-" + n);
-    if (box) box.innerHTML = text ? '<div class="msg ' + (cls || "err") + '">' + esc(text) + "</div>" : "";
+    if (!box) return;
+    // "wait": the line is about something still happening, so it carries the mark
+    if (cls === "wait") { box.innerHTML = text ? '<div class="msg ok wait-line">' + LokaWait.html(text) + "</div>" : ""; return; }
+    box.innerHTML = text ? '<div class="msg ' + (cls || "err") + '">' + esc(text) + "</div>" : "";
   }
   function esc(v) {
     return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;")
@@ -64,7 +67,11 @@
   /* ======================= who is here ======================= */
 
   function boot() {
+    // nothing else is drawn until the server says who is here
+    var bootWait = $("#boot-wait"), stopBoot = function () {};
+    if (bootWait) { bootWait.hidden = false; stopBoot = LokaWait.start(bootWait, "Opening…"); }
     api("auth/me").then(function (me) {
+      stopBoot(); if (bootWait) bootWait.hidden = true;
       // a signed-out visitor now gets a 200 saying so, where the request used
       // to fail; the gate below is what should still happen
       if (!me || !me.email) throw new Error("not signed in");
@@ -93,6 +100,7 @@
       else if (/(^|[?&])new=1/.test(location.search)) startFlow();
       else showHome();
     }).catch(function () {
+      stopBoot(); if (bootWait) bootWait.hidden = true;
       $("#gate").hidden = false;
     });
   }
@@ -106,7 +114,9 @@
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) {
       msg("gate", "That does not look like an email address."); $("#g-email").focus(); return;
     }
-    btn.disabled = true; msg("gate", "");
+    msg("gate", "");
+    // the server sends an email before it answers: the button says so
+    var stop = LokaWait.start(btn, "Sending the code…");
     api("auth/request-link", { method: "POST", body: { email: em } }).then(function (r) {
       $("#gate-1").hidden = true; $("#gate-2").hidden = false;
       $("#g-said").textContent = r.sent === false
@@ -114,19 +124,20 @@
         : "We sent a six-digit code to " + em + ".";
       $("#g-code").focus();
     }).catch(function (e) { msg("gate", errMsg(e)); })
-      .then(function () { btn.disabled = false; });
+      .then(stop);
   };
   $("#g-back").onclick = function () {
     $("#gate-2").hidden = true; $("#gate-1").hidden = false; msg("gate", ""); $("#g-email").focus();
   };
   $("#g-verify").onclick = function () {
     var em = $("#g-email").value.trim(), code = $("#g-code").value.trim(), btn = this;
-    btn.disabled = true; msg("gate", "");
+    msg("gate", "");
+    var stop = LokaWait.start(btn, "Checking the code…");
     api("auth/verify-code", { method: "POST", body: { email: em, code: code } }).then(function () {
       $("#gate").hidden = true;
       boot();
     }).catch(function (e) { msg("gate", errMsg(e)); })
-      .then(function () { btn.disabled = false; });
+      .then(stop);
   };
   $("#g-code").addEventListener("keydown", function (e) { if (e.key === "Enter") $("#g-verify").click(); });
   $("#g-email").addEventListener("keydown", function (e) { if (e.key === "Enter") $("#g-send").click(); });
@@ -208,7 +219,7 @@
     no.onclick = function () { box.replaceWith(wrap); };
     yes.onclick = function () {
       yes.disabled = no.disabled = true;
-      p.textContent = "Deleting \u201c" + name + "\u201d\u2026";
+      p.innerHTML = LokaWait.html("Deleting \u201c" + name + "\u201d\u2026");
       api("instances/" + encodeURIComponent(inst.slug), { method: "DELETE" })
         .then(function () {
           // drop it from what we hold, then redraw: asking the server again
@@ -794,7 +805,7 @@
   function placesFromFile(file) {
     if (!window.LokaIngest) { msg(2, "The file reader didn’t load — reload the page and try again."); return; }
     GEO.said = null;
-    msg(2, "Reading " + file.name + "…", "ok");
+    msg(2, "Reading " + file.name + "…", "wait");
     GEO.file = file;               // a part may be chosen after this returns
     FILE_STATE.pick = null;
     showFileCard(file.name, "reading…");
@@ -873,7 +884,7 @@
       return;
     }
     showFileCard(file.name, rows + " rows" + (part ? " · " + part : "") + " · finding places…");
-    msg(2, "Reading all " + rows.toLocaleString() + " rows to find the places…", "ok");
+    msg(2, "Reading all " + rows.toLocaleString() + " rows to find the places… this can take a minute for a big file.", "wait");
     // several columns may read like places; the boundary data settles which
     var body = pts ? { iso3: S.iso3, points: pts } : { iso3: S.iso3, columns: cols };
     api("geo/infer", { method: "POST", body: body })
@@ -1823,7 +1834,7 @@
   function loadCatalog() {
     // waits on the country list rather than assuming it has landed — what is
     // on offer depends entirely on which country this atlas is in
-    $("#cats").innerHTML = '<p class="hint">Loading what is available here…</p>';
+    $("#cats").innerHTML = '<p class="hint wait-line">' + LokaWait.html("Loading what is available here…") + '</p>';
     loadCountries().then(function () {
       /* Cached on the country AND the region's size: what can be built here
          changes when places are added or taken away, not only when the
@@ -2188,7 +2199,7 @@
     $("#home").hidden = true; $("#gate").hidden = true; $("#flow").hidden = true;
     $("#fixes").hidden = false;
     $("#fixes-open").href = "../?dataset=" + encodeURIComponent(slug);
-    $("#fixes-intro").textContent = "Loading…";
+    $("#fixes-intro").innerHTML = LokaWait.html("Loading…");
     loadFixes();
   }
   function loadFixes() {
@@ -2306,8 +2317,8 @@
       ask.innerHTML = '<button class="btn secondary" type="button">Look it up on the map</button>';
       ask.firstChild.onclick = function () {
         var b = this;
-        b.disabled = true;
-        b.textContent = "Looking…";
+        // one lookup per row, each about a second: the button says so at once
+        var stop = LokaWait.start(b, "Looking it up…", { delay: 0, keepDisabled: true });
         // every row of this name, one after another: each is its own place
         rows.reduce(function (p, x) {
           return p.then(function () {
@@ -2315,6 +2326,7 @@
               .then(function (res) { if (x.row === r0.row) ptFind = res.find || null; });
           });
         }, Promise.resolve()).then(function () {
+          stop();
           if (!ptFind) {
             b.textContent = "Not found on the map";
             box.querySelector(".hint").textContent = "OpenStreetMap does not know this name either. Correct it in your file and add the file again under Your data.";
@@ -2323,7 +2335,7 @@
           ask.hidden = true;
           paintOpts(cands);
           use.hidden = false;
-        }).catch(function (e) { b.disabled = false; b.textContent = "Look it up on the map"; msg("fixes", errMsg(e)); });
+        }).catch(function (e) { stop(); b.disabled = false; msg("fixes", errMsg(e)); });
       };
       box.appendChild(ask);
     }
@@ -2336,13 +2348,14 @@
         '<button class="btn secondary" type="button">Find</button>';
       var inp = find.querySelector("input");
       function go() {
+        var stop = LokaWait.start(find.querySelector("button"), "Finding…");
         api("layers/repair/find?importId=" + encodeURIComponent(imp.importId) + "&q=" + encodeURIComponent(inp.value))
           .then(function (res) {
             cands = res.matches || [];
             paintOpts(cands);
             if (!cands.length) box.querySelector(".hint").textContent = "Nothing on the map is called that. Try another spelling.";
             use.hidden = !cands.length && !ptFind;
-          }).catch(function (e) { msg("fixes", errMsg(e)); });
+          }).catch(function (e) { msg("fixes", errMsg(e)); }).then(stop);
       }
       find.querySelector("button").onclick = go;
       inp.addEventListener("keydown", function (e) { if (e.key === "Enter") go(); });

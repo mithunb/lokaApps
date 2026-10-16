@@ -192,12 +192,50 @@
      handed an error in the map's place. */
   /* The stage's own ground and one quiet line while the manifest and the base
      style are on their way; the map takes its place once it has drawn. */
+  /* showLoading(true) covers the stage with the mark and "Loading the map";
+     after LONG_WAIT it adds one more line, so a slow connection (or a private
+     atlas, which is asked for twice) is told this is normal and not stuck.
+     showLoading("Drawing the layers") keeps the map in view and says its
+     words in a small label at the stage's foot — for the layer files, which
+     arrive after the map does, and for a new basemap's tiles. Each caller
+     waits WAIT_DELAY before asking, so a file that lands at once never
+     flashes a label. showLoading(false) takes whichever is showing away. */
+  var LONG_WAIT = 6000, WAIT_DELAY = 300, loadingMoreT = null;
   function showLoading(on) {
     var n = $("#atlas-loading");
     if (!n) return;
-    if (on) { n.classList.remove("gone"); n.hidden = false; return; }
+    var words = n.querySelector(".atlas-loading-words > span:not(.wait-mark)");
+    var more = $("#atlas-loading-more");
+    clearTimeout(loadingMoreT);
+    if (on) {
+      var aside = typeof on === "string";
+      if (words) words.textContent = aside ? on : "Loading the map";
+      if (more) more.textContent = "";
+      n.classList.toggle("aside", aside);
+      n.classList.remove("gone"); n.hidden = false;
+      if (!aside && more) loadingMoreT = setTimeout(function () {
+        more.textContent = "Still on its way — this can take a minute on a slow connection.";
+      }, LONG_WAIT);
+      return;
+    }
     n.classList.add("gone");
-    setTimeout(function () { n.hidden = true; }, 220);
+    setTimeout(function () { if (n.classList.contains("gone")) { n.hidden = true; n.classList.remove("aside"); } }, 220);
+  }
+
+  /* The map library's stylesheet is fetched without holding the first paint
+     (see the head of index.html), so the map waits for it here instead: a
+     map built before its stylesheet lands draws its canvas and buttons in
+     the wrong place until it does. Resolved already when the sheet is in;
+     and after a short cap regardless, so a CDN that never answers costs the
+     visitor a plain-looking map rather than no map. */
+  function mapCssReady() {
+    var link = document.getElementById("maplibre-css");
+    if (!link || link.rel === "stylesheet" && link.sheet) return Promise.resolve();
+    return new Promise(function (resolve) {
+      var t = setTimeout(resolve, 4000);
+      link.addEventListener("load", function () { clearTimeout(t); setTimeout(resolve, 0); });
+      link.addEventListener("error", function () { clearTimeout(t); resolve(); });
+    });
   }
 
   /* The reason, in words a reader can act on. Our own messages already are;
@@ -261,7 +299,7 @@
         // the everyday map is a style document that has to arrive before the
         // map can be built from it
         activeBasemap = (m.basemaps.find(function (b) { return b.default; }) || m.basemaps[0]).id;
-        return baseStyle(m).then(function (st) { start(m, st); return true; });
+        return Promise.all([baseStyle(m), mapCssReady()]).then(function (r) { start(m, r[0]); return true; });
       })
       .catch(function (err) {
         showLoading(false);
@@ -308,6 +346,28 @@
 
     var grid = $("#home-grid");
     grid.innerHTML = "";
+    /* A pressed row says "Opening" at once, with the mark, and stays that way
+       until the atlas's first frame replaces this page — the browser keeps
+       the gallery on screen until then, and a gallery that did not move read
+       as a click that had not taken. The row is put back when the page is
+       shown again from the back button's cache. */
+    if (!grid._openingWired) {
+      grid._openingWired = true;
+      grid.addEventListener("click", function (e) {
+        var row = e.target && e.target.closest && e.target.closest("a.home-row");
+        if (!row || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button) return;
+        row.classList.add("opening");
+        var go = row.querySelector(".go");
+        if (go && window.LokaWait) go.innerHTML = LokaWait.html("Opening…");
+      });
+      window.addEventListener("pageshow", function () {
+        grid.querySelectorAll("a.home-row.opening").forEach(function (row) {
+          row.classList.remove("opening");
+          var go = row.querySelector(".go");
+          if (go) go.textContent = "→";
+        });
+      });
+    }
 
     // one row per atlas: its name, then where it is and who built it
     function row(href, title, blurb, featured) {
@@ -472,7 +532,12 @@
         // buildLayers preloads sources async, so layer ids (L._ids) only exist once
         // it resolves. wirePopups + fitToData depend on those, so run them after.
         renderMapAttrib();
+        // the layer files come after the map: a map with nothing on it yet
+        // says so at its foot, once the files have taken longer than a blink
+        var layersWait = setTimeout(function () { showLoading("Drawing the layers"); }, WAIT_DELAY);
         buildLayers().then(function () {
+          clearTimeout(layersWait);
+          showLoading(false);
           wirePopups();
           syncSearchBox();   // the data is in: keep the search box only if it has text to search
           /* Draw every layer's row again now the data is in. The panel is built
@@ -501,7 +566,10 @@
             };
             window.addEventListener("resize", once);
           }
-        }).catch(function (err) { console.error("Atlas build error:", err && err.message, err && err.stack); });
+        }).catch(function (err) {
+          clearTimeout(layersWait); showLoading(false);
+          console.error("Atlas build error:", err && err.message, err && err.stack);
+        });
         // re-frame when the layout flips between the floating panel (desktop) and
         // the bottom sheet (mobile). Wired once for the life of the page: start()
         // runs again on every draft preview (reboot), and this listener outlives
@@ -4723,6 +4791,28 @@
     searchableLayers().forEach(function (L) { searchRows(L).forEach(function (e) { e.hidden = false; }); applyRowVisibility(L); });
     updateSearchCount(null);
   }
+  /* The words pass answers at once; the pass by meaning is a round trip to
+     the server. When it has taken longer than a blink, the count line gets
+     one more line under it — the mark and "Looking further, by meaning" —
+     taken away the moment the answer lands or a newer keystroke wins. The
+     count line itself is left alone: it is redrawn by applySearch. */
+  function meaningWait(seq) {
+    var t = setTimeout(function () {
+      if (seq !== searchSeq) return;
+      var c = $("#atlas-search-count"); if (!c || !window.LokaWait) return;
+      var line = el("div", "ctl-search-more");
+      line.innerHTML = LokaWait.html("Looking further, by meaning…");
+      c.appendChild(line);
+      c.hidden = false;
+    }, WAIT_DELAY);
+    return function () {
+      clearTimeout(t);
+      var c = $("#atlas-search-count"); if (!c) return;
+      var line = c.querySelector(".ctl-search-more");
+      if (line) line.remove();
+      if (!c.textContent) c.hidden = true;
+    };
+  }
   function runSearch(raw) {
     searchWord = (raw || "").trim();
     var q = searchWord.toLowerCase();
@@ -4741,13 +4831,16 @@
     searchTimer = setTimeout(function () {
       // the key rides along so search works on a private atlas the same way its
       // files do; with no key the API falls back to the caller's own session
+      var stopWait = meaningWait(seq);
       fetch("./api/layers/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dataset: DATASET, q: q, key: KEY || undefined }),
       })
         .then(function (r) { return r.json(); })
+        .catch(function () { return null; })
         .then(function (r) {
+          stopWait();
           if (seq !== searchSeq) return;      // a newer keystroke won
           searchTags = (r && r.tags) || [];
           /* The server scores every row against the meaning of the query and
@@ -4822,8 +4915,26 @@
     el.innerHTML = parts.join(" · ");
   }
 
+  /* A new basemap's tiles arrive one by one; until the map is idle again the
+     stage says whose tiles it is waiting for — only if they take longer than
+     a blink, and only while this is still the basemap asked for. */
+  var tilesWaitT = null, tilesWaitFor = null;
+  function tilesWait(id) {
+    clearTimeout(tilesWaitT);
+    if (!map) return;
+    tilesWaitFor = id;
+    var b = (MANIFEST.basemaps || []).find(function (x) { return x.id === id; });
+    var label = b && b.label ? b.label.toLowerCase() : "map";
+    tilesWaitT = setTimeout(function () {
+      if (!map || tilesWaitFor !== id || map.areTilesLoaded()) return;
+      showLoading("Loading the " + label + " tiles");
+      map.once("idle", function () { if (tilesWaitFor === id) showLoading(false); });
+    }, WAIT_DELAY);
+  }
+
   function switchBasemap(id) {
     activeBasemap = id;
+    tilesWait(id);
     MANIFEST.basemaps.forEach(function (b) {
       if (map.getLayer("base-" + b.id)) map.setLayoutProperty("base-" + b.id, "visibility", b.id === id ? "visible" : "none");
     });

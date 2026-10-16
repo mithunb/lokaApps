@@ -445,6 +445,9 @@
   </header>
 
   <div class="wrap">
+    <!-- while the page asks who is here: nothing else is drawn until it
+         knows, so after a blink this line says the page is working -->
+    <p class="intro wait-line" id="boot-wait" hidden></p>
     <!-- signed out ----------------------------------------------------- -->
     <section class="panel" id="gate" hidden>
       <h2>Build an atlas of your region</h2>
@@ -712,6 +715,7 @@
 
   <!-- ?v=dev is a placeholder — deploy/deploy.sh stamps every one of these with the
        commit it ships, so nobody has to remember. Hard-refresh locally. -->
+  <script src="../wait.js?v=dev"></script>
   <script src="../vendor/papaparse.min.js"></script>
   <script src="../vendor/simplify.js"></script>
   <script src="../ingest.js?v=dev"></script>

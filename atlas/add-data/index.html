@@ -134,6 +134,7 @@
     <div id="bench"></div>
   </div>
 
+  <script src="../wait.js?v=dev"></script>
   <script src="../vendor/papaparse.min.js"></script>
   <script src="../vendor/simplify.js"></script>
   <!-- ?v=dev is a placeholder — deploy/deploy.sh stamps every one of these with the
@@ -166,6 +167,10 @@
     // The atlas is fetched before the bench mounts, so the page can never
     // offer to add data to something the person cannot edit — the old page
     // let you upload first and refused at the very end.
+    // Nothing else is on the page until it answers, so after a blink the
+    // gate says the page is working; a gate with a reason replaces it.
+    var stopOpening = LokaWait.start($("#gate-p"), "Opening the atlas…");
+    var openingT = setTimeout(function () { $("#gate-t").textContent = ""; $("#gate").hidden = false; }, LokaWait.DELAY);
     fetch(API + "instances/" + encodeURIComponent(SLUG), { credentials: "same-origin" })
       .then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (j) {
@@ -174,6 +179,7 @@
         });
       })
       .then(function (inst) {
+        clearTimeout(openingT); stopOpening(); $("#gate").hidden = true;
         if (!inst.canEdit) {
           gate("You cannot add data to this atlas",
             "It exists, but this account is not its owner and has not been invited to it.", true);
@@ -187,6 +193,7 @@
         start(inst);
       })
       .catch(function (e) {
+        clearTimeout(openingT); stopOpening();
         if (e && (e._status === 401 || e.needsAuth)) {
           gate("Sign in first", "Adding data to an atlas needs the email it belongs to.", true);
         } else if (e && e._status === 404) {

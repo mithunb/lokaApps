@@ -196,13 +196,14 @@
     var b = el("button", "shr-btn", ICONS.share + "<span>" + esc(label) + "</span>");
     b.type = "button";
     b.onclick = function () {
-      b.disabled = true;
+      // the server is asked for a key: the button says so while it waits
+      var stop = window.LokaWait ? LokaWait.start(b, "Making a new link…") : (b.disabled = true, function () { b.disabled = false; });
       Promise.resolve(opts.renew()).then(function (key) {
         if (!key) return;
         opts.viewKey = key;
         var fresh = panel(opts);
         if (root.parentNode) root.parentNode.replaceChild(fresh, root);
-      }).catch(function () {}).then(function () { b.disabled = false; });
+      }).catch(function () {}).then(stop);
     };
     return b;
   }

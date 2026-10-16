@@ -387,6 +387,8 @@
       "). Tell us that, and we can fix it.";
   }
   function msg(sel, text, cls) {
+    // "wait": the line is about something still happening, so it carries the mark
+    if (cls === "wait") { $(sel).innerHTML = text ? '<div class="msg ok wait-line">' + LokaWait.html(text) + "</div>" : ""; return; }
     $(sel).innerHTML = text ? '<div class="msg ' + (cls || "err") + '">' + text + "</div>" : "";
   }
 
@@ -476,6 +478,9 @@
   if ($("#auth-send")) $("#auth-send").onclick = function () {
     var email = $("#f-auth-email").value.trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { msg("#msg-auth", "Enter a valid email."); return; }
+    // the server sends an email before it answers: the button says so, and
+    // cannot be pressed twice meanwhile
+    var stop = LokaWait.start(this, "Sending the code…");
     api("auth/request-link", { method: "POST", body: { email: email } }).then(function (r) {
       msg("#msg-auth", r.sent
         ? "We emailed you a 6-digit code — type it and sign in."
@@ -484,16 +489,17 @@
       $("#auth-verify").hidden = false;
       $("#f-auth-code").value = "";
       $("#f-auth-code").focus();
-    }).catch(function (e) { msg("#msg-auth", esc(errMsg(e))); });
+    }).catch(function (e) { msg("#msg-auth", esc(errMsg(e))); }).then(stop);
   };
   if ($("#auth-verify")) $("#auth-verify").onclick = function () {
     var email = $("#f-auth-email").value.trim();
     var code = $("#f-auth-code").value.trim();
     if (!/^\d{6}$/.test(code)) { msg("#msg-auth", "Enter the 6-digit code from the email."); return; }
+    var stop = LokaWait.start(this, "Checking the code…");
     api("auth/verify-code", { method: "POST", body: { email: email, code: code } })
       .then(function () { $("#code-wrap").hidden = true; $("#auth-verify").hidden = true; return refreshAuth(); })
       .then(function () { msg("#msg-auth", "Signed in ✓", "ok"); loadAddedLayers(); })
-      .catch(function (e) { msg("#msg-auth", esc(errMsg(e))); });
+      .catch(function (e) { msg("#msg-auth", esc(errMsg(e))); }).then(stop);
   };
 
   /* ---- layers already added to this atlas ---- */
@@ -753,12 +759,10 @@
     var rows = S.canonical.rows.map(function (r) {
       var o = {}; cols.forEach(function (c) { o[c] = r[c]; }); return o;
     });
-    var btn = $("#enrich-go"), label = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spin" aria-hidden="true"></span>Reading…';
-    function done() { btn.disabled = false; btn.innerHTML = label; }
+    var btn = $("#enrich-go");
+    var done = LokaWait.start(btn, "Reading…", { delay: 0 });
     hideOffer();
-    msg("#msg-enrich", "Reading all " + S.canonical.rows.length + " places…", "ok");
+    msg("#msg-enrich", "Reading all " + S.canonical.rows.length + " places… this can take a minute.", "wait");
     api("layers/enrich", { method: "POST", body: {
       dataset: S.dataset || undefined, fields: cols, rows: rows,
     } }).then(function (r) {
@@ -958,6 +962,9 @@
     // them; otherwise they sit beside the button that was just pressed.
     function say(text, cls) {
       if (HOST.onStatus) { HOST.onStatus(text || "", cls || ""); msg("#msg-check", ""); return; }
+      // every "ok" line here is progress on something still running, so it
+      // carries the mark (msg's "wait" escapes the words itself)
+      if (cls === "ok") { msg("#msg-check", text || "", "wait"); return; }
       msg("#msg-check", text ? esc(text) : "", cls);
     }
     $("#to-place").disabled = true;
@@ -1147,10 +1154,13 @@
     if (detected && result.strategy === "coordinates" && !needsAnEye(result)) {
       S.placeSkipped = true;
       if (STAGES === "checkPlace") { readyCheck(); return; }
+      // the person is still looking at the check step while this round trip
+      // runs, so its line says what is happening (it was silent before)
+      msg("#msg-check", "Placing them on the map…", "wait");
       runApply(function () {
         return api("layers/apply", { method: "POST", body: applyBody(true, S.result.spec) })
-          .then(function (r) { S.result = r; enterStyle(r); })
-          .catch(function () { S.placeSkipped = false; goStep(3); });
+          .then(function (r) { S.result = r; msg("#msg-check", ""); enterStyle(r); })
+          .catch(function () { S.placeSkipped = false; msg("#msg-check", ""); goStep(3); });
       });
       return;
     }
@@ -1238,8 +1248,9 @@
     $("#addr-find").disabled = true;
     msg("#msg-place", "");
     (function round() {
-      $("#addr-progress").textContent = ADDR.results.length
-        ? "looked up " + ADDR.results.length + "\u2026" : "looking them up\u2026";
+      // one address a second, so a long list is a long wait: the count moves
+      $("#addr-progress").innerHTML = LokaWait.html(ADDR.results.length
+        ? "looked up " + ADDR.results.length + "\u2026" : "looking them up\u2026 about one a second");
       api("layers/locate", { method: "POST", body: { importId: S.result.importId, column: col } })
         .then(function (d) {
           ADDR.results = d.results || [];
@@ -1663,7 +1674,7 @@
 
   function buildPreview() {
     $("#to-style").disabled = true;
-    msg("#msg-place", "Building the preview…", "ok");
+    msg("#msg-place", "Building the preview…", "wait");
     runApply(function () {
       var spec = Object.assign({}, S.result.spec, { outsideAction: outsideChoice() });
       return api("layers/apply", { method: "POST", body: applyBody(true, spec) }).then(function (r) {
@@ -2262,7 +2273,7 @@
       popupTitleColumn: $("#s-poptitle").value || undefined,
       outsideAction: outsideChoice(),
     });
-    $("#style-state").textContent = "Updating the preview…";
+    $("#style-state").innerHTML = LokaWait.html("Updating the preview…");
     return api("layers/apply", { method: "POST", body: applyBody(true, spec) }).then(function (r) {
       S.result = r;
       $("#style-state").textContent = "";
@@ -2289,6 +2300,10 @@
 
   $("#commit").onclick = function () {
     if (!S.result) return;
+    // the file is written into the atlas and the map rebuilt before this
+    // answers: the button says so, and a second press cannot send it twice
+    var stop = LokaWait.start(this, "Adding it to the atlas…");
+    msg("#msg-commit", "");
     api("layers/commit", { method: "POST", body: { importId: S.result.importId, dataset: S.dataset } })
       .then(function (r) {
         S.committedLayer = r.layerId;   // the file is on the map now — see Keep
@@ -2303,13 +2318,14 @@
           return;
         }
         msg("#msg-commit", esc(errMsg(e)));
-      });
+      }).then(stop);
   };
   $("#discard").onclick = function () {
     if (!S.result) return;
+    var stop = LokaWait.start(this, "Taking it off…");
     api("layers/discard", { method: "POST", body: { importId: S.result.importId } }).then(function () {
       location.reload();
-    });
+    }).catch(function (e) { stop(); msg("#msg-commit", esc(errMsg(e))); });
   };
 
     return {

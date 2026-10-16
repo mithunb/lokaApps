@@ -18,14 +18,34 @@
        about a second; longer on a private atlas, which is asked for twice).
        Under the mark the title slot says nothing and the drawer is not drawn;
        atlas.js lifts it the moment the manifest has named the atlas, or when
-       it has to say why the atlas could not open. -->
-  <script>if (/[?&]dataset=[^&]/.test(location.search)) { document.documentElement.classList.add("atlas-full"); document.documentElement.classList.add("atlas-pending"); }</script>
+       it has to say why the atlas could not open.
+       The same script writes the fonts' stylesheet, because an atlas and the
+       gallery need it loaded differently. A stylesheet in the head holds the
+       first paint until it arrives; on a slow connection the gallery stayed
+       on screen, still, for as long as Google Fonts took (measured on the
+       live site, 16 Oct 2026: the two outside stylesheets were the only
+       render-blocking fetches). An atlas address fetches the fonts without
+       holding the paint — the only words in its first frame are "Loading the
+       map", and the title is hidden until the manifest names it, so nothing
+       is seen in the wrong face. The gallery keeps the fonts blocking: its
+       first frame IS its headings, and a flash from the fallback face into
+       Lora is the one thing a non-blocking load would add there. Only a
+       stylesheet the parser writes can block, which is why this is written
+       and not appended. -->
+  <script>if (/[?&]dataset=[^&]/.test(location.search)) { document.documentElement.classList.add("atlas-full"); document.documentElement.classList.add("atlas-pending"); }
+  document.write(document.documentElement.classList.contains("atlas-full")
+    ? '<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600;700&family=Lora:wght@700&display=swap" onload="this.onload=null;this.rel=\'stylesheet\'" />'
+    : '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600;700&family=Lora:wght@700&display=swap" />');</script>
   <title>LOKA Atlas</title>
   <meta name="description" content="LOKA Atlas — layered, shareable maps for any geography, built from open data. Pick a region, choose layers, add your own data, and publish." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600;700&family=Lora:wght@700&display=swap" />
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <!-- The map library's own stylesheet is needed only once there is a map,
+       which is after the manifest; it is fetched now but holds nothing, and
+       atlas.js waits for it (mapCssReady) before building the map, so the map
+       is never drawn unstyled. -->
+  <link id="maplibre-css" rel="preload" as="style" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" onload="this.onload=null;this.rel='stylesheet'" />
+  <noscript><link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" /></noscript>
   <style>
     :root {
       /* The Bazaar palette, a little softer — every value is measured, see
@@ -147,7 +167,31 @@
       transition:opacity .2s ease; }
     .atlas-loading.gone { opacity:0; }
     .atlas-loading[hidden] { display:none !important; }
-    .atlas-loading span::after { content:'…'; }
+    .atlas-loading .atlas-loading-words > span:not(.wait-mark)::after { content:'…'; }
+    /* The second line, said only once the wait has gone on for a while:
+       it keeps its place and says nothing until then. */
+    .atlas-loading small { display:block; min-height:1.3em; margin-top:.25rem; font-size:var(--t-label); color:var(--color-text-muted); }
+    .atlas-loading .atlas-loading-words { text-align:center; }
+    /* Once the map is up, the same line steps aside: a small label at the
+       foot of the stage while the layers' files, or a new basemap's tiles,
+       are on their way. The map stays usable under it. */
+    .atlas-loading.aside { inset:auto auto .75rem 50%; transform:translateX(-50%); width:max-content; max-width:calc(100% - 2rem);
+      background:var(--color-surface); border:1px solid var(--color-border);
+      border-radius:var(--radius-md); padding:.3rem .6rem; font-size:var(--t-label); box-shadow:var(--shadow-md); }
+    .atlas-loading.aside small { display:none; }
+    /* ---- the waiting mark: three Leaf dots that breathe in turn ----
+       The same rules live in wait.js, which every other page loads; they are
+       repeated here so the mark is in the atlas's first frame, before any
+       script. test/waits-test.mjs holds the two copies equal. */
+    .wait-mark { display:inline-flex; align-items:center; gap:4px; vertical-align:middle; margin-right:.5em; }
+    .wait-mark i { display:block; width:6px; height:6px; border-radius:50%; background:var(--color-leaf,#2A6B41); opacity:.3;
+      animation:wait-breathe 1.5s ease-in-out infinite; }
+    .wait-mark i:nth-child(2) { animation-delay:.22s; }
+    .wait-mark i:nth-child(3) { animation-delay:.44s; }
+    button .wait-mark i, .btn .wait-mark i, .share-btn .wait-mark i, .shr-btn .wait-mark i { background:currentColor; }
+    @keyframes wait-breathe { 0%, 70%, 100% { opacity:.3; transform:scale(.85); } 35% { opacity:1; transform:scale(1); } }
+    .wait-line { display:inline-flex; align-items:center; color:var(--color-text-secondary,#5A5751); }
+    @media (prefers-reduced-motion: reduce) { .wait-mark i { animation:none; opacity:.6; } }
     /* The map could not be loaded: a small Surface panel that says what
        happened in words and offers one thing to try. Never a red wall. */
     .atlas-error { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:2rem; }
@@ -258,6 +302,7 @@
       padding:.2rem .6rem; font-size:var(--t-meta); color:var(--color-text-secondary);
       background:rgba(253,252,248,.95); border:1px solid var(--color-border);
       border-radius:var(--radius-md); box-shadow:var(--shadow-md); }
+    .ctl-search-more { margin-top:.2rem; font-size:var(--t-label); color:var(--color-text-muted); }
     .ctl-search-go { font:inherit; font-weight:600; border:none; background:none; padding:0;
       color:var(--color-leaf); cursor:pointer; text-decoration:underline; }
     .ctl-search-go:hover { color:var(--color-leaf-deep); }
@@ -1135,6 +1180,11 @@
     .home-row .go { grid-column:2; grid-row:1 / span 2; align-self:center; font-size:var(--t-section);
       color:var(--color-text-muted); transition:transform .15s ease, color .15s ease; }
     a.home-row:hover .go { color:var(--color-leaf); transform:translateX(3px); }
+    /* The row that has been pressed: its arrow becomes the mark and the word
+       "Opening", at once, because the browser keeps this page on screen
+       until the atlas's first frame — a still gallery read as a dead click. */
+    a.home-row.opening .go, a.home-row.opening:hover .go { font-family:var(--font-body); font-size:var(--t-ui); font-weight:600;
+      color:var(--color-text-secondary); transform:none; white-space:nowrap; display:inline-flex; align-items:center; }
     @media (prefers-reduced-motion:reduce) {
       .home-row .go, .home-row h2 { transition:none; }
       a.home-row:hover .go { transform:none; }
@@ -1321,6 +1371,8 @@
       .sheet-foot-words { flex-direction:row; align-items:center; }
       /* the chips sit just above the sheet, with the map's own buttons */
       .map-foot { left:8px; bottom:calc(var(--sheet-h, 0px) + 8px); max-width:calc(100% - 4.5rem); }
+      /* the waiting label steps up above the sheet and the chips, like the cue */
+      .atlas-loading.aside { bottom:calc(var(--sheet-h, 0px) + 52px); }
       .atlas-full .maplibregl-ctrl-bottom-left { bottom:calc(var(--sheet-h, 0px) + 40px); }
       .atlas-full .maplibregl-ctrl-bottom-right { bottom:calc(var(--sheet-h, 0px) + 12px); }
       .atlas-sources { left:0; right:0; bottom:0; width:auto; max-height:88%; border-radius:var(--radius-lg) var(--radius-lg) 0 0; border-left:0; border-right:0; }
@@ -1607,7 +1659,7 @@
     <div id="atlas-map"></div>
     <!-- shown from the first frame on an atlas; atlas.js takes it away once
          the map has drawn (showLoading). The gallery never shows it. -->
-    <div class="atlas-loading" id="atlas-loading" aria-live="polite"><span>Loading the map</span></div>
+    <div class="atlas-loading" id="atlas-loading" aria-live="polite"><div class="atlas-loading-words"><span class="wait-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>Loading the map</span><small id="atlas-loading-more"></small></div></div>
     <aside class="atlas-panel" id="atlas-panel">
       <!-- open: the drawer's head. Folded: this same head is the
            "Layers · N" button that opens it again. -->
@@ -1814,6 +1866,7 @@
        hover), shared with the server for the same reason -->
   <script src="./label-rules.js?v=dev"></script>
   <script src="./iconkit.js?v=dev"></script>
+  <script src="./wait.js?v=dev"></script>
   <script src="./share.js?v=dev"></script>
   <script src="./atlas.js?v=dev"></script>
 </body>

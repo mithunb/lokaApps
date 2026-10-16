@@ -729,7 +729,9 @@
         var want = (scrim.querySelector('input[name="own-vis"]:checked') || {}).value;
         if (!want || want === stateOf()) { closeDialog(scrim); return; }
         var btn = this, err = scrim.querySelector("#own-vis-err");
-        btn.disabled = true; err.textContent = "";
+        err.textContent = "";
+        // moving an atlas's files is a few round trips: the button says so
+        var stop = LokaWait.start(btn, "Changing who can open it…");
         setVisibility(want)
           .then(function () {
             /* The viewer fetched every file from where the atlas WAS. Rather
@@ -737,7 +739,7 @@
                the page fresh and say what happened on arrival (see mount). */
             location.href = location.pathname + "?dataset=" + encodeURIComponent(SLUG) + "&who=" + want;
           })
-          .catch(function (e) { err.textContent = errMsg(e); btn.disabled = false; });
+          .catch(function (e) { stop(); err.textContent = errMsg(e); });
       };
     });
   }
@@ -832,7 +834,7 @@
           '. Tick what this atlas should carry. Applying rebuilds the base map, which takes a few ' +
           'minutes — the atlas stays up, and your own data, About text and logo are kept.</p>') +
       '<p class="own-set-p own-od-given" id="own-od-given"></p>' +
-      '<div class="own-od-cats" id="own-od-cats" aria-busy="true"><span class="own-set-p">Loading the list…</span></div>' +
+      '<div class="own-od-cats" id="own-od-cats" aria-busy="true"><span class="own-set-p wait-line">' + LokaWait.html("Loading the list…") + '</span></div>' +
       (waiting ? "" :
         '<p class="own-set-p own-od-sum" id="own-od-sum" aria-live="polite"></p>' +
         '<div class="own-row own-row-tight">' +
@@ -973,10 +975,12 @@
     var box = scrim.querySelector("#own-od-confirm");
     function send() {
       box.hidden = true;
-      btn.disabled = true; m.textContent = "";
+      m.textContent = "";
+      var stop = LokaWait.start(btn, "Starting the rebuild…");
       api("instances/" + encodeURIComponent(SLUG) + "/rebuild", {
         method: "POST", body: { layers: d.want },
       }).then(function (r) {
+        stop();
         closeDialog(scrim);
         INST.layers = (r && r.layers) || d.want;
         if (r && r.pendingApproval) {
@@ -996,7 +1000,7 @@
         paintStatus();
         if (r.jobId) watchRebuild(r.jobId, "Open data updated");
       }).catch(function (e) {
-        btn.disabled = false;
+        stop();
         m.textContent = errMsg(e);
       });
     }
@@ -1532,7 +1536,11 @@
       kindsBox.hidden = true; kindsBox.innerHTML = "";
       go.textContent = "Work out the answers"; go.disabled = false;
     }
-    function fail(e) { err.textContent = errMsg(e); err.hidden = false; go.disabled = false; }
+    // a line that is still being waited on: the mark, then the words
+    function saying(t) { say.innerHTML = LokaWait.html(t); }
+    // the wait is over when it fails, so its line goes too — before this, "Answering…"
+    // stayed on screen above the reason it had not
+    function fail(e) { say.textContent = ""; err.textContent = errMsg(e); err.hidden = false; go.disabled = false; }
     function ask(phase, body) {
       return api("layers/ask", { method: "POST", body: Object.assign(
         { dataset: SLUG, layerId: L.id, phase: phase, question: box.value.trim() },
@@ -1584,7 +1592,7 @@
       go.disabled = true;
 
       if (!kinds) {
-        say.textContent = "Reading your places to see what the answers look like…";
+        saying("Reading your places to see what the answers look like…");
         ask("kinds").then(function (r) {
           go.disabled = false;
           if (r.verdict === "cannot_answer") {
@@ -1613,7 +1621,7 @@
           err.hidden = false;
           return;
         }
-        say.textContent = "Answering " + allPlaces + "… about half a minute.";
+        saying("Answering " + allPlaces + "… this can take about half a minute.");
         ask("try", { kinds: named() }).then(function (r) {
           go.disabled = false;
           if (r.verdict !== "answered") { fail(new Error(r.note || r.trouble || "nothing came back")); return; }
@@ -1648,7 +1656,7 @@
         return;
       }
 
-      say.textContent = fix ? "Putting it right on the map…" : "Adding it to the map…";
+      saying(fix ? "Putting it right on the map…" : "Adding it to the map…");
       ask("keep", { kinds: named(), token: token }).then(function (r) {
         if (!r.wrote) { fail(new Error(r.note || r.trouble || "it could not be saved")); return; }
         var name = r.question || box.value.trim();
@@ -2396,12 +2404,14 @@
     scrim.querySelector("#own-region-no").onclick = function () { box.hidden = true; };
     scrim.querySelector("#own-region-yes").onclick = function () {
       box.hidden = true;
-      btn.disabled = true; m.textContent = "";
+      m.textContent = "";
+      var stop = LokaWait.start(btn, "Starting the rebuild…");
       api("instances/" + encodeURIComponent(SLUG) + "/rebuild", {
         method: "POST",
         body: { region: { iso3: (INST.region && INST.region.iso3) || "IND", level: level,
                           shapeIDs: chosen.map(function (c) { return c.id; }) } },
       }).then(function (r) {
+        stop();
         closeDialog(scrim);
         /* The same unchecked field as the wizard's: past the free tier the API
            answers pendingApproval with no job, and saying "rebuilding" then is
@@ -2418,7 +2428,7 @@
           : "Rebuilding — this takes a few minutes. The atlas stays up meanwhile.");
         if (r.jobId) watchRebuild(r.jobId);
       }).catch(function (e) {
-        btn.disabled = false;
+        stop();
         m.textContent = errMsg(e);
       });
     };
@@ -2479,16 +2489,16 @@
     });
     yes.onclick = function () {
       if (slug.value.trim() !== SLUG) return;
-      yes.disabled = true; no.disabled = true;
-      yes.textContent = "Deleting…";
+      no.disabled = true;
       err.textContent = "";
+      var stop = LokaWait.start(yes, "Deleting…", { delay: 0 });
       api("instances/" + encodeURIComponent(SLUG), { method: "DELETE" })
         .then(function () {
           // this page's subject is gone; there is nothing here to return to
           location.href = "./setup/?deleted=" + encodeURIComponent(INST.title || SLUG);
         })
         .catch(function (e) {
-          yes.textContent = "Delete permanently";
+          stop();
           no.disabled = false;
           yes.disabled = slug.value.trim() !== SLUG;
           err.textContent = errMsg(e);
@@ -2540,7 +2550,8 @@
     }
     var org = scrim.querySelector("#own-org").value.trim();
     if (!org) { err.textContent = "Name the organisation or project this atlas belongs to."; scrim.querySelector("#own-org").focus(); return; }
-    btn.disabled = true; err.textContent = "";
+    err.textContent = "";
+    var stop = LokaWait.start(btn, "Saving…");
     // the logo rides in the same request the server already takes for the
     // words: a new picture as logoData, or removeLogo; untouched, neither
     var branding = { orgName: org, orgUrl: site };
@@ -2572,7 +2583,7 @@
       preview(SLUG);
     }).catch(function (e) {
       err.textContent = errMsg(e);
-    }).then(function () { btn.disabled = false; });
+    }).then(stop);
   }
 
   function paintInvites(scrim) {
@@ -2609,6 +2620,9 @@
     var em = scrim.querySelector("#own-inv-email"), go = scrim.querySelector("#own-inv-go");
     var v = em.value.trim();
     if (!v) { em.focus(); return; }
+    // the invitation is an email the server sends before answering: the
+    // button says so, and cannot be pressed twice meanwhile
+    var stop = LokaWait.start(go, "Inviting…");
     api("instances/" + encodeURIComponent(SLUG) + "/collaborators", { method: "POST", body: { email: v } })
       .then(function (r) {
         INST.collaborators = r.collaborators || [];
@@ -2619,7 +2633,7 @@
         toast(r.sent === false ? "Added, but the email could not be sent" : "Invited " + v);
       })
       .catch(function (e) { scrim.querySelector("#own-set-err").textContent = errMsg(e); })
-      .then(function () { go.disabled = false; });
+      .then(stop);
   }
 
   window.LokaAtlasOwner = { mount: mount };

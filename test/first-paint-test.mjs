@@ -37,7 +37,10 @@ function check(name, got, want) {
 
 console.log('\n  the decision is made in the head, before anything is drawn');
 const headEnd = html.indexOf('</head>');
-const headScript = /<script>(if \(\/\[\?&\]dataset=\[\^&\]\/\.test\(location\.search\)\) \{[^<]*\})<\/script>/.exec(html);
+// The script's first statement is the decision; what follows (the fonts'
+// link, written by the same script — see test/waits-test.mjs) must not
+// come before it.
+const headScript = /<script>(if \(\/\[\?&\]dataset=\[\^&\]\/\.test\(location\.search\)\) \{[^}]*\})[\s\S]*?<\/script>/.exec(html);
 check('one inline script in the head looks at the address', !!headScript && html.indexOf(headScript[0]) < headEnd, true);
 check('it comes before every stylesheet, so no style is ever applied without it',
   !!headScript && html.indexOf(headScript[0]) < html.indexOf('<link rel="stylesheet"'), true);
@@ -73,8 +76,13 @@ check('the private atlas is read by the viewer from the same address — nothing
 
 console.log('\n  nothing later takes the shape away');
 check('no script removes the full-page class', /classList\.remove\(["']atlas-full["']\)/.test(js + html), false);
+// The two outside stylesheets are now fetched without holding the paint
+// (the fonts' link is written by the head script, the map library's is a
+// preload — both pinned in test/waits-test.mjs); no other stylesheet is
+// linked in the markup at all.
+const markupOnly = html.replace(/<script>[\s\S]*?<\/script>/g, '').replace(/<noscript>[\s\S]*?<\/noscript>/g, '');
 check('no stylesheet of ours is loaded late (owner.css is the owner\'s tools, after the atlas has drawn)',
-  (html.match(/<link rel="stylesheet"/g) || []).length, 2);
+  (markupOnly.match(/<link rel="stylesheet"/g) || []).length, 0);
 check('the only late stylesheet is the owner\'s', /css\.href = "\.\/owner\.css\?v="/.test(js), true);
 check('the shape does not wait for the manifest: atlas.js only repeats the head\'s decision',
   /if \(DATASET\) document\.documentElement\.classList\.add\("atlas-full"\);/.test(js), true);
