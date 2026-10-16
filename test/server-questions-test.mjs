@@ -409,8 +409,8 @@ await (async () => {
       page2.ponds, { state: 'none', reason: "No questions were kept: most places didn't fit any theme.", unreachable: false });
     check('and the layer is marked as looked at, as a first reading marks it', L('ponds').patternsNone, true);
     check('it is off the owed list', !!readJSON(of)[SLUG + '|ponds'], false);
-    check('no email is sent when nothing is kept (waiting on Mithun\'s decision)',
-      /no questions were kept for it/.test(out), false);
+    check('the owner is told it was read and nothing kept, with why',
+      /Subject: Your atlas has been read[\s\S]{0,400}no questions were kept for it[\s\S]{0,200}most places didn't fit any theme/.test(out), true);
     check('the retry checks the record against this layer\'s own rows, so a split file is updated too',
       /noteRetry\(o\.dataset, o\.layerId, patch, ownSig \|\| out\.sig\);/.test(fs.readFileSync(path.join(ROOT, 'api', 'apps', 'atlas.js'), 'utf8')), true);
 
