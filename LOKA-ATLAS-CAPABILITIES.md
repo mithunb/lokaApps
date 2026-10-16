@@ -472,8 +472,8 @@ A "key" means: colour the places of one layer by the answers in one of its colum
 - answers are cut to 40 characters.
 
 One inconsistency, verified: the **editor** only offers columns with up to **8** different answers as
-the "Colour by" choice, while the **map** will accept up to **9**. A column with exactly 9 kinds can
-become a key by tapping it on the map but will never appear in the editor's dropdown.
+the "Colour by" choice, while the **map** will accept up to **10**. A column with 9 or 10 kinds can
+become a key on the map but will never appear in the editor's dropdown.
 
 **A hard structural limit.** Keys, pins, badges and per-place icons only exist on layers drawn as
 pins, and a point layer becomes pins only when it has **3,000 or fewer** places (the server's
@@ -792,7 +792,7 @@ The table, as seen in a real layer of 66 places:
   why it is not offered as a colour choice: "*labels* has N different tags — too many to tell apart
   by colour. They stay searchable, and they show when a place is opened."
 - **`creator` and `created_at`** are usable as popup columns. `creator` could even become a key if it
-  holds between 2 and 9 different people.
+  holds between 2 and 10 different people.
 
 ### Where it currently struggles
 
@@ -808,7 +808,8 @@ The table, as seen in a real layer of 66 places:
 - **Whether `categories` is even treated as a list depends on the data.** A column is read as a list
   only when at least **40%** of its filled cells contain the separator. If most places in a given
   export carry exactly one category, the column is read as one-answer-per-place — and then the
-  ceiling for becoming a key drops from 12 kinds to 9 (on the map) or 8 (in the editor's dropdown). A
+  ceiling on the map stays 10 kinds either way (a list is counted by its first answer), but the
+  first answers alone may spread wider, and the editor's dropdown still stops at 8. A
   layer that colours fine at 66 places can stop being offered for colouring as the data grows past
   those counts. **Worth measuring on the real export before proposing.**
 - **`labels` cannot colour the map at all**, by design — it holds too many different tags. It is
@@ -899,7 +900,7 @@ State these as out of scope, or as new work, in any proposal.
 | AI calls per hour | 150 per signed-in account; 40 per internet address signed out; 24 per reading of a table (§4) |
 | Keys on at once, per layer | 5, as rows of marks beside the pin |
 | Colours per key | 8, plus grey "other" |
-| Different answers a column may hold to be a key | 2–9 (2–12 for a list column) |
+| Different answers a column may hold to be a key | 2–10, the same for a list column (a list is counted by each place's first answer); eight get colours and the rest show as grey "other". The owner's own colouring column has no limit |
 | Share of places a key's kinds must cover | 60% |
 | Share of places one answer may cover before a column stops being a key | 85% (questions and the owner's marker column exempt) |
 | Share of answering places that must share an answer with another place for a column to be a key | at least half (questions and the owner's marker column exempt) |

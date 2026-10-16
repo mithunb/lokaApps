@@ -82,7 +82,7 @@ check('Show all clears the filter the way the count line does', /all\.onclick = 
 check('the line is hidden when nothing is pressed', /line\.hidden = !mine;/.test(js) && /\.key-only\[hidden\] \{ display:none; \}/.test(html), true);
 // (October 2026: the hint is one line about opening a row; the second tap is
 // explained by the "Showing only … · Show all" line under the pressed kind)
-check('the hint is one line, and the second tap is said under the pressed kind', /"Open one to colour the map by its answers\."/.test(js) && /Showing only " \+ what/.test(js), true);
+check('the hint is one line, and the second tap is said under the pressed kind', /"Open one to colour the map by its answers\. Tap an answer to show only those places\."/.test(js) && /Showing only " \+ what/.test(js), true);
 check('(b) from dadd121 stands: a kind narrows the map; (a) the list it coloured is gone (October 2026)', !/function collMarkEl\(/.test(js) && /r\.onclick = function \(\) \{ filterByKind\(L, opt, which, it\.label\); \};/.test(js), true);
 
 console.log('\n  3. counted discs are ink, not Leaf');

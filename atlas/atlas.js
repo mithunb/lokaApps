@@ -2783,7 +2783,7 @@
     /* One line. The six-line hint it replaces explained ticks, kinds and
        tags at once; with a row that opens, the only thing worth saying up
        front is what opening one does. */
-    wrap.appendChild(el("span", "key-hint", "Open one to colour the map by its answers."));
+    wrap.appendChild(el("span", "key-hint", "Open one to colour the map by its answers. Tap an answer to show only those places."));
     var list = el("div", "key-list");
     var act = activeKeyOptions(L);
     var showing = L._visible !== false;
@@ -3176,10 +3176,19 @@
 
   function whyWordsEl(L, why) {
     var box = el("div", "leg-why");
+    /* One line above the words, because the only other explanation is a hover
+       title and a phone never shows one. "Tap one" is said only when a word
+       can be tapped. */
+    var anyGo = (why || []).some(function (it) { return it && typeof it !== "string" && (it.es || []).length; });
+    box.appendChild(el("div", "leg-why-lead", anyGo
+      ? "Words people used. Tap one to see where it was said."
+      : "Words people used."));
     (why || []).forEach(function (it) {
       var w = typeof it === "string" ? { w: it, es: [] } : it;
       var many = (w.es || []).length > 1;
-      var b = el("button", "leg-why-w", esc(w.w));
+      // a word more than one place used says how many: "trees · 3"
+      var b = el("button", "leg-why-w", esc(w.w) +
+        (many ? '<span class="leg-why-n"> · ' + w.es.length + "</span>" : ""));
       b.type = "button";
       if (w.es && w.es.length) {
         b.classList.add("leg-why-go");

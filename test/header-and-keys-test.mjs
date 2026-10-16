@@ -92,7 +92,7 @@ check('a key going off drops a filter that was on it', /if \(KINDFILTER && KINDF
 check('the pressed kind is filled with Leaf Tint on a Leaf edge', /button\.key-kind\.on \{ background:var\(--color-leaf-tint\); border-color:var\(--color-leaf\); \}/.test(html), true);
 // (October 2026: the hint is one line about opening a row; what a tap on a
 // kind does is said where it happens — the "Showing only … · Show all" line)
-check('the hint under "Mark each place by" is one line about opening a row', /"Open one to colour the map by its answers\."/.test(js), true);
+check('the hint under "Mark each place by" is one line about opening a row', /"Open one to colour the map by its answers\. Tap an answer to show only those places\."/.test(js), true);
 check('and the pressed kind says what a second tap does, right under the kinds', /var all = el\("button", "key-only-all", "Show all"\);/.test(js), true);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
