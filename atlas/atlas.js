@@ -1512,7 +1512,14 @@
          the whole truth. The dot is still one per row, on the same spot. */
       if (f._twins && t.property) {
         if (props === f.properties) { props = {}; for (var k2 in f.properties) props[k2] = f.properties[k2]; }
-        props[t.property] = joinNames(f._twins.map(function (r) { return popupTitleText(L, gj.features[r].properties) || gj.features[r].properties[t.property]; }));
+        props[t.property] = joinNames(f._twins.map(function (r) { return popupTitleText(L, gj.features[r].properties) || cellShown(gj.features[r].properties[t.property]); }));
+      } else if (t.property && props[t.property] != null) {
+        // a name is written on the map as it reads on the card: "{}" writes nothing
+        var nm = cellShown(props[t.property]);
+        if (nm !== String(props[t.property]).trim()) {
+          if (props === f.properties) { props = {}; for (var k3 in f.properties) props[k3] = f.properties[k3]; }
+          props[t.property] = nm;
+        }
       }
       pts.push({ type: "Feature", properties: props, geometry: { type: "Point", coordinates: p } });
     });
@@ -2049,7 +2056,8 @@
       feats.forEach(function (f) {
         var v = f.properties ? f.properties[col] : undefined;
         // unwrapped here so a key's kinds are words, not "{Nature}"
-        if (v !== undefined && v !== null && v !== "") nonEmpty.push(unbrace(v));
+        // and an empty list ("{}") is no answer at all, not a kind called "{}"
+        if (v !== undefined && v !== null && v !== "") { v = unbrace(v); if (v) nonEmpty.push(v); }
       });
       if (!nonEmpty.length) return;
       // multi-value cells: the same rule the server uses (fragment.js detectDelimiter)
@@ -2683,7 +2691,7 @@
          a counter. Only where the reading actually quoted something — a filing
          done by counting has no reason to give, and will not invent one. */
       var why = props[opt.col + "_why"];
-      var hasWhy = !!(opt.isQuestion && vals.length && why && String(why).trim());
+      var hasWhy = !!(opt.isQuestion && vals.length && cellShown(why));
 
       /* Folded by default, and only in the popup. A place answering four
          questions spent three lines on each — question, answer, reason — and the
@@ -2737,7 +2745,7 @@
         b2.appendChild(el("span", "key-because-lead", "because"));
         // a flex gap is space on the screen and nothing in the text
         b2.appendChild(document.createTextNode(" "));
-        String(why).split(",").forEach(function (w) {
+        cellShown(why).split(",").forEach(function (w) {
           w = w.trim();
           if (w) b2.appendChild(el("span", "key-because-w", esc(w)));
         });
@@ -3098,8 +3106,8 @@
     if (L._visible !== false && !folded) {
       (markersByLayer[L.id] || []).forEach(function (e) {
         if (e.hidden || e._clustered || e._absorbed || e._fanned) return;
-        var v = e.f.properties[t.property];
-        if (v == null || v === "") return;
+        var v = cellShown(e.f.properties[t.property]);
+        if (!v) return;
         feats.push({ type: "Feature", geometry: e.f.geometry, properties: { _name: shortName(String(v), max) } });
       });
     }
@@ -4203,9 +4211,29 @@
      way, so a cell genuinely holding a record is left alone. */
   function unbrace(v) {
     var s = String(v == null ? "" : v).trim();
+    // only brackets, quotes, separators and spaces: there are no words in it
+    var blank = /^[\s{}\[\]"',;]*$/;
+    /* An empty list is nothing, however it is written: "{}" is how the
+       tagging app sends a place with no labels, and it was printed on the
+       card as "{}". So are "[]", "{ }", and a cell holding only commas. */
+    if (blank.test(s)) return "";
     if (s.charAt(0) !== "{" || s.charAt(s.length - 1) !== "}") return s;
     try { JSON.parse(s); return s; } catch (e) { /* not a record; it is a list */ }
-    return s.slice(1, -1);
+    return s.slice(1, -1).trim();
+  }
+  /* A cell as a visitor reads it, wherever it is shown: the card's rows and
+     title, a pin's name on the map, the words under an answer. A database's
+     list comes out as plain words ("subterranean, insect-architecture"), and
+     an empty value in any form comes out as "" so the caller leaves it out,
+     the same as a blank cell. Reading only; the stored data is not touched. */
+  function cellShown(v) {
+    if (v == null) return "";
+    if (Array.isArray(v)) return v.map(cellShown).filter(Boolean).join(", ");
+    if (typeof v === "object") return Object.keys(v).length ? JSON.stringify(v) : "";
+    var raw = String(v).trim();
+    var s = unbrace(raw);
+    if (s && s !== raw) s = s.split(",").map(unquotePiece).filter(Boolean).join(", ");
+    return s;
   }
   function unquotePiece(s) {
     var t = String(s == null ? "" : s).trim();
@@ -6076,10 +6104,8 @@
   function popupTitleText(L, props) {
     var spec = L && L.popup;
     if (!spec || !props) return "";
-    var t = spec.title ? props[spec.title] : "";
-    if ((t == null || t === "") && spec.titleFallback) t = props[spec.titleFallback];
-    if (t == null) return "";
-    t = String(t).trim();
+    var t = spec.title ? cellShown(props[spec.title]) : "";
+    if (!t && spec.titleFallback) t = cellShown(props[spec.titleFallback]);
     return (t && t !== "null" && t !== "undefined") ? t : "";
   }
 
@@ -6212,7 +6238,7 @@
     if (!spec && !krows) return "";
     spec = spec || {};
     var title = popupTitleText(L, props);
-    var sub = spec.subtitle || (spec.subtitleProperty ? props[spec.subtitleProperty] : "");
+    var sub = spec.subtitle || (spec.subtitleProperty ? cellShown(props[spec.subtitleProperty]) : "");
     var loka = isLoka(L);
     var shell = '<div class="pop">';
     var h = shell;
@@ -6268,7 +6294,8 @@
     var fields = loka ? lokaFields(spec.fields) : (spec.fields || []);
     fields.forEach(function (fld) {
       var v = props[fld.property];
-      if (v == null || v === "" || v === "[]") return;
+      // "", "{}", "[]", only commas: nothing to say, so no row for it
+      if (!cellShown(v)) return;
       /* The field's name, short when the heading is long. The card builder
          wrote fld.label when the layer was made; a long heading is shown by
          its short name here, with the whole heading on hover and behind ⓘ. */
@@ -6334,10 +6361,7 @@
            list — the braces are what stopped it looking like one when it was
            profiled. Shown as words either way, so a card never prints
            {dense-shade,surface-roots} at somebody. */
-        var shown = unbrace(v);
-        if (shown !== String(v)) {
-          shown = shown.split(",").map(unquotePiece).filter(Boolean).join(", ");
-        }
+        var shown = cellShown(v);
         /* A whole number that came out of a spreadsheet as a decimal.
         
            "How long have you been involved in this work?" answered "30" arrives
