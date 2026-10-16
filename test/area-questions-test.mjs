@@ -72,7 +72,8 @@ for (const fn of ['writeReading', 'restoreAnswers', 'writeNothingHere']) {
     /const shapes = shapesFor\(/.test(body) && /geoms: shapes\.geoms, geomIdx: shapes\.geomIdx,/.test(body) &&
     /geometry: shapes\.geometry/.test(body), true);
 }
-check('runReading tells the write which layer it read', /dataset, layer, layerId, rows, questions: out\.questions,/.test(server), true);
+check('runReading writes each half of the file it read its own share', /writeReadingToHalves\(\{\s*dataset, halves, questions: out\.questions,/.test(server) &&
+  /dataset, layer: h\.layer, layerId: h\.layer\.id, rows: h\.rows, questions: mine,/.test(server), true);
 check('on the shapes path a replaced layer keeps its own choices, as it does on the joined path',
   /const kept = session\.replacingSpec \|\|\n\s*\(replacing \? specOfLayer\(replacing\.prior, replacing\.id, rows, columns\) : null\);\n\s*session\.spec = kept \? Object\.assign\(\{\}, fresh, kept\) : fresh;/.test(server), true);
 check('the owner\'s "edit this layer" starts from the same answer', /const spec = specOfLayer\(layer, layerId, rows, columns\);/.test(server), true);
@@ -193,7 +194,8 @@ async function road() {
   const t1 = Date.now();
   while (!done() && Date.now() - t1 < 30000) await sleep(200);
   const q = JSON.parse(fs.readFileSync(qf, 'utf8'));
-  check('both were read', Object.values(q).map((r) => r.state), ['done', 'done']);
+  // the two on the list, and the zones' outlines noted as done by their pins' reading
+  check('both were read', [ONE + '|wards', TWO + '|zones-points', TWO + '|zones'].map((k) => q[k] && q[k].state), ['done', 'done', 'done']);
   if (Object.values(q).some((r) => r.state !== 'done')) console.log(out.split('\n').filter((l) => /questions|atlas\]/.test(l)).slice(-12).join('\n'));
 
   const wards = readLocal(ONE).find((l) => l.id === 'wards');
@@ -214,8 +216,19 @@ async function road() {
 
   const zones = readLocal(TWO).find((l) => l.id === 'zones');
   const twin = readLocal(TWO).find((l) => l.id === 'zones-points');
-  check('the zones were left to their pins: not read again, still polygons', [Object.keys(zones.keyLabels || {}).length, q[TWO + '|zones'],
-    readFile(TWO, zones.source).features.every((f) => f.geometry.type === 'Polygon')], [0, undefined, true]);
+  /* The file was read ONCE, through its pins, and both halves got their share:
+     the halves hold different rows (ten zones, one point), so the outlines are
+     answered by the same reading rather than copied or read again. */
+  const zonesGJ = readFile(TWO, zones.source);
+  check('the zones were read with their pins, once: the same questions on both halves, still polygons',
+    [Object.keys(zones.keyLabels || {}).length > 0, zones.keyLabels, q[TWO + '|zones'] && q[TWO + '|zones'].state,
+     zonesGJ.features.every((f) => f.geometry.type === 'Polygon')], [true, twin.keyLabels, 'done', true]);
+  check('every zone answered the first question, and the point did too',
+    [zonesGJ.features.every((f) => typeof f.properties.pattern_1 === 'string' && f.properties.pattern_1),
+     readFile(TWO, twin.source).features[0].properties.pattern_1], [true, 'A short note']);
+  check('the pond on the edge of town mentions water; the zones answer that question for themselves',
+    [readFile(TWO, twin.source).features[0].properties.pattern_2, zonesGJ.features.filter((f) => f.properties.pattern_2 === 'Mentions water').length],
+    ['Mentions water', NOTES.filter((n) => /water|river|lake|pond|well|stream|tank/i.test(n)).length]);
   check('their twin of points carries the questions', Object.keys(twin.keyLabels || {}).length > 0, true);
   check('the zones kept their twin, and the twin kept them', [zones.sameFileAs, twin.sameFileAs], ['zones-points', 'zones']);
   check('and the zones kept their credit', [(zones.credits || []).map((c) => c.name), zones.attribution], [['geoBoundaries'], 'geoBoundaries']);

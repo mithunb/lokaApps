@@ -73,7 +73,7 @@ check('a point is itself; a line has no pole', [pole({ type: 'Point', coordinate
 check('the dot that used to sit at the centre of mass is kept only for a curated layer that asks', /Superseded for contributed layers by ONE MARK FOR EVERY PLACE/.test(js), true);
 
 console.log('\n  one set of behaviours');
-check('keys are offered to any contributed layer that wears markers, areas included', /function initLayerKeys\(L\) \{\s*if \(!L\.userLayer \|\| !hasPins\(L\) \|\| L\._keyOptions\) return;/.test(js), true);
+check('keys are offered to any contributed layer that wears markers, areas included', /function initLayerKeys\(L\) \{\s*var H = keyHost\(L\);\s*if \(!H\.userLayer \|\| !hasPins\(L\)\) return;/.test(js), true);
 check('the 30% rule for a question stands unchanged', /var QUESTION_MIN_REACH = 0\.30;/.test(js), true);
 check('a search hides an area\'s marker and pales its shading, both', /if \(hasPins\(L\)\) applyMarkerVisibility\(L\);\s*if \(!hasPins\(L\) \|\| areaPins\(L\)\) applyShapeFade\(L\);/.test(js), true);
 check('a matching area is framed by its whole outline, not its marker', /walkCoords\(\(e\.shape \|\| e\.f\)\.geometry, function \(c\)/.test(js) && /if \(!hasPins\(L\) \|\| areaPins\(L\)\) \{\s*shapes = true;/.test(js), true);
@@ -97,7 +97,7 @@ const splitWords = lift(js, ['splitWords']);
 check('"6 as areas · 5 as points" when the first half kept its outlines', [splitWords(6, { type: 'fill' }, false), splitWords(5, { type: 'fill' }, true), splitWords(1, { type: 'fill' }, false)], ['6 as areas', '5 as points', '1 as area']);
 check('"6 by region · 5 looked up" when the first half was placed at its regions\' middles', [splitWords(6, { type: 'marker' }, false), splitWords(5, { type: 'marker' }, true)], ['6 by region', '5 looked up']);
 check('the second line is Muted, Meta type, under the count', /\.coll-split \{ margin:0 0 0 calc\(11px \+ 3px \+ \.5rem\); padding:0; font-size:var\(--t-meta\); color:var\(--color-text-muted\);/.test(html), true);
-check('a split file\'s rows are "places" unless the manifest names them', /var noun = L\.noun \|\| \(parts\.length > 1 \? "places" : layerNoun\(L\)\);/.test(js), true);
+check('a split file\'s rows are "places" unless the manifest names them', /function keyNoun\(L\) \{\s*var H = keyHost\(L\);\s*return H\.noun \|\| \(keyHalves\(H\)\.length > 1 \? "places" : layerNoun\(H\)\);/.test(js) && /var noun = keyNoun\(L\);/.test(js), true);
 
 console.log('\n  the design notes say it');
 check('one mark for every place', /### One mark for every place \(October 2026\)/.test(design) && /pole of inaccessibility/.test(design), true);

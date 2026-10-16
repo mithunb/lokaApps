@@ -1882,17 +1882,27 @@
   // as keys — pins, and areas now that they wear the same marker (the colour
   // goes on the marker, never on the fill). Curated layers (Deoria's pins)
   // never enter here.
+  /* Called as each layer's markers land. For a split file (KEYS OVER BOTH
+     HALVES) both halves call in, in whichever order their data arrives, and
+     the keys are worked out on the host over every half that has landed:
+     the first call builds them over one half, the second rebuilds over both.
+     A key that was open stays open if the two halves together still offer it. */
   function initLayerKeys(L) {
-    if (!L.userLayer || !hasPins(L) || L._keyOptions) return;
-    var gj = DATA[L.id];
-    if (!gj || !gj.features || !gj.features.length) return;
-    var opts = computeKeyOptions(L, gj.features);
+    var H = keyHost(L);
+    if (!H.userLayer || !hasPins(L)) return;
+    var halves = keyHalves(H).filter(hasPins);
+    if (H._keyOptions && H._keyHalves === halves.length) return;   // built over these halves already
+    var feats = keyFeatures(H);
+    if (!feats.length) return;
+    var opts = computeKeyOptions(keyFace(H), feats);
     if (!opts.length) return;
     var committedOpt = null;
     opts.forEach(function (o) { if (o.committed) committedOpt = o; });
     // a layer whose committed colouring we cannot mirror is left untouched
-    if (L.markerBy && !committedOpt) return;
-    L._keyOptions = opts;
+    if (H.markerBy && !committedOpt) return;
+    var had = keyState[H.id];
+    H._keyOptions = opts;
+    H._keyHalves = halves.length;
     /* The map opens marked by the first key offered — the one that reaches the
        most places (opts are sorted by reach) — with its row unfolded in the
        panel; every other row starts folded (Mithun, October 2026). Before this
@@ -1900,13 +1910,16 @@
        find the ticks to learn that colouring was on offer at all. */
     var first = null;
     opts.forEach(function (o) { if (!first && !o.tooFew && !o.scattered) first = o; });
-    keyState[L.id] = { active: first ? [first.col] : [], note: null, noteCol: null };
-    var act = activeKeyOptions(L);
-    (markersByLayer[L.id] || []).forEach(function (e) { renderMarks(L, e, act); });
-    L._legend = keyLegendRows(L, act);
+    var active = had
+      ? had.active.filter(function (c) { return opts.some(function (o) { return o.col === c && !o.tooFew && !o.scattered; }); })
+      : (first ? [first.col] : []);
+    keyState[H.id] = { active: active, note: null, noteCol: null };
+    var act = activeKeyOptions(H);
+    keyEntries(H).forEach(function (e) { renderMarks(H, e, act); });
+    H._legend = keyLegendRows(H, act);
     wireRowFlips();
-    renderExtra(L);   // the rows exist only once the data has said which columns qualify
-    if (act.length) applyMarkerVisibility(L);   // discs read the rows' footprint from the start
+    renderExtra(H);   // the rows exist only once the data has said which columns qualify
+    if (act.length) halves.forEach(function (h) { applyMarkerVisibility(h); });   // discs read the rows' footprint from the start
   }
 
 /* A column of dates.
@@ -2469,7 +2482,7 @@
     if (!map) return;
     var w = map.getContainer().clientWidth;
     (MANIFEST.layers || []).forEach(function (L) {
-      if (!keyState[L.id]) return;
+      if (!keyState[keyHost(L).id]) return;   // a points twin wears its host's keys
       (markersByLayer[L.id] || []).forEach(function (e) {
         if (!e._rowsEl) return;
         var x = map.project(e.mk.getLngLat()).x;
@@ -2590,7 +2603,7 @@
       return [{ color: oneColorOf(L), label: String(L.label || "").slice(0, 40), shape: "dot" }];
     }
     var rows = [];
-    var entries = markersByLayer[L.id] || [];
+    var entries = keyEntries(L);   // both halves of a split file: one count per answer
     act.forEach(function (opt, fi) {
       // How many places wear each kind's mark — counted from the same answers
       // the marks themselves are drawn from (optValuesOf), so the number in
@@ -2668,6 +2681,7 @@
      its key happens to be switched on. One builder still, so the same answer
      is worded the same way in both. */
   function keyRowsEl(L, props, all) {
+    L = keyHost(L);   // a points twin's place answers under its host's keys
     var act = all ? (L._keyOptions || []) : activeKeyOptions(L);
     if (!act.length) return null;
     var f = { properties: props };
@@ -2763,14 +2777,15 @@
 
   function applyLayerKeys(L) {
     var act = activeKeyOptions(L);
-    (markersByLayer[L.id] || []).forEach(function (e) { renderMarks(L, e, act); });
+    // every half of a split file wears the same keys (KEYS OVER BOTH HALVES)
+    keyEntries(L).forEach(function (e) { renderMarks(L, e, act); });
     hideHint();   // a bubble built from the old keys must not outlive them
     updateRowFlips();   // fresh blocks near the right edge flip straight away
     // the panel always describes what the pins now wear — the manifest's own
     // key described coloured pins that no longer exist once keys are offered
     L._legend = keyLegendRows(L, act);
     renderExtra(L);
-    applyMarkerVisibility(L);   // discs re-read the new footprints (fold distance included)
+    keyHalves(L).forEach(function (h) { applyMarkerVisibility(h); });   // discs re-read the new footprints (fold distance included)
     // a pressed kind whose key just went off has nothing left to filter by
     if (KINDFILTER && KINDFILTER.layer === L.id &&
         !act.some(function (o) { return o.col === KINDFILTER.col; })) clearSearch();
@@ -2796,7 +2811,7 @@
     var sum = 0, n = 0;
     (MANIFEST.layers || []).forEach(function (L) {
       if (L._visible === false) return;
-      var st = keyState[L.id];
+      var st = keyState[keyHost(L).id];   // a points twin wears its host's keys
       if (!st || !st.active.length) return;
       (markersByLayer[L.id] || []).forEach(function (e) {
         if (e.hidden) return;
@@ -2817,7 +2832,7 @@
   // pins that are merely outside the viewport, and those are not "hiding".
   function foldedCount(L) {
     var n = 0, b = map.getBounds();
-    (markersByLayer[L.id] || []).forEach(function (e) {
+    keyEntries(L).forEach(function (e) {   // both halves of a split file
       if (!e.hidden && e._clustered && !e._fanned && b.contains(e.mk.getLngLat())) n++;
     });
     return n;
@@ -2970,7 +2985,7 @@
            "from 88% of tags", in the layer's own word for its rows. */
         if (opt.isQuestion) {
           var pct = Math.round(opt.reach * 100);
-          var nounK = layerNoun(L);
+          var nounK = keyNoun(L);   // a split file's rows are areas and points both: "places"
           var reach = el("div", "key-reach", "Answers come from " + pct + "% of the " + nounK);
           reach.title = "Answers to this question come from " + pct + " of every 100 " + nounK;
           body.appendChild(reach);
@@ -3158,7 +3173,9 @@
       var e = es[0];
       var at = e.mk ? e.mk.getLngLat() : e.f.geometry.coordinates;
       var opened = false;
-      var open = function () { if (opened) return; opened = true; spiderClick(L, e); };
+      // the place may sit in either half of a split file; its card is its own half's
+      var own = halfOfEntry(L, e);
+      var open = function () { if (opened) return; opened = true; spiderClick(own, e); };
       map.once("moveend", open);
       // an area is framed whole, with room left for the drawer and the sheet;
       // a map already framed right may not move at all, so the card is
@@ -3190,8 +3207,7 @@
      Each place leads back to its own pin, so the row is a way INTO the map
      rather than a report about it. */
   function silentPlacesEl(L, col) {
-    var gj = DATA[L.id];
-    var feats = (gj && gj.features) || [];
+    var feats = keyFeatures(L);   // both halves of a split file
     var box = el("div", "leg-silent");
     var mine = [];
     feats.forEach(function (f, i) {
@@ -3239,7 +3255,7 @@
          rather than over the place. */
       b.onclick = function (e) {
         e.preventDefault(); e.stopPropagation();
-        var entry = (markersByLayer[L.id] || []).filter(function (x) { return x.f === m.f; })[0];
+        var entry = keyEntries(L).filter(function (x) { return x.f === m.f; })[0];
         if (entry) goToWord(L, [entry]);
       };
       box.appendChild(b);
@@ -4379,6 +4395,61 @@
     var p = layerById(L.sameFileAs);
     return p && pairedTwin(p) === L ? p : null;
   }
+  /* KEYS OVER BOTH HALVES. The keys under a split file's one row are worked out
+     over its outlines AND its points together (Mithun, October 2026: "keys
+     should cover both — why wouldn't it?"): one reach, one count per answer,
+     one ordered list; opening a key marks the areas' marks and the points'
+     pins alike; tapping an answer narrows both halves and "Show all" clears
+     both. The key state (keyState, _keyOptions) lives on the HOST — the
+     outlines layer, the one with the row — and the twin has none of its own,
+     so the row's switch, which already moves both layers, finds one state.
+     A layer with no twin is its own host and its only half. */
+  function keyHost(L) { return pairedPrimary(L) || L; }
+  function keyHalves(L) { var t = pairedTwin(keyHost(L)); return t ? [keyHost(L), t] : [keyHost(L)]; }
+  // every marker on the map across the halves: what the keys count, mark and filter
+  function keyEntries(L) {
+    var out = [];
+    keyHalves(L).forEach(function (h) { out = out.concat(markersByLayer[h.id] || []); });
+    return out;
+  }
+  // every place across the halves that stand as markers, in the halves' order
+  function keyFeatures(L) {
+    var out = [];
+    keyHalves(L).forEach(function (h) {
+      if (hasPins(h) && DATA[h.id]) out = out.concat(DATA[h.id].features || []);
+    });
+    return out;
+  }
+  // which half a marker belongs to — a word under a kind can lead to either
+  function halfOfEntry(L, e) {
+    var hs = keyHalves(L);
+    for (var i = 0; i < hs.length; i++) if ((markersByLayer[hs[i].id] || []).indexOf(e) >= 0) return hs[i];
+    return L;
+  }
+  /* What a split file says about its keys, read off both halves. A question's
+     name and the owner's list of hidden keys are written on whichever half a
+     reading reached — on the pins alone, for a file read before the server
+     read both halves together — and the one row must offer them either way.
+     The face answers for the host in everything else. */
+  function keyFace(L) {
+    var hs = keyHalves(L);
+    if (hs.length === 1) return L;
+    var labels = {}, hidden = [];
+    hs.forEach(function (h) {
+      Object.keys(h.keyLabels || {}).forEach(function (c) { if (!labels[c]) labels[c] = h.keyLabels[c]; });
+      (h.hiddenKeys || []).forEach(function (c) { if (hidden.indexOf(c) < 0) hidden.push(c); });
+    });
+    var face = Object.create(L);
+    face.keyLabels = labels;
+    face.hiddenKeys = hidden;
+    return face;
+  }
+  // what the places under a key are called: a split file's are areas and
+  // points both, so "places" unless the manifest names them ("people")
+  function keyNoun(L) {
+    var H = keyHost(L);
+    return H.noun || (keyHalves(H).length > 1 ? "places" : layerNoun(H));
+  }
   // how a split file's halves are said: "6 as areas · 5 as points", or, when
   // the first half was placed at its regions' middles, "6 by region · 5 looked up"
   function splitWords(n, P, twin) {
@@ -4740,19 +4811,21 @@
     clearTimeout(searchTimer);
     KINDFILTER = { layer: L.id, col: opt.col, which: which, label: label };
     var shown = 0, total = 0, pts = [];
-    var rows = searchRows(L);
-    rows.forEach(function (e) {
-      total++;
-      var vals = optValuesOf(L, opt, e.f);
-      var has;
-      if (which === "silent") has = !vals.length;
-      else if (which === "other") has = vals.some(function (v) { return opt.kept.indexOf(v) < 0; });
-      else has = vals.indexOf(label) >= 0;
-      e.hidden = !has;
-      if (has) { shown++; if (markersByLayer[L.id]) pts.push(e.f.geometry.coordinates); }
+    // both halves of a split file narrow together, and the line counts both
+    keyHalves(L).forEach(function (h) {
+      searchRows(h).forEach(function (e) {
+        total++;
+        var vals = optValuesOf(L, opt, e.f);
+        var has;
+        if (which === "silent") has = !vals.length;
+        else if (which === "other") has = vals.some(function (v) { return opt.kept.indexOf(v) < 0; });
+        else has = vals.indexOf(label) >= 0;
+        e.hidden = !has;
+        if (has) { shown++; if (markersByLayer[h.id]) pts.push(e.f.geometry.coordinates); }
+      });
+      applyRowVisibility(h);
     });
-    applyRowVisibility(L);
-    updateSearchCount(shown, total, pts, { ofAll: kindWords(label, which) }, null, searchNoun([L]));
+    updateSearchCount(shown, total, pts, { ofAll: kindWords(label, which) }, null, keyNoun(L));
     markLitKinds();
   }
   // the pressed kind shows as on in the panel, and only that one
@@ -4827,10 +4900,13 @@
     TAGFILTER = null;
     TAGFILTER_LAYER = null;
     markLitTags();
+    // a pressed answer narrowed both halves of a split file; "Show all" frees both
+    var kinded = KINDFILTER ? layerById(KINDFILTER.layer) : null;
     KINDFILTER = null;
     markLitKinds();
     lastFitKey = null;
     searchableLayers().forEach(function (L) { searchRows(L).forEach(function (e) { e.hidden = false; }); applyRowVisibility(L); });
+    if (kinded) keyHalves(kinded).forEach(function (h) { searchRows(h).forEach(function (e) { e.hidden = false; }); applyRowVisibility(h); });
     updateSearchCount(null);
   }
   /* The words pass answers at once; the pass by meaning is a round trip to
@@ -5451,7 +5527,7 @@
      being the key. A key owns its words. */
   function keyOwnedColumns(L) {
     var owned = {};
-    (L._keyOptions || []).forEach(function (o) { if (o.col) owned[o.col] = 1; });
+    (keyHost(L)._keyOptions || []).forEach(function (o) { if (o.col) owned[o.col] = 1; });
     return owned;
   }
 
@@ -5795,7 +5871,7 @@
     if (!items.length) return;
     // a split file's rows are areas and points both, so they are "places"
     // unless the manifest names them ("people")
-    var noun = L.noun || (parts.length > 1 ? "places" : layerNoun(L));
+    var noun = keyNoun(L);
     var narrowed = shown !== items.length;
     // the phone's tab reads this number instead of "1 layer" — see buildBar
     if (L._row) L._row.setAttribute("data-count", String(shown));
@@ -6302,7 +6378,8 @@
        Source line at the foot already names whoever added the places, so a
        Creator row repeated it a third time. */
     var keyCols = {};
-    (L._keyOptions || []).forEach(function (o) { if (o.col) keyCols[o.col] = 1; });
+    // a points twin's card leaves out the columns its host's keys already say
+    (keyHost(L)._keyOptions || []).forEach(function (o) { if (o.col) keyCols[o.col] = 1; });
     var srcLine = sourceLine(L);
 
     /* Our own data is not a guess. The wizard's field order is a fair reading of

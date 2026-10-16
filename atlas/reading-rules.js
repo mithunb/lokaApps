@@ -111,10 +111,13 @@
     return Boolean((L.type === "fill" || L.type === "polygon") && L.centreMarks);
   }
 
-  /* One file added as two layers — outlines and the same rows as pins
-     (sameFileAs) — is read once, through its pins. Both twins hold the same
-     rows, so reading the outlines too would charge the owner twice and could
-     settle on different questions for one file. */
+  /* One file added as two layers — its outlines, and the rows that only had a
+     point, as pins (sameFileAs) — is read once, through its pins. The halves
+     hold DIFFERENT rows (a row becomes a point only when no outline placed
+     it), so the pins' reading gathers both halves' rows and writes each half
+     its share (api/apps/atlas.js fileHalves). Listing the outlines as well
+     would read the same file twice, charge the owner twice, and could settle
+     on two sets of questions for one file. */
   function readByItsTwin(L, layers) {
     if (!L || L.type === "marker" || !L.sameFileAs) return false;
     var twin = (layers || []).filter(function (o) { return o && o.id === L.sameFileAs; })[0];
