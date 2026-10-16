@@ -439,8 +439,19 @@
     var where = look.places && look.places.length
       ? (look.places.length <= 3 ? look.places.join(", ") : look.places.slice(0, 2).join(", ") + " and " + (look.places.length - 2) + " more")
       : (INST.regionLabel || (INST.region && INST.region.label) || "");
-    var layers = Number(look.layers) || 0;
-    var built = "Boundaries and place names" + (where ? " for " + where : "") +
+    /* What is on it, counted off the atlas itself. The wizard's ticks used to
+       be the count, and a tick is not a layer: boundaries are ticked and then
+       dropped on a worldwide atlas, which said "2 open data layers" of an atlas
+       with one; and one tick can build two layers. The manifest is the built
+       atlas, so it is the count for every atlas. */
+    var onIt = ((window.LokaAtlas && window.LokaAtlas.manifest && window.LokaAtlas.manifest.layers) || [])
+      .filter(function (L) { return L && !L.userLayer; });
+    var hasAdmin = onIt.some(function (L) { return L.id === "admin"; });
+    var hasLabels = onIt.some(function (L) { return L.id === "labels"; });
+    var layers = onIt.filter(function (L) { return L.id !== "admin" && L.id !== "labels"; }).length;
+    var worldwide = !!(INST.region && INST.region.worldwide);
+    var built = (hasAdmin && hasLabels ? "Boundaries and place names" : hasAdmin ? "Boundaries" : hasLabels ? "Place names" : "A base map") +
+      (worldwide ? " for the whole world" : where ? " for " + where : "") +
       (layers ? ", with " + layers + (layers === 1 ? " open data layer" : " open data layers") : "") + ".";
     var rows = "";
     var drawn = rowsOnMap();

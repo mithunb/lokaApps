@@ -1072,17 +1072,28 @@
     var names = S.chosen.map(function (c) { return c.label; });
     if (GEO.canonical) {
       lede.textContent = "Read from " + GEO.file.name + (GEO.part ? " (" + GEO.part + ")" : "") + ". " +
-        "Your file is checked against these places here, before anything is built.";
+        (S.worldwide ? "Your file is checked here, before anything is built."
+                     : "Your file is checked against these places here, before anything is built.");
     } else {
       lede.textContent = "The places you chose. Add or take out any of them on the Where step.";
     }
     var rows = GEO.canonical ? (FOUND.settled ? FOUND.rows : ((d && d.rows) || GEO.rows || 0)) : 0;
     var placed = FOUND.settled ? FOUND.placed : (d && d.matchedRows) || 0;
     if (S.worldwide) {
-      num.textContent = "Worldwide";
-      what.textContent = "";
-      say.textContent = "Your data is not in one country, so the atlas will cover the whole world and " +
+      var world = "Your data is not in one country, so the atlas will cover the whole world and " +
         "open on your own places. Base layers built from open data need a region, so there will be very few to choose from.";
+      if (GEO.canonical && FOUND.settled) {
+        /* The check has answered, so the headline is its number — the same
+           words the regional path uses, because the question is the same:
+           how many of these rows will be on the atlas. */
+        num.textContent = placed.toLocaleString() + " of " + rows.toLocaleString();
+        what.textContent = "rows are on the map";
+        say.textContent = world + (FOUND.rep ? " " + checkSays(FOUND.rep) : "");
+      } else {
+        num.textContent = "Worldwide";
+        what.textContent = "";
+        say.textContent = world;
+      }
     } else if (!GEO.canonical) {
       num.textContent = names.length + (names.length === 1 ? " place" : " places");
       what.textContent = countryName() ? "in " + countryName() : "";
@@ -1287,7 +1298,8 @@
   }
 
   function startBench() {
-    var key = S.iso3 + "|" + S.level + "|" +
+    // a worldwide atlas has no places to key on: "world" is its one key
+    var key = S.worldwide ? "world" : S.iso3 + "|" + S.level + "|" +
       S.chosen.map(function (c) { return c.id; }).sort().join(",");
     if (BENCH && BENCH_KEY === key) return;        // already checked against these places
     if (BENCH) { BENCH.destroy(); BENCH = null; }
@@ -1297,7 +1309,8 @@
     var v = $("#check-verdict");
     v.hidden = false;
     v.classList.remove("err");
-    v.textContent = "Checking " + GEO.file.name + " against these places…";
+    v.textContent = S.worldwide ? "Checking " + GEO.file.name + "…"
+      : "Checking " + GEO.file.name + " against these places…";
     try {
       // window.__bench mirrors what the add-data page already exposes: a handle
       // on the bench from the console. It is how a wizard-only fault in the data
@@ -1308,7 +1321,11 @@
         api: API,
         viewer: "../",
         stages: "checkPlace",
-        region: {
+        /* A worldwide atlas sends no country and no places: the server
+           places its rows by their own coordinates, or by name, within the
+           whole world. Sending the country still showing in the dropdown
+           used to get the check refused for want of places. */
+        region: S.worldwide ? { worldwide: true } : {
           iso3: S.iso3, level: S.level,
           shapeIDs: S.chosen.map(function (c) { return c.id; }),
           bbox: chosenBbox(),
@@ -1698,7 +1715,7 @@
     });
     // a district or state column the check did not use as the parent still says where
     if (!ctx.length) cols.forEach(function (c) {
-      if (c.name !== name && /district|zila|jila|tehsil|taluk|block|state/i.test(c.name)) ctx.push(c.name);
+      if (c.name !== name && /district|zila|jila|tehsil|taluk|block|state|country/i.test(c.name)) ctx.push(c.name);
     });
     return { name: name, context: ctx.slice(0, 2) };
   }
@@ -1716,8 +1733,10 @@
     var secs = Math.max(5, Math.round(none * 1.2));
     box.hidden = false;
     box.innerHTML =
-      "<h3>" + n(none) + " of " + n(FOUND.rows) + " rows name places we have no outline for</h3>" +
-      "<p>Villages, most likely: the outlines on this atlas go down to blocks, not villages, so a village name has nothing to match. " +
+      "<h3>" + n(none) + " of " + n(FOUND.rows) + (rep.noOutlines ? " rows name a place" : " rows name places we have no outline for") + "</h3>" +
+      "<p>" + (rep.noOutlines
+        ? "This atlas covers the whole world, so it has no outlines of its own to match a name against. "
+        : "Villages, most likely: the outlines on this atlas go down to blocks, not villages, so a village name has nothing to match. ") +
       "We can look each of them up by name on OpenStreetMap, a free public map, and put it on your atlas as a point. " +
       (FOUND.placed ? "The " + n(FOUND.placed) + rowsWord(FOUND.placed) + " that matched an outline keep it." : "") + "</p>" +
       '<p class="hint">Only the ' + esc([pc.name || "place"].concat(pc.context).join(" and ")) +
@@ -2145,7 +2164,10 @@
       file: GEO.file ? GEO.file.name : "",
       added: !!(BENCH && GEO.canonical),
       places: S.worldwide ? [] : S.chosen.map(function (c) { return c.label; }),
-      layers: Object.keys(S.picked).filter(function (id) { return S.picked[id]; }).length,
+      // no layer count: the atlas counts the layers it was actually built
+      // with, off its own manifest (owner.js, showFirstLook) — a tick here is
+      // not a layer there (boundaries are dropped on a worldwide atlas, and
+      // one tick can build two layers)
     };
     function keepLook() { try { localStorage.setItem("loka-first-look", JSON.stringify(look)); } catch (e) { /* private mode: no first look */ } }
     keepLook();

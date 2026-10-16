@@ -172,6 +172,18 @@ One rule the screen enforces silently and then explains: **every unit in one atl
 one administrative depth.** If you add a district and then a state, the broader one is dropped and
 you are told why.
 
+**A file whose places are not in one country makes a worldwide atlas** (October 2026). If fewer
+than half of a dropped file's coordinates fall inside the chosen country — or more of its place
+names are found outside it than inside — the wizard says so and carries on with no region at all:
+the atlas covers the whole world, opens on your own places, and no boundary layer is built (there is
+nothing to outline). The file is still checked on the "What we found" step, exactly as for a
+regional atlas: rows with coordinates are placed by them; rows with only a place name are offered
+the OpenStreetMap lookup ("look them up"), which asks the whole world rather than one country; and
+the screen says how many rows are on the map and how many still need a place. The file then goes
+onto the atlas automatically at the end of the build. (Before this, a worldwide atlas's file could
+not be checked — the check demanded a region — so the file was never added, and the owner had to add
+it again under Your data.)
+
 ### Step 3 — Open data
 
 Shows the layers available for the chosen country, grouped into four collapsible groups. Boundaries
@@ -184,6 +196,12 @@ needing operator approval are marked "needs approval".
 One button, then a progress bar with a live message and a running log. The atlas is built by a
 Python job on the server, one job at a time in a queue. On success the screen offers a link into the
 editor.
+
+The atlas then opens with a one-time "Your atlas is built" card. What it says is on the atlas is
+read off the built atlas itself (its manifest), not off the wizard's ticks (October 2026): the
+boundaries and place names it actually has, where it is, and the count of open-data layers beyond
+those. A worldwide atlas therefore reads "Place names for the whole world", and a plain regional
+atlas no longer claims "2 open data layers" for its boundaries and labels.
 
 ### After the build — the editor (`/apps/atlas/edit/?dataset=<slug>`)
 
@@ -380,6 +398,9 @@ Imagery). The built map's top zoom is 15.
 - **One atlas is built at one depth.** Mixing depths is refused and explained.
 - **Up to 100 units** may be chosen for one atlas (anything beyond the hundredth is dropped without
   a message).
+- **Or no region at all:** an atlas whose file spans several countries is built worldwide (see
+  Step 2) — no country, no units, bounds the whole world, no boundary layer; its own file is still
+  checked and added as for any other atlas.
 - **No size ceiling any more — the layers decide** (corrected October 2026; the old "approval above
   6 square degrees, refusal above 40" rule is gone from the code, `api/apps/atlas.js` §feasibleLayers
   and the build route). The region is still measured as the **bounding box** around the chosen
