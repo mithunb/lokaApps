@@ -5104,9 +5104,26 @@
     }
   }
 
+  /* Pieces buildControls makes that placeStripPieces may then carry OUT of the
+     panel and the strip — the Map/Satellite switch goes to the phone's sheet
+     foot. Clearing the panel and the strip cannot reach them there, so every
+     build first takes the old ones away wherever they ended up. Without this a
+     phone gained one more Map/Satellite switch on every redraw (1, 2, 3...).
+     The rule: building the controls twice leaves exactly what building them
+     once does. Anything new that placeStripPieces moves belongs in this list. */
+  var MOVED_PIECES = [".ctl-basemaps"];
+  function dropMovedPieces() {
+    MOVED_PIECES.forEach(function (sel) {
+      Array.prototype.forEach.call(document.querySelectorAll(sel), function (n) {
+        if (n.parentNode) n.parentNode.removeChild(n);
+      });
+    });
+  }
+
   function buildControls() {
     var panel = $("#atlas-controls");
     panel.innerHTML = "";
+    dropMovedPieces();
     var stage = document.querySelector(".atlas-stage");
     var strip = stage ? ensureStrip(stage) : null;
 
