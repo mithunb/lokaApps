@@ -109,7 +109,7 @@ check('the reach line, the note and the kinds live in the open body only',
   /body\.appendChild\(reach\)/.test(build) && /body\.appendChild\(why\)/.test(build) &&
   /keyKindRows\(L, opt\)\.forEach\(function \(r\) \{ body\.appendChild\(r\); \}\)/.test(build), true);
 check('the reach line is a plain sentence', /"Answers come from " \+ pct \+ "% of the " \+ nounK/.test(build), true);
-check('the hint is one line', /"Open one to colour the map by its answers\."/.test(build), true);
+check('the hint is one line: what opening a row does, and what tapping an answer does', /"Open one to colour the map by its answers\. Tap an answer to show only those places\."/.test(build), true);
 check('and the old six-line hint is gone', /Keys colour the map — each wears its own shape/.test(js), false);
 check('no tick box is built for a key (the layer\'s own switch is still a checkbox)', /cb\.type = "checkbox"|key-tick/.test(build), false);
 
@@ -128,6 +128,34 @@ check('the note is in plain words', /var KEY_STACK_NOTE = "Up to five at once �
 check('every row has its own status line, shown only for the refused one',
   /var refused = !!st\.note && st\.noteCol === opt\.col;\s*\n\s*note\.hidden = !refused;/.test(build), true);
 check('closing any row clears the note', /st\.active\.splice\(i, 1\);\s*\n\s*\}\s*\n\s*st\.note = null;\s*\n\s*st\.noteCol = null;/.test(build), true);
+
+console.log('\n  the words behind an answer');
+// whyWordsEl as it stands in atlas.js, run against a tiny stand-in for the page
+function fakeDoc() {
+  function node(tag) {
+    return { tag, className: '', innerHTML: '', children: [], attrs: {}, classList: null, disabled: false, hidden: false, title: '', type: '',
+      appendChild(c) { this.children.push(c); return c; },
+      setAttribute(k, v) { this.attrs[k] = String(v); } };
+  }
+  return { createElement(tag) { const n = node(tag); n.classList = { add(c) { n.className += ' ' + c; } }; return n; } };
+}
+const whyLift = new Function('document', 'goToWord',
+  js.slice(js.indexOf('  var el = function (tag, cls, html) {'), js.indexOf('\n  };\n', js.indexOf('  var esc = function (s) {')) + 5) +
+  section('whyWordsEl') + '\nreturn whyWordsEl;');
+const whyWordsEl = whyLift(fakeDoc(), () => {});
+const box = whyWordsEl({}, [{ w: 'trees', es: [1, 2, 3] }, { w: 'shade', es: [1] }, { w: 'quiet', es: [] }]);
+const lead = box.children[0];
+check('a line sits above the words, before the first word', lead.className, 'leg-why-lead');
+check('it says what the words are and what a tap does', lead.innerHTML, 'Words people used. Tap one to see where it was said.');
+check('when no word can be tapped, it does not offer a tap',
+  whyWordsEl({}, [{ w: 'quiet', es: [] }, 'still']).children[0].innerHTML, 'Words people used.');
+const [trees, shade, quiet] = box.children.slice(1);
+check('a word several places used shows the count after it: "trees · 3"', trees.innerHTML.replace(/<[^>]+>/g, ''), 'trees · 3');
+check('and keeps its label and title', [trees.title, trees.attrs['aria-label']], ['Show the 3 places that say this', 'Show the 3 places that say this: trees']);
+check('a word one place used shows no count', [shade.innerHTML, shade.title], ['shade', 'Show this place']);
+check('a word with no places stays disabled', [quiet.disabled, quiet.innerHTML], [true, 'quiet']);
+check('the line is styled as small muted helper text across the whole box',
+  /\.leg-why-lead \{ flex:0 0 100%; font-size:var\(--t-label\); color:var\(--color-text-muted\);/.test(html), true);
 
 console.log('\n  the styles');
 check('rows are separated by a hairline, not by margins on the kinds', /\.key-entry \{ border-top:1px solid var\(--color-divider\); \}/.test(html) && !/\.key-list \.key-kind \+ \.key-toggle/.test(html), true);
