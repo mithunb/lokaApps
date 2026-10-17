@@ -57,6 +57,7 @@ export const NAME_MAX = LABELS.NAME_MAX;          // 32 characters
 export const MAX_WORDS = 4;
 export const PER_CALL = 40;                        // long places per call to the model
 export const CALLS_PER_HOUR = 24;                  // per job; the rest wait for the next hour
+export const MAX_TRIES = 3;                        // an hour apart, when the model could not be asked
 export const NO_NAME = 'no fair name';
 export const firstWords = LABELS.firstWords;
 
@@ -83,27 +84,33 @@ export function descHash(text) {
 const JOINERS = new Set(('a an the of for and or in on at to with by from as its it is are was were ' +
   'this that these those into onto over under near beside between').split(' '));
 
-/* A word as it is compared: lower case, accents kept, the punctuation round
-   it dropped, commas out of numbers ("1,300" is "1300"). */
-function wordKey(w) {
-  return String(w).toLowerCase()
+/* A word as it is compared: the punctuation round it dropped, commas out of
+   numbers ("1,300" is "1300"), accents kept — and its CASE kept: the
+   tagger's case is part of the tagger's words. */
+function wordRaw(w) {
+  return String(w)
     .replace(/(\d),(?=\d)/g, '$1')
     .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
 }
+function wordKey(w) { return wordRaw(w).toLowerCase(); }
 export function wordsOf(text) {
-  return clean(text).split(' ').map(wordKey).filter(Boolean);
+  return clean(text).split(' ').map(wordRaw).filter(Boolean);
 }
 /* The forms of a description's word a name may use: the word, its possessive
    and plain forms ("Hebbal", "Hebbal's"; "trees", "tree"), and each part of
-   a hyphenated word. A name is the tagger's words, not the tagger's grammar. */
+   a hyphenated word — each in the tagger's own case, plus a first capital,
+   so a name may start with a capital ("Bifurcatree" from "bifurcatree") but
+   never re-case a word (ALL CAPS where the tagger wrote none). A name is
+   the tagger's words, not the tagger's grammar. */
 function allowedForms(words) {
   const out = new Set();
+  const put = (w) => { if (w) { out.add(w); out.add(w.charAt(0).toUpperCase() + w.slice(1)); } };
   const add = (w) => {
     if (!w) return;
-    out.add(w);
-    if (/'s$/.test(w)) out.add(w.slice(0, -2)); else out.add(w + "'s");
-    if (/’s$/.test(w)) out.add(w.slice(0, -2));
-    if (/s$/.test(w) && w.length > 3) out.add(w.slice(0, -1)); else out.add(w + 's');
+    put(w);
+    if (/'s$/.test(w)) put(w.slice(0, -2)); else put(w + "'s");
+    if (/’s$/.test(w)) put(w.slice(0, -2));
+    if (/s$/.test(w) && w.length > 3) put(w.slice(0, -1)); else put(w + 's');
   };
   for (const w of words) {
     add(w);
@@ -111,11 +118,14 @@ function allowedForms(words) {
   }
   return out;
 }
+// the punctuation a name may wear round a word on its own: a question mark, a comma…
+const PLAIN_MARKS = /^[.,;:!?'’"“”()\-–—]*$/;
 
 /* The model's answer for one place, checked against the rules. Answers the
    name to keep, or "" when it breaks a rule (and the plain cut stands in):
-   empty, "no fair name", over NAME_MAX characters, over MAX_WORDS words, or
-   any word that is neither the description's nor a joining word. */
+   empty, "no fair name", over NAME_MAX characters, over MAX_WORDS words, any
+   word that is neither the description's — in the tagger's case — nor a
+   joining word, or any symbol or emoji the description does not carry. */
 export function checkName(name, description) {
   const s = clean(name);
   if (!s) return '';
@@ -124,13 +134,17 @@ export function checkName(name, description) {
   const words = s.split(' ');
   if (words.length > MAX_WORDS) return '';
   const allowed = allowedForms(wordsOf(description));
+  const desc = clean(description);
   for (const w of words) {
-    const k = wordKey(w);
-    if (!k) continue;                       // a lone punctuation mark says nothing
-    if (JOINERS.has(k) || allowed.has(k)) continue;
+    const raw = wordRaw(w);
+    // a symbol or an emoji on its own, or stuck to a word ("is🌳"): only if the tagger wrote it
+    if (!raw) { if (desc.indexOf(w) >= 0) continue; return ''; }
+    const round = w.replace(/(\d),(?=\d)/g, '$1').replace(raw, '');
+    if (round && !PLAIN_MARKS.test(round) && desc.indexOf(w) < 0) return '';
+    if (JOINERS.has(raw.toLowerCase()) || allowed.has(raw)) continue;
     // a word with punctuation inside ("trees—fungi"): each part must be the tagger's
-    const parts = k.split(/[^\p{L}\p{N}'’]+/u).filter(Boolean);
-    if (parts.length > 1 && parts.every((p) => JOINERS.has(p) || allowed.has(p))) continue;
+    const parts = raw.split(/[^\p{L}\p{N}'’]+/u).filter(Boolean);
+    if (parts.length > 1 && parts.every((p) => JOINERS.has(p.toLowerCase()) || allowed.has(p))) continue;
     return '';
   }
   return s;
@@ -295,6 +309,25 @@ export function standInAnswer(items) {
     const name = words.join(' ').replace(/[\s,;:(–—-]+$/, '');
     return { key: it.key, name: name.length <= NAME_MAX && name ? name : NO_NAME };
   }) };
+}
+
+/* What the list is told when a job ends: done when nothing is waiting; the
+   rest wait for the next hour when this hour's share is spent; and when the
+   model could not be asked at all (unreachable, a bad answer) the same wait,
+   counted, up to MAX_TRIES — a one-off fault must not leave the first words
+   standing for ever — then failed, with a reason the owner's page shows. */
+export function outcome({ waiting, stopped, tries }) {
+  if (!waiting) return { state: 'done', reason: '' };
+  if (stopped && !/share of the model|too many readings/.test(stopped)) {
+    const n = (tries || 0) + 1;
+    if (n >= MAX_TRIES) {
+      return { state: 'failed', tries: n, reason: 'the model could not be asked ' + n + ' times — ' + String(stopped).slice(0, 120) };
+    }
+    return { state: 'queued', notBefore: Date.now() + 3600 * 1000, tries: n,
+      reason: 'the model could not be asked (' + String(stopped).slice(0, 120) + '); tried again in an hour' };
+  }
+  return { state: 'queued', notBefore: Date.now() + 3600 * 1000,
+    reason: waiting + ' place' + (waiting === 1 ? '' : 's') + ' wait for the next hour' };
 }
 
 /* ---------- writing ---------- */

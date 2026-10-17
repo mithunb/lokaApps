@@ -2248,7 +2248,7 @@
           ". Until they arrive, the first words of each " + src.from + " stand in.");
         watchNames();
       } else if (pn.state === "failed") {
-        state.textContent = "The short names could not be written just now; the first words of each " + src.from + " stand in.";
+        state.textContent = "The short names could not be written" + (pn.reason ? " (" + pn.reason + ")" : " just now") + "; the first words of each " + src.from + " stand in.";
       } else if (pn.by === "model" || pn.by === "stand-in") {
         state.textContent = "Short names written for " + n + " place" + (n === 1 ? "" : "s") + ".";
       }
@@ -2264,7 +2264,7 @@
           clearInterval(namesWatch); namesWatch = null;
           MINE = (r && r.layers) || MINE;
           if (pn.state === "failed") {
-            state.textContent = "The short names could not be written just now; the first words of each " + src.from + " stand in.";
+            state.textContent = "The short names could not be written" + (pn.reason ? " (" + pn.reason + ")" : " just now") + "; the first words of each " + src.from + " stand in.";
             return;
           }
           var n = pn.long || src.long;

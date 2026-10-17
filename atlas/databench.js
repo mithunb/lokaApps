@@ -2446,6 +2446,10 @@
       popupTitleAlso: ($("#s-poptitle").value && $("#s-poptitle2").value) || undefined,
       // which column LOKA writes the short names from, when that is the choice
       placeNamesFrom: ($("#s-poptitle").value === NAME_FIELD && (namesSource() || {}).from) || undefined,
+      /* The owner picked the naming column by hand (not the guess): a plain
+         column chosen here is the owner's "no" to short names, and the
+         server leaves the layer alone instead of switching them on by default. */
+      titleChosen: (S.titleChosen || ((S.result && S.result.spec) || {}).titleChosen) ? true : undefined,
       outsideAction: outsideChoice(),
     });
     var renaming = spec.popupTitleColumn !== (S.result.spec || {}).popupTitleColumn ||
@@ -2466,6 +2470,7 @@
    "#s-linewidth", "#s-linedash", "#s-fillopacity"].forEach(function (sel) {
     $(sel).addEventListener("change", function () {
       // the four names change at once — they come from the rows in hand
+      if (sel === "#s-poptitle") S.titleChosen = true;   // the owner's own pick, not the guess
       if (sel === "#s-poptitle" || sel === "#s-poptitle2") syncNamePeek();
       syncStyleVisibility();
       scheduleApply(applyStyle);

@@ -2913,6 +2913,7 @@ function preparePlaceNames(session, spec, feats, keep) {
   const aboard = (c) => !!c && rows.some((r) => r[c] !== undefined && r[c] !== null && r[c] !== '');
   if (!chosen) {
     if (had && had.off) return null;                                    // the owner switched it off
+    if (spec.titleChosen) return null;                                  // the owner picked a plain column by hand (the bench)
     if (!aboard(from) || !placeNames.wantsNames(rows, from)) return null;   // on by default only when most are long
   } else if (!aboard(from)) {
     // chosen, but the column it came from is gone: the first column that qualifies, else back to plain naming
@@ -4555,9 +4556,17 @@ function considerPlaceNames(dataset, layerId, opts) {
   if (!got || !got.rows.length) return 'no layer';
   const inst = reg.getInstance(dataset);
   const m = imports.readManifest(dataset);
+  /* The owner picked a plain column by hand in the bench (spec.titleChosen,
+     not the guess): that is a "no" to short names, remembered on the list so
+     a reading's write or a repair never switches them on by themselves. */
+  const sp = got.layer.spec || null;
+  if (!(opts && opts.from) && sp && sp.titleChosen && sp.popupTitleColumn !== placeNames.NAME_FIELD) {
+    placeNames.queue.remember(dataset, layerId, { off: true });
+    return 'switched off';
+  }
   return placeNames.consider({ dataset, layerId, layer: got.layer, rows: got.rows, dir: m && m.dir,
     payer: (inst && inst.email) || '',
-    spec: opts && opts.from ? { placeNamesFrom: opts.from } : (got.layer.spec || null) });
+    spec: opts && opts.from ? { placeNamesFrom: opts.from } : sp });
 }
 
 /* The owner chose "Short names written by LOKA" in Settings: switched on
@@ -4584,6 +4593,18 @@ function switchOffPlaceNames(dataset, layerId) {
    long places that have no kept name, each answer checked, the names
    written onto the file and the stanza. At most CALLS_PER_HOUR calls in one
    go; what is left waits for the next hour on the same line of the list. */
+/* Two knobs for the stand-in only, so the retry road can be watched on a
+   throwaway server: ATLAS_FAKE_NAMES_FAIL ("3", or "slug:2,other:3") makes
+   the stand-in unreachable that many times per atlas; ATLAS_QUEUE_PUMP_MS
+   brings the names list's once-a-minute look closer. */
+const fakeNamesFail = {};
+if (FAKE_READING && process.env.ATLAS_FAKE_NAMES_FAIL) {
+  for (const part of String(process.env.ATLAS_FAKE_NAMES_FAIL).split(',')) {
+    const [slug, n] = part.includes(':') ? part.split(':') : ['*', part];
+    fakeNamesFail[slug.trim()] = Number(n) || 0;
+  }
+}
+const PUMP_EVERY = (FAKE_READING && Number(process.env.ATLAS_QUEUE_PUMP_MS)) || 60 * 1000;
 async function placeNamesJob(job) {
   const { dataset, layerId } = job;
   const where = dataset + '/' + layerId;
@@ -4608,7 +4629,12 @@ async function placeNamesJob(job) {
      stand-in (FAKE_READING) answers with the first words that fit the rules,
      so the whole road — list, call, check, write — runs locally. */
   let batch = [];
-  const stub = FAKE_READING ? async () => placeNames.standInAnswer(batch) : null;
+  const stub = FAKE_READING ? async () => {
+    // ATLAS_FAKE_NAMES_FAIL=n: the stand-in cannot be reached the first n times, to watch the retry
+    const key = fakeNamesFail[dataset] > 0 ? dataset : (fakeNamesFail['*'] > 0 ? '*' : '');
+    if (key) { fakeNamesFail[key] -= 1; throw new Error('the stand-in model could not be reached'); }
+    return placeNames.standInAnswer(batch);
+  } : null;
   const call = aiCaller(job.payer ? { payer: job.payer } : 'server', placeNames.CALLS_PER_HOUR, stub);
   let calls = 0, named = 0, declined = 0, stopped = '';
   for (let at = 0; at < items.length; at += placeNames.PER_CALL) {
@@ -4633,16 +4659,10 @@ async function placeNamesJob(job) {
   const sig = placeNames.sigFor(got.rows, from);
   console.log('[names] ' + where + ' — ' + named + ' named by the ' + by + ', ' + declined + ' kept their first words' +
     (wrote.waiting ? ', ' + wrote.waiting + ' still waiting' : '') + (stopped ? ' — ' + stopped : ''));
-  if (wrote.waiting) {
-    // this hour's share is spent: the rest wait for the next hour, on the same line
-    if (stopped && !/share of the model|too many readings/.test(stopped)) {
-      return { state: 'failed', reason: stopped.slice(0, 160), names: kept, from, by, calls, sig };
-    }
-    return { state: 'queued', notBefore: Date.now() + 3600 * 1000,
-      reason: wrote.waiting + ' place' + (wrote.waiting === 1 ? '' : 's') + ' wait for the next hour',
-      names: kept, from, by, calls, sig };
-  }
-  return { state: 'done', reason: '', names: kept, from, by, calls, sig };
+  // done; or the rest wait for the next hour (share spent, or the model could
+  // not be asked — tried again an hour later, up to three times, then failed)
+  return Object.assign({ names: kept, from, by, calls, sig },
+    placeNames.outcome({ waiting: wrote.waiting, stopped, tries: job.tries }));
 }
 
 /* One reading off the list. Answers what to write on the list about it. */
@@ -4913,7 +4933,7 @@ export function startBackgroundWork() {
      minute pump also brings back a job that stopped at its hour's share
      (notBefore), and one put on by deploy/queue-place-names.mjs. */
   placeNames.queue.start(placeNamesJob, { recheck: (d, l) => considerPlaceNames(d, l) });
-  setInterval(() => placeNames.queue.pump(), 60 * 1000).unref();
+  setInterval(() => placeNames.queue.pump(), PUMP_EVERY).unref();
   /* And the meaning index, for layers put on its list by
      deploy/queue-meaning-index.mjs — public and private atlases alike. */
   meaningQueue.start(meaningIndexJob);

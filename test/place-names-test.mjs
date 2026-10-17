@@ -91,6 +91,14 @@ check('five words fail', P.checkName('Overhead highway for a loris', 'To a slend
 check('33 characters fail', P.checkName('Grooves on a tree bark from ants', 'Grooves on a tree bark, from an ant\'s pov, we are no less than caves'), '');
 check('"no fair name" is not a name', P.checkName('No fair name.', ANT), '');
 check('empty is not a name', P.checkName('   ', ANT), '');
+check('an emoji the tagger did not write fails', P.checkName('Ant Mansion 🌳', ANT), '');
+check('bare punctuation the tagger did not write fails', P.checkName('Ant Mansion !!', ANT), '');
+check('an emoji the tagger wrote may stay', P.checkName('Ant Mansion 🐜🏚️', ANT), 'Ant Mansion 🐜🏚️');
+check('a question mark the tagger wrote may stay', P.checkName('Are we colonisers?', 'Are we colonisers?! Said the squirrel to the crow, one afternoon'), 'Are we colonisers?');
+check('ALL CAPS where the tagger wrote none fails', P.checkName('ANT MANSION', ANT), '');
+check('a word re-cased in the middle fails', P.checkName('ant MANSION', ANT), '');
+check('a first capital is allowed: Bifurcatree', P.checkName('Bifurcatree', 'I am bifurcatree because I always divide each branch in two'), 'Bifurcatree');
+check('the tagger\'s own capitals stay as they are', P.checkName('KR PURAM DEVASANDRA MARKET', 'KR PURAM DEVASANDRA MARKET, on a Sunday morning, before the crowds arrive'), 'KR PURAM DEVASANDRA MARKET');
 {
   const [a, b, c] = [ANT, FIX.cubbon[2], FIX.cubbon[1]].map(P.descHash);
   const items = [{ key: a, text: ANT }, { key: b, text: FIX.cubbon[2] }, { key: c, text: FIX.cubbon[1] }];
@@ -117,6 +125,20 @@ check('the prompt carries every rule in plain words', (() => {
     'Never add a fact, a species, a place or a judgement', 'no fair name'].every((s) => p.includes(s));
 })(), true);
 check('one call for every 40 long places, at most 24 calls an hour', [P.PER_CALL, P.CALLS_PER_HOUR], [40, 24]);
+console.log('\n  what a job tells the list when it ends');
+{
+  const soon = (o) => o.notBefore > Date.now() + 3500 * 1000 && o.notBefore <= Date.now() + 3600 * 1000;
+  check('nothing waiting: done', P.outcome({ waiting: 0, stopped: '' }), { state: 'done', reason: '' });
+  const share = P.outcome({ waiting: 30, stopped: 'this reading has used its share of the model' });
+  check('the hour\'s share spent: the rest wait for the next hour, not a try', [share.state, soon(share), share.tries, share.reason], ['queued', true, undefined, '30 places wait for the next hour']);
+  const first = P.outcome({ waiting: 19, stopped: 'the model could not be reached' });
+  check('the model could not be asked: tried again in an hour, counted', [first.state, soon(first), first.tries, first.reason], ['queued', true, 1, 'the model could not be asked (the model could not be reached); tried again in an hour']);
+  const second = P.outcome({ waiting: 19, stopped: 'the model could not be reached', tries: 1 });
+  check('a second time: still tried again', [second.state, second.tries], ['queued', 2]);
+  const third = P.outcome({ waiting: 19, stopped: 'the model could not be reached', tries: 2 });
+  check('the third time it ends, with a plain reason for the owner', [third.state, third.tries, third.notBefore, third.reason], ['failed', 3, undefined, 'the model could not be asked 3 times — the model could not be reached']);
+  check('three tries, an hour apart', P.MAX_TRIES, 3);
+}
 
 /* ------------------------------------------------------------------ *
  * The fingerprint: writing names is not a change to anybody's data
@@ -287,8 +309,10 @@ console.log('\n  the wiring: server, viewer, owner\'s fold, data bench, docs');
   check('the names go on before the stanza is built, so preview and commit both show them', /const named = preparePlaceNames\(session, spec, feats, keep\);\n\s*const frag = buildFragment\(spec, feats, existingIds\);/.test(server), true);
   check('on by default, and an owner\'s "no" is remembered', /if \(had && had\.off\) return null;\s*\/\/ the owner switched it off/.test(server), true);
   check('the job pays out of the owner\'s hourly allowance, thinking off, as the short-labels job', /aiCaller\(job\.payer \? \{ payer: job\.payer \} : 'server', placeNames\.CALLS_PER_HOUR, stub\)/.test(server) && /placeNames\.schemaFor\(Type\), \{ file: true \}/.test(server), true);
-  check('the rest wait for the next hour', /notBefore: Date\.now\(\) \+ 3600 \* 1000/.test(server), true);
-  check('the list is started with the others, and pumped once a minute', /placeNames\.queue\.start\(placeNamesJob/.test(server) && /setInterval\(\(\) => placeNames\.queue\.pump\(\), 60 \* 1000\)/.test(server), true);
+  check('the rest wait for the next hour; a failure too, three times, then it ends', /placeNames\.outcome\(\{ waiting: wrote\.waiting, stopped, tries: job\.tries \}\)/.test(server) &&
+    /notBefore: Date\.now\(\) \+ 3600 \* 1000/.test(fs.readFileSync(ROOT + '/api/lib/atlas/place-names.js', 'utf8')), true);
+  check('the list is started with the others, and pumped once a minute', /placeNames\.queue\.start\(placeNamesJob/.test(server) && /setInterval\(\(\) => placeNames\.queue\.pump\(\), PUMP_EVERY\)/.test(server) &&
+    /const PUMP_EVERY = \(FAKE_READING && Number\(process\.env\.ATLAS_QUEUE_PUMP_MS\)\) \|\| 60 \* 1000;/.test(server), true);
   check('Settings: choosing the written column switches on; choosing another switches off', /switchOnPlaceNames\(dataset, layerId, from\)/.test(server) && /switchOffPlaceNames\(dataset, layerId\)/.test(server), true);
   check('a split file\'s other half follows', /if \(layer\.sameFileAs\) switchOnPlaceNames\(dataset, layer\.sameFileAs, from\)/.test(server), true);
   check('the owner\'s page is told where the names have got to', /placeNames: placeNames\.stateFor\(l, placeNames\.queue\.get\(dataset, l\.id\)\)/.test(server), true);
@@ -324,10 +348,11 @@ console.log('\n  the whole road, on a throwaway server (stand-in model, no key)'
 const PORT = 8600 + Math.floor(Math.random() * 300);
 const BASE = `http://127.0.0.1:${PORT}`;
 const TAG = Math.random().toString(36).slice(2, 7);
-const PUBSLUG = 'names-check-' + TAG, PRIVSLUG = 'names-private-' + TAG;
+const PUBSLUG = 'names-check-' + TAG, PRIVSLUG = 'names-private-' + TAG, RETRYSLUG = 'names-retry-' + TAG;
 const DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'loka-names-data-'));
 const PUB = path.join(ROOT, 'atlas', 'datasets', PUBSLUG);
 const PRIV = path.join(DATA, 'private-datasets', PRIVSLUG);
+const RETRY = path.join(DATA, 'private-datasets', RETRYSLUG);
 const OWNER = 'owner@example.test';
 let child = null, out = '';
 function cleanup() {
@@ -343,6 +368,8 @@ async function startServer() {
   child = spawn(process.execPath, [path.join(ROOT, 'api', 'server.js')], {
     env: { ...process.env, LOKA_PORT: String(PORT), LOKA_DATA_DIR: DATA, LOKA_DEV_STATIC: '1', MAIL_TRANSPORT: 'log',
       GEMINI_API_KEY: '', ATLAS_OWNER_EMAILS: 'nobody@example.test', ATLAS_FAKE_READING: '1', ATLAS_FAKE_READING_MS: '200',
+      // the stand-in cannot be reached twice for one atlas, three times for another; the list looks every half second
+      ATLAS_FAKE_NAMES_FAIL: PRIVSLUG + ':2,' + RETRYSLUG + ':3', ATLAS_QUEUE_PUMP_MS: '500',
       NODE_ENV: 'development' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -380,12 +407,14 @@ const record = (slug) => { try { return JSON.parse(fs.readFileSync(qfile, 'utf8'
 try {
   atlasDir(PUB, PUBSLUG, FIX.cubbon);
   atlasDir(PRIV, PRIVSLUG, FIX.cubbon);
+  atlasDir(RETRY, RETRYSLUG, FIX.cubbon);
   fs.writeFileSync(path.join(DATA, 'registry.json'), JSON.stringify({
     instances: {
       [PUBSLUG]: { slug: PUBSLUG, title: 'Names check', visibility: 'public', status: 'published', publishedAt: 1, ownerAccount: OWNER, email: OWNER, tier: 'india', layers: [], tokenHash: 'x', viewKeyHash: null, createdAt: 1 },
       [PRIVSLUG]: { slug: PRIVSLUG, title: 'Names private', visibility: 'private', status: 'published', publishedAt: 1, ownerAccount: OWNER, email: OWNER, tier: 'india', layers: [], tokenHash: 'x', viewKeyHash: 'y', createdAt: 1 },
+      [RETRYSLUG]: { slug: RETRYSLUG, title: 'Names retry', visibility: 'private', status: 'published', publishedAt: 1, ownerAccount: OWNER, email: OWNER, tier: 'india', layers: [], tokenHash: 'x', viewKeyHash: 'y', createdAt: 1 },
     },
-    accounts: { [OWNER]: { email: OWNER, instances: [PUBSLUG, PRIVSLUG], verifiedAt: 1 } },
+    accounts: { [OWNER]: { email: OWNER, instances: [PUBSLUG, PRIVSLUG, RETRYSLUG], verifiedAt: 1 } },
     drafts: {},
   }));
   // the one-off script puts both on the list before the server starts, as a deploy would
@@ -393,8 +422,24 @@ try {
     '--registry', path.join(DATA, 'registry.json'), path.join(ROOT, 'atlas', 'datasets'), path.join(DATA, 'private-datasets')], { encoding: 'utf8' });
   check('the script lists the public copy and the private copy alike', [/names-check-/.test(applied.stdout), /names-private-/.test(applied.stdout)], [true, true]);
   await startServer();
-  const done = await until(() => ['done'].includes((record(PUBSLUG) || {}).state) && ['done'].includes((record(PRIVSLUG) || {}).state), 15000);
-  check('the server names both within seconds (stand-in model)', done, true);
+  const stateOf = (slug) => (record(slug) || {});
+  const done = await until(() => stateOf(PUBSLUG).state === 'done' && stateOf(PRIVSLUG).tries === 1 && stateOf(RETRYSLUG).tries === 1, 15000);
+  check('the server names the public copy within seconds (stand-in model)', done && stateOf(PUBSLUG).state, 'done');
+  /* The retry road: the stand-in could not be reached for two atlases. Each
+     is tried again an hour later — the hour is brought forward here by
+     editing the line, and the list looks every half second. */
+  console.log('\n  a one-off failure is tried again; three failures end with a reason');
+  check('a failure waits for the next hour on the same line, counted, with the first words standing in',
+    [stateOf(PRIVSLUG).state, stateOf(PRIVSLUG).tries, stateOf(PRIVSLUG).notBefore > Date.now() + 3500 * 1000, /tried again in an hour/.test(stateOf(PRIVSLUG).reason),
+      readLayer(PRIV).popup.title, readLayer(PRIV).lokaNames.by, readFeats(PRIV)[0].properties.loka_name],
+    ['queued', 1, true, true, 'loka_name', 'first words', 'Cubbon Park']);
+  const bringForward = (slug) => { const db = JSON.parse(fs.readFileSync(qfile, 'utf8')); db[slug + '|tags'].notBefore = Date.now() - 1; fs.writeFileSync(qfile, JSON.stringify(db)); };
+  bringForward(PRIVSLUG); bringForward(RETRYSLUG);
+  check('the hour comes: both are tried again, and fail again', await until(() => stateOf(PRIVSLUG).tries === 2 && stateOf(RETRYSLUG).tries === 2 && stateOf(PRIVSLUG).state === 'queued', 8000), true);
+  bringForward(PRIVSLUG); bringForward(RETRYSLUG);
+  check('the third time: one succeeds, the other ends', await until(() => stateOf(PRIVSLUG).state === 'done' && stateOf(RETRYSLUG).state === 'failed', 8000), true);
+  check('the one that failed three times says why, plainly', [stateOf(RETRYSLUG).tries, stateOf(RETRYSLUG).reason], [3, 'the model could not be asked 3 times — the stand-in model could not be reached']);
+  check('its places keep the first words', [readLayer(RETRY).lokaNames.by, readLayer(RETRY).lokaNames.waiting], ['first words', 19]);
   for (const [what, dir] of [['public', PUB], ['private', PRIV]]) {
     const L = readLayer(dir), F = readFeats(dir);
     check(what + ': the written column names each place, pin and card alike', [L.popup.title, L.label_text && L.label_text.property], ['loka_name', 'loka_name']);
@@ -409,6 +454,9 @@ try {
   check('the owner\'s page is told: written, 19 places', [list.j.layers[0].placeNames.state, list.j.layers[0].placeNames.long, list.j.layers[0].placeNames.from], ['done', 19, 'description']);
   const plist = await call('GET', '/api/atlas/layers/list?dataset=' + PRIVSLUG, { cookie: ownerC });
   check('and for the private atlas too', plist.j.layers[0].placeNames.state, 'done');
+  const rlist = await call('GET', '/api/atlas/layers/list?dataset=' + RETRYSLUG, { cookie: ownerC });
+  check('and told why the other one could not be named', [rlist.j.layers[0].placeNames.state, rlist.j.layers[0].placeNames.reason], ['failed', 'the model could not be asked 3 times — the stand-in model could not be reached']);
+  check('the owner\'s fold shows that reason', /"The short names could not be written" \+ \(pn\.reason \? " \(" \+ pn\.reason \+ "\)" : " just now"\)/.test(fs.readFileSync(ROOT + '/atlas/owner.js', 'utf8')), true);
   // search finds a place by its short name, titles the hit with it
   const s = await call('POST', '/api/atlas/layers/search', { body: { dataset: PUBSLUG, q: 'squirrels' } });
   check('a search hit is titled by the short name', ((s.j && s.j.hits) || []).flatMap((h) => h.features.map((f) => f.title)).includes('squirrels'), true);
@@ -441,6 +489,23 @@ try {
   await tick(400);
   const rec2 = JSON.parse(fs.readFileSync(qr, 'utf8'))[PUBSLUG + '|tags'];
   check('a second commit carrying the names is the same version: not read again', [rec2.sig === sigAfter, rec2.state], [true, 'done']);
+  /* The owner's own pick wins. In the bench, choosing a plain column by hand
+     (titleChosen) is a "no" to short names: nothing is written, the layer
+     is left alone, and the "no" is remembered for every later write. */
+  console.log('\n  the owner\'s pick in Add data is theirs');
+  const re3 = await call('POST', '/api/atlas/layers/reopen', { cookie: ownerC, body: { dataset: PUBSLUG, layerId: 'tags' } });
+  const chosen = Object.assign({}, re3.j.spec, { popupTitleColumn: 'description', placeNamesFrom: undefined, titleChosen: true });
+  const ap = await call('POST', '/api/atlas/layers/apply', { cookie: ownerC, body: { importId: re3.j.importId, spec: chosen } });
+  check('the preview names places by the column the owner picked, no short names', [ap.status, ap.j.fragment.popup.title, 'lokaNames' in ap.j.fragment, ap.j.spec.popupTitleColumn], [200, 'description', false, 'description']);
+  const c3 = await call('POST', '/api/atlas/layers/commit', { cookie: ownerC, body: { importId: re3.j.importId, dataset: PUBSLUG } });
+  check('committed so', [c3.status, readLayer(PUB).popup.title, 'lokaNames' in readLayer(PUB), 'loka_name' in readFeats(PUB)[0].properties], [200, 'description', false, false]);
+  check('and the "no" is on the list', record(PUBSLUG).off, true);
+  const re4 = await call('POST', '/api/atlas/layers/reopen', { cookie: ownerC, body: { dataset: PUBSLUG, layerId: 'tags' } });
+  check('a later write starts from that choice', [re4.j.spec.titleChosen, re4.j.spec.popupTitleColumn, re4.j.fragment.popup.title], [true, 'description', 'description']);
+  await call('POST', '/api/atlas/layers/commit', { cookie: ownerC, body: { importId: re4.j.importId, dataset: PUBSLUG } });
+  check('and keeps it: still no short names', [readLayer(PUB).popup.title, 'lokaNames' in readLayer(PUB), record(PUBSLUG).off], ['description', false, true]);
+  check('the bench marks the owner\'s own pick', /if \(sel === "#s-poptitle"\) S\.titleChosen = true;/.test(fs.readFileSync(ROOT + '/atlas/databench.js', 'utf8')) && /titleChosen: \(S\.titleChosen/.test(fs.readFileSync(ROOT + '/atlas/databench.js', 'utf8')), true);
+  check('and the server honours it before the stanza is built', /if \(spec\.titleChosen\) return null;/.test(fs.readFileSync(ROOT + '/api/apps/atlas.js', 'utf8')), true);
 } catch (e) {
   fail++;
   console.log('  FAIL  the server run — ' + (e && e.stack || e) + '\n' + out.slice(-1500));

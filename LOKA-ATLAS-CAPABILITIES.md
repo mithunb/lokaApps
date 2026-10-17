@@ -571,7 +571,11 @@ slate.
   tagger's words" wherever the name is shorter than the description. The owner's Settings fold
   says "Writing short names for 19 places. Until they arrive, the first words of each description
   stand in." and then "Short names written for 19 places."; choosing another column switches it
-  off and is remembered. `loka_name` is left out of the reading fingerprint, never read as
+  off and is remembered, and a plain column picked by hand in Add data is the same "no" from the
+  start. If the model cannot be asked, the job is tried again an hour later, up to three times,
+  then ends with the reason on the owner's fold; the first words stand in throughout. The check
+  keeps the tagger's case (a first capital is fine, ALL CAPS is not) and refuses any emoji or
+  symbol the description does not carry. `loka_name` is left out of the reading fingerprint, never read as
   evidence, never a key or a card line. Names are kept under a fingerprint of their description,
   so a re-upload keeps unchanged places' names and asks only about new or changed ones. Private
   and public atlases alike. Stanza: `lokaNames: { from, by, waiting, long, total }`. Route:
