@@ -2140,6 +2140,7 @@
          is different: it was asked of these places and this is the honest answer,
          so it is offered with the share it can speak for written beside it. */
       if (/^pattern_\d+_why$/.test(col)) return;   // a reason is not a key
+      if (col === LokaLabelRules.NAME_FIELD) return;   // a written name is a name, not a kind
       var isQuestion = /^pattern_\d+$/.test(col);
       /* A question with no name is not a question, it is a leftover column.
 
@@ -4272,6 +4273,8 @@
   // carries letters is fair game. Mirrors the server's index coverage.
   function skipSearchProp(n) {
     n = String(n == null ? "" : n).toLowerCase();
+    // the short name LOKA wrote is the description's own words again (it is the hit's title)
+    if (n === LokaLabelRules.NAME_FIELD) return true;
     if (/(^|[^a-z])(id|ids|uuid|guid|url|uri|link|href|image|images|img|photo|photos|thumb|thumbnail|icon|lat|latitude|lon|lng|long|longitude|x|y|geom|geometry|wkt|color|colour)([^a-z]|$)/.test(n)) return true;
     return /(created|updated|modified|timestamp)/.test(n);
   }
@@ -6369,18 +6372,34 @@
     var loka = isLoka(L);
     var shell = '<div class="pop">';
     var h = shell;
+    /* A short name written by LOKA (label-rules NAME_FIELD; the server's
+       place-names.js): the heading is the tagger's own words, cut to a name,
+       and one small line under it says so — the approved wording. Only when
+       the name is shorter than what it was made from; a short description
+       used as it is needs no explaining. */
+    var byLoka = "";
+    if (spec.title === LokaLabelRules.NAME_FIELD && L.lokaNames && L.lokaNames.from && title) {
+      var whole = cellShown(props[L.lokaNames.from]);
+      if (whole && whole.trim() !== title.trim()) byLoka = '<div class="pop-byline">Short name by LOKA, from the tagger’s words</div>';
+    }
     /* On a LOKA place the description IS the title, and it is a sentence —
        sometimes with a photo credit on the end — so heading the card with it
        produced an eight-line title. It is a caption, and it belongs under the
        picture it captions. So a LOKA card opens with the photo, then the
        caption, then what the atlas worked out; the generic card keeps the
-       heading-first order that suits a spreadsheet nobody has seen. */
+       heading-first order that suits a spreadsheet nobody has seen.
+
+       Given a short name, the LOKA card has a heading again — above the
+       photo, in the display face — and the whole description stays as the
+       caption under it. */
     if (loka) {
-      h += lokaLead(L, props, title, krows);
+      var caption = cellShown(props.description) || title;
+      if (title && title.trim() !== caption.trim()) h += '<div class="pop-title">' + esc(title) + "</div>" + byLoka;
+      h += lokaLead(L, props, caption, krows);
     } else {
       // the kicker first ("SURVEY VILLAGE · GORAKHPUR"), then the name
       if (sub) h += '<div class="pop-sub">' + esc(sub) + "</div>";
-      if (title) h += '<div class="pop-title">' + esc(title) + "</div>";
+      if (title) h += '<div class="pop-title">' + esc(title) + "</div>" + byLoka;
       if (krows) h += krows.outerHTML;
     }
     /* Plain facts sit in one two-column list — label beside value, values

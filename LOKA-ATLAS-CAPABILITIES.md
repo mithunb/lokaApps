@@ -226,6 +226,11 @@ Opening an uploaded layer asks **three questions**, in this order:
    are not offered. **Add a second column (optional)** joins two — "Asha Rao · Western Ghats
    Collective" — and drops an empty part. A place with nothing in the chosen column(s) is called by
    its row ("Place 7") everywhere, and the step says how many places that is before you choose.
+   When the naming column is longer than 32 characters for more than half the places — a LOKA
+   export, whose only name is the tagger's sentence — one more option sits at the top, chosen
+   unless you say otherwise: **"Short names written by LOKA — from description"**. LOKA writes
+   each long place a name of up to four words out of the description's own words (§7, Popups);
+   the first words stand in until it has.
 
 Below question 3 the live map key is shown as *output*, with per-kind counts. Below sits
 "Remove this layer from the atlas…". Changes are held until you press **Save changes**; a note reads
@@ -338,6 +343,8 @@ pickers a person then confirms.
 - **Breaking ties** on ambiguous name matches, but only when there are 40 or fewer, and only ever
   choosing from that row's own candidate list.
 - **Finding themes** (§9).
+- **Writing short names** for places whose only name is a sentence (§7, Popups): one call per 40
+  long places, checked word by word on the way back; without a model the first words serve.
 
 Rate limit (corrected October 2026, from `api/apps/atlas.js` `AI_CALLS_PER_HOUR`,
 `AI_CALLS_PER_HOUR_IP`, `AI_CALLS_PER_READING`): **150 model calls per rolling hour for a
@@ -546,6 +553,31 @@ slate.
   names.", the pin names and area names on the map follow, and both halves of a split file are set
   together. The server route is `POST layers/relabel` with `titleColumn` and `titleAlso` (an empty
   `titleAlso` takes the second column off). In the stanza: `popup.title` and `popup.titleAlso`.
+- **Short names written by LOKA** (October 2026). A layer whose naming column is a sentence for
+  more than half its places (Cubbon Park: 19 of 33 descriptions over 32 characters; Bengaluru on
+  LOKA: 107 of 134) gets a short name for every long place, on by default: the server writes a
+  NEW column, `loka_name`, onto every feature — the description is never changed — and names each
+  place by it (`popup.title = "loka_name"`; the pin's name, search and the card follow). Straight
+  away the first words stand in (the first clause when it is 8–32 characters, else the first words
+  cut at a word, never past 32); then the model is asked, one call per 40 long places, out of the
+  owner's hourly allowance, at most 24 calls in one go (the rest wait for the next hour), with the
+  rules: only the description's own words (joining words may be added), at most 4 words and 32
+  characters, the tagger's language, voice and spelling, never a fact, species, place or judgement
+  that is not there, "no fair name" rather than invent. The server checks every answer against
+  those rules (word containment, length, word count) and a failing one keeps the first words. A
+  description of 32 characters or fewer is its own name and is never sent. On the card: the short
+  name is the heading (a LOKA card, which had none, gets one above the photo), the whole description
+  stays as the caption, and one small line under the heading says "Short name by LOKA, from the
+  tagger's words" wherever the name is shorter than the description. The owner's Settings fold
+  says "Writing short names for 19 places. Until they arrive, the first words of each description
+  stand in." and then "Short names written for 19 places."; choosing another column switches it
+  off and is remembered. `loka_name` is left out of the reading fingerprint, never read as
+  evidence, never a key or a card line. Names are kept under a fingerprint of their description,
+  so a re-upload keeps unchanged places' names and asks only about new or changed ones. Private
+  and public atlases alike. Stanza: `lokaNames: { from, by, waiting, long, total }`. Route:
+  `POST layers/relabel` with `titleColumn: "loka_name"` and `namesFrom`. One-off for the layers
+  added before this: `deploy/queue-place-names.mjs` (dry run; `--apply` to queue; both roots;
+  Deoria never).
 - Hovering a place shows a small bubble: its name and one line per active key, which is how the
   badges are decoded. **Hover is switched off entirely on touch screens** — there the popup does that
   job.
@@ -859,11 +891,13 @@ The table, as seen in a real layer of 66 places:
   budget work for a gallery if photos matter.
 - **`description` may be truncated.** Cells are cut to **500 characters** on the server. Longer written
   notes lose their tails, everywhere — popup, search and theme-finding.
-- **`tag_id` is correctly ignored** for colour, key and search, but the pin's own name comes from
-  whatever column you pick in "Identify each place by". This table has **no short name column** —
-  the natural candidates are `description` (long prose) and `address`. Expect hover labels and popup
-  titles to read awkwardly unless a name column is added to the export. The name is drawn beside the
-  pin whatever its length, cut at a word to 32 letters; the card shows the whole of it.
+- **`tag_id` is correctly ignored** for colour, key and search. This table has **no short name
+  column** — the natural candidates are `description` (long prose) and `address` — so since October
+  2026 the atlas writes one: **"Short names written by LOKA — from description"** is offered at the
+  top of "Identify each place by" and on by default whenever most descriptions run past 32
+  characters (§7, Popups). Each long place gets a name of up to four of the tagger's own words,
+  checked; the first words stand in until it lands; the description itself is never changed and
+  stays whole on the card. A short description is its own name.
 - **Adding more data means another upload.** There is no update-in-place and no matching on
   `tag_id`. Re-exporting after new places are tagged means uploading a new layer, or removing the old
   one and adding the new. Atlas does notice when the same data comes back — it fingerprints what was

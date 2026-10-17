@@ -457,7 +457,7 @@ export function relabelLayer(datasetId, layerId, { label, titleColumn, titleAlso
       const wanted = cardColumns
         .map((c) => String(c || '').trim())
         .filter((c) => c && has.has(c) && naming.indexOf(c) < 0 &&
-          c.charAt(0) !== '_' && !/^pattern_/.test(c))
+          c.charAt(0) !== '_' && !/^pattern_/.test(c) && c !== 'loka_name')
         .slice(0, 40);
       const seen = new Set();
       layer.popup = layer.popup || {};

@@ -20,6 +20,7 @@ import { noteTrouble, noteOk, setTroubleNotifier, openTroubles } from '../lib/at
 import * as owed from '../lib/atlas/owed.js';
 import { queue as QUESTIONS, createQueue, fileSignatureOf, NEVER_READ } from '../lib/atlas/questions-queue.js';
 import * as shortLabels from '../lib/atlas/short-labels.js';
+import * as placeNames from '../lib/atlas/place-names.js';
 import {
   enqueueBuild, getJob, setJobDoneHook, setStrandedBuildHook, DATASETS_ROOT, PRIVATE_ROOT,
 } from '../lib/atlas/jobs.js';
@@ -2883,6 +2884,49 @@ function sessionBounds(session) {
   return (bb && bb.length === 4) ? [[bb[0], bb[1]], [bb[2], bb[3]]] : null;
 }
 
+/* Short names written by LOKA, on the way onto the map.
+
+   Decides, for the layer being built, whether its places are named by the
+   written column (place-names.js NAME_FIELD) and writes that column onto the
+   features: the owner chose it (spec.popupTitleColumn is the written
+   column), or — on by default, Mithun's decision — the naming column is
+   longer than 32 characters for more than half the places and the owner has
+   not switched it off. The names come from what the list already kept for
+   this layer (a re-upload keeps every unchanged place's name) and the first
+   words stand in for the rest until the model's names land (placeNamesJob).
+   Answers the counts for the stanza, or null when the layer is left alone. */
+/* The column that plays the place's name when rows are placed: the naming
+   column, or — when the names are LOKA's written ones, which the rows do
+   not carry yet — the column they are written from. */
+function placeRoleColumn(spec) {
+  if (!spec) return undefined;
+  return spec.popupTitleColumn === placeNames.NAME_FIELD ? (spec.placeNamesFrom || undefined) : spec.popupTitleColumn;
+}
+
+function preparePlaceNames(session, spec, feats, keep) {
+  if (!session.dataset || NEVER_READ.has(session.dataset) || !feats.length) return null;
+  const rows = feats.map((f) => (f && f.properties) || {});
+  const had = session.replacingLayerId ? placeNames.queue.get(session.dataset, session.replacingLayerId) : null;
+  const chosen = spec.popupTitleColumn === placeNames.NAME_FIELD;
+  let from = spec.placeNamesFrom || (had && had.from) || '';
+  if (!from && spec.popupTitleColumn && spec.popupTitleColumn !== placeNames.NAME_FIELD) from = spec.popupTitleColumn;
+  const aboard = (c) => !!c && rows.some((r) => r[c] !== undefined && r[c] !== null && r[c] !== '');
+  if (!chosen) {
+    if (had && had.off) return null;                                    // the owner switched it off
+    if (!aboard(from) || !placeNames.wantsNames(rows, from)) return null;   // on by default only when most are long
+  } else if (!aboard(from)) {
+    // chosen, but the column it came from is gone: the first column that qualifies, else back to plain naming
+    from = Object.keys(rows[0] || {}).find((c) => placeNames.wantsNames(rows, c)) || '';
+    if (!from) { delete spec.placeNamesFrom; delete spec.popupTitleColumn; return null; }
+  }
+  const got = placeNames.applyNames(feats, from, (had && had.names) || {});
+  spec.popupTitleColumn = placeNames.NAME_FIELD;
+  spec.placeNamesFrom = from;
+  if (spec.popupTitleAlso === from || spec.popupTitleAlso === placeNames.NAME_FIELD) delete spec.popupTitleAlso;
+  keep.add(placeNames.NAME_FIELD);
+  return Object.assign(got, { from, by: got.fromModel ? ((had && had.by) || 'model') : 'first words' });
+}
+
 function transform(session) {
   const { rows, strategy } = session;
   const roles = rolesMap(session.columns);
@@ -3219,7 +3263,16 @@ function transform(session) {
     feats = feats.map((f) => (f.geometry && !/Point/.test(f.geometry.type)
       ? { ...f, geometry: { type: 'Point', coordinates: centroidOf(f.geometry) } } : f));
   }
+  /* Short names written by LOKA (place-names.js): a layer whose naming
+     column is a sentence for most of its places gets the written column on
+     every feature here, before the stanza is built, so the stanza names it
+     and the preview, the draft and the commit all show a name at once. */
+  const named = preparePlaceNames(session, spec, feats, keep);
   const frag = buildFragment(spec, feats, existingIds);
+  if (named) {
+    placeNames.markStanza(frag.stanza, { from: named.from, by: named.by, waiting: named.waiting,
+      long: named.long, total: named.total, anyNamed: named.values.some(Boolean) });
+  }
   /* Pass the credit on to the layer itself.
 
      A layer built by joining rows to borrowed shapes IS a use of those shapes,
@@ -3410,6 +3463,9 @@ function applyResult(session, withDraft) {
       name: p.name, type: p.type, kinds: p.kinds || p.distinct, filled: p.filled,
       categorical: !!p.categorical, multiValue: !!p.multiValue,
       tagList: !!p.tagList, looksLikeName: !!p.looksLikeName, looksLikeImage: !!p.looksLikeImage,
+      // how many places this column is a sentence for: "Short names written
+      // by LOKA" is offered when that is more than half of them (place-names.js)
+      longValues: placeNames.countLong(session.rows || [], p.name).long,
     })),
     rowCount: (session.rows || []).length,
     /* Which rows have nothing in each column of words, so the naming choice
@@ -3730,7 +3786,7 @@ async function ingestLayerSteps(b, who, tell) {
     if (session.replacingLabel) session.spec.label = session.replacingLabel;
     if (kept && session.spec.popupTitleColumn) {
       session.columns.forEach((c) => {
-        c.role = c.name === session.spec.popupTitleColumn ? 'placeName' : (c.role === 'placeName' ? 'text' : c.role);
+        c.role = c.name === placeRoleColumn(session.spec) ? 'placeName' : (c.role === 'placeName' ? 'text' : c.role);
       });
     }
     tell('placing');
@@ -3926,7 +3982,7 @@ async function ingestLayerSteps(b, who, tell) {
       session.spec = Object.assign({}, session.spec, session.replacingSpec);
       if (session.spec.popupTitleColumn) {
         session.columns.forEach((c) => {
-          c.role = c.name === session.spec.popupTitleColumn ? 'placeName' : (c.role === 'placeName' ? 'text' : c.role);
+          c.role = c.name === placeRoleColumn(session.spec) ? 'placeName' : (c.role === 'placeName' ? 'text' : c.role);
         });
       }
     }
@@ -4487,6 +4543,108 @@ async function shortLabelsJob(job) {
   return { state: 'done', reason: '', calls: 1, names, by, sig: shortLabels.headingSig(headings) };
 }
 
+/* ---------- short names written by LOKA, for places named by a sentence ---------- */
+
+/* Should this layer's places be given short names? The rules are in
+   api/lib/atlas/place-names.js; this finds the layer, its owner and the
+   column. The stand-in is written at once if the file does not carry the
+   names yet; the model's names are asked for on the list. */
+function considerPlaceNames(dataset, layerId, opts) {
+  if (NEVER_READ.has(dataset)) return 'never';
+  const got = layerAndRows(dataset, layerId);
+  if (!got || !got.rows.length) return 'no layer';
+  const inst = reg.getInstance(dataset);
+  const m = imports.readManifest(dataset);
+  return placeNames.consider({ dataset, layerId, layer: got.layer, rows: got.rows, dir: m && m.dir,
+    payer: (inst && inst.email) || '',
+    spec: opts && opts.from ? { placeNamesFrom: opts.from } : (got.layer.spec || null) });
+}
+
+/* The owner chose "Short names written by LOKA" in Settings: switched on
+   (a "switched off" and an old version on the list are forgotten), the
+   stand-in written at once, the model asked. Answers the list's word. */
+function switchOnPlaceNames(dataset, layerId, from) {
+  placeNames.queue.remember(dataset, layerId, { off: false, sig: '', from });
+  return considerPlaceNames(dataset, layerId, { from });
+}
+
+/* The owner chose another column: the stanza stops saying the names are
+   LOKA's, and the list remembers not to switch them back on by itself. */
+function switchOffPlaceNames(dataset, layerId) {
+  const m = imports.readManifest(dataset);
+  const layer = m && m.local && (m.local.layers || []).find((L) => L.id === layerId);
+  if (!layer || !layer.lokaNames) return false;
+  placeNames.unmarkStanza(layer);
+  fs.writeFileSync(path.join(m.dir, 'manifest.local.json'), JSON.stringify(m.local, null, 1));
+  placeNames.queue.remember(dataset, layerId, { off: true });
+  return true;
+}
+
+/* One layer off the place-names list: one call to the model for every 40
+   long places that have no kept name, each answer checked, the names
+   written onto the file and the stanza. At most CALLS_PER_HOUR calls in one
+   go; what is left waits for the next hour on the same line of the list. */
+async function placeNamesJob(job) {
+  const { dataset, layerId } = job;
+  const where = dataset + '/' + layerId;
+  if (!ai && !FAKE_READING) return { state: 'skipped', reason: 'no model on this server' };
+  const got = layerAndRows(dataset, layerId);
+  if (!got) return { state: 'failed', reason: 'the layer is gone' };
+  const m = imports.readManifest(dataset);
+  const from = placeNames.sourceColumnOf(got.layer) || job.from || '';
+  if (!from) return { state: 'none', reason: 'no column to name from' };
+  const kept = Object.assign({}, job.names || {});
+  const items = placeNames.wanting(got.rows, from, kept);
+  const inst = reg.getInstance(dataset);
+  /* A layer put on the list from outside (deploy/queue-place-names.mjs) is
+     not switched on yet: the first words go beside every pin now, before
+     the model is asked, so nobody waits on it to see a name. */
+  const on = got.layer.popup && got.layer.popup.title === placeNames.NAME_FIELD && got.layer.lokaNames;
+  if (m && (!on || !got.rows.every((r) => r[placeNames.NAME_FIELD] !== undefined))) {
+    placeNames.writeNames(m.dir, layerId, { from, kept, by: job.by || 'model' });
+  }
+  console.log('[names] writing short names for ' + items.length + ' place' + (items.length === 1 ? '' : 's') + ' on ' + where);
+  /* Out of the owner's hourly allowance, one call per PER_CALL places. The
+     stand-in (FAKE_READING) answers with the first words that fit the rules,
+     so the whole road — list, call, check, write — runs locally. */
+  let batch = [];
+  const stub = FAKE_READING ? async () => placeNames.standInAnswer(batch) : null;
+  const call = aiCaller(job.payer ? { payer: job.payer } : 'server', placeNames.CALLS_PER_HOUR, stub);
+  let calls = 0, named = 0, declined = 0, stopped = '';
+  for (let at = 0; at < items.length; at += placeNames.PER_CALL) {
+    batch = items.slice(at, at + placeNames.PER_CALL);
+    let answer;
+    try {
+      // naming is not reasoning: thinking off, room to answer (as the short-labels job)
+      answer = await call(getFlashLiteModel(), placeNames.promptFor(batch, from, (inst && inst.title) || ''),
+        placeNames.schemaFor(Type), { file: true });
+    } catch (e) {
+      stopped = String((e && e.message) || 'something went wrong');
+      break;
+    }
+    calls += 1;
+    const c = placeNames.cleanAnswer(answer, batch);
+    Object.assign(kept, c.names);
+    named += c.fromModel; declined += c.declined;
+  }
+  const by = FAKE_READING ? 'stand-in' : 'model';
+  const wrote = m && placeNames.writeNames(m.dir, layerId, { from, kept, by });
+  if (!wrote) return { state: 'failed', reason: 'the names could not be written onto the layer', names: kept, from, by, calls };
+  const sig = placeNames.sigFor(got.rows, from);
+  console.log('[names] ' + where + ' — ' + named + ' named by the ' + by + ', ' + declined + ' kept their first words' +
+    (wrote.waiting ? ', ' + wrote.waiting + ' still waiting' : '') + (stopped ? ' — ' + stopped : ''));
+  if (wrote.waiting) {
+    // this hour's share is spent: the rest wait for the next hour, on the same line
+    if (stopped && !/share of the model|too many readings/.test(stopped)) {
+      return { state: 'failed', reason: stopped.slice(0, 160), names: kept, from, by, calls, sig };
+    }
+    return { state: 'queued', notBefore: Date.now() + 3600 * 1000,
+      reason: wrote.waiting + ' place' + (wrote.waiting === 1 ? '' : 's') + ' wait for the next hour',
+      names: kept, from, by, calls, sig };
+  }
+  return { state: 'done', reason: '', names: kept, from, by, calls, sig };
+}
+
 /* One reading off the list. Answers what to write on the list about it. */
 async function readingJob(job) {
   const { dataset, layerId } = job;
@@ -4751,6 +4909,11 @@ export function startBackgroundWork() {
      to it from outside. */
   shortLabels.queue.start(shortLabelsJob, { recheck: (d, l) => considerShortLabels(d, l) });
   setInterval(() => shortLabels.queue.pump(), 60 * 1000).unref();
+  /* Short names for places named by a sentence, the same way. The once-a-
+     minute pump also brings back a job that stopped at its hour's share
+     (notBefore), and one put on by deploy/queue-place-names.mjs. */
+  placeNames.queue.start(placeNamesJob, { recheck: (d, l) => considerPlaceNames(d, l) });
+  setInterval(() => placeNames.queue.pump(), 60 * 1000).unref();
   /* And the meaning index, for layers put on its list by
      deploy/queue-meaning-index.mjs — public and private atlases alike. */
   meaningQueue.start(meaningIndexJob);
@@ -5294,6 +5457,9 @@ function cosine(a, b) {
    or date match on every feature. */
 function searchSkipProp(name) {
   const n = String(name == null ? '' : name).toLowerCase();
+  // the short name LOKA wrote is the description's own words: counting it
+  // again would weight those places twice (its place is the hit's title)
+  if (n === placeNames.NAME_FIELD) return true;
   if (/(^|[^a-z])(id|ids|uuid|guid|url|uri|link|href|image|images|img|photo|photos|thumb|thumbnail|icon|lat|latitude|lon|lng|long|longitude|x|y|geom|geometry|wkt|color|colour)([^a-z]|$)/.test(n)) return true;
   return /(created|updated|modified|timestamp)/.test(n);
 }
@@ -5865,6 +6031,10 @@ function commitLayer({ importId, dataset }, who, opts) {
       try { considerShortLabels(session.dataset, id); } catch (e) {
         console.warn('[labels] could not look at ' + session.dataset + '/' + id + ' — ' + (e && e.message));
       }
+      // and short names for its places, when their only name is a sentence
+      try { considerPlaceNames(session.dataset, id); } catch (e) {
+        console.warn('[names] could not look at ' + session.dataset + '/' + id + ' — ' + (e && e.message));
+      }
     }
     return { ok: true, layerId: layerId || pointsLayerId, pointsLayerId, dataset: session.dataset };
   } catch (e) {
@@ -6008,7 +6178,13 @@ router.post('/layers/commit', (req, res) => {
    and a reading handing an area layer's shapes back with its answers — so
    that both put the layer back as it was rather than as a fresh upload. */
 function specOfLayer(layer, layerId, rows, columns) {
-  if (layer.spec && typeof layer.spec === 'object') return layer.spec;
+  if (layer.spec && typeof layer.spec === 'object') {
+    // the column LOKA's short names come from travels with the choice of them
+    if (layer.lokaNames && layer.lokaNames.from && !layer.spec.placeNamesFrom) {
+      return Object.assign({}, layer.spec, { placeNamesFrom: layer.lokaNames.from });
+    }
+    return layer.spec;
+  }
   const matchCol = columnFromMatch(layer.paint && layer.paint.color, columns);
   const catCol = layer.markerBy === '_category'
     ? recoverCategoryColumn(rows, columns)
@@ -6030,6 +6206,7 @@ function specOfLayer(layer, layerId, rows, columns) {
     categoryColumn: catCol,
     popupTitleColumn: layer.popup && layer.popup.title,
     popupTitleAlso: (layer.popup && layer.popup.titleAlso) || undefined,
+    placeNamesFrom: (layer.lokaNames && layer.lokaNames.from) || undefined,
     popupColumns: ((layer.popup && layer.popup.fields) || []).map((f) => f.property),
     imageColumn: (((layer.popup && layer.popup.fields) || []).find((f) => f.type === 'image') || {}).property,
     palette: 'marigold',
@@ -6063,7 +6240,8 @@ router.post('/layers/reopen', (req, res) => {
   } catch (e) { return res.status(400).json({ error: 'this layer’s data file is missing — remove it and add it again' }); }
   if (!feats.length) return res.status(400).json({ error: 'this layer has no features to edit' });
 
-  const rows = feats.map((f) => Object.assign({}, f.properties));
+  // the short names LOKA wrote are the machinery's, put back by transform from what the list kept
+  const rows = feats.map((f) => { const o = Object.assign({}, f.properties); delete o[placeNames.NAME_FIELD]; return o; });
   const geoms = feats.map((f) => f.geometry);
   const columns = Object.keys(rows[0] || {}).slice(0, MAX_COLS);
   const cls = /Polygon/.test(geoms[0] && geoms[0].type) ? 'polygon'
@@ -6084,7 +6262,7 @@ router.post('/layers/reopen', (req, res) => {
   });
   imports.writeGeoms(session.id, geoms);
   session.strategy = 'geometry';
-  session.columns = columns.map((c) => ({ name: c, role: c === spec.popupTitleColumn ? 'placeName' : 'text' }));
+  session.columns = columns.map((c) => ({ name: c, role: c === placeRoleColumn(spec) ? 'placeName' : 'text' }));
   session.spec = spec;
   try {
     res.json(applyResult(session, true));   // draft written: the preview works immediately
@@ -6115,6 +6293,8 @@ router.get('/layers/list', (req, res) => {
   const layers = all.map((l) => ({
     id: l.id, label: l.label || l.id,
     questions: stateOf(l),
+    // where the short names for its places have got to (place-names.js), when it has them
+    placeNames: placeNames.stateFor(l, placeNames.queue.get(dataset, l.id)),
     addedBy: l.addedBy ? { email: l.addedBy.email, name: l.addedBy.name || '', org: l.addedBy.org || '' } : null,
     addedAt: l.addedAt || null,
     /* Two different questions, which were one flag for too long.
@@ -6383,6 +6563,23 @@ router.post('/layers/relabel', (req, res) => {
     titleColumn: typeof b.titleColumn === 'string' ? b.titleColumn : undefined,
     titleAlso: typeof b.titleAlso === 'string' ? b.titleAlso : undefined,
   };
+  /* "Short names written by LOKA" is a choice like any column, but the
+     column is written by the server: choosing it writes the stand-in at
+     once, marks the stanza and asks the model (place-names.js); choosing
+     another column after it switches it off and the list remembers. One
+     file, one way of naming: a split file's other half follows. */
+  let namesState = null;
+  if (naming.titleColumn === placeNames.NAME_FIELD) {
+    const from = String(b.namesFrom || placeNames.sourceColumnOf(layer) || '').trim().slice(0, 60);
+    if (!from) return res.status(400).json({ error: 'say which column the short names should come from' });
+    namesState = switchOnPlaceNames(dataset, layerId, from);
+    if (layer.sameFileAs) switchOnPlaceNames(dataset, layer.sameFileAs, from);
+    naming.titleColumn = undefined;   // the stanza already names the written column
+    if (naming.titleAlso === from) naming.titleAlso = '';
+  } else if (naming.titleColumn !== undefined && layer.lokaNames) {
+    switchOffPlaceNames(dataset, layerId);
+    if (layer.sameFileAs) switchOffPlaceNames(dataset, layer.sameFileAs);
+  }
   const out = imports.relabelLayer(dataset, layerId, Object.assign({
     label: typeof b.label === 'string' ? b.label : undefined,
     hiddenKeys: Array.isArray(b.hiddenKeys) ? b.hiddenKeys : undefined,
@@ -6399,7 +6596,7 @@ router.post('/layers/relabel', (req, res) => {
     if (naming.titleColumn !== undefined || naming.titleAlso !== undefined) Object.assign(twin, naming);
     if (Object.keys(twin).length) imports.relabelLayer(dataset, layer.sameFileAs, twin);
   }
-  res.json(Object.assign({ ok: true }, out));
+  res.json(Object.assign({ ok: true }, out, namesState ? { placeNames: namesState } : {}));
 });
 
 router.post('/layers/remove', (req, res) => {

@@ -60,11 +60,26 @@
   var LONG_HEADING = 36;   // longer than this is "long": shown short, whole on hover (measured, above)
   var SHORT_MAX = 32;      // a short name is at most this many characters
 
-  /* Columns that are never labels: the machinery's own answer columns, private
-     columns, and the coordinates. */
+  /* 4. A PLACE'S SHORT NAME. A layer out of the LOKA app has no name column,
+     only the tagger's sentence ("description"), so a pin, a search hit and a
+     card heading showed half a sentence. The server writes each such place a
+     short name of the tagger's own words into NAME_FIELD (api/lib/atlas/
+     place-names.js); until that lands, and wherever the model's answer breaks
+     the rules, the plain cut below stands in: the first clause when it is
+     short enough, else the first words, cut at a word, never past NAME_MAX
+     characters with its ellipsis. The same 32 as SHORT_MAX, for the same
+     reason: it is what fits beside a pin (label_text.maxChars) and on one
+     line of a card heading. The column is the machinery's, never a label, a
+     key, a card fact or a plain choice — label-rules, reading-rules and the
+     naming controls all leave it out by this name. */
+  var NAME_FIELD = "loka_name";
+  var NAME_MAX = 32;
+
+  /* Columns that are never labels: the machinery's own answer columns, the
+     written short name, private columns, and the coordinates. */
   function isLabelColumn(col) {
     var c = String(col || "");
-    if (!c || c.charAt(0) === "_" || /^pattern_\d+/.test(c)) return false;
+    if (!c || c.charAt(0) === "_" || /^pattern_\d+/.test(c) || c === NAME_FIELD) return false;
     return !/^(lat|latitude|lng|lon|long|longitude|x|y|geometry|wkt)$/i.test(c.trim());
   }
 
@@ -235,9 +250,44 @@
     return { text: short, full: full, shortened: short !== full };
   }
 
+  /* 4. The first words of a place's description, as a name. Not long: the
+     whole thing, as it is. Long: the first clause — up to a full stop, a
+     question mark, a colon, a spaced dash, a bracket or a line break — when
+     that is a name's length (8 to NAME_MAX); otherwise the first words, cut
+     at a word, with an ellipsis, so the whole thing never passes NAME_MAX.
+     Every word is the description's own, in its order; nothing is added. */
+  function firstWords(text) {
+    var raw = String(text == null ? "" : text).trim();
+    if (!raw) return "";
+    var whole = raw.replace(/\s+/g, " ").trim();
+    if (whole.length <= NAME_MAX) return whole;
+    var line = raw.split(/\n+/)[0].replace(/\s+/g, " ").trim();
+    var stops = [];
+    var i;
+    var m = line.match(/[.!?]+(\s|$)/);
+    // a sentence's end: the full stop is dropped, a question or exclamation mark kept
+    if (m && m.index > 0) stops.push(line.slice(0, m.index) + m[0].replace(/[.\s]+/g, ""));
+    if ((i = line.indexOf(":")) > 0) stops.push(line.slice(0, i));
+    if ((i = line.search(/\s[–—-]\s/)) > 0) stops.push(line.slice(0, i));
+    if ((i = line.indexOf("(")) > 0) stops.push(line.slice(0, i));
+    stops.sort(function (a, b) { return a.length - b.length; });
+    for (var k = 0; k < stops.length; k++) {
+      var head = stops[k].replace(/[\s,;:]+$/, "").trim();
+      if (head.length >= 8 && head.length <= NAME_MAX) return head;
+    }
+    if (line.length <= NAME_MAX) return line;
+    var cut = line.slice(0, NAME_MAX - 1);
+    var sp = cut.lastIndexOf(" ");
+    if (sp > (NAME_MAX - 1) * 0.5) cut = cut.slice(0, sp);
+    return cut.replace(/[\s,;:(–—-]+$/, "") + "…";
+  }
+
   return {
     LONG_HEADING: LONG_HEADING,
     SHORT_MAX: SHORT_MAX,
+    NAME_FIELD: NAME_FIELD,
+    NAME_MAX: NAME_MAX,
+    firstWords: firstWords,
     isLabelColumn: isLabelColumn,
     headingCase: headingCase,
     isLong: isLong,

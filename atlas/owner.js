@@ -2007,6 +2007,24 @@
   var ID_LIKE = /(^|_)(id|uuid|guid)$/i;
   var MAP_CUT = 32;   // the map's own cut for a name beside a pin (label_text.maxChars)
   var NAME_SAID = null;   // { lid, text } — a line for the fold rebuilt after a save
+  /* Short names written by LOKA (api/lib/atlas/place-names.js). A layer
+     whose naming column is a sentence for most of its places — the LOKA
+     app's own exports — is offered one more choice at the top: the server
+     writes each long place a name of the tagger's own words into this
+     column, and the first words stand in until they land. The rule and the
+     plain cut are the viewer's (label-rules.js), so what this fold shows is
+     what the map shows. */
+  var NAME_FIELD = window.LokaLabelRules ? window.LokaLabelRules.NAME_FIELD : "loka_name";
+  var NAME_MAX = window.LokaLabelRules ? window.LokaLabelRules.NAME_MAX : 32;
+  function firstWords(s) { return window.LokaLabelRules ? window.LokaLabelRules.firstWords(s) : mapCut(s, NAME_MAX); }
+  // the column the short names come from, and how many places it is long for
+  function namesSourceOf(L, feats) {
+    var from = (L.lokaNames && L.lokaNames.from) || ((L.popup && L.popup.title) !== NAME_FIELD && L.popup && L.popup.title) || "";
+    if (!from) return null;
+    var long = 0;
+    feats.forEach(function (f) { if (cellOf(f, from).length > NAME_MAX) long++; });
+    return { from: from, long: long, total: feats.length, wanted: long > 0 && long > feats.length / 2 };
+  }
   function cellOf(f, c) {
     var v = c ? (f.properties || {})[c] : null;
     if (v == null) return "";
@@ -2035,6 +2053,7 @@
     });
     return cols.filter(function (k) {
       if (k.charAt(0) === "_" || /^pattern_/.test(k) || ID_LIKE.test(k)) return false;
+      if (k === NAME_FIELD) return false;   // the written short name is offered on its own, below
       if (/^(lat|latitude|lon|lng|long|longitude|x|y)$/i.test(k)) return false;
       return true;
     }).map(function (k) {
@@ -2053,6 +2072,12 @@
         idLike: n === filled && filled > 20,
         shared: n >= 2 && n <= 12 && n < filled / 2 };
     }).filter(function (c) {
+      /* The column the places are named by now is always offered, even when
+         it reads as an id (every entry different on a long list — which is
+         what a column of sentences looks like): an owner must be able to
+         see, and go back to, the choice that is in force. */
+      var current = c.name === (L.popup && L.popup.title) || c.name === (L.lokaNames && L.lokaNames.from);
+      if (current) c.idLike = false;
       return c.filled > 0 && c.words && !c.picture && c.kinds > 1 && !c.idLike;
     }).map(function (c) {
       c.label = c.name + " — " + (c.filled >= c.total ? "every place" : c.filled + " of " + c.total + " places") +
@@ -2094,6 +2119,19 @@
     var choices = nameChoicesOf(L, feats);
     var title = (L.popup && L.popup.title) || "";
     var also = (L.popup && L.popup.titleAlso) || "";
+    /* One more choice, at the top, only when the naming column is long for
+       more than half the places (or the names are already on): the server
+       writes the names, this fold only shows them. */
+    var src = namesSourceOf(L, feats);
+    if (src && (src.wanted || L.lokaNames)) {
+      choices.unshift({ name: NAME_FIELD, label: "Short names written by LOKA — from " + src.from,
+        filled: feats.length, total: feats.length, kinds: feats.length, lokaNames: true });
+    }
+    // a place's name under a choice: the written name, or the first words until it is written
+    function nameUnder(f, col) {
+      if (col !== NAME_FIELD) return cellOf(f, col);
+      return cellOf(f, NAME_FIELD) || firstWords(cellOf(f, src.from));
+    }
     if (!choices.length) {
       box.appendChild(el("p", "own-note", "This layer has no column of names to choose from."));
       NAME_SAID = null;
@@ -2114,6 +2152,16 @@
     var note = el("span", "own-note");
     note.textContent = "The name each place is known by — shown beside its pin, at the top of its card and in search. Choose which column it comes from.";
     box.appendChild(note);
+    // what the written names are, said only while that is the choice
+    var shortNote = el("p", "own-note own-name-short");
+    shortNote.hidden = true;
+    if (src) {
+      shortNote.textContent = "LOKA writes a name of up to four words for each long " + src.from +
+        ", using only the tagger’s own words. The whole " + src.from + " stays on the card. " +
+        src.long + " of " + src.total + " places are long; the other " + (src.total - src.long) +
+        " keep their words as they are.";
+    }
+    box.appendChild(shortNote);
 
     var second = document.createElement("select");
     var alsoLbl = el("label", "own-name-also");
@@ -2139,15 +2187,23 @@
     box.appendChild(state);
     if (NAME_SAID && NAME_SAID.lid === L.id) { state.textContent = NAME_SAID.text; NAME_SAID = null; }
 
+    // the second column: never the written name, and never the column it was written from
+    function seconds(col) {
+      return choices.filter(function (c) {
+        return c.name !== col && c.name !== NAME_FIELD && !(col === NAME_FIELD && src && c.name === src.from);
+      });
+    }
     function render() {
       var col = first.value, two = second.value;
-      fill(second, choices.filter(function (c) { return c.name !== col; }), two === col ? "" : two, true);
+      fill(second, seconds(col), two === col ? "" : two, true);
       two = second.value;
+      shortNote.hidden = col !== NAME_FIELD;
+      sayNames(col);
       peek.innerHTML = "";
       feats.slice(0, 4).forEach(function (f, i) {
         var li = el("li", "own-name-row");
         li.appendChild(el("span", "own-name-pin"));
-        var name = [cellOf(f, col), cellOf(f, two)].filter(Boolean).join(" · ");
+        var name = [nameUnder(f, col), cellOf(f, two)].filter(Boolean).join(" · ");
         var n = el("span", "own-name-n" + (name ? "" : " is-row"));
         n.textContent = name ? mapCut(name, MAP_CUT) : rowNoun(L) + " " + (i + 1);
         if (name && n.textContent !== name) n.title = name;
@@ -2160,7 +2216,7 @@
         peek.appendChild(li);
       });
       var blank = [];
-      feats.forEach(function (f, i) { if (!cellOf(f, col) && !cellOf(f, two)) blank.push(i + 1); });
+      feats.forEach(function (f, i) { if (!nameUnder(f, col) && !cellOf(f, two)) blank.push(i + 1); });
       var choice = choices.filter(function (c) { return c.name === col; })[0];
       if (blank.length) {
         warn.hidden = false;
@@ -2176,14 +2232,62 @@
         warn.hidden = true;
       }
     }
-    fill(second, choices.filter(function (c) { return c.name !== first.value; }), also, true);
+    /* Where the written names have got to, under the choice: a calm wait
+       while the server writes them (the first words stand in meanwhile),
+       then how many it wrote. Asked of the server every few seconds while
+       it is writing; when they land the map reads the layer again. */
+    var namesWatch = null;
+    function sayNames(col) {
+      if (col !== NAME_FIELD || !L.lokaNames) return;
+      var m = mineFor(L.id);
+      var pn = (m && m.placeNames) || { state: L.lokaNames.waiting ? "writing" : "done", by: L.lokaNames.by,
+        long: L.lokaNames.long, waiting: L.lokaNames.waiting };
+      var n = pn.long || src.long;
+      if (pn.state === "writing") {
+        state.innerHTML = LokaWait.html("Writing short names for " + n + " place" + (n === 1 ? "" : "s") +
+          ". Until they arrive, the first words of each " + src.from + " stand in.");
+        watchNames();
+      } else if (pn.state === "failed") {
+        state.textContent = "The short names could not be written just now; the first words of each " + src.from + " stand in.";
+      } else if (pn.by === "model" || pn.by === "stand-in") {
+        state.textContent = "Short names written for " + n + " place" + (n === 1 ? "" : "s") + ".";
+      }
+    }
+    function watchNames() {
+      if (namesWatch) return;
+      namesWatch = setInterval(function () {
+        if (!document.body.contains(state)) { clearInterval(namesWatch); namesWatch = null; return; }
+        api("layers/list?dataset=" + encodeURIComponent(SLUG)).then(function (r) {
+          var m = ((r && r.layers) || []).filter(function (x) { return x.id === L.id; })[0];
+          var pn = m && m.placeNames;
+          if (!pn || pn.state === "writing") return;
+          clearInterval(namesWatch); namesWatch = null;
+          MINE = (r && r.layers) || MINE;
+          if (pn.state === "failed") {
+            state.textContent = "The short names could not be written just now; the first words of each " + src.from + " stand in.";
+            return;
+          }
+          var n = pn.long || src.long;
+          state.textContent = "Short names written for " + n + " place" + (n === 1 ? "" : "s") + ".";
+          NAME_SAID = { lid: L.id, text: state.textContent };
+          // the file was rewritten under the same name: say so, then the map reads it again
+          if (window.LokaAtlas.dataChanged) window.LokaAtlas.dataChanged();
+          preview(SLUG).then(refreshLayers);
+        }).catch(function () { /* a missed look; the next one tries again */ });
+      }, WATCH_EVERY);
+    }
+    fill(second, seconds(first.value), also, true);
     render();
     function changed() {
       render();
       if (first.value === title && (second.value || "") === also) return;
-      state.innerHTML = LokaWait.html("Renaming the places on the map…");
+      state.innerHTML = first.value === NAME_FIELD
+        ? LokaWait.html("Writing the first words of each " + src.from + " beside every pin…")
+        : LokaWait.html("Renaming the places on the map…");
       NAME_SAID = { lid: L.id, text: "Done. Everyone who opens the atlas sees the new names." };
-      save({ titleColumn: first.value, titleAlso: second.value || "" });
+      var patch = { titleColumn: first.value, titleAlso: second.value || "" };
+      if (first.value === NAME_FIELD) patch.namesFrom = src.from;
+      save(patch);
     }
     first.onchange = changed;
     second.onchange = changed;

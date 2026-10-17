@@ -517,7 +517,8 @@ export function buildFragment(spec, feats, existingIds) {
 
    Judged by the column's shape, not by a list of names, so this holds for a
    layer read before the naming settled as much as for one read tomorrow. */
-function isAnswerColumn(col) { return /^pattern_/.test(String(col)); }
+// a question's answers, and the short name LOKA writes for a place (atlas/reading-rules.js has the one rule)
+function isAnswerColumn(col) { return /^pattern_/.test(String(col)) || String(col) === 'loka_name'; }
 
 /* What a column is called on a card.
 

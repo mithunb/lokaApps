@@ -36,7 +36,13 @@
      question's kinds from what the map already shows stops at eight too. */
   var MAX_KINDS_KEPT = 8;
 
-  function isAnswerColumn(k) { return /^pattern_/.test(k); }
+  /* A column the machinery wrote, never evidence: a question's answers
+     (pattern_…), and the short name LOKA writes for a place (loka_name,
+     label-rules NAME_FIELD). Both are left out of a reading, of a layer's
+     fingerprint, and of every list of plain columns, so writing them on is
+     never a change to anybody's data. */
+  var NAME_FIELD = "loka_name";
+  function isAnswerColumn(k) { return /^pattern_/.test(k) || k === NAME_FIELD; }
   function isQuestionColumn(k) { return /^pattern_\d+$/.test(k); }
 
   /* What a cell says, when it might be holding several things.
@@ -235,6 +241,7 @@
 
   return {
     MAX_KINDS_KEPT: MAX_KINDS_KEPT,
+    NAME_FIELD: NAME_FIELD,
     isAnswerColumn: isAnswerColumn,
     isQuestionColumn: isQuestionColumn,
     wordColumns: wordColumns,

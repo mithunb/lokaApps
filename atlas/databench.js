@@ -232,6 +232,7 @@
           <label class="name-also" id="w-poptitle2" for="s-poptitle2"><span>Add a second column <span class="hint">(optional)</span></span>
             <select id="s-poptitle2"></select>
           </label>
+          <p class="note" id="poptitle-short" hidden></p>
           <ul class="name-peek" id="poptitle-peek"></ul>
           <p class="note warnish" id="poptitle-empty" role="status" hidden></p>
           <p class="note" id="poptitle-left" hidden></p>
@@ -2149,12 +2150,50 @@
      nameChoicesOf) — one on the server's profiles, one on the loaded places. */
   var NAMEISH = /^(name|title|label|place|description|desc|site|spot)s?$/i;
   var ID_LIKE = /(^|_)(id|uuid|guid)$/i;
-  function nameChoices() {
+  /* Short names written by LOKA (api/lib/atlas/place-names.js): when the
+     naming column is a sentence for more than half the places, one more
+     choice goes at the top, and it is the one chosen unless the owner says
+     otherwise. The server writes the column; this bench shows the first
+     words (label-rules firstWords) until it has. */
+  var NAME_FIELD = window.LokaLabelRules ? window.LokaLabelRules.NAME_FIELD : "loka_name";
+  var NAME_MAX = window.LokaLabelRules ? window.LokaLabelRules.NAME_MAX : 32;
+  function firstWords(s) { return window.LokaLabelRules ? window.LokaLabelRules.firstWords(s) : mapCut(s, NAME_MAX); }
+  // the column the short names would come from, when they are wanted (or already chosen)
+  function namesSource() {
+    var spec = (S.result && S.result.spec) || {};
+    var plain = plainNameChoices();
+    var names = plain.map(function (c) { return c.name; });
+    var from = spec.placeNamesFrom;
+    if (!from) {
+      var t = spec.popupTitleColumn;
+      from = (t && t !== NAME_FIELD) ? t : guessTitle(names);
+    }
+    var p = resultProfiles().filter(function (x) { return x.name === from && x.type === "string"; })[0];
+    if (!p) return null;
     var total = (S.result && S.result.rowCount) || 0;
+    var long = p.longValues || 0;
+    var wanted = long > 0 && long > total / 2;
+    if (!wanted && spec.popupTitleColumn !== NAME_FIELD) return null;
+    return { from: from, long: long, total: total };
+  }
+  function nameChoices() {
+    var plain = plainNameChoices();
+    var src = namesSource();
+    if (src) {
+      plain.unshift({ name: NAME_FIELD, filled: src.total, total: src.total, kinds: src.total, shared: false,
+        lokaNames: true, label: "Short names written by LOKA — from " + src.from });
+    }
+    return plain;
+  }
+  function plainNameChoices() {
+    var total = (S.result && S.result.rowCount) || 0;
+    var spec = (S.result && S.result.spec) || {};
     return resultProfiles().filter(function (p) {
       if (p.type !== "string" || p.looksLikeImage) return false;
-      if (p.name.charAt(0) === "_" || /^pattern_/.test(p.name) || ID_LIKE.test(p.name)) return false;
+      if (p.name.charAt(0) === "_" || /^pattern_/.test(p.name) || ID_LIKE.test(p.name) || p.name === NAME_FIELD) return false;
       if (!p.filled || p.kinds <= 1) return false;
+      // the column the places are named by now (or the short names come from) is always offered
+      if (p.name === spec.popupTitleColumn || p.name === spec.placeNamesFrom) return true;
       // every entry different, on a long list: an id, whatever it is called
       if (p.kinds === p.filled && p.filled > 20 && !p.multiValue && !p.looksLikeName) return false;
       return true;
@@ -2170,8 +2209,8 @@
   }
   function nameChoiceNames() { return nameChoices().map(function (c) { return c.name; }); }
   function titleColumns() { return nameChoiceNames(); }
-  function guessTitle() {
-    var cols = titleColumns();
+  function guessTitle(among) {
+    var cols = among || titleColumns();
     var byName = cols.filter(function (n) { return NAMEISH.test(n.trim()); })[0];
     if (byName) return byName;
     var nameish = resultProfiles().filter(function (p) {
@@ -2198,12 +2237,27 @@
     // the second list offers everything but the first choice — refilled
     // first, so a second that just became the first is no longer a second
     var second = $("#s-poptitle2"), was = second.value;
-    fillSelect("#s-poptitle2", nameChoices().filter(function (c) { return c.name !== col; })
-      .map(function (c) { return { value: c.name, label: c.label }; }), null, true);
+    var src = col === NAME_FIELD ? namesSource() : null;
+    // the second column: never the written name, nor the column it was written from
+    fillSelect("#s-poptitle2", nameChoices().filter(function (c) {
+      return c.name !== col && c.name !== NAME_FIELD && !(src && c.name === src.from);
+    }).map(function (c) { return { value: c.name, label: c.label }; }), null, true);
     second.value = (was && was !== col) ? was : "";
     second.options[0].textContent = "— none —";
     var also = second.value;
-    var cell = function (r, c) { return c ? String(r[c] == null ? "" : r[c]).trim() : ""; };
+    var shortNote = $("#poptitle-short");
+    shortNote.hidden = !src;
+    if (src) {
+      shortNote.textContent = "LOKA writes a name of up to four words for each long " + src.from +
+        ", using only the tagger’s own words. The whole " + src.from + " stays on the card. " +
+        src.long + " of " + src.total + " places are long; the other " + (src.total - src.long) +
+        " keep their words as they are.";
+    }
+    var cell = function (r, c) {
+      if (!c) return "";
+      if (c === NAME_FIELD) return src ? firstWords(String(r[src.from] == null ? "" : r[src.from]).trim()) : "";
+      return String(r[c] == null ? "" : r[c]).trim();
+    };
     peek.innerHTML = rows.map(function (r, i) {
       var name = [cell(r, col), cell(r, also)].filter(Boolean).join(" · ");
       if (!name) {
@@ -2216,7 +2270,7 @@
         '<span class="name-peek-n"' + (short !== name ? ' title="' + esc(name) + '"' : "") + ">" + esc(short) + "</span></li>";
     }).join("");
     var empty = (S.result && S.result.emptyRows) || {};
-    var blank = empty[col] || [];
+    var blank = empty[src ? src.from : col] || [];
     if (also) {
       var inAlso = {};
       (empty[also] || []).forEach(function (i) { inAlso[i] = true; });
@@ -2247,6 +2301,7 @@
     resultProfiles().forEach(function (p) {
       if (offered[p.name] || p.name.charAt(0) === "_" || p.type !== "string" || p.looksLikeImage) return;
       if (/^pattern_/.test(p.name)) { qs++; return; }
+      if (p.name === NAME_FIELD) return;   // the machinery's own column, offered above by its own name when wanted
       if (ID_LIKE.test(p.name) || (p.kinds === p.filled && p.filled > 20 && !p.multiValue && !p.looksLikeName)) out.push(p.name + " (an id for each row)");
       else if (p.filled && p.kinds <= 1) out.push(p.name + " (the same for every place)");
     });
@@ -2389,6 +2444,8 @@
       fillOpacity: Number($("#s-fillopacity").value) || undefined,
       popupTitleColumn: $("#s-poptitle").value || undefined,
       popupTitleAlso: ($("#s-poptitle").value && $("#s-poptitle2").value) || undefined,
+      // which column LOKA writes the short names from, when that is the choice
+      placeNamesFrom: ($("#s-poptitle").value === NAME_FIELD && (namesSource() || {}).from) || undefined,
       outsideAction: outsideChoice(),
     });
     var renaming = spec.popupTitleColumn !== (S.result.spec || {}).popupTitleColumn ||

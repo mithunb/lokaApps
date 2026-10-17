@@ -138,8 +138,14 @@ export function createQueue({ file } = {}) {
       save(db);
       return false;
     }
-    db[k] = { dataset, layerId, sig, payer: payer || (had && had.payer) || '', state: 'queued',
-              reason: '', queuedAt: Date.now(), at: Date.now(), restore: !!restore };
+    /* What the list already knew about this layer travels to the new line:
+       the names a job wrote (short-labels, place-names), which column they
+       came from, and an owner's "switched off". A new version is a new
+       reading, not a new memory. */
+    const carry = {};
+    for (const f of ['names', 'from', 'by', 'off']) if (had && had[f] !== undefined) carry[f] = had[f];
+    db[k] = Object.assign(carry, { dataset, layerId, sig, payer: payer || (had && had.payer) || '', state: 'queued',
+              reason: '', queuedAt: Date.now(), at: Date.now(), restore: !!restore });
     save(db);
     setImmediate(pump);
     return true;
@@ -183,7 +189,11 @@ export function createQueue({ file } = {}) {
   async function pump() {
     if (running || !runner) return;
     const db = load();
-    const next = Object.values(db).filter((r) => r.state === 'queued')
+    /* A job may stop short of its hour's share and ask to be picked up again
+       later (notBefore, place-names.js): it stays queued and is passed over
+       until then. The once-a-minute pump in api/apps/atlas.js brings it back. */
+    const now = Date.now();
+    const next = Object.values(db).filter((r) => r.state === 'queued' && !(r.notBefore > now))
       .sort((a, b) => (a.queuedAt || 0) - (b.queuedAt || 0))[0];
     if (!next) return;
     running = true;
