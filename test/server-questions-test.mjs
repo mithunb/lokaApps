@@ -162,7 +162,10 @@ check('the wizard, adding data and re-commits all come through it',
 check('so does a repair', /const out = commitLayer\(\{ importId: session\.id, dataset: session\.dataset \}, req\);/.test(server), true);
 check('a reading\'s own write says so, and is noted as read',
   /return commitLayer\(\{ importId: ing\.importId, dataset \}, 'server', \{ fromReading: true \}\);/.test(server) &&
-  /if \(opts && opts\.fromReading\) \{\n\s*QUESTIONS\.remember\(/.test(server), true);
+  /if \(opts && opts\.fromReading\) \{\n\s*keepAnswers\([\s\S]{0,900}?if \(!QUESTIONS\.isBusy\(dataset, layerId\)\) \{\n\s*QUESTIONS\.remember\(/.test(server), true);
+check('but not while the list is on that layer: a split file\'s pins are written before its outlines, and the reading\'s own ending writes the record',
+  server.indexOf('if (!QUESTIONS.isBusy(dataset, layerId)) {') > server.indexOf('if (opts && opts.fromReading) {') &&
+  server.indexOf('if (!QUESTIONS.isBusy(dataset, layerId)) {') < server.indexOf("return 'written by a reading';"), true);
 check('the same tests the browser made, by the shared rule: places that wear a marker, words of their own',
   /if \(!RULES\.wearsMarks\(layer\)\) return 'no marks';/.test(server) &&
   /if \(!rows\.length \|\| !RULES\.worthReading\(layer, rows\)\) return 'no words';/.test(server), true);
@@ -205,7 +208,7 @@ check('nothing that starts the live server sets either flag', /ATLAS_FAKE_READIN
 
 console.log('\n  the owner\'s page reports, and starts nothing');
 check('the browser no longer reads', /askQuestions|keepQuestions|rememberNothingHere|layers\/enrich/.test(ownerCode), false);
-check('the status comes on /layers/list, per layer', /questions: reading\[l\.id\] \|\| null,/.test(server), true);
+check('the status comes on /layers/list, per layer', /questions: stateOf\(l\),/.test(server) && /return pins && \(pins\.state === 'queued' \|\| pins\.state === 'running'\) \? pins : \(reading\[l\.id\] \|\| null\);/.test(server), true);
 check('the note shows only while the server is at work',
   /if \(busyReading\(q\)\) \{\n\s*\/\/[^\n]*\n\s*wrap\.appendChild\(el\("p", "own-note",\n\s*"Finding questions in your data/.test(owner), true);
 check('it no longer asks for the page to be kept open', /Keep this page open/.test(owner), false);
@@ -411,8 +414,8 @@ await (async () => {
     check('it is off the owed list', !!readJSON(of)[SLUG + '|ponds'], false);
     check('the owner is told it was read and nothing kept, with why',
       /Subject: Your atlas has been read[\s\S]{0,400}no questions were kept for it[\s\S]{0,200}most places didn't fit any theme/.test(out), true);
-    check('the retry checks the record against this layer\'s own rows, so a split file is updated too',
-      /noteRetry\(o\.dataset, o\.layerId, patch, ownSig \|\| out\.sig\);/.test(fs.readFileSync(path.join(ROOT, 'api', 'apps', 'atlas.js'), 'utf8')), true);
+    check('the retry checks the record against the file\'s fingerprint, the one the record was written with, so a split file is updated too',
+      /const fileSig = fileSigOf\(o\.dataset, o\.layerId\);[\s\S]*?noteRetry\(o\.dataset, o\.layerId, patch, fileSig \|\| out\.sig\);/.test(fs.readFileSync(path.join(ROOT, 'api', 'apps', 'atlas.js'), 'utf8')), true);
 
     check('a retry that finds questions ends as "done", no longer out of reach',
       page2.wells, { state: 'done', reason: '', unreachable: false });
@@ -433,7 +436,7 @@ console.log('\n  the retry\'s ending is the first reading\'s, read from the sour
   const code = server.replace(/\/\*[\s\S]*?\*\//g, ' ');
   const retry = code.slice(code.indexOf('async function retryOne'), code.indexOf('async function sweepOwed'));
   check('the retry ends through the same endReading as the list', /const patch = await endReading\(o\.dataset, o\.layerId, out\);/.test(retry), true);
-  check('and writes that ending onto the record the page reads', /noteRetry\(o\.dataset, o\.layerId, patch, ownSig \|\| out\.sig\);/.test(retry), true);
+  check('and writes that ending onto the record the page reads', /noteRetry\(o\.dataset, o\.layerId, patch, fileSig \|\| out\.sig\);/.test(retry), true);
   check('the list ends through it too', /return endReading\(dataset, layerId, out\);/.test(code), true);
   check('a reading given up on after a week stops promising another try',
     /for \(const o of owed\.expired\(\)\) \{\s*owed\.settle\(o\.dataset, o\.layerId\);[\s\S]{0,120}?noteRetry\(/.test(code), true);

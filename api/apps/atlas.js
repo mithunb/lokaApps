@@ -18,7 +18,7 @@ import * as auth from '../lib/atlas/auth.js';
 import { sendMail } from '../lib/mailer.js';
 import { noteTrouble, noteOk, setTroubleNotifier, openTroubles } from '../lib/atlas/trouble.js';
 import * as owed from '../lib/atlas/owed.js';
-import { queue as QUESTIONS, createQueue, signatureOf, NEVER_READ } from '../lib/atlas/questions-queue.js';
+import { queue as QUESTIONS, createQueue, fileSignatureOf, NEVER_READ } from '../lib/atlas/questions-queue.js';
 import * as shortLabels from '../lib/atlas/short-labels.js';
 import {
   enqueueBuild, getJob, setJobDoneHook, setStrandedBuildHook, DATASETS_ROOT, PRIVATE_ROOT,
@@ -4027,8 +4027,9 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
   const settled = halves.map((h) => questionsOn(h.layer, rows)).find((s) => s.length) || [];
   const asked = afresh ? [] : (settled.length ? settled : (opts.keep || []));
   const inst = reg.getInstance(dataset);
-  // the version of the places this reading is about, so it can tell if they move under it
-  const sigAtStart = signatureOf(rows, RULES.isAnswerColumn);
+  // the version of the FILE this reading is about — both halves of a split
+  // file — so it can tell if either half moves under it
+  const sigAtStart = fileSignatureOf(halves, RULES.isAnswerColumn);
   // charged to the owner when the server reads on their behalf (questions-queue.js)
   const payer = opts.payer ? { payer: opts.payer } : 'server';
   const callers = [];
@@ -4135,14 +4136,16 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
              note: out.note || '', reason: out.reason || '', withText: out.withText,
              sig: sigAtStart, calls: spentBy(callers) };
   }
-  /* Somebody put new places on this layer while it was being read. Writing now
-     would lay these answers over the old places and throw their change away, so
-     nothing is written; the newer version is read in its own turn. */
+  /* Somebody put new places on this layer — or on the other half of its file —
+     while it was being read. Writing now would lay these answers over the old
+     places and throw their change away, so nothing is written; the newer
+     version is read in its own turn (the list re-offers it: questions-queue
+     `again`, then considerReading on what is on disk now). */
   if (opts.guard) {
     let now = null;
     try {
       const again = fileHalves(imports.readManifest(dataset), layer);
-      now = again ? signatureOf(rowsOf(again), RULES.isAnswerColumn) : null;
+      now = again ? fileSignatureOf(again, RULES.isAnswerColumn) : null;
     } catch { /* gone: refused below as changed */ }
     if (now !== sigAtStart) return { wrote: false, verdict: 'changed', sig: sigAtStart, calls: spentBy(callers) };
   }
@@ -4253,6 +4256,19 @@ function layerAndRows(dataset, layerId) {
   return { layer, layers: m.local.layers, rows: ((gj && gj.features) || []).map((f) => f.properties || {}) };
 }
 
+/* ONE FILE, ONE FINGERPRINT. The version of a layer the list, the kept
+   answers and the retry all compare against is the fingerprint of its whole
+   file — both halves of a split file, in a fixed order (fileSignatureOf) — so
+   a change to either half is a change to the file, and the same rows coming
+   back on both halves is the same file. A layer with no twin is one half.
+   Null when the layer or its places are gone. */
+function fileSigOf(dataset, layerId) {
+  const m = imports.readManifest(dataset);
+  const layer = m && imports.mergedLayers(m).find((L) => L.id === layerId);
+  const halves = layer ? fileHalves(m, layer) : null;
+  return halves ? fileSignatureOf(halves, RULES.isAnswerColumn) : null;
+}
+
 /* A layer's own shapes, for a reading's write to carry.
 
    A reading writes its answers by handing the layer's rows back to ingest, and
@@ -4307,8 +4323,10 @@ async function restoreAnswers(dataset, layerId) {
   const got = layerAndRows(dataset, layerId);
   const kept = QUESTIONS.loadAnswers(dataset, layerId);
   if (!got || !kept) return false;
-  const sig = signatureOf(got.rows, RULES.isAnswerColumn);
-  if (kept.sig !== sig || (kept.answers || []).length !== got.rows.length) return false;
+  // the same file, both halves (fileSigOf): a split file whose other half
+  // changed is read again, not patched up from one half's old answers
+  const sig = fileSigOf(dataset, layerId);
+  if (!sig || kept.sig !== sig || (kept.answers || []).length !== got.rows.length) return false;
   const out = RULES.withoutAnswers(got.rows).map((r, i) => Object.assign(r, kept.answers[i]));
   const shapes = shapesFor(got.layer, dataset);
   const ing = await ingestLayer({
@@ -4340,7 +4358,14 @@ async function restoreAnswers(dataset, layerId) {
      - a layer that already carries questions, or was already found to have
        none, and that the list has never seen: it was read in a browser before
        this existed. Noted as read and left exactly as it is.
-     - the reading's own write: the version it wrote is noted as read */
+     - the reading's own write: the version it wrote is noted as read
+     - ONE FILE, ONE RULE: a file that went on as two layers is read as one
+       file through its pins (fileHalves), and its version is the fingerprint
+       of both halves (fileSigOf). So a change to EITHER half — new rows on
+       the outlines alone, say — is a change to the file, and the file is
+       offered for reading through its pins exactly as if the pins had
+       changed. Before this, the outlines half was only ever noted, never
+       offered, and an outlines-only change was never read at all. */
 function considerReading(dataset, layerId, opts) {
   if (NEVER_READ.has(dataset)) return 'never';
   const got = layerAndRows(dataset, layerId);
@@ -4348,15 +4373,25 @@ function considerReading(dataset, layerId, opts) {
   const { layer, layers, rows } = got;
   if (!RULES.wearsMarks(layer)) return 'no marks';
   if (!rows.length || !RULES.worthReading(layer, rows)) return 'no words';
-  const sig = signatureOf(rows, RULES.isAnswerColumn);
+  const sig = fileSigOf(dataset, layerId);
+  if (!sig) return 'no layer';
   const hasQuestions = questionsOn(layer, rows).length > 0 ||
     Object.keys(rows[0] || {}).some((k) => RULES.isQuestionColumn(k));
   /* Noted for either half of a split file: a reading started from the pins
      writes the outlines too (writeReadingToHalves), and their answers are
      kept here so a repair can put them back without reading again. */
   if (opts && opts.fromReading) {
-    QUESTIONS.remember(dataset, layerId, { sig, state: layer.patternsNone ? 'none' : 'done', reason: '' });
     keepAnswers(dataset, layer, rows, sig);
+    /* Not while the list is on this layer. A reading of a split file writes
+       the pins first and the outlines after; noting the pins "done" between
+       the two writes would let a change landing in that window be offered
+       as a fresh version and then overwritten by the reading's own ending.
+       The reading's ending (endReading) writes the record; a layer the list
+       is not busy with — written by the owner's own question, the operator's
+       re-read or a retry — is noted here as before. */
+    if (!QUESTIONS.isBusy(dataset, layerId)) {
+      QUESTIONS.remember(dataset, layerId, { sig, state: layer.patternsNone ? 'none' : 'done', reason: '' });
+    }
     return 'written by a reading';
   }
   const had = QUESTIONS.get(dataset, layerId);
@@ -4378,14 +4413,23 @@ function considerReading(dataset, layerId, opts) {
     keepAnswers(dataset, layer, rows, sig);
     return 'read before';
   }
-  /* The outlines half of a split file is never put on the list to be read:
-     its pins' reading covers both halves (fileHalves). Its own answers are
-     still noted and kept above, so a repair that puts the same places back
-     gets them back without a reading. */
-  if (RULES.readByItsTwin(layer, layers)) return 'read through its pins';
   if (!ai && !FAKE_READING) return 'no model';
   const inst = reg.getInstance(dataset);
   const payer = (inst && inst.email) || '';
+  /* The outlines half of a split file is never put on the list under its own
+     name: its pins' reading covers both halves (fileHalves), and listing both
+     would read one file twice and charge the owner twice. Its own answers are
+     still noted and kept above, so a repair that puts the same places back
+     gets them back without a reading. But a CHANGE to the outlines is a
+     change to the file, so the file is offered through its pins, under the
+     file's fingerprint. The list takes one version once: when both halves
+     are committed together, whichever half asks first puts the file on and
+     the other finds it there; while the file is being read, the list notes
+     the newer version and looks again when the reading lands. */
+  if (RULES.readByItsTwin(layer, layers)) {
+    return QUESTIONS.offer({ dataset, layerId: layer.sameFileAs, sig, payer })
+      ? 'queued through its pins' : 'read through its pins';
+  }
   return QUESTIONS.offer({ dataset, layerId, sig, payer }) ? 'queued' : 'not queued';
 }
 
@@ -4452,9 +4496,8 @@ async function readingJob(job) {
     try {
       if (await restoreAnswers(dataset, layerId)) {
         console.log('[questions] ' + where + ' — the same places again: answers put back, nothing read');
-        const now = layerAndRows(dataset, layerId);
         return { state: 'done', reason: '', calls: 0, restore: false,
-          sig: now ? signatureOf(now.rows, RULES.isAnswerColumn) : job.sig };
+          sig: fileSigOf(dataset, layerId) || job.sig };
       }
     } catch (e) {
       return { state: 'failed', restore: false, reason: ('the answers could not be put back — ' + (e && e.message)).slice(0, 160) };
@@ -4485,12 +4528,15 @@ async function endReading(dataset, layerId, out) {
   if (out.wrote) {
     console.log('[questions] ' + where + ' — ' + out.questions.length + ' question' +
       (out.questions.length === 1 ? '' : 's') + ' written');
-    // the version on disk now, answers and all; its fingerprint is the one noted
-    const now = layerAndRows(dataset, layerId);
-    return { state: 'done', reason: '', calls: out.calls,
-      sig: now ? signatureOf(now.rows, RULES.isAnswerColumn) : out.sig };
+    // the version on disk now, answers and all (both halves of a split file);
+    // its fingerprint is the one noted
+    return { state: 'done', reason: '', calls: out.calls, sig: fileSigOf(dataset, layerId) || out.sig };
   }
   if (out.verdict === 'changed') {
+    /* Not the end of the story: the list noted the newer version while this
+       one was running (questions-queue `again`) and looks at it as soon as
+       this record is written, so the changed file is offered once more. */
+    console.log('[questions] ' + where + ' — the places changed while they were being read; the newer version is read next');
     return { state: 'failed', reason: 'the places changed while they were being read' };
   }
   if (cannotReach(out.verdict)) {
@@ -4522,9 +4568,7 @@ async function endReading(dataset, layerId, out) {
       try { await writeNothingHere(dataset, got.layer, got.rows); } catch (e) {
         return { state: 'failed', reason: 'nothing found, and that could not be noted — ' + (e && e.message) };
       }
-      const now = layerAndRows(dataset, layerId);
-      return { state: 'none', reason: why,
-        sig: now ? signatureOf(now.rows, RULES.isAnswerColumn) : out.sig };
+      return { state: 'none', reason: why, sig: fileSigOf(dataset, layerId) || out.sig };
     }
     return { state: 'none', reason: why };
   }
@@ -4577,11 +4621,12 @@ function noteRetry(dataset, layerId, patch, sig) {
 
 async function retryOne(o) {
   const where = o.dataset + '/' + o.layerId;
-  /* The fingerprint the record was written with is this layer's own rows. A
-     split file's reading fingerprints both halves together, which never
-     matches, so the record is checked against this layer's rows instead. */
-  const own = layerAndRows(o.dataset, o.layerId);
-  const ownSig = own ? signatureOf(own.rows, RULES.isAnswerColumn) : null;
+  /* The version this retry is of: the file's fingerprint as it stands before
+     the reading (fileSigOf, both halves of a split file), which is the same
+     fingerprint the record on the list was written with. Taken now rather
+     than from the reading's own answer, so a file that changed while this
+     retry ran is left to the list, which owns the newer version. */
+  const fileSig = fileSigOf(o.dataset, o.layerId);
   let out;
   try {
     // read the way the list reads: the questions it last settled on, and not
@@ -4602,7 +4647,7 @@ async function retryOne(o) {
   /* The same ending a first reading gets. Still out of reach: endReading has
      put it back on the owed list, and the record keeps saying so. */
   const patch = await endReading(o.dataset, o.layerId, out);
-  noteRetry(o.dataset, o.layerId, patch, ownSig || out.sig);
+  noteRetry(o.dataset, o.layerId, patch, fileSig || out.sig);
   if (patch.unreachable) return;
   owed.settle(o.dataset, o.layerId);
 
@@ -4794,7 +4839,13 @@ async function writeReading({ dataset, layer, layerId, rows, questions, label, s
    first, reads them as one set — one list of questions, one reach — and
    writes each half back its own share of the answers, with the same question
    names on both. Either half can start it: the list reaches the pins, the
-   owner's own door the outlines. A layer with no twin is one half. */
+   owner's own door the outlines. A layer with no twin is one half.
+
+   And one file has one version: the fingerprint on the list, beside the kept
+   answers and in the retry is the two halves' rows together (fileSigOf), so
+   a change to the outlines alone — which used to go unread for ever, the
+   outlines being only noted and never offered — is a change to the file,
+   and the file is offered through its pins again (considerReading). */
 function fileHalves(m, layer) {
   if (!m || !layer || !layer.source) return null;
   const partner = layer.sameFileAs
@@ -6053,9 +6104,17 @@ router.get('/layers/list', (req, res) => {
   const who = auth.sessionFromReq(req);
   // where the server has got to finding each layer's questions (see questions-queue.js)
   const reading = QUESTIONS.forDataset(dataset);
-  const layers = ((m && m.local && m.local.layers) || []).map((l) => ({
+  const all = (m && m.local && m.local.layers) || [];
+  /* One file, read through its pins (considerReading): while the pins half is
+     waiting or being read, the outlines half is too, so its row says so —
+     the owner's page lists the file by its outlines. */
+  const stateOf = (l) => {
+    const pins = l.sameFileAs && RULES.readByItsTwin(l, all) ? reading[l.sameFileAs] : null;
+    return pins && (pins.state === 'queued' || pins.state === 'running') ? pins : (reading[l.id] || null);
+  };
+  const layers = all.map((l) => ({
     id: l.id, label: l.label || l.id,
-    questions: reading[l.id] || null,
+    questions: stateOf(l),
     addedBy: l.addedBy ? { email: l.addedBy.email, name: l.addedBy.name || '', org: l.addedBy.org || '' } : null,
     addedAt: l.addedAt || null,
     /* Two different questions, which were one flag for too long.

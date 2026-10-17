@@ -62,6 +62,20 @@ export function signatureOf(rows, isAnswerColumn) {
   return h.digest('hex').slice(0, 20);
 }
 
+/* The fingerprint of a whole FILE: one uploaded file that went on as two
+   layers (its outlines and "<name> · as points", each naming the other) is
+   read as one file, so the version that decides "has this been read" is the
+   two halves' rows together. Either half can ask; the answer is the same,
+   because the halves are taken in a fixed order (by layer id), not in the
+   order the asker happened to gather them. A layer with no twin is one half,
+   and its file fingerprint is simply its own. Every record on the list, the
+   kept answers beside it and the one-off script all use this one. */
+export function fileSignatureOf(halves, isAnswerColumn) {
+  const ordered = (halves || []).slice()
+    .sort((a, b) => String((a.layer || {}).id || '').localeCompare(String((b.layer || {}).id || '')));
+  return signatureOf(ordered.flatMap((h) => h.rows || []), isAnswerColumn);
+}
+
 export function createQueue({ file } = {}) {
   const FILE = file || path.join(DATA_DIR, 'question-readings.json');
   let runner = null;

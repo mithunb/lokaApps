@@ -34,7 +34,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { createQueue, signatureOf, NEVER_READ } from '../api/lib/atlas/questions-queue.js';
+import { createQueue, fileSignatureOf, NEVER_READ } from '../api/lib/atlas/questions-queue.js';
 
 const REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const RULES = createRequire(import.meta.url)(path.join(REPO, 'atlas', 'reading-rules.js'));
@@ -61,22 +61,28 @@ export function survey(roots) {
       for (const L of (local && local.layers) || []) {
         const where = { dataset: slug, layerId: L.id, label: L.label || L.id };
         if (!RULES.wearsMarks(L)) continue;                 // no marker, nowhere to show a key
-        if (RULES.readByItsTwin(L, local.layers)) continue; // the same rows, read through its pins
+        if (RULES.readByItsTwin(L, local.layers)) continue; // its file is listed through its pins, below
         if (L.patternsNone) continue;                       // already looked, nothing there
         const gj = L.source ? readJSON(path.join(dir, L.source)) : null;
         const rows = ((gj && gj.features) || []).map((f) => f.properties || {});
         if (!rows.length) continue;
-        if (RULES.settledQuestions(L, rows).length ||
-            Object.keys(rows[0] || {}).some((k) => RULES.isQuestionColumn(k))) continue;   // has questions
-        if (!RULES.worthReading(L, rows)) continue;         // nothing beyond the places' names
-        const cols = RULES.wordColumns(rows);
-        // a file that went on as pins beside its outlines is read as one file:
-        // the count says every row the reading will cover (atlas.js fileHalves)
+        /* A file that went on as pins beside its outlines is read as one file
+           (atlas.js fileHalves): its places are both halves' rows, its
+           fingerprint covers both halves (fileSignatureOf), and it wants
+           reading when EITHER half has no questions — a file read before the
+           halves were read together has them on the pins alone. */
         const twin = L.sameFileAs && (local.layers || []).find((o) => o.id === L.sameFileAs && o.source);
         const twinGJ = twin ? readJSON(path.join(dir, twin.source)) : null;
-        const places = rows.length + (((twinGJ && twinGJ.features) || []).length);
+        const twinRows = ((twinGJ && twinGJ.features) || []).map((f) => f.properties || {});
+        const halves = [{ layer: L, rows }].concat(twin && twinRows.length ? [{ layer: twin, rows: twinRows }] : []);
+        const hasQuestions = (h) => RULES.settledQuestions(h.layer, h.rows).length ||
+          Object.keys(h.rows[0] || {}).some((k) => RULES.isQuestionColumn(k));
+        if (halves.every(hasQuestions)) continue;           // has questions, on every half
+        if (!halves.some((h) => RULES.worthReading(h.layer, h.rows))) continue;   // nothing beyond the places' names
+        const cols = RULES.wordColumns(rows);
+        const places = halves.reduce((n, h) => n + h.rows.length, 0);
         want.push(Object.assign(where, { places, columns: cols,
-          shapes: L.type !== 'marker', sig: signatureOf(rows, RULES.isAnswerColumn) }));
+          shapes: L.type !== 'marker', sig: fileSignatureOf(halves, RULES.isAnswerColumn) }));
       }
     }
   }

@@ -25,6 +25,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
    api/node_modules; where that is missing it says so and counts those checks
    as failed rather than quietly skipping them. */
 const RULES = createRequire(import.meta.url)(ROOT + '/atlas/reading-rules.js');
+import { fileSignatureOf } from '../api/lib/atlas/questions-queue.js';
 const server = fs.readFileSync(ROOT + '/api/apps/atlas.js', 'utf8');
 const owner = fs.readFileSync(ROOT + '/atlas/owner.js', 'utf8');
 const script = fs.readFileSync(ROOT + '/deploy/queue-question-readings.mjs', 'utf8');
@@ -61,7 +62,7 @@ check('considerReading asks the rule, not the type', /if \(!RULES\.wearsMarks\(l
 check('and asks for words of the layer\'s own', /if \(!rows\.length \|\| !RULES\.worthReading\(layer, rows\)\) return 'no words';/.test(server), true);
 check('the owner\'s door opens by the same rule', /if \(!L \|\| !RULES\.wearsMarks\(L\) \|\| !L\.userLayer\) return;/.test(owner), true);
 check('so does the one-off for atlases read before this',
-  /if \(!RULES\.wearsMarks\(L\)\) continue;/.test(script) && /if \(!RULES\.worthReading\(L, rows\)\) continue;/.test(script), true);
+  /if \(!RULES\.wearsMarks\(L\)\) continue;/.test(script) && /if \(!halves\.some\(\(h\) => RULES\.worthReading\(h\.layer, h\.rows\)\)\) continue;/.test(script), true);
 
 console.log('\n  an area\'s shapes travel with its rows when a reading writes');
 check('a pin\'s rows carry their own coordinates and keep the path they had', /if \(!layer \|\| layer\.type === 'marker'\) return \{\};/.test(server), true);
@@ -113,6 +114,7 @@ const manifest = (title) => ({ title, center: [77.6, 12.95], zoom: 10, groups: [
   basemaps: [{ id: 'plain', label: 'Plain', default: true, type: 'raster', tiles: [] }], layers: [] });
 
 const PORT = 8600 + Math.floor(Math.random() * 300);
+const ADMIN = 'check-admin-' + Math.random().toString(36).slice(2);
 const DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'loka-area-questions-'));
 const PRIV = path.join(DATA, 'private-datasets');
 const ONE = 'area-check-one', TWO = 'area-check-two';
@@ -177,9 +179,10 @@ async function road() {
     }
     return;
   }
+  // the stand-in takes a moment over each reading, so a change can land while one runs (below)
   child = spawn(process.execPath, [path.join(ROOT, 'api', 'server.js')], {
     env: { ...process.env, LOKA_PORT: String(PORT), LOKA_DATA_DIR: DATA, LOKA_DEV_STATIC: '1', MAIL_TRANSPORT: 'log',
-      GEMINI_API_KEY: '', ATLAS_FAKE_READING: '1', ATLAS_FAKE_READING_MS: '0', NODE_ENV: 'test' },
+      GEMINI_API_KEY: '', ATLAS_FAKE_READING: '1', ATLAS_FAKE_READING_MS: '1200', NODE_ENV: 'test', ATLAS_ADMIN_TOKEN: ADMIN },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout.on('data', (d) => { out += d; });
@@ -234,6 +237,95 @@ async function road() {
   check('and the zones kept their credit', [(zones.credits || []).map((c) => c.name), zones.attribution], [['geoBoundaries'], 'geoBoundaries']);
   const bareL = readLocal(TWO).find((l) => l.id === 'bare');
   check('the bare outlines were not read, not even to find nothing', [bareL.keyLabels, bareL.patternsNone, q[TWO + '|bare']], [undefined, undefined, undefined]);
+
+  /* ONE FILE, ONE VERSION. The outlines half of a split file is never on the
+     list under its own name, so until this was fixed a change to the outlines
+     alone was never read: the pins had not changed, nothing offered them, and
+     the new places counted as unanswered for ever. Now the file's version is
+     both halves' rows together, and a change to either half offers the file
+     through its pins. Played out on the zones: the same rows put back (no
+     reading, answers restored), one new zone on the outlines alone (read
+     once, both halves answered), and a second change landing while that
+     reading runs (dropped as changed, offered again, the newest rows read). */
+  console.log('\n  one file, one version: a change to either half is read; the same rows back are not');
+  const API = 'http://127.0.0.1:' + PORT + '/api/atlas';
+  const admin = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + ADMIN };
+  const post = async (p, body) => {
+    const r = await fetch(API + p, { method: 'POST', headers: admin, body: JSON.stringify(body) });
+    return { status: r.status, j: await r.json().catch(() => ({})) };
+  };
+  const readQ = () => JSON.parse(fs.readFileSync(qf, 'utf8'));
+  const rec = (id) => readQ()[TWO + '|' + id] || {};
+  const readings = () => (out.match(/\[questions\] reading /g) || []).length;
+  const until = async (f, ms) => { const t = Date.now(); while (Date.now() - t < ms) { if (f()) return true; await sleep(100); } return f(); };
+  const settled = (ms) => until(done, ms);
+  const busy = (s) => s === 'queued' || s === 'running';
+  // the outlines put back the way a repair or "edit this layer" puts them: the
+  // rows without their answers, the shapes row for row, the same layer id
+  const putOutlines = async (rows, rings) => {
+    const ing = await post('/layers/ingest', { dataset: TWO, replaceLayerId: 'zones', filename: 'Zones',
+      schema: RULES.schemaFor(rows), rows, geoms: rings.map((r) => ({ type: 'Polygon', coordinates: [r] })), geomIdx: rows.map((_, i) => i),
+      meta: { sourceName: 'user-zones.geojson', rowCount: rows.length, geometry: { class: 'polygon', count: rows.length, vertices: 0 } } });
+    if (!ing.j.importId) return ing;
+    return post('/layers/commit', { importId: ing.j.importId, dataset: TWO });
+  };
+  const zonesNow = () => readLocal(TWO).find((l) => l.id === 'zones');
+  const twinNow = () => readLocal(TWO).find((l) => l.id === 'zones-points');
+  const zoneFeats = () => readFile(TWO, zonesNow().source).features;
+  const labelsBefore = JSON.stringify(zones.keyLabels);
+  const rows0 = RULES.withoutAnswers(zoneFeats().map((f) => Object.assign({}, f.properties)));
+  const rings0 = zoneFeats().map((f) => f.geometry.coordinates[0]);
+  const allRings = squares(13, 0.3);
+
+  // the same rows back
+  let before = readings();
+  let r = await putOutlines(rows0, rings0);
+  check('the outlines put back with the same rows are accepted', r.status, 200);
+  check('the list settles', await settled(10000), true);
+  check('nothing was read: the answers were put back from the copy', [readings() - before, /zones — the same places again: answers put back, nothing read/.test(out)], [0, true]);
+  check('the outlines carry their answers again, under the same questions', [zoneFeats().every((f) => typeof f.properties.pattern_1 === 'string' && f.properties.pattern_1),
+    JSON.stringify(zonesNow().keyLabels) === labelsBefore], [true, true]);
+  check('both halves\' records say done, under one fingerprint for the file', [rec('zones').state, rec('zones-points').state, rec('zones').sig === rec('zones-points').sig], ['done', 'done', true]);
+
+  // a change to the outlines alone
+  before = readings();
+  const rows1 = rows0.concat([{ name: 'Zone 12', notes: 'a new tank by the lake, full after rain' }]);
+  const rings1 = rings0.concat([allRings[10]]);
+  r = await putOutlines(rows1, rings1);
+  check('one new zone on the outlines alone is accepted', r.status, 200);
+  check('the FILE is offered through its pins, not under the outlines\' own name', [busy(rec('zones-points').state), busy(rec('zones').state)], [true, false]);
+  const list = await (await fetch(API + '/layers/list?dataset=' + TWO, { headers: admin })).json();
+  check('and the owner\'s page says the outlines are being read too', [busy((((list.layers || []).find((l) => l.id === 'zones') || {}).questions || {}).state),
+    busy((((list.layers || []).find((l) => l.id === 'zones-points') || {}).questions || {}).state)], [true, true]);
+  check('the list settles', await settled(15000), true);
+  check('the file was read once, through its pins', [readings() - before, (out.match(new RegExp('\\[questions\\] reading ' + TWO + '/zones-points', 'g')) || []).length - 1], [1, 1]);
+  check('both halves got answers, the new zone too', [zoneFeats().length, zoneFeats().every((f) => typeof f.properties.pattern_1 === 'string' && f.properties.pattern_1),
+    (zoneFeats().find((f) => f.properties.name === 'Zone 12') || { properties: {} }).properties.pattern_2,
+    readFile(TWO, twinNow().source).features[0].properties.pattern_1], [11, true, 'Mentions water', 'A short note']);
+  check('the same questions as before, on both halves', [JSON.stringify(zonesNow().keyLabels) === labelsBefore, JSON.stringify(twinNow().keyLabels) === labelsBefore], [true, true]);
+  check('both records show the new version of the file', [rec('zones').state, rec('zones-points').state, rec('zones').sig === rec('zones-points').sig,
+    rec('zones').sig === fileSignatureOf([{ layer: zonesNow(), rows: zoneFeats().map((f) => f.properties) },
+      { layer: twinNow(), rows: readFile(TWO, twinNow().source).features.map((f) => f.properties) }], RULES.isAnswerColumn)], ['done', 'done', true, true]);
+  check('the twin is kept through all of it', [zonesNow().sameFileAs, twinNow().sameFileAs], ['zones-points', 'zones']);
+
+  // a change landing while the file is being read
+  before = readings();
+  const rows2 = rows1.map((x) => x.name === 'Zone 12' ? Object.assign({}, x, { notes: x.notes + ', and a well' }) : x);
+  r = await putOutlines(rows2, rings1);
+  check('a changed note on the outlines is accepted', r.status, 200);
+  check('the reading starts', await until(() => rec('zones-points').state === 'running', 5000), true);
+  const rows3 = rows2.concat([{ name: 'Zone 13', notes: 'dry scrub, nothing grows' }]);
+  const rings3 = rings1.concat([allRings[11]]);
+  r = await putOutlines(rows3, rings3);
+  check('another zone added while that reading runs is accepted', r.status, 200);
+  check('the list settles', await settled(20000), true);
+  check('the first reading was dropped as changed, and the file offered again: two readings, both through the pins',
+    [/zones-points — the places changed while they were being read|changed while they were being read/.test(out), readings() - before], [true, 2]);
+  check('what was read is what is on disk now: twelve zones, every one answered, the dry one dry', [zoneFeats().length,
+    zoneFeats().every((f) => typeof f.properties.pattern_1 === 'string' && f.properties.pattern_1),
+    (zoneFeats().find((f) => f.properties.name === 'Zone 13') || { properties: {} }).properties.pattern_2 || ''], [12, true, '']);
+  check('both records say done under the newest version, and no reading is owed', [rec('zones').state, rec('zones-points').state, rec('zones').sig === rec('zones-points').sig,
+    Object.keys((() => { try { return JSON.parse(fs.readFileSync(path.join(DATA, 'owed.json'), 'utf8')); } catch { return {}; } })()).length], ['done', 'done', true, 0]);
 }
 
 console.log('\n  one file added as two layers is read once, through its pins');

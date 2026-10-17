@@ -216,15 +216,27 @@ console.log('\n  the server reads a split file as one file, and writes each half
 check('the halves are gathered, the layer first, its twin after', /function fileHalves\(m, layer\) \{[^]*?for \(const L of partner \? \[layer, partner\] : \[layer\]\)/.test(server), true);
 check('a reading reads them together', /const halves = fileHalves\(m, layer\);\s*if \(!halves\) throw refuse\(404[^]*?const rows = rowsOf\(halves\);/.test(server), true);
 check('settled questions are taken from whichever half carries them', /const settled = halves\.map\(\(h\) => questionsOn\(h\.layer, rows\)\)\.find\(\(s\) => s\.length\) \|\| \[\];/.test(server), true);
-check('the guard against places moving re-reads both halves', /const again = fileHalves\(imports\.readManifest\(dataset\), layer\);\s*now = again \? signatureOf\(rowsOf\(again\), RULES\.isAnswerColumn\) : null;/.test(server), true);
+check('the guard against places moving re-reads both halves', /const again = fileHalves\(imports\.readManifest\(dataset\), layer\);\s*now = again \? fileSignatureOf\(again, RULES\.isAnswerColumn\) : null;/.test(server), true);
 check('the owner\'s own question is asked of both halves and written to both',
   /router\.post\('\/layers\/ask'[^]*?const halves = fileHalves\(m, layer\);[^]*?await writeReadingToHalves\(\{ dataset, halves, questions: all \}\);/.test(server), true);
 check('each half\'s write carries its own layer, so an area layer keeps its shapes', /dataset, layer: h\.layer, layerId: h\.layer\.id, rows: h\.rows, questions: mine,/.test(server), true);
-check('a reading\'s write on either half is noted and its answers kept, before the twin rule', server.indexOf("if (opts && opts.fromReading) {") < server.indexOf("if (RULES.readByItsTwin(layer, layers)) return 'read through its pins';") &&
-  server.indexOf("if (RULES.readByItsTwin(layer, layers)) return 'read through its pins';") < server.indexOf("if (!ai && !FAKE_READING) return 'no model';"), true);
+check('a reading\'s write on either half is noted and its answers kept, before the twin rule', server.indexOf("if (opts && opts.fromReading) {") < server.indexOf("if (RULES.readByItsTwin(layer, layers)) {") &&
+  server.indexOf("if (!ai && !FAKE_READING) return 'no model';") < server.indexOf("if (RULES.readByItsTwin(layer, layers)) {"), true);
+check('a change to the outlines half offers the FILE through its pins, under the file\'s fingerprint',
+  /if \(RULES\.readByItsTwin\(layer, layers\)\) \{\s*return QUESTIONS\.offer\(\{ dataset, layerId: layer\.sameFileAs, sig, payer \}\)/.test(server) &&
+  /const sig = fileSigOf\(dataset, layerId\);/.test(server), true);
+check('one file has one fingerprint, the same from either half: both halves\' rows in a fixed order',
+  /export function fileSignatureOf\(halves, isAnswerColumn\)/.test(fs.readFileSync(ROOT + '/api/lib/atlas/questions-queue.js', 'utf8')) &&
+  /const sigAtStart = fileSignatureOf\(halves, RULES\.isAnswerColumn\);/.test(server) &&
+  /now = again \? fileSignatureOf\(again, RULES\.isAnswerColumn\) : null;/.test(server), true);
+check('and it is the one the record, the kept answers and the retry compare against',
+  (server.match(/fileSigOf\(dataset, layerId\)/g) || []).length >= 4 && /const fileSig = fileSigOf\(o\.dataset, o\.layerId\);/.test(server) &&
+  !/signatureOf\(now\.rows/.test(server) && !/signatureOf\(got\.rows/.test(server), true);
+check('the one-off script fingerprints the file the same way, and lists it when either half lacks questions',
+  /sig: fileSignatureOf\(halves, RULES\.isAnswerColumn\)/.test(script) && /if \(halves\.every\(hasQuestions\)\) continue;/.test(script), true);
 check('switching a question off on one half switches it off on the other', /if \(layer\.sameFileAs\) \{[\s\S]{0,400}if \(Array\.isArray\(b\.hiddenKeys\)\) twin\.hiddenKeys = b\.hiddenKeys;[\s\S]{0,300}imports\.relabelLayer\(dataset, layer\.sameFileAs, twin\);/.test(server), true);
 check('the rule\'s own note no longer claims the halves hold the same rows', /Both twins hold the same\s*rows/.test(rules), false);
-check('the one-off list counts every row the reading will cover', /const places = rows\.length \+ \(\(\(twinGJ && twinGJ\.features\) \|\| \[\]\)\.length\);/.test(script), true);
+check('the one-off list counts every row the reading will cover', /const places = halves\.reduce\(\(n, h\) => n \+ h\.rows\.length, 0\);/.test(script), true);
 
 // the slicing itself, lifted and run: eleven answers become six and five
 {
@@ -241,6 +253,19 @@ check('the one-off list counts every row the reading will cover', /const places 
     [[cats.slice(0, 6), cats.slice(0, 6)], [cats.slice(6), cats.slice(6)]]);
   check('the wording, the kinds and the reading note go on both', writes.map((x) => [x.questions[0].question, x.questions[0].counts[0].name, x.reading]), [['Q?', 'x', 'r'], ['Q?', 'x', 'r']]);
   check('a layer with no twin is one write', [last, (await (async () => { writes.length = 0; await run({ dataset: 'd', halves: halves.slice(1), questions: [{ categories: cats.slice(6), why: whys.slice(6) }] }); return writes.length; })())], ['zones-as-points', 1]);
+}
+
+// one file, one fingerprint: the same from either half, different when either half changes
+{
+  const { fileSignatureOf, signatureOf } = await import('../api/lib/atlas/questions-queue.js');
+  const A = { layer: { id: 'zones' }, rows: areaRows }, P = { layer: { id: 'zones-as-points' }, rows: pointRows };
+  const fromOutlines = fileSignatureOf([A, P]), fromPins = fileSignatureOf([P, A]);
+  check('the file\'s fingerprint is the same whichever half asks', fromOutlines === fromPins, true);
+  check('and is not either half\'s own', [fromPins === signatureOf(pointRows), fromPins === signatureOf(areaRows)], [false, false]);
+  const changedOutlines = fileSignatureOf([{ layer: A.layer, rows: areaRows.concat([{ name: 'Zone 7', notes: 'new', Kind: 'Nature' }]) }, P]);
+  check('a change to the outlines alone changes it', changedOutlines === fromPins, false);
+  check('the answers written on do not', fileSignatureOf([{ layer: A.layer, rows: areaRows.map((r) => Object.assign({}, r, { pattern_1: 'x' })) }, P]) === fromPins, true);
+  check('a layer with no twin is one half, and its file fingerprint is its own', fileSignatureOf([P]) === signatureOf(pointRows), true);
 }
 
 console.log('\n  the owner\'s Questions tab shows one file once');

@@ -117,7 +117,10 @@
      it), so the pins' reading gathers both halves' rows and writes each half
      its share (api/apps/atlas.js fileHalves). Listing the outlines as well
      would read the same file twice, charge the owner twice, and could settle
-     on two sets of questions for one file. */
+     on two sets of questions for one file. A change to the outlines alone is
+     still a change to the file: the server offers the file through its pins
+     when either half changes (considerReading), under a fingerprint that
+     covers both halves (questions-queue fileSignatureOf). */
   function readByItsTwin(L, layers) {
     if (!L || L.type === "marker" || !L.sameFileAs) return false;
     var twin = (layers || []).filter(function (o) { return o && o.id === L.sameFileAs; })[0];
