@@ -471,7 +471,12 @@ A "key" means: colour the places of one layer by the answers in one of its colum
   "134 places" on a phone, "· 134" in the drawer, "27 of 134" while narrowed), the same number the
   phone's tab shows. On a phone the sheet has three heights (peek · half · full, `setSheet`) with a
   visible chevron, a grabber, a swipe and the map as the way out; group tabs show only with two or
-  more groups; the "27 of 134 places are … · show all" line sits in the sheet's head. There is no tick box:
+  more groups; the "27 of 134 places are … · show all" line sits in the sheet's head. **A place's card
+  opens in the sheet on a phone** (`openCardInSheet`, the same `popupHTML` the wide screen docks): low
+  first (40%), full on a tap or swipe; "‹ Layers" and ✕ go back to the layer panel as it was. **The
+  phone's header navigation is behind one ☰** (`.nav-burger`, `.nav-menu`): Share, the Owner menu,
+  sign in / the account, all atlases, all apps and discoverloka.org as plain rows; a wide screen is
+  unchanged. There is no tick box:
   opening the row (`buildKeyToggles`, a button with `aria-expanded`) switches the key on and shows
   its reach ("Answers come from 39% of the tags"), any "mostly one answer" note and its kinds with
   counts; closing it switches the key off. **Rows are ordered by reach** — the share of the layer's

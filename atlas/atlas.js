@@ -530,7 +530,6 @@
        stated the moment the map exists. Leaving it to "load" meant a style that
        was slow — or that never finished — left the map crediting nobody. */
     renderMapAttrib();
-    watchCredit();
     wireSheetMap();
 
     userMoved = false;
@@ -541,6 +540,10 @@
         // and take the loading line away now there is a map to look at
         warmBaseStyle(map);
         showLoading(false);
+        /* the credit's five seconds start now, when there is a map to read
+           it over — started when the map object was made, a slow connection
+           folded it before anyone had seen it */
+        watchCredit();
         // buildLayers preloads sources async, so layer ids (L._ids) only exist once
         // it resolves. wirePopups + fitToData depend on those, so run them after.
         renderMapAttrib();
@@ -5029,6 +5032,9 @@
   function renderMapAttrib() {
     var el = $("#map-attrib-words"); if (!el || !map) return;
     el.innerHTML = basemapCreditHTML();
+    // and the first line of About & sources: the licence is one tap from the folded ⓘ
+    var inSources = $("#sources-map");
+    if (inSources) inSources.innerHTML = "Map: " + basemapCreditHTML();
     var inPop = $("#map-style-credit");
     if (inPop) inPop.innerHTML = basemapCreditHTML();
   }
@@ -5164,7 +5170,16 @@
     btn.onclick = function () { pop.hidden ? open() : shut(); };
     close.onclick = function () { shut(); btn.focus(); };
     scrim.onclick = shut;
-    pop.addEventListener("keydown", function (e) { if (e.key === "Escape") { shut(); btn.focus(); } });
+    pop.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") { e.preventDefault(); shut(); btn.focus(); return; }
+      // Tab stays inside the sheet while it is open
+      if (e.key !== "Tab") return;
+      var f = Array.prototype.filter.call(pop.querySelectorAll("button, a[href]"), function (x) { return !x.disabled && x.offsetParent; });
+      if (!f.length) return;
+      var first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
     stage.appendChild(btn);
     stage.appendChild(scrim);
     stage.appendChild(pop);
@@ -5269,6 +5284,9 @@
          change so what was in the middle stays in the middle. */
       var was = lastH; lastH = h;
       if (was == null || !h || !was || Math.abs(h - was) < 24 || !map) return;
+      // a card opening or closing is not the map's cue to re-frame: the
+      // place it is about is kept in view by keepPlaceAboveSheet instead
+      if (CARD.open || Date.now() < CARD.quietUntil) return;
       clearTimeout(roomT);
       roomT = setTimeout(function () {
         if (!map) return;
@@ -5499,6 +5517,7 @@
        finally stands — including whatever the owner's tools just added to
        it. setSheet draws the bar and marks the showing group. */
     wireSheet();
+    if (CARD.open) closeCard(true);   // a redraw replaces the places a card was about
     setSheet(SHEET);
     /* A mark carries how many of its layers are on, so it has to hear about a
        switch moving. One listener on the panel rather than one per switch, and
@@ -6252,6 +6271,14 @@
     if (!html) return;
     var at = feature.properties && feature.properties._srow;
     if (rows && rows.length > 1) html = chooserHTML(L, rows, at != null ? at : feature._row) + html;
+    /* On a phone the card goes into the bottom sheet, not over the map
+       (openCardInSheet) — the same HTML, the chooser included, so there is
+       one card. The wide screen keeps its docked card below. */
+    if (onPhone()) {
+      var cpop = openCardInSheet(L, feature, lngLat, html);
+      if (cpop && rows && rows.length > 1) wireChooser(cpop, L, rows);
+      return cpop;
+    }
     var opts = { closeButton: true, maxWidth: "320px", className: "atlas-popup" };
     // An un-fanned popup used to open with no offset, right on the pin — fine
     // over a 20px circle, but the taller pin now sits under its own popup.
@@ -6314,7 +6341,10 @@
   }
   // Esc puts the card away, as it does the fan and the tooltip
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && LAST_POP) { try { LAST_POP.remove(); } catch (err) {} }
+    if (e.key !== "Escape" || !LAST_POP) return;
+    // the phone's card: back to the layers, and the sheet's own Esc stays out of it
+    if (LAST_POP._card) { e.preventDefault(); e.stopImmediatePropagation(); closeCard(true); return; }
+    try { LAST_POP.remove(); } catch (err) {}
   });
 
   // The strip floats over the top of the map, so a card opened near the top
@@ -7038,13 +7068,106 @@
   var SHEET_HEIGHTS = ["peek", "half", "full"];
   var SHEET = "half";
   function onPhone() { return window.matchMedia("(max-width: 720px)").matches; }
+
+  /* ---- a place's card in the sheet (phones) ----
+     Tapping a pin, an area's marker, a chooser row or a word under an answer
+     opens the place's card IN the sheet, over the layers (Google Maps
+     style), instead of floating over the map where the sheet cut it off.
+     openPopup routes here on a phone with the same HTML the wide screen
+     docks, so there is one card. It opens LOW (40% of the stage: the name,
+     the first photo, the first facts) and goes FULL (90%) on a tap, the
+     grabber or a swipe up. "‹ Layers" and the ✕ go back to the layer panel
+     exactly as it was — the same height, scroll, open question and filter,
+     none of which the card touched; the ✕ also lets the place go (its
+     Sindoor ring), "Layers" keeps it. A swipe down from low, a tap on the
+     map and Esc go back too. The sheet's height is still setSheet's: while
+     the card is open it moves between low and full, and the layers' own
+     height waits in SHEET untouched. */
+  var CARD_HEIGHTS = ["low", "full"];
+  var CARD = { open: false, h: "low", prev: null, lngLat: null, quietUntil: 0 };
+  function heights() { return CARD.open ? CARD_HEIGHTS : SHEET_HEIGHTS; }
+  function curH() { return CARD.open ? CARD.h : SHEET; }
+  function openCardInSheet(L, feature, lngLat, html) {
+    var panel = document.getElementById("atlas-panel");
+    var body = document.getElementById("sheet-card-body");
+    if (!panel || !body) return null;
+    if (!CARD.open) {
+      var controls = document.getElementById("atlas-controls");
+      CARD.prev = { h: SHEET, scroll: controls ? controls.scrollTop : 0 };
+      CARD.open = true;
+      panel.classList.add("card-mode");
+      var cardEl = document.getElementById("sheet-card");
+      if (cardEl) cardEl.hidden = false;
+    }
+    body.innerHTML = html;
+    body.scrollTop = 0;
+    CARD.lngLat = lngLat;
+    // what the rest of the viewer holds as "the open popup": enough of a
+    // popup to be closed, filled again (the chooser) and searched
+    var pop = {
+      _card: true,
+      getElement: function () { return body; },
+      setHTML: function (h) { body.innerHTML = h; return pop; },
+      remove: function () { if (LAST_POP === pop) closeCard(true); },
+      // the one event anything listens for on a popup: told when the card closes
+      _closers: [],
+      on: function (name, fn) { if (name === "close" && typeof fn === "function") pop._closers.push(fn); return pop; },
+    };
+    CARD.pop = pop;
+    LAST_POP = pop;
+    setSheet("low");
+    keepPlaceAboveSheet(lngLat);
+    return pop;
+  }
+  function closeCard(keepSelection) {
+    if (!CARD.open) return;
+    var panel = document.getElementById("atlas-panel");
+    var body = document.getElementById("sheet-card-body");
+    CARD.open = false;
+    CARD.h = "low";
+    CARD.quietUntil = Date.now() + 700;   // the sheet's size change is not the map's cue to re-frame
+    if (panel) panel.classList.remove("card-mode");
+    var cardEl = document.getElementById("sheet-card");
+    if (cardEl) cardEl.hidden = true;
+    if (body) body.innerHTML = "";
+    LAST_POP = null;
+    var closing = CARD.pop; CARD.pop = null;
+    if (closing) closing._closers.forEach(function (fn) { try { fn({ target: closing }); } catch (e) {} });
+    var prev = CARD.prev || { h: "half", scroll: 0 };
+    CARD.prev = null;
+    setSheet(prev.h);
+    var controls = document.getElementById("atlas-controls");
+    if (controls) controls.scrollTop = prev.scroll;
+    if (!keepSelection) clearSelection();
+  }
+  /* The low card covers the foot of the map: ease the map the least distance
+     that puts the place in the open above it — never under it, never under
+     the search box at the top, and clear of the side edges. */
+  function keepPlaceAboveSheet(lngLat) {
+    if (!map || !lngLat) return;
+    var box = map.getContainer();
+    var H = box.clientHeight, W = box.clientWidth;
+    var sheetH = Math.round(H * 0.4);
+    var p = map.project(lngLat);
+    var room = 48;
+    var topLimit = 40;
+    var strip = document.querySelector(".atlas-strip");
+    if (strip && strip.offsetHeight) topLimit = strip.getBoundingClientRect().bottom - box.getBoundingClientRect().top + 40;
+    var dx = 0, dy = 0;
+    if (p.x > W - room) dx = p.x - (W - room); else if (p.x < room) dx = p.x - room;
+    if (p.y > H - sheetH - room) dy = p.y - (H - sheetH - room);
+    else if (p.y - 34 < topLimit) dy = (p.y - 34) - topLimit;
+    if (dx || dy) map.panBy([dx, dy], { duration: 300 });
+  }
+
   function setSheet(h) {
     var stage = document.querySelector(".atlas-stage");
     var panel = document.getElementById("atlas-panel");
     if (!stage || !panel) return;
-    if (SHEET_HEIGHTS.indexOf(h) < 0) h = "half";
-    var was = SHEET;
-    SHEET = h;
+    var hs = heights();
+    if (hs.indexOf(h) < 0) h = CARD.open ? "low" : "half";
+    var was = curH();
+    if (CARD.open) CARD.h = h; else SHEET = h;
     panel.setAttribute("data-h", h);
     var open = h !== "peek";
     if (open && !TRAY) {
@@ -7059,12 +7182,12 @@
     var chev = panel.querySelector(".panel-collapse");
     if (chev && onPhone()) {
       chev.setAttribute("aria-expanded", String(open));
-      chev.setAttribute("aria-label", open ? "Lower the layers sheet" : "Open the layers sheet");
+      chev.setAttribute("aria-label", open ? "Hide the layers" : "Show the layers");
     }
-    if (open && was === "peek") ensureFirstQuestionOpen();
+    if (open && was === "peek" && !CARD.open) ensureFirstQuestionOpen();
     buildBar();   // and the head, which buildBar keeps current
     // a group's scroll starts at its top when the sheet first opens
-    if (open && was === "peek") { var controls = document.getElementById("atlas-controls"); if (controls) controls.scrollTop = 0; }
+    if (open && was === "peek" && !CARD.open) { var controls = document.getElementById("atlas-controls"); if (controls) controls.scrollTop = 0; }
   }
   // the first layer of the showing group has a question open, or gets one
   function ensureFirstQuestionOpen() {
@@ -7096,7 +7219,7 @@
     } else {
       who.appendChild(el("span", "sheet-layer-name", esc(sec.getAttribute("data-group-label") || sec.getAttribute("data-group"))));
       var on = sec.querySelectorAll('.ctl-toggle input[type="checkbox"]:checked').length;
-      who.appendChild(el("small", "", on + " of " + rows.length + " on"));
+      who.appendChild(el("small", "", on + " of " + rows.length + " showing"));
     }
   }
   var sheetWired = false;
@@ -7109,11 +7232,12 @@
     var grip = head.querySelector(".sheet-grip");
     var chev = head.querySelector(".panel-collapse");
     var who = head.querySelector(".sheet-who");
-    // the grabber: a tap cycles peek → half → full → peek
+    // the grabber: a tap cycles peek → half → full → peek (a card: low ↔ full)
     if (grip) grip.addEventListener("click", function (e) {
       if (!onPhone()) return;
       e.stopPropagation();
-      setSheet(SHEET_HEIGHTS[(SHEET_HEIGHTS.indexOf(SHEET) + 1) % SHEET_HEIGHTS.length]);
+      var hs = heights();
+      setSheet(hs[(hs.indexOf(curH()) + 1) % hs.length]);
     });
     // the chevron: peeked → half; open → peek
     if (chev) chev.addEventListener("click", function (e) {
@@ -7127,25 +7251,71 @@
       e.stopPropagation();
       setSheet(SHEET === "peek" ? "half" : "full");
     });
-    // a swipe on the head: down lowers one step, up raises one
+    // a swipe on the head: down lowers one step, up raises one — and a swipe
+    // down from the low card goes back to the layers
     var y0 = null;
     head.addEventListener("touchstart", function (e) { y0 = e.touches[0].clientY; }, { passive: true });
     head.addEventListener("touchend", function (e) {
       if (y0 == null || !onPhone()) return;
       var dy = e.changedTouches[0].clientY - y0; y0 = null;
-      var i = SHEET_HEIGHTS.indexOf(SHEET);
-      if (dy > 40 && i > 0) setSheet(SHEET_HEIGHTS[i - 1]);
-      else if (dy < -40 && i < SHEET_HEIGHTS.length - 1) setSheet(SHEET_HEIGHTS[i + 1]);
+      swipeSheet(dy);
     }, { passive: true });
     // the filter line's "show all" lives in the head on a phone
     var filt = head.querySelector("#sheet-filter");
     if (filt) filt.addEventListener("click", function (e) { e.stopPropagation(); });
+
+    // the card's own head and body
+    var back = document.getElementById("sheet-card-back");
+    var close = document.getElementById("sheet-card-close");
+    var cardHead = panel.querySelector(".sheet-card-head");
+    var cardBody = document.getElementById("sheet-card-body");
+    if (back) back.addEventListener("click", function (e) { e.stopPropagation(); closeCard(true); });
+    if (close) close.addEventListener("click", function (e) { e.stopPropagation(); closeCard(false); });
+    if (cardHead) {
+      cardHead.addEventListener("touchstart", function (e) { y0 = e.touches[0].clientY; }, { passive: true });
+      cardHead.addEventListener("touchend", function (e) {
+        if (y0 == null || !onPhone()) return;
+        var dy = e.changedTouches[0].clientY - y0; y0 = null;
+        swipeSheet(dy);
+      }, { passive: true });
+    }
+    if (cardBody) {
+      // low: a tap anywhere that is not a control shows the whole card; a
+      // swipe up does the same, a swipe down goes back
+      cardBody.addEventListener("click", function (e) {
+        if (!CARD.open || CARD.h !== "low") return;
+        if (e.target.closest && e.target.closest("button, a, input, [data-fold]")) return;
+        setSheet("full");
+      });
+      var cy0 = null;
+      cardBody.addEventListener("touchstart", function (e) { cy0 = e.touches[0].clientY; }, { passive: true });
+      cardBody.addEventListener("touchend", function (e) {
+        if (cy0 == null || !CARD.open || CARD.h !== "low") return;
+        var dy = e.changedTouches[0].clientY - cy0; cy0 = null;
+        swipeSheet(dy);
+      }, { passive: true });
+    }
+    // a phone that grows into a wide screen keeps its card no longer
+    window.matchMedia("(max-width: 720px)").addEventListener("change", function (e) { if (!e.matches && CARD.open) closeCard(true); });
+  }
+  function swipeSheet(dy) {
+    var hs = heights();
+    var i = hs.indexOf(curH());
+    if (dy > 40) {
+      if (CARD.open && i === 0) closeCard(true);
+      else if (i > 0) setSheet(hs[i - 1]);
+    } else if (dy < -40 && i < hs.length - 1) setSheet(hs[i + 1]);
   }
   // a tap on the map lowers the sheet to its peek, so the map is the way out
+  // (with a card open, it puts the card away first)
   function wireSheetMap() {
     if (!map || map._sheetWired) return;
     map._sheetWired = true;
-    map.on("click", function () { if (onPhone() && SHEET !== "peek") setSheet("peek"); });
+    map.on("click", function () {
+      if (!onPhone()) return;
+      if (CARD.open) { closeCard(true); return; }
+      if (SHEET !== "peek") setSheet("peek");
+    });
   }
 
   function buildBar() {
@@ -7225,7 +7395,9 @@
 
   document.addEventListener("keydown", function (e) {
     // Esc shuts whatever is over the map first; the sheet only when nothing is
+    if (e.defaultPrevented) return;   // something over the map took this Esc
     if (document.querySelector(".atlas-sources[open], .map-style-pop:not([hidden])")) return;
+    if (CARD.open) return;   // the card's own Esc handles it (and stops here)
     if (e.key === "Escape" && onPhone() && SHEET !== "peek") {
       setSheet("peek");
       var chev = document.querySelector("#atlas-panel .panel-collapse");
@@ -7241,6 +7413,9 @@
     MANIFEST = null; activeBasemap = null;
     TRAY = null;                  // the tray cannot outlive the groups it was showing
     SHEET = "half";               // the next draw opens as a first visit does
+    CARD.open = false; CARD.prev = null; CARD.h = "low";
+    var panelEl = document.getElementById("atlas-panel");
+    if (panelEl) panelEl.classList.remove("card-mode");
     var stageEl = document.querySelector(".atlas-stage");
     if (stageEl) { stageEl.classList.remove("tray-open"); stageEl.classList.remove("sheet-peek"); }
     DATA = {}; markersByLayer = {}; cropState = {}; keyState = {}; pmSources = {};

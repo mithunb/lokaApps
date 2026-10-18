@@ -34,6 +34,7 @@ function check(label, got, want) {
 }
 // the phone's block of rules, and the touch block
 const phone = html.slice(html.indexOf('/* ---- the sheet ----\n         The shelf docks at the foot of the stage as a bottom sheet with three'), html.indexOf('/* Motion is intentional but never mandatory */'));
+const phoneHead = html.slice(html.indexOf('/* one row: the kicker and the title at the left, the ☰ at the right */'), html.indexOf('/* ---- the sheet ----\n         The shelf docks at the foot of the stage as a bottom sheet with three'));
 const touchAt = html.indexOf('@media (pointer:coarse), (max-width:720px){');
 const touch = html.slice(touchAt, html.indexOf('@media (pointer:coarse){', touchAt));
 
@@ -82,7 +83,13 @@ check('it folds on the map\'s first move by the reader, or after five seconds', 
 check('only on a phone: a wide screen keeps the line', /if \(!window\.matchMedia\("\(max-width: 720px\)"\)\.matches\) return;\s*pill\.classList\.add\("folded"\);/.test(js), true);
 check('folded, it is the 32px ⓘ alone', /\.map-attrib\.folded \{ max-width:32px; \}/.test(html), true);
 check('tapping it opens About & sources (the dialog is unchanged)', /if \(pill\) pill\.addEventListener\("click"/.test(html) && /<dialog class="atlas-sources" id="atlas-sources"/.test(html) && /function buildCredits\(\) \{/.test(js), true);
-check('watched from start(), beside the first credit', /renderMapAttrib\(\);\s*watchCredit\(\);/.test(js), true);
+check('the five seconds start once the map has drawn, not when it was made', /showLoading\(false\);\s*\/\*[\s\S]*?\*\/\s*watchCredit\(\);/.test(js) && !/renderMapAttrib\(\);\s*watchCredit\(\);/.test(js), true);
+check('one Esc shuts one thing: the credits, the map sheet, the card and the menu take theirs, the layers sheet steps back', /if \(e\.key === "Escape" && dlg\.open\) \{ e\.preventDefault\(\); shut\(\);/.test(html) && /if \(e\.key === "Escape"\) \{ e\.preventDefault\(\); shut\(\); btn\.focus\(\); return; \}/.test(js) && /if \(e\.defaultPrevented\) return;   \/\/ something over the map took this Esc/.test(js), true);
+check('About & sources leads with the map\'s own credit and its copyright link', /<p class="sources-map" id="sources-map"><\/p>/.test(html) && /if \(inSources\) inSources\.innerHTML = "Map: " \+ basemapCreditHTML\(\);/.test(js), true);
+check('the pill does not clip its 44px ⓘ, and the folded words cannot be tabbed onto', !/\.map-attrib \{[^}]*overflow:hidden/.test(html) && /\.map-attrib-words \{[^}]*overflow:hidden/.test(html) && /\.map-attrib\.folded \.map-attrib-words \{ opacity:0; visibility:hidden; \}/.test(html), true);
+check('Tab stays inside the open map sheet', /if \(e\.key !== "Tab"\) return;[\s\S]*?if \(e\.shiftKey && document\.activeElement === first\) \{ e\.preventDefault\(\); last\.focus\(\); \}/.test(js), true);
+check('the card\'s stand-in popup tells its listeners when it closes', /on: function \(name, fn\) \{ if \(name === "close" && typeof fn === "function"\) pop\._closers\.push\(fn\); return pop; \}/.test(js) && /if \(closing\) closing\._closers\.forEach/.test(js), true);
+check('the chevron says "Hide the layers" / "Show the layers"; a group head says "showing"', /open \? "Hide the layers" : "Show the layers"/.test(js) && /" of " \+ rows\.length \+ " showing"/.test(js), true);
 check('above the phone\'s sheet', /\.map-attrib \{ left:8px; bottom:calc\(var\(--sheet-h, 0px\) \+ 8px\);/.test(html), true);
 
 console.log('\n  5. the phone sheet: peek · half · full');
@@ -93,21 +100,42 @@ check('setSheet owns the state and writes data-h', /function setSheet\(h\) \{[\s
 check('the peek shows the grabber, "LAYERS / <layer> <count>" and the badge', /<div class="sheet-grip" aria-hidden="true"><i><\/i><\/div>/.test(html) && /<span class="sheet-layer" id="sheet-layer"><\/span>/.test(html) && /<a class="loka-badge loka-badge-head"/.test(html), true);
 check('the head names the showing layer and its number', /function syncSheetHead\(\) \{[\s\S]*?var cnt = rows\[0\]\.querySelector\("\.ctl-count b"\);/.test(js), true);
 check('tapping the peeked head opens half', /if \(who\) who\.addEventListener\("click", function \(e\) \{[\s\S]*?setSheet\(SHEET === "peek" \? "half" : "full"\);/.test(js), true);
-check('with the first layer\'s first question open', /if \(open && was === "peek"\) ensureFirstQuestionOpen\(\);/.test(js) && /function ensureFirstQuestionOpen\(\) \{[\s\S]*?var first = row\.querySelector\("\.key-entry \.key-toggle"\);\s*if \(first\) first\.click\(\);/.test(js), true);
+check('with the first layer\'s first question open', /if \(open && was === "peek" && !CARD\.open\) ensureFirstQuestionOpen\(\);/.test(js) && /function ensureFirstQuestionOpen\(\) \{[\s\S]*?var first = row\.querySelector\("\.key-entry \.key-toggle"\);\s*if \(first\) first\.click\(\);/.test(js), true);
 check('the tabs-only state and the "LAYERS" chip are gone', /\.atlas-full \.atlas-panel\.collapsed \{ left:8px; right:auto;/.test(html) || /grid-template-rows:0fr/.test(html), false);
 check('on a phone the wide screen\'s fold is never kept', /if \(mq\.matches\) return;   \/\/ the phone's sheet is atlas\.js's/.test(html) && /if \(mq\.matches\) \{ panel\.classList\.remove\("collapsed"\); sync\(\); \}/.test(html), true);
 check('group tabs only with two or more groups, 40px tall', /if \(secs\.length < 2\) \{ bar\.hidden = true; return; \}/.test(js) && /\.atlas-tab \{\s*flex:0 0 auto; scroll-snap-align:start; height:40px;/.test(phone), true);
 check('the chevron is a visible 44px button at the head\'s right', /\.panel-collapse \{ display:inline-flex; flex:0 0 auto; width:44px; height:44px;/.test(phone), true);
 check('down when open, up when peeked', /\.atlas-panel\[data-h="peek"\] \.panel-collapse \{ transform:rotate\(180deg\); \}/.test(phone) && /chev\.setAttribute\("aria-expanded", String\(open\)\);/.test(js), true);
 check('the chevron: peeked → half, open → peek', /if \(chev\) chev\.addEventListener\("click", function \(e\) \{[\s\S]*?setSheet\(SHEET === "peek" \? "half" : "peek"\);/.test(js), true);
-check('the grabber cycles the heights', /if \(grip\) grip\.addEventListener\("click", function \(e\) \{[\s\S]*?setSheet\(SHEET_HEIGHTS\[\(SHEET_HEIGHTS\.indexOf\(SHEET\) \+ 1\) % SHEET_HEIGHTS\.length\]\);/.test(js), true);
-check('a swipe on the head moves one step', /head\.addEventListener\("touchend", function \(e\) \{[\s\S]*?if \(dy > 40 && i > 0\) setSheet\(SHEET_HEIGHTS\[i - 1\]\);\s*else if \(dy < -40 && i < SHEET_HEIGHTS\.length - 1\) setSheet\(SHEET_HEIGHTS\[i \+ 1\]\);/.test(js), true);
-check('a tap on the map lowers it to peek', /map\.on\("click", function \(\) \{ if \(onPhone\(\) && SHEET !== "peek"\) setSheet\("peek"\); \}\);/.test(js), true);
-check('Esc too, unless something is already over the map', /if \(document\.querySelector\("\.atlas-sources\[open\], \.map-style-pop:not\(\[hidden\]\)"\)\) return;\s*if \(e\.key === "Escape" && onPhone\(\) && SHEET !== "peek"\)/.test(js), true);
+check('the grabber cycles the heights', /if \(grip\) grip\.addEventListener\("click", function \(e\) \{[\s\S]*?var hs = heights\(\);\s*setSheet\(hs\[\(hs\.indexOf\(curH\(\)\) \+ 1\) % hs\.length\]\);/.test(js), true);
+check('a swipe on the head moves one step', /head\.addEventListener\("touchend", function \(e\) \{[\s\S]*?swipeSheet\(dy\);/.test(js) && /function swipeSheet\(dy\) \{[\s\S]*?else if \(i > 0\) setSheet\(hs\[i - 1\]\);\s*\} else if \(dy < -40 && i < hs\.length - 1\) setSheet\(hs\[i \+ 1\]\);/.test(js), true);
+check('a tap on the map lowers it to peek', /map\.on\("click", function \(\) \{\s*if \(!onPhone\(\)\) return;\s*if \(CARD\.open\) \{ closeCard\(true\); return; \}\s*if \(SHEET !== "peek"\) setSheet\("peek"\);/.test(js), true);
+check('Esc too, unless something is already over the map', /if \(document\.querySelector\("\.atlas-sources\[open\], \.map-style-pop:not\(\[hidden\]\)"\)\) return;\s*if \(CARD\.open\) return;[^\n]*\n\s*if \(e\.key === "Escape" && onPhone\(\) && SHEET !== "peek"\)/.test(js), true);
 check('--sheet-h is still measured from the panel', /function watchSheetHeight\(stage\) \{[\s\S]*?stage\.style\.setProperty\("--sheet-h", h \+ "px"\);/.test(js), true);
 check('LOKA\'s badge is in the head on a phone and never floats over the map there', /\.loka-badge\.loka-badge-head \{ display:inline-flex; height:30px;/.test(phone) && /\.loka-badge-float \{ display:none; \}/.test(html) && !/\.atlas-panel\.collapsed ~ \.loka-badge-float/.test(html), true);
 check('a reboot opens the next draw at half', /SHEET = "half";               \/\/ the next draw opens as a first visit does/.test(js), true);
-check('the place card is untouched: still the floating card over the foot of the map', /\.atlas-stage \.atlas-popup\.maplibregl-popup \{\s*position:absolute; inset:auto 8px calc\(var\(--sheet-h, 0px\) \+ 8px\) 8px;/.test(html), true);
+check('the head\'s name gives way before its number ("bengaluru-t… 134")', /\.sheet-layer-name \{ flex:0 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; \}/.test(phone) && /\.sheet-layer small \{ flex:0 0 auto;/.test(phone), true);
+check('and the badge stays whole on a phone — "Powered by LOKA Atlas" — with a 44px tap box', /<span class="loka-badge-by">Powered by<\/span> <img src="\.\/loka-logo\.png" alt="LOKA"> <em>Atlas<\/em>/.test(html) && !/\.loka-badge-by \{ display:none/.test(html) && /\.loka-badge-head::after \{ content:''; position:absolute; left:0; right:0; top:-7px; bottom:-7px; \}/.test(phone), true);
+
+console.log('\n  8. a place\'s card in the sheet (phones)');
+check('on a phone openPopup routes the card into the sheet, same HTML, chooser and all', /if \(onPhone\(\)\) \{\s*var cpop = openCardInSheet\(L, feature, lngLat, html\);\s*if \(cpop && rows && rows\.length > 1\) wireChooser\(cpop, L, rows\);\s*return cpop;\s*\}/.test(js), true);
+check('and not before the chooser is put on it', /if \(rows && rows\.length > 1\) html = chooserHTML\(L, rows, at != null \? at : feature\._row\) \+ html;\s*\/\*[\s\S]*?\*\/\s*if \(onPhone\(\)\) \{/.test(js), true);
+check('the wide screen still makes a maplibre popup, docked as before', /var pop = new maplibregl\.Popup\(opts\)\.setLngLat\(lngLat\)\.setHTML\(html\)\.addTo\(map\);/.test(js) && /function cardDocked\(\) \{/.test(js) && /stage\.classList\.add\("card-docked"\);/.test(js), true);
+check('the card lives in the sheet\'s markup, hidden, with "‹ Layers" and a ✕', /<div class="sheet-card" id="sheet-card" hidden>[\s\S]*?<button class="sheet-card-back" id="sheet-card-back"[\s\S]*?Layers<\/button>\s*<button class="sheet-card-close" id="sheet-card-close" type="button" aria-label="Close the card">/.test(html), true);
+check('never shown on a wide screen', /\.sheet-grip, \.sheet-layer, \.loka-badge\.loka-badge-head, \.sheet-filter, \.sheet-card \{ display:none; \}/.test(html), true);
+check('it opens LOW: 40% of the stage', /setSheet\("low"\);\s*keepPlaceAboveSheet\(lngLat\);/.test(js) && /\.atlas-panel\[data-h="low"\] \{ height:40%; \}/.test(phone), true);
+check('low, the body is clipped and a tap on it shows the whole card', /\.atlas-panel\[data-h="low"\] \.sheet-card-body \{ overflow:hidden; cursor:pointer; \}/.test(phone) && /if \(!CARD\.open \|\| CARD\.h !== "low"\) return;\s*if \(e\.target\.closest && e\.target\.closest\("button, a, input, \[data-fold\]"\)\) return;\s*setSheet\("full"\);/.test(js), true);
+check('the card\'s heights are low and full; the layers\' height waits untouched', /var CARD_HEIGHTS = \["low", "full"\];/.test(js) && /if \(CARD\.open\) CARD\.h = h; else SHEET = h;/.test(js), true);
+check('"Layers" goes back as it was: the same height and scroll, the place kept', /CARD\.prev = \{ h: SHEET, scroll: controls \? controls\.scrollTop : 0 \};/.test(js) && /if \(back\) back\.addEventListener\("click", function \(e\) \{ e\.stopPropagation\(\); closeCard\(true\); \}\);/.test(js) && /setSheet\(prev\.h\);\s*var controls = document\.getElementById\("atlas-controls"\);\s*if \(controls\) controls\.scrollTop = prev\.scroll;/.test(js), true);
+check('the ✕ closes the card and lets the place go', /if \(close\) close\.addEventListener\("click", function \(e\) \{ e\.stopPropagation\(\); closeCard\(false\); \}\);/.test(js) && /if \(!keepSelection\) clearSelection\(\);/.test(js), true);
+check('a swipe down from the low card goes back; Esc and a tap on the map too', /if \(CARD\.open && i === 0\) closeCard\(true\);/.test(js) && /if \(LAST_POP\._card\) \{ e\.preventDefault\(\); e\.stopImmediatePropagation\(\); closeCard\(true\); return; \}/.test(js) && /if \(CARD\.open\) \{ closeCard\(true\); return; \}/.test(js), true);
+check('the map eases the place into the open above the low card', /function keepPlaceAboveSheet\(lngLat\) \{[\s\S]*?var sheetH = Math\.round\(H \* 0\.4\);[\s\S]*?if \(dx \|\| dy\) map\.panBy\(\[dx, dy\], \{ duration: 300 \}\);/.test(js), true);
+check('and the sheet\'s size change does not re-frame the map meanwhile', /if \(CARD\.open \|\| Date\.now\(\) < CARD\.quietUntil\) return;/.test(js), true);
+check('the "N here" chooser works on the card through the same stand-in popup', /setHTML: function \(h\) \{ body\.innerHTML = h; return pop; \}/.test(js) && /getElement: function \(\) \{ return body; \}/.test(js), true);
+check('clusters and fans are untouched: they never went through openPopup', /if \(clusterAt\(e\.point\)\) return;             \/\/ the disc owns this click/.test(js) && /SPIDER\.pop = openPopup\(it\.L, it\.e\.f, it\.e\.mk\.getLngLat\(\), it\.off, fanAnchor\(it\.foot\)\);/.test(js), true);
+check('a redraw or a reboot puts a card away', /if \(CARD\.open\) closeCard\(true\);   \/\/ a redraw replaces the places a card was about/.test(js) && /CARD\.open = false; CARD\.prev = null; CARD\.h = "low";/.test(js), true);
+check('the back and close buttons are 44px', /\.sheet-card-back \{ display:inline-flex; align-items:center; gap:4px; height:44px;/.test(phone) && /\.sheet-card-close \{ margin-left:auto; flex:0 0 auto; width:44px; height:44px;/.test(phone), true);
+check('the card title is set in the display face at 1.25rem', /\.sheet-card-body \.pop-title \{ font-size:1\.25rem; padding-right:0; \}/.test(phone) && /\.pop-title \{ font-family:var\(--font-display\);/.test(html), true);
 
 console.log('\n  6. touch targets');
 check('questions 48px', /\.key-toggle \{ min-height:48px; \}/.test(touch), true);
@@ -124,7 +152,22 @@ check('in the head\'s markup, a status line', /<div class="sheet-filter" id="she
 check('on a Leaf Tint band, hidden while peeked', /\.sheet-filter \{[^}]*background:var\(--color-leaf-tint\);/.test(phone) && /\.sheet-filter\[hidden\], \.atlas-panel\[data-h="peek"\] \.sheet-filter \{ display:none; \}/.test(phone), true);
 check('the line under the search box shows on a phone only while the sheet is peeked', /\.atlas-strip \.ctl-search-count \{ display:none; \}\s*\.atlas-stage\.sheet-peek \.atlas-strip \.ctl-search-count \{ display:block; \}/.test(phone), true);
 check('the drawer keeps its own line under the kinds on a wide screen; the phone drops it (the head says it)', /\.key-only \{ display:flex;/.test(html) && /\.key-only \{ display:none; \}/.test(phone), true);
-check('not there on a wide screen', /\.sheet-grip, \.sheet-layer, \.loka-badge\.loka-badge-head, \.sheet-filter \{ display:none; \}/.test(html), true);
+check('not there on a wide screen', /\.sheet-grip, \.sheet-layer, \.loka-badge\.loka-badge-head, \.sheet-filter, \.sheet-card \{ display:none; \}/.test(html), true);
+
+console.log('\n  9. the phone\'s header navigation is behind one ☰');
+check('the ☰ is in the markup, 44px, named "Menu", and says whether it is open', /<button class="nav-burger" id="nav-burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav-menu">/.test(html) && /\.nav-burger \{ display:inline-flex;[^}]*width:44px; height:44px;/.test(phoneHead), true);
+check('the menu wraps Share and the links; on a wide screen it is display:contents, so the row is as it was', /<div class="nav-menu" id="nav-menu">[\s\S]*?<div class="hero-actions">[\s\S]*?<div class="links">/.test(html) && /\.nav-menu \{ display:contents; \}/.test(html), true);
+check('and the ☰, the menu\'s head, the scrim and the long words are not drawn there', /\.nav-burger, \.nav-menu-head, \.nav-menu-scrim, \.nav-menu-more \{ display:none; \}/.test(html), true);
+check('on a phone the menu is a panel under the header, shown by html.nav-open', /\.nav-menu \{ display:none; position:fixed; left:0; right:0; top:var\(--nav-h, 52px\); z-index:30;/.test(phoneHead) && /html\.nav-open \.nav-menu \{ display:flex; \}/.test(phoneHead), true);
+check('its rows are 48px, plain words, first letter up ("All atlases", "Sign in")', /line-height:48px; min-height:48px;/.test(phoneHead) && /\.nav-menu \.links a::first-letter, \.nav-menu \.links button::first-letter \{ text-transform:uppercase; \}/.test(phoneHead) && /a\[href\^="https:\/\/discoverloka"\]::first-letter \{ text-transform:none; \}/.test(phoneHead), true);
+check('Share reads "Share this atlas" in the menu', /<span>Share<span class="nav-menu-more"> this atlas<\/span><\/span>/.test(html) && /\.nav-menu-more \{ display:inline; \}/.test(phoneHead), true);
+check('every link is in the menu on a phone, all apps and discoverloka.org too', /\.atlas-full \.nav-menu \.links a\[href="\.\.\/"\], \.atlas-full \.nav-menu \.links a\[href\^="https:\/\/discoverloka"\] \{ display:block; \}/.test(phoneHead), true);
+check('the owner\'s button keeps its word in the menu, and its panel opens over it', /\.nav-menu \.own-btn-word \{ display:inline; \}/.test(phoneHead) && /\.nav-menu \.own-btn \{ display:flex; width:100%; min-height:48px;/.test(phoneHead), true);
+check('the ✕ is 44px; a tap outside (the scrim) and Esc shut it too', /\.nav-menu-close \{ margin-left:auto; flex:0 0 auto; width:44px; height:44px;/.test(phoneHead) && /if \(scrim\) scrim\.addEventListener\("click", shut\);/.test(html) && /if \(e\.key === "Escape" && document\.documentElement\.classList\.contains\("nav-open"\)\) \{ e\.preventDefault\(\); shut\(\); burger\.focus\(\); \}/.test(html), true);
+check('a row that goes somewhere puts the menu away', /e\.target\.closest\("a, #share-btn, #nav-signout"\);\s*if \(t\) shut\(\);/.test(html), true);
+check('the header paints in its final form: no script moves anything into the menu', /appendChild\(.*hero-actions|nav-menu\.appendChild/.test(html), false);
+check('an embed has no ☰ (its nav is not there at all)', /\.atlas-embed \.nav-burger \{ display:none; \}/.test(html), true);
+check('the owner\'s tools still find Share and the actions row by the same ids', /document\.querySelector\("\.hero-actions"\)/.test(fs.readFileSync(ROOT + '/atlas/owner.js', 'utf8')) && /id="share-btn"/.test(html), true);
 
 console.log('\n  the notes say so');
 check('DESIGN.md describes the three-height sheet', /peek/.test(design) && /Map or satellite/.test(design), true);

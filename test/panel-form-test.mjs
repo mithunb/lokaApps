@@ -87,7 +87,7 @@ check('Enter saves, Escape puts back what was there',
 console.log('\n  a phone can still sign in from an atlas');
 check('the header keeps sign in and sign out on a phone',
   /\.atlas-full \.nav \.links > :not\(#nav-signin\):not\(#nav-signout\) \{ display:none; \}/.test(html), true);
-check('and it is a thumb-sized target', /#nav-signout:not\(\[hidden\]\) \{ display:inline-flex; align-items:center; min-height:44px;/.test(html), true);
+check('and on a phone sign in is a 48px row in the ☰ menu', /\.nav-menu \.links a, \.nav-menu \.links button, \.nav-menu #nav-user \{\s*display:block; width:100%; margin:0; padding:0 \.25rem; line-height:48px; min-height:48px;/.test(html), true);
 check('only one script measures the sheet', /function sheetH\(\)/.test(html), false);
 
 check('a phone card wears a thinner red edge than the desktop one', /\.atlas-popup \.maplibregl-popup-content \{ border-top-width:1\.5px; \}/.test(html), true);

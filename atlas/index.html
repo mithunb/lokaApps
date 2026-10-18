@@ -111,6 +111,15 @@
 
     header.site { border-bottom:1px solid var(--color-divider); background:var(--color-page); position:relative; z-index:2; }
     .nav { width:var(--container); margin:0 auto; padding:1rem 0; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+    /* ---- the phone's menu ----
+       On a wide screen the menu is not a thing: display:contents lets Share
+       and the links sit in the header's row exactly as they always have, and
+       the ☰, the menu's head, the scrim and the long words are not drawn.
+       On a phone (the block near the end of this sheet) the ☰ is the one
+       thing to the right of the title, and the menu is a panel under the
+       header with the same items as plain rows. */
+    .nav-menu { display:contents; }
+    .nav-burger, .nav-menu-head, .nav-menu-scrim, .nav-menu-more { display:none; }
     .nav .links { display:flex; gap:1.25rem; align-items:center; flex-wrap:wrap; }
     .nav .links a, .nav .links button { color:var(--color-text-secondary); font-size:var(--t-ui);
       background:none; border:none; font-family:inherit; cursor:pointer; padding:0; }
@@ -177,19 +186,19 @@
       height:32px; max-width:calc(100% - 9rem); border-radius:var(--radius-pill);
       background:rgba(253,252,248,.94); border:1px solid var(--color-border);
       font-size:var(--t-label); line-height:1.3; color:var(--color-text-secondary); white-space:nowrap;
-      overflow:hidden; cursor:pointer; transition:max-width .35s ease; }
+      cursor:pointer; transition:max-width .35s ease; }
     .map-attrib-i { flex:0 0 auto; width:44px; height:44px; margin:-7px -8px -7px -7px; padding:0; border:0; background:none; cursor:pointer;
       display:inline-flex; align-items:center; justify-content:center;
       font-family:var(--font-display); font-weight:700; font-style:italic; font-size:.9rem; color:var(--color-leaf); }
     .map-attrib-i:focus-visible { outline:2px solid var(--color-leaf); outline-offset:-6px; border-radius:50%; }
-    .map-attrib-words { padding:0 .7rem 0 .35rem; overflow:hidden; text-overflow:ellipsis; }
+    .map-attrib-words { padding:0 .7rem 0 .35rem; overflow:hidden; text-overflow:ellipsis; min-width:0; }
     .map-attrib-words:empty { display:none; }
     .map-attrib a { color:inherit; text-decoration:underline; text-decoration-color:var(--color-border); text-underline-offset:2px; }
     .map-attrib a:hover { color:var(--color-leaf-deep); text-decoration-color:currentColor; }
     .map-attrib:hover, .map-attrib:has([aria-expanded="true"]) { background:var(--color-surface); color:var(--color-text-primary); }
     .map-attrib.folded { max-width:32px; }
     .map-attrib-words { transition:opacity .2s ease; }
-    .map-attrib.folded .map-attrib-words { opacity:0; }
+    .map-attrib.folded .map-attrib-words { opacity:0; visibility:hidden; }
     /* the home gallery has no map, so nothing to credit */
     html.atlas-home .map-attrib { display:none; }
     /* While the manifest and the base style are on their way the stage shows
@@ -264,7 +273,7 @@
     /* the phone sheet's own pieces of the head — the grabber band, the layer's
        name under "LAYERS", LOKA's badge, the filter line — are not there on
        a wide screen */
-    .sheet-grip, .sheet-layer, .loka-badge.loka-badge-head, .sheet-filter { display:none; }
+    .sheet-grip, .sheet-layer, .loka-badge.loka-badge-head, .sheet-filter, .sheet-card { display:none; }
     .panel-head-row { display:flex; align-items:center; gap:.45rem; min-width:0; flex:1 1 auto; }
     .sheet-who { display:flex; align-items:center; gap:.45rem; min-width:0; flex:1 1 auto; }
     @media (min-width:721px){
@@ -1445,25 +1454,67 @@
     .sources-lead { padding:0 1.25rem; margin:.35rem 0 0; font-size:var(--t-ui); font-weight:400; color:var(--color-text-secondary); max-width:72ch; text-wrap:pretty; }
     .sources-sub { padding:0 1.25rem; margin:.35rem 0 0; font-size:var(--t-control); font-weight:600; color:var(--color-text-primary); text-wrap:pretty; }
     .sources-sub + .sources-lead { margin-top:.2rem; }
-    .sources-lead:empty, .sources-sub:empty { display:none; }
+    .sources-lead:empty, .sources-sub:empty, .sources-map:empty { display:none; }
+    .sources-map { padding:0 1.25rem; margin:.45rem 0 0; font-size:var(--t-meta); color:var(--color-text-secondary); }
+    .sources-map a { color:var(--color-leaf-deep); }
     .atlas-sources .credits-foot { display:block; }
     .atlas-sources .atlas-credits { width:auto; padding:1rem 1.25rem .5rem; }
     .atlas-sources .credits-grid { padding:1.2rem 1.25rem; }
     .sources-foot { display:flex; flex-wrap:wrap; gap:.5rem 1.25rem; padding:0 1.25rem 1rem; font-size:var(--t-ui); font-weight:600; }
     .sources-foot a:last-child { margin-left:auto; color:var(--color-text-secondary); }
     @media (max-width:720px){
-      /* one row: a long title shortens rather than pushing Share to a second line */
+      /* one row: the kicker and the title at the left, the ☰ at the right */
       .atlas-full .nav { min-height:52px; padding:.4rem .75rem; gap:.5rem .75rem; flex-wrap:nowrap; }
-      .atlas-full .org-head { flex:1 1 auto; min-width:0; max-width:none; }   /* the title gives way, never the acts beside it */
-      /* only sign in / sign out stay on a phone ("All atlases" is in the About &
-         sources panel); a thumb-sized target, never pushing Share off the row */
-      .atlas-full .nav .links { display:flex; flex:0 0 auto; gap:0; }
-      .atlas-full .nav .links > :not(#nav-signin):not(#nav-signout) { display:none; }
-      .atlas-full .nav .links > #nav-signin:not([hidden]),
-      .atlas-full .nav .links > #nav-signout:not([hidden]) { display:inline-flex; align-items:center; min-height:44px; padding:0 .35rem; font-size:var(--t-meta); font-weight:600; white-space:nowrap; }
-      .atlas-full #share-btn span { display:none; }   /* icon only: the width is the title's */
-      .atlas-full #share-btn { padding:.4rem .5rem; }
-      .atlas-full #share-btn svg { margin:0; }
+      .atlas-full .org-head { flex:1 1 auto; min-width:0; max-width:none; }   /* the title gives way, never the ☰ beside it */
+      /* ---- the phone's menu ----
+         Everything that stood to the right of the title — Share, the Owner
+         menu, sign in / the account, all atlases, all apps, discoverloka.org
+         — is behind one 44px ☰. It opens a panel under the header with the
+         same items as plain 48px rows; the ✕, a tap outside or Esc shuts it.
+         The owner's button keeps its word here and its own panel opens over
+         the menu, so nothing the owner had is lost. Same on the home
+         gallery, which shares this header. */
+      .nav-burger { display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; margin-left:auto; width:44px; height:44px; padding:0;
+        border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface); color:var(--color-text-primary); cursor:pointer; }
+      .nav-burger svg { width:22px; height:22px; }
+      .nav-burger[aria-expanded="true"] { background:var(--color-leaf-tint); color:var(--color-leaf-deep); border-color:var(--color-leaf); }
+      .nav-burger:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; }
+      .nav-menu { display:none; position:fixed; left:0; right:0; top:var(--nav-h, 52px); z-index:30; flex-direction:column;
+        padding:0 .75rem calc(.75rem + env(safe-area-inset-bottom)); max-height:calc(100dvh - var(--nav-h, 52px)); overflow-y:auto;
+        background:var(--color-surface); border-bottom:1px solid var(--color-border); box-shadow:var(--shadow-lg); }
+      html.nav-open .nav-menu { display:flex; }
+      html.nav-open .nav-menu-scrim { display:block; position:fixed; inset:0; z-index:29; background:rgba(36,33,29,.18); }
+      .nav-menu-head { display:flex; align-items:center; height:52px; flex:0 0 auto; }
+      .nav-menu-head strong { font-size:var(--t-label); font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--color-text-muted); }
+      .nav-menu-close { margin-left:auto; flex:0 0 auto; width:44px; height:44px; padding:0; display:inline-flex; align-items:center; justify-content:center;
+        border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-page); color:var(--color-text-primary); cursor:pointer; }
+      .nav-menu-close svg { width:20px; height:20px; }
+      .nav-menu-close:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; }
+      .nav-menu .hero-actions, .nav-menu .links { display:flex; flex-direction:column; align-items:stretch; gap:0; flex-wrap:nowrap; margin:0; flex:0 0 auto; }
+      /* every item is a plain row: 48px, one voice, a hairline between */
+      .nav-menu .links a, .nav-menu .links button, .nav-menu #nav-user {
+        display:block; width:100%; margin:0; padding:0 .25rem; line-height:48px; min-height:48px; text-align:left;
+        font:inherit; font-size:var(--t-control); font-weight:600; color:var(--color-text-primary);
+        background:none; border:0; border-bottom:1px solid var(--color-divider); border-radius:0; text-decoration:none; white-space:nowrap; }
+      .nav-menu .links a::first-letter, .nav-menu .links button::first-letter { text-transform:uppercase; }
+      .nav-menu .links a[href^="https://discoverloka"]::first-letter { text-transform:none; }
+      .nav-menu #nav-user { font-weight:400; color:var(--color-text-secondary); overflow:hidden; text-overflow:ellipsis; }
+      .nav-menu .share-btn { display:flex; align-items:center; gap:.6rem; width:100%; min-height:48px; margin:0; padding:0 .25rem; text-align:left;
+        font:inherit; font-size:var(--t-control); font-weight:600; color:var(--color-text-primary);
+        background:none; border:0; border-bottom:1px solid var(--color-divider); border-radius:0; }
+      .nav-menu .share-btn svg { width:18px; height:18px; margin:0; color:var(--color-leaf); }
+      .nav-menu .share-btn span { display:inline; }
+      .nav-menu-more { display:inline; }
+      /* on the phone every link is in the menu, the ones the wide screen keeps in About & sources too */
+      .atlas-full .nav-menu .links a[href="../"], .atlas-full .nav-menu .links a[href^="https://discoverloka"] { display:block; }
+      .nav-menu [hidden] { display:none !important; }
+      /* the owner's button is a row here, in its own voice; its panel opens over the menu */
+      .nav-menu .own-acts { display:block; width:100%; }
+      .nav-menu .own-btn { display:flex; width:100%; min-height:48px; justify-content:flex-start; gap:.6rem; padding:0 .25rem; margin:0;
+        font-size:var(--t-control); border:0; border-bottom:1px solid var(--color-divider); border-radius:0; background:none; }
+      .nav-menu .own-btn-word { display:inline; }
+      .nav-menu .own-btn-chev { display:inline; }
+      .atlas-embed .nav-burger { display:none; }
       .org-brand-logo { height:28px; }
       .org-brand-line > span { max-width:none; }
       .org-head #atlas-title { font-size:1rem; }
@@ -1614,6 +1665,7 @@
       .atlas-panel[data-h="peek"] { height:calc(84px + env(safe-area-inset-bottom)); }
       .atlas-panel[data-h="half"] { height:52%; }
       .atlas-panel[data-h="full"] { height:90%; }
+      .atlas-panel[data-h="low"] { height:40%; }   /* a place's card, opened low */
       /* the head: the grabber band over one row — the words, the badge, the chevron */
       .panel-head { position:relative; display:block; cursor:default; padding:0 8px 0 14px; border-bottom:0; min-height:0; flex:0 0 auto; }
       .sheet-grip { display:flex; align-items:center; justify-content:center; height:22px; cursor:pointer; }
@@ -1627,7 +1679,40 @@
       .sheet-layer-name { flex:0 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
       .sheet-layer small { flex:0 0 auto; font-size:var(--t-meta); font-weight:600; color:var(--color-text-secondary); font-variant-numeric:tabular-nums; }
       .sheet-layer:empty { display:none; }
-      .loka-badge.loka-badge-head { display:inline-flex; height:30px; padding:0 8px; flex:0 0 auto; }
+      /* the badge, whole ("Powered by LOKA Atlas"), in every state; the
+         layer's NAME gives way before it, never the number. 30px to look at,
+         a 44px box to tap (the ::after, drawn past its edges). */
+      .loka-badge.loka-badge-head { display:inline-flex; height:30px; padding:0 8px; flex:0 0 auto; position:relative; }
+      .loka-badge-head::after { content:''; position:absolute; left:0; right:0; top:-7px; bottom:-7px; }
+
+      /* ---- a place's card in the sheet (phones) ----
+         Tapping a pin, an area's marker or a word under an answer opens the
+         place's card IN the sheet, over the layers: "‹ Layers" at the head's
+         left goes back to the layer panel exactly as it was, the 44px ✕ at
+         the right closes the card. It opens LOW (40%): the name, the first
+         photo and the first facts; a tap on it, the grabber or a swipe up
+         shows the whole card, scrolling. A swipe down from low goes back.
+         The map above stays usable, eased so the place sits in the open
+         (keepPlaceAboveSheet). The same card HTML the wide screen docks. */
+      .atlas-panel.card-mode .sheet-card { display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
+      .atlas-panel.card-mode .panel-head-row, .atlas-panel.card-mode .sheet-filter,
+      .atlas-panel.card-mode .atlas-bar, .atlas-panel.card-mode .sheet-body { display:none; }
+      .sheet-card-head { display:flex; align-items:center; gap:.5rem; height:48px; padding:0 8px 0 6px; flex:0 0 auto; }
+      .sheet-card-back { display:inline-flex; align-items:center; gap:4px; height:44px; padding:0 10px 0 6px; font:inherit; font-size:var(--t-control); font-weight:700;
+        color:var(--color-leaf-deep); background:none; border:0; border-radius:var(--radius-md); cursor:pointer; }
+      .sheet-card-back svg { width:20px; height:20px; }
+      .sheet-card-back:focus-visible, .sheet-card-close:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; }
+      .sheet-card-close { margin-left:auto; flex:0 0 auto; width:44px; height:44px; padding:0; display:inline-flex; align-items:center; justify-content:center;
+        border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-page); color:var(--color-text-primary); cursor:pointer; }
+      .sheet-card-close svg { width:20px; height:20px; }
+      .sheet-card-body { flex:1 1 auto; min-height:0; overflow-y:auto; scrollbar-width:thin; padding:0 14px calc(20px + env(safe-area-inset-bottom)); }
+      .atlas-panel[data-h="low"] .sheet-card-body { overflow:hidden; cursor:pointer; }
+      /* low, the photo is a band, so the first facts show under it */
+      .atlas-panel[data-h="low"] .sheet-card-body .pop-img { max-height:110px; }
+      .atlas-panel[data-h="low"] .sheet-card-body .pop-shots.is-waiting { min-height:110px; }
+      .sheet-card-body .pop { padding:0; max-height:none; overflow:visible; }
+      .sheet-card-body .pop-title { font-size:1.25rem; padding-right:0; }
+      .sheet-card-body .pop-twins { margin-bottom:.5rem; }
       /* the chevron: a visible 44px button, down while the sheet is open and
          up while it is peeked */
       .panel-collapse { display:inline-flex; flex:0 0 auto; width:44px; height:44px; padding:0; margin:0;
@@ -1772,25 +1857,42 @@
       <!-- An eyebrow stood here reading "interactive map · loka atlas". It said
            nothing the nav above and the title below were not already saying, and
            on a phone it wrapped to two lines to say it. -->
-      <div class="hero-actions">
-        <a id="add-data-btn" class="share-btn" hidden href="#" aria-label="Add your data to this atlas (experimental)"
-           title="Add your own data as a map layer — experimental, under development">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-          <span>Add data</span>
-        </a>
-        <button id="share-btn" class="share-btn" hidden type="button" aria-label="Share this atlas">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
-          <span>Share</span>
-        </button>
+      <!-- On a phone everything to the right of the title — Share, the Owner
+           menu, sign in, the site links — is behind one ☰ button (October
+           2026, Mithun: "mobile atlas navigation can be neatly tucked under a
+           burger icon"). .nav-menu is the panel it opens; on a wide screen
+           the panel is display:contents, so the row reads exactly as it did
+           and the burger is not there. The header is in its final form from
+           the first frame: the markup and the stylesheet decide, not a script. -->
+      <button class="nav-burger" id="nav-burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav-menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg>
+      </button>
+      <div class="nav-menu" id="nav-menu">
+        <div class="nav-menu-head">
+          <strong>Menu</strong>
+          <button class="nav-menu-close" id="nav-menu-close" type="button" aria-label="Close the menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <div class="hero-actions">
+          <a id="add-data-btn" class="share-btn" hidden href="#" aria-label="Add your data to this atlas (experimental)"
+             title="Add your own data as a map layer — experimental, under development">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            <span>Add data</span>
+          </a>
+          <button id="share-btn" class="share-btn" hidden type="button" aria-label="Share this atlas">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+            <span>Share<span class="nav-menu-more"> this atlas</span></span>
+          </button>
+        </div>
+        <div class="links">
+          <a href="./">all atlases</a>
+          <a href="../">all apps</a>
+          <a href="https://discoverloka.org" target="_blank" rel="noopener">discoverloka.org</a>
+          <span id="nav-user" hidden></span>
+          <a id="nav-signin" href="./setup/?signin=1">sign in</a>
+          <button id="nav-signout" type="button" hidden>sign out</button>
+        </div>
       </div>
-      <div class="links">
-        <a href="./">all atlases</a>
-        <a href="../">all apps</a>
-        <a href="https://discoverloka.org" target="_blank" rel="noopener">discoverloka.org</a>
-        <span id="nav-user" hidden></span>
-        <a id="nav-signin" href="./setup/?signin=1">sign in</a>
-        <button id="nav-signout" type="button" hidden>sign out</button>
-      </div>
+      <div class="nav-menu-scrim" id="nav-menu-scrim" hidden></div>
     </nav>
   </header>
 
@@ -1833,7 +1935,7 @@
             <span class="panel-count" id="panel-count"></span>
             <span class="sheet-layer" id="sheet-layer"></span>
           </div>
-          <a class="loka-badge loka-badge-head" href="./setup/" title="Build your own atlas">Powered by <img src="./loka-logo.png" alt="LOKA"> <em>Atlas</em></a>
+          <a class="loka-badge loka-badge-head" href="./setup/" title="Build your own atlas"><span class="loka-badge-by">Powered by</span> <img src="./loka-logo.png" alt="LOKA"> <em>Atlas</em></a>
           <button class="panel-collapse" type="button" aria-label="Show or hide map layers" aria-expanded="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
         </div>
         <!-- the phone's "27 of 134 places are … · show all" line, beside the
@@ -1845,6 +1947,18 @@
       <nav class="atlas-bar" id="atlas-bar" aria-label="Layer groups" hidden></nav>
       <div class="sheet-body">
         <div id="atlas-controls"></div>
+      </div>
+      <!-- A place's card, on a phone: it takes the sheet over (Google Maps
+           style) instead of floating over the map. "Layers" goes back to the
+           layer panel as it was; the ✕ closes the card. atlas.js fills the
+           body with the same card HTML the docked card uses (openCardInSheet).
+           On a wide screen it is never shown. -->
+      <div class="sheet-card" id="sheet-card" hidden>
+        <div class="sheet-card-head">
+          <button class="sheet-card-back" id="sheet-card-back" type="button" aria-label="Back to the layers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>Layers</button>
+          <button class="sheet-card-close" id="sheet-card-close" type="button" aria-label="Close the card"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <div class="sheet-card-body" id="sheet-card-body"></div>
       </div>
     </aside>
     <!-- Bottom-left of the map: one pill — the ⓘ that opens About & sources,
@@ -1869,6 +1983,9 @@
     </div>
     <p class="sources-sub" id="sources-sub"></p>
     <p class="sources-lead" id="sources-lead"></p>
+    <!-- the showing base map's credit, first, with OpenStreetMap's copyright
+         link: one tap from the folded ⓘ on a phone -->
+    <p class="sources-map" id="sources-map"></p>
   <section class="atlas-credits">
     <div class="credits-grid">
       <div class="credits-col">
@@ -1960,6 +2077,42 @@
       mq.addEventListener("change", function () { if (mq.matches) { panel.classList.remove("collapsed"); sync(); } });
     })();
 
+    /* The phone's menu: the ☰ opens it, the ✕, a tap outside, Esc or a tap
+       on one of its items shuts it. The panel hangs just under the header,
+       measured, so a header with a logo does not cover its first row. */
+    (function () {
+      var burger = document.getElementById("nav-burger");
+      var menu = document.getElementById("nav-menu");
+      var scrim = document.getElementById("nav-menu-scrim");
+      var close = document.getElementById("nav-menu-close");
+      var header = document.querySelector("header.site");
+      if (!burger || !menu) return;
+      function open() {
+        if (header) document.documentElement.style.setProperty("--nav-h", Math.round(header.getBoundingClientRect().bottom) + "px");
+        document.documentElement.classList.add("nav-open");
+        burger.setAttribute("aria-expanded", "true");
+        if (scrim) scrim.hidden = false;
+      }
+      function shut() {
+        document.documentElement.classList.remove("nav-open");
+        burger.setAttribute("aria-expanded", "false");
+        if (scrim) scrim.hidden = true;
+      }
+      burger.addEventListener("click", function () { document.documentElement.classList.contains("nav-open") ? shut() : open(); });
+      if (close) close.addEventListener("click", function () { shut(); burger.focus(); });
+      if (scrim) scrim.addEventListener("click", shut);
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && document.documentElement.classList.contains("nav-open")) { e.preventDefault(); shut(); burger.focus(); }
+      });
+      // a row that goes somewhere, or opens something of its own, puts the menu away
+      menu.addEventListener("click", function (e) {
+        var t = e.target && e.target.closest && e.target.closest("a, #share-btn, #nav-signout");
+        if (t) shut();
+      });
+      // a phone that grows into a wide screen has no menu to keep open
+      window.matchMedia("(max-width: 720px)").addEventListener("change", function (e) { if (!e.matches) shut(); });
+    })();
+
     /* "About & sources": the credits, in a panel over the map's corner. The
        map stays live behind it; the ⓘ (or the credit's words, except its
        link), the ×, Esc or a click on the map put it away. */
@@ -1982,7 +2135,7 @@
         if (dlg.open && !dlg.contains(e.target) && !(pill || chip).contains(e.target)) shut();
       });
       // a panel that is not modal does not hear Esc on its own
-      document.addEventListener("keydown", function (e) { if (e.key === "Escape" && dlg.open) { shut(); chip.focus(); } });
+      document.addEventListener("keydown", function (e) { if (e.key === "Escape" && dlg.open) { e.preventDefault(); shut(); chip.focus(); } });
     })();
 
     /* Crisp text over the map. The map canvas and the blurred panel are
