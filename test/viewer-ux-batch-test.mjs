@@ -69,7 +69,7 @@ check('a docked card ignores the pin offset and anchor', /if \(offsetPx && !dock
 check('the stage is told, and told again when the card closes', /stage\.classList\.add\("card-docked"\);[\s\S]*?pop\.on\("close", function \(\) \{[\s\S]*?stage\.classList\.remove\("card-docked"\);/.test(js), true);
 check('the pin is panned clear of the card and the toolbar', /function keepClearOfCard\(lngLat, offsetPx\) \{[\s\S]*?map\.panBy\(\[dx, dy\], \{ duration: 250 \}\);/.test(js), true);
 check('framing leaves room for the card while one is open', /if \(LAST_POP && cardDocked\(\)\) pad\.right = Math\.min\(mr\.width \* 0\.45, 340 \+ 8 \+ 24\);/.test(js), true);
-check('Esc puts the card away (on a phone, back to the layers)', /if \(e\.key !== "Escape" \|\| !LAST_POP\) return;[\s\S]*?try \{ LAST_POP\.remove\(\); \} catch \(err\) \{\}/.test(js), true);
+check('Esc puts the card away (on a phone, back to the layers)', /if \(e\.key !== "Escape" \|\| !LAST_POP \|\| e\.defaultPrevented\) return;[\s\S]*?try \{ LAST_POP\.remove\(\); \} catch \(err\) \{\}/.test(js), true);
 check('a tapped marker is the chosen one; an area\'s marker rings its outline with it', /function spiderClick\(L, entry\) \{[\s\S]*?selectRow\(L, entry\.f\._row, entry\.shape \? shapeRef\(L, entry\.shape, entry\.f\._row\) : null\);/.test(js), true);
 check('the chosen pin wears the Sindoor ring', /\.atlas-mnode\.sel \.atlas-pin\.loc::before \{[^}]*border:2px solid var\(--color-sindoor\);/.test(html) && /function markSelPin\(\) \{/.test(js), true);
 

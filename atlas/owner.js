@@ -630,7 +630,8 @@
       document.removeEventListener("keydown", onKey, true);
     }
     function away(e) { if (!panel.contains(e.target) && !btn.contains(e.target)) shut(); }
-    function onKey(e) { if (e.key === "Escape") { shut(); btn.focus(); } }
+    // one Esc shuts one thing: this panel takes it, nothing under it hears it
+    function onKey(e) { if (e.key === "Escape") { e.preventDefault(); shut(); btn.focus(); } }
     btn.onclick = function () {
       if (!panel.hidden) { shut(); return; }
       panel.hidden = false;

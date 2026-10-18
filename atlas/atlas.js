@@ -6341,7 +6341,7 @@
   }
   // Esc puts the card away, as it does the fan and the tooltip
   document.addEventListener("keydown", function (e) {
-    if (e.key !== "Escape" || !LAST_POP) return;
+    if (e.key !== "Escape" || !LAST_POP || e.defaultPrevented) return;
     // the phone's card: back to the layers, and the sheet's own Esc stays out of it
     if (LAST_POP._card) { e.preventDefault(); e.stopImmediatePropagation(); closeCard(true); return; }
     try { LAST_POP.remove(); } catch (err) {}
@@ -7117,6 +7117,9 @@
     LAST_POP = pop;
     setSheet("low");
     keepPlaceAboveSheet(lngLat);
+    // the keyboard lands on the way back, so the card is never a trap
+    var back = document.getElementById("sheet-card-back");
+    if (back) { try { back.focus({ preventScroll: true }); } catch (e) { back.focus(); } }
     return pop;
   }
   function closeCard(keepSelection) {
@@ -7139,6 +7142,8 @@
     var controls = document.getElementById("atlas-controls");
     if (controls) controls.scrollTop = prev.scroll;
     if (!keepSelection) clearSelection();
+    var chev = panel && panel.querySelector(".panel-collapse");
+    if (chev) { try { chev.focus({ preventScroll: true }); } catch (e) { chev.focus(); } }
   }
   /* The low card covers the foot of the map: ease the map the least distance
      that puts the place in the open above it — never under it, never under
