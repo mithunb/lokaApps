@@ -33,11 +33,13 @@ check('the phone sheet keeps an edge where it meets the map', /border-top:1px so
 console.log('\n  the phone gets a tab row, and only the phone');
 check('the bar is absent on a wide screen', /\.atlas-bar \{ display:none; \}/.test(html), true);
 check('and appears only once it has marks', /\.atlas-bar:not\(\[hidden\]\) \{/.test(html), true);
-check('the sheet foot clears the phone\'s own strip at the bottom',
-  /padding:\.35rem \.75rem calc\(\.4rem \+ env\(safe-area-inset-bottom\)\)/.test(html), true);
+check('the sheet\'s list clears the phone\'s own strip at the bottom (there is no foot)',
+  /#atlas-controls \{ overflow-y:auto; flex:1 1 auto; min-height:0; padding:0 14px calc\(20px \+ env\(safe-area-inset-bottom\)\)/.test(html) && !/sheet-foot/.test(html), true);
 check('the tabs scroll sideways rather than cutting names short',
   /\.atlas-bar:not\(\[hidden\]\) \{[^}]*overflow-x:auto/.test(html), true);
-check('and never takes more than half the screen', /max-height:50%/.test(html), true);
+check('its three heights: peek about 84px, half 52%, full 90% (a sliver of map kept)',
+  /\.atlas-panel\[data-h="peek"\] \{ height:calc\(84px \+ env\(safe-area-inset-bottom\)\); \}/.test(html) &&
+  /\.atlas-panel\[data-h="half"\] \{ height:52%; \}/.test(html) && /\.atlas-panel\[data-h="full"\] \{ height:90%; \}/.test(html), true);
 
 console.log('\n  the bar is built from what the panel actually drew');
 check('every group says its name on the outside', /sec\.setAttribute\("data-group", g\.id\)/.test(js), true);
@@ -52,8 +54,8 @@ check('a label that runs out of room ellipsises rather than being chopped',
 
 console.log('\n  and the tray cannot outlive what it was showing');
 check('a reboot closes it', /TRAY = null;\s*\/\/ the tray cannot outlive/.test(js), true);
-check('Escape closes it and gives the mark back its focus',
-  /e\.key === "Escape" && TRAY/.test(js), true);
+check('Escape lowers it to its peek and hands focus to the chevron',
+  /e\.key === "Escape" && onPhone\(\) && SHEET !== "peek"/.test(js) && /setSheet\("peek"\);\s*var chev = document\.querySelector\("#atlas-panel \.panel-collapse"\);\s*if \(chev\) chev\.focus\(\);/.test(js), true);
 
 const owner = fs.readFileSync(ROOT + '/atlas/owner.js', 'utf8');
 const ocss = fs.readFileSync(ROOT + '/atlas/owner.css', 'utf8');
@@ -65,8 +67,8 @@ check('and it grows with the switch on a touch screen',
   /--panel-strip: calc\(38px \+ \.55rem\)/.test(html), true);
 check('a subgroup no longer pushes its children right',
   /\.ctl-sub-body \{ padding-left:0; \}/.test(html), true);
-check('a layer\'s keys hang under its name, not behind a hairline',
-  /\.ctl-extra \{ margin:\.05rem 0 \.35rem; padding-left:var\(--panel-strip\); border-left:0; \}/.test(html), true);
+check('a layer\'s questions sit flush with its name, full width, not behind a hairline',
+  /\.ctl-extra \{ margin:\.05rem 0 \.35rem; padding-left:0; border-left:0; \}/.test(html), true);
 check('and no depth keeps its own left edge',
   /padding-left:\.85rem|padding-left:1\.55rem|padding-left:2\.125rem|padding-left:2\.375rem/.test(html), false);
 

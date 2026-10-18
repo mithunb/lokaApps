@@ -209,7 +209,7 @@ check('the ⓘ is a real button with the heading as its aria-label', /<button ty
 check('only where the label was shortened', (atlas.match(/labelInfoHTML\(fl\.full\)/g) || []).length === 1 && /\(fl\.shortened \? " " \+ labelInfoHTML\(fl\.full\) : ""\)/.test(atlas), true);
 check('one delegated listener works every ⓘ, and never flips the switch beside it', /closest\(".lbl-info\[aria-controls\]"\);[\s\S]{0,120}e\.stopPropagation\(\);/.test(atlas), true);
 check('the ⓘ sits at the key row\'s end, like the layer rows\' own', /\.key-toggle \.lbl-info \{ margin-left:auto; flex:0 0 auto; \}/.test(page), true);
-check('and the opened heading is set in under the row, aligned with the name', /\.key-list \.lbl-full \{ margin:-\.05rem 0 \.3rem 1\.6rem; \}/.test(page), true);
+check('and the opened heading sits under the row, flush with the question', /\.key-list \.lbl-full \{ margin:-\.05rem 0 \.3rem 0; \}/.test(page), true);
 check('the ⓘ can be reached by keyboard', /\.lbl-info:focus-visible \{ outline:2px solid var\(--color-leaf\)/.test(page), true);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

@@ -30,7 +30,7 @@ check('the press does not travel up to the row',
 console.log('\n  and what it holds can be reached without a mouse');
 /* A title only appears on hover with a pointer: on a phone and by keyboard the
    words behind it were simply unreachable. */
-check('the words go in a paragraph under the row', /el\("p", "ctl-said", esc\(L\.info\)\)/.test(js), true);
+check('the words go in a paragraph under the row', /said = el\("p", "ctl-said"\);/.test(js) && /function renderLayerNote\(L\) \{\s*if \(L\._said\) L\._said\.textContent = layerNote\(L\);/.test(js), true);
 check('put away to begin with', /said\.hidden = true;/.test(js), true);
 check('pressing turns it over', /var show = said\.hidden;\s*said\.hidden = !show;/.test(js), true);
 check('and it says whether it is open', /info\.setAttribute\("aria-expanded", String\(show\)\)/.test(js), true);
@@ -39,8 +39,8 @@ check('the button is named after the layer',
 check('the paragraph is styled', /\.ctl-said \{/.test(html), true);
 check('no leftover rule still calls it a hint', /\.ctl-info \{[^}]*cursor:help/.test(html), false);
 check('and the old fixed 16px box is gone', /\.ctl-info \{[^}]*width:16px/.test(html), false);
-check('with a hit area bigger than the mark', /\.ctl-info \{[^}]*padding:5px/.test(html), true);
-check('bigger again under a finger', /\.ctl-info \{ padding:8px; \}/.test(html), true);
+check('with a 44px box around the mark', /\.ctl-info \{[^}]*width:44px; height:44px;/.test(html), true);
+check('kept at 44px under a finger and on a phone', /@media \(pointer:coarse\), \(max-width:720px\)\{[\s\S]*?\.ctl-info \{ width:44px; height:44px; \}/.test(html), true);
 
 console.log('\n  the switch is named by its layer, not by the row it sits on');
 check('named where it is made', /cb\.setAttribute\("aria-label", L\.label \|\| L\.id\)/.test(js), true);

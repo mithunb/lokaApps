@@ -1097,11 +1097,7 @@
     // changing it is the owner's act, not a layer a reader switches
     var slot = $("#own-panel-region");
     if (slot) slot.appendChild(wrap);
-    else {
-      var after = panel.querySelector(".ctl-basemaps");
-      if (after && after.nextSibling) panel.insertBefore(wrap, after.nextSibling);
-      else panel.insertBefore(wrap, panel.firstChild);
-    }
+    else panel.insertBefore(wrap, panel.firstChild);
   }
 
   /* One extra control on the rows this caller may change, named for what it

@@ -530,6 +530,8 @@
        stated the moment the map exists. Leaving it to "load" meant a style that
        was slow — or that never finished — left the map crediting nobody. */
     renderMapAttrib();
+    watchCredit();
+    wireSheetMap();
 
     userMoved = false;
     map.on("movestart", function (e) { if (e && e.originalEvent) userMoved = true; });
@@ -2882,11 +2884,12 @@
        by its SHAPE (circles, squares, triangles…), and colours repeat between
        keys. These are a list you mark places by, up to five at once. */
     wrap.setAttribute("aria-label", "Mark each place by");
-    wrap.appendChild(el("span", "key-chips-lbl", "Mark each place by"));
-    /* One line. The six-line hint it replaces explained ticks, kinds and
-       tags at once; with a row that opens, the only thing worth saying up
-       front is what opening one does. */
-    wrap.appendChild(el("span", "key-hint", "Open one to colour the map by its answers. Tap an answer to show only those places."));
+    /* No caption and no hint over the rows any more. "Mark each place by"
+       and its one-line how-to took about 70px of every open layer on every
+       visit, and pushed the first question below the fold of a phone's
+       sheet. The same words are said once, behind the layer's own ⓘ
+       (layerNote), where a reader who wants them can open them and a reader
+       who has read them once is not shown them again. */
     var list = el("div", "key-list");
     var act = activeKeyOptions(L);
     var showing = L._visible !== false;
@@ -4628,8 +4631,18 @@
   // still on the map, so the line has to say what they were tested against —
   // "3 of 11 areas match ‘Telugu’" — and name the way back to all of them.
   // `noun` is what the rows are called (places, areas, people).
+  /* The line is said in two places that are never both shown: under the
+     search box over the map (a wide screen; a phone while its sheet is
+     peeked), and in the phone sheet's head (#sheet-filter), beside the
+     answer that narrowed the map — so a reader who pressed an answer in
+     the sheet sees what it did without looking up at the map. */
   function updateSearchCount(shown, total, pts, lead, word, noun) {
     var c = $("#atlas-search-count"); if (!c) return;
+    fillCountLine(c, shown, total, pts, lead, word, noun);
+    var sf = $("#sheet-filter");
+    if (sf) fillCountLine(sf, shown, total, pts, lead, word, noun);
+  }
+  function fillCountLine(c, shown, total, pts, lead, word, noun) {
     if (shown == null) { c.hidden = true; c.textContent = ""; return; }
     c.hidden = false;
     noun = noun || "places";
@@ -5014,7 +5027,27 @@
   // it). Shows the active basemap's credit plus any raster tile source (e.g. Esri
   // labels); dataset/source credits live in the credits section further down.
   function renderMapAttrib() {
-    var el = $("#map-attrib"); if (!el || !map) return;
+    var el = $("#map-attrib-words"); if (!el || !map) return;
+    el.innerHTML = basemapCreditHTML();
+    var inPop = $("#map-style-credit");
+    if (inPop) inPop.innerHTML = basemapCreditHTML();
+  }
+  /* The showing base map's credit, as one line with its licence a tap away:
+     "© OpenStreetMap contributors · OpenFreeMap", where OpenStreetMap links to
+     openstreetmap.org/copyright — the OSMF attribution guideline asks for
+     exactly that link, visibly, wherever OSM data is drawn. Any raster
+     source the map is also drawing (Esri's labels) is credited after it. */
+  function basemapCreditHTML() {
+    var parts = basemapCreditParts();
+    return parts.map(function (p) {
+      return esc(p)
+        .replace(/©\s*OpenStreetMap contributors/,
+          '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors')
+        .replace(/,\s*©\s*OpenFreeMap/, " · OpenFreeMap");
+    }).join(" · ");
+  }
+  function basemapCreditParts() {
+    if (!map) return [];
     var srcs = (map.getStyle() && map.getStyle().sources) || {};
     var seen = {}, parts = [];
     /* A basemap given as a whole style document has no source of its own here,
@@ -5039,7 +5072,103 @@
       var a = srcs[k] && srcs[k].attribution;
       if (a && !seen[a]) { seen[a] = 1; parts.push(a); }
     });
-    el.innerHTML = parts.join(" · ");
+    return parts;
+  }
+
+  /* The credit pill folds to its ⓘ on a phone — on the map's first move by
+     the reader, or after five seconds — and stays folded. A phone's map is
+     375px wide and the full line covered a third of it; the licence stays
+     one tap away (the ⓘ opens About & sources, whose Map line links the
+     copyright page), which is what the OSMF guideline asks for a small
+     screen. A wide screen has room, so there the line stays as it is. */
+  var creditFoldT = null;
+  function watchCredit() {
+    var pill = $("#map-attrib"); if (!pill || !map) return;
+    pill.classList.remove("folded");
+    clearTimeout(creditFoldT);
+    var fold = function () {
+      clearTimeout(creditFoldT);
+      if (!window.matchMedia("(max-width: 720px)").matches) return;
+      pill.classList.add("folded");
+    };
+    creditFoldT = setTimeout(fold, 5000);
+    // the reader's own move, not the atlas framing its data
+    var onMove = function (e) { if (e && e.originalEvent) { map.off("movestart", onMove); fold(); } };
+    map.on("movestart", onMove);
+  }
+
+  /* ---- the map button: Map or satellite ----
+     One round 44px button at the map's top-right (under the search box on a
+     phone), wearing the layers-stack mark. It opens a small sheet with the
+     base maps as two swatches to choose from and the showing map's credit
+     beneath them. It replaces the Map/Satellite segment that sat in the
+     toolbar on a wide screen and in the data sheet's foot on a phone — a
+     map setting among the data. Appended to the stage, not the strip or
+     the sheet, so it is in one place at every width; MOVED_PIECES takes
+     the old one away before buildControls makes a new one. Not drawn at
+     all when the atlas has one base map: a choice of one is no choice. */
+  function buildMapButton(stage) {
+    var maps = MANIFEST.basemaps || [];
+    if (maps.length < 2) return null;
+    // Leaf while the map showing is not the atlas's usual one (Satellite)
+    var usual = (maps.find(function (b) { return b.default; }) || maps[0]).id;
+    // the usual map first, whatever order the manifest listed them in
+    maps = maps.slice().sort(function (a, b) { return (b.id === usual ? 1 : 0) - (a.id === usual ? 1 : 0); });
+    var btn = el("button", "map-style-btn");
+    btn.type = "button";
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/></svg>';
+    btn.setAttribute("aria-label", "Map or satellite");
+    btn.title = "Map or satellite";
+    btn.setAttribute("aria-haspopup", "dialog");
+    btn.setAttribute("aria-expanded", "false");
+    var scrim = el("div", "map-style-scrim");
+    scrim.hidden = true;
+    var pop = el("div", "map-style-pop");
+    pop.setAttribute("role", "dialog");
+    pop.setAttribute("aria-label", "Map or satellite");
+    pop.hidden = true;
+    var head = el("div", "map-style-head");
+    head.appendChild(el("h3", "map-style-title", "Map or satellite"));
+    var close = el("button", "map-style-close", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>');
+    close.type = "button";
+    close.setAttribute("aria-label", "Close");
+    head.appendChild(close);
+    pop.appendChild(head);
+    var choice = el("div", "map-style-choice");
+    choice.setAttribute("role", "group");
+    choice.setAttribute("aria-label", "Base map");
+    maps.forEach(function (b) {
+      var c = el("button", "map-style-opt" + (b.id === activeBasemap ? " on" : ""));
+      c.type = "button";
+      c.setAttribute("data-basemap", b.id);
+      c.setAttribute("aria-pressed", b.id === activeBasemap ? "true" : "false");
+      c.appendChild(el("span", "map-style-swatch " + (/sat|imagery/i.test(b.id + " " + b.label) ? "sat" : "map")));
+      c.appendChild(el("span", "map-style-name", esc(b.label)));
+      c.onclick = function () {
+        switchBasemap(b.id);
+        Array.prototype.forEach.call(choice.children, function (x) { x.classList.remove("on"); x.setAttribute("aria-pressed", "false"); });
+        c.classList.add("on");
+        c.setAttribute("aria-pressed", "true");
+        btn.classList.toggle("on", b.id !== usual);
+      };
+      choice.appendChild(c);
+    });
+    pop.appendChild(choice);
+    var credit = el("p", "map-style-credit");
+    credit.id = "map-style-credit";
+    credit.innerHTML = map ? basemapCreditHTML() : "";
+    pop.appendChild(credit);
+    btn.classList.toggle("on", activeBasemap !== usual);
+    function open() { pop.hidden = false; scrim.hidden = false; btn.setAttribute("aria-expanded", "true"); var first = pop.querySelector(".map-style-opt.on") || pop.querySelector(".map-style-opt"); if (first) first.focus(); }
+    function shut() { pop.hidden = true; scrim.hidden = true; btn.setAttribute("aria-expanded", "false"); }
+    btn.onclick = function () { pop.hidden ? open() : shut(); };
+    close.onclick = function () { shut(); btn.focus(); };
+    scrim.onclick = shut;
+    pop.addEventListener("keydown", function (e) { if (e.key === "Escape") { shut(); btn.focus(); } });
+    stage.appendChild(btn);
+    stage.appendChild(scrim);
+    stage.appendChild(pop);
+    return btn;
   }
 
   /* A new basemap's tiles arrive one by one; until the map is idle again the
@@ -5178,10 +5307,7 @@
     var strip = document.querySelector(".atlas-strip");
     var panel = $("#atlas-controls");
     if (!strip || !panel || !stage) return;
-    var phone = window.matchMedia("(max-width: 720px)").matches;
-    var bm = document.querySelector(".ctl-basemaps");
     var region = document.querySelector(".own-region-wrap");   // owner.js's row
-    var foot = document.querySelector("#atlas-panel .sheet-foot");
     /* The strip is the map's own toolbar and never leaves the stage: on a
        wide screen it floats beside the Layers drawer (search, then
        Map/Satellite), on a phone it is the floating search box the phone
@@ -5189,14 +5315,9 @@
        made the owner's header two rows tall and put the map's own controls
        a level away from the map. */
     if (strip.parentNode !== stage) stage.insertBefore(strip, stage.firstChild);
-    if (phone && foot) {
-      // the sheet's foot: Map/Satellite first
-      if (bm && bm.parentNode !== foot) foot.insertBefore(bm, foot.firstChild);
-    } else {
-      // strip order: search (already there), then Map/Satellite — appended
-      // every time, so a rebuild cannot shuffle them
-      if (bm) strip.appendChild(bm);
-    }
+    /* The map button (Map or satellite) is the stage's own at every width:
+       it is appended to the stage by buildControls and never moves, so
+       there is no phone branch here any more. The sheet has no foot. */
     /* The owner's region row belongs to the Owner menu (owner.js builds
        both). owner.js places it there itself; this is the safety net for a
        row that landed in the layers panel before the menu existed. */
@@ -5217,14 +5338,14 @@
     }
   }
 
-  /* Pieces buildControls makes that placeStripPieces may then carry OUT of the
-     panel and the strip — the Map/Satellite switch goes to the phone's sheet
-     foot. Clearing the panel and the strip cannot reach them there, so every
-     build first takes the old ones away wherever they ended up. Without this a
-     phone gained one more Map/Satellite switch on every redraw (1, 2, 3...).
-     The rule: building the controls twice leaves exactly what building them
-     once does. Anything new that placeStripPieces moves belongs in this list. */
-  var MOVED_PIECES = [".ctl-basemaps"];
+  /* Pieces buildControls puts OUTSIDE the panel and the strip — the map
+     button and its small sheet live on the stage itself. Clearing the panel
+     and the strip cannot reach them there, so every build first takes the old
+     ones away wherever they ended up. Without this a redraw (the owner saving
+     Settings, a draft preview) left one more map button on every pass (1, 2,
+     3...). The rule: building the controls twice leaves exactly what building
+     them once does. Anything new that lands outside the panel belongs here. */
+  var MOVED_PIECES = [".map-style-btn", ".map-style-pop", ".map-style-scrim"];
   function dropMovedPieces() {
     MOVED_PIECES.forEach(function (sel) {
       Array.prototype.forEach.call(document.querySelectorAll(sel), function (n) {
@@ -5240,19 +5361,8 @@
     var stage = document.querySelector(".atlas-stage");
     var strip = stage ? ensureStrip(stage) : null;
 
-    // basemap switch — placed by placeStripPieces: the strip on wide screens,
-    // the top of the bottom sheet on phones
-    var bm = el("div", "ctl-basemaps");
-    MANIFEST.basemaps.forEach(function (b) {
-      var btn = el("button", "bm-btn" + (b.id === activeBasemap ? " active" : ""), esc(b.label));
-      btn.onclick = function () {
-        switchBasemap(b.id);
-        Array.prototype.forEach.call(bm.children, function (c) { c.classList.remove("active"); });
-        btn.classList.add("active");
-      };
-      bm.appendChild(btn);
-    });
-    if (strip) strip.appendChild(bm); else panel.appendChild(bm);   // placeStripPieces orders it after the search
+    // the map button: Map or satellite, one round button on the stage itself
+    if (stage) buildMapButton(stage);
 
     // search box — over marker layers that could carry text (keyword now,
     // semantic on public atlases with embeddings). syncSearchBox() takes it away
@@ -5385,9 +5495,11 @@
     wireStripPlacement();
     placeStripPieces();
 
-    /* The phone's bar, last, so it reads the panel as it finally stands —
-       including whatever the owner's tools just added to it. */
-    buildBar();
+    /* The phone's sheet, last, so its bar and head read the panel as it
+       finally stands — including whatever the owner's tools just added to
+       it. setSheet draws the bar and marks the showing group. */
+    wireSheet();
+    setSheet(SHEET);
     /* A mark carries how many of its layers are on, so it has to hear about a
        switch moving. One listener on the panel rather than one per switch, and
        it survives the panel being rebuilt because the panel is what it is on. */
@@ -5442,6 +5554,49 @@
     return wrap;
   }
 
+  /* What the layer's ⓘ says, in one paragraph: the layer's name and how
+     much it holds, who added it and from what (L.info, composed as the
+     manifest loads), then the one-line how-to that used to sit over the
+     questions on every visit — said only when the layer offers questions —
+     and a line about LOKA's short names only when the layer has them.
+
+       "bengaluru-tags — 134 places. Added by Socratus, from a spreadsheet.
+       Mark each place by one of the questions below. Open a question to
+       colour the map by its answers; tap an answer to show only those
+       places. Short names are written by LOKA from the tagger's own words."
+
+     Drawn again whenever the count or the questions change (syncCollection,
+     renderExtra), because both arrive after the row is first built. */
+  var HOW_TO = "Mark each place by one of the questions below. Open a question to colour the map by its answers; tap an answer to show only those places.";
+  var LOKA_NAMES_NOTE = "Short names are written by LOKA from the tagger’s own words.";
+  function keysOffered(L) {
+    var H = keyHost(L);
+    return !!(H._keyOptions && H._keyOptions.some(function (o) { return !o.tooFew && !o.scattered; }));
+  }
+  function layerNote(L) {
+    var head = L.label || L.id;
+    if (L._countN != null) head += " — " + countWords(L._countN, keyNoun(L));
+    var parts = [head];
+    if (L.info) parts.push(String(L.info).replace(/\.\s*$/, ""));
+    if (keysOffered(L)) parts.push(HOW_TO.replace(/\.$/, ""));
+    if (L.lokaNames && L.lokaNames.from) parts.push(LOKA_NAMES_NOTE.replace(/\.$/, ""));
+    return parts.join(". ") + ".";
+  }
+  function renderLayerNote(L) {
+    if (L._said) L._said.textContent = layerNote(L);
+  }
+  // the count beside the name, from the same number the phone's tab reads
+  function renderLayerCount(L, shown, total) {
+    var c = L._count; if (!c) return;
+    L._countN = total;
+    c.hidden = false;
+    c.innerHTML = "";
+    c.appendChild(el("b", "", String(shown)));
+    if (shown !== total) c.appendChild(el("span", "ctl-count-of", " of " + total));
+    c.appendChild(el("span", "ctl-count-noun", " " + (total === 1 && shown === total ? nounOne(keyNoun(L)) : keyNoun(L))));
+    renderLayerNote(L);
+  }
+
   function layerRow(L, onChange) {
     L._visible = on(L);
     var row = el("div", "ctl-row");
@@ -5461,8 +5616,17 @@
     var sw = el("span", "ctl-switch");
     var name = el("span", "ctl-name", esc(L.label));
     top.appendChild(cb); top.appendChild(sw); top.appendChild(name);
+    /* How much the layer holds, right beside its name: "134 places" on a
+       phone, "· 134" in the drawer (the noun is dropped by CSS where the
+       drawer is narrow). The number used to appear only on the phone's tab
+       chip, and the row that named the layer gave no size at all. Filled by
+       syncCollection once the file is in — the same count the tab reads. */
+    var count = el("span", "ctl-count");
+    count.hidden = true;
+    top.appendChild(count);
+    L._count = count;
     var said = null;
-    if (L.info) {
+    if (L.info || collectionLayer(L)) {
       /* A real button, and it does something.
 
          This was a span carrying a title. Two faults followed from that. A span
@@ -5479,8 +5643,10 @@
       info.type = "button";
       info.setAttribute("aria-expanded", "false");
       info.setAttribute("aria-label", "About " + (L.label || L.id));
-      said = el("p", "ctl-said", esc(L.info));
+      said = el("p", "ctl-said");
       said.hidden = true;
+      L._said = said;
+      renderLayerNote(L);
       info.onclick = function (e) {
         e.preventDefault();
         e.stopPropagation();
@@ -5584,6 +5750,7 @@
       box.appendChild(buildKeyToggles(L));
       updateFoldNote(L);
     }
+    renderLayerNote(L);   // the ⓘ says how to use the questions only once there are some
     if (!L._visible) return;
 
 
@@ -5878,22 +6045,14 @@
     });
     wrap.innerHTML = "";
     if (!items.length) return;
-    // a split file's rows are areas and points both, so they are "places"
-    // unless the manifest names them ("people")
-    var noun = keyNoun(L);
-    var narrowed = shown !== items.length;
     // the phone's tab reads this number instead of "1 layer" — see buildBar
     if (L._row) L._row.setAttribute("data-count", String(shown));
-
-    var head = el("div", "coll-head");
-    var dot = el("span", "coll-dot pin");
-    dot.style.setProperty("--c", items[0].color);
-    head.appendChild(dot);
-    var words = narrowed
-      ? shown + " of " + items.length + " " + noun + " match"
-      : countWords(items.length, noun);
-    head.appendChild(el("span", "coll-count", esc(words)));
-    wrap.appendChild(head);
+    /* The count sits beside the layer's name (renderLayerCount): "134
+       places", or "16 of 134 places" while a search or a pressed answer has
+       narrowed the map. Both halves of a split file are one count. The line
+       that said it here, under the row with a dot before it, is gone — one
+       number in one place. Only the split's second line stays. */
+    renderLayerCount(L, shown, items.length);
     if (parts.length > 1) wrap.appendChild(el("p", "coll-split", esc(split.join(" · "))));
   }
   // the rows a card should offer beside this one: its twins, if it has any
@@ -6861,13 +7020,143 @@
      way you came. */
   var TRAY = null;              // which group the sheet is showing, if any
 
+  /* ---- the phone's sheet: three heights ----
+     peek (about 84px: the grabber, "LAYERS / <layer> <count>", LOKA's badge
+     and the chevron), half (52% of the stage) and full (90%, a sliver of
+     map kept). The height is the sheet's data-h, which the CSS turns into a
+     height; --sheet-h is still measured by watchSheetHeight, so the zoom
+     buttons, the credit pill and the card keep clear of it as before.
+
+     Ways to change it: the chevron at the head's right (down when open, up
+     when peeked), the grabber (a tap cycles the heights), a swipe down or
+     up on the head, a tap on the map (lowers it to peek), Esc. The head
+     itself opens a peeked sheet to half. Opening from peek makes sure the
+     first group's first layer has a question open, so the first thing seen
+     is a coloured map and the key that colours it. The old states — tabs
+     only, and the "LAYERS" chip bottom-left — are gone: the sheet always
+     shows at least its head, and one tap from there reaches the questions. */
+  var SHEET_HEIGHTS = ["peek", "half", "full"];
+  var SHEET = "half";
+  function onPhone() { return window.matchMedia("(max-width: 720px)").matches; }
+  function setSheet(h) {
+    var stage = document.querySelector(".atlas-stage");
+    var panel = document.getElementById("atlas-panel");
+    if (!stage || !panel) return;
+    if (SHEET_HEIGHTS.indexOf(h) < 0) h = "half";
+    var was = SHEET;
+    SHEET = h;
+    panel.setAttribute("data-h", h);
+    var open = h !== "peek";
+    if (open && !TRAY) {
+      var first = document.querySelector("#atlas-controls .ctl-group[data-group]");
+      if (first) TRAY = first.getAttribute("data-group");
+    }
+    stage.classList.toggle("tray-open", open);
+    stage.classList.toggle("sheet-peek", !open);
+    document.querySelectorAll("#atlas-controls .ctl-group[data-group]").forEach(function (sec) {
+      sec.classList.toggle("on-show", sec.getAttribute("data-group") === TRAY);
+    });
+    var chev = panel.querySelector(".panel-collapse");
+    if (chev && onPhone()) {
+      chev.setAttribute("aria-expanded", String(open));
+      chev.setAttribute("aria-label", open ? "Lower the layers sheet" : "Open the layers sheet");
+    }
+    if (open && was === "peek") ensureFirstQuestionOpen();
+    buildBar();   // and the head, which buildBar keeps current
+    // a group's scroll starts at its top when the sheet first opens
+    if (open && was === "peek") { var controls = document.getElementById("atlas-controls"); if (controls) controls.scrollTop = 0; }
+  }
+  // the first layer of the showing group has a question open, or gets one
+  function ensureFirstQuestionOpen() {
+    var sec = document.querySelector("#atlas-controls .ctl-group.on-show");
+    if (!sec) return;
+    var row = sec.querySelector(".ctl-row");
+    if (!row || row.querySelector(".key-entry.open")) return;
+    var first = row.querySelector(".key-entry .key-toggle");
+    if (first) first.click();
+  }
+  /* The head names what the sheet holds, so a peeked sheet still says what
+     is under it: the showing group's one layer and its count ("bengaluru-tags
+     134 places"), or the group's name and how many of its layers are on. */
+  function syncSheetHead() {
+    var who = document.getElementById("sheet-layer");
+    if (!who) return;
+    var sec = document.querySelector("#atlas-controls .ctl-group.on-show") ||
+      document.querySelector("#atlas-controls .ctl-group[data-group]");
+    if (!sec) { who.textContent = ""; return; }
+    var rows = sec.querySelectorAll(".ctl-row");
+    who.innerHTML = "";
+    if (rows.length === 1) {
+      var nm = rows[0].querySelector(".ctl-name");
+      // the name gives way (ellipsis) before the number does
+      who.appendChild(el("span", "sheet-layer-name", esc(nm ? nm.textContent : (sec.getAttribute("data-group-label") || ""))));
+      // the number alone: the row below says the noun, and the head has one line
+      var cnt = rows[0].querySelector(".ctl-count b");
+      if (cnt) who.appendChild(el("small", "", esc(cnt.textContent)));
+    } else {
+      who.appendChild(el("span", "sheet-layer-name", esc(sec.getAttribute("data-group-label") || sec.getAttribute("data-group"))));
+      var on = sec.querySelectorAll('.ctl-toggle input[type="checkbox"]:checked').length;
+      who.appendChild(el("small", "", on + " of " + rows.length + " on"));
+    }
+  }
+  var sheetWired = false;
+  function wireSheet() {
+    if (sheetWired) return;
+    var panel = document.getElementById("atlas-panel");
+    var head = panel && panel.querySelector(".panel-head");
+    if (!head) return;
+    sheetWired = true;
+    var grip = head.querySelector(".sheet-grip");
+    var chev = head.querySelector(".panel-collapse");
+    var who = head.querySelector(".sheet-who");
+    // the grabber: a tap cycles peek → half → full → peek
+    if (grip) grip.addEventListener("click", function (e) {
+      if (!onPhone()) return;
+      e.stopPropagation();
+      setSheet(SHEET_HEIGHTS[(SHEET_HEIGHTS.indexOf(SHEET) + 1) % SHEET_HEIGHTS.length]);
+    });
+    // the chevron: peeked → half; open → peek
+    if (chev) chev.addEventListener("click", function (e) {
+      if (!onPhone()) return;
+      e.stopPropagation();
+      setSheet(SHEET === "peek" ? "half" : "peek");
+    });
+    // the words: peeked → half; half → full
+    if (who) who.addEventListener("click", function (e) {
+      if (!onPhone()) return;
+      e.stopPropagation();
+      setSheet(SHEET === "peek" ? "half" : "full");
+    });
+    // a swipe on the head: down lowers one step, up raises one
+    var y0 = null;
+    head.addEventListener("touchstart", function (e) { y0 = e.touches[0].clientY; }, { passive: true });
+    head.addEventListener("touchend", function (e) {
+      if (y0 == null || !onPhone()) return;
+      var dy = e.changedTouches[0].clientY - y0; y0 = null;
+      var i = SHEET_HEIGHTS.indexOf(SHEET);
+      if (dy > 40 && i > 0) setSheet(SHEET_HEIGHTS[i - 1]);
+      else if (dy < -40 && i < SHEET_HEIGHTS.length - 1) setSheet(SHEET_HEIGHTS[i + 1]);
+    }, { passive: true });
+    // the filter line's "show all" lives in the head on a phone
+    var filt = head.querySelector("#sheet-filter");
+    if (filt) filt.addEventListener("click", function (e) { e.stopPropagation(); });
+  }
+  // a tap on the map lowers the sheet to its peek, so the map is the way out
+  function wireSheetMap() {
+    if (!map || map._sheetWired) return;
+    map._sheetWired = true;
+    map.on("click", function () { if (onPhone() && SHEET !== "peek") setSheet("peek"); });
+  }
+
   function buildBar() {
     var bar = document.getElementById("atlas-bar");
     var stage = document.querySelector(".atlas-stage");
     if (!bar || !stage) return;
     var secs = [].slice.call(document.querySelectorAll("#atlas-controls .ctl-group[data-group]"));
     bar.innerHTML = "";
-    if (!secs.length) { bar.hidden = true; return; }
+    syncSheetHead();   // the head says what the sheet holds, tabs or no tabs
+    // tabs only when there is a choice to make: one group needs no tab
+    if (secs.length < 2) { bar.hidden = true; return; }
     bar.hidden = false;
 
     function onIn(sec) {
@@ -6897,7 +7186,7 @@
       b.type = "button";
       b.className = "atlas-tab";
       b.setAttribute("data-mark", id);
-      b.setAttribute("aria-expanded", String(TRAY === id));
+      b.setAttribute("aria-pressed", String(TRAY === id));
       b.setAttribute("aria-label", label + (count ? ", " + tc.said : ""));
       b.appendChild(document.createTextNode(label));
       if (count) {
@@ -6906,50 +7195,41 @@
         c.setAttribute("aria-hidden", "true");
         b.appendChild(c);
       }
-      b.onclick = function () { openTray(TRAY === id ? null : id); };
+      b.onclick = function () { openTray(id); };
       bar.appendChild(b);
     });
     // the lit tab stays in view, even when the row has scrolled
-    var lit = bar.querySelector('.atlas-tab[aria-expanded="true"]');
+    var lit = bar.querySelector('.atlas-tab[aria-pressed="true"]');
     if (lit && lit.scrollIntoView) {
       try { lit.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (e) {}
     }
   }
 
+  /* Show a group in the sheet (and open the sheet if it was peeked), or,
+     with nothing, lower the sheet to its peek. */
   function openTray(which) {
     var stage = document.querySelector(".atlas-stage");
     var panel = document.getElementById("atlas-panel");
     if (!stage || !panel) return;
-    TRAY = which;
-    stage.classList.toggle("tray-open", !!which);
-    var secs = [].slice.call(document.querySelectorAll("#atlas-controls .ctl-group[data-group]"));
-    secs.forEach(function (sec) {
-      sec.classList.toggle("on-show", sec.getAttribute("data-group") === which);
-    });
-    buildBar();
-    if (which) {
-      // focus stays on the tab that opened the group: the rows are right
-      // beneath it, and a thumb that just tapped here is still here
-      var tab = document.querySelector('.atlas-tab[data-mark="' + which + '"]');
-      if (tab) { try { tab.focus({ preventScroll: true }); } catch (e) { tab.focus(); } }
-      var controls = document.getElementById("atlas-controls");
-      if (controls) controls.scrollTop = 0;
-    }
+    if (which) TRAY = which;
+    if (!which) { setSheet("peek"); return; }
+    setSheet(SHEET === "peek" ? "half" : SHEET);
+    var controls = document.getElementById("atlas-controls");
+    if (controls) controls.scrollTop = 0;
   }
 
-  /* The grab bar's job: open the first group, or put the open one away. */
+  /* The head's job on a phone: open a peeked sheet, or lower an open one. */
   function toggleSheet() {
-    if (TRAY) { openTray(null); return; }
-    var first = document.querySelector("#atlas-controls .ctl-group[data-group]");
-    if (first) openTray(first.getAttribute("data-group"));
+    setSheet(SHEET === "peek" ? "half" : "peek");
   }
 
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && TRAY) {
-      var was = TRAY;
-      openTray(null);
-      var m = document.querySelector('.atlas-tab[data-mark="' + was + '"]');
-      if (m) m.focus();
+    // Esc shuts whatever is over the map first; the sheet only when nothing is
+    if (document.querySelector(".atlas-sources[open], .map-style-pop:not([hidden])")) return;
+    if (e.key === "Escape" && onPhone() && SHEET !== "peek") {
+      setSheet("peek");
+      var chev = document.querySelector("#atlas-panel .panel-collapse");
+      if (chev) chev.focus();
     }
   });
 
@@ -6960,8 +7240,9 @@
     if (map) { try { map.remove(); } catch (e) {} map = null; }
     MANIFEST = null; activeBasemap = null;
     TRAY = null;                  // the tray cannot outlive the groups it was showing
+    SHEET = "half";               // the next draw opens as a first visit does
     var stageEl = document.querySelector(".atlas-stage");
-    if (stageEl) stageEl.classList.remove("tray-open");
+    if (stageEl) { stageEl.classList.remove("tray-open"); stageEl.classList.remove("sheet-peek"); }
     DATA = {}; markersByLayer = {}; cropState = {}; keyState = {}; pmSources = {};
     SPIDER = { items: null, anchor: null, svg: null, pop: null, cid: null };
     SEL = { L: null, row: null, ref: null };
@@ -7026,8 +7307,10 @@
       (MANIFEST && MANIFEST.layers || []).forEach(function (L) { if (L._extra) renderExtra(L); });
     },
     reboot: reboot,
-    // the phone sheet's grab bar lives in index.html; it asks here
+    // the phone sheet's head lives in index.html; it asks here
     toggleSheet: toggleSheet,
+    setSheet: setSheet,
+    get sheet() { return SHEET; },
   };
 
   function setText(sel, txt) { var e = $(sel); if (e) e.textContent = txt; }

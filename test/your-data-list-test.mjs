@@ -69,15 +69,15 @@ check('the search line reads the same noun', /var n = L\.noun \|\| \(markersByLa
 console.log('\n  Map Browser: the count (the list is gone — one mark for every place, October 2026)');
 check('no list, no cap, no "Show all"', !/COLL_CAP/.test(js) && !/"Show all " \+ shown/.test(js) && !/coll-list/.test(js) && !/function goToItem\(/.test(js), true);
 check('a search narrows the count with the map', /function applyRowVisibility\(L\) \{[\s\S]*?syncCollection\(pairedPrimary\(L\) \|\| L\);/.test(js), true);
-check('and the line says how many matched', /shown \+ " of " \+ items\.length \+ " " \+ noun \+ " match"/.test(js), true);
-check('the count is plain text, not a button', /var head = el\("div", "coll-head"\);/.test(js) && !/head\.onclick/.test(js), true);
+check('and the count beside the name says how many matched ("16 of 134")', /if \(shown !== total\) c\.appendChild\(el\("span", "ctl-count-of", " of " \+ total\)\);/.test(js), true);
+check('the count is plain text, not a button', /var count = el\("span", "ctl-count"\);/.test(js) && !/count\.onclick/.test(js), true);
 check('the chosen place rings on the map; the panel no longer repeats it', /function selectRow\(L, row, ref\) \{\s*clearSelection\(\);\s*SEL\.L = L; SEL\.row = row; SEL\.ref = ref \|\| null;\s*if \(ref\)[^\n]*\n\s*markSelPin\(\);\s*\}/.test(js) && /selectRow\(top\.L, row != null \? row : null/.test(js), true);
 check('no list styles are left in the sheet', !/\.coll-item/.test(html) && !/\.coll-more/.test(html) && !/\.coll-chev/.test(html), true);
 // (widened in the viewer-ux batch: any one-colour layer drops its repeating row, not only a collection)
 check('the legend row that only repeated the layer\'s name is gone from such a layer', /if \(collectionLayer\(L\) \|\| \(data\.length === 1 && repeats\(data\[0\]\)\)\) \{[\s\S]*?return !repeats\(it\)/.test(js), true);
 check('a name without a title still has one ("person 4")', /if \(!it\.name\) it\.name = nounOne\(layerNoun\(L\)\) \+ " " \+ \(it\.row \+ 1\);/.test(js), true);
 check('the phone\'s tab counts the people, not the one layer', /function tabCount\(sec\) \{[\s\S]*?rows\[0\]\.hasAttribute\("data-count"\)/.test(js) && /L\._row\.setAttribute\("data-count", String\(shown\)\)/.test(js), true);
-check('the count line reads at the phone\'s size', /\.coll-head \{ min-height:32px; font-size:var\(--t-ui\);/.test(html), true);
+check('the count reads at the phone\'s size, with its noun ("134 places")', /\.ctl-count \{ font-size:var\(--t-ui\); \}/.test(html) && /\.ctl-count \.ctl-count-noun \{ display:inline; \}/.test(html), true);
 check('the design notes name it', /### Map Browser/.test(design), true);
 
 console.log('\n  Map Browser: twins — two rows drawn as one shape');

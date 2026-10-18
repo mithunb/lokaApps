@@ -209,7 +209,7 @@ check('the places a question is silent on are looked for in both halves', /funct
 check('folding, flipping and the fold note read the host\'s keys for a twin\'s pins',
   /if \(!keyState\[keyHost\(L\)\.id\]\) return;/.test(js) && /var st = keyState\[keyHost\(L\)\.id\];/.test(js) && /function foldedCount\(L\) \{[^]*?keyEntries\(L\)\.forEach/.test(js), true);
 check('the reach line says "places" for a split file', /var nounK = keyNoun\(L\);/.test(js), true);
-check('the row\'s own count already read both halves, and uses the same noun', /var parts = \[L\]\.concat\(pairedTwin\(L\) \? \[pairedTwin\(L\)\] : \[\]\);[^]*?var noun = keyNoun\(L\);/.test(js), true);
+check('the row\'s own count already read both halves, and uses the same noun', /var parts = \[L\]\.concat\(pairedTwin\(L\) \? \[pairedTwin\(L\)\] : \[\]\);[^]*?renderLayerCount\(L, shown, items\.length\);/.test(js) && /function renderLayerCount\(L, shown, total\) \{[^]*?keyNoun\(L\)/.test(js), true);
 check('at most five keys open at once, as before', /var KEY_STACK_CAP = 5;/.test(js), true);
 
 console.log('\n  the server reads a split file as one file, and writes each half its share');

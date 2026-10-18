@@ -42,11 +42,13 @@ check('the drawer\'s width is written by the same watcher that measures the phon
   /stage\.style\.setProperty\("--panel-w", \(onPhone \? 0 : panel\.offsetWidth\) \+ "px"\);/.test(js), true);
 check('it wears the drawer\'s materials: hairline edge, corner radius, the panel-lift shadow',
   /\.atlas-strip \{[^}]*border:1px solid var\(--color-border\); border-radius:var\(--radius-md\); box-shadow:var\(--shadow-md\); \}/.test(html), true);
-check('Map/Satellite follows search inside it on a wide screen', /else \{\s*\/\/ strip order: search \(already there\), then Map\/Satellite[^]*?if \(bm\) strip\.appendChild\(bm\);/.test(js), true);
-check('on a phone Map/Satellite still lives in the sheet\'s foot', /if \(phone && foot\) \{[^}]*foot\.insertBefore\(bm, foot\.firstChild\);/.test(js), true);
+// (the viewer redesign, October 2026: Map/Satellite left the toolbar and the
+// sheet's foot for one round map button on the stage — see map-button-test)
+check('the toolbar holds search alone: no Map/Satellite segment is built', /el\("div", "ctl-basemaps"\)|"bm-btn"/.test(js), false);
+check('and placeStripPieces has no phone branch moving anything into a foot', /if \(phone && foot\)/.test(js) || /sheet-foot/.test(js), false);
 check('and the phone\'s band goes quiet, full width, search alone', /@media \(max-width:720px\)\{[^]*?\.atlas-strip \{ top:0; left:0; right:0; max-width:none; background:none; border:none; box-shadow:none;/.test(html), true);
 check('the count line hangs from the toolbar\'s left edge, clear of the drawer', /\.atlas-strip \.ctl-search-count \{ left:-\.3rem; transform:none; text-align:left; \}/.test(html), true);
-check('and stays centred under the phone\'s search box', /\.atlas-strip \.ctl-search-count \{ left:50%; transform:translateX\(-50%\); text-align:center; \}/.test(html), true);
+check('and stays centred under the phone\'s search box, clear of the map button', /\.atlas-strip \.ctl-search-count \{ left:50%; transform:translateX\(-50%\); text-align:center; max-width:calc\(100% - 64px\); \}/.test(html), true);
 check('the drawer no longer waits under a strip', /--strip-h,48px\) \+ 8px/.test(html), false);
 
 console.log('\n  the owner\'s tools fold into one Owner menu');
@@ -70,7 +72,7 @@ check('the undeclared base group is called "Boundaries & places" — a declared 
 console.log('\n  (a) the marks live on the map; the Map Browser is a count (one mark for every place, October 2026)');
 check('one builder gives the pin and the list their marks', /function keyMarkRows\(L, f, act\)/.test(js) && /var rows = keyMarkRows\(L, entry\.f, act\);/.test(js), true);
 check('the list of names, and the marks it wore, are gone from the panel', !/function collMarkEl\(/.test(js) && !/coll-marks/.test(js) && !/coll-list/.test(js), true);
-check('the row is a plain count with the place mark before it', /var head = el\("div", "coll-head"\);[\s\S]*?var dot = el\("span", "coll-dot pin"\);/.test(js), true);
+check('the count sits beside the layer\'s name, as plain text (renderLayerCount)', /function renderLayerCount\(L, shown, total\)/.test(js) && /var count = el\("span", "ctl-count"\);/.test(js) && !/el\("div", "coll-head"\)/.test(js), true);
 check('a pin with no answer under a key still wears the grey its "no answer" row uses, on the map', /KEY_OTHER/.test(js) && /function keyMarkRows\(L, f, act\)/.test(js), true);
 check('toggling a key no longer redraws a list', !/syncCollection\(L\);   \/\/ the names in the list/.test(js), true);
 check('no list styles are left in the sheet', !/\.coll-item/.test(html) && !/\.coll-more/.test(html), true);
@@ -93,7 +95,7 @@ check('a key going off drops a filter that was on it', /if \(KINDFILTER && KINDF
 check('the pressed kind is filled with Leaf Tint on a Leaf edge', /button\.key-kind\.on \{ background:var\(--color-leaf-tint\); border-color:var\(--color-leaf\); \}/.test(html), true);
 // (October 2026: the hint is one line about opening a row; what a tap on a
 // kind does is said where it happens — the "Showing only … · Show all" line)
-check('the hint under "Mark each place by" is one line about opening a row', /"Open one to colour the map by its answers\. Tap an answer to show only those places\."/.test(js), true);
+check('the how-to is one line, said once behind the layer\'s ⓘ (not over the rows)', /var HOW_TO = "Mark each place by one of the questions below\. Open a question to colour the map by its answers; tap an answer to show only those places\.";/.test(js) && !/el\("span", "key-hint"/.test(js), true);
 check('and the pressed kind says what a second tap does, right under the kinds', /var all = el\("button", "key-only-all", "Show all"\);/.test(js), true);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

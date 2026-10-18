@@ -84,9 +84,9 @@ check('a kind\'s word goes to an area framed whole, and the card still opens on 
 check('the first-visit pulse sits on the marker\'s head for any layer with markers', /offset: hasPins\(L\) \? \[0, -18\] : \[0, 0\]/.test(js), true);
 
 console.log('\n  the Map Browser counts, and a split file is one row');
-check('a count as plain text, with the place mark before it', /var head = el\("div", "coll-head"\);\s*var dot = el\("span", "coll-dot pin"\);/.test(js), true);
+check('a count as plain text, beside the layer\'s name', /renderLayerCount\(L, shown, items\.length\);/.test(js) && /c\.appendChild\(el\("b", "", String\(shown\)\)\);/.test(js), true);
 check('no chevron, no list, no "Show all"', !/coll-chev/.test(js) && !/coll-list/.test(js) && !/coll-more/.test(js) && !/\.coll-chev/.test(html), true);
-check('the count is not a button in the sheet either', /\.coll-head \{ display:flex; align-items:center; gap:\.5rem; min-height:24px;/.test(html) && !/\.coll-head:hover/.test(html), true);
+check('the count is not a button in the sheet either', /\.ctl-count \{ flex:0 0 auto; font-size:var\(--t-meta\);/.test(html) && !/\.ctl-count:hover/.test(html) && !/count\.onclick/.test(js), true);
 const pairs = lift(js, ['layerById', 'looksLikeTwin', 'pairedTwin', 'pairedPrimary'], 'var MANIFEST = { layers: [] };\n');
 check('the "· as points" half is known by its name', (() => { const f = lift(js, ['looksLikeTwin']); return [f({ id: 'a-as-points', sameFileAs: 'a' }), f({ id: 'x', sameFileAs: 'a', label: 'Water · as points' }), f({ id: 'a', sameFileAs: 'a-as-points', label: 'Water' })]; })(), [true, true, false]);
 check('the twin has no row of its own in the drawer', /!isBaseMapRow\(L\) && !pairedPrimary\(L\)/.test(js), true);
@@ -97,7 +97,7 @@ const splitWords = lift(js, ['splitWords']);
 check('"6 as areas · 5 as points" when the first half kept its outlines', [splitWords(6, { type: 'fill' }, false), splitWords(5, { type: 'fill' }, true), splitWords(1, { type: 'fill' }, false)], ['6 as areas', '5 as points', '1 as area']);
 check('"6 by region · 5 looked up" when the first half was placed at its regions\' middles', [splitWords(6, { type: 'marker' }, false), splitWords(5, { type: 'marker' }, true)], ['6 by region', '5 looked up']);
 check('the second line is Muted, Meta type, under the count', /\.coll-split \{ margin:0 0 0 calc\(11px \+ 3px \+ \.5rem\); padding:0; font-size:var\(--t-meta\); color:var\(--color-text-muted\);/.test(html), true);
-check('a split file\'s rows are "places" unless the manifest names them', /function keyNoun\(L\) \{\s*var H = keyHost\(L\);\s*return H\.noun \|\| \(keyHalves\(H\)\.length > 1 \? "places" : layerNoun\(H\)\);/.test(js) && /var noun = keyNoun\(L\);/.test(js), true);
+check('a split file\'s rows are "places" unless the manifest names them', /function keyNoun\(L\) \{\s*var H = keyHost\(L\);\s*return H\.noun \|\| \(keyHalves\(H\)\.length > 1 \? "places" : layerNoun\(H\)\);/.test(js) && /nounOne\(keyNoun\(L\)\) : keyNoun\(L\)/.test(js), true);
 
 console.log('\n  the design notes say it');
 check('one mark for every place', /### One mark for every place \(October 2026\)/.test(design) && /pole of inaccessibility/.test(design), true);

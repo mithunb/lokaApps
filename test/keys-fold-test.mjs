@@ -110,7 +110,8 @@ check('the reach line, the note and the kinds live in the open body only',
   /body\.appendChild\(reach\)/.test(build) && /body\.appendChild\(why\)/.test(build) &&
   /keyKindRows\(L, opt\)\.forEach\(function \(r\) \{ body\.appendChild\(r\); \}\)/.test(build), true);
 check('the reach line is a plain sentence', /"Answers come from " \+ pct \+ "% of the " \+ nounK/.test(build), true);
-check('the hint is one line: what opening a row does, and what tapping an answer does', /"Open one to colour the map by its answers\. Tap an answer to show only those places\."/.test(build), true);
+check('no caption and no hint are built over the rows: the ⓘ says it once', /key-chips-lbl|key-hint/.test(build), false);
+check('and the how-to is one line in the ⓘ: open a question, tap an answer', /var HOW_TO = "Mark each place by one of the questions below\. Open a question to colour the map by its answers; tap an answer to show only those places\.";/.test(js), true);
 check('and the old six-line hint is gone', /Keys colour the map — each wears its own shape/.test(js), false);
 check('no tick box is built for a key (the layer\'s own switch is still a checkbox)', /cb\.type = "checkbox"|key-tick/.test(build), false);
 
@@ -162,7 +163,7 @@ console.log('\n  the styles');
 check('rows are separated by a hairline, not by margins on the kinds', /\.key-entry \{ border-top:1px solid var\(--color-divider\); \}/.test(html) && !/\.key-list \.key-kind \+ \.key-toggle/.test(html), true);
 check('the caret turns when the row is open', /\.key-entry\.open > \.key-toggle \.key-caret \{ transform:rotate\(-135deg\)/.test(html), true);
 check('the refused note is in Sindoor', /\.key-note \{[^}]*color:var\(--color-sindoor-deep\)/.test(html), true);
-check('on a touch screen a row is at least 44px tall', /@media \(pointer:coarse\)\{[\s\S]*?\.key-toggle \{ min-height:44px; \}/.test(html), true);
+check('on a touch screen, or a phone-width screen, a question\'s row is 48px tall', /@media \(pointer:coarse\), \(max-width:720px\)\{[\s\S]*?\.key-toggle \{ min-height:48px; \}/.test(html), true);
 check('and the ⓘ still sits at the row\'s end', /\.key-toggle \.lbl-info \{ margin-left:auto; flex:0 0 auto; \}/.test(html), true);
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');

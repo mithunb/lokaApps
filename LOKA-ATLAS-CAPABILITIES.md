@@ -398,8 +398,14 @@ A representative sample:
 Estimated build times in the catalogue run from 1 second (the streamed layers) to 180 seconds (the
 floodplain). Every layer carries its own credit line, and credits appear on the published map.
 
-Two basemaps ship with every atlas: **Map** (CARTO light, the default) and **Satellite** (Esri World
-Imagery). The built map's top zoom is 15.
+Two basemaps ship with every atlas: **Map** (OpenFreeMap's OSM Bright, the default) and **Satellite**
+(Esri World Imagery). The built map's top zoom is 15. A reader switches between them from one round
+**map button** at the map's top-right (under the search box on a phone), which opens a small
+"Map or satellite" sheet with the two as swatches and the showing map's credit beneath them (October
+2026; it replaced the Satellite/Map segment in the toolbar and in the phone sheet's foot). The showing
+map's credit is also on the **credit pill** bottom-left of the map — "ⓘ © OpenStreetMap contributors
+· OpenFreeMap", OpenStreetMap linking to its copyright page — which folds to its ⓘ on a phone once the
+map is first moved (or after five seconds); the ⓘ opens About & sources.
 
 ---
 
@@ -456,8 +462,16 @@ A "key" means: colour the places of one layer by the answers in one of its colum
   and a row holds one mark for **every** answer the place carries, so a place that is Culture and
   Nature wears two circles side by side. (The older corner-badge design, which showed one answer per
   key at the pin's four corners, is gone.)
-- **Every key the layer offers is listed as a row under "Mark each place by"** (October 2026),
-  questions and spreadsheet columns alike, showing only its name and a caret. There is no tick box:
+- **Every key the layer offers is listed as a row directly under the layer** (October 2026),
+  questions and spreadsheet columns alike, showing only its name and a caret, flush with the layer at
+  the panel's full width. The caption "Mark each place by" and the one-line how-to are no longer
+  drawn over the rows: they are said once behind the layer's ⓘ (`layerNote`), together with the
+  layer's name and count, who added it and from what, and — only when the layer has them — a line
+  about LOKA's short names. The count also sits beside the layer's name (`renderLayerCount`:
+  "134 places" on a phone, "· 134" in the drawer, "27 of 134" while narrowed), the same number the
+  phone's tab shows. On a phone the sheet has three heights (peek · half · full, `setSheet`) with a
+  visible chevron, a grabber, a swipe and the map as the way out; group tabs show only with two or
+  more groups; the "27 of 134 places are … · show all" line sits in the sheet's head. There is no tick box:
   opening the row (`buildKeyToggles`, a button with `aria-expanded`) switches the key on and shows
   its reach ("Answers come from 39% of the tags"), any "mostly one answer" note and its kinds with
   counts; closing it switches the key off. **Rows are ordered by reach** — the share of the layer's

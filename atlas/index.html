@@ -163,11 +163,35 @@
       background:var(--map-ground); border:1px solid var(--map-boundary);
       outline:1px solid var(--map-boundary); outline-offset:2px; }
     #atlas-map { position:absolute; inset:0; }
-    /* basemap attribution rendered below the map, not overlaying it */
-    .map-attrib { width:var(--container); margin:0 auto 1.5rem; text-align:right;
-      font-size:var(--t-label); line-height:1.4; color:var(--color-text-muted); }
-    .map-attrib:empty { display:none; }
-    .map-attrib a { color:inherit; text-decoration:underline; }
+    /* ---- the credit pill, bottom-left of the map ----
+       One pill holds the ⓘ that opens "About & sources" and the showing base
+       map's own credit: "ⓘ © OpenStreetMap contributors · OpenFreeMap", the
+       OpenStreetMap link going to its copyright page, as the OSMF guideline
+       asks. It replaced two things floating side by side there — an "About &
+       sources" chip and a credit line — with one. 32px tall; the ⓘ's tap box
+       is 44px, drawn past the pill's edge (the negative margin) so the pill
+       itself stays small. On a phone it folds to the ⓘ alone (.folded, set
+       by atlas.js on the map's first move or after five seconds); a wide
+       screen has room and keeps the whole line. */
+    .map-attrib { position:absolute; left:8px; bottom:8px; z-index:4; display:flex; align-items:center;
+      height:32px; max-width:calc(100% - 9rem); border-radius:var(--radius-pill);
+      background:rgba(253,252,248,.94); border:1px solid var(--color-border);
+      font-size:var(--t-label); line-height:1.3; color:var(--color-text-secondary); white-space:nowrap;
+      overflow:hidden; cursor:pointer; transition:max-width .35s ease; }
+    .map-attrib-i { flex:0 0 auto; width:44px; height:44px; margin:-7px -8px -7px -7px; padding:0; border:0; background:none; cursor:pointer;
+      display:inline-flex; align-items:center; justify-content:center;
+      font-family:var(--font-display); font-weight:700; font-style:italic; font-size:.9rem; color:var(--color-leaf); }
+    .map-attrib-i:focus-visible { outline:2px solid var(--color-leaf); outline-offset:-6px; border-radius:50%; }
+    .map-attrib-words { padding:0 .7rem 0 .35rem; overflow:hidden; text-overflow:ellipsis; }
+    .map-attrib-words:empty { display:none; }
+    .map-attrib a { color:inherit; text-decoration:underline; text-decoration-color:var(--color-border); text-underline-offset:2px; }
+    .map-attrib a:hover { color:var(--color-leaf-deep); text-decoration-color:currentColor; }
+    .map-attrib:hover, .map-attrib:has([aria-expanded="true"]) { background:var(--color-surface); color:var(--color-text-primary); }
+    .map-attrib.folded { max-width:32px; }
+    .map-attrib-words { transition:opacity .2s ease; }
+    .map-attrib.folded .map-attrib-words { opacity:0; }
+    /* the home gallery has no map, so nothing to credit */
+    html.atlas-home .map-attrib { display:none; }
     /* While the manifest and the base style are on their way the stage shows
        its own ground and one quiet line; the map appears in its place. */
     .atlas-loading { position:absolute; inset:0; z-index:3; display:flex; align-items:center; justify-content:center;
@@ -209,23 +233,21 @@
     .atlas-error-box p { font-size:var(--t-ui); font-weight:400; color:var(--color-text-secondary); margin:0 0 .9rem; text-wrap:pretty; overflow-wrap:anywhere; }
     .atlas-error-box .share-btn { font-size:var(--t-ui); }
 
-    /* ---- the map's toolbar: search and Map/Satellite, floating beside the drawer ----
-       Search and Map/Satellite each give ONE answer for the whole map, so
-       they sit together on one small toolbar at the map's top edge, just to
-       the right of the Layers drawer — grouped with the map they act on,
-       wearing the drawer's own materials (Surface at 95%, hairline edge, the
-       panel-lift shadow) so the two read as one family of controls over the
-       map. The drawer's width is measured into --panel-w by atlas.js, so the
-       toolbar follows it when the drawer folds to its "Layers · N" head. On
-       a phone (below) the band goes quiet and search floats alone, as it
-       always did. */
+    /* ---- the map's toolbar: search, floating beside the drawer ----
+       Search gives ONE answer for the whole map, so it sits on one small
+       toolbar at the map's top edge, just to the right of the Layers drawer
+       — grouped with the map it acts on, wearing the drawer's own materials
+       (Surface at 95%, hairline edge, the panel-lift shadow) so the two read
+       as one family of controls over the map. The drawer's width is measured
+       into --panel-w by atlas.js, so the toolbar follows it when the drawer
+       folds to its "Layers · N" head. On a phone (below) the band goes quiet
+       and search floats alone, as it always did. Map/Satellite left the
+       toolbar for the map button at the top-right (below). */
     .atlas-strip { position:absolute; top:8px; left:calc(var(--panel-w, 19.5rem) + 16px); z-index:6;
       display:flex; align-items:center; gap:.4rem; padding:.25rem .3rem;
       max-width:calc(100% - var(--panel-w, 19.5rem) - 24px);
       background:rgba(253,252,248,.95); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
       border:1px solid var(--color-border); border-radius:var(--radius-md); box-shadow:var(--shadow-md); }
-    .atlas-strip .ctl-basemaps { flex:0 0 auto; margin:0; border-color:transparent; background:none; padding:0; }
-    .atlas-strip .bm-btn { flex:0 0 auto; }
 
     /* ---- control widget ---- */
     /* The shelf floats over the map, 8px in from the frame and just under the
@@ -239,9 +261,12 @@
     /* the sheet's own body: on a wide screen it is just the scroller's box;
        on a phone it is what slides open (see the mobile block) */
     .sheet-body { display:flex; flex-direction:column; min-height:0; flex:1 1 auto; }
-    /* the phone sheet's foot: on a wide screen the credit strip below the map
-       says all of this, so the foot is not there */
-    .sheet-foot { display:none; }
+    /* the phone sheet's own pieces of the head — the grabber band, the layer's
+       name under "LAYERS", LOKA's badge, the filter line — are not there on
+       a wide screen */
+    .sheet-grip, .sheet-layer, .loka-badge.loka-badge-head, .sheet-filter { display:none; }
+    .panel-head-row { display:flex; align-items:center; gap:.45rem; min-width:0; flex:1 1 auto; }
+    .sheet-who { display:flex; align-items:center; gap:.45rem; min-width:0; flex:1 1 auto; }
     @media (min-width:721px){
       /* folded: the shelf stops being a column and becomes its own head */
       .atlas-panel.collapsed { bottom:auto; }
@@ -275,16 +300,51 @@
       .atlas-panel.collapsed .panel-collapse { transform:rotate(180deg); }
     }
 
-    /* Map / Satellite: one segmented control on Surface with an ink border;
-       the segment that is showing is Leaf with white text */
-    .ctl-basemaps { display:inline-flex; gap:0; padding:2px; background:var(--color-surface);
-      border:1px solid var(--color-border); border-radius:var(--radius-md); }
-    .bm-btn { flex:1; padding:.32rem .65rem; font:inherit; font-size:var(--t-meta); font-weight:600; cursor:pointer;
-      background:transparent; color:var(--color-text-secondary); border:0; border-radius:var(--radius-xs);
-      transition:background .15s ease, color .15s ease; }
-    .bm-btn:hover { color:var(--color-leaf-deep); background:var(--color-leaf-tint); }
-    .bm-btn.active { background:var(--color-leaf); color:#fff; }
-    .bm-btn:focus-visible { outline:2px solid var(--color-leaf); outline-offset:1px; }
+    /* ---- the map button: Map or satellite ----
+       One round 44px button at the map's top-right wearing the layers-stack
+       mark (the same mark the drawer's folded head wears), on Surface with a
+       hairline edge. Leaf with white ink while the satellite is showing, so
+       the button says which. It opens a small sheet (.map-style-pop) with
+       the two base maps as swatches and the showing map's credit under them.
+       On a phone the sheet rises from the foot of the stage; on a wide
+       screen it hangs from the button. */
+    .map-style-btn { position:absolute; top:8px; right:8px; z-index:6; width:44px; height:44px; padding:0; border-radius:50%;
+      background:rgba(253,252,248,.95); border:1px solid var(--color-border); box-shadow:var(--shadow-md); cursor:pointer;
+      display:inline-flex; align-items:center; justify-content:center; color:var(--color-text-primary);
+      transition:background .15s ease, color .15s ease, right .22s cubic-bezier(.22,1,.36,1); }
+    .map-style-btn svg { width:20px; height:20px; }
+    .map-style-btn:hover { background:var(--color-surface); color:var(--color-leaf-deep); }
+    .map-style-btn.on { background:var(--color-leaf); border-color:var(--color-leaf); color:#fff; }
+    .map-style-btn:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; }
+    .map-style-btn[aria-expanded="true"] { background:var(--color-surface); color:var(--color-leaf-deep); }
+    /* the card docks at the right on a wide screen: the button steps left of it */
+    @media (min-width:721px){ .atlas-stage.card-docked .map-style-btn { right:356px; } }
+    .map-style-scrim { position:absolute; inset:0; z-index:7; background:rgba(36,33,29,.18); }
+    .map-style-scrim[hidden] { display:none; }
+    .map-style-pop { position:absolute; top:60px; right:8px; z-index:8; width:min(20rem, calc(100% - 16px));
+      padding:0 .9rem .9rem; background:var(--color-surface); border:1px solid var(--color-border);
+      border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); }
+    .map-style-pop[hidden] { display:none; }
+    .map-style-head { display:flex; align-items:center; gap:.5rem; height:48px; }
+    .map-style-title { flex:1 1 auto; margin:0; font-family:var(--font-display); font-size:var(--t-control); font-weight:700; color:var(--color-text-primary); }
+    .map-style-close { flex:0 0 auto; width:44px; height:44px; margin-right:-.5rem; border:0; background:none; cursor:pointer; color:var(--color-text-muted);
+      display:inline-flex; align-items:center; justify-content:center; border-radius:var(--radius-md); }
+    .map-style-close svg { width:18px; height:18px; }
+    .map-style-close:hover { background:var(--color-surface-alt); color:var(--color-text-primary); }
+    .map-style-close:focus-visible { outline:2px solid var(--color-leaf); outline-offset:-4px; }
+    .map-style-choice { display:flex; gap:.6rem; margin:0 0 .6rem; }
+    .map-style-opt { flex:1 1 0; min-width:0; padding:.5rem; font:inherit; font-size:var(--t-ui); font-weight:600; color:var(--color-text-primary); text-align:center;
+      background:var(--color-surface); border:2px solid var(--color-border); border-radius:var(--radius-lg); cursor:pointer;
+      display:flex; flex-direction:column; gap:.4rem; align-items:stretch; }
+    .map-style-opt:hover { border-color:var(--color-leaf); }
+    .map-style-opt.on { border-color:var(--color-leaf); background:var(--color-leaf-tint); color:var(--color-leaf-deep); }
+    .map-style-opt:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; }
+    .map-style-swatch { display:block; height:54px; border-radius:var(--radius-md); border:1px solid var(--color-border); }
+    .map-style-swatch.map { background:var(--map-ground, #F5F1E6); background-image:linear-gradient(90deg, transparent 46%, #D9D2C2 46%, #D9D2C2 54%, transparent 54%), linear-gradient(0deg, transparent 58%, #DDE3D2 58%, #DDE3D2 78%, transparent 78%); }
+    .map-style-swatch.sat { background:linear-gradient(135deg, #6E6248, #55613C); }
+    .map-style-credit { margin:0; font-size:var(--t-label); line-height:1.45; color:var(--color-text-secondary); }
+    .map-style-credit:empty { display:none; }
+    .map-style-credit a { color:inherit; text-decoration:underline; text-underline-offset:2px; }
 
     /* ---- search: lives in the strip ----
        Searching is a reader's first move; inside the panel it read as one
@@ -393,13 +453,26 @@
     .ctl-toggle input:focus-visible + .ctl-switch { outline:2px solid var(--color-leaf); outline-offset:2px; }
     .ctl-toggle input:disabled + .ctl-switch { opacity:.5; }
     .ctl-name { font-size:var(--t-ui); font-weight:600; line-height:1.25; }
+    /* How much the layer holds, beside its name: "· 134" in the drawer (the
+       noun is dropped, the drawer is 312px wide), "134 places" on a phone.
+       "16 of 134" while a search or a pressed answer has narrowed the map.
+       Filled by atlas.js once the file is in; the same number the phone's
+       tab chip reads. */
+    .ctl-count { flex:0 0 auto; font-size:var(--t-meta); font-weight:600; color:var(--color-text-secondary);
+      white-space:nowrap; font-variant-numeric:tabular-nums; }
+    .ctl-count[hidden] { display:none; }
+    .ctl-count b { font-weight:700; color:var(--color-text-primary); }
+    .ctl-count::before { content:'· '; color:var(--color-text-muted); }
+    .ctl-count .ctl-count-noun { display:none; }
+    .ctl-row.off .ctl-count, .ctl-row.off .ctl-count b { color:var(--color-text-muted); font-weight:400; }
     /* A button, not a span carrying a title: it can be pressed, focused and
-       read out. The mark stays 15px; the padding around it is the part you
-       can hit, which a 16px square never was. */
+       read out. The mark stays 15px; the box around it is the part you can
+       hit — 44px square, which a 16px square never was. The box overhangs
+       the row's edge (the negative margin) so the row keeps its width. */
     .ctl-info { margin-left:auto; flex:0 0 auto; color:var(--color-text-muted);
       display:inline-flex; align-items:center; justify-content:center;
-      background:none; border:0; padding:5px; cursor:pointer; }
-    .ctl-info svg { width:15px; height:15px; }
+      background:none; border:0; padding:0; width:44px; height:44px; margin-right:-10px; cursor:pointer; border-radius:50%; }
+    .ctl-info svg { width:16px; height:16px; }
     .ctl-info:hover { color:var(--color-leaf); }
     .ctl-info:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; border-radius:var(--radius-md); }
     .ctl-info[aria-expanded="true"] { color:var(--color-leaf); }
@@ -422,18 +495,21 @@
        heading, when opened, is a line of its own under the row (a sibling of
        the label, as a layer's own note is). */
     .key-toggle .lbl-info { margin-left:auto; flex:0 0 auto; }
-    .key-list .lbl-full { margin:-.05rem 0 .3rem 1.6rem; }
+    .key-list .lbl-full { margin:-.05rem 0 .3rem 0; }
     .pop-lbl .lbl-full, .key-name .lbl-full { margin:.1rem 0 .2rem; }
-    /* what the layer is, in its own words — on the panel's strip like everything else */
-    .ctl-said { margin:.1rem 0 .35rem; padding-left:var(--panel-strip);
-      font-size:var(--t-label); line-height:1.45; color:var(--color-text-secondary); }
-    /* Everything a layer owns — keys, legend, fold note, browse link,
-       opacity — hangs behind one moss rule, so wherever the sheet is
-       scrolled the branch visibly belongs to something above it. (The rule
-       used to sit on the key block alone; it now holds the whole branch.) */
-    /* No hairline and no step: the words line up under the switch they belong
-       to, which says the same thing without spending width on saying it. */
-    .ctl-extra { margin:.05rem 0 .35rem; padding-left:var(--panel-strip); border-left:0; }
+    /* What the layer is: its name and count, who added it, how to use the
+       questions — behind the ⓘ, on a quiet Page-coloured card. Flush with
+       the layer, full width. */
+    .ctl-said { margin:.15rem 0 .45rem; padding:.55rem .7rem; background:var(--color-page);
+      border:1px solid var(--color-border); border-radius:var(--radius-md);
+      font-size:var(--t-meta); line-height:1.45; color:var(--color-text-secondary); text-wrap:pretty; }
+    /* Everything a layer owns — questions, legend, fold note, opacity — sits
+       flush with the layer at the panel's full width. It used to step right
+       by the switch's width behind a hairline: each question lost that width
+       and wrapped, in a drawer only 312px wide. The questions' own rows and
+       the Leaf rule beside an open question's answers say what belongs to
+       what. */
+    .ctl-extra { margin:.05rem 0 .35rem; padding-left:0; border-left:0; }
     .ctl-extra:empty { display:none; }
     /* an atlas with nothing on its shelf */
     .ctl-empty { margin:.6rem .1rem; font-size:var(--t-meta); color:var(--color-text-secondary); }
@@ -477,11 +553,10 @@
        layer's name can scroll out of sight — leaving a column of switches with
        no visible owner. A rule down their left side says "these are a branch of
        something" wherever you are in the scroll, which a heading cannot. */
-    .key-chips { margin:.3rem 0 .1rem; }
-    .key-chips-lbl { display:block; font-size:var(--t-label); font-weight:600; letter-spacing:.02em; color:var(--color-text-muted); margin-bottom:.1rem; }
-    /* said once per layer, quiet enough to skip and there when you look for it */
-    .key-hint { display:block; font-size:var(--t-label); font-weight:400; line-height:1.45; color:var(--color-text-muted);
-      margin:0 0 .3rem; max-width:28ch; }
+    /* No caption and no hint over the rows: "Mark each place by" and its
+       how-to line are said once behind the layer's ⓘ (.ctl-said). The rows
+       start right under the layer. */
+    .key-chips { margin:.1rem 0 .1rem; }
     .key-list { display:flex; flex-direction:column; }
     .ctl-switch.small { width:26px; height:15px; }
     .ctl-switch.small::after { width:11px; height:11px; }
@@ -511,6 +586,12 @@
        whether open or closed; the caret and the slot say the state */
     .key-tname { flex:1 1 auto; min-width:0; font-size:var(--t-meta); font-weight:600; line-height:1.25; color:var(--color-text-primary); }
     .key-entry.open > .key-toggle .key-tname { color:var(--color-leaf-deep); }
+    .key-entry.open > .key-toggle { color:var(--color-leaf-deep); }
+    .key-entry.open > .key-toggle .key-caret { border-color:var(--color-leaf-deep); }
+    /* an open question's answers sit behind a 3px Leaf rule, in from the
+       question by the slot's width: the rule says "these belong to the
+       question above" wherever the sheet is scrolled, which a heading cannot */
+    .key-entry.open > .key-body { margin:0 0 .35rem .35rem; padding-left:.75rem; border-left:3px solid var(--color-leaf); }
     .key-caret { flex:0 0 auto; margin-left:auto; width:8px; height:8px; border:solid var(--color-text-muted);
       border-width:0 1.5px 1.5px 0; transform:rotate(45deg); margin-bottom:4px; transition:transform .15s; }
     .key-toggle .lbl-info + .key-caret { margin-left:0; }
@@ -521,10 +602,10 @@
        open body, quiet, because it is a caveat on the key, not a number to
        read first; set in under the name, where everything in the body sits */
     .key-reach { font-size:var(--t-label); color:var(--color-text-muted); line-height:1.4;
-      padding:0 0 .25rem 1.5rem; font-variant-numeric:tabular-nums; }
+      padding:.1rem 0 .25rem; font-variant-numeric:tabular-nums; }
     /* the sixth key refused: said under the row that was pressed, in Sindoor */
     .key-note { font-size:var(--t-label); font-weight:400; color:var(--color-sindoor-deep); line-height:1.4;
-      padding:.1rem 0 .4rem 1.5rem; }
+      padding:.1rem 0 .4rem; }
     .key-note[hidden] { display:none; }
     /* open, on a layer nobody is showing: the choice holds, the voice drops */
     .key-entry.key-held > .key-toggle .key-tname { color:var(--color-text-muted); font-weight:400; }
@@ -532,7 +613,7 @@
        the panel's quietest voice: the label rung, muted ink, under the reach
        line. No colour, no icon — it is a caveat, not a warning. */
     .key-flat { font-size:var(--t-label); color:var(--color-text-muted); line-height:1.4;
-      padding:0 0 .3rem 1.5rem; }
+      padding:0 0 .3rem; }
     /* where the folded places went — kept current by updateFoldNote */
     .key-fold { font-size:var(--t-label); font-weight:400; color:var(--color-text-muted); line-height:1.45; margin:.3rem 0 .05rem; }
     /* keys wear rows: each switched-on key is one row of small marks beside
@@ -592,10 +673,10 @@
     /* a kind sitting under its own switch, indented to belong to it */
     /* a kind sits under its key's own name, which is the strip again */
     .key-kind { padding-left:var(--panel-strip); }
-    /* Inside an open row the kinds sit under the key's name — the slot and
-       its gap, 1.5rem — not out on the layer's strip. Between one key and the
-       next the row's own hairline (.key-entry) draws the line. */
-    .key-body .key-kind { padding-left:1.5rem; }
+    /* Inside an open row the kinds sit behind the row's Leaf rule, flush
+       with the reach line above them. Between one key and the next the
+       row's own hairline (.key-entry) draws the line. */
+    .key-body .key-kind { padding-left:.15rem; min-height:32px; }
     /* The kinds of the key that is on, two to a row where the names allow it.
        A plain column of them is 96px longer on this atlas (MEASURED in the
        drawing), and listing every key at rest already spends height — so the
@@ -608,7 +689,7 @@
     /* The places a question has nothing to say about, opened from its own row.
        Indented to the legend's words, quiet as a caveat, and each place a way
        back to its pin rather than a label. */
-    .leg-silent { display:flex; flex-direction:column; gap:.1rem; padding:.1rem 0 .35rem 1.5rem; }
+    .leg-silent { display:flex; flex-direction:column; gap:.1rem; padding:.1rem 0 .35rem .5rem; }
     .leg-silent-p { font:inherit; font-size:var(--t-label); font-family:inherit; text-align:left;
       background:none; border:0; padding:.1rem 0; cursor:pointer; color:var(--color-text-secondary);
       overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -665,7 +746,7 @@
     .leg-open:hover { color:var(--color-text-primary); background:var(--color-surface-alt); }
     .leg-open[aria-expanded="true"] { transform:rotate(180deg); color:var(--color-text-primary); }
     .leg-open:focus-visible { outline:2px solid var(--color-leaf); outline-offset:0; }
-    .leg-why { display:flex; flex-wrap:wrap; gap:.2rem; padding:.1rem 0 .35rem 1.5rem; }
+    .leg-why { display:flex; flex-wrap:wrap; gap:.2rem; padding:.1rem 0 .35rem .5rem; }
     /* Each word is a button now, because each one leads back to the place that
        said it. It keeps the quiet look it had as a label — a word of evidence
        should not shout like a control — and only declares itself on hover and
@@ -1330,17 +1411,8 @@
     .atlas-panel.collapsed .panel-head { border-bottom:none; padding:.5rem .8rem; }
     .panel-icon { width:15px; height:15px; flex:0 0 auto; color:var(--color-leaf); display:none; }
     .atlas-panel.collapsed .panel-icon { display:block; }
-    /* bottom-left: the way to the credits and the base map's own line */
-    .map-foot { position:absolute; left:8px; bottom:8px; z-index:4; display:flex; align-items:center; gap:.4rem;
-      max-width:calc(100% - 9rem); pointer-events:none; }
-    .map-foot > * { pointer-events:auto; }
-    .map-chip { font:inherit; font-size:var(--t-label); font-weight:600; letter-spacing:.02em; color:var(--color-text-secondary); cursor:pointer;
-      background:rgba(253,252,248,.94); border:1px solid var(--color-border); border-radius:var(--radius-md);
-      padding:.3rem .6rem; white-space:nowrap; transition:color .15s ease, background .15s ease; }
-    .map-chip:hover, .map-chip[aria-expanded="true"] { color:var(--color-leaf-deep); background:var(--color-surface); }
-    .atlas-full .map-attrib { width:auto; margin:0; padding:.3rem .5rem; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-      background:rgba(253,252,248,.82); border-radius:var(--radius-md); font-size:var(--t-label); }
-    /* the map's own zoom buttons and scale bar keep clear of the chips */
+    /* the map's own zoom buttons and scale bar keep clear of the badge (the
+       credit pill is bottom-LEFT, see the top of the sheet) */
     .atlas-full .maplibregl-ctrl-bottom-right { bottom:34px; }
     .atlas-full .maplibregl-ctrl-bottom-right .maplibregl-ctrl-scale { margin-left:auto; }
     /* ---- LOKA's badge: "Powered by [LOKA] Atlas" ----
@@ -1395,21 +1467,12 @@
       .org-brand-logo { height:28px; }
       .org-brand-line > span { max-width:none; }
       .org-head #atlas-title { font-size:1rem; }
-      /* the sheet folded: a chip bottom-left; LOKA's badge comes out of its foot to float */
-      .atlas-full .atlas-panel.collapsed { left:8px; right:auto; bottom:calc(8px + env(safe-area-inset-bottom)); max-height:none;
-        border:1px solid var(--color-border); border-radius:var(--radius-md); box-shadow:var(--shadow-md); background:rgba(253,252,248,.94); }
-      .atlas-panel.collapsed .panel-head { padding:.45rem .7rem; }
-      .atlas-panel.collapsed .panel-head::before { display:none; }
-      .atlas-panel.collapsed .panel-head strong, .atlas-panel.collapsed .panel-count { display:inline; }
-      .atlas-panel.collapsed .atlas-bar, .atlas-panel.collapsed .sheet-body, .atlas-panel.collapsed .sheet-foot { display:none; }
+      /* the badge is in the sheet's head on a phone; it floats only while
+         the empty drawer is not drawn (loading, the private page) */
       .loka-badge-float { display:none; }
-      .atlas-panel.collapsed ~ .loka-badge-float,
-      /* the empty drawer is not drawn (loading, the private page), so the badge stands on its own */
       .atlas-full .atlas-panel:has(#atlas-controls:empty) ~ .loka-badge-float { display:inline-flex; bottom:calc(8px + env(safe-area-inset-bottom)); }
-      /* the sheet at rest: its foot carries Map/Satellite and the badge */
-      .sheet-foot-words { flex-direction:row; align-items:center; }
-      /* the chips sit just above the sheet, with the map's own buttons */
-      .map-foot { left:8px; bottom:calc(var(--sheet-h, 0px) + 8px); max-width:calc(100% - 4.5rem); }
+      /* the credit pill sits just above the sheet, with the map's own buttons */
+      .map-attrib { left:8px; bottom:calc(var(--sheet-h, 0px) + 8px); max-width:calc(100% - 4.5rem); }
       /* the waiting label steps up above the sheet and the chips, like the cue */
       .atlas-loading.aside { bottom:calc(var(--sheet-h, 0px) + 52px); }
       .atlas-full .maplibregl-ctrl-bottom-left { bottom:calc(var(--sheet-h, 0px) + 40px); }
@@ -1428,10 +1491,22 @@
     /* map-only: the frame IS the map — not even the header */
     .atlas-embed-map header.site,
     .atlas-embed-map .atlas-hero { display:none; }
-    /* Coarse pointer (touch): comfortable 44px targets regardless of screen size */
-    @media (pointer:coarse){
+    /* Touch sizes: on a touch screen of any size, and on any screen as
+       narrow as a phone (a phone's browser is not always honest about its
+       pointer). The guide figure is 44px; a question's row is 48px; a word
+       chip 36px with 6px between; the grabber band 22px. */
+    @media (pointer:coarse), (max-width:720px){
       .ctl-toggle, .ctl-sub-toggle { min-height:44px; }
-      .ctl-info { padding:8px; }
+      .key-toggle { min-height:48px; }
+      .key-body .key-kind { min-height:44px; }
+      .leg-open { width:44px; height:44px; }
+      .leg-open svg { width:16px; height:16px; }
+      .leg-why { gap:6px; }
+      .leg-why-w { min-height:36px; padding:0 .6rem; display:inline-flex; align-items:center; border-radius:18px; }
+      .leg-why-w.leg-why-go { padding:0 .6rem; }
+      .ctl-info { width:44px; height:44px; }
+    }
+    @media (pointer:coarse){
       .ctl-switch { width:38px; height:22px; }
       .ctl-switch::after { width:18px; height:18px; }
       .ctl-toggle input:checked + .ctl-switch::after,
@@ -1446,18 +1521,13 @@
       .ctl-switch.small::after { width:14px; height:14px; }
       .ctl-toggle input:checked + .ctl-switch.small::after { transform:translateX(12px); }
       .key-tname { font-size:var(--t-ui); }
-      /* a key's row is a thumb target: 44px tall, the whole row the target */
-      .key-toggle { min-height:44px; }
-      .key-body .key-kind { min-height:32px; }
       .ctl-sub-chev { min-width:40px; min-height:40px; align-items:center; justify-content:center; }
-      .coll-head { min-height:32px; font-size:var(--t-ui); font-weight:400; }
       .coll-split { font-size:var(--t-ui); }
       .pop-twin { min-height:38px; }
       .ctl-group-head { padding:.75rem .1rem; }
       .ctl-search-box { min-height:44px; }
-      .bm-btn { padding:.6rem .5rem; }
       .crop-chip { padding:.4rem .6rem; font-size:var(--t-meta); }
-      .panel-collapse { min-width:40px; min-height:40px; }
+      .panel-collapse { min-width:44px; min-height:44px; }
     }
 
     /* Mobile: the layer widget becomes a bottom sheet — map stays visible, thumb-reachable */
@@ -1483,7 +1553,7 @@
         min-height:0; padding:.75rem .75rem 0; pointer-events:none; }
       .atlas-strip .ctl-search { flex:1 1 auto; margin:0 auto; }
       .atlas-strip .ctl-search-box { border-color:var(--color-border); background:var(--color-surface); }
-      .atlas-strip .ctl-search-count { left:50%; transform:translateX(-50%); text-align:center; }
+      .atlas-strip .ctl-search-count { left:50%; transform:translateX(-50%); text-align:center; max-width:calc(100% - 64px); }
       .atlas-strip > * { pointer-events:auto; }
       .ctl-search-box { box-shadow:var(--shadow-md); }
       /* The sheet shows about three rows at a time, so the section you are in
@@ -1518,87 +1588,129 @@
       #atlas-map { position:absolute; inset:0; }
 
       /* ---- the sheet ----
-         The shelf docks at the foot of the stage as a bottom sheet. At rest it
-         is a grab bar, the row of group tabs and the foot; tapping a tab slides
-         that group's rows open above the foot. It never rises past half the
-         stage, so the top third of the map is always in view — which is why
-         the head, the tab row and the foot are each as short as a thumb
-         allows: every pixel they spend is a row the list cannot show. */
+         The shelf docks at the foot of the stage as a bottom sheet with three
+         heights, named by data-h (set in the markup, kept by atlas.js):
+           peek  — about 84px: the grabber band, "LAYERS / <layer> <count>",
+                   LOKA's badge and the chevron. The map has the rest.
+           half  — 52% of the stage: the head, the group tabs (only with two
+                   or more groups), the layer and its first question open.
+           full  — 90%: a sliver of map stays, so the way back is in sight.
+         It opens at half, so a first visitor sees the layers and a coloured
+         map at once. The chevron, the grabber, a swipe on the head, a tap
+         on the map and Esc move it (atlas.js, setSheet). The old states —
+         tabs only at rest, and a "LAYERS" chip bottom-left — are gone: the
+         sheet always shows at least its head, which names what is under it. */
       .atlas-panel {
         position:absolute; left:0; right:0; top:auto; bottom:0; z-index:6;
-        width:auto; max-width:none; max-height:50%; min-height:0;
+        width:auto; max-width:none; max-height:none; min-height:0;
+        height:52%;
         background:var(--color-surface);
-        border-radius:0; border-right:0; border-top:1px solid var(--map-block);
-        box-shadow:0 -2px 14px rgba(36,33,29,.16);
+        border-radius:var(--radius-lg) var(--radius-lg) 0 0; border-right:0; border-left:0; border-bottom:0;
+        border-top:1px solid var(--map-block);
+        box-shadow:0 -4px 20px rgba(36,33,29,.12);
         transform:none; visibility:visible;
+        transition:height .28s cubic-bezier(.22,1,.36,1);
       }
-      /* the head is the grab bar and nothing else: the tabs say what is here */
-      .panel-head { position:relative; cursor:pointer; padding:.7rem .9rem .2rem; border-bottom:0; justify-content:center; min-height:0; }
-      .panel-head::before { content:''; position:absolute; top:5px; left:50%; transform:translateX(-50%);
-        width:30px; height:4px; border-radius:var(--radius-pill); background:var(--color-toggle-off); }
-      .panel-head strong, .panel-count { display:none; }
-      .panel-collapse { display:none; }
+      .atlas-panel[data-h="peek"] { height:calc(84px + env(safe-area-inset-bottom)); }
+      .atlas-panel[data-h="half"] { height:52%; }
+      .atlas-panel[data-h="full"] { height:90%; }
+      /* the head: the grabber band over one row — the words, the badge, the chevron */
+      .panel-head { position:relative; display:block; cursor:default; padding:0 8px 0 14px; border-bottom:0; min-height:0; flex:0 0 auto; }
+      .sheet-grip { display:flex; align-items:center; justify-content:center; height:22px; cursor:pointer; }
+      .sheet-grip i { display:block; width:36px; height:5px; border-radius:var(--radius-pill); background:var(--color-toggle-off); }
+      .panel-head-row { display:flex; align-items:center; gap:.5rem; height:48px; }
+      .panel-icon { display:none; }
+      .sheet-who { display:block; flex:1 1 auto; min-width:0; cursor:pointer; }
+      .sheet-who strong { display:block; font-size:var(--t-label); font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--color-text-muted); line-height:1.1; }
+      .panel-count { display:none; }
+      .sheet-layer { display:flex; align-items:baseline; gap:.4rem; min-width:0; font-size:var(--t-control); font-weight:700; line-height:1.2; color:var(--color-text-primary); }
+      .sheet-layer-name { flex:0 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .sheet-layer small { flex:0 0 auto; font-size:var(--t-meta); font-weight:600; color:var(--color-text-secondary); font-variant-numeric:tabular-nums; }
+      .sheet-layer:empty { display:none; }
+      .loka-badge.loka-badge-head { display:inline-flex; height:30px; padding:0 8px; flex:0 0 auto; }
+      /* the chevron: a visible 44px button, down while the sheet is open and
+         up while it is peeked */
+      .panel-collapse { display:inline-flex; flex:0 0 auto; width:44px; height:44px; padding:0; margin:0;
+        border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-page); color:var(--color-text-primary);
+        transition:transform .25s cubic-bezier(.25,1,.5,1); }
+      .panel-collapse svg { width:20px; height:20px; }
+      .atlas-panel[data-h="peek"] .panel-collapse { transform:rotate(180deg); }
+      .panel-collapse:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; }
       /* while the owner's edit card stands in for the list, the head must
          name the layer again — it is the only place that says which one */
       .atlas-panel:has(#atlas-controls[hidden]) .panel-head strong { display:block; }
+      /* "27 of 134 places are Commerce or services · show all", on a Leaf
+         Tint band under the head's row, beside the answer that caused it */
+      .sheet-filter { display:flex; flex-wrap:wrap; align-items:center; gap:.2rem .5rem; margin:0 0 8px; padding:.45rem .7rem;
+        background:var(--color-leaf-tint); border-radius:var(--radius-md); font-size:var(--t-meta); font-weight:600; color:var(--color-leaf-deep); line-height:1.3; }
+      .sheet-filter[hidden], .atlas-panel[data-h="peek"] .sheet-filter { display:none; }
+      .sheet-filter .ctl-search-go { font-size:var(--t-meta); color:var(--color-leaf-deep); min-height:32px; }
+      .sheet-filter .ctl-search-more { flex:0 0 100%; }
+      /* the line under the search box is the phone's only while the sheet is
+         peeked; open, the sheet's own line says it beside the answer */
+      .atlas-strip .ctl-search-count { display:none; }
+      .atlas-stage.sheet-peek .atlas-strip .ctl-search-count { display:block; }
+      /* the line under the kinds is the same words again: the head says it */
+      .key-only { display:none; }
 
-      /* the tab row: one tab per group, scrolling sideways when the names
-         need more room than the phone has (names are never cut short) */
+      /* the tab row: one tab per group (two or more groups only), 40px,
+         scrolling sideways when the names need more room than the phone has
+         (names are never cut short) */
       .atlas-bar:not([hidden]) {
-        display:flex; gap:.35rem; flex:0 0 auto;
-        padding:.1rem .75rem .4rem; overflow-x:auto; scrollbar-width:none;
+        display:flex; gap:.5rem; flex:0 0 auto;
+        padding:2px 14px 10px; overflow-x:auto; scrollbar-width:none;
         -webkit-overflow-scrolling:touch; scroll-snap-type:x proximity;
       }
       .atlas-bar::-webkit-scrollbar { display:none; }
+      .atlas-panel[data-h="peek"] .atlas-bar { display:none; }
       .atlas-tab {
-        flex:0 0 auto; scroll-snap-align:start; min-height:34px; padding:.3rem .7rem;
+        flex:0 0 auto; scroll-snap-align:start; height:40px; padding:0 .75rem;
         font:inherit; font-size:var(--t-label); font-weight:700; letter-spacing:.08em; text-transform:uppercase;
         color:var(--color-text-primary); background:var(--color-surface); border:1px solid var(--color-border);
         border-radius:var(--radius-md); cursor:pointer; white-space:nowrap; display:inline-flex; align-items:center; gap:.4rem;
         transition:background .15s ease, color .15s ease, border-color .15s ease;
       }
       .atlas-tab .tab-on { font-weight:600; letter-spacing:0; color:var(--color-text-secondary); font-variant-numeric:tabular-nums; }
-      .atlas-tab[aria-expanded="true"] { background:var(--color-leaf); border-color:var(--color-leaf); color:#fff; }
-      .atlas-tab[aria-expanded="true"] .tab-on { color:rgba(255,255,255,.8); }
+      .atlas-tab[aria-pressed="true"] { background:var(--color-leaf); border-color:var(--color-leaf); color:#fff; }
+      .atlas-tab[aria-pressed="true"] .tab-on { color:rgba(255,255,255,.8); }
       .atlas-tab:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; }
 
-      /* the rows slide open beneath the tabs (0.28s, the sheet's own ease) */
-      .sheet-body { display:grid; grid-template-rows:0fr; flex:0 1 auto; min-height:0;
-        transition:grid-template-rows .28s cubic-bezier(.22,1,.36,1); }
-      .atlas-stage.tray-open .sheet-body { grid-template-rows:1fr; }
-      .sheet-body > * { min-height:0; overflow:hidden; }
-      .atlas-panel #atlas-controls { overflow-y:auto; padding:0 .75rem .5rem; border-top:1px solid var(--color-divider); }
-      .atlas-stage:not(.tray-open) #atlas-controls { border-top-color:transparent; }
+      /* the rows: the sheet's height is the fold, so the body is just a scroller */
+      .sheet-body { display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
+      .atlas-panel[data-h="peek"] .sheet-body { display:none; }
+      .atlas-panel #atlas-controls { overflow-y:auto; flex:1 1 auto; min-height:0; padding:0 14px calc(20px + env(safe-area-inset-bottom)); border-top:1px solid var(--color-divider); }
       /* one group at a time: the tab is the fold */
       #atlas-controls .ctl-group[data-group] { display:none; }
       .atlas-stage.tray-open #atlas-controls .ctl-group.on-show { display:block; }
-      /* the tab already names the group, so the group's own head steps aside;
+      /* the head already names the group, so the group's own head steps aside;
          its hairline stays as the top edge of the list */
       .atlas-stage.tray-open #atlas-controls .ctl-group.on-show .ctl-group-head { position:static; height:0; padding:0; margin:0; border:0; overflow:hidden; }
       .ctl-group:first-of-type { margin-top:0; }
-      /* rows: full width, a finger high, the switch at the end, a hairline between */
+      /* rows: full width, a finger high, the switch first, the count after
+         the name, the ⓘ at the end; a hairline between rows */
       .ctl-row { padding:0; border-bottom:1px solid var(--color-divider); }
       .ctl-row:last-child { border-bottom:0; }
-      .ctl-toggle { min-height:44px; gap:.75rem; }
-      .ctl-toggle .ctl-switch { order:3; margin-left:auto; }
-      .ctl-toggle .ctl-name { order:1; flex:1 1 auto; min-width:0; }
-      .ctl-toggle .ctl-info { order:2; margin-left:0; }
+      .ctl-toggle { min-height:52px; gap:.6rem; }
+      .ctl-toggle .ctl-name { flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:var(--t-control); }
+      .ctl-count { font-size:var(--t-ui); }
+      .ctl-count::before { content:none; }
+      .ctl-count .ctl-count-noun { display:inline; }
+      .ctl-toggle .ctl-info { margin-left:auto; margin-right:-6px; }
       :root { --panel-strip:0px; }
       .ctl-sub-head { min-height:44px; }
       .ctl-sub-toggle .ctl-switch { order:3; margin-left:auto; }
       .ctl-sub-toggle .ctl-sub-name { order:1; flex:1 1 auto; }
+      /* questions: 48px rows, flush with the layer, at the sheet's full width */
+      .key-toggle { font-size:var(--t-control); }
+      .key-tname { font-size:var(--t-control); }
+      .key-body .key-kind { font-size:var(--t-ui); }
 
-      /* the foot: Map/Satellite at the left; at the right the way to build
-         your own atlas, with the credit beneath it — one row, a thumb high */
-      .sheet-foot { display:flex; align-items:center; gap:.6rem .9rem; flex-wrap:wrap; flex:0 0 auto;
-        padding:.35rem .75rem calc(.4rem + env(safe-area-inset-bottom)); border-top:1px solid var(--color-divider);
-        background:var(--color-surface-alt); font-size:var(--t-meta); color:var(--color-text-secondary); }
-      .sheet-foot .ctl-basemaps { flex:0 0 auto; }
-      .sheet-foot .bm-btn { padding:.4rem .6rem; }
-      .sheet-foot-words { margin-left:auto; display:flex; flex-direction:column; align-items:flex-end; gap:.05rem; line-height:1.35; }
-      .sheet-foot-credit { white-space:nowrap; font-size:var(--t-label); }
-      .sheet-foot-credit b { color:var(--color-text-primary); font-weight:700; letter-spacing:.08em; }
-      .sheet-foot-build { font-weight:600; color:var(--color-leaf); white-space:nowrap; }
+      /* the map button sits under the search box, top-right; the small
+         sheet it opens rises from the foot of the stage */
+      .map-style-btn { top:calc(var(--strip-h, 60px) + 2px); right:12px; }
+      .map-style-pop { top:auto; bottom:0; left:0; right:0; width:auto; max-height:88%; overflow:auto;
+        border-radius:var(--radius-lg) var(--radius-lg) 0 0; border-left:0; border-right:0; border-bottom:0;
+        padding-bottom:calc(20px + env(safe-area-inset-bottom)); }
       /* a place card opens above the sheet, not behind it: the map box makes
          no stacking context of its own, so the card can outrank the sheet */
       /* On a phone a place's card becomes a card along the bottom.
@@ -1703,37 +1815,47 @@
     <!-- shown from the first frame on an atlas; atlas.js takes it away once
          the map has drawn (showLoading). The gallery never shows it. -->
     <div class="atlas-loading" id="atlas-loading" aria-live="polite"><div class="atlas-loading-words"><span class="wait-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>Loading the map</span><small id="atlas-loading-more"></small></div></div>
-    <aside class="atlas-panel" id="atlas-panel">
-      <!-- open: the drawer's head. Folded: this same head is the
-           "Layers · N" button that opens it again. -->
+    <!-- data-h is the phone sheet's height (peek · half · full), set here so
+         the first frame is the final layout; atlas.js keeps it current. On a
+         wide screen it is ignored. -->
+    <aside class="atlas-panel" id="atlas-panel" data-h="half">
+      <!-- Wide screen, open: the drawer's head. Folded: this same head is the
+           "Layers · N" button that opens it again. Phone: the sheet's head —
+           the grabber band, "LAYERS / <layer> <count>", LOKA's badge and the
+           chevron that lowers or opens the sheet. The badge is hard-coded:
+           no manifest can change or remove it. -->
       <div class="panel-head">
-        <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/></svg>
-        <strong>Layers</strong>
-        <span class="panel-count" id="panel-count"></span>
-        <button class="panel-collapse" type="button" aria-label="Show or hide map layers" aria-expanded="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+        <div class="sheet-grip" aria-hidden="true"><i></i></div>
+        <div class="panel-head-row">
+          <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/></svg>
+          <div class="sheet-who">
+            <strong>Layers</strong>
+            <span class="panel-count" id="panel-count"></span>
+            <span class="sheet-layer" id="sheet-layer"></span>
+          </div>
+          <a class="loka-badge loka-badge-head" href="./setup/" title="Build your own atlas">Powered by <img src="./loka-logo.png" alt="LOKA"> <em>Atlas</em></a>
+          <button class="panel-collapse" type="button" aria-label="Show or hide map layers" aria-expanded="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+        </div>
+        <!-- the phone's "27 of 134 places are … · show all" line, beside the
+             answer that caused it (atlas.js fills it with the search count) -->
+        <div class="sheet-filter" id="sheet-filter" role="status" hidden></div>
       </div>
-      <!-- the phone's row of group tabs; on a wide screen it is not there -->
+      <!-- the phone's row of group tabs, only when an atlas has two or more
+           groups; on a wide screen it is not there -->
       <nav class="atlas-bar" id="atlas-bar" aria-label="Layer groups" hidden></nav>
       <div class="sheet-body">
         <div id="atlas-controls"></div>
       </div>
-      <!-- the sheet's foot on phones: Map/Satellite is moved in by atlas.js,
-           and LOKA's badge sits at the right. Hard-coded: no manifest can
-           change or remove it. -->
-      <div class="sheet-foot">
-        <div class="sheet-foot-words">
-          <a class="loka-badge" href="./setup/" title="Build your own atlas">Powered by <img src="./loka-logo.png" alt="LOKA"> <em>Atlas</em></a>
-        </div>
-      </div>
     </aside>
-    <!-- Bottom-left of the map: the way to the credits, with the base map's
-         own attribution beside it. Bottom-right: LOKA's badge (wide screens;
-         on phones it sits in the sheet's foot above, and here only while the
-         sheet is folded away). -->
-    <div class="map-foot">
-      <button id="sources-btn" class="map-chip" type="button" aria-expanded="false" aria-controls="atlas-sources">About &amp; sources</button>
-      <div class="map-attrib" id="map-attrib" aria-label="Map data attribution"></div>
+    <!-- Bottom-left of the map: one pill — the ⓘ that opens About & sources,
+         and the showing base map's own credit beside it. On a phone the
+         credit folds to the ⓘ once the map is first moved (atlas.js). -->
+    <div class="map-attrib" id="map-attrib">
+      <button id="sources-btn" class="map-attrib-i" type="button" aria-expanded="false" aria-controls="atlas-sources" aria-label="About this atlas and its sources">i</button>
+      <span class="map-attrib-words" id="map-attrib-words"></span>
     </div>
+    <!-- Bottom-right: LOKA's badge on a wide screen (on a phone it is in the
+         sheet's head above, and here only while there is no sheet to hold it) -->
     <a class="loka-badge loka-badge-float" href="./setup/" title="Build your own atlas">Powered by <img src="./loka-logo.png" alt="LOKA"> <em>Atlas</em></a>
 
   <!-- The credits, opened from the "About & sources" chip. Not modal: the
@@ -1813,10 +1935,11 @@
   <script>
     /* The layers: a drawer over the map on a wide screen, a bottom sheet on a
        phone. Both are OPEN when the page loads — the layers are the point of
-       an atlas, and a first-time visitor must see that they exist. Folded,
-       the drawer becomes a "Layers · N" button (the sheet, a chip) that
-       opens it again. On a phone, tapping the grab bar puts an open group
-       away first, and only then folds the sheet. */
+       an atlas, and a first-time visitor must see that they exist. On a wide
+       screen the drawer folds to a "Layers · N" button that opens it again;
+       that is handled here. The phone's sheet has three heights (peek, half,
+       full) and is handled by atlas.js (setSheet), which owns the groups it
+       shows — nothing here touches it. */
     (function () {
       var panel = document.getElementById("atlas-panel");
       if (!panel) return;
@@ -1827,32 +1950,36 @@
       function resizeMap() { if (window.__map) requestAnimationFrame(function () { window.__map.resize(); }); }
       sync();
       // --sheet-h (how tall the sheet is, 0 on a wide screen) is kept current
-      // by watchSheetHeight() in atlas.js; the chips and map buttons read it.
+      // by watchSheetHeight() in atlas.js; the credit pill and map buttons read it.
       head.addEventListener("click", function () {
+        if (mq.matches) return;   // the phone's sheet is atlas.js's
         if (panel.classList.contains("collapsed")) { panel.classList.remove("collapsed"); sync(); resizeMap(); return; }
-        var stage = panel.closest(".atlas-stage");
-        if (mq.matches && stage && stage.classList.contains("tray-open")) {
-          if (window.LokaAtlas && window.LokaAtlas.toggleSheet) window.LokaAtlas.toggleSheet();
-          return;
-        }
         panel.classList.add("collapsed"); sync(); resizeMap();
       });
+      // a phone never keeps the wide screen's fold
+      mq.addEventListener("change", function () { if (mq.matches) { panel.classList.remove("collapsed"); sync(); } });
     })();
 
     /* "About & sources": the credits, in a panel over the map's corner. The
-       map stays live behind it; the chip, the ×, Esc or a click on the map
-       put it away. */
+       map stays live behind it; the ⓘ (or the credit's words, except its
+       link), the ×, Esc or a click on the map put it away. */
     (function () {
       var dlg = document.getElementById("atlas-sources");
       var chip = document.getElementById("sources-btn");
+      var pill = document.getElementById("map-attrib");
       if (!dlg || !chip || !dlg.show) return;
       function open() { dlg.show(); chip.setAttribute("aria-expanded", "true"); }
       function shut() { dlg.close(); chip.setAttribute("aria-expanded", "false"); }
       chip.addEventListener("click", function () { dlg.open ? shut() : open(); });
+      if (pill) pill.addEventListener("click", function (e) {
+        if (e.target === chip || chip.contains(e.target)) return;   // the ⓘ answered already
+        if (e.target.closest && e.target.closest("a")) return;    // the licence link is its own way out
+        dlg.open ? shut() : open();
+      });
       dlg.querySelector(".sources-close").addEventListener("click", shut);
       dlg.addEventListener("close", function () { chip.setAttribute("aria-expanded", "false"); });
       document.addEventListener("click", function (e) {
-        if (dlg.open && !dlg.contains(e.target) && !chip.contains(e.target)) shut();
+        if (dlg.open && !dlg.contains(e.target) && !(pill || chip).contains(e.target)) shut();
       });
       // a panel that is not modal does not hear Esc on its own
       document.addEventListener("keydown", function (e) { if (e.key === "Escape" && dlg.open) { shut(); chip.focus(); } });
