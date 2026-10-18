@@ -31,8 +31,16 @@
        first frame IS its headings, and a flash from the fallback face into
        Lora is the one thing a non-blocking load would add there. Only a
        stylesheet the parser writes can block, which is why this is written
-       and not appended. -->
-  <script>if (/[?&]dataset=[^&]/.test(location.search)) { document.documentElement.classList.add("atlas-full"); document.documentElement.classList.add("atlas-pending"); }
+       and not appended.
+       The gallery (no ?dataset=) is marked .atlas-home in the same breath.
+       Without it the markup's default — the map stage with its double rule
+       and an empty Layers drawer, the atlas's shell — was the gallery's first
+       frame too, for as long as the map library took to arrive before
+       atlas.js could hide it (measured on the live site, 18 Oct 2026: about
+       1.5 s on a fast connection, 4 s on a throttled one). Under the mark
+       the stage is not drawn and the gallery's own frame is: its lead, the
+       list with "Loading the atlases" in it, the band and the footer. -->
+  <script>if (/[?&]dataset=[^&]/.test(location.search)) { document.documentElement.classList.add("atlas-full"); document.documentElement.classList.add("atlas-pending"); } else { document.documentElement.classList.add("atlas-home"); }
   document.write(document.documentElement.classList.contains("atlas-full")
     ? '<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600;700&family=Lora:wght@700&display=swap" onload="this.onload=null;this.rel=\'stylesheet\'" />'
     : '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600;700&family=Lora:wght@700&display=swap" />');</script>
@@ -1173,6 +1181,20 @@
 
     /* ---- app home: instance gallery ---- */
     .atlas-home { width:var(--container); margin:0 auto 2.5rem; }
+    /* The gallery is drawn only under the head's mark (html.atlas-home, set
+       before any style is applied), and the map stage never is: the two
+       never share a frame, from the first one. Before this, the stage and
+       its empty drawer were the gallery's first frame, and the list appeared
+       only once atlas.js had hidden them. */
+    html:not(.atlas-home) #atlas-home { display:none; }
+    html.atlas-home .atlas-stage { display:none; }
+    /* The list's first row, in the markup: the mark and "Loading the
+       atlases". It keeps its place from the first frame but says nothing for
+       the first 300 ms (the wait rule in wait.js), so a list that arrives at
+       once never flashes it; atlas.js replaces it with the rows. */
+    .home-wait { display:flex; align-items:center; margin:0; padding:1.1rem .15rem; border-bottom:1px solid var(--color-divider);
+      font-size:var(--t-ui); color:var(--color-text-secondary); opacity:0; animation:home-wait-in 0s .3s both; }
+    @keyframes home-wait-in { to { opacity:1; } }
     /* This was a grid of same-sized bordered cards, and one of them — "build
        your own atlas" — was filled solid moss. It was not an atlas, and it was
        the loudest thing on a page whose whole subject is the atlases. So the
@@ -1660,16 +1682,20 @@
     </nav>
   </header>
 
-  <!-- The home gallery's lead. On an atlas these two lines are read in the
-       "About & sources" panel instead, so the map can have the whole page. -->
+  <!-- The home gallery's lead, in the markup so it is in the gallery's first
+       frame (atlas.js says the same words again). On an atlas these two
+       lines are read in the "About & sources" panel instead, so the map can
+       have the whole page. -->
   <section class="atlas-hero">
-    <p class="lead" id="atlas-subtitle"></p>
-    <p id="atlas-about"></p>
+    <p class="lead" id="atlas-subtitle">Layered, shareable maps for any geography — built from open data.</p>
+    <p id="atlas-about">Every atlas below is built with the same engine: pick a region, choose layers, add your data, and share it. Public tech by Socratus.</p>
   </section>
 
-  <!-- App home (no ?dataset= given): the instance gallery -->
-  <section class="atlas-home" id="atlas-home" hidden aria-label="Published atlases">
-    <div class="home-list" id="home-grid"></div>
+  <!-- App home (no ?dataset= given): the instance gallery. Drawn only under
+       html.atlas-home (set in the head); its list says "Loading the atlases"
+       until atlas.js has the rows. -->
+  <section class="atlas-home" id="atlas-home" aria-label="Published atlases">
+    <div class="home-list" id="home-grid"><p class="home-wait" aria-live="polite"><span class="wait-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>Loading the atlases…</span></p></div>
   </section>
 
   <div class="atlas-stage">
@@ -1766,7 +1792,9 @@
   <aside class="atlas-cta" aria-label="Create your own atlas">
     <div class="cta-inner">
       <div>
-        <b id="cta-lead">Build an atlas like this for your own geography and data.</b>
+        <!-- the gallery's words, because the band is only ever drawn there
+             (an atlas does not show it); atlas.js says the same words again -->
+        <b id="cta-lead">Build one of these for your own geography and data.</b>
         <span id="cta-sub">Your region, your layers, your branding — free to start.</span>
       </div>
       <a class="cta-btn" href="./setup/">Build your own atlas for free →</a>

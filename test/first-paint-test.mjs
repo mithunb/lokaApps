@@ -97,6 +97,45 @@ check('a built drawer always holds something, so the rule only ever hides an unb
   /panel\.appendChild\(el\("p", "ctl-empty", "This atlas has no layers yet\."\)\)/.test(js), true);
 check('the drawer\'s markup starts empty (no whitespace, or :empty would not match)', /<div id="atlas-controls"><\/div>/.test(html), true);
 
+console.log('\n  the gallery, too, is itself from the first frame');
+// Mithun, 18 Oct 2026: "When I click on loka.place/apps/atlas/ I still see a
+// flash of the earlier notebook style atlas design." Observed on the live
+// site: the markup's default is the atlas's shell — the ruled map stage with
+// an empty Layers drawer — and the home address kept it on screen until
+// atlas.js (loaded after the map library) hid it: 1.5 s on a fast connection,
+// 4 s throttled. So the head marks the home address too, the stage is never
+// drawn under that mark, and the gallery's own frame is in the markup.
+check('the same head script marks the home address .atlas-home, in its else branch',
+  !!headScript && /\} else \{ document\.documentElement\.classList\.add\("atlas-home"\); \}/.test(headScript[0]), true);
+check('under the mark the map stage is not drawn', /html\.atlas-home \.atlas-stage \{ display:none; \}/.test(html), true);
+check('and the gallery is drawn only under it (never on an atlas)', /html:not\(\.atlas-home\) #atlas-home \{ display:none; \}/.test(html), true);
+check('the gallery\'s section is not hidden in the markup, or the first frame would have no list',
+  /<section class="atlas-home" id="atlas-home" aria-label="Published atlases">/.test(html), true);
+check('its list says "Loading the atlases" with the mark, from the markup',
+  /<div class="home-list" id="home-grid"><p class="home-wait" aria-live="polite"><span class="wait-mark" aria-hidden="true"><i><\/i><i><\/i><i><\/i><\/span><span>Loading the atlases…<\/span><\/p><\/div>/.test(html), true);
+check('the line keeps its place but says nothing for the first 300 ms (the wait rule)',
+  /\.home-wait \{[^}]*opacity:0; animation:home-wait-in 0s \.3s both; \}/.test(html) && /@keyframes home-wait-in \{ to \{ opacity:1; \} \}/.test(html), true);
+check('renderHome clears that line before the rows go in', /grid\.innerHTML = "";/.test(js.slice(js.indexOf('function renderHome'), js.indexOf('function renderHome') + 3000)), true);
+// The words the gallery's first frame carries are the words atlas.js says
+// again, so nothing is seen to change.
+const homeWords = {
+  '#atlas-subtitle': 'Layered, shareable maps for any geography — built from open data.',
+  '#atlas-about': 'Every atlas below is built with the same engine: pick a region, choose layers, add your data, and share it. Public tech by Socratus.',
+  '#cta-lead': 'Build one of these for your own geography and data.',
+};
+for (const [sel, words] of Object.entries(homeWords)) {
+  const idAttr = 'id="' + sel.slice(1) + '"';
+  const at = html.indexOf(idAttr);
+  const inMarkup = at > 0 ? html.slice(html.indexOf('>', at) + 1, html.indexOf('<', at)) : null;
+  check('the markup says the gallery\'s words in ' + sel, inMarkup, words);
+  const jsWords = new RegExp('setText\\("' + sel + '", "([^"]*)"\\);').exec(js.slice(js.indexOf('function renderHome')));
+  check('and renderHome says the same words in ' + sel, jsWords ? JSON.parse('"' + jsWords[1] + '"') : null, words);
+}
+check('atlas.js repeats the head\'s decision for the home as well',
+  /if \(DATASET\) document\.documentElement\.classList\.add\("atlas-full"\);\n  else document\.documentElement\.classList\.add\("atlas-home"\);/.test(js), true);
+check('nothing takes the home mark away', /classList\.remove\(["']atlas-home["']\)/.test(js + html), false);
+check('the head never gives one address both marks', /atlas-full.*\} else \{.*atlas-home/.test(headScript ? headScript[0] : ''), true);
+
 console.log('\n  the mark comes off exactly when the atlas\'s own words are in place');
 const startAt = js.indexOf('function start(manifest, styleDoc) {');
 const startBody = js.slice(startAt, js.indexOf('\n  }\n', startAt));

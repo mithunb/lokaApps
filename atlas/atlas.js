@@ -42,6 +42,7 @@
   // header (index.html's .atlas-full rules). The home gallery keeps its own
   // page shape.
   if (DATASET) document.documentElement.classList.add("atlas-full");
+  else document.documentElement.classList.add("atlas-home");
   // Public datasets are plain static files. A private atlas's files sit outside
   // the web root, so they come through the API instead, and there are two ways to
   // be allowed: a view key in the address, or — with ?via=api and no key — the
@@ -336,6 +337,10 @@
     setText("#atlas-title", "LOKA Atlas");
     setText("#atlas-subtitle", "Layered, shareable maps for any geography \u2014 built from open data.");
     setText("#atlas-about", "Every atlas below is built with the same engine: pick a region, choose layers, add your data, and share it. Public tech by Socratus.");
+    /* The words above, the band's lead and the gallery's shape are already in
+       index.html's markup and under html.atlas-home (set in the head), so the
+       first frame is this page; what follows only says the same again and
+       fills in the rows. */
     var home = $("#atlas-home");
     var stage = document.querySelector(".atlas-stage");
     if (stage) stage.style.display = "none";
@@ -344,8 +349,8 @@
     /* The band was hidden here and a moss-filled card stood in for it inside
        the gallery. The band is better: it is the same invitation this product
        makes on every other page, in the same words and the same place. Its
-       lead says "an atlas like this", which needs an atlas on the screen to
-       mean anything, so on the home page it says what it means outright. */
+       lead once said "an atlas like this", which needs an atlas on the screen
+       to mean anything, so on the home page it says what it means outright. */
     setText("#cta-lead", "Build one of these for your own geography and data.");
     home.hidden = false;
 
