@@ -120,7 +120,7 @@
        thing to the right of the title, and the menu is a panel under the
        header with the same items as plain rows. */
     .nav-menu { display:contents; }
-    .nav-burger, .nav-menu-head, .nav-menu-scrim, .nav-menu-more { display:none; }
+    .nav-burger, .nav-menu-head, .nav-menu-scrim, .nav-menu-more, .loka-badge-menu { display:none; }
     .nav .links { display:flex; gap:1.25rem; align-items:center; flex-wrap:wrap; }
     .nav .links a, .nav .links button { color:var(--color-text-secondary); font-size:var(--t-ui);
       background:none; border:none; font-family:inherit; cursor:pointer; padding:0; }
@@ -1438,6 +1438,7 @@
     .loka-badge em { font-style:normal; font-family:var(--font-display); font-weight:700; font-size:.85rem; color:var(--color-text-primary); }
     .loka-badge:hover { color:var(--color-leaf-deep); border-color:var(--color-leaf); text-decoration:none; }
     .loka-badge-float { position:absolute; right:8px; bottom:8px; z-index:4; }
+    .loka-badge.loka-badge-menu { display:none; }   /* drawn only inside the phone's ☰ menu */
     /* ---- "About & sources": the credits, in a panel over the map ----
        Opens above its chip, bottom-left. Not modal, so the map stays live
        behind it; Esc, the × or a click on the map put it away. */
@@ -1507,6 +1508,8 @@
       .nav-menu .share-btn svg { display:none; }   /* no row has an icon: one left edge for every label */
       .nav-menu .share-btn span { display:inline; }
       .nav-menu-more { display:inline; }
+      /* LOKA's badge at the menu's foot, only where the ☰ is drawn */
+      .nav-menu .loka-badge.loka-badge-menu { display:inline-flex; align-self:flex-start; margin:16px .25rem 8px; min-height:44px; box-sizing:border-box; }
       /* on the phone every link is in the menu, the ones the wide screen keeps in About & sources too */
       .atlas-full .nav-menu .links a[href="../"], .atlas-full .nav-menu .links a[href^="https://discoverloka"] { display:block; }
       .nav-menu [hidden] { display:none !important; }
@@ -1686,7 +1689,10 @@
       /* the badge, whole ("Powered by LOKA Atlas"), in every state; the
          layer's NAME gives way before it, never the number. 30px to look at,
          a 44px box to tap (the ::after, drawn past its edges). */
-      .loka-badge.loka-badge-head { display:inline-flex; height:30px; padding:0 8px; flex:0 0 auto; position:relative; }
+      /* On a phone LOKA's badge sits at the foot of the ☰ menu (Mithun, 2026-10-18), so the sheet head
+         gives its room to the layer's name. An embed has no menu, so there it stays in the head. */
+      .loka-badge.loka-badge-head { display:none; height:30px; padding:0 8px; flex:0 0 auto; position:relative; }
+      .atlas-embed .loka-badge.loka-badge-head { display:inline-flex; }
       .loka-badge-head::after { content:''; position:absolute; left:0; right:0; top:-7px; bottom:-7px; }
 
       /* ---- a place's card in the sheet (phones) ----
@@ -1903,6 +1909,7 @@
           <a id="nav-signin" href="./setup/?signin=1">sign in</a>
           <button id="nav-signout" type="button" hidden>sign out</button>
         </div>
+        <a class="loka-badge loka-badge-menu" href="./setup/" title="Build your own atlas"><span class="loka-badge-by">Powered by</span> <img src="./loka-logo.png" alt="LOKA"> <em>Atlas</em></a>
       </div>
       <div class="nav-menu-scrim" id="nav-menu-scrim" hidden></div>
     </nav>

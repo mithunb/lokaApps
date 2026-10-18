@@ -112,7 +112,7 @@ check('a swipe on the head moves one step', /head\.addEventListener\("touchend",
 check('a tap on the map lowers it to peek', /map\.on\("click", function \(\) \{\s*if \(!onPhone\(\)\) return;\s*if \(CARD\.open\) \{ closeCard\(true\); return; \}\s*if \(SHEET !== "peek"\) setSheet\("peek"\);/.test(js), true);
 check('Esc too, unless something is already over the map', /if \(document\.querySelector\("\.atlas-sources\[open\], \.map-style-pop:not\(\[hidden\]\)"\)\) return;\s*if \(CARD\.open\) return;[^\n]*\n\s*if \(e\.key === "Escape" && onPhone\(\) && SHEET !== "peek"\)/.test(js), true);
 check('--sheet-h is still measured from the panel', /function watchSheetHeight\(stage\) \{[\s\S]*?stage\.style\.setProperty\("--sheet-h", h \+ "px"\);/.test(js), true);
-check('LOKA\'s badge is in the head on a phone and never floats over the map there', /\.loka-badge\.loka-badge-head \{ display:inline-flex; height:30px;/.test(phone) && /\.loka-badge-float \{ display:none; \}/.test(html) && !/\.atlas-panel\.collapsed ~ \.loka-badge-float/.test(html), true);
+check('LOKA\'s badge is in the ☰ menu on a phone (in the head only for an embed) and never floats over the map there', /\.loka-badge\.loka-badge-head \{ display:none; height:30px;/.test(phone) && /\.atlas-embed \.loka-badge\.loka-badge-head \{ display:inline-flex; \}/.test(phone) && /\.nav-menu \.loka-badge\.loka-badge-menu \{ display:inline-flex;/.test(phoneHead) && /\.loka-badge-float \{ display:none; \}/.test(html) && !/\.atlas-panel\.collapsed ~ \.loka-badge-float/.test(html), true);
 check('a reboot opens the next draw at half', /SHEET = "half";               \/\/ the next draw opens as a first visit does/.test(js), true);
 check('the head\'s name gives way before its number ("bengaluru-t… 134")', /\.sheet-layer-name \{ flex:0 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; \}/.test(phone) && /\.sheet-layer small \{ flex:0 0 auto;/.test(phone), true);
 check('and the badge stays whole on a phone — "Powered by LOKA Atlas" — with a 44px tap box', /<span class="loka-badge-by">Powered by<\/span> <img src="\.\/loka-logo\.png" alt="LOKA"> <em>Atlas<\/em>/.test(html) && !/\.loka-badge-by \{ display:none/.test(html) && /\.loka-badge-head::after \{ content:''; position:absolute; left:0; right:0; top:-7px; bottom:-7px; \}/.test(phone), true);
@@ -157,7 +157,7 @@ check('not there on a wide screen', /\.sheet-grip, \.sheet-layer, \.loka-badge\.
 console.log('\n  9. the phone\'s header navigation is behind one ☰');
 check('the ☰ is in the markup, 44px, named "Menu", and says whether it is open', /<button class="nav-burger" id="nav-burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav-menu">/.test(html) && /\.nav-burger \{ display:inline-flex;[^}]*width:44px; height:44px;/.test(phoneHead), true);
 check('the menu wraps Share and the links; on a wide screen it is display:contents, so the row is as it was', /<div class="nav-menu" id="nav-menu">[\s\S]*?<div class="hero-actions">[\s\S]*?<div class="links">/.test(html) && /\.nav-menu \{ display:contents; \}/.test(html), true);
-check('and the ☰, the menu\'s head, the scrim and the long words are not drawn there', /\.nav-burger, \.nav-menu-head, \.nav-menu-scrim, \.nav-menu-more \{ display:none; \}/.test(html), true);
+check('and the ☰, the menu\'s head, the scrim and the long words are not drawn there', /\.nav-burger, \.nav-menu-head, \.nav-menu-scrim, \.nav-menu-more, \.loka-badge-menu \{ display:none; \}/.test(html), true);
 check('on a phone the menu is a panel under the header, shown by html.nav-open', /\.nav-menu \{ display:none; position:fixed; left:0; right:0; top:var\(--nav-h, 52px\); z-index:30;/.test(phoneHead) && /html\.nav-open \.nav-menu \{ display:flex; \}/.test(phoneHead), true);
 check('its rows are 48px, plain words, first letter up ("All atlases", "Sign in")', /padding:14px \.25rem; line-height:20px;/.test(phoneHead) && /\.nav-menu \.links a::first-letter, \.nav-menu \.links button::first-letter \{ text-transform:uppercase; \}/.test(phoneHead) && /a\[href\^="https:\/\/discoverloka"\]::first-letter \{ text-transform:none; \}/.test(phoneHead), true);
 check('Share reads "Share this atlas" in the menu', /<span>Share<span class="nav-menu-more"> this atlas<\/span><\/span>/.test(html) && /\.nav-menu-more \{ display:inline; \}/.test(phoneHead), true);
@@ -183,6 +183,10 @@ check('DESIGN.md describes the three-height sheet', /peek/.test(design) && /Map 
 check('and the capabilities note the map button and the ⓘ', /Map or satellite/.test(caps) && /behind the layer/.test(caps), true);
 
 check('the low card fades at its foot, so more is plainly below', /\.atlas-panel\[data-h="low"\] \.sheet-card-body \{ overflow:hidden; cursor:pointer;[\s\S]{0,120}mask-image:linear-gradient\(to bottom, #000 calc\(100% - 28px\), transparent\)/.test(html), true);
+
+check('the menu\'s badge reads "Powered by LOKA Atlas" whole, and is hidden on a wide screen', /<a class="loka-badge loka-badge-menu" href="\.\/setup\/" title="Build your own atlas"><span class="loka-badge-by">Powered by<\/span> <img src="\.\/loka-logo\.png" alt="LOKA"> <em>Atlas<\/em><\/a>/.test(html) && /\.nav-menu-more, \.loka-badge-menu \{ display:none; \}/.test(html), true);
+
+check('the menu\'s badge outranks the general badge rule, so a wide screen never shows it', /\.loka-badge\.loka-badge-menu \{ display:none; \}/.test(html), true);
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
