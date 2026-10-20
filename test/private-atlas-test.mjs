@@ -133,6 +133,10 @@ check('a dead private link is told apart from no link',
   /This private link no longer works — the owner has made a new one/.test(viewer), true);
 check('the data bench previews a private draft through the API', /var VIA = PRIVATE \? "&via=api" : "";/.test(bench) && /private: inst\.visibility === "private",/.test(addData), true);
 
+check('a web page where the manifest should be counts as "not here", so a private atlas still opens when the site answers unknown addresses with its own page',
+  /function notHere\(r\) \{\s*return r\.status === 404 \|\| \(r\.ok && \/text\\\/html\/i\.test/.test(viewer) && /if \(VIA_API \|\| !notHere\(r\)\) return r;/.test(viewer), true);
+check('and a missing atlas is still said plainly, never read as data', /return notHere\(r\) && r\.ok \? new Response\("", \{ status: 404 \}\) : r;/.test(viewer), true);
+
 console.log('\n  the server keeps a private atlas out of the web root');
 check('details with visibility moves the folder, owner only, and unlists',
   /if \(callerRole\(req, inst\) !== 'owner'\) return res\.status\(403\)\.json\(\{ error: 'only the owner can change who may see this atlas' \}\);/.test(server) &&

@@ -263,15 +263,28 @@
      owner opens their own private atlas from the same plain link as everyone
      else, so a 404 from the static path is followed by one question to the
      API: 200 means private and allowed (so every later file goes the same way),
-     403 means private and not allowed, 404 means there is no such atlas. */
+     403 means private and not allowed, 404 means there is no such atlas.
+
+     "Not on the static path" is not always a 404: a web server whose site
+     serves its own page for every unknown address answers 200 with HTML
+     (loka.place began doing so on 2026-10-20, and every private atlas then
+     read that page as its data). A web page where a manifest should be is
+     therefore read as "not here" too, whatever the server's settings. */
+  function notHere(r) {
+    return r.status === 404 || (r.ok && /text\/html/i.test((r.headers && r.headers.get("content-type")) || ""));
+  }
   function fetchManifest() {
     return fetch(dataUrl("manifest.json")).then(function (r) {
       if (r.ok && VIA_API) PRIVATE = true;
-      if (r.ok || VIA_API || r.status !== 404) return r;
+      if (VIA_API || !notHere(r)) return r;
       VIA_API = true;
       BASE = "./api/datasets/" + DATASET + "/";
       return fetch(dataUrl("manifest.json"), { credentials: "same-origin" }).then(function (r2) {
-        if (r2.status === 404) { VIA_API = false; BASE = "./datasets/" + DATASET + "/"; return r; }
+        if (r2.status === 404) {
+          VIA_API = false; BASE = "./datasets/" + DATASET + "/";
+          // no such atlas: say so plainly, never hand on the site's own page as data
+          return notHere(r) && r.ok ? new Response("", { status: 404 }) : r;
+        }
         if (r2.ok) PRIVATE = true;
         return r2;
       });
