@@ -35,7 +35,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { NEVER_READ } from '../api/lib/atlas/questions-queue.js';
+import { NEVER_READ, payerOf } from '../api/lib/atlas/questions-queue.js';
 import { createPlaceNamesQueue, sourceColumnOf, wantsNames, countLong, namesFor, sigFor, firstWords, NAME_FIELD }
   from '../api/lib/atlas/place-names.js';
 
@@ -96,7 +96,8 @@ function main(argv) {
     ': ' + want.length + ' layer' + (want.length === 1 ? '' : 's') + ' whose places are named by a sentence.');
   let added = 0;
   for (const w of want) {
-    const owner = (instances[w.dataset] && instances[w.dataset].email) || '';
+    // the account that owns the atlas, else the email it was set up with (questions-queue payerOf)
+    const owner = payerOf(instances[w.dataset]);
     const had = queue.get(w.dataset, w.layerId);
     const note = had && had.sig === w.sig ? ' (already on the list: ' + had.state + ')' : '';
     console.log('  ' + w.dataset + '/' + w.layerId + ' — ' + w.label + ' — ' + w.places + ' places, ' +

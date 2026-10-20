@@ -18,7 +18,7 @@ import * as auth from '../lib/atlas/auth.js';
 import { sendMail } from '../lib/mailer.js';
 import { noteTrouble, noteOk, setTroubleNotifier, openTroubles } from '../lib/atlas/trouble.js';
 import * as owed from '../lib/atlas/owed.js';
-import { queue as QUESTIONS, createQueue, fileSignatureOf, NEVER_READ } from '../lib/atlas/questions-queue.js';
+import { queue as QUESTIONS, createQueue, fileSignatureOf, NEVER_READ, payerOf } from '../lib/atlas/questions-queue.js';
 import * as shortLabels from '../lib/atlas/short-labels.js';
 import * as placeNames from '../lib/atlas/place-names.js';
 import {
@@ -2309,7 +2309,7 @@ const geminiRate = new Map();
    still the fallback, and a stricter one, since it may stand for a whole office. */
 const AI_CALLS_PER_HOUR = 150;      // per signed-in account
 const AI_CALLS_PER_HOUR_IP = 40;    // per address, when nobody is signed in
-const AI_CALLS_PER_READING = 24;    // one reading may not exceed this
+const AI_CALLS_PER_READING = 24;    // one ATTEMPT at a reading may not exceed this; its one retry has its own
 
 function aiWho(req) {
   // work the server is finishing on an owner's behalf keeps its own allowance,
@@ -3731,6 +3731,16 @@ async function ingestLayerSteps(b, who, tell) {
             .filter((x) => x.name)])
           .filter(([, v]) => v.length))
       : undefined,
+    /* The column each question was found in (enrich.js planColumns), kept
+       beside its kinds so a later reading answers it from that column and
+       checks its words there. Absent for a question found in the whole
+       record. Column names only, as many as one group held. */
+    keyColumns: (b.keyColumns && typeof b.keyColumns === 'object')
+      ? Object.fromEntries(Object.entries(b.keyColumns)
+          .filter(([k, v]) => k && Array.isArray(v) && v.length)
+          .map(([k, v]) => [String(k).slice(0, 60), v.slice(0, MAX_COLS).map((c) => String(c).slice(0, 200)).filter(Boolean)])
+          .filter(([, v]) => v.length))
+      : undefined,
     replacingLayerId: replacing ? replacing.id : undefined,
     replacingLabel: replacing ? replacing.label : undefined,
     replacingUploadedAs: replacing ? replacing.uploadedAs : undefined,
@@ -4098,13 +4108,17 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
   // the stand-in's planned outcome for this reading, if a check planned one
   const planned = FAKE_READING ? fakePlanFor(dataset, layerId) : '';
   /* Every column with words of its own is read on its own (enrich.js
-     planColumns), within this reading's allowance of calls; the place's name
+     planColumns), within what one attempt may spend (AI_CALLS_PER_READING —
+     each attempt, the retry included, has a caller of its own); the place's name
      column is named so it is not read as evidence; and a re-read that adds
      questions from columns the first reading never drew on says which
      (opts.addColumns, from deploy/queue-question-rereads.mjs). */
   const nameCol = (layer.popup && layer.popup.title) || 'name';
   let firstFound = null;   // the first attempt's questions per column, reused by the second
-  const ask = (missed) => FAKE_READING ? fakeReading(rows, fields, asked, caller(), planned, nameCol) : enrich.enrichRows({
+  /* What the record said of each column last time, so a column this reading
+     does not look at keeps the line it was given when it was looked at. */
+  const previousColumns = ((QUESTIONS.get(dataset, layerId) || {}).columns) || [];
+  const ask = (missed) => FAKE_READING ? fakeReading(rows, fields, asked, caller(), planned, nameCol, previousColumns) : enrich.enrichRows({
     rows, fields, title: (inst && inst.title) || dataset,
     mode: 'questions',
     keepQuestions: asked,
@@ -4115,6 +4129,7 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
     nameCol, callBudget: AI_CALLS_PER_READING,
     addColumns: Array.isArray(opts.addColumns) && opts.addColumns.length ? opts.addColumns : null,
     reuseFound: firstFound,
+    previousColumns,
   });
   let out = await ask([]);
   firstFound = out.found || null;
@@ -4261,7 +4276,7 @@ function fakePlanFor(dataset, layerId) {
   return Array.isArray(list) && list.length ? String(list.shift()) : '';
 }
 
-async function fakeReading(rows, fields, asked, pay, planned, nameCol) {
+async function fakeReading(rows, fields, asked, pay, planned, nameCol, previous) {
   // long enough to watch the owner's note come and go; ATLAS_FAKE_READING_MS changes it
   const wait = Number(process.env.ATLAS_FAKE_READING_MS || 15000);
   if (wait > 0) await new Promise((r) => setTimeout(r, Math.min(wait, 120000)));
@@ -4301,7 +4316,7 @@ async function fakeReading(rows, fields, asked, pay, planned, nameCol) {
   const outcomes = {};
   plan.groups.forEach((g, i) => { outcomes[g.label] = i ? { state: 'none', note: 'the stand-in only counts the first column' } : { state: 'asked', proposed: 2, dropped: 0, twice: 0 }; });
   questions.forEach((q) => { q.column = plan.groups.length ? plan.groups[0].label : ''; });
-  const columns = enrich.columnReport(plan, outcomes, questions, [], rows.length);
+  const columns = enrich.columnReport(plan, outcomes, questions, [], rows.length, { previous: previous || [] });
   if (!questions.length) return { verdict: 'no_clear_questions', note: 'nothing written to count', columns };
   // a planned "LOKA's own check turned them down", as the gate would say it
   if (planned === 'refused') return { verdict: 'refused', reason: "most places didn't fit any theme", columns };
@@ -4385,7 +4400,7 @@ function keepAnswers(dataset, layer, rows, sig) {
     return out;
   };
   QUESTIONS.saveAnswers(dataset, layer.id, {
-    sig, keyLabels: only(layer.keyLabels), keyKinds: only(layer.keyKinds),
+    sig, keyLabels: only(layer.keyLabels), keyKinds: only(layer.keyKinds), keyColumns: only(layer.keyColumns),
     reading: layer.reading || '', facts: layer.facts || [],
     answers: rows.map((r) => { const a = {}; for (const c of cols) if (r[c] !== undefined) a[c] = r[c]; return a; }),
   });
@@ -4397,7 +4412,8 @@ function keptQuestions(kept) {
   if (!kept) return [];
   return Object.keys(kept.keyLabels || {}).filter((c) => RULES.isQuestionColumn(c))
     .sort((a, b) => Number(a.split('_')[1]) - Number(b.split('_')[1]))
-    .map((c) => ({ question: kept.keyLabels[c], kinds: (kept.keyKinds || {})[c] || [] }))
+    .map((c) => ({ question: kept.keyLabels[c], kinds: (kept.keyKinds || {})[c] || [],
+                   columns: ((kept.keyColumns || {})[c] || []).slice() }))
     .filter((q) => q.question && q.kinds.length);
 }
 
@@ -4417,7 +4433,7 @@ async function restoreAnswers(dataset, layerId) {
     schema: RULES.schemaFor(out),
     rows: out,
     geoms: shapes.geoms, geomIdx: shapes.geomIdx,
-    keyLabels: kept.keyLabels, keyKinds: kept.keyKinds,
+    keyLabels: kept.keyLabels, keyKinds: kept.keyKinds, keyColumns: kept.keyColumns,
     reading: kept.reading || undefined,
     facts: (kept.facts || []).length ? kept.facts : undefined,
     meta: { sourceName: got.layer.source, rowCount: out.length, geometry: shapes.geometry },
@@ -4498,7 +4514,7 @@ function considerReading(dataset, layerId, opts) {
   }
   if (!ai && !FAKE_READING) return 'no model';
   const inst = reg.getInstance(dataset);
-  const payer = (inst && inst.email) || '';
+  const payer = payerOf(inst);
   /* The outlines half of a split file is never put on the list under its own
      name: its pins' reading covers both halves (fileHalves), and listing both
      would read one file twice and charge the owner twice. Its own answers are
@@ -4530,7 +4546,7 @@ function considerShortLabels(dataset, layerId) {
   const inst = reg.getInstance(dataset);
   const m = imports.readManifest(dataset);
   return shortLabels.consider({ dataset, layerId, layer: got.layer, rows: got.rows,
-    dir: m && m.dir, payer: (inst && inst.email) || '' });
+    dir: m && m.dir, payer: payerOf(inst) });
 }
 
 /* One layer off the short-names list: one call to the model for all of its
@@ -4591,7 +4607,7 @@ function considerPlaceNames(dataset, layerId, opts) {
     return 'switched off';
   }
   return placeNames.consider({ dataset, layerId, layer: got.layer, rows: got.rows, dir: m && m.dir,
-    payer: (inst && inst.email) || '',
+    payer: payerOf(inst),
     spec: opts && opts.from ? { placeNamesFrom: opts.from } : sp });
 }
 
@@ -4739,6 +4755,15 @@ async function endReading(dataset, layerId, out) {
     return { state: 'done', reason: '', calls: out.calls, sig: fileSigOf(dataset, layerId) || out.sig,
              columns: out.columns || [] };
   }
+  if (out.verdict === 'nothing_new') {
+    /* A re-read that only added from named columns, and kept nothing new:
+       the questions on the map are exactly as they were, not answered again
+       and not written again. The record says so, with what became of each
+       column it asked. */
+    console.log('[questions] ' + where + ' — the columns asked added no new question; the questions on the map are unchanged');
+    return { state: 'done', reason: '', calls: out.calls, sig: fileSigOf(dataset, layerId) || out.sig,
+             columns: out.columns || [] };
+  }
   if (out.verdict === 'changed') {
     /* Not the end of the story: the list noted the newer version while this
        one was running (questions-queue `again`) and looks at it as soon as
@@ -4751,7 +4776,7 @@ async function endReading(dataset, layerId, out) {
        own — tried again on a backing-off timer, and the owner written to when it
        lands — so it is handed there rather than retried here. */
     const inst = reg.getInstance(dataset);
-    owed.owe({ dataset, layerId, email: (inst && inst.email) || '',
+    owed.owe({ dataset, layerId, email: (inst && inst.email) || '', payer: payerOf(inst),
       kind: troubleKind(out.trouble), trouble: out.trouble || '' });
     return { state: 'failed', unreachable: true,
       reason: ('the AI could not be reached' + (out.trouble ? ' — ' + out.trouble : '')).slice(0, 160) };
@@ -4838,7 +4863,12 @@ async function retryOne(o) {
   try {
     // read the way the list reads: the questions it last settled on, and not
     // over places that changed while it was being read
+    /* Charged to whoever owns the atlas, like the reading it stands in for —
+       the payer noted when it was owed, or the atlas's owner now. It used to
+       run on the server's own allowance, so an owner's retries were paid by
+       nobody's hour. */
     out = await runReading(o.dataset, o.layerId, false, { guard: true,
+      payer: o.payer || payerOf(reg.getInstance(o.dataset)),
       keep: keptQuestions(QUESTIONS.loadAnswers(o.dataset, o.layerId)) });
   } catch (e) {
     // the layer or the atlas is gone: the debt goes with it
@@ -4983,9 +5013,16 @@ router.post('/admin/reread', async (req, res) => {
   const dataset = String(b.dataset || ''), layerId = String(b.layerId || '');
   try {
     const out = await runReading(dataset, layerId, b.afresh === true);
+    /* What became of each column goes on the record here too, as the list's
+       own readings put it there — otherwise the owner's page went on showing
+       the lines from before the operator's re-read. Left alone while the list
+       is reading this layer: that reading owns the record. */
+    if ((out.columns || []).length && !QUESTIONS.isBusy(dataset, layerId)) {
+      QUESTIONS.remember(dataset, layerId, { columns: out.columns });
+    }
     if (cannotReach(out.verdict)) {
       const inst = reg.getInstance(dataset);
-      owed.owe({ dataset, layerId, email: (inst && inst.email) || '',
+      owed.owe({ dataset, layerId, email: (inst && inst.email) || '', payer: payerOf(inst),
         kind: troubleKind(out.trouble), trouble: out.trouble || '' });
     } else if (out.wrote) {
       owed.settle(dataset, layerId);
@@ -5012,7 +5049,7 @@ async function writeReading({ dataset, layer, layerId, rows, questions, label, s
      saving, which is the one thing this side and the browser genuinely do
      differently: it calls ingest directly where the browser posts to it. */
   const shaped = RULES.shapeReading(rows, questions);
-  const out = shaped.rows, labels = shaped.keyLabels, kinds = shaped.keyKinds;
+  const out = shaped.rows, labels = shaped.keyLabels, kinds = shaped.keyKinds, froms = shaped.keyColumns;
   // an area's shapes travel with its rows (shapesFor); a pin's coordinates already do
   const shapes = shapesFor(layer, dataset);
   const ing = await ingestLayer({
@@ -5020,7 +5057,7 @@ async function writeReading({ dataset, layer, layerId, rows, questions, label, s
     schema: shaped.schema,
     rows: out,
     geoms: shapes.geoms, geomIdx: shapes.geomIdx,
-    keyLabels: labels, keyKinds: kinds,
+    keyLabels: labels, keyKinds: kinds, keyColumns: froms,
     reading: reading || undefined,
     facts: (facts || []).length ? facts : undefined,
     meta: { sourceName: source, rowCount: out.length, geometry: shapes.geometry },
@@ -6189,6 +6226,14 @@ function commitPart(session, frag, features) {
   if (session.keyKinds && Object.keys(session.keyKinds).length) {
     frag.stanza.keyKinds = dropStale(frag.stanza.keyKinds, session.keyKinds);
   }
+  /* Replaced with the labels, whether or not this write names any columns: a
+     question's column from an earlier set must not stay on a new question
+     that happens to take its place. */
+  if (session.keyLabels && Object.keys(session.keyLabels).length) {
+    const cols = dropStale(frag.stanza.keyColumns, session.keyColumns || {});
+    if (Object.keys(cols).length) frag.stanza.keyColumns = cols;
+    else delete frag.stanza.keyColumns;
+  }
   // this reading's account if it made one, otherwise the one already there
   const account = session.reading || session.replacingReading;
   const sorts = (session.facts && session.facts.length) ? session.facts : session.replacingFacts;
@@ -6917,6 +6962,7 @@ router.post('/layers/enrich', async (req, res) => {
       owed.owe({
         dataset, layerId: String(b.layerId),
         email: (asked && asked.email) || (inst && inst.email) || '',
+        payer: payerOf(inst),
         kind: troubleKind(out.trouble), trouble: out.trouble || '',
       });
     }

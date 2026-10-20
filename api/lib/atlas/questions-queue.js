@@ -37,6 +37,15 @@ const DATA_DIR = process.env.LOKA_DATA_DIR || path.join(path.dirname(fileURLToPa
 export const NEVER_READ = new Set(['deoria-bioregion']);
 
 const BUSY = new Set(['queued', 'running']);
+
+/* Whose allowance a reading or a naming is charged to: the account that owns
+   the atlas, and only when there is none the email it was set up with. The two
+   differ when an atlas was made before sign-in, or handed to someone else —
+   charging the setup email then bills a person who no longer holds the atlas.
+   One rule, used by the server and by every script that puts work on a list. */
+export function payerOf(inst) {
+  return String((inst && (inst.ownerAccount || inst.email)) || '');
+}
 const keyOf = (dataset, layerId) => dataset + '|' + layerId;
 
 /* The fingerprint of a layer's places, with every trace of a reading taken out.
@@ -150,10 +159,13 @@ export function createQueue({ file } = {}) {
     }
     /* What the list already knew about this layer travels to the new line:
        the names a job wrote (short-labels, place-names), which column they
-       came from, and an owner's "switched off". A new version is a new
-       reading, not a new memory. */
+       came from, an owner's "switched off", and what became of each column
+       the last time it was read — so a restore, or a reading that looks at
+       only some columns, never leaves the owner's page saying "not asked" of
+       a column that was read. A new version is a new reading, not a new
+       memory. */
     const carry = {};
-    for (const f of ['names', 'from', 'by', 'off']) if (had && had[f] !== undefined) carry[f] = had[f];
+    for (const f of ['names', 'from', 'by', 'off', 'columns']) if (had && had[f] !== undefined) carry[f] = had[f];
     db[k] = Object.assign(carry, { dataset, layerId, sig, payer: payer || (had && had.payer) || '', state: 'queued',
               reason: '', queuedAt: Date.now(), at: Date.now(), restore: !!restore },
               adding ? { addColumns: addColumns.map(String) } : {});

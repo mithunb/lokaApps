@@ -195,7 +195,7 @@ check('a reading for an owner is charged to their account',
 check('runReading spends through that payer',
   /const payer = opts\.payer \? \{ payer: opts\.payer \} : 'server';/.test(server) &&
   /const c = aiCaller\(payer, null,/.test(server), true);
-check('the payer is the atlas owner', /const payer = \(inst && inst\.email\) \|\| '';/.test(server), true);
+check('the payer is the atlas owner', /const payer = payerOf\(inst\);/.test(server), true);
 check('each reading still has its own ceiling', /if \(spent >= cap\) throw new Error\('this reading has used its share of the model'\);/.test(server), true);
 check('the stand-in pays out of the same allowance', /if \(stub\) return stub\(model, prompt, schema, o\);/.test(server) &&
   /await pay\('fake', 'find ' \+ g\.label, null, \{\}\);/.test(server), true);

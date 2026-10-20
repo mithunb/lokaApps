@@ -34,7 +34,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { createQueue, fileSignatureOf, NEVER_READ } from '../api/lib/atlas/questions-queue.js';
+import { createQueue, fileSignatureOf, NEVER_READ, payerOf } from '../api/lib/atlas/questions-queue.js';
 
 const REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const RULES = createRequire(import.meta.url)(path.join(REPO, 'atlas', 'reading-rules.js'));
@@ -105,7 +105,8 @@ function main(argv) {
     ': ' + want.length + ' layer' + (want.length === 1 ? '' : 's') + ' with words to read and no questions yet.');
   let added = 0;
   for (const w of want) {
-    const owner = (instances[w.dataset] && instances[w.dataset].email) || '';
+    // the account that owns the atlas, else the email it was set up with (questions-queue payerOf)
+    const owner = payerOf(instances[w.dataset]);
     const had = queue.get(w.dataset, w.layerId);
     const note = had && had.sig === w.sig ? ' (already on the list: ' + had.state + ')' : '';
     console.log('  ' + w.dataset + '/' + w.layerId + ' — ' + w.label + ' — ' + w.places + (w.shapes ? ' areas' : ' places') +

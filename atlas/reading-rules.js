@@ -181,7 +181,7 @@
      rather than a column named after how it was made. */
   function shapeReading(rows, questions) {
     var out = withoutAnswers(rows);
-    var keyLabels = {}, keyKinds = {};
+    var keyLabels = {}, keyKinds = {}, keyColumns = {};
     (questions || []).forEach(function (q, n) {
       var col = "pattern_" + (n + 1);
       var whyCol = col + "_why";
@@ -191,6 +191,12 @@
       keyKinds[col] = (q.counts || []).map(function (c) {
         return { name: c.name, definition: c.definition || "" };
       });
+      /* And the column it was found in, beside its kinds. A later reading
+         answers it from that column and checks the words under each answer
+         there, as the reading that found it did; without this it would fall
+         back to the whole record and a comment's question could stand on a
+         description's words. A question found in the whole record has none. */
+      if (Array.isArray(q.columns) && q.columns.length) keyColumns[col] = q.columns.map(String);
       (q.categories || []).forEach(function (c, i) {
         if (out[i]) out[i][col] = c === "other" ? "" : (c || "");
       });
@@ -204,7 +210,7 @@
         if (o[whyCol] === undefined) o[whyCol] = "";
       });
     });
-    return { rows: out, keyLabels: keyLabels, keyKinds: keyKinds, schema: schemaFor(out) };
+    return { rows: out, keyLabels: keyLabels, keyKinds: keyKinds, keyColumns: keyColumns, schema: schemaFor(out) };
   }
 
   /* An atlas read before the kinds were kept has the wording and nothing else.
@@ -230,11 +236,13 @@
   function settledQuestions(layer, rows) {
     var labels = (layer && layer.keyLabels) || {};
     var kinds = (layer && layer.keyKinds) || {};
+    var from = (layer && layer.keyColumns) || {};
     return Object.keys(labels)
       .filter(isQuestionColumn)
       .sort(function (a, b) { return Number(a.split("_")[1]) - Number(b.split("_")[1]); })
       .map(function (col) {
-        return { question: labels[col], kinds: kinds[col] || kindsSeenIn(rows, col) };
+        return { question: labels[col], kinds: kinds[col] || kindsSeenIn(rows, col),
+                 columns: Array.isArray(from[col]) ? from[col].slice() : [] };
       })
       .filter(function (q) { return q.question && q.kinds.length; });
   }

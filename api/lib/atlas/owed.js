@@ -54,7 +54,10 @@ function nextAfter(kind, attempts, now) {
 }
 
 /* Record that a reading is owed, or note another failed attempt at one. */
-export function owe({ dataset, layerId, email, kind, trouble }) {
+/* payer: whose allowance the retry is charged to (questions-queue payerOf:
+   the atlas's owner account, else its setup email). email is only who is
+   written to when it lands. */
+export function owe({ dataset, layerId, email, payer, kind, trouble }) {
   const db = load();
   const key = keyOf(dataset, layerId);
   const now = Date.now();
@@ -63,6 +66,7 @@ export function owe({ dataset, layerId, email, kind, trouble }) {
   db[key] = {
     dataset, layerId,
     email: email || (had && had.email) || '',
+    payer: payer || (had && had.payer) || '',
     kind: kind === 'gone' ? 'gone' : 'busy',
     trouble: trouble || (had && had.trouble) || '',
     firstAt: (had && had.firstAt) || now,

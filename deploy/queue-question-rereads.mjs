@@ -22,18 +22,23 @@
  * that would get its own look today (the same test the reading uses) which
  * none of the kept questions draws on. "Draws on" is measured, not guessed:
  * each kept question's evidence words (pattern_N_why) are looked for in each
- * column's text on that place, and a column counts as drawn on when words
- * found in it AND IN NO OTHER COLUMN stand under an answer on at least three
- * places — three being this product's own floor for a kind. A word found in
- * two columns at once proves nothing about either.
+ * column's text on that place, and a column counts as drawn on when the
+ * words quoted under an answer are found in it on at least three places —
+ * three being this product's own floor for a kind. A word found in two
+ * columns at once counts for both: a description and a comment that share
+ * words have both been drawn on, and calling them both unused (as an
+ * earlier version of this did) would pay for a re-read of a column the
+ * questions already speak from.
  *
  * --apply puts each such layer on the list with the unused columns named
  * (addColumns). The server reads it within a minute, keeps every question
  * already on the map, asks the named columns for more, and charges the
- * reading to the atlas owner's hourly allowance. Running it twice adds nothing
- * the second time: a layer already waiting or being read is not added again,
- * and once it has been read its columns are drawn on or reported as yielding
- * nothing, so it is not listed again.
+ * reading to the atlas owner's hourly allowance (the owner's account, else the
+ * email the atlas was set up with). Running it twice adds nothing the second
+ * time: a layer already waiting or being read is not added again, and nor is
+ * one whose record already shows a re-read of these columns (or more) at this
+ * same version of its places — a column that yielded nothing then would yield
+ * nothing again, at the owner's cost.
  *
  * A layer with no questions is not this script's business (that is
  * queue-question-readings.mjs). The deoria-bioregion atlas is never touched —
@@ -44,7 +49,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { createQueue, fileSignatureOf, NEVER_READ } from '../api/lib/atlas/questions-queue.js';
+import { createQueue, fileSignatureOf, NEVER_READ, payerOf } from '../api/lib/atlas/questions-queue.js';
 import { textColumns, columnLabel } from '../api/lib/atlas/enrich.js';
 
 const REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -55,7 +60,7 @@ export const DEFAULT_ROOTS = [
   path.join(REPO, 'atlas', 'datasets'),
   path.join(REPO, 'api', 'data', 'atlas', 'private-datasets'),
 ];
-const DRAWN_ON = 3;      // places on which a column alone stands under an answer
+const DRAWN_ON = 3;      // places on which a column's words stand under an answer
 
 function readJSON(f) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } }
 const textOf = (v) => v == null ? '' : Array.isArray(v) ? v.map((x) => x == null ? '' : String(x)).join('; ') : String(v);
@@ -66,20 +71,19 @@ export function unusedColumns(layer, rows) {
   const nameCol = (layer && layer.popup && layer.popup.title) || 'name';
   const { ask } = textColumns(rows, fields, { nameCol });
   const asked = Object.keys(rows[0] || {}).filter((k) => RULES.isQuestionColumn(k));
-  const used = new Map();     // column -> places where it alone stood under an answer
+  const used = new Map();     // column -> places where words quoted under an answer are found in it
   for (const c of ask) used.set(c.column, 0);
   for (const r of rows) {
     const texts = ask.map((c) => textOf(r[c.column]).toLowerCase());
-    const alone = new Set();
+    const hit = new Set();      // the columns its quoted words are found in, on this place
     for (const q of asked) {
       if (!r[q] || r[q] === 'other') continue;
       const words = String(r[q + '_why'] || '').split(',').map((w) => w.trim().toLowerCase()).filter(Boolean);
       for (const w of words) {
-        const where = ask.filter((c, i) => texts[i].includes(w));
-        if (where.length === 1) alone.add(where[0].column);
+        ask.forEach((c, i) => { if (texts[i].includes(w)) hit.add(c.column); });
       }
     }
-    for (const c of alone) used.set(c, used.get(c) + 1);
+    for (const c of hit) used.set(c, used.get(c) + 1);
   }
   return {
     questions: asked.length,
@@ -123,6 +127,17 @@ export function survey(roots) {
   return { want, skipped };
 }
 
+/* Has this layer's record already had a re-read of these columns, at this same
+   version of its places? Then a second run must not pay for another. Every
+   column wanted now must be among those asked then: a column that yielded
+   nothing at the time is still listed as never drawn on, and asking it again
+   of the same places would only buy the same nothing. */
+export function alreadyReread(had, w) {
+  if (!had || had.sig !== w.sig || !Array.isArray(had.addColumns)) return false;
+  const asked = new Set(had.addColumns.map(String));
+  return w.unused.every((u) => asked.has(u.column));
+}
+
 function main(argv) {
   const apply = argv.includes('--apply');
   const opt = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : null; };
@@ -139,14 +154,17 @@ function main(argv) {
     ': ' + want.length + ' layer' + (want.length === 1 ? '' : 's') + ' with a column its questions never drew on.');
   let added = 0;
   for (const w of want) {
-    const owner = (instances[w.dataset] && instances[w.dataset].email) || '';
+    // the account that owns the atlas, else the email it was set up with (questions-queue payerOf)
+    const owner = payerOf(instances[w.dataset]);
     const had = queue.get(w.dataset, w.layerId);
     const busy = had && (had.state === 'queued' || had.state === 'running');
+    const done = !busy && alreadyReread(had, w);
     console.log('  ' + w.dataset + '/' + w.layerId + ' — ' + w.label + ' — ' + w.places + ' places, ' +
-      w.questions + ' question' + (w.questions === 1 ? '' : 's') + ' drawing on ' + (w.drawnOn.join(', ') || 'no column alone') +
+      w.questions + ' question' + (w.questions === 1 ? '' : 's') + ' drawing on ' + (w.drawnOn.join(', ') || 'no column') +
       '; never drawn on: ' + w.unused.map((u) => columnLabel(u.column) + ' (' + u.kind + ', ' + u.avgLen + ' characters on ' + u.filled + ' places)').join(', ') +
-      (owner ? '' : ' — no owner on record, charged to the server') + (busy ? ' (already on the list: ' + had.state + ')' : ''));
-    if (!apply || busy) continue;
+      (owner ? '' : ' — no owner on record, charged to the server') + (busy ? ' (already on the list: ' + had.state + ')' : '') +
+      (done ? ' (already re-read for these columns at this version: ' + had.state + ' — not added again)' : ''));
+    if (!apply || busy || done) continue;
     if (queue.offer({ dataset: w.dataset, layerId: w.layerId, sig: w.sig, payer: owner,
                       addColumns: w.unused.map((u) => u.column) })) added += 1;
   }
