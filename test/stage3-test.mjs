@@ -36,14 +36,17 @@ function run({ plan, keepQuestions = [] }) {
           { name: 'Bigly', definition: 'Places that', examples: [1,2,3] },
           { name: 'Elsewise', definition: 'Places that', examples: [4,5,6] }] },
       ] };
-      const lines = [...p.matchAll(/^(\d+)\. (.*)$/gm)].map((x) => [Number(x[1]), x[2]]);
+      /* Columns are read one at a time now, so a place's line is labelled with
+         its column ("description: …"); the label is not a word of the place
+         and is taken off before a word is picked. */
+      const lines = [...p.matchAll(/^(\d+)\. (.*)$/gm)].map((x) => [Number(x[1]), x[2].replace(/^[\w +-]+: /, '')]);
       /* Each place cites a word only IT has. A word shared by two places that
          got different answers is dropped by the rule against a word arguing two
          ways — correctly — so a stub that hands out shared words tests that rule
          instead of this one. */
       const seenIn = new Map();
       const wordsOf = lines.map(([, text]) => {
-        const ws = [...new Set((text.toLowerCase().match(/[a-z][a-z-]{5,}/g) || []))];
+        const ws = [...new Set((text.toLowerCase().match(/[a-z][a-z-]{5,}/g) || []).concat(text.toLowerCase().match(/[a-z][a-z-]{2,}/g) || []))];
         for (const w of ws) seenIn.set(w, (seenIn.get(w) || 0) + 1);
         return ws;
       });

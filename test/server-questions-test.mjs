@@ -198,7 +198,7 @@ check('runReading spends through that payer',
 check('the payer is the atlas owner', /const payer = \(inst && inst\.email\) \|\| '';/.test(server), true);
 check('each reading still has its own ceiling', /if \(spent >= cap\) throw new Error\('this reading has used its share of the model'\);/.test(server), true);
 check('the stand-in pays out of the same allowance', /if \(stub\) return stub\(model, prompt, schema, o\);/.test(server) &&
-  /await pay\('fake', 'find', null, \{\}\);/.test(server), true);
+  /await pay\('fake', 'find ' \+ g\.label, null, \{\}\);/.test(server), true);
 
 console.log('\n  the stand-in model cannot be switched on by accident');
 check('it needs the flag, the local static mode, no key and not production',
@@ -408,8 +408,11 @@ await (async () => {
     const layers = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.local.json'), 'utf8')).layers;
     const L = (id) => layers.find((l) => l.id === id) || {};
 
+    // what became of each column travels with the record (columns-test.mjs has the lines themselves)
+    const sansColumns = (r) => { const o = Object.assign({}, r); delete o.columns; return o; };
     check('a retry that keeps nothing ends as "none", with the plain reason',
-      page2.ponds, { state: 'none', reason: "No questions were kept: most places didn't fit any theme.", unreachable: false });
+      sansColumns(page2.ponds), { state: 'none', reason: "No questions were kept: most places didn't fit any theme.", unreachable: false });
+    check('and says what became of each column', (page2.ponds.columns || []).length > 0 && page2.ponds.columns.every((c) => c.column && c.line), true);
     check('and the layer is marked as looked at, as a first reading marks it', L('ponds').patternsNone, true);
     check('it is off the owed list', !!readJSON(of)[SLUG + '|ponds'], false);
     check('the owner is told it was read and nothing kept, with why',
@@ -418,7 +421,10 @@ await (async () => {
       /const fileSig = fileSigOf\(o\.dataset, o\.layerId\);[\s\S]*?noteRetry\(o\.dataset, o\.layerId, patch, fileSig \|\| out\.sig\);/.test(fs.readFileSync(path.join(ROOT, 'api', 'apps', 'atlas.js'), 'utf8')), true);
 
     check('a retry that finds questions ends as "done", no longer out of reach',
-      page2.wells, { state: 'done', reason: '', unreachable: false });
+      sansColumns(page2.wells), { state: 'done', reason: '', unreachable: false });
+    // the stand-in reports every column like the real reading does (on this tiny
+    // fixture the one word column is already a key, so every line is "not asked")
+    check('with a line for each column', (page2.wells.columns || []).length > 0 && page2.wells.columns.every((c) => c.column && /^[A-Z][^:]*: /.test(c.line)), true);
     check('and the questions are on the layer',
       Object.keys(L('wells').keyLabels || {}).filter((k) => /^pattern_\d+$/.test(k)).length > 0, true);
     check('it is off the owed list too', !!readJSON(of)[SLUG + '|wells'], false);

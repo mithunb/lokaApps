@@ -37,7 +37,10 @@ async function peek(model, prompt, schema, o) {
      them before mine ever sees them. So each place cites a word taken from its
      own line, plus "culture" — which is on many lines and is offered here for
      BOTH kinds, which is the contradiction being staged. */
-  const lines = [...prompt.matchAll(/^(\d+)\. (.*)$/gm)].map((m) => [Number(m[1]), m[2]]);
+  /* Since columns are read one at a time, a place's line is labelled with the
+     column it came from ("description: …"); the label is not a word of the
+     place, so it is taken off before a word is picked. */
+  const lines = [...prompt.matchAll(/^(\d+)\. (.*)$/gm)].map((m) => [Number(m[1]), m[2].replace(/^[\w +-]+: /, '')]);
   return { rows: lines.map(([i, text], k) => {
     const own = (text.match(/[a-z][a-z-]{5,}/i) || ['place'])[0];
     return k % 2 ? { i, q0: 'Alpha', w0: [own, 'culture'] }

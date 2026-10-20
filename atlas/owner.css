@@ -397,6 +397,11 @@
 }
 .own-note { font-size:var(--t-label); color:var(--color-text-muted); font-weight:400; }
 .own-note.warnish { color:var(--color-sindoor-deep); }
+/* what became of each column of a layer's places: a quiet list, one line a
+   column, the columns that were asked a shade darker than those passed over */
+.own-columns { margin:4px 0 0; padding-left:1.1em; }
+.own-columns .own-column { margin:2px 0; }
+.own-columns .own-column.asked { color:var(--color-text); }
 
 /* "Identify each place by" — first in the layer's fold: the question, its one
    quiet line, the optional second column, four real names cut the way the map

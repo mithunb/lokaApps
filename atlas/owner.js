@@ -232,6 +232,7 @@
       var said = readingOf(L.id);
       var why = said && said.state === "none" ? plainWhy(said.reason) : "";
       if (why) wrap.appendChild(el("p", "own-note", esc(why)));
+      columnLines(wrap, said);
       return;
     }
     var done = Object.keys(feats[0].properties || {})
@@ -267,12 +268,37 @@
          places and kept or thrown away. That answers the park exactly, changes
          only the question that is wrong, and has no dice in it. So the door is
          gone, and nothing here can lose work any more. */
+      /* One thing IS said: what became of each column of the places. Every
+         column with words of its own is read on its own now, and the record
+         says per column what was found or why nothing was kept — so an owner
+         can see that the comments column was looked at, not only that the
+         description yielded two questions. */
+      columnLines(wrap, readingOf(L.id));
       return;
     }
 
     var cols = wordColumns(feats);
     if (!cols.length) return;            // nothing written here to read
     showReading(L, feats, cols, wrap);
+  }
+
+  /* What became of each column, one plain line each, as the server recorded
+     it (questions-queue forDataset → columns; the lines are written by
+     enrich.js columnReport). Shown wherever the layer's reading is reported
+     on: under the keys once it has landed, and under "nothing here" when it
+     kept nothing. Not shown while a reading is still running, because there
+     is nothing to say yet. The Questions tab (addShelves, drawQuestionShelf)
+     would be the other natural home for these lines; they sit here so that
+     this change and the tab's own repair do not touch the same code. */
+  function columnLines(wrap, said) {
+    var lines = (said && said.columns) || [];
+    if (!lines.length) return;
+    var list = el("ul", "own-note own-columns");
+    lines.forEach(function (c) {
+      if (!c || !c.line) return;
+      list.appendChild(el("li", c.asked ? "own-column asked" : "own-column", esc(c.line)));
+    });
+    if (list.childNodes.length) wrap.appendChild(list);
   }
 
   /* The questions are found on the server now, not here.

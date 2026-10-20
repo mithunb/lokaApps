@@ -90,7 +90,8 @@ const long = await E.enrichRows({ rows, fields: ['description', 'categories', 'l
       question: 'What sort of material was this thing built out of?',   // 49 characters
       kinds: [{ name: 'Zephyr', definition: 'Places that', examples: [1, 2, 3] },
               { name: 'Quixote', definition: 'Places that', examples: [4, 5, 6] }] }] };
-    const ids = [...p.matchAll(/^(\d+)\. (.*)$/gm)].map((x) => [Number(x[1]), x[2]]);
+    // the line is labelled with its column now ("description: …"); the label is not a word of the place
+    const ids = [...p.matchAll(/^(\d+)\. (.*)$/gm)].map((x) => [Number(x[1]), x[2].replace(/^[\w +-]+: /, '')]);
     return { rows: ids.map(([i, text], k) => {
       const own = (text.match(/[a-z][a-z-]{5,}/i) || ['place'])[0];
       return { i, q0: k % 2 ? 'Zephyr' : 'Quixote', w0: [own] };

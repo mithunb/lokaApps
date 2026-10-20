@@ -102,7 +102,11 @@ export function createQueue({ file } = {}) {
   function forDataset(dataset) {
     const out = {};
     for (const r of Object.values(load())) {
-      if (r.dataset === dataset) out[r.layerId] = { state: r.state, reason: r.reason || '', unreachable: !!r.unreachable };
+      if (r.dataset === dataset) {
+        out[r.layerId] = { state: r.state, reason: r.reason || '', unreachable: !!r.unreachable,
+          // what became of each column of the layer's places, one plain line each (enrich.js columnReport)
+          columns: Array.isArray(r.columns) ? r.columns : [] };
+      }
     }
     return out;
   }
@@ -123,15 +127,21 @@ export function createQueue({ file } = {}) {
 
   /* Put a layer on the list for this version of its places. Answers whether it
      went on: a version already read, waiting or being read is not added twice. */
-  function offer({ dataset, layerId, sig, payer, restore }) {
+  /* addColumns: a re-read of the same version that keeps the questions it
+     has and adds from the named columns — the ones a reading under the old
+     one-pile rule never drew on (deploy/queue-question-rereads.mjs). Like a
+     restore, it is asked for a version already read; unlike one, it costs a
+     reading, charged to the owner as any reading is. */
+  function offer({ dataset, layerId, sig, payer, restore, addColumns }) {
     if (NEVER_READ.has(dataset)) return false;
     const db = load();
     const k = keyOf(dataset, layerId);
     const had = db[k];
+    const adding = Array.isArray(addColumns) && addColumns.length > 0;
     // a restore is the one thing asked for the same version twice: putting
     // back answers a re-commit dropped, which costs no reading at all
-    if (had && had.sig === sig && !restore) return false;
-    if (had && restore && BUSY.has(had.state)) return false;
+    if (had && had.sig === sig && !restore && !adding) return false;
+    if (had && (restore || adding) && BUSY.has(had.state)) return false;
     // being read right now: the newer version is read once this one has landed
     if (had && had.state === 'running') {
       had.again = true;
@@ -145,7 +155,8 @@ export function createQueue({ file } = {}) {
     const carry = {};
     for (const f of ['names', 'from', 'by', 'off']) if (had && had[f] !== undefined) carry[f] = had[f];
     db[k] = Object.assign(carry, { dataset, layerId, sig, payer: payer || (had && had.payer) || '', state: 'queued',
-              reason: '', queuedAt: Date.now(), at: Date.now(), restore: !!restore });
+              reason: '', queuedAt: Date.now(), at: Date.now(), restore: !!restore },
+              adding ? { addColumns: addColumns.map(String) } : {});
     save(db);
     setImmediate(pump);
     return true;

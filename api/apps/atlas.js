@@ -4097,7 +4097,14 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
   };
   // the stand-in's planned outcome for this reading, if a check planned one
   const planned = FAKE_READING ? fakePlanFor(dataset, layerId) : '';
-  const ask = (missed) => FAKE_READING ? fakeReading(rows, fields, asked, caller(), planned) : enrich.enrichRows({
+  /* Every column with words of its own is read on its own (enrich.js
+     planColumns), within this reading's allowance of calls; the place's name
+     column is named so it is not read as evidence; and a re-read that adds
+     questions from columns the first reading never drew on says which
+     (opts.addColumns, from deploy/queue-question-rereads.mjs). */
+  const nameCol = (layer.popup && layer.popup.title) || 'name';
+  let firstFound = null;   // the first attempt's questions per column, reused by the second
+  const ask = (missed) => FAKE_READING ? fakeReading(rows, fields, asked, caller(), planned, nameCol) : enrich.enrichRows({
     rows, fields, title: (inst && inst.title) || dataset,
     mode: 'questions',
     keepQuestions: asked,
@@ -4105,8 +4112,12 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
     callJSON: caller(),
     models: { flash: getFlashModel(), flashLite: getFlashLiteModel() },
     missed,
+    nameCol, callBudget: AI_CALLS_PER_READING,
+    addColumns: Array.isArray(opts.addColumns) && opts.addColumns.length ? opts.addColumns : null,
+    reuseFound: firstFound,
   });
   let out = await ask([]);
+  firstFound = out.found || null;
 
   /* One more attempt, and only one, and only for the fault that counting can
      see: a word a good part of the map says whose places found nowhere to go.
@@ -4187,11 +4198,15 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
     }
   }
 
+  /* What became of each column, in the log as well as the record: an owner
+     reads it on their page, an operator in pm2's log, and both see the same
+     lines. */
+  for (const c of (out.columns || [])) console.log('[atlas] ' + dataset + '/' + layerId + ' — ' + c.line);
   if (out.verdict !== 'questions' || !(out.questions || []).length) {
     return { wrote: false, verdict: out.verdict, unread: out.unread || 0,
              read: out.read, batches: out.batches, trouble: out.trouble || '',
              note: out.note || '', reason: out.reason || '', withText: out.withText,
-             sig: sigAtStart, calls: spentBy(callers) };
+             sig: sigAtStart, calls: spentBy(callers), columns: out.columns || [] };
   }
   /* Somebody put new places on this layer — or on the other half of its file —
      while it was being read. Writing now would lay these answers over the old
@@ -4216,8 +4231,10 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
   });
   return {
     wrote: true, verdict: 'questions', places: rows.length, sig: sigAtStart, calls: spentBy(callers),
+    columns: out.columns || [],
     questions: out.questions.map((q) => ({
       question: q.question,
+      column: q.column || '',
       answered: (q.categories || []).filter((c) => c && c !== 'other').length,
       withWords: (q.why || []).filter((w) => w && w.length).length,
     })),
@@ -4244,15 +4261,19 @@ function fakePlanFor(dataset, layerId) {
   return Array.isArray(list) && list.length ? String(list.shift()) : '';
 }
 
-async function fakeReading(rows, fields, asked, pay, planned) {
+async function fakeReading(rows, fields, asked, pay, planned, nameCol) {
   // long enough to watch the owner's note come and go; ATLAS_FAKE_READING_MS changes it
   const wait = Number(process.env.ATLAS_FAKE_READING_MS || 15000);
   if (wait > 0) await new Promise((r) => setTimeout(r, Math.min(wait, 120000)));
   // a planned "could not be reached": nothing is asked and nothing is paid
   if (planned === 'unreachable') return { verdict: 'unavailable', trouble: '503 the stand-in is pretending to be busy' };
-  // one call for finding the questions, one for answering them, both paid for
-  // out of the same allowance a real reading would use
-  await pay('fake', 'find', null, {});
+  /* One call for finding questions in each column read on its own, one for
+     answering them — the same shape as a real reading, paid for out of the
+     same allowance, so a check sees the calls a reading now costs. The
+     report says what became of every column, as the real reading does. */
+  const plan = enrich.planColumns(rows, fields, { nameCol: nameCol || '', budget: AI_CALLS_PER_READING,
+    batches: Math.ceil(rows.length / 40) });
+  for (const g of plan.groups) await pay('fake', 'find ' + g.label, null, {});
   await pay('fake', 'answer', null, {});
   const textOf = (r) => fields.map((f) => String((r && r[f]) || '')).join(' ').trim();
   const firstWords = (t) => t.split(/\s+/).filter(Boolean).slice(0, 2);
@@ -4276,10 +4297,15 @@ async function fakeReading(rows, fields, asked, pay, planned) {
     q.coverage = rows.length ? answered / rows.length : 0;
     return q;
   }).filter((q) => q.categories.some((c) => c && c !== 'other'));
-  if (!questions.length) return { verdict: 'no_clear_questions', note: 'nothing written to count' };
+  // the stand-in's questions are asked of the first column read; the rest are reported as yielding nothing
+  const outcomes = {};
+  plan.groups.forEach((g, i) => { outcomes[g.label] = i ? { state: 'none', note: 'the stand-in only counts the first column' } : { state: 'asked', proposed: 2, dropped: 0, twice: 0 }; });
+  questions.forEach((q) => { q.column = plan.groups.length ? plan.groups[0].label : ''; });
+  const columns = enrich.columnReport(plan, outcomes, questions, [], rows.length);
+  if (!questions.length) return { verdict: 'no_clear_questions', note: 'nothing written to count', columns };
   // a planned "LOKA's own check turned them down", as the gate would say it
-  if (planned === 'refused') return { verdict: 'refused', reason: "most places didn't fit any theme" };
-  return { verdict: 'questions', questions, reading: 'Made up locally for checking, not by a model.', facts: [] };
+  if (planned === 'refused') return { verdict: 'refused', reason: "most places didn't fit any theme", columns };
+  return { verdict: 'questions', questions, reading: 'Made up locally for checking, not by a model.', facts: [], columns };
 }
 
 /* "Asked, and nothing found", written onto the layer so it is not asked again.
@@ -4687,7 +4713,9 @@ async function readingJob(job) {
   let out;
   try {
     out = await runReading(dataset, layerId, false, { payer: job.payer || '', guard: true,
-      keep: keptQuestions(QUESTIONS.loadAnswers(dataset, layerId)) });
+      keep: keptQuestions(QUESTIONS.loadAnswers(dataset, layerId)),
+      // a re-read that keeps the questions it has and adds from the columns they never drew on
+      addColumns: Array.isArray(job.addColumns) ? job.addColumns : null });
   } catch (e) {
     console.warn('[questions] ' + where + ' — ' + (e && e.message));
     return { state: 'failed', reason: String((e && e.message) || 'something went wrong').slice(0, 160) };
@@ -4708,7 +4736,8 @@ async function endReading(dataset, layerId, out) {
       (out.questions.length === 1 ? '' : 's') + ' written');
     // the version on disk now, answers and all (both halves of a split file);
     // its fingerprint is the one noted
-    return { state: 'done', reason: '', calls: out.calls, sig: fileSigOf(dataset, layerId) || out.sig };
+    return { state: 'done', reason: '', calls: out.calls, sig: fileSigOf(dataset, layerId) || out.sig,
+             columns: out.columns || [] };
   }
   if (out.verdict === 'changed') {
     /* Not the end of the story: the list noted the newer version while this
@@ -4746,9 +4775,9 @@ async function endReading(dataset, layerId, out) {
       try { await writeNothingHere(dataset, got.layer, got.rows); } catch (e) {
         return { state: 'failed', reason: 'nothing found, and that could not be noted — ' + (e && e.message) };
       }
-      return { state: 'none', reason: why, sig: fileSigOf(dataset, layerId) || out.sig };
+      return { state: 'none', reason: why, sig: fileSigOf(dataset, layerId) || out.sig, columns: out.columns || [] };
     }
-    return { state: 'none', reason: why };
+    return { state: 'none', reason: why, columns: out.columns || [] };
   }
   console.warn('[questions] ' + where + ' — no questions could be found (' + out.verdict + ')');
   return { state: 'failed', reason: ('no questions could be found (' + out.verdict + ')').slice(0, 160) };
