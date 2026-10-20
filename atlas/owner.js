@@ -2394,8 +2394,7 @@
      the viewer's own rule), said beside the question so nothing is reworded
      out of the owner's sight. */
   function headingLine(question, noun) {
-    var place = (window.LokaAtlas && window.LokaAtlas.manifest && window.LokaAtlas.manifest.placeName) || "";
-    var h = LokaLabelRules.keyHeading({ question: question, noun: noun, place: place });
+    var h = LokaLabelRules.keyHeading({ question: question, noun: noun });
     // as markup (el sets innerHTML), so the words are escaped
     return esc(h.sub ? "On the map: “" + h.heading + "”" : "On the map: as written");
   }
@@ -2447,10 +2446,6 @@
       /* The place's name for the map's headings ("Explore Goa by area"). Filled
          in with the region as a suggestion; it is used only once Save is
          pressed, and an empty box means the headings name no place. */
-      '<label class="own-fld">Call this place <span class="own-note">headings on the map read “Explore ' +
-        '<i>this place</i> by …”; leave it empty for “Explore by …”</span>' +
-        '<input type="text" id="own-placename" maxlength="' + LokaLabelRules.PLACE_MAX + '" value="' +
-          esc(placeNameSaved()) + '"' + (placeNameSaved() ? '' : ' placeholder="' + esc(placeNameNow() ? "e.g. " + placeNameNow() : "") + '"') + ' /></label>' +
       '<label class="own-fld">Your organisation or project <span class="own-note">shown above the title</span>' +
         '<input type="text" id="own-org" maxlength="60" value="' + esc(b.orgName || INST.org || "") + '" /></label>' +
       /* The logo, where it can be seen beside the name it goes with. Any
@@ -2516,19 +2511,6 @@
     "</div>";
   }
 
-  /* What the "Call this place" box opens with: the name the owner saved, or,
-     until they have saved one, the atlas's region as a suggestion (its first
-     name: "Bangalore", from "Bangalore · Bangalore Rural"). */
-  function placeNameNow() {
-    if (typeof INST.placeName === "string" && INST.placeName) return INST.placeName;
-    var r = String(INST.regionLabel || (INST.region && INST.region.label) || "");
-    if (!r || /^worldwide$/i.test(r)) return "";
-    return LokaLabelRules.cleanPlaceName(r.split(/\s+·\s+|,\s*/)[0].replace(/\s+\+\d+$/, ""));
-  }
-  function placeNameSaved() {
-    return (typeof INST.placeName === "string" && INST.placeName) ? INST.placeName : "";
-  }
-
   function identityDirty(scrim) {
     var t = scrim.querySelector("#own-title");
     if (!t) return false;
@@ -2537,9 +2519,6 @@
       scrim.querySelector("#own-desc").value.trim() !== (INST.subtitle || "") ||
       scrim.querySelector("#own-org").value.trim() !== (b.orgName || INST.org || "") ||
       scrim.querySelector("#own-site").value.trim() !== (b.orgUrl || "") ||
-      // the region is only a greyed suggestion (placeholder), never a value, so
-      // it can never be saved by pressing Save for some other change
-      scrim.querySelector("#own-placename").value.trim() !== placeNameSaved() ||
       scrim.__logo !== undefined;
   }
 
@@ -2974,11 +2953,8 @@
         subtitle: scrim.querySelector("#own-desc").value.trim(),
         org: org,
         branding: branding,
-        placeName: LokaLabelRules.cleanPlaceName(scrim.querySelector("#own-placename").value),
       },
     }).then(function () {
-      var placeWas = placeNameSaved();
-      INST.placeName = LokaLabelRules.cleanPlaceName(scrim.querySelector("#own-placename").value);
       INST.title = t.value.trim();
       INST.subtitle = scrim.querySelector("#own-desc").value.trim();
       INST.org = org;
@@ -2992,9 +2968,7 @@
       // this page's copy and hoping the two agree. The logo keeps one file
       // name, so the reboot is told the files changed or the browser would
       // show the old picture from its cache.
-      // the place's name lives beside the layers (manifest.local.json), so a
-      // new one is read again the way a changed layer is
-      if ((scrim.__logo !== undefined || INST.placeName !== placeWas) && window.LokaAtlas.dataChanged) window.LokaAtlas.dataChanged();
+      if (scrim.__logo !== undefined && window.LokaAtlas.dataChanged) window.LokaAtlas.dataChanged();
       preview(SLUG);
     }).catch(function (e) {
       err.textContent = errMsg(e);

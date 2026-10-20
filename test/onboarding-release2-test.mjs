@@ -128,7 +128,7 @@ check('an empty organisation is refused before anything is sent',
   /if \(!org\) \{ err\.textContent = "Name the organisation or project this atlas belongs to\."; /.test(owner), true);
 check('a changed logo counts as unsaved work', /scrim\.__logo !== undefined;\n\s*\}/.test(owner), true);
 check('the reboot is told the files changed, or the browser would keep showing the old logo',
-  /if \(\(scrim\.__logo !== undefined \|\| INST\.placeName !== placeWas\) && window\.LokaAtlas\.dataChanged\) window\.LokaAtlas\.dataChanged\(\);/.test(owner), true);
+  /if \(scrim\.__logo !== undefined && window\.LokaAtlas\.dataChanged\) window\.LokaAtlas\.dataChanged\(\);/.test(owner), true);
 check('the route reads org and branding.orgName, and defaults the one to the other',
   /const org = has\('org'\) \? cap\(b\.org, 60\) : \(inst\.org \|\| ''\);/.test(server) &&
   /orgName: hasB\('orgName'\) \? \(cap\(bb\.orgName, 60\) \|\| org\) : \(curB\.orgName \|\| org\),/.test(server), true);

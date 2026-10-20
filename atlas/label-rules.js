@@ -409,13 +409,14 @@
        o.noun     — the noun stored for it (keyNouns), checked again here
        o.label    — what the row is called, for a spreadsheet column
        o.column   — the column's own heading, for "Column: …"
-       o.place    — the owner's name for the place, or nothing
      Answers { heading, sub }; sub is "" when there is no second line (a
      question shown as written says the same thing twice otherwise). */
   function keyHeading(o) {
     o = o || {};
-    var place = cleanPlaceName(o.place);
-    var explore = function (noun) { return "Explore " + (place ? place + " " : "") + "by " + noun; };
+    /* No place name, ever (Mithun, 2026-10-20): "Explore Bengaluru by …" on
+       every row of a panel is repetitive, and the atlas's title already says
+       where it is. Every heading reads "Explore by <noun>". */
+    var explore = function (noun) { return "Explore by " + noun; };
     if (o.question != null && o.question !== "") {
       var q = String(o.question);
       var noun = nounFromQuestion(o.noun, q);

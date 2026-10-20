@@ -115,9 +115,9 @@ console.log('\n  the heading and the line under it');
 check('a question with a noun, no place set',
   L.keyHeading({ question: 'What is its primary function?', noun: 'function' }),
   { heading: 'Explore by function', sub: 'What is its primary function?' });
-check('the same, once the owner calls the place Bengaluru',
+check('never a place name, even if one is passed (Mithun: it becomes repetitive)',
   L.keyHeading({ question: 'What is its primary function?', noun: 'function', place: 'Bengaluru' }),
-  { heading: 'Explore Bengaluru by function', sub: 'What is its primary function?' });
+  { heading: 'Explore by function', sub: 'What is its primary function?' });
 check('a question with no noun is headed by itself, with no second line saying it again',
   L.keyHeading({ question: 'what locations are human-friendly and why', noun: '', place: 'Cubbon Park' }),
   { heading: 'what locations are human-friendly and why', sub: '' });
@@ -132,7 +132,7 @@ check('a spreadsheet column',
   { heading: 'Explore by category', sub: 'Column: Categories' });
 check('a long column: its short name in the heading, its whole heading under it',
   L.keyHeading({ label: 'Languages', column: 'What languages do you primarily work in? Feel free to mention all if there is more than one.', place: 'Goa' }),
-  { heading: 'Explore Goa by language', sub: 'Column: What languages do you primarily work in? Feel free to mention all if there is more than one.' });
+  { heading: 'Explore by language', sub: 'Column: What languages do you primarily work in? Feel free to mention all if there is more than one.' });
 check('a column whose short name is a cut question keeps it as the heading',
   L.keyHeading({ label: 'How long have you been involved…', column: 'How long have you been involved in this work? Is the work ongoing/complete?' }).heading,
   'How long have you been involved…');
@@ -247,13 +247,9 @@ check('the server runs the list, one call per layer, out of the payer\'s allowan
 check('the job never touches deoria-bioregion', /async function keyNounsJob[\s\S]{0,200}if \(NEVER_READ\.has\(dataset\)\) return/.test(server), true);
 
 /* ------------------------------------------------------------------ */
-console.log('\n  the place\'s name: the owner\'s, set in Settings, used only once saved');
-check('Settings has one plain field for it', /'<label class="own-fld">Call this place /.test(owner) && /id="own-placename"/.test(owner), true);
-check('it opens with the saved name, or the region as a suggestion',
-  /if \(typeof INST\.placeName === "string" && INST\.placeName\) return INST\.placeName;\n\s*var r = String\(INST\.regionLabel/.test(owner), true);
-check('the region is only a greyed suggestion, never a value, so Save cannot keep it by accident', /value="' \+\s*esc\(placeNameSaved\(\)\) \+ '"' \+ \(placeNameSaved\(\) \? '' : ' placeholder="'/.test(owner) && /scrim\.querySelector\("#own-placename"\)\.value\.trim\(\) !== placeNameSaved\(\)/.test(owner), true);
+console.log('\n  no place name in headings');
+check('Settings has no place-name box: headings never name a place', /Call this place|own-placename/.test(owner), false);
 check('an editor\'s question is shown as text, never markup', /el\("span", "own-q-name", esc\(q\.label\)\)/.test(owner), true);
-check('Save sends it with the rest of the details', /placeName: LokaLabelRules\.cleanPlaceName\(scrim\.querySelector\("#own-placename"\)\.value\),/.test(owner), true);
 check('the server tidies it and writes it beside the layers',
   /placeName: has\('placeName'\) \? shortLabels\.LABELS\.cleanPlaceName\(b\.placeName\)/.test(server) &&
   /if \(has\('placeName'\)\) writePlaceName\(updated\);/.test(server) && /function writePlaceName\(inst\)/.test(server), true);
