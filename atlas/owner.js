@@ -2057,8 +2057,14 @@
   }
   /* The layer's places: the ones the map already holds, or, in the moment
      after a rebuild when the fold reopens before the map has read its file
-     again, the file itself. */
-  function placesOf(L, then) {
+     again, the file itself.
+
+     Its own name, not placesOf: this used to be a second function called
+     placesOf in the same file, and the later of two same-named functions
+     silently replaces the earlier everywhere. The Questions shelf called the
+     other one, got this one, and drew nothing at all.
+     test/one-name-one-function-test.mjs now refuses a repeat. */
+  function featuresOf(L, then) {
     var gj = window.LokaAtlas.dataFor && window.LokaAtlas.dataFor(L.id);
     if (gj && gj.features) { then(gj.features); return; }
     var url = window.LokaAtlas.fileUrl && window.LokaAtlas.fileUrl(L);
@@ -2132,7 +2138,7 @@
     var waiting = el("p", "own-note");
     waiting.innerHTML = LokaWait.html("Reading the places\u2026");
     box.appendChild(waiting);
-    placesOf(L, function (feats) {
+    featuresOf(L, function (feats) {
       waiting.remove();
       fillNameChoice(box, lbl, L, feats, save);
     });
