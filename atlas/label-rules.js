@@ -282,7 +282,161 @@
     return cut.replace(/[\s,;:(–—-]+$/, "") + "…";
   }
 
+  /* 5. "Explore by …" — the heading over a key's row ("version D", Mithun,
+     October 2026). A question's row is headed "Explore <place> by <noun>",
+     and the question itself sits under it in a small grey line, always.
+
+     The noun is picked by the model from the question's own words, and it is
+     checked here, on the server before it is stored and in the page before
+     it is shown: every word of it must be a word of the question (any case,
+     singular or plural), at most NOUN_WORDS words and NOUN_MAX letters. A
+     noun that adds a word, or that is only asking words ("what", "is it"),
+     is no noun. With no noun, and always for a yes-or-no question, the
+     heading is the question exactly as it was written — a yes-or-no question
+     has no honest noun ("by whether it's free" is a rewording).
+
+     The place is the owner's own ("Call this place", in Settings), and is
+     left out until they set one: "Explore by function". */
+  var NOUN_WORDS = 4;
+  var NOUN_MAX = 32;
+  var PLACE_MAX = 40;
+  var YES_NO = /^(is|isn't|are|aren't|was|wasn't|were|weren't|am|does|doesn't|do|don't|did|didn't|can|can't|could|has|hasn't|have|haven't|had|will|won't|would|should|shall|may|might|must)\b/i;
+  // words that ask, point or join — a noun made only of these names nothing
+  var ASKING = ("what which who whom whose where when why how is are was were be been am do does did " +
+    "can could has have had will would should it its it's this that these those there here the a an " +
+    "of to in on at for by and or as with from").split(" ");
+  var ASKING_START = /^(what|which|who|whom|whose|where|when|why|how)$/;
+
+  function isYesNo(question) {
+    return YES_NO.test(String(question == null ? "" : question).trim().replace(/^[¿¡"“'‘(\[]+/, ""));
+  }
+  // a word as it is compared: lower case, the punctuation round it dropped
+  function bare(w) {
+    return String(w).toLowerCase().replace(/’/g, "'")
+      .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+  }
+  // the same word, singular or plural
+  function forms(w) {
+    var out = [w];
+    if (/ies$/.test(w) && w.length > 4) out.push(w.slice(0, -3) + "y");
+    if (/y$/.test(w) && w.length > 2) out.push(w.slice(0, -1) + "ies");
+    if (/es$/.test(w) && w.length > 3) out.push(w.slice(0, -2));
+    if (/s$/.test(w) && w.length > 3) out.push(w.slice(0, -1));
+    out.push(w + "s", w + "es");
+    return out;
+  }
+  function cleanPhrase(s) {
+    return String(s == null ? "" : s).replace(/\s+/g, " ").trim()
+      .replace(/^["“'‘]+|["”'’]+$/g, "").replace(/[\s?.!,;:…]+$/, "").trim();
+  }
+
+  /* The model's noun for a question, checked. Answers the noun to keep, or ""
+     when it breaks a rule. Words are given back in the question's own case
+     where the question capitalises them inside the sentence (a name), and in
+     lower case otherwise ("function", not "Function"). */
+  function nounFromQuestion(noun, question) {
+    var q = String(question == null ? "" : question).replace(/\s+/g, " ").trim();
+    if (!q || isYesNo(q)) return "";
+    var s = cleanPhrase(noun);
+    if (!s || s.length > NOUN_MAX) return "";
+    var words = s.split(" ");
+    if (words.length > NOUN_WORDS) return "";
+    // the question's words, each with the case it was written in
+    var asked = {};
+    q.split(" ").forEach(function (raw, i) {
+      var parts = [raw].concat(raw.indexOf("-") > 0 ? raw.split("-") : []);
+      parts.forEach(function (p) {
+        var k = bare(p);
+        if (!k) return;
+        var kept = String(p).replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+        // a capital on the question's first word is the sentence's, not the word's
+        if (!(k in asked) || (i > 0 && asked[k] === k)) asked[k] = i === 0 ? k : kept;
+      });
+    });
+    var out = [], named = false;
+    for (var i = 0; i < words.length; i++) {
+      var k = bare(words[i]);
+      if (!k) return "";
+      var hit = null;
+      var fs = forms(k);
+      for (var j = 0; j < fs.length; j++) if (fs[j] in asked) { hit = fs[j]; break; }
+      if (hit === null) return "";
+      if (i === 0 && ASKING_START.test(k)) return "";
+      if (ASKING.indexOf(k) < 0) named = true;
+      // the question's own capitals only when the word is the question's word as written
+      out.push(hit === k && asked[hit] !== hit ? asked[hit] : k);
+    }
+    return named ? out.join(" ") : "";
+  }
+
+  // a column's name made singular, on its last word: "Categories" → "Category"
+  var NOT_PLURAL = /^(species|series|news|means|physics|status|address|bus|gas|analysis|basis|lens|canvas|census)$/i;
+  function singular(word) {
+    var w = String(word);
+    if (NOT_PLURAL.test(w)) return w;
+    if (/ies$/i.test(w) && w.length > 4) return w.slice(0, -3) + (/IES$/.test(w) ? "Y" : "y");
+    if (/(ss|us|is|ics)$/i.test(w)) return w;
+    if (/(ches|shes|xes|zes|sses|uses)$/i.test(w)) return w.slice(0, -2);
+    if (/[^s]s$/i.test(w) && w.length > 3) return w.slice(0, -1);
+    return w;
+  }
+  /* A column's name as the end of "Explore by …": singular, and in lower case
+     where it only wore a capital to start a label ("Tag id" → "tag id"; GPS
+     and Arunachal Pradesh keep theirs). A name that is itself a question, or
+     was cut short with an ellipsis, cannot follow "by" — it is answered "". */
+  function columnNoun(label) {
+    var s = String(label == null ? "" : label).replace(/\s+/g, " ").trim();
+    if (!s || /[?…]$/.test(s) || /\.\.\.$/.test(s)) return "";
+    if (ASKING_START.test(bare(s.split(" ")[0])) || isYesNo(s)) return "";
+    var words = s.split(" ");
+    words[words.length - 1] = singular(words[words.length - 1]);
+    // a label in sentence case ("Tag id") wore its one capital to start a
+    // label; one with a capital further in ("Arunachal Pradesh …") is a name
+    var sentence = words.slice(1).every(function (w) { return !/^\p{Lu}/u.test(w); });
+    return words.map(function (w, i) {
+      return i === 0 && sentence && /^\p{Lu}[^\p{Lu}]*$/u.test(w) ? w.toLowerCase() : w;
+    }).join(" ");
+  }
+
+  // the owner's name for the place, tidied; "" when there is none
+  function cleanPlaceName(s) {
+    var t = String(s == null ? "" : s).replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim();
+    return t.slice(0, PLACE_MAX).trim();
+  }
+
+  /* The heading over one key's row, and the small line under it.
+       o.question — a question's own wording (keyLabels), for a question
+       o.noun     — the noun stored for it (keyNouns), checked again here
+       o.label    — what the row is called, for a spreadsheet column
+       o.column   — the column's own heading, for "Column: …"
+       o.place    — the owner's name for the place, or nothing
+     Answers { heading, sub }; sub is "" when there is no second line (a
+     question shown as written says the same thing twice otherwise). */
+  function keyHeading(o) {
+    o = o || {};
+    var place = cleanPlaceName(o.place);
+    var explore = function (noun) { return "Explore " + (place ? place + " " : "") + "by " + noun; };
+    if (o.question != null && o.question !== "") {
+      var q = String(o.question);
+      var noun = nounFromQuestion(o.noun, q);
+      return noun ? { heading: explore(noun), sub: q } : { heading: q, sub: "" };
+    }
+    var label = String(o.label == null ? "" : o.label);
+    var col = String(o.column == null ? "" : o.column) || label;
+    var cn = columnNoun(label);
+    return { heading: cn ? explore(cn) : label, sub: col ? "Column: " + col : "" };
+  }
+
   return {
+    NOUN_WORDS: NOUN_WORDS,
+    NOUN_MAX: NOUN_MAX,
+    PLACE_MAX: PLACE_MAX,
+    isYesNo: isYesNo,
+    nounFromQuestion: nounFromQuestion,
+    singular: singular,
+    columnNoun: columnNoun,
+    cleanPlaceName: cleanPlaceName,
+    keyHeading: keyHeading,
     LONG_HEADING: LONG_HEADING,
     SHORT_MAX: SHORT_MAX,
     NAME_FIELD: NAME_FIELD,

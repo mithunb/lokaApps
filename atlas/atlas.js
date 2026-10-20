@@ -465,6 +465,9 @@
         (local.attributions || []).forEach(function (a) { manifest.attributions.push(a); });
         // the people who tagged the places, when the owner has recorded them
         if (local.taggedBy) manifest.taggedBy = local.taggedBy;
+        // the owner's name for the place ("Call this place", Settings), for the
+        // key headings "Explore <place> by …"; kept here so a rebuild leaves it be
+        if (typeof local.placeName === "string") manifest.placeName = local.placeName;
         return manifest;
       });
   }
@@ -2891,6 +2894,26 @@
      shape on the map (ROW_SHAPES, in offered order), and the sixth is refused
      with a note under the row that was pressed. The old "one colour" chip is
      gone with the chips: all-closed is visible on the rows themselves. */
+  /* The heading of one key's row (label-rules.js keyHeading). A question is
+     headed by its noun, a spreadsheet column by its name made singular; a
+     date grouped by month keeps its own plain name ("When it was added (by
+     month)"), which already says what it sorts by. whole: the grey line
+     shows the column's whole heading, so its ⓘ would say it twice. */
+  function keyHeadingOf(L, opt) {
+    var place = (MANIFEST && MANIFEST.placeName) || "";
+    if (opt.grain) return { heading: opt.label, sub: "", whole: false };
+    if (opt.isQuestion) {
+      var face = keyFace(keyHost(L));
+      var h = LokaLabelRules.keyHeading({ question: opt.full || opt.label,
+        noun: (face.keyNouns || {})[opt.col], place: place });
+      h.whole = false;
+      return h;
+    }
+    var c = LokaLabelRules.keyHeading({ label: opt.label, column: opt.full || opt.label, place: place });
+    c.whole = true;
+    return c;
+  }
+
   function buildKeyToggles(L) {
     var st = keyState[L.id];
     var wrap = el("div", "key-chips");
@@ -2933,15 +2956,23 @@
         slot.appendChild(sv);
       } else slot.appendChild(el("span", "key-dash"));
       btn.appendChild(slot);
-      var tname = el("span", "key-tname", esc(opt.label));
+      /* "Explore <place> by <noun>" over the row, and what it was made from in
+         a small grey line under it, always (version D, Mithun, October 2026):
+         a question's own wording, or "Column: <its heading>". The rule is
+         label-rules.js keyHeading, which the owner's Questions tab shows too. */
+      var hd = keyHeadingOf(L, opt);
+      var tname = el("span", "key-tname");
+      tname.appendChild(el("span", "key-head", esc(hd.heading)));
+      if (hd.sub) tname.appendChild(el("span", "key-asked", esc(hd.sub)));
       btn.appendChild(tname);
       /* A key named short says what it is short for: the whole heading on
          hover, and behind a small ⓘ for a phone, where there is no hover. The
          ⓘ sits at the row's end, where a layer's own ⓘ sits, and the heading
          opens under the row (fullHeading, appended after the button below) —
-         reachable whether the row is open or not. */
+         reachable whether the row is open or not. A row whose grey line
+         already shows the whole heading needs neither. */
       var fullHeading = null;
-      if (opt.shortened) {
+      if (opt.shortened && !hd.whole) {
         tname.title = opt.full;
         var parts = labelInfo(opt.full);
         btn.appendChild(parts.btn);
@@ -4462,14 +4493,21 @@
   function keyFace(L) {
     var hs = keyHalves(L);
     if (hs.length === 1) return L;
-    var labels = {}, hidden = [];
+    var labels = {}, hidden = [], nouns = {};
     hs.forEach(function (h) {
       Object.keys(h.keyLabels || {}).forEach(function (c) { if (!labels[c]) labels[c] = h.keyLabels[c]; });
       (h.hiddenKeys || []).forEach(function (c) { if (hidden.indexOf(c) < 0) hidden.push(c); });
     });
+    // a question's noun goes with the half whose wording is shown
+    hs.forEach(function (h) {
+      Object.keys(h.keyNouns || {}).forEach(function (c) {
+        if (!nouns[c] && (h.keyLabels || {})[c] === labels[c]) nouns[c] = h.keyNouns[c];
+      });
+    });
     var face = Object.create(L);
     face.keyLabels = labels;
     face.hiddenKeys = hidden;
+    face.keyNouns = nouns;
     return face;
   }
   // what the places under a key are called: a split file's are areas and

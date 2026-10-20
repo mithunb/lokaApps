@@ -685,3 +685,7 @@
 @media (max-width:720px) {
   .own-first { top:8px; right:8px; left:8px; width:auto; }
 }
+/* version D: what a question's row is headed on the map, said beside it */
+.own-q-heading { font-size:var(--t-label); color:var(--color-text-secondary);
+  padding-left:var(--q-indent); line-height:1.4; }
+p.own-q-heading { padding-left:0; margin:.4rem 0 0; }

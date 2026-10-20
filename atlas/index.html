@@ -595,7 +595,13 @@
     /* a key's name is a thing you can act on — it keeps its ink and weight
        whether open or closed; the caret and the slot say the state */
     .key-tname { flex:1 1 auto; min-width:0; font-size:var(--t-meta); font-weight:600; line-height:1.25; color:var(--color-text-primary); }
+    /* version D: the heading, and under it what it was made from — the
+       question as written, or "Column: …" — in the panel's quietest voice */
+    .key-head { display:block; }
+    .key-asked { display:block; font-size:var(--t-label); font-weight:400; line-height:1.35;
+      color:var(--color-text-muted); margin-top:.1rem; overflow-wrap:anywhere; }
     .key-entry.open > .key-toggle .key-tname { color:var(--color-leaf-deep); }
+    .key-entry.open > .key-toggle .key-asked { color:var(--color-text-muted); }
     .key-entry.open > .key-toggle { color:var(--color-leaf-deep); }
     .key-entry.open > .key-toggle .key-caret { border-color:var(--color-leaf-deep); }
     /* an open question's answers sit behind a 3px Leaf rule, in from the

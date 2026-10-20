@@ -20,6 +20,7 @@ import { noteTrouble, noteOk, setTroubleNotifier, openTroubles } from '../lib/at
 import * as owed from '../lib/atlas/owed.js';
 import { queue as QUESTIONS, createQueue, fileSignatureOf, NEVER_READ, payerOf } from '../lib/atlas/questions-queue.js';
 import * as shortLabels from '../lib/atlas/short-labels.js';
+import * as keyNouns from '../lib/atlas/key-nouns.js';
 import * as placeNames from '../lib/atlas/place-names.js';
 import {
   enqueueBuild, getJob, setJobDoneHook, setStrandedBuildHook, DATASETS_ROOT, PRIVATE_ROOT,
@@ -1702,6 +1703,24 @@ function rewriteManifest(inst) {
   } catch { return false; }
 }
 
+/* The owner's name for the place, onto the atlas's own overlay
+   (manifest.local.json, top level, beside its layers) — the file the viewer
+   reads fresh on every visit, which a rebuild of the base map and an update
+   of the code both leave alone. Empty takes it off. */
+function writePlaceName(inst) {
+  const file = path.join(datasetDirFor(inst), 'manifest.local.json');
+  let local = { layers: [] };
+  try { local = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { /* none yet: start one */ }
+  const name = shortLabels.LABELS.cleanPlaceName(inst.placeName);
+  if ((local.placeName || '') === name) return true;
+  if (name) local.placeName = name; else delete local.placeName;
+  try {
+    fs.writeFileSync(file + '.tmp', JSON.stringify(local, null, 1));
+    fs.renameSync(file + '.tmp', file);
+    return true;
+  } catch { return false; }
+}
+
 // Fast edit — text, branding, logo and public/private — with no rebuild.
 router.post('/instances/:slug/details', (req, res) => {
   const inst = reg.getInstance(String(req.params.slug));
@@ -1732,6 +1751,9 @@ router.post('/instances/:slug/details', (req, res) => {
     about: has('about') ? cap(b.about, 500) : (inst.about || ''),
     email: has('email') && b.email ? cap(b.email, 120) : inst.email,
     org, branding,
+    /* "Call this place": the owner's own name for where the atlas is, for the
+       headings "Explore <place> by …". Empty means none: "Explore by …". */
+    placeName: has('placeName') ? shortLabels.LABELS.cleanPlaceName(b.placeName) : (inst.placeName || ''),
   };
 
   // logo add / replace / remove (written straight into the current dataset dir)
@@ -1790,6 +1812,7 @@ router.post('/instances/:slug/details', (req, res) => {
 
   const updated = reg.updateInstance(inst.slug, patch);
   rewriteManifest(updated);
+  if (has('placeName')) writePlaceName(updated);
   res.json({ ok: true, visibility: updated.visibility, status: updated.status, viewKey: viewKey || undefined });
 });
 
@@ -3670,6 +3693,10 @@ async function ingestLayerSteps(b, who, tell) {
          taken off the map. */
       reading: prior.reading || '', facts: prior.facts || null,
       hiddenKeys: prior.hiddenKeys || null,
+      /* The nouns its questions' headings read "Explore by …" with, and the
+         wording they belong to: a re-commit that hands no nouns keeps the old
+         one wherever the question at that place is word for word the same. */
+      keyNouns: prior.keyNouns || null, keyLabels: prior.keyLabels || null,
       /* Whose outlines these are. Worked out when rows are joined to borrowed
          shapes, and nowhere else — a reading handing an area layer's own
          shapes back has nothing to join, so without this the credit the
@@ -3741,7 +3768,18 @@ async function ingestLayerSteps(b, who, tell) {
           .map(([k, v]) => [String(k).slice(0, 60), v.slice(0, MAX_COLS).map((c) => String(c).slice(0, 200)).filter(Boolean)])
           .filter(([, v]) => v.length))
       : undefined,
+    /* The noun each question's heading reads "Explore by …" with (version D).
+       Kept only when every word of it is a word of that question, the same
+       check the page makes before it shows one (atlas/label-rules.js). */
+    keyNouns: (b.keyNouns && typeof b.keyNouns === 'object' && b.keyLabels && typeof b.keyLabels === 'object')
+      ? Object.fromEntries(Object.entries(b.keyNouns)
+          .filter(([k]) => RULES.isQuestionColumn(String(k)))
+          .map(([k, v]) => [String(k), shortLabels.LABELS.nounFromQuestion(v, b.keyLabels[k])])
+          .filter(([, v]) => v))
+      : undefined,
     replacingLayerId: replacing ? replacing.id : undefined,
+    replacingKeyNouns: replacing ? replacing.keyNouns : undefined,
+    replacingKeyLabels: replacing ? replacing.keyLabels : undefined,
     replacingLabel: replacing ? replacing.label : undefined,
     replacingUploadedAs: replacing ? replacing.uploadedAs : undefined,
     replacingSpec: replacing ? replacing.spec : undefined,
@@ -4296,12 +4334,14 @@ async function fakeReading(rows, fields, asked, pay, planned, nameCol, previous)
   const wet = /\b(water|river|lake|pond|well|stream|tank)s?\b/i;
   const q1 = {
     question: (asked[0] && asked[0].question) || 'How much is written about this place?',
+    noun: (asked[0] && asked[0].noun) || '',
     counts: [{ name: LONG, definition: 'forty letters or more' }, { name: SHORT, definition: 'fewer than forty letters' }],
     categories: rows.map((r) => textOf(r).length >= 40 ? LONG : SHORT),
     why: rows.map((r) => firstWords(textOf(r))),
   };
   const q2 = {
     question: (asked[1] && asked[1].question) || 'Does it mention water?',
+    noun: (asked[1] && asked[1].noun) || '',
     counts: [{ name: WATER, definition: 'names a river, lake, pond, well or the like' }],
     categories: rows.map((r) => wet.test(textOf(r)) ? WATER : 'other'),
     why: rows.map((r) => { const m = textOf(r).match(wet); return m ? [m[0]] : []; }),
@@ -4401,6 +4441,7 @@ function keepAnswers(dataset, layer, rows, sig) {
   };
   QUESTIONS.saveAnswers(dataset, layer.id, {
     sig, keyLabels: only(layer.keyLabels), keyKinds: only(layer.keyKinds), keyColumns: only(layer.keyColumns),
+    keyNouns: only(layer.keyNouns),
     reading: layer.reading || '', facts: layer.facts || [],
     answers: rows.map((r) => { const a = {}; for (const c of cols) if (r[c] !== undefined) a[c] = r[c]; return a; }),
   });
@@ -4413,7 +4454,8 @@ function keptQuestions(kept) {
   return Object.keys(kept.keyLabels || {}).filter((c) => RULES.isQuestionColumn(c))
     .sort((a, b) => Number(a.split('_')[1]) - Number(b.split('_')[1]))
     .map((c) => ({ question: kept.keyLabels[c], kinds: (kept.keyKinds || {})[c] || [],
-                   columns: ((kept.keyColumns || {})[c] || []).slice() }))
+                   columns: ((kept.keyColumns || {})[c] || []).slice(),
+                   noun: String((kept.keyNouns || {})[c] || '') }))
     .filter((q) => q.question && q.kinds.length);
 }
 
@@ -4433,7 +4475,7 @@ async function restoreAnswers(dataset, layerId) {
     schema: RULES.schemaFor(out),
     rows: out,
     geoms: shapes.geoms, geomIdx: shapes.geomIdx,
-    keyLabels: kept.keyLabels, keyKinds: kept.keyKinds, keyColumns: kept.keyColumns,
+    keyLabels: kept.keyLabels, keyKinds: kept.keyKinds, keyColumns: kept.keyColumns, keyNouns: kept.keyNouns,
     reading: kept.reading || undefined,
     facts: (kept.facts || []).length ? kept.facts : undefined,
     meta: { sourceName: got.layer.source, rowCount: out.length, geometry: shapes.geometry },
@@ -4584,6 +4626,42 @@ async function shortLabelsJob(job) {
   console.log('[labels] ' + where + ' — ' + fromModel + ' of ' + headings.length + ' named by the ' + by +
     (fromModel < headings.length ? ', the rest by the plain cut' : ''));
   return { state: 'done', reason: '', calls: 1, names, by, sig: shortLabels.headingSig(headings) };
+}
+
+/* ---------- the noun for "Explore by …", for questions found before it ---------- */
+
+/* One layer off the list deploy/queue-key-nouns.mjs fills: one call for all
+   of its questions that have no noun, each noun checked against its question,
+   the ones that pass written onto the stanza. The rules are in
+   api/lib/atlas/key-nouns.js. A question left without one keeps its own
+   wording as its heading, which is what it shows today. */
+async function keyNounsJob(job) {
+  const { dataset, layerId } = job;
+  const where = dataset + '/' + layerId;
+  if (NEVER_READ.has(dataset)) return { state: 'skipped', reason: 'never touched' };
+  if (!ai && !FAKE_READING) return { state: 'skipped', reason: 'no model on this server' };
+  const m = imports.readManifest(dataset);
+  const layer = m && ((m.local && m.local.layers) || []).find((L) => L.id === layerId);
+  if (!layer) return { state: 'failed', reason: 'the layer is gone' };
+  const wanting = keyNouns.questionsWanting(layer);
+  if (!wanting.length) return { state: 'none', reason: 'every question has its noun' };
+  const inst = reg.getInstance(dataset);
+  console.log('[nouns] asking for ' + wanting.length + ' noun' + (wanting.length === 1 ? '' : 's') + ' on ' + where);
+  // one call, out of the owner's hourly allowance; the stand-in answers without a model
+  const stub = FAKE_READING ? async () => keyNouns.standInAnswer(wanting) : null;
+  const call = aiCaller(job.payer ? { payer: job.payer } : 'server', 1, stub);
+  let answer;
+  try {
+    answer = await call(getFlashLiteModel(), keyNouns.promptFor(wanting, (inst && inst.title) || ''), keyNouns.schemaFor(Type), { file: true });
+  } catch (e) {
+    console.warn('[nouns] ' + where + ' — ' + (e && e.message));
+    return { state: 'failed', reason: String((e && e.message) || 'something went wrong').slice(0, 160) };
+  }
+  const nouns = keyNouns.cleanNouns(answer, wanting);
+  const wrote = keyNouns.writeNouns(m.dir, layerId, nouns, wanting);
+  console.log('[nouns] ' + where + ' — ' + wrote + ' of ' + wanting.length + ' given a noun' +
+    (wrote < wanting.length ? '; the rest keep their wording as their heading' : ''));
+  return { state: 'done', reason: '', calls: 1, nouns, sig: keyNouns.questionsSig(wanting) };
 }
 
 /* ---------- short names written by LOKA, for places named by a sentence ---------- */
@@ -4988,6 +5066,10 @@ export function startBackgroundWork() {
      to it from outside. */
   shortLabels.queue.start(shortLabelsJob, { recheck: (d, l) => considerShortLabels(d, l) });
   setInterval(() => shortLabels.queue.pump(), 60 * 1000).unref();
+  /* Nouns for "Explore by …" on questions found before the reading picked
+     them: put on only by deploy/queue-key-nouns.mjs, picked up within a minute. */
+  keyNouns.queue.start(keyNounsJob);
+  setInterval(() => keyNouns.queue.pump(), 60 * 1000).unref();
   /* Short names for places named by a sentence, the same way. The once-a-
      minute pump also brings back a job that stopped at its hour's share
      (notBefore), and one put on by deploy/queue-place-names.mjs. */
@@ -5049,7 +5131,8 @@ async function writeReading({ dataset, layer, layerId, rows, questions, label, s
      saving, which is the one thing this side and the browser genuinely do
      differently: it calls ingest directly where the browser posts to it. */
   const shaped = RULES.shapeReading(rows, questions);
-  const out = shaped.rows, labels = shaped.keyLabels, kinds = shaped.keyKinds, froms = shaped.keyColumns;
+  const out = shaped.rows, labels = shaped.keyLabels, kinds = shaped.keyKinds, froms = shaped.keyColumns,
+    nouns = shaped.keyNouns;
   // an area's shapes travel with its rows (shapesFor); a pin's coordinates already do
   const shapes = shapesFor(layer, dataset);
   const ing = await ingestLayer({
@@ -5057,7 +5140,7 @@ async function writeReading({ dataset, layer, layerId, rows, questions, label, s
     schema: shaped.schema,
     rows: out,
     geoms: shapes.geoms, geomIdx: shapes.geomIdx,
-    keyLabels: labels, keyKinds: kinds, keyColumns: froms,
+    keyLabels: labels, keyKinds: kinds, keyColumns: froms, keyNouns: nouns,
     reading: reading || undefined,
     facts: (facts || []).length ? facts : undefined,
     meta: { sourceName: source, rowCount: out.length, geometry: shapes.geometry },
@@ -6234,6 +6317,25 @@ function commitPart(session, frag, features) {
     if (Object.keys(cols).length) frag.stanza.keyColumns = cols;
     else delete frag.stanza.keyColumns;
   }
+  /* The nouns for "Explore by …", one per question at most. This write's own
+     where it names one; otherwise the layer's old one, but only where the
+     question at that place is word for word the question it was picked for —
+     a new question that happens to take an old one's place does not inherit
+     its heading. Each is checked against its question once more. */
+  {
+    const labels = frag.stanza.keyLabels || {};
+    const given = (session.keyLabels && Object.keys(session.keyLabels).length) ? (session.keyNouns || {}) : {};
+    const was = session.replacingKeyNouns || {}, wasLabels = session.replacingKeyLabels || {};
+    const nouns = {};
+    for (const c of Object.keys(labels)) {
+      if (!RULES.isQuestionColumn(c)) continue;
+      const n = given[c] || (wasLabels[c] === labels[c] ? was[c] : '');
+      const ok = shortLabels.LABELS.nounFromQuestion(n, labels[c]);
+      if (ok) nouns[c] = ok;
+    }
+    if (Object.keys(nouns).length) frag.stanza.keyNouns = nouns;
+    else delete frag.stanza.keyNouns;
+  }
   // this reading's account if it made one, otherwise the one already there
   const account = session.reading || session.replacingReading;
   const sorts = (session.facts && session.facts.length) ? session.facts : session.replacingFacts;
@@ -6458,6 +6560,8 @@ function questionsAsAnswered(layer, rows) {
     categories.forEach((c) => { if (c) tally.set(c, (tally.get(c) || 0) + 1); });
     return {
       question: q.question,
+      // its heading's noun, kept as it was (the page and the commit check it again)
+      noun: q.noun || '',
       /* Every answer this question was given, including the ones no place is
          using at the moment.
 
@@ -6549,9 +6653,12 @@ router.post('/layers/ask', async (req, res) => {
          handed in as settled — so the counting after it (a kind under three
          places folded away, a name shared with another question resolved, a
          word arguing two ways dropped) applies here exactly as it does there. */
+      /* The noun the kinds step picked from the question's own words, handed
+         back by the page; checked again, so only the question's words survive. */
+      const noun = shortLabels.LABELS.nounFromQuestion(b.noun, question);
       const out = await enrich.enrichRows({
         rows, fields, title, mode: 'questions',
-        keepQuestions: [{ question, kinds }],
+        keepQuestions: [{ question, kinds, noun }],
         seedSet: keptCatSet(dataset),
         callJSON: aiCaller('server'),
         models: { flash: getFlashModel(), flashLite: getFlashLiteModel() },
@@ -6564,6 +6671,8 @@ router.post('/layers/ask', async (req, res) => {
       const answered = (q.categories || []).filter((c) => c && c !== 'other').length;
       const preview = {
         verdict: 'answered', question: q.question,
+        // what its heading will read on the map, so nothing is reworded unseen
+        noun: q.noun || '',
         answered, places: rows.length,
         kinds: (q.counts || []).map((c) => ({ name: c.name, count: c.count })),
         /* A handful of real ones, so the number has faces behind it.

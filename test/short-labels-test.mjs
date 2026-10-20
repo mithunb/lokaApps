@@ -201,7 +201,7 @@ console.log('\n  the viewer prints the short name and keeps the whole heading a 
 check('the page loads the shared rule before atlas.js', page.indexOf('label-rules.js?v=dev') > 0 && page.indexOf('label-rules.js?v=dev') < page.indexOf('atlas.js?v=dev'), true);
 check('a key option carries the whole heading and whether it was shortened', /opts\.push\(\{ col: col, label: shown, full: lab\.full, shortened: lab\.shortened,/.test(atlas), true);
 // (October 2026: a key is a row that unfolds — the ⓘ goes on the row's button)
-check('the key\'s name wears the heading as its hover, and the ⓘ goes on the row', /if \(opt\.shortened\) \{\n        tname\.title = opt\.full;\n        var parts = labelInfo\(opt\.full\);\n        btn\.appendChild\(parts\.btn\);/.test(atlas), true);
+check('the key\'s name wears the heading as its hover, and the ⓘ goes on the row', /if \(opt\.shortened && !hd\.whole\) \{\n        tname\.title = opt\.full;\n        var parts = labelInfo\(opt\.full\);\n        btn\.appendChild\(parts\.btn\);/.test(atlas), true);
 check('the opened heading is a line under the row, not inside the button', /row\.appendChild\(btn\);\n[^\n]*\n      if \(fullHeading\) row\.appendChild\(fullHeading\);/.test(atlas), true);
 check('the legend\'s header too', /if \(it\.full\) head\.title = it\.full;/.test(atlas), true);
 check('and a card\'s key rows and field names', /kname\.title = opt\.full;/.test(atlas) && /var labHTML = '<span class="pop-lbl"' \+ \(fl\.shortened \? ' title="' \+ esc\(fl\.full\) \+ '"' : ""\)/.test(atlas), true);

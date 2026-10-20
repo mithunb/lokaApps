@@ -181,11 +181,16 @@
      rather than a column named after how it was made. */
   function shapeReading(rows, questions) {
     var out = withoutAnswers(rows);
-    var keyLabels = {}, keyKinds = {}, keyColumns = {};
+    var keyLabels = {}, keyKinds = {}, keyColumns = {}, keyNouns = {};
     (questions || []).forEach(function (q, n) {
       var col = "pattern_" + (n + 1);
       var whyCol = col + "_why";
       keyLabels[col] = q.question;
+      /* The few words of the question a heading reads "Explore by …" with
+         (label-rules.js nounFromQuestion; the server checks them again
+         before they are stored). Travels with the wording, as the kinds do,
+         so a later reading keeps it. A question with none has none here. */
+      if (q.noun && typeof q.noun === "string") keyNouns[col] = q.noun;
       // the kinds travel with the wording, so this question can be asked again
       // later unchanged rather than re-invented
       keyKinds[col] = (q.counts || []).map(function (c) {
@@ -210,7 +215,8 @@
         if (o[whyCol] === undefined) o[whyCol] = "";
       });
     });
-    return { rows: out, keyLabels: keyLabels, keyKinds: keyKinds, keyColumns: keyColumns, schema: schemaFor(out) };
+    return { rows: out, keyLabels: keyLabels, keyKinds: keyKinds, keyColumns: keyColumns, keyNouns: keyNouns,
+             schema: schemaFor(out) };
   }
 
   /* An atlas read before the kinds were kept has the wording and nothing else.
@@ -237,12 +243,14 @@
     var labels = (layer && layer.keyLabels) || {};
     var kinds = (layer && layer.keyKinds) || {};
     var from = (layer && layer.keyColumns) || {};
+    var nouns = (layer && layer.keyNouns) || {};
     return Object.keys(labels)
       .filter(isQuestionColumn)
       .sort(function (a, b) { return Number(a.split("_")[1]) - Number(b.split("_")[1]); })
       .map(function (col) {
         return { question: labels[col], kinds: kinds[col] || kindsSeenIn(rows, col),
-                 columns: Array.isArray(from[col]) ? from[col].slice() : [] };
+                 columns: Array.isArray(from[col]) ? from[col].slice() : [],
+                 noun: typeof nouns[col] === "string" ? nouns[col] : "" };
       })
       .filter(function (q) { return q.question && q.kinds.length; });
   }

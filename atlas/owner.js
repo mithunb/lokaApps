@@ -1450,7 +1450,7 @@
         cb.checked = !q.hidden;
         lab.appendChild(cb);
         lab.appendChild(el("span", "ctl-switch small"));
-        lab.appendChild(el("span", "own-q-name", q.label));
+        lab.appendChild(el("span", "own-q-name", esc(q.label)));   // an editor's words are text, never markup
         cb.onchange = function () {
           var now = (L.hiddenKeys || []).slice();
           var at = now.indexOf(q.col);
@@ -1459,6 +1459,7 @@
           saveLayer(L, { hiddenKeys: now });
         };
         line.appendChild(lab);
+        line.appendChild(el("div", "own-q-heading", headingLine(q.label, q.noun)));
         var tally = tallyOf(rows, q.col);
         line.appendChild(el("div", "own-q-reach",
           tally.answered + " of " + rows.length + " places answer it"));
@@ -1569,7 +1570,7 @@
     form.appendChild(say); form.appendChild(kindsBox); form.appendChild(err); form.appendChild(row);
     wrap.appendChild(form);
 
-    var kinds = null, token = null;
+    var kinds = null, token = null, noun = "";   // noun: the kinds step's pick for the heading
 
     open.onclick = function () {
       open.hidden = true; form.hidden = false;
@@ -1591,7 +1592,7 @@
     };
 
     function reset() {
-      kinds = null; token = null;
+      kinds = null; token = null; noun = "";
       box.value = ""; say.textContent = ""; err.hidden = true;
       kindsBox.hidden = true; kindsBox.innerHTML = "";
       go.textContent = "Work out the answers"; go.disabled = false;
@@ -1663,6 +1664,7 @@
           }
           if (r.verdict !== "kinds") { fail(new Error(r.trouble || "the model could not answer")); return; }
           kinds = r.kinds;
+          noun = r.noun || "";
           say.textContent = "These are the answers it found. Change any of them, drop one, " +
             "or add one it missed, then try it on your places.";
           drawKinds();
@@ -1682,7 +1684,7 @@
           return;
         }
         saying("Answering " + allPlaces + "… this can take about half a minute.");
-        ask("try", { kinds: named() }).then(function (r) {
+        ask("try", { kinds: named(), noun: noun }).then(function (r) {
           go.disabled = false;
           if (r.verdict !== "answered") { fail(new Error(r.note || r.trouble || "nothing came back")); return; }
           token = r.token;
@@ -1708,6 +1710,8 @@
             }
             kindsBox.appendChild(line);
           });
+          // what its row will be headed, before it is kept
+          kindsBox.appendChild(el("p", "own-q-heading", headingLine(r.question || box.value.trim(), r.noun || "")));
           kindsBox.appendChild(el("p", "own-note", fix
             ? "Nothing has changed on your map yet. Throw this away and the question stays exactly as it is now."
             : "Nothing has changed on your map yet."));
@@ -1717,7 +1721,7 @@
       }
 
       saying(fix ? "Putting it right on the map…" : "Adding it to the map…");
-      ask("keep", { kinds: named(), token: token }).then(function (r) {
+      ask("keep", { kinds: named(), token: token, noun: noun }).then(function (r) {
         if (!r.wrote) { fail(new Error(r.note || r.trouble || "it could not be saved")); return; }
         var name = r.question || box.value.trim();
         toast(fix ? "“" + name + "” was read again." : "“" + name + "” is on the map.");
@@ -2381,8 +2385,19 @@
            so it has to be able to reach them without asking the server — what
            is already on the map is exactly what needs changing. */
         return { col: c, label: labels[c], hidden: hidden.indexOf(c) >= 0,
-                 kinds: ((L && L.keyKinds) || {})[c] || [] };
+                 kinds: ((L && L.keyKinds) || {})[c] || [],
+                 noun: ((L && L.keyNouns) || {})[c] || "" };
       });
+  }
+
+  /* What a question's row is headed on the map (label-rules.js keyHeading,
+     the viewer's own rule), said beside the question so nothing is reworded
+     out of the owner's sight. */
+  function headingLine(question, noun) {
+    var place = (window.LokaAtlas && window.LokaAtlas.manifest && window.LokaAtlas.manifest.placeName) || "";
+    var h = LokaLabelRules.keyHeading({ question: question, noun: noun, place: place });
+    // as markup (el sets innerHTML), so the words are escaped
+    return esc(h.sub ? "On the map: “" + h.heading + "”" : "On the map: as written");
   }
 
   function countPlaces(L) {
@@ -2429,6 +2444,13 @@
         '<input type="text" id="own-title" maxlength="80" value="' + esc(INST.title || "") + '" /></label>' +
       '<label class="own-fld">What this atlas is for <span class="own-note">shown under the title</span>' +
         '<textarea id="own-desc" rows="3" maxlength="160">' + esc(INST.subtitle || "") + "</textarea></label>" +
+      /* The place's name for the map's headings ("Explore Goa by area"). Filled
+         in with the region as a suggestion; it is used only once Save is
+         pressed, and an empty box means the headings name no place. */
+      '<label class="own-fld">Call this place <span class="own-note">headings on the map read “Explore ' +
+        '<i>this place</i> by …”; leave it empty for “Explore by …”</span>' +
+        '<input type="text" id="own-placename" maxlength="' + LokaLabelRules.PLACE_MAX + '" value="' +
+          esc(placeNameSaved()) + '"' + (placeNameSaved() ? '' : ' placeholder="' + esc(placeNameNow() ? "e.g. " + placeNameNow() : "") + '"') + ' /></label>' +
       '<label class="own-fld">Your organisation or project <span class="own-note">shown above the title</span>' +
         '<input type="text" id="own-org" maxlength="60" value="' + esc(b.orgName || INST.org || "") + '" /></label>' +
       /* The logo, where it can be seen beside the name it goes with. Any
@@ -2494,6 +2516,19 @@
     "</div>";
   }
 
+  /* What the "Call this place" box opens with: the name the owner saved, or,
+     until they have saved one, the atlas's region as a suggestion (its first
+     name: "Bangalore", from "Bangalore · Bangalore Rural"). */
+  function placeNameNow() {
+    if (typeof INST.placeName === "string" && INST.placeName) return INST.placeName;
+    var r = String(INST.regionLabel || (INST.region && INST.region.label) || "");
+    if (!r || /^worldwide$/i.test(r)) return "";
+    return LokaLabelRules.cleanPlaceName(r.split(/\s+·\s+|,\s*/)[0].replace(/\s+\+\d+$/, ""));
+  }
+  function placeNameSaved() {
+    return (typeof INST.placeName === "string" && INST.placeName) ? INST.placeName : "";
+  }
+
   function identityDirty(scrim) {
     var t = scrim.querySelector("#own-title");
     if (!t) return false;
@@ -2502,6 +2537,9 @@
       scrim.querySelector("#own-desc").value.trim() !== (INST.subtitle || "") ||
       scrim.querySelector("#own-org").value.trim() !== (b.orgName || INST.org || "") ||
       scrim.querySelector("#own-site").value.trim() !== (b.orgUrl || "") ||
+      // the region is only a greyed suggestion (placeholder), never a value, so
+      // it can never be saved by pressing Save for some other change
+      scrim.querySelector("#own-placename").value.trim() !== placeNameSaved() ||
       scrim.__logo !== undefined;
   }
 
@@ -2936,8 +2974,11 @@
         subtitle: scrim.querySelector("#own-desc").value.trim(),
         org: org,
         branding: branding,
+        placeName: LokaLabelRules.cleanPlaceName(scrim.querySelector("#own-placename").value),
       },
     }).then(function () {
+      var placeWas = placeNameSaved();
+      INST.placeName = LokaLabelRules.cleanPlaceName(scrim.querySelector("#own-placename").value);
       INST.title = t.value.trim();
       INST.subtitle = scrim.querySelector("#own-desc").value.trim();
       INST.org = org;
@@ -2951,7 +2992,9 @@
       // this page's copy and hoping the two agree. The logo keeps one file
       // name, so the reboot is told the files changed or the browser would
       // show the old picture from its cache.
-      if (scrim.__logo !== undefined && window.LokaAtlas.dataChanged) window.LokaAtlas.dataChanged();
+      // the place's name lives beside the layers (manifest.local.json), so a
+      // new one is read again the way a changed layer is
+      if ((scrim.__logo !== undefined || INST.placeName !== placeWas) && window.LokaAtlas.dataChanged) window.LokaAtlas.dataChanged();
       preview(SLUG);
     }).catch(function (e) {
       err.textContent = errMsg(e);

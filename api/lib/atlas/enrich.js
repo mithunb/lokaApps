@@ -15,6 +15,15 @@
 // honest "try again" is changing which columns are read, not re-rolling the
 // same question.
 
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+/* The heading rules the viewer uses (atlas/label-rules.js): a question's noun
+   for "Explore by …" is checked here with the same rule the page applies. */
+const LABELS = createRequire(import.meta.url)(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'atlas', 'label-rules.js'));
+
 const CLASSIFY_BATCH = 40;       // rows per assignment call (prompt-budget bound)
 const MIN_CATS = 2;              // fewer named themes than this is not a colouring
 const MAX_CATS = 7;              // named themes; + "other" = 8 = the palette
@@ -585,6 +594,15 @@ export async function classifyRows({ digest, categorySet, title, callJSON, model
    better than hiding it. */
 const MAX_QUESTIONS = 6;
 
+/* The noun for "Explore by …" (version D, Mithun, October 2026: "phrases like
+   'function' and 'environmental impact' are inferred automatically using AI").
+   One more short field in calls that already happen. The model copies it from
+   the question; the server keeps it only if every word IS the question's
+   (LABELS.nounFromQuestion), so it can never add a meaning the question does
+   not have. No example is given, for the reason the finder's prompt gives
+   none: an example is the fastest way to get somebody else's words back. */
+const NOUN_RULE = '- For each question also give its noun: the word, or the few words (at most four), copied from the question itself that name what it sorts places by, so that a heading can read "Explore by" and then those words. Copy them exactly as the question has them; add no word that is not in the question. Leave the noun empty for a question answered yes or no, or when no words of the question name it.';
+
 /* ================= which columns get their own look =================
 
    The reading used to hand the model one line per place with every column on
@@ -835,9 +853,12 @@ const QUESTIONS_SCHEMA = {
     verdict: { type: 'STRING', enum: ['questions', 'no_clear_questions'] },
     note: { type: 'STRING' },
     questions: { type: 'ARRAY', items: {
-      type: 'OBJECT', required: ['question', 'kinds'],
+      type: 'OBJECT', required: ['question', 'noun', 'kinds'],
+      propertyOrdering: ['question', 'noun', 'kinds'],
       properties: {
         question: { type: 'STRING' },
+        // the words of the question a heading reads "Explore by …" with (NOUN_RULE)
+        noun: { type: 'STRING' },
         kinds: { type: 'ARRAY', items: {
           type: 'OBJECT', required: ['name', 'definition', 'examples'],
           properties: {
@@ -897,6 +918,7 @@ async function induceQuestions({ digest, fields, title, callJSON, model, already
     '- Make one question for every sort of fact that passes these rules, up to ' + MAX_QUESTIONS + '. Do not stop early: returning one question from lines that state three sorts of fact is the failure this reading exists to end. And never pad: if the lines honestly support only one question, return one.',
     '- A question is asked of one place at a time, and a place answers it in a word or a few — so the answers can gather into between ' + MIN_CATS + ' and ' + MAX_CATS + ' kinds. A fact that is different on every line — a name, an exact measurement — makes a poor question, unless its values gather naturally into a few plain kinds a stranger could learn.',
     '- Each question must be a real question in everyday words, at most 40 characters, ending in a question mark.',
+    NOUN_RULE,
     '- Give each question between ' + MIN_CATS + ' and ' + MAX_CATS + ' kinds of answer. Name each kind in 1 to 3 everyday words, taken from how the lines themselves speak.',
     '- A kind must fit at least 3 of the places below. No kind may take nearly all of them — that is not a sorting. If one group is very large, split it into narrower kinds that a stranger could tell apart; do not leave part of it out to keep the kinds even.',
     '- A question is worth keeping even if it can only speak for some of the places. One that answers a fifth of them is a true answer about that fifth, and the map says so. Drop a question for being unsupported, never for being narrow.',
@@ -964,6 +986,8 @@ async function induceQuestions({ digest, fields, title, callJSON, model, already
     .slice(0, MAX_QUESTIONS)
     .map((q) => ({
       question: clipQuestion(q.question),
+      // kept only if every word is the question's own (atlas/label-rules.js)
+      noun: LABELS.nounFromQuestion(q.noun, clipQuestion(q.question)),
       kinds: (Array.isArray(q.kinds) ? q.kinds : []).map((k) => ({
         name: String(k.name || '').trim().slice(0, 40),
         definition: String(k.definition || '').trim(),
@@ -991,10 +1015,12 @@ async function induceQuestions({ digest, fields, title, callJSON, model, already
    their own data, rather than guessing at it cold. */
 const KINDS_SCHEMA = {
   type: 'OBJECT', required: ['verdict', 'kinds'],
-  propertyOrdering: ['verdict', 'note', 'kinds'],
+  propertyOrdering: ['verdict', 'note', 'noun', 'kinds'],
   properties: {
     verdict: { type: 'STRING', enum: ['kinds', 'cannot_answer'] },
     note: { type: 'STRING' },
+    // the owner's question's noun for "Explore by …", from its own words (NOUN_RULE)
+    noun: { type: 'STRING' },
     kinds: { type: 'ARRAY', items: {
       type: 'OBJECT', required: ['name', 'definition', 'examples'],
       properties: {
@@ -1026,6 +1052,10 @@ export async function proposeKinds({ digest, question, title, callJSON, model, a
     '- The kinds must between them leave a home for the recurring words above: where a word is on many places and no kind would take them, add a kind that does.',
     '- Judge only by what the lines actually say, not by what such places usually are.',
     '- Never use "other" as a kind name; places that fit nothing are handled separately.',
+    /* The heading the owner's question will wear on the map. Not a rewording:
+       only the question's own words are kept (LABELS.nounFromQuestion), and the
+       owner sees the heading before keeping the question. */
+    NOUN_RULE.replace('For each question also give its noun', 'Also give the question\'s noun'),
     keyed.length
       ? '- This map already sorts places by ' +
         keyed.map((k) => 'its ' + k.column + ' (' + k.words.slice(0, 14).join(', ') +
@@ -1064,7 +1094,8 @@ export async function proposeKinds({ digest, question, title, callJSON, model, a
     return { verdict: 'cannot_answer',
       note: 'these places only gave one sort of answer to that, so it would colour the map one colour' };
   }
-  return { verdict: 'kinds', kinds, listLength: places.listLength };
+  return { verdict: 'kinds', kinds, listLength: places.listLength,
+           noun: LABELS.nounFromQuestion(out.noun, asked) };
 }
 
 /* Every question answered for every place, in ONE call per batch of rows. Asking
@@ -1388,8 +1419,11 @@ export async function enrichRows(opts) {
         const cols = (Array.isArray(q && q.columns) ? q.columns : []).map(String)
           .filter((c) => (fields || []).includes(c));
         const whole = !cols.length || cols.length !== ((q && q.columns) || []).length;
+        const wording = String((q && q.question) || '').trim();
         return {
-          question: String((q && q.question) || '').trim(),
+          question: wording,
+          // the noun it was stored with, checked again (a settled question keeps its heading)
+          noun: LABELS.nounFromQuestion(q && q.noun, wording),
           kinds: ((q && q.kinds) || [])
             .map((k) => ({ name: String((k && k.name) || '').trim(), definition: String((k && k.definition) || '') }))
             .filter((k) => k.name),
@@ -1471,7 +1505,7 @@ export async function enrichRows(opts) {
           // questions, or its "nothing here" — at no cost
           const was = reuse[g.label];
           got = (was.questions || []).length
-            ? { verdict: 'questions', questions: was.questions.map((q) => ({ question: q.question, kinds: q.kinds })),
+            ? { verdict: 'questions', questions: was.questions.map((q) => ({ question: q.question, noun: q.noun || '', kinds: q.kinds })),
                 listLength: 0, reading: was.reading || '', facts: was.facts || [], reused: true }
             : { verdict: 'no_clear_questions', note: was.note || '' };
         } else {
@@ -1502,11 +1536,11 @@ export async function enrichRows(opts) {
              one switch for it: the first column to ask it keeps it. */
           const same = kept.find((k) => similarity(k.question, q.question) >= SAME_WORDING);
           if (same) { twice += 1; continue; }
-          const one = { question: q.question, kinds: kinds.kept, column: g.label, columns: g.columns.slice(), digest: g.digest, settled: false };
+          const one = { question: q.question, noun: q.noun || '', kinds: kinds.kept, column: g.label, columns: g.columns.slice(), digest: g.digest, settled: false };
           kept.push(one);
           theirs.push(one);
         }
-        found[g.label] = { questions: theirs.map((q) => ({ question: q.question, kinds: q.kinds })),
+        found[g.label] = { questions: theirs.map((q) => ({ question: q.question, noun: q.noun, kinds: q.kinds })),
                            reading: got.reading || '', facts: got.facts || [] };
         outcomes[g.label] = { state: 'asked', proposed, dropped, twice, kept: theirs.map((q) => q.question) };
       }
@@ -1709,6 +1743,8 @@ export async function enrichRows(opts) {
       const biggest = counts.length ? counts[0].count : 0;
       return {
         question: q.question, counts, other, categories: cats,
+        // the words of the question its heading reads "Explore by …" with; "" for none
+        noun: q.noun || '',
         // which column it was asked of, and so where its words come from;
         // a settled question read under the old rule has none
         column: q.column || '', columns: q.columns || [],

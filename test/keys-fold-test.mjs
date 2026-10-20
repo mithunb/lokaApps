@@ -104,7 +104,7 @@ const build = section('buildKeyToggles');
 check('every offered key is a row — questions and columns through the same loop',
   /L\._keyOptions\.forEach\(function \(opt\) \{\s*\n\s*if \(opt\.tooFew\) return;[^\n]*\n\s*if \(opt\.scattered\) return;/.test(build), true);
 check('the row is a button that says whether it is open', /btn\.setAttribute\("aria-expanded", open \? "true" : "false"\)/.test(build), true);
-check('folded, it shows only the name and a caret', /btn\.appendChild\(el\("span", "key-caret"\)\)/.test(build) && /var tname = el\("span", "key-tname", esc\(opt\.label\)\);/.test(build), true);
+check('folded, it shows only the name and a caret', /btn\.appendChild\(el\("span", "key-caret"\)\)/.test(build) && /var tname = el\("span", "key-tname"\);\n\s*tname\.appendChild\(el\("span", "key-head", esc\(hd\.heading\)\)\);/.test(build), true);
 check('the reach line, the note and the kinds live in the open body only',
   /if \(open\) \{\s*\n\s*var body = el\("div", "key-body"\);/.test(build) &&
   /body\.appendChild\(reach\)/.test(build) && /body\.appendChild\(why\)/.test(build) &&
