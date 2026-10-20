@@ -68,7 +68,7 @@ check('the address is read too, known for what it is', kindOf('address'), 'addre
 check('a word or two a place with real variety is read, as a short column', [kindOf('tree'), kindOf('keeper')], ['short', 'short']);
 check('the closed list the map already colours by is not asked again',
   whyOf('categories'), 'the map can already colour places by this (3 answers)');
-check('a column filled on one place is too thin, said as a share', whyOf('labels'), 'filled on only 1 of 24 places, too few to find a pattern');
+check('a column filled on one place is still read: no data is excluded for being sparse', whyOf('labels') === '' && kindOf('labels') !== '', true);
 check('two names, neither on more than 85 of 100 places, is a key the map offers', /^the map can already colour places by this \(2 answers\)$/.test(whyOf('created_by')), true);
 check('the same thing on every place is said so', whyOf('status'), 'says the same thing for every place');
 check('one value everywhere, with spaces in it, likewise', whyOf('spaces'), 'says the same thing for every place');
@@ -82,15 +82,15 @@ console.log('\n  the plan: one look per column, prose first, short columns toget
 const plan = E.planColumns(rows, fields, { nameCol: 'loka_name', budget: 24, batches: 1 });
 // prose first, the fuller column first (the made-up comments are longer than the descriptions), tags, then the address, then the short ones together
 check('four groups: comment, description, address, and the short columns together',
-  plan.groups.map((g) => g.label), ['festival_comment', 'description', 'address', 'tree + keeper']);
-check('the short columns are one group of two', plan.groups[3].columns, ['tree', 'keeper']);
+  plan.groups.map((g) => g.label), ['festival_comment', 'description', 'address', 'tree + keeper + labels']);
+check('the short columns are one group of two', plan.groups[3].columns, ['tree', 'keeper', 'labels']);
 check('and say so', /read together/.test(plan.groups[3].why), true);
 check('prose before an address, whatever their lengths', plan.groups.findIndex((g) => g.label === 'address') > plan.groups.findIndex((g) => g.label === 'description'), true);
 check('room for ' + plan.maxGroups + ' looks on their own at 24 calls and 1 batch', plan.maxGroups, 21);
 const tight = E.planColumns(rows, fields, { nameCol: 'loka_name', budget: 24, batches: 11 });
 check('a reading of 420 places (11 batches) can afford one look', tight.maxGroups, 1);
 check('so every column is read together in it', tight.groups.length, 1);
-check('with every column on the line', tight.groups[0].columns, ['festival_comment', 'description', 'address', 'tree', 'keeper']);
+check('with every column on the line', tight.groups[0].columns, ['festival_comment', 'description', 'address', 'tree', 'keeper', 'labels']);
 check('and the record says why, without counting calls', tight.groups[0].why, 'read together with other columns, to keep the cost of one reading down');
 check('a plan never spends past the allowance: looks + answers + one retry', tight.groups.length + 11 + 1 + 11 <= 24, true);
 
@@ -178,10 +178,9 @@ check('the comments: a question kept, and how far it reaches', lineOf('festival_
   'Festival comment: 1 question kept: “Which day is it on?” (reaches 24 of 24 places)');
 check('the description likewise', /^Description: 1 question kept: “What sort of place is it\?” \(reaches 24 of 24 places\)$/.test(lineOf('description')), true);
 check('a column the model found nothing in says so in a fixed plain sentence, not the model\'s own note', lineOf('tree'),
-  'Tree: no question kept — nothing in it sorts the places into groups (read with Keeper — it holds only a word or two)');
+  'Tree: no question kept — nothing in it sorts the places into groups (read with Keeper and Labels — each holds only a word or two)');
 check('a column passed over says why', lineOf('status'), 'Status: not asked — says the same thing for every place');
-check('and so does the one filled on a single place', lineOf('labels'), 'Labels: not asked — filled on only 1 of 24 places, too few to find a pattern');
-check('the lines are marked asked or not', r1.columns.filter((c) => c.asked).map((c) => c.column), ['festival_comment', 'description', 'address', 'tree', 'keeper']);
+check('the lines are marked asked or not', r1.columns.filter((c) => c.asked).map((c) => c.column), ['festival_comment', 'description', 'address', 'tree', 'keeper', 'labels']);
 
 console.log('\n  the evidence for an answer must come from the column the question was asked of');
 const r2 = await read({}, { cheat: true, perColumn: { festival_comment: found([dayQ]) } });
@@ -290,10 +289,10 @@ console.log('\n  the one-off script: layers whose questions never drew on a colu
   put('deoria-bioregion', { id: 'tags', type: 'marker', source: 'user-tags.geojson' }, old);
   const u = unusedColumns({ popup: { title: 'loka_name' } }, old);
   check('the description is drawn on', u.drawnOn, ['description']);
-  check('the comments and the address are not', u.unused.map((x) => x.column), ['festival_comment', 'address', 'tree', 'keeper']);
+  check('the comments and the address are not', u.unused.map((x) => x.column), ['festival_comment', 'labels', 'address', 'tree', 'keeper']);
   const { want, skipped } = survey([root]);
   check('the layer read under the old rule is listed', want.map((w) => w.dataset + '/' + w.layerId), ['festival/tags']);
-  check('with the columns to add', want[0].unused.map((x) => x.column), ['festival_comment', 'address', 'tree', 'keeper']);
+  check('with the columns to add', want[0].unused.map((x) => x.column), ['festival_comment', 'labels', 'address', 'tree', 'keeper']);
   check('a layer never read is not this script\'s business', want.some((w) => w.dataset === 'unread'), false);
   check('deoria is skipped, visibly', skipped, [{ dataset: 'deoria-bioregion', why: 'never touched (standing rule)' }]);
   // and --apply, on a list of its own
@@ -305,7 +304,7 @@ console.log('\n  the one-off script: layers whose questions never drew on a colu
   const applied = spawnSync(process.execPath, [path.join(ROOT, 'deploy', 'queue-question-rereads.mjs'), '--apply', '--queue', qf, '--registry', path.join(TMP, 'none.json'), root], { encoding: 'utf8' });
   const line = createQueue({ file: qf }).get('festival', 'tags');
   check('--apply puts it on the list', [applied.status, line && line.state], [0, 'queued']);
-  check('with the columns to add', line && line.addColumns, ['festival_comment', 'address', 'tree', 'keeper']);
+  check('with the columns to add', line && line.addColumns, ['festival_comment', 'labels', 'address', 'tree', 'keeper']);
   check('nothing in the atlas folder was written', fs.readdirSync(path.join(root, 'festival')).sort(), ['manifest.json', 'manifest.local.json', 'user-tags.geojson']);
   fs.rmSync(TMP, { recursive: true, force: true });
 }
@@ -335,16 +334,20 @@ console.log('\n  1. only four reasons pass a column over; the rest are read');
   check('a column with few different values is no longer "a fact restated"', t2.passed.some((p) => /fact restated|over and over/.test(p.why)), false);
   check('a key the viewer offers is still passed over', /^the map can already colour places by this \(2 answers\)$/.test(w2('keeper')), true);
   check('one value on every place is passed over', w2('status'), 'says the same thing for every place');
-  check('filled on half the places or fewer is passed over, said as a share', w2('sparse'), 'filled on only 5 of 30 places, too few to find a pattern');
+  check('filled on few places (5 of 30) is still read', w2('sparse') === '' && k2('sparse') !== '', true);
   // a share, not a count: no floor in places (Mithun: "anything above 50% is legit")
   const tiny = mk(12, (i) => ({ loka_name: 'T' + i, note: i < 7 ? ['by the well', 'near the gate', 'under the tree', 'on the hill', 'past the school', 'at the lake', 'behind the temple'][i] : '' }));
   check('7 of 12 places filled (58%) is read, though under the old floor of 8', E.textColumns(tiny, ['note'], { nameCol: 'loka_name' }).ask.map((a) => a.column), ['note']);
   const half = mk(6, (i) => ({ note: i < 3 ? ['by the well', 'near the gate', 'under the tree'][i] : '' }));
-  check('exactly half filled is not more than half: passed over', E.textColumns(half, ['note']).passed[0].why, 'filled on only 3 of 6 places, too few to find a pattern');
+  check('half filled is read', E.textColumns(half, ['note']).ask.length, 1);
+  const sparse = mk(100, (i) => ({ note: i < 5 ? 'wheelchair ramp at the side' : '' }));
+  check('one value on 5 of 100 places, empty on the rest, is read (it sorts has it / hasn\'t)', E.textColumns(sparse, ['note']).ask.length, 1);
+  const empty = mk(10, () => ({ note: '' }));
+  check('a column empty everywhere is passed over, said plainly', E.textColumns(empty, ['note']).passed[0].why, 'empty on every place');
   const most = mk(200, (i) => ({ note: i < 101 ? 'note number ' + i : '' }));
   check('101 of 200 is more than half: read', E.textColumns(most, ['note']).ask.length, 1);
   const p2 = E.planColumns(small, f2, { nameCol: 'loka_name', budget: 24, batches: 1 });
-  check('the short columns with real variety share one look, at no extra call', p2.groups.map((g) => g.label), ['zone + open']);
+  check('the short columns with real variety share one look, at no extra call', p2.groups.map((g) => g.label), ['zone + open + sparse']);
 }
 
 console.log('\n  2. six questions a layer at most, settled ones keeping their place');
@@ -530,7 +533,7 @@ console.log('\n  10. plain words on the owner\'s page');
     'X: no question kept — nothing in it sorts the places into groups (read with Tree and Keeper — each holds only a word or two)');
   const sq = E.columnReport(tight, { [tight.groups[0].label]: { state: 'none' } }, [], [], 0, {});
   check('a column squeezed in with others says why, without numbers', sq[0].line,
-    'Festival comment: no question kept — nothing in it sorts the places into groups (read together with other columns, to keep the cost of one reading down: with Description, Address, Tree and Keeper)');
+    'Festival comment: no question kept — nothing in it sorts the places into groups (read together with other columns, to keep the cost of one reading down: with Description, Address, Tree, Keeper and Labels)');
 }
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');

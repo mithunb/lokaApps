@@ -290,9 +290,9 @@ console.log('\n  a reading LOKA turned down says why, in plain words');
     'No questions were kept: none of the suggested questions had enough answers that fit these places.');
   check('a turned-down reading with no reason still gets a sentence',
     enrich.whyNothingKept({ verdict: 'refused' }), 'No questions were kept: they did not pass LOKA’s own check.');
-  const thin = await enrich.enrichRows({ rows: [{ d: 'a pond' }, { d: '' }], fields: ['d'], title: 'T', mode: 'questions', callJSON: null, models: {} });
-  check('too few places with words is said too', [thin.verdict, enrich.whyNothingKept(thin)],
-    ['too_thin', 'No questions were kept: only 1 place has words written about it, too few to find a pattern in.']);
+  const thin = await enrich.enrichRows({ rows: [{ d: '' }, { d: '' }], fields: ['d'], title: 'T', mode: 'questions', callJSON: null, models: {} });
+  check('a layer with no words at all is said plainly (one place with words is read)', [thin.verdict, enrich.whyNothingKept(thin)],
+    ['too_thin', 'No questions were kept: no place has any words written about it.']);
   check('questions written, or a model out of reach, are not "kept nothing"',
     [enrich.whyNothingKept({ verdict: 'questions' }), enrich.whyNothingKept({ verdict: 'unavailable' }),
      enrich.whyNothingKept({ verdict: 'unread' }), enrich.whyNothingKept(null)], ['', '', '', '']);

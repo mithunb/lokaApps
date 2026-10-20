@@ -19,7 +19,7 @@ const CLASSIFY_BATCH = 40;       // rows per assignment call (prompt-budget boun
 const MIN_CATS = 2;              // fewer named themes than this is not a colouring
 const MAX_CATS = 7;              // named themes; + "other" = 8 = the palette
                                  // (fragment.js MAX_CATEGORIES, tabular.js <= 8)
-const MIN_TEXT_ROWS = 8;         // fewer described places → "too_thin"
+const MIN_TEXT_ROWS = 1;         // a layer is read if any place has words (Mithun, 2026-10-20: exclude no data)
 const DIGEST_MAX = 400;          // whole set below this; even-stride sample above
 /* The share at which the viewer refuses a key outright: one answer on 85 of
    every 100 places is not a sorting. Kept here as well because the same truth
@@ -606,11 +606,15 @@ const MAX_QUESTIONS = 6;
        puts beside the map as a colouring answers "what sort of thing is this"
        already, and asking it again in other words is the echo the gate below
        throws out. The test is the viewer's own (keyShapedColumns, below).
-     - it is filled on half the places or fewer (Mithun, 2026-10-20: "go by
-       percentages and not absolute numbers, anything above 50% is legit").
-       A share, not a count, so a layer of 12 places and one of 1,200 are
-       held to the same rule; there is no floor in places.
-     - it says one single thing on every place it is filled on
+     - it is empty on every place (there is nothing in it to read)
+     - it says one single identical thing on EVERY place (filled everywhere,
+       one value) — no place differs, so there is no pattern to find
+
+   How many places a column is filled on is no reason to pass it over
+   (Mithun, 2026-10-20: "even if 10% or less of the places have some
+   information for a column, read it. We don't want to exclude any data while
+   reading"). A remark on a few places is read like any other; one value on
+   some places and nothing on the rest still sorts them (has it / hasn't).
 
    There used to be a fifth — a column that said "the same few things over and
    over" was passed over as a fact restated. That threw away columns with real
@@ -625,7 +629,6 @@ const MAX_QUESTIONS = 6;
    is too little to read a pattern from on its own and three such columns side
    by side may say something between them. */
 const TEXT_WORDS = 4;            // a place says this many words or more: free text
-const FILLED_SHARE = 0.5;        // a column is read when filled on MORE than this share of places
 
 /* A column's name as an owner reads it: "festival_comment" → "Festival comment". */
 export function columnLabel(name) {
@@ -653,11 +656,11 @@ export function textColumns(rows, fields, { nameCol = '' } = {}) {
       passed.push({ column: f, why: 'the map can already colour places by this (' + firsts.size + ' answers)' });
       continue;
     }
-    if (!(filled.length > FILLED_SHARE * values.length)) {
-      passed.push({ column: f, why: 'filled on only ' + filled.length + ' of ' + values.length + ' places, too few to find a pattern' });
+    if (!filled.length) {
+      passed.push({ column: f, why: 'empty on every place' });
       continue;
     }
-    if (distinct === 1) {
+    if (distinct === 1 && filled.length === values.length) {
       passed.push({ column: f, why: 'says the same thing for every place' });
       continue;
     }
@@ -770,7 +773,7 @@ export function columnReport(plan, outcomes, questions, fell = [], total = 0, op
         text = 'not asked — this reading answered the questions already on the map';
       }
     } else if (o.state === 'thin') {
-      text = 'no question kept — filled on only ' + o.withText + ' of ' + total + ' places, too few to find a pattern';
+      text = 'no question kept — empty on every place';
     } else if (o.state === 'none') {
       text = 'no question kept — nothing in it sorts the places into groups';
     } else if (survived.length) {
@@ -1320,9 +1323,8 @@ export function whyNothingKept(out) {
     return 'No questions were kept: ' + (PLAINER[why] || why || 'they did not pass LOKA’s own check') + '.';
   }
   if (out.verdict === 'too_thin') {
-    const n = Number(out.withText) || 0;
-    return 'No questions were kept: only ' + n + ' place' + (n === 1 ? ' has' : 's have') +
-      ' words written about ' + (n === 1 ? 'it' : 'them') + ', too few to find a pattern in.';
+    // a layer is skipped only when no place has any words at all (MIN_TEXT_ROWS = 1)
+    return 'No questions were kept: no place has any words written about it.';
   }
   return '';
 }
@@ -1456,8 +1458,8 @@ export async function enrichRows(opts) {
       const alreadyKeyed = keyKindsByColumn(rows, fields);
       const reserved = [...fields, ...alreadyKeyed.flatMap((k) => k.words)];
       for (const g of groupsToAsk) {
-        // the column rule's own share, not a count of places (textColumns, FILLED_SHARE)
-        if (!(g.digest.withText > FILLED_SHARE * rows.length)) {
+        // no column is too thin to read; only one with no words at all is skipped
+        if (!(g.digest.withText > 0)) {
           outcomes[g.label] = { state: 'thin', withText: g.digest.withText };
           continue;
         }
