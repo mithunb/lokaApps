@@ -85,7 +85,8 @@ check('every faint colour is darkened until it reads at 4.5 to 1 on every backgr
 check('white words on the accent read at 4.5 to 1', T.contrast('#FFFFFF', faint.vars['--color-leaf']) >= 4.5, true);
 check('a ring reads at 3 to 1', bgs.every((b) => T.contrast(faint.vars['--color-sindoor'], b) >= 3), true);
 check('and each change is said, in words', faint.notes.length, 7);
-check('the festival’s red, as words, is the one colour it had to darken', r.notes.length === 1 && /^highlightDeep: #FC3103 .* darkened to #[0-9A-F]{6}$/.test(r.notes[0]), true);
+check('the festival file stores its red already darkened for words, so it needs no change at run time', r.notes.length, 0);
+check('and the guard would still darken the raw site red if given it', /^highlightDeep: #FC3103 .* darkened to #[0-9A-F]{6}$/.test((T.resolve({ colors: { highlightDeep: '#FC3103' } }).notes[0] || '')), true);
 check('a colour that already reads is left exactly as given', T.resolve({ colors: { accent: '#6B1164' } }).vars['--color-leaf'], '#6B1164');
 const dark = T.resolve({ colors: { page: '#060606', surface: '#111111', text: '#FFFDFD' } });
 check('a dark page is refused (no dark mode)', [dark.vars['--color-page'], dark.vars['--color-surface']], [undefined, undefined]);

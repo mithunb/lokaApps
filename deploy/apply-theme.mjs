@@ -69,7 +69,7 @@ async function readLogo(src) {
   if (!src) return null;
   let buf;
   if (/^https:\/\//.test(src)) {
-    const r = await fetch(src);
+    const r = await fetch(src, { signal: AbortSignal.timeout(15000) });
     if (!r.ok) die('logo: ' + src + ' answered ' + r.status);
     buf = Buffer.from(await r.arrayBuffer());
   } else {
@@ -92,6 +92,20 @@ for (const n of resolved.notes) console.log('  NOTE  ' + n);
 console.log('Logo:   ' + (logo ? spec.logo + ' (' + logo.length + ' bytes, PNG)' : 'none given; left as it is'));
 
 if (!APPLY) process.exit(0);
+
+/* The running server keeps the registry in memory and writes it back whole,
+   so writing while it runs would lose hasLogo (and a Settings save in the same
+   seconds could lose the theme). Refuse unless pm2 says lokaApps is stopped,
+   or the operator says so in so many words. */
+if (!args.includes('--server-is-stopped')) {
+  let online = false;
+  try {
+    const { execSync } = await import('node:child_process');
+    const list = JSON.parse(execSync('pm2 jlist', { stdio: ['ignore', 'pipe', 'ignore'] }).toString());
+    online = list.some((p) => p.name === 'lokaApps' && p.pm2_env && p.pm2_env.status === 'online');
+  } catch (e) { /* no pm2 here (a local run): nothing to clash with */ }
+  if (online) die('lokaApps is running: stop it first (pm2 stop lokaApps), or add --server-is-stopped');
+}
 
 // ---- backup ----
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
