@@ -86,6 +86,8 @@
       --font-companions-serif:"Lora"; --font-companions-sans:"Karla";
       --font-display:"Lora",var(--font-companions-serif),serif;
       --font-body:"Karla",var(--font-companions-sans),sans-serif;
+      /* the headings' weight; an atlas's own theme (theme.js) may lighten it */
+      --weight-display:700;
       --t-display:clamp(1.6rem,4vw,2.4rem); --t-section:1.2rem; --t-body:1rem; --t-control:.95rem; --t-ui:.9rem; --t-meta:.8rem; --t-label:.72rem;
       /* shape and depth: corners stay small; xs is for a shape under 16px */
       --radius-xs:.125rem; --radius-md:.25rem; --radius-lg:.375rem; --radius-pill:999px;
@@ -99,7 +101,7 @@
       min-height:100dvh; display:flex; flex-direction:column; }
     body > * { width:100%; }
     footer.site { margin-top:auto; }
-    h1,h2,h3 { font-family:var(--font-display); font-weight:700; letter-spacing:-.01em; margin:0 0 .5rem; }
+    h1,h2,h3 { font-family:var(--font-display); font-weight:var(--weight-display); letter-spacing:-.01em; margin:0 0 .5rem; }
     h1 { font-size:var(--t-display); line-height:1.12; text-wrap:balance; }
     .lead, #atlas-about { text-wrap:pretty; }
     p { color:var(--color-text-secondary); margin:0 0 1rem; }
@@ -151,14 +153,14 @@
     .org-head:has(.org-brand-logo) { column-gap:.6rem; }
     #org-branding, #org-branding a, .org-brand-line { display:contents; }
     #org-branding a { text-decoration:none; }
-    .org-brand-logo { grid-column:1; grid-row:1 / span 2; height:30px; width:auto; max-width:120px; object-fit:contain; display:block; }
+    .org-brand-logo { grid-column:1; grid-row:1 / span 2; height:30px; width:auto; max-width:var(--logo-max-width,120px); object-fit:contain; display:block; }
     .org-brand-line > span { grid-column:2; grid-row:1; font-size:var(--t-label); font-weight:700; letter-spacing:.08em; text-transform:uppercase;
       color:var(--color-text-secondary); line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:320px; }
     .org-brand-line b { font-weight:700; }
     #org-branding a:hover .org-brand-line b { color:var(--color-leaf); }
     .org-head #atlas-title { grid-column:2; grid-row:2; margin:0; font-size:1.1rem; line-height:1.2; letter-spacing:-.005em;
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-wrap:initial; }
-    .org-credit-logo { height:30px; width:auto; max-width:160px; object-fit:contain; display:block; margin-bottom:.4rem; }
+    .org-credit-logo { height:30px; width:auto; max-width:var(--logo-max-width,160px); object-fit:contain; display:block; margin-bottom:.4rem; }
     .org-credit-name { font-weight:600; }
     .org-credit-line { font-size:var(--t-ui); color:var(--color-text-secondary); margin-bottom:.9rem; }
     #org-credit:not(:empty) { padding-bottom:.9rem; margin-bottom:.9rem; border-bottom:1px solid var(--color-divider); }
@@ -336,7 +338,7 @@
       border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); }
     .map-style-pop[hidden] { display:none; }
     .map-style-head { display:flex; align-items:center; gap:.5rem; height:48px; }
-    .map-style-title { flex:1 1 auto; margin:0; font-family:var(--font-display); font-size:var(--t-control); font-weight:700; color:var(--color-text-primary); }
+    .map-style-title { flex:1 1 auto; margin:0; font-family:var(--font-display); font-size:var(--t-control); font-weight:var(--weight-display); color:var(--color-text-primary); }
     .map-style-close { flex:0 0 auto; width:44px; height:44px; margin-right:-.5rem; border:0; background:none; cursor:pointer; color:var(--color-text-muted);
       display:inline-flex; align-items:center; justify-content:center; border-radius:var(--radius-md); }
     .map-style-close svg { width:18px; height:18px; }
@@ -1070,7 +1072,7 @@
     /* the kicker comes first: "SURVEY VILLAGE · GORAKHPUR" in Leaf, then the
        name in the serif — the card reads like a catalogue entry */
     .pop-sub { font-size:var(--t-label); font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:var(--color-leaf); margin:0 0 .2rem; padding-right:1.4rem; }
-    .pop-title { font-family:var(--font-display); font-weight:700; font-size:1.1rem; color:var(--color-text-primary); line-height:1.25; padding-right:1.4rem; text-wrap:balance; }
+    .pop-title { font-family:var(--font-display); font-weight:var(--weight-display); font-size:1.1rem; color:var(--color-text-primary); line-height:1.25; padding-right:1.4rem; text-wrap:balance; }
     .pop-sub + .pop-title { padding-right:0; }
     /* under a heading LOKA wrote: where the name came from, in one small line */
     .pop-byline { font-size:var(--t-label); color:var(--color-text-muted); margin:.15rem 0 .35rem; }
@@ -1349,7 +1351,7 @@
     .cta-inner { display:flex; align-items:center; justify-content:space-between; gap:1.25rem; flex-wrap:wrap;
       background:var(--color-leaf-tint); border:1px solid var(--color-border); border-radius:var(--radius-lg);
       padding:1.15rem 1.4rem; }
-    .cta-inner b { display:block; font-family:var(--font-display); font-weight:700; font-size:var(--t-section); line-height:1.25; color:var(--color-text-primary); text-wrap:balance; }
+    .cta-inner b { display:block; font-family:var(--font-display); font-weight:var(--weight-display); font-size:var(--t-section); line-height:1.25; color:var(--color-text-primary); text-wrap:balance; }
     .cta-inner span { font-size:var(--t-ui); color:var(--color-text-secondary); }
     .cta-btn { flex:0 0 auto; display:inline-block; padding:.6rem 1.2rem; border-radius:var(--radius-md);
       background:var(--color-leaf); color:#fff; font-weight:600; font-size:var(--t-control); transition:background .15s ease; }
@@ -1453,7 +1455,15 @@
        The one LOKA element on every atlas view, embeds included. Hard-coded
        in the page: no manifest can rename or remove it. "Powered by" in the
        sans, the mark 10px tall, "Atlas" in the serif. Links to the page that
-       builds an atlas of your own. */
+       builds an atlas of your own.
+       An atlas with its own theme (theme.js) sets the page's colour, type and
+       corner variables on the root; the badge sets LOKA's own values back,
+       here, for itself, so it reads the same on every atlas whatever the
+       theme says. These are the :root values, repeated on purpose. */
+    .loka-badge { --color-text-primary:#24211D; --color-text-secondary:#5A5751; --color-border:rgba(36,33,29,.18);
+      --color-leaf:#2A6B41; --color-leaf-deep:#1F5232; --radius-md:.25rem;
+      --font-display:"Lora",var(--font-companions-serif),serif; --font-body:"Karla",var(--font-companions-sans),sans-serif;
+      font-family:var(--font-body); }
     .loka-badge { display:inline-flex; align-items:center; gap:.35em; padding:3px 8px; white-space:nowrap; text-decoration:none;
       font-size:var(--t-label); font-weight:600; line-height:1.2; color:var(--color-text-secondary);
       background:rgba(253,252,248,.94); border:1px solid var(--color-border); border-radius:var(--radius-md);
@@ -1546,7 +1556,7 @@
       .nav-menu .own-btn-word { display:inline; }
       .nav-menu .own-btn-chev { display:inline; }
       .atlas-embed .nav-burger { display:none; }
-      .org-brand-logo { height:28px; }
+      .org-brand-logo { height:28px; max-width:min(var(--logo-max-width,120px), 120px); }   /* a theme's wider logo leaves the title room on a phone */
       .org-brand-line > span { max-width:none; }
       .org-head #atlas-title { font-size:1rem; }
       /* the badge is in the sheet's head on a phone; it floats only while
@@ -2244,6 +2254,8 @@
   <script src="./iconkit.js?v=dev"></script>
   <script src="./wait.js?v=dev"></script>
   <script src="./share.js?v=dev"></script>
+  <!-- an atlas's own look, when its manifest gives one; must load before atlas.js -->
+  <script src="./theme.js?v=dev"></script>
   <script src="./atlas.js?v=dev"></script>
 </body>
 </html>

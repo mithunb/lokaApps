@@ -468,6 +468,8 @@
         // the owner's name for the place ("Call this place", Settings), for the
         // key headings "Explore <place> by …"; kept here so a rebuild leaves it be
         if (typeof local.placeName === "string") manifest.placeName = local.placeName;
+        // the atlas's own look (theme.js); kept here for the same reason
+        if (local.theme && typeof local.theme === "object") manifest.theme = local.theme;
         return manifest;
       });
   }
@@ -481,6 +483,16 @@
     // the same two lines, where an atlas view reads them: the About & sources panel
     setText("#sources-sub", manifest.subtitle || "");
     setText("#sources-lead", manifest.about || "");
+    /* The atlas's own colours and type, when its manifest gives them
+       (atlas/theme.js says what a theme can and cannot change). Before the
+       title is shown, so the title appears in the atlas's own face. With no
+       theme nothing is touched. */
+    if (manifest.theme && window.LokaTheme) {
+      try {
+        var themeNotes = window.LokaTheme.apply(manifest.theme, document);
+        if (themeNotes.length) console.info("Atlas theme: " + themeNotes.join(" · "));
+      } catch (e) {}
+    }
     renderBranding(manifest.branding);
     renderCollaborators(manifest);
     wireShare(manifest);
