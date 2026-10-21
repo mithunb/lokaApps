@@ -150,7 +150,12 @@
        name stays in the credits and the page title. */
     .org-head { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center;
       column-gap:0; min-width:0; flex:0 1 auto; max-width:min(100%, 34rem); }
-    .org-head:has(.org-brand-logo) { column-gap:.6rem; }
+    /* With a logo, everything stacks under it (Mithun, 2026-10-21): the logo,
+       then the organisation's name if it has one, then the atlas's title. */
+    .org-head:has(.org-brand-logo) { grid-template-columns:minmax(0,1fr); column-gap:0; row-gap:.2rem; }
+    .org-head:has(.org-brand-logo) .org-brand-logo { grid-column:1; grid-row:1; justify-self:start; }
+    .org-head:has(.org-brand-logo) .org-brand-line > span { grid-column:1; grid-row:2; }
+    .org-head:has(.org-brand-logo) #atlas-title { grid-column:1; grid-row:3; }
     #org-branding, #org-branding a, .org-brand-line { display:contents; }
     #org-branding a { text-decoration:none; }
     .org-brand-logo { grid-column:1; grid-row:1 / span 2; height:30px; width:auto; max-width:var(--logo-max-width,120px); object-fit:contain; display:block; }
