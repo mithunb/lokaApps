@@ -55,7 +55,7 @@ check('a row found by meaning matches even when no word does', /var match = !!\(
 check('with nothing from the server, the words alone decide (no crash, no change)', /if \(!searchTags\.length && !anyRow\) return;/.test(js), true);
 
 console.log('\n  a non-match fades, it does not vanish');
-check('the fade wraps each sub-layer\'s own opacity in "did this row match"', /\["case", hit, orig, \["\*", orig, SEARCH_FADE\[p\]\]\]/.test(js), true);
+check('the fade wraps each sub-layer\'s own opacity in "did this row match"', /var fade = \(named && p === "text-opacity"\) \? 0 : SEARCH_FADE\[p\];\s*var v = any \? \["case", hit, orig, \["\*", orig, fade\]\] : orig;/.test(js), true);
 check('fill, outline, centre dot and name all fade', /\/-\(fill\|line\|mark\|label\)\$\//.test(js), true);
 check('the fill goes faint, the outline stays readable', (() => { const m = js.match(/SEARCH_FADE = (\{[^}]+\})/); const f = m && new Function('return ' + m[1])(); return f && f['fill-opacity'] < 0.2 && f['line-opacity'] >= 0.3; })(), true);
 const fadeRe = (() => { const m = js.match(/L\._ids\.filter\(function \(id\) \{ return (\/[^/]+\/)\.test\(id\); \}\)/); return m && new Function('return ' + m[1])(); })();
@@ -79,7 +79,7 @@ console.log('\n  the line under the box');
 check('it says how many matched what, and names the way back', /\+ " match ‘" \+ word \+ "’"/.test(js) && /if \(lead \|\| word\) \{/.test(js), true);
 check('nothing matched says so plainly, with the same way back', /"nothing matched ‘" \+ word \+ "’ — try another word"/.test(js), true);
 check('the word is shown as typed, matching lowercases its own copy', /searchWord = \(raw \|\| ""\)\.trim\(\);\n\s*var q = searchWord\.toLowerCase\(\);/.test(js), true);
-check('"show all" empties the box as well as the map', /all\.onclick = function \(\) \{ var box = \$\("\.ctl-search-input"\); if \(box\) box\.value = ""; clearSearch\(\); \};/.test(js), true);
+check('"show all" empties the box as well as the map', /all\.onclick = function \(\) \{ var box = \$\("\.ctl-search-input"\); if \(box\) box\.value = ""; unpickAnswer\(\); \};/.test(js), true);
 check('a pin-only atlas keeps its old line and its "Show me" offer', /if \(!shapes\) \{ updateSearchCount\(shown, total, matchPts\); return; \}/.test(js), true);
 check('what the rows are called: places for pins, areas for shapes, or what the manifest says', /var n = L\.noun \|\| \(markersByLayer\[L\.id\] \? "places" : "areas"\);/.test(js), true);
 check('the old pin wording is untouched', /c\.textContent = shown \? \(shown \+ " of " \+ total \+ " shown"\) : "nothing matched — try another word";/.test(js), true);

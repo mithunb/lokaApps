@@ -2546,11 +2546,14 @@
     }
     var out = [];
     mine.forEach(function (it) {
-      /* Each kind is a chip you can press: the map keeps the places of that
-         kind and the list narrows to them, the way search does (filterByKind).
-         Pressing it again, or "show all", comes back. The row wears the
-         same mark the map draws, so what you press is what you see. */
-      var r = el("button", "leg-item key-kind" + (it.faint ? " faint" : ""));
+      /* Each answer is a button you can see is a button (Mithun, 2026-10-21:
+         "a button like clickable form"): a pill with the answer's own mark
+         and its count. Pressing it selects it — it fills, aria-pressed says
+         so — and the map keeps only those places, frames them, and writes
+         their names (filterByKind). The words people used for that answer
+         open under it in the same tap; there is no separate chevron any more.
+         Pressing it again, or "Show all", puts everything back. */
+      var r = el("button", "leg-item key-kind key-answer" + (it.faint ? " faint" : ""));
       r.type = "button";
       var which = it.silentOf ? "silent" : (it.label === "other" && it.color === KEY_OTHER ? "other" : "kind");
       r.setAttribute("data-kind", which === "kind" ? it.label : "");
@@ -2565,36 +2568,24 @@
       r.appendChild(swatch(it));
       r.appendChild(el("span", "leg-label", esc(it.label)));
       if (it.n != null) r.appendChild(el("span", "leg-n", String(it.n)));
-      /* The pressed chip wears a small × so it reads "tap again to clear",
+      /* The pressed answer wears a small × so it reads "tap again to clear",
          and the line under the key says the rest (see keyOnlyLine). */
       var x = el("span", "key-x", "×");
       x.setAttribute("aria-hidden", "true");
       r.appendChild(x);
       r.onclick = function () { filterByKind(L, opt, which, it.label); };
       out.push(r);
-      /* The words behind a kind, or the places a question is silent on, open
-         from a small chevron after the row — not from the row itself, which
-         now narrows the map. */
-      var fold = null;
-      if (it.silentOf) fold = silentPlacesEl(L, it.silentOf);
-      else if (it.why && it.why.length) fold = whyWordsEl(L, it.why);
-      if (fold) {
-        fold.hidden = true;
-        var open = el("button", "leg-open", ICONS.chevron);
-        open.type = "button";
-        open.setAttribute("aria-expanded", "false");
-        open.setAttribute("aria-label", it.silentOf
-          ? "Which places have no answer"
-          : "The words that put a place under " + it.label);
-        open.onclick = function () {
-          fold.hidden = !fold.hidden;
-          open.setAttribute("aria-expanded", String(!fold.hidden));
-        };
-        var pair = el("div", "leg-pair");
-        pair.appendChild(r);
-        pair.appendChild(open);
-        out[out.length - 1] = pair;
-        out.push(fold);
+      /* What sits under a selected answer: the words people used for it, or,
+         for "no answer", the places the question is silent on. Shown while the
+         answer is selected and hidden otherwise (markLitKinds keeps it so). */
+      var more = null;
+      if (it.silentOf) more = silentPlacesEl(L, it.silentOf);
+      else if (it.why && it.why.length) more = whyWordsEl(L, it.why);
+      if (more) {
+        more.classList.add("key-answer-more");
+        more.hidden = !lit;
+        r._more = more;
+        out.push(more);
       }
     });
     out.push(keyOnlyLine(L, opt));
@@ -2614,7 +2605,7 @@
     line.appendChild(el("span", "key-only-t"));
     var all = el("button", "key-only-all", "Show all");
     all.type = "button";
-    all.onclick = function () { clearSearch(); };
+    all.onclick = function () { unpickAnswer(); };
     line.appendChild(el("span", "key-only-dot", "·"));
     line.appendChild(all);
     return line;
@@ -2816,7 +2807,7 @@
     keyHalves(L).forEach(function (h) { applyMarkerVisibility(h); });   // discs re-read the new footprints (fold distance included)
     // a pressed kind whose key just went off has nothing left to filter by
     if (KINDFILTER && KINDFILTER.layer === L.id &&
-        !act.some(function (o) { return o.col === KINDFILTER.col; })) clearSearch();
+        !act.some(function (o) { return o.col === KINDFILTER.col; })) unpickAnswer();
   }
 
   // Fold distance follows the markers' true footprint. With nothing switched
@@ -2932,6 +2923,16 @@
     var list = el("div", "key-list");
     var act = activeKeyOptions(L);
     var showing = L._visible !== false;
+    /* Every row's heading, worked out before any is drawn, so no two rows of
+       this panel share one (label-rules.js distinctHeadings): the first
+       "Explore by place" keeps it, a later one shows its question as written. */
+    var offered = L._keyOptions.filter(function (o) { return !o.tooFew && !o.scattered; });
+    var raw = offered.map(function (o) { var h = keyHeadingOf(L, o); h.asWritten = o.full || o.label; return h; });
+    var heads = {};
+    LokaLabelRules.distinctHeadings(raw).forEach(function (h, i) {
+      // shown as written: the whole wording is the heading, so no ⓘ is needed for it
+      heads[offered[i].col] = { heading: h.heading, sub: h.sub, whole: raw[i].whole || h.heading !== raw[i].heading };
+    });
     L._keyOptions.forEach(function (opt) {
       if (opt.tooFew) return;   // under 30% of places: on cards, not offered as a key
       if (opt.scattered) return;   // answers mostly one of a kind: on cards, not offered as a key
@@ -2960,7 +2961,7 @@
          a small grey line under it, always (version D, Mithun, October 2026):
          a question's own wording, or "Column: <its heading>". The rule is
          label-rules.js keyHeading, which the owner's Questions tab shows too. */
-      var hd = keyHeadingOf(L, opt);
+      var hd = heads[opt.col] || keyHeadingOf(L, opt);
       var tname = el("span", "key-tname");
       tname.appendChild(el("span", "key-head", esc(hd.heading)));
       if (hd.sub) tname.appendChild(el("span", "key-asked", esc(hd.sub)));
@@ -3184,6 +3185,14 @@
       });
     }
     src.setData({ type: "FeatureCollection", features: feats });
+    /* While an answer is selected its places' names are all written, even
+       ones the map would normally drop for room (answerNamesOn). Only the
+       selected places are in the source then, so nothing else crowds in. */
+    var all = answerNamesOn(L) || !!t.alwaysShow;
+    if (L._pinNamesAll !== all) {
+      L._pinNamesAll = all;
+      try { map.setLayoutProperty(L.id + "-pinname", "text-allow-overlap", all); } catch (e) {}
+    }
   }
   // a name cut at a word, with an ellipsis, when it is really a sentence
   function shortName(s, max) {
@@ -3330,13 +3339,9 @@
 
   function whyWordsEl(L, why) {
     var box = el("div", "leg-why");
-    /* One line above the words, because the only other explanation is a hover
-       title and a phone never shows one. "Tap one" is said only when a word
-       can be tapped. */
-    var anyGo = (why || []).some(function (it) { return it && typeof it !== "string" && (it.es || []).length; });
-    box.appendChild(el("div", "leg-why-lead", anyGo
-      ? "Words people used. Tap one to see where it was said."
-      : "Words people used."));
+    /* No line above the words any more: said under every answer it was the
+       same sentence again and again (Mithun, 2026-10-21). What the words are
+       is said once, in the layer's ⓘ (HOW_TO). */
     (why || []).forEach(function (it) {
       var w = typeof it === "string" ? { w: it, es: [] } : it;
       var many = (w.es || []).length > 1;
@@ -4627,10 +4632,15 @@
       });
     }
     var hit = ["in", ["get", "_srow"], ["literal", hits]];
+    /* A selected answer writes every one of its areas' names, even those the
+       map would drop for room, and the names of the other areas go entirely
+       (not to a pale 30%), so they neither crowd nor block the ones asked for. */
+    var named = any && answerNamesOn(L);
     ids.forEach(function (id) {
       fadeProps(id).forEach(function (p) {
         var orig = L._searchPaint[id + "|" + p];
-        var v = any ? ["case", hit, orig, ["*", orig, SEARCH_FADE[p]]] : orig;
+        var fade = (named && p === "text-opacity") ? 0 : SEARCH_FADE[p];
+        var v = any ? ["case", hit, orig, ["*", orig, fade]] : orig;
         try { map.setPaintProperty(id, p, v); } catch (e) {}
       });
     });
@@ -4642,6 +4652,14 @@
       if (!("_searchSort" in L)) { try { L._searchSort = map.getLayoutProperty(lbl, "symbol-sort-key"); } catch (e) { L._searchSort = null; } }
       var base = L._searchSort == null ? 0 : L._searchSort;
       try { map.setLayoutProperty(lbl, "symbol-sort-key", any ? ["+", ["case", hit, 0, 1e9], base] : L._searchSort); } catch (e) {}
+      var always = !!(L.label_text && L.label_text.alwaysShow);
+      if (L._shapeNamesAll !== (named || always)) {
+        L._shapeNamesAll = named || always;
+        try {
+          map.setLayoutProperty(lbl, "text-allow-overlap", L._shapeNamesAll);
+          map.setLayoutProperty(lbl, "text-ignore-placement", L._shapeNamesAll);
+        } catch (e) {}
+      }
     }
   }
   // after a search touches a layer's rows: pins re-draw, shapes re-paint
@@ -4723,7 +4741,7 @@
       all.type = "button";
       // the box empties too: a line that has gone while the box still says
       // "Telugu" would leave the reader wondering which of them is right
-      all.onclick = function () { var box = $(".ctl-search-input"); if (box) box.value = ""; clearSearch(); };
+      all.onclick = function () { var box = $(".ctl-search-input"); if (box) box.value = ""; unpickAnswer(); };
       c.appendChild(document.createTextNode(" · "));
       c.appendChild(all);
     }
@@ -4878,7 +4896,7 @@
   }
   function filterByKind(L, opt, which, label) {
     if (!$("#atlas-search-count")) return;
-    if (kindFilterIs(L, opt, which, label)) { clearSearch(); return; }
+    if (kindFilterIs(L, opt, which, label)) { unpickAnswer(); return; }
     clearSearch();   // whatever stood before — a tag, a word — is gone
     var box = $(".ctl-search-input");
     if (box) box.value = "";          // one filter at a time, and it is this one
@@ -4903,6 +4921,46 @@
     });
     updateSearchCount(shown, total, pts, { ofAll: kindWords(label, which) }, null, keyNoun(L));
     markLitKinds();
+    if (shown) fitAnswer(L);
+  }
+  /* "Bring the markers in focus" (Mithun, 2026-10-21): a selected answer's
+     places are framed — pins and whole areas, both halves of a split file —
+     with room left for the side panel and the phone sheet (viewPadding), and
+     no closer than ANSWER_MAX_ZOOM, so one place is not blown up to the
+     street. Their names are written while the answer stays selected
+     (answerNamesOn, used by syncPinNames and applyShapeFade). */
+  var ANSWER_MAX_ZOOM = 15;
+  function fitAnswer(L) {
+    if (!map) return;
+    var b = null;
+    keyHalves(L).forEach(function (h) {
+      var hb = shapeBounds(h);
+      if (hb) b = b ? b.extend(hb) : hb;
+    });
+    if (!b) return;
+    /* A pin stands above its point and its name hangs below it, so the edges
+       get a little more room than a bare point needs: the top for the pin,
+       the bottom for the name and the map's own hint line (measured on Bengaluru: a pin framed at the top
+       edge had its head cut off). */
+    var pad = viewPadding();
+    pad.top += 32;
+    pad.bottom += 56;
+    try { map.fitBounds(b, { padding: pad, maxZoom: ANSWER_MAX_ZOOM, duration: 600 }); } catch (e) {}
+  }
+  // the selected answer's own layer (either half of a split file)
+  function answerNamesOn(L) {
+    if (!KINDFILTER || !L) return false;
+    var K = layerById(KINDFILTER.layer);
+    return !!K && keyHalves(K).indexOf(L) >= 0;
+  }
+  /* Unselecting an answer — tapping it again, "Show all", or closing its
+     question — puts every place back, the names back to normal, and the view
+     back to the whole atlas. Other clears (a new search, a tag) keep the view
+     they are about to set themselves. */
+  function unpickAnswer() {
+    var had = !!KINDFILTER;
+    clearSearch();
+    if (had && map) { try { if (!focusFit(true)) fitToData(true); } catch (e) {} }
   }
   // the pressed kind shows as on in the panel, and only that one
   function markLitKinds() {
@@ -4918,6 +4976,10 @@
       // the other kinds of the same key step back, still there to switch to
       b.classList.toggle("dim", sameKey && !on);
       b.setAttribute("aria-pressed", on ? "true" : "false");
+      // the words people used for it open with the selection, and close with it
+      if (b._more) b._more.hidden = !on;
+      var al = b.getAttribute("aria-label");
+      if (al) b.setAttribute("aria-label", al.replace(/^(Showing only|Show only)/, on ? "Showing only" : "Show only"));
       if (on) { var n = b.querySelector(".leg-n"); litN = n ? n.textContent : ""; }
     });
     document.querySelectorAll(".key-only[data-layer]").forEach(function (line) {
@@ -5637,7 +5699,7 @@
 
      Drawn again whenever the count or the questions change (syncCollection,
      renderExtra), because both arrive after the row is first built. */
-  var HOW_TO = "Mark each place by one of the questions below. Open a question to colour the map by its answers; tap an answer to show only those places.";
+  var HOW_TO = "Mark each place by one of the questions below. Open a question to colour the map by its answers. Tap an answer to show those places and the words people used for it; tap it again to see everything.";
   var LOKA_NAMES_NOTE = "Short names are written by LOKA from the tagger’s own words.";
   function keysOffered(L) {
     var H = keyHost(L);

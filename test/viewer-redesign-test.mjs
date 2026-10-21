@@ -57,7 +57,7 @@ check('and no style is left for it', /\.key-chips-lbl|\.key-hint/.test(html), fa
 check('the ⓘ exists for every contributed layer, not only one with a note', /if \(L\.info \|\| collectionLayer\(L\)\) \{/.test(js), true);
 check('its note leads with the name and the count', /if \(L\._countN != null\) head \+= " — " \+ countWords\(L\._countN, keyNoun\(L\)\);/.test(js), true);
 check('then who added it (L.info), then the how-to only when questions are offered', /if \(L\.info\) parts\.push\(String\(L\.info\)\.replace\(\/\\\.\\s\*\$\/, ""\)\);\s*if \(keysOffered\(L\)\) parts\.push\(HOW_TO/.test(js), true);
-check('the how-to, word for word', /var HOW_TO = "Mark each place by one of the questions below\. Open a question to colour the map by its answers; tap an answer to show only those places\.";/.test(js), true);
+check('the how-to, word for word', /var HOW_TO = "Mark each place by one of the questions below\. Open a question to colour the map by its answers\. Tap an answer to show those places and the words people used for it; tap it again to see everything\.";/.test(js), true);
 check('a line about LOKA\'s short names only when the layer has them', /if \(L\.lokaNames && L\.lokaNames\.from\) parts\.push\(LOKA_NAMES_NOTE/.test(js) && /var LOKA_NAMES_NOTE = "Short names are written by LOKA from the tagger’s own words\.";/.test(js), true);
 check('the note is drawn again when the count lands and when the questions are built', /renderLayerCount\(L, shown, total\) \{[\s\S]*?renderLayerNote\(L\);\s*\}/.test(js) && /renderLayerNote\(L\);   \/\/ the ⓘ says how to use the questions only once there are some/.test(js), true);
 check('questions sit flush with the layer: no strip indent on the body or the note', /\.ctl-extra \{ margin:\.05rem 0 \.35rem; padding-left:0; border-left:0; \}/.test(html) && !/\.ctl-said \{[^}]*padding-left:var\(--panel-strip\)/.test(html), true);
@@ -140,7 +140,7 @@ check('the card title is set in the display face at 1.25rem', /\.sheet-card-body
 console.log('\n  6. touch targets');
 check('questions 48px', /\.key-toggle \{ min-height:48px; \}/.test(touch), true);
 check('answers 44px', /\.key-body \.key-kind \{ min-height:44px; \}/.test(touch), true);
-check('the "words" caret in a 44px box', /\.leg-open \{ width:44px; height:44px; \}/.test(touch), true);
+check('answer buttons 44px on touch, and no "words" caret left', /\.key-body button\.key-answer \{ min-height:44px; \}/.test(touch) && !/\.leg-open/.test(touch), true);
 check('word chips 36px, 6px apart', /\.leg-why \{ gap:6px; \}/.test(touch) && /\.leg-why-w \{ min-height:36px;/.test(touch), true);
 check('the ⓘ in a 44px box', /\.ctl-info \{ width:44px; height:44px; \}/.test(touch), true);
 check('the grabber band 22px', /\.sheet-grip \{ display:flex; align-items:center; justify-content:center; height:22px;/.test(phone), true);

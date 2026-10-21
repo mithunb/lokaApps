@@ -222,7 +222,7 @@ check('the settled question comes first, so its key keeps its place', r6.questio
 check('and has no column, as it was found from the pile', r6.questions[0].column, '');
 check('the new one follows, from the comments', [r6.questions[1].question, r6.questions[1].column], ['Which day is it on?', 'festival_comment']);
 check('a column not named this time is never called "not asked": it was read in the earlier reading', (r6.columns.find((c) => c.column === 'address') || {}).line,
-  'Address: looked at in an earlier reading; this one only answered the questions already on the map');
+  'Address: read earlier — nothing new this time');
 const r7 = await read({ keepQuestions: settled }, { perColumn: { festival_comment: found([dayQ]) } });
 check('a plain re-answer of settled questions asks no column', r7.log.think.length, 0);
 check('and answers them once', [r7.log.file.length, r7.questions.length], [1, 1]);
@@ -249,9 +249,9 @@ check('and onto the record when questions were written', /return \{ state: 'done
 check('and when nothing was kept', /return \{ state: 'none', reason: why, sig: fileSigOf\(dataset, layerId\) \|\| out\.sig, columns: out\.columns \|\| \[\] \};/.test(server), true);
 check('the stand-in pays one call per column read, like the real thing', /for \(const g of plan\.groups\) await pay\('fake', 'find ' \+ g\.label, null, \{\}\);/.test(server), true);
 check('the list hands the lines to the owner\'s page', /columns: Array\.isArray\(r\.columns\) \? r\.columns : \[\]/.test(queueSrc), true);
-check('the owner\'s page shows them under the keys', /columnLines\(wrap, readingOf\(L\.id\)\);/.test(owner), true);
+check('the owner\'s page shows them in the Questions tab', /columnLines\(block, readingOf\(L\.id\)\);/.test(owner), true);
 check('and under "nothing here"', /columnLines\(wrap, said\);/.test(owner), true);
-check('one list item per column line', /list\.appendChild\(el\("li", c\.asked \? "own-column asked" : "own-column", esc\(c\.line\)\)\);/.test(owner), true);
+check('one list item per column line', /list\.appendChild\(el\("li", c\.asked \? "own-column asked" : "own-column", esc\(plainColumnLine\(c\.line\)\)\)\);/.test(owner), true);
 check('styled quietly', /\.own-columns \{/.test(css), true);
 
 console.log('\n  the list: a re-read of the same version, adding columns');

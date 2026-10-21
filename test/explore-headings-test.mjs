@@ -257,7 +257,7 @@ check('the viewer reads it from there', /if \(typeof local\.placeName === "strin
 
 console.log('\n  the rows wear it, everywhere the rows are drawn');
 check('the row\'s name is the heading, with the grey line under it',
-  /var hd = keyHeadingOf\(L, opt\);\n\s*var tname = el\("span", "key-tname"\);\n\s*tname\.appendChild\(el\("span", "key-head", esc\(hd\.heading\)\)\);\n\s*if \(hd\.sub\) tname\.appendChild\(el\("span", "key-asked", esc\(hd\.sub\)\)\);/.test(atlas), true);
+  /var hd = heads\[opt\.col\] \|\| keyHeadingOf\(L, opt\);\n\s*var tname = el\("span", "key-tname"\);\n\s*tname\.appendChild\(el\("span", "key-head", esc\(hd\.heading\)\)\);\n\s*if \(hd\.sub\) tname\.appendChild\(el\("span", "key-asked", esc\(hd\.sub\)\)\);/.test(atlas), true);
 check('the heading uses the shared rule and the owner\'s place',
   /var place = \(MANIFEST && MANIFEST\.placeName\) \|\| "";/.test(atlas) && /LokaLabelRules\.keyHeading\(\{ question: opt\.full \|\| opt\.label,/.test(atlas), true);
 check('a split file\'s noun is read off whichever half carries its question', /face\.keyNouns = nouns;/.test(atlas), true);
@@ -266,7 +266,7 @@ check('one list builder for desktop and the phone sheet', (atlas.match(/buildKey
 check('the reach order and the six-question cap are where they were',
   /return \(b\.isQuestion \? 1 : 0\) - \(a\.isQuestion \? 1 : 0\)\n\s*\|\| \(b\.reach - a\.reach\)/.test(atlas) && /const MAX_QUESTIONS = 6;/.test(enrichSrc), true);
 check('the owner\'s Questions tab shows each question\'s heading beside it',
-  /line\.appendChild\(el\("div", "own-q-heading", headingLine\(q\.label, q\.noun\)\)\);/.test(owner), true);
+  /line\.appendChild\(el\("div", "own-q-heading", headingLine\(q\.label, q\.noun, shownAs\[q\.col\]\)\)\);/.test(owner), true);
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

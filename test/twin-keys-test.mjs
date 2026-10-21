@@ -59,12 +59,12 @@ const body =
     'keyMarkRows', 'keyLegendRows', 'kindWords', 'hasPins',
     'layerById', 'looksLikeTwin', 'pairedTwin', 'pairedPrimary', 'layerNoun',
     'keyHost', 'keyHalves', 'keyEntries', 'keyFeatures', 'halfOfEntry', 'keyFace', 'keyNoun',
-    'kindFilterIs', 'filterByKind'].map(fn).join('');
+    'kindFilterIs', 'filterByKind', 'fitAnswer', 'answerNamesOn', 'unpickAnswer'].map(fn).join('');
 /* The state the lifted functions read: the manifest, the data, the markers,
    the key state, and the search machinery a pressed answer goes through. */
 const make = new Function('LokaLabelRules', 'MANIFEST', 'DATA', 'markersByLayer', 'keyState', 'searchRows',
   'applyRowVisibility', 'updateSearchCount', 'markLitKinds', 'clearSearch', '$',
-  'var KINDFILTER = null, searchWord = "", searchSeq = 0, searchTimer = null;\n' +
+  'var KINDFILTER = null, searchWord = "", searchSeq = 0, searchTimer = null, map = null, ANSWER_MAX_ZOOM = 15;\n' +
   'function clearTimeout() {}\n' +
   body +
   'return { computeKeyOptions, keyLegendRows, keyMarkRows, activeKeyOptions, keyHost, keyHalves, keyEntries, keyFeatures, ' +

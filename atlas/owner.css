@@ -402,6 +402,16 @@
 .own-columns { margin:4px 0 0; padding-left:1.1em; }
 .own-columns .own-column { margin:2px 0; }
 .own-columns .own-column.asked { color:var(--color-text); }
+/* the lines live folded under one line in the Questions tab, shut until tapped */
+.own-columns-fold { margin:10px 0 0; }
+.own-columns-sum { cursor:pointer; font-size:var(--t-label); color:var(--color-text-secondary);
+  min-height:32px; display:flex; align-items:center; gap:.35rem; list-style:none; }
+.own-columns-sum::-webkit-details-marker { display:none; }
+.own-columns-sum::before { content:"▸"; color:var(--color-text-muted); transition:transform .15s ease; }
+.own-columns-fold[open] > .own-columns-sum::before { transform:rotate(90deg); }
+.own-columns-sum:hover { color:var(--color-leaf-deep); }
+.own-columns-sum:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; border-radius:4px; }
+@media (pointer:coarse), (max-width:720px) { .own-columns-sum { min-height:44px; } }
 
 /* "Identify each place by" — first in the layer's fold: the question, its one
    quiet line, the optional second column, four real names cut the way the map

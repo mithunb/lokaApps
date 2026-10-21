@@ -78,24 +78,24 @@ check('toggling a key no longer redraws a list', !/syncCollection\(L\);   \/\/ t
 check('no list styles are left in the sheet', !/\.coll-item/.test(html) && !/\.coll-more/.test(html), true);
 
 console.log('\n  (b) a pressed kind narrows the list and the map together');
-check('a kind is a button that narrows', /var r = el\("button", "leg-item key-kind"/.test(js) && /r\.onclick = function \(\) \{ filterByKind\(L, opt, which, it\.label\); \};/.test(js), true);
+check('a kind is a button that narrows', /var r = el\("button", "leg-item key-kind key-answer"/.test(js) && /r\.onclick = function \(\) \{ filterByKind\(L, opt, which, it\.label\); \};/.test(js), true);
 check('it says which layer, key and kind it is', /r\.setAttribute\("data-layer", L\.id\);\s*r\.setAttribute\("data-col", opt\.col\);/.test(js), true);
 check('the line reads "12 of 66 places are Market"', /shown \+ " of " \+ total \+ " " \+ noun \+ \(shown === 1 \? " is " : " are "\) \+ lead\.ofAll/.test(js), true);
 check('one place says "is"', /shown === 1 \? " is " : " are "/.test(js), true);
 check('and "other" and "no answer" are said in plain words', /if \(which === "silent"\) return "without an answer";\s*if \(which === "other"\) return "something else";/.test(js), true);
-check('pressing the lit kind again comes back', /if \(kindFilterIs\(L, opt, which, label\)\) \{ clearSearch\(\); return; \}/.test(js), true);
+check('pressing the lit kind again comes back', /if \(kindFilterIs\(L, opt, which, label\)\) \{ unpickAnswer\(\); return; \}/.test(js), true);
 // over every half of a split file (KEYS OVER BOTH HALVES), each re-drawn through the same door
 check('it gates the rows the way a tag does and re-draws map and list through the same door', /e\.hidden = !has;[^]*?applyRowVisibility\(h\);\s*\}\);\s*updateSearchCount\(shown, total, pts, \{ ofAll: kindWords\(label, which\) \}/.test(js), true);
-check('the words behind a kind open from their own chevron, so the row is free to narrow', /var open = el\("button", "leg-open", ICONS\.chevron\);/.test(js), true);
+check('the words behind an answer open with the answer itself: no separate chevron', /r\._more = more;/.test(js) && !/"leg-open"/.test(js), true);
 check('one filter at a time: a kind empties the box and orphans a search in flight', /var box = \$\("\.ctl-search-input"\);\s*if \(box\) box\.value = "";[^\n]*\n\s*searchWord = "";\s*searchSeq\+\+;/.test(js), true);
 check('typing replaces a pressed kind', /if \(KINDFILTER\) \{ KINDFILTER = null; markLitKinds\(\); \}   \/\/ a pressed kind, likewise/.test(js), true);
 check('a tag replaces a pressed kind', /TAGFILTER_LAYER = layerId \|\| null;\s*if \(KINDFILTER\) \{ KINDFILTER = null; markLitKinds\(\); \}/.test(js), true);
 check('"show all" clears it with everything else', /function clearSearch\(\) \{[^}]*KINDFILTER = null;\s*markLitKinds\(\);/.test(js), true);
-check('a key going off drops a filter that was on it', /if \(KINDFILTER && KINDFILTER\.layer === L\.id &&\s*!act\.some\(function \(o\) \{ return o\.col === KINDFILTER\.col; \}\)\) clearSearch\(\);/.test(js), true);
+check('a key going off drops a filter that was on it', /if \(KINDFILTER && KINDFILTER\.layer === L\.id &&\s*!act\.some\(function \(o\) \{ return o\.col === KINDFILTER\.col; \}\)\) unpickAnswer\(\);/.test(js), true);
 check('the pressed kind is filled with Leaf Tint on a Leaf edge', /button\.key-kind\.on \{ background:var\(--color-leaf-tint\); border-color:var\(--color-leaf\); \}/.test(html), true);
 // (October 2026: the hint is one line about opening a row; what a tap on a
 // kind does is said where it happens — the "Showing only … · Show all" line)
-check('the how-to is one line, said once behind the layer\'s ⓘ (not over the rows)', /var HOW_TO = "Mark each place by one of the questions below\. Open a question to colour the map by its answers; tap an answer to show only those places\.";/.test(js) && !/el\("span", "key-hint"/.test(js), true);
+check('the how-to is one line, said once behind the layer\'s ⓘ (not over the rows)', /var HOW_TO = "Mark each place by one of the questions below\. Open a question to colour the map by its answers\. Tap an answer to show those places and the words people used for it; tap it again to see everything\.";/.test(js) && !/el\("span", "key-hint"/.test(js), true);
 check('and the pressed kind says what a second tap does, right under the kinds', /var all = el\("button", "key-only-all", "Show all"\);/.test(js), true);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

@@ -786,7 +786,7 @@ export function columnReport(plan, outcomes, questions, fell = [], total = 0, op
       if (mine.length) {
         text = 'looked at in an earlier reading, which kept ' + mine.map((x) => q(x.question) + (x.answered != null ? reach(x) : '')).join(', ');
       } else if (settled.length) {
-        text = 'looked at in an earlier reading; this one only answered the questions already on the map';
+        text = 'read earlier — nothing new this time';
       } else {
         text = 'not asked — this reading answered the questions already on the map';
       }

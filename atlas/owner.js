@@ -232,6 +232,8 @@
       var said = readingOf(L.id);
       var why = said && said.state === "none" ? plainWhy(said.reason) : "";
       if (why) wrap.appendChild(el("p", "own-note", esc(why)));
+      /* A layer that kept no question has no Questions tab to hold these, so
+         its lines stay with this note, folded shut like the tab's. */
       columnLines(wrap, said);
       return;
     }
@@ -273,7 +275,10 @@
          says per column what was found or why nothing was kept — so an owner
          can see that the comments column was looked at, not only that the
          description yielded two questions. */
-      columnLines(wrap, readingOf(L.id));
+      /* What became of each column is no longer said here, on the map's own
+         panel, where it cluttered every visit (Mithun, 2026-10-21: "why is
+         this shown on the Atlas"). It is in the Questions tab, folded under
+         "What LOKA read in each column" (drawQuestionShelf). */
       return;
     }
 
@@ -290,15 +295,29 @@
      is nothing to say yet. The Questions tab (addShelves, drawQuestionShelf)
      would be the other natural home for these lines; they sit here so that
      this change and the tab's own repair do not touch the same code. */
+  /* Folded under one line, shut until tapped (Mithun, 2026-10-21): the
+     lines are a record for the owner, not something to read on every visit.
+     Lines written before the plainer wording are put in it as they are shown. */
+  var COLUMNS_FOLD = "What LOKA read in each column";
+  function plainColumnLine(line) {
+    return String(line || "").replace(
+      "looked at in an earlier reading; this one only answered the questions already on the map",
+      "read earlier — nothing new this time");
+  }
   function columnLines(wrap, said) {
     var lines = (said && said.columns) || [];
     if (!lines.length) return;
     var list = el("ul", "own-note own-columns");
     lines.forEach(function (c) {
       if (!c || !c.line) return;
-      list.appendChild(el("li", c.asked ? "own-column asked" : "own-column", esc(c.line)));
+      list.appendChild(el("li", c.asked ? "own-column asked" : "own-column", esc(plainColumnLine(c.line))));
     });
-    if (list.childNodes.length) wrap.appendChild(list);
+    if (!list.childNodes.length) return;
+    var fold = document.createElement("details");
+    fold.className = "own-columns-fold";   // shut until tapped: no "open" attribute
+    fold.appendChild(el("summary", "own-columns-sum", esc(COLUMNS_FOLD)));
+    fold.appendChild(list);
+    wrap.appendChild(fold);
   }
 
   /* The questions are found on the server now, not here.
@@ -1441,6 +1460,16 @@
       var rows = placesOf(L);
       var block = el("div", "own-qblock");
       if (keyedLayers().length > 1) block.appendChild(el("h4", "own-qlayer", L.label || L.id));
+      /* The headings the map shows, with the viewer's rule that no two rows
+         share one (label-rules.js distinctHeadings): of the questions that
+         are on, a later one with the same heading is shown as written. */
+      var onQs = questionsOf(L).filter(function (q) { return !q.hidden; });
+      var shownAs = {};
+      LokaLabelRules.distinctHeadings(onQs.map(function (q) {
+        var h = LokaLabelRules.keyHeading({ question: q.label, noun: q.noun });
+        h.asWritten = q.label;
+        return h;
+      })).forEach(function (h, i) { shownAs[onQs[i].col] = h; });
       questionsOf(L).forEach(function (q) {
         var line = el("div", "own-q-row");
         var lab = el("label", "ctl-toggle own-q");
@@ -1459,7 +1488,7 @@
           saveLayer(L, { hiddenKeys: now });
         };
         line.appendChild(lab);
-        line.appendChild(el("div", "own-q-heading", headingLine(q.label, q.noun)));
+        line.appendChild(el("div", "own-q-heading", headingLine(q.label, q.noun, shownAs[q.col])));
         var tally = tallyOf(rows, q.col);
         line.appendChild(el("div", "own-q-reach",
           tally.answered + " of " + rows.length + " places answer it"));
@@ -1484,6 +1513,8 @@
           "so turning it back on puts it straight back."));
       }
       block.appendChild(askBox(L));
+      // what became of each column of the places, folded shut (columnLines)
+      columnLines(block, readingOf(L.id));
       host.appendChild(block);
     });
   }
@@ -2393,8 +2424,8 @@
   /* What a question's row is headed on the map (label-rules.js keyHeading,
      the viewer's own rule), said beside the question so nothing is reworded
      out of the owner's sight. */
-  function headingLine(question, noun) {
-    var h = LokaLabelRules.keyHeading({ question: question, noun: noun });
+  function headingLine(question, noun, given) {
+    var h = given || LokaLabelRules.keyHeading({ question: question, noun: noun });
     // as markup (el sets innerHTML), so the words are escaped
     return esc(h.sub ? "On the map: “" + h.heading + "”" : "On the map: as written");
   }

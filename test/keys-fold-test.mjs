@@ -111,7 +111,7 @@ check('the reach line, the note and the kinds live in the open body only',
   /keyKindRows\(L, opt\)\.forEach\(function \(r\) \{ body\.appendChild\(r\); \}\)/.test(build), true);
 check('the reach line is a plain sentence', /"Answers come from " \+ pct \+ "% of the " \+ nounK/.test(build), true);
 check('no caption and no hint are built over the rows: the ⓘ says it once', /key-chips-lbl|key-hint/.test(build), false);
-check('and the how-to is one line in the ⓘ: open a question, tap an answer', /var HOW_TO = "Mark each place by one of the questions below\. Open a question to colour the map by its answers; tap an answer to show only those places\.";/.test(js), true);
+check('and the how-to is one line in the ⓘ: open a question, tap an answer', /var HOW_TO = "Mark each place by one of the questions below\. Open a question to colour the map by its answers\. Tap an answer to show those places and the words people used for it; tap it again to see everything\.";/.test(js), true);
 check('and the old six-line hint is gone', /Keys colour the map — each wears its own shape/.test(js), false);
 check('no tick box is built for a key (the layer\'s own switch is still a checkbox)', /cb\.type = "checkbox"|key-tick/.test(build), false);
 
@@ -146,18 +146,14 @@ const whyLift = new Function('document', 'goToWord',
   section('whyWordsEl') + '\nreturn whyWordsEl;');
 const whyWordsEl = whyLift(fakeDoc(), () => {});
 const box = whyWordsEl({}, [{ w: 'trees', es: [1, 2, 3] }, { w: 'shade', es: [1] }, { w: 'quiet', es: [] }]);
-const lead = box.children[0];
-check('a line sits above the words, before the first word', lead.className, 'leg-why-lead');
-check('it says what the words are and what a tap does', lead.innerHTML, 'Words people used. Tap one to see where it was said.');
-check('when no word can be tapped, it does not offer a tap',
-  whyWordsEl({}, [{ w: 'quiet', es: [] }, 'still']).children[0].innerHTML, 'Words people used.');
-const [trees, shade, quiet] = box.children.slice(1);
+check('no line sits above the words any more: the first child is the first word', box.children[0].className.indexOf('leg-why-w') >= 0, true);
+check('nor for words that cannot be tapped', whyWordsEl({}, [{ w: 'quiet', es: [] }, 'still']).children.length, 2);
+check('the old sentence is nowhere in the viewer', /Words people used\. Tap one|leg-why-lead/.test(js) || /leg-why-lead/.test(html), false);
+const [trees, shade, quiet] = box.children;
 check('a word several places used shows the count after it: "trees · 3"', trees.innerHTML.replace(/<[^>]+>/g, ''), 'trees · 3');
 check('and keeps its label and title', [trees.title, trees.attrs['aria-label']], ['Show the 3 places that say this', 'Show the 3 places that say this: trees']);
 check('a word one place used shows no count', [shade.innerHTML, shade.title], ['shade', 'Show this place']);
 check('a word with no places stays disabled', [quiet.disabled, quiet.innerHTML], [true, 'quiet']);
-check('the line is styled as small muted helper text across the whole box',
-  /\.leg-why-lead \{ flex:0 0 100%; font-size:var\(--t-label\); color:var\(--color-text-muted\);/.test(html), true);
 
 console.log('\n  the styles');
 check('rows are separated by a hairline, not by margins on the kinds', /\.key-entry \{ border-top:1px solid var\(--color-divider\); \}/.test(html) && !/\.key-list \.key-kind \+ \.key-toggle/.test(html), true);

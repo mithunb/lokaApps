@@ -78,11 +78,11 @@ check('the pressed chip wears a small × (tap again to clear)', (js.includes('va
 check('the other kinds of that key step back but stay tappable', /b\.classList\.toggle\("dim", sameKey && !on\);/.test(js) && /button\.key-kind\.dim \{ opacity:\.55; \}/.test(html) && /button\.key-kind\.dim:hover \{ opacity:1; \}/.test(html), true);
 check('under the key: "Showing only Culture (32) · Show all"', /t\.textContent = "Showing only " \+ what \+ \(litN \? " \(" \+ litN \+ "\)" : ""\);/.test(js) && /var all = el\("button", "key-only-all", "Show all"\);/.test(js), true);
 check('the line sits after that key\'s kinds', /out\.push\(keyOnlyLine\(L, opt\)\);\s*return out;/.test(js), true);
-check('Show all clears the filter the way the count line does', /all\.onclick = function \(\) \{ clearSearch\(\); \};/.test(js), true);
+check('Show all clears the filter the way the count line does', /all\.onclick = function \(\) \{ unpickAnswer\(\); \};/.test(js), true);
 check('the line is hidden when nothing is pressed', /line\.hidden = !mine;/.test(js) && /\.key-only\[hidden\] \{ display:none; \}/.test(html), true);
 // (October 2026: the hint is one line about opening a row; the second tap is
 // explained by the "Showing only … · Show all" line under the pressed kind)
-check('the how-to is one line in the layer\'s ⓘ, and the second tap is said under the pressed kind', /var HOW_TO = "Mark each place by one of the questions below\. Open a question to colour the map by its answers; tap an answer to show only those places\.";/.test(js) && /Showing only " \+ what/.test(js), true);
+check('the how-to is one line in the layer\'s ⓘ, and the second tap is said under the pressed kind', /var HOW_TO = "Mark each place by one of the questions below\. Open a question to colour the map by its answers\. Tap an answer to show those places and the words people used for it; tap it again to see everything\.";/.test(js) && /Showing only " \+ what/.test(js), true);
 check('(b) from dadd121 stands: a kind narrows the map; (a) the list it coloured is gone (October 2026)', !/function collMarkEl\(/.test(js) && /r\.onclick = function \(\) \{ filterByKind\(L, opt, which, it\.label\); \};/.test(js), true);
 
 console.log('\n  3. counted discs are ink, not Leaf');

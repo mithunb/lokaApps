@@ -428,7 +428,29 @@
     return { heading: cn ? explore(cn) : label, sub: col ? "Column: " + col : "" };
   }
 
+  /* No two rows of one panel share a heading (Mithun, 2026-10-21: "'Explore
+     by Place' gets repeated"). Two questions can pick the same noun — "Which
+     place is it?" and "What place does it sit beside?" both say place — and
+     two rows both reading "Explore by place" tell a reader nothing about which
+     is which. The first keeps its heading; every later row with the same one
+     shows its own words as written instead (a question's wording, a column's
+     heading), with no grey line, since that line would only say it again.
+       list — [{ heading, sub, asWritten }] in panel order
+     Answers a new list of { heading, sub }; the input is left alone. */
+  function distinctHeadings(list) {
+    var seen = {};
+    return (list || []).map(function (h) {
+      h = h || {};
+      var key = String(h.heading || "").trim().toLowerCase();
+      var out = { heading: h.heading, sub: h.sub };
+      if (key && seen[key] && h.asWritten) out = { heading: String(h.asWritten), sub: "" };
+      seen[key] = true;
+      return out;
+    });
+  }
+
   return {
+    distinctHeadings: distinctHeadings,
     NOUN_WORDS: NOUN_WORDS,
     NOUN_MAX: NOUN_MAX,
     PLACE_MAX: PLACE_MAX,
