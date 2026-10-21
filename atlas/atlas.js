@@ -3174,24 +3174,42 @@
     var src = map.getSource(srcId(L) + "-names");
     if (!src) return;
     var feats = [];
-    var folded = L.cluster && L._clusterMarker && map.getZoom() < L.cluster.belowZoom;
+    var folded = L.cluster && L._clusterMarker && map.getZoom() < L.cluster.belowZoom && !answerNamesOn(L);
     var max = t.maxChars || 32;
     if (L._visible !== false && !folded) {
       (markersByLayer[L.id] || []).forEach(function (e) {
         if (e.hidden || e._clustered || e._absorbed || e._fanned) return;
         var v = labelNameOf(L, e.f, t);
         if (!v) return;
-        feats.push({ type: "Feature", geometry: e.f.geometry, properties: { _name: shortName(String(v), max) } });
+        var g = e.f.geometry;
+        // a pin set out of a shared spot (spreadAnswerPins) has its name under it, not under the spot
+        if (e._off) {
+          try {
+            var px = map.project(g.coordinates);
+            var ll = map.unproject([px.x + e._off[0], px.y + e._off[1]]);
+            g = { type: "Point", coordinates: [ll.lng, ll.lat] };
+          } catch (err) {}
+        }
+        feats.push({ type: "Feature", geometry: g, properties: { _name: shortName(String(v), max) } });
       });
     }
     src.setData({ type: "FeatureCollection", features: feats });
-    /* While an answer is selected its places' names are all written, even
-       ones the map would normally drop for room (answerNamesOn). Only the
-       selected places are in the source then, so nothing else crowds in. */
-    var all = answerNamesOn(L) || !!t.alwaysShow;
-    if (L._pinNamesAll !== all) {
-      L._pinNamesAll = all;
-      try { map.setLayoutProperty(L.id + "-pinname", "text-allow-overlap", all); } catch (e) {}
+    /* While an answer is selected its places' names are written as fully as
+       the map has room for: only the selected places are in the source then,
+       the pins stop claiming ground (so a pin never hides a name), and each
+       name may sit below, right or left of its pin, wherever it fits. Two
+       names are still never drawn over each other — measured on Cubbon Park
+       on a phone, thirteen names allowed to overlap were a smudge nobody
+       could read — so in a tight knot a name waits for one step of zoom.
+       Unselected, every setting goes back to the layer's own. */
+    var on = answerNamesOn(L);
+    if (L._pinNamesOn !== on) {
+      L._pinNamesOn = on;
+      try {
+        map.setLayoutProperty(L.id + "-pinname", "text-variable-anchor", on ? ["top", "right", "left"] : undefined);
+        map.setLayoutProperty(L.id + "-pinname", "text-radial-offset", on ? 0.9 : undefined);
+        map.setLayoutProperty(L.id + "-pinbox", "icon-ignore-placement", on);
+      } catch (e) {}
     }
   }
   // a name cut at a word, with an ellipsis, when it is really a sentence
@@ -3209,13 +3227,68 @@
   // `e._fanned` overrides it while that pin is spread out of a fan.
   function paintMarkerDisplay(L) {
     var shown = L._visible !== false;
-    var folded = L.cluster && L._clusterMarker && map.getZoom() < L.cluster.belowZoom;
+    // a selected answer's places are never folded into the layer's one badge either
+    var folded = L.cluster && L._clusterMarker && map.getZoom() < L.cluster.belowZoom && !answerNamesOn(L);
+    spreadAnswerPins(L);
     (markersByLayer[L.id] || []).forEach(function (e) {
       e.mk.getElement().style.display =
         (shown && !folded && !e.hidden && ((!e._clustered && !e._absorbed) || e._fanned)) ? "" : "none";
     });
     if (L._clusterMarker) L._clusterMarker.getElement().style.display = (shown && folded) ? "" : "none";
     syncPinNames(L);
+  }
+  /* A selected answer's places each stand as their own pin, never inside a
+     numbered disc (clusterEntries leaves them out of the folding). Pins that
+     would then sit on or touching one another on screen — the same spot, or
+     a few metres apart at this zoom — are set out in a small ring around
+     where they stand, the way a fan sets out a disc's members, so every one
+     can be tapped and its name read. Worked out in screen pixels on every
+     repaint (each pan or zoom ends in one), so a ring opens up again as the
+     map zooms in and the pins part by themselves. Unselected, it closes. */
+  var SPREAD_PX = 26;    // pins nearer than this, centre to centre, are set out
+  var SPREAD_MAX = 400;  // past this many selected pins, leave them be (cost)
+  function spreadAnswerPins(L) {
+    var list = markersByLayer[L.id] || [];
+    var on = answerNamesOn(L) && !!map;
+    var mine = [];
+    if (on) list.forEach(function (e) {
+      if (!e.hidden && e.f && e.f.geometry && e.f.geometry.type === "Point") mine.push(e);
+    });
+    var want = new Map();
+    if (mine.length > 1 && mine.length <= SPREAD_MAX) {
+      var px = mine.map(function (e) { return map.project(e.f.geometry.coordinates); });
+      // pins that touch are one group, and a group takes in whatever touches any of it
+      var root = mine.map(function (_, i) { return i; });
+      var find = function (i) { while (root[i] !== i) { root[i] = root[root[i]]; i = root[i]; } return i; };
+      for (var i = 0; i < mine.length; i++) {
+        for (var j = i + 1; j < mine.length; j++) {
+          if (Math.abs(px[i].x - px[j].x) < SPREAD_PX && Math.abs(px[i].y - px[j].y) < SPREAD_PX) root[find(i)] = find(j);
+        }
+      }
+      var groups = {};
+      mine.forEach(function (e, i) { var r = find(i); (groups[r] = groups[r] || []).push(i); });
+      Object.keys(groups).forEach(function (k) {
+        var g = groups[k];
+        if (g.length < 2) return;
+        var cx = 0, cy = 0;
+        g.forEach(function (i) { cx += px[i].x; cy += px[i].y; });
+        cx /= g.length; cy /= g.length;
+        // room on the ring for a pin and the start of its name
+        var r = Math.max(24, 34 * g.length / (2 * Math.PI));
+        g.forEach(function (i, n) {
+          var a = -Math.PI / 2 + n * 2 * Math.PI / g.length;
+          want.set(mine[i], [Math.round(cx + r * Math.cos(a) - px[i].x), Math.round(cy + r * Math.sin(a) - px[i].y)]);
+        });
+      });
+    }
+    list.forEach(function (e) {
+      var o = want.get(e) || null;
+      var had = e._off || null;
+      if (!o && !had) return;
+      if (o && had && o[0] === had[0] && o[1] === had[1]) return;
+      e._off = o;
+      try { e.mk.setOffset(o || [0, 0]); } catch (err) {}
+    });
   }
   function applyMarkerVisibility(L) {
     // whatever is changing here (layer toggle, badge fold, search) can change
@@ -3486,9 +3559,15 @@
     var out = [];
     (MANIFEST.layers || []).forEach(function (L) {
       if (L._visible === false) return;
-      if (L.cluster && L._clusterMarker && map.getZoom() < L.cluster.belowZoom) return;
+      /* A selected answer's places are never folded into a numbered disc,
+         whatever the zoom (Mithun, 2026-10-21): each stands as its own pin
+         with its name. Left out of the engine, they are marked loose here,
+         and the folding comes back as it was once the answer is unselected. */
+      var free = answerNamesOn(L);
+      if (!free && L.cluster && L._clusterMarker && map.getZoom() < L.cluster.belowZoom) return;
       (markersByLayer[L.id] || []).forEach(function (e, i) {
         if (e.hidden) return;
+        if (free) { e._clustered = false; e._absorbed = false; return; }
         out.push({ L: L, e: e, key: L.id + "|" + i });
       });
     });
@@ -3761,7 +3840,15 @@
     hideClusterBounds();
     var src = map.getSource(CLUSTER_SRC);
     if (src) src.setData({ type: "FeatureCollection", features: feats });
+    paintAnswerLayers();   // left out of the engine, so no verdict will repaint them
     scheduleClusterSync();
+  }
+  // the selected answer's layers, which the folding engine no longer touches
+  function paintAnswerLayers() {
+    if (!KINDFILTER) return;
+    (MANIFEST.layers || []).forEach(function (L) {
+      if (markersByLayer[L.id] && answerNamesOn(L)) paintMarkerDisplay(L);
+    });
   }
 
   function scheduleClusterSync() {
@@ -3794,6 +3881,8 @@
       touched[it.L.id] = it.L;
     }
     for (var id in touched) paintMarkerDisplay(touched[id]);
+    // and the selected answer's, whose names sit under pins set out a fixed few pixels
+    paintAnswerLayers();
     // every keyed layer's fold note re-reads the fresh verdicts — including
     // layers whose pins all left the population (search can empty one)
     (MANIFEST.layers || []).forEach(function (L) { if (L._foldEl) updateFoldNote(L); });
@@ -4929,7 +5018,7 @@
      no closer than ANSWER_MAX_ZOOM, so one place is not blown up to the
      street. Their names are written while the answer stays selected
      (answerNamesOn, used by syncPinNames and applyShapeFade). */
-  var ANSWER_MAX_ZOOM = 15;
+  var ANSWER_MAX_ZOOM = 16;   // the zoom goToWord opens one place at: close enough that a place stands alone
   function fitAnswer(L) {
     if (!map) return;
     var b = null;
@@ -4945,6 +5034,30 @@
     var pad = viewPadding();
     pad.top += 32;
     pad.bottom += 56;
+    /* and clear of the search box, which on a phone lies across the top of
+       the map, and of the credits pill, which floats over it just above the
+       sheet: a pin or a name framed behind either cannot be read */
+    try {
+      var sb = document.querySelector(".atlas-strip");
+      var mr0 = map.getContainer().getBoundingClientRect();
+      if (sb && sb.offsetParent !== null) {
+        var sr = sb.getBoundingClientRect();
+        var overMap = sr.bottom > mr0.top && sr.top < mr0.top + mr0.height / 2 && sr.left < mr0.left + mr0.width / 2 && sr.right > mr0.left + mr0.width / 2;
+        if (overMap) pad.top = Math.max(pad.top, Math.round(sr.bottom - mr0.top) + 36);
+      }
+    } catch (e) {}
+    /* (the credits pill, below) which on a phone floats over the map
+       just above the sheet: a name framed behind it cannot be read */
+    try {
+      var cr = document.getElementById("map-attrib");
+      var mr = map.getContainer().getBoundingClientRect();
+      if (cr && cr.offsetParent !== null) {
+        var ar = cr.getBoundingClientRect();
+        if (ar.height && ar.top < mr.bottom) pad.bottom = Math.max(pad.bottom, Math.round(mr.bottom - ar.top) + 32);
+      }
+      // never so much that nothing is left to frame into
+      pad.bottom = Math.min(pad.bottom, Math.max(40, mr.height - pad.top - 120));
+    } catch (e) {}
     try { map.fitBounds(b, { padding: pad, maxZoom: ANSWER_MAX_ZOOM, duration: 600 }); } catch (e) {}
   }
   // the selected answer's own layer (either half of a split file)

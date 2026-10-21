@@ -751,20 +751,25 @@
     .key-only-all:hover { color:var(--color-leaf); }
     .key-only-all:focus-visible { outline:2px solid var(--color-leaf); outline-offset:1px; }
     @media (pointer:coarse) { .key-only-all { min-height:32px; padding:0 .4rem; } }
-    /* An answer is a button that looks like one (Mithun, 2026-10-21): a pill
-       with an edge, the answer's own mark and its count. Selected, it fills
-       with Leaf and its words turn white, so selected and not selected can be
-       told apart at a glance, in colour and without it (the fill, the ×, the
-       bold). The words people used for it open right under it. */
+    /* An answer is a button that looks like one (Mithun, 2026-10-21), in the
+       atlas's own button language rather than a new one: the corner, edge,
+       face and fill of the phone's group tabs (.atlas-tab), the map-style
+       swatches and the place-card tags (.pop-tag). At rest: Surface, a 1px
+       Border edge, the small corner (--radius-md), Karla at the panel's
+       control size. Hover: the edge turns Leaf, as on a tag or a swatch.
+       Selected: filled with Leaf, Leaf edge, white words — exactly the
+       selected tab, the active map button and a pressed tag — plus the small
+       × that says "tap again to clear". Focus: the 2px Leaf ring every
+       control wears. */
     .key-body button.key-answer { display:flex; align-items:center; gap:.5rem; min-height:36px;
-      margin:0 0 6px; padding:.3rem .75rem .3rem .6rem; border:1px solid var(--color-border);
-      border-radius:var(--radius-pill); background:var(--color-surface);
+      margin:0 0 6px; padding:.3rem .75rem; font:inherit; font-size:var(--t-ui);
+      border:1px solid var(--color-border); border-radius:var(--radius-md);
+      background:var(--color-surface); color:var(--color-text-primary);
       transition:background .15s ease, border-color .15s ease, color .15s ease; }
-    .key-body button.key-answer:hover { background:var(--color-leaf-tint); border-color:var(--color-leaf); }
+    .key-body button.key-answer:hover { background:var(--color-surface); border-color:var(--color-leaf); }
     .key-body button.key-answer:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; }
-    .key-body button.key-answer.on { background:var(--color-leaf); border-color:var(--color-leaf-deep); color:#fff;
-      box-shadow:0 1px 3px rgba(36,33,29,.18); }
-    .key-body button.key-answer.on .leg-label { color:#fff; font-weight:700; }
+    .key-body button.key-answer.on { background:var(--color-leaf); border-color:var(--color-leaf); color:#fff; }
+    .key-body button.key-answer.on .leg-label { color:#fff; font-weight:600; }
     .key-body button.key-answer.on .leg-n { color:#fff; }
     .key-body button.key-answer.on .key-x { color:#fff; background:rgba(255,255,255,.22); }
     .key-body button.key-answer.dim { opacity:.7; }
@@ -776,17 +781,22 @@
        said it. It keeps the quiet look it had as a label — a word of evidence
        should not shout like a control — and only declares itself on hover and
        on focus, where a person is already asking what it does. */
-    .leg-why-w { font:inherit; font-size:var(--t-label); font-family:inherit;
-      background:var(--color-marigold-tint); border:0; border-radius:var(--radius-md);
-      padding:.05rem .25rem; color:var(--color-text-secondary); text-align:left; }
+    /* The words wear the place card's tag chip (.pop-tag): Leaf Tint, Leaf
+       Deep words, the small corner, a transparent edge that turns Leaf on
+       hover, the 2px Leaf ring on focus — so a word under an answer and a
+       tag on a card read as the same kind of thing. */
+    .leg-why-w { font:inherit; font-size:var(--t-label); font-weight:600;
+      background:var(--color-leaf-tint); border:1px solid transparent; border-radius:var(--radius-md);
+      padding:.15rem .5rem; color:var(--color-leaf-deep); text-align:left;
+      transition:background .15s ease, border-color .15s ease; }
     .leg-why-n { color:var(--color-text-muted); font-variant-numeric:tabular-nums; }
     .leg-why-w.leg-why-go { cursor:pointer; }
-    .leg-why-w.leg-why-go:hover { background:var(--color-leaf-tint); color:var(--color-leaf-deep); }
+    .leg-why-w.leg-why-go:hover { border-color:var(--color-leaf); }
     .leg-why-w.leg-why-go:focus-visible { outline:2px solid var(--color-leaf); outline-offset:1px; }
     .leg-why-w:disabled { cursor:default; }
     @media (pointer:coarse) {
       /* room for a fingertip without moving the words apart on a mouse */
-      .leg-why-w.leg-why-go { padding:.3rem .4rem; }
+      .leg-why-w.leg-why-go { padding:.3rem .5rem; }
     }
     /* sequential scale: one graduated bar, endpoints labelled */
     .leg-ramp { display:flex; height:9px; border-radius:var(--radius-pill); overflow:hidden; margin:.15rem 0 .25rem; box-shadow:inset 0 0 0 1px rgba(0,0,0,.08); }
@@ -1573,7 +1583,7 @@
       .key-body .key-kind { min-height:44px; }
       .key-body button.key-answer { min-height:44px; }
       .leg-why { gap:6px; }
-      .leg-why-w { min-height:36px; padding:0 .6rem; display:inline-flex; align-items:center; border-radius:18px; }
+      .leg-why-w { min-height:36px; padding:0 .6rem; display:inline-flex; align-items:center; }
       .leg-why-w.leg-why-go { padding:0 .6rem; }
       .ctl-info { width:44px; height:44px; }
     }

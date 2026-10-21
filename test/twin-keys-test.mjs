@@ -64,7 +64,7 @@ const body =
    the key state, and the search machinery a pressed answer goes through. */
 const make = new Function('LokaLabelRules', 'MANIFEST', 'DATA', 'markersByLayer', 'keyState', 'searchRows',
   'applyRowVisibility', 'updateSearchCount', 'markLitKinds', 'clearSearch', '$',
-  'var KINDFILTER = null, searchWord = "", searchSeq = 0, searchTimer = null, map = null, ANSWER_MAX_ZOOM = 15;\n' +
+  'var KINDFILTER = null, searchWord = "", searchSeq = 0, searchTimer = null, map = null, ANSWER_MAX_ZOOM = 16;\n' +
   'function clearTimeout() {}\n' +
   body +
   'return { computeKeyOptions, keyLegendRows, keyMarkRows, activeKeyOptions, keyHost, keyHalves, keyEntries, keyFeatures, ' +

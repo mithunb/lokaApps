@@ -131,8 +131,14 @@ check('it says whether it is selected', /r\.setAttribute\("aria-pressed", lit \?
 check('it wears the answer\'s mark and count', /r\.appendChild\(swatch\(it\)\);/.test(kinds) && /el\("span", "leg-n", String\(it\.n\)\)/.test(kinds), true);
 check('the words open under it with the selection, from the same tap', /more\.hidden = !lit;/.test(kinds) && /r\._more = more;/.test(kinds), true);
 check('there is no separate chevron', /leg-open|leg-pair|ICONS\.chevron/.test(kinds), false);
-check('selected: a strong Leaf fill and white words', /\.key-body button\.key-answer\.on \{ background:var\(--color-leaf\); border-color:var\(--color-leaf-deep\); color:#fff;/.test(html), true);
-check('not selected: a pill with an edge', /\.key-body button\.key-answer \{[^}]*border:1px solid var\(--color-border\);[^}]*border-radius:var\(--radius-pill\);/.test(html), true);
+check('selected: filled with Leaf, Leaf edge, white words — the selected tab\'s and a pressed tag\'s own fill', /\.key-body button\.key-answer\.on \{ background:var\(--color-leaf\); border-color:var\(--color-leaf\); color:#fff; \}/.test(html) && /\.atlas-tab\[aria-pressed="true"\] \{ background:var\(--color-leaf\); border-color:var\(--color-leaf\); color:#fff; \}/.test(html) && /\.pop-tag\.on \{ background:var\(--color-leaf\); color:#fff; border-color:var\(--color-leaf\); \}/.test(html), true);
+check('at rest: Surface, a 1px Border edge, the small corner, Karla at the control size — as the tabs', /\.key-body button\.key-answer \{[^}]*font:inherit; font-size:var\(--t-ui\);[^}]*border:1px solid var\(--color-border\); border-radius:var\(--radius-md\);[^}]*background:var\(--color-surface\);/.test(html), true);
+check('no values of its own: no pill corner, no shadow, no deeper edge', /\.key-answer[^{]*\{[^}]*(radius-pill|box-shadow|leaf-deep)/.test(html), false);
+check('hover turns the edge Leaf, as on a tag and a map swatch', /\.key-body button\.key-answer:hover \{ background:var\(--color-surface\); border-color:var\(--color-leaf\); \}/.test(html) && /\.pop-tag:hover \{ border-color:var\(--color-leaf\); \}/.test(html), true);
+check('the focus ring every control wears', /\.key-body button\.key-answer:focus-visible \{ outline:2px solid var\(--color-leaf\); outline-offset:2px; \}/.test(html), true);
+check('the words wear the card tag\'s chip: Leaf Tint, Leaf Deep, small corner, Leaf edge on hover',
+  /\.leg-why-w \{ font:inherit; font-size:var\(--t-label\); font-weight:600;\s*background:var\(--color-leaf-tint\); border:1px solid transparent; border-radius:var\(--radius-md\);\s*padding:\.15rem \.5rem; color:var\(--color-leaf-deep\);/.test(html) &&
+  /\.leg-why-w\.leg-why-go:hover \{ border-color:var\(--color-leaf\); \}/.test(html) && !/border-radius:18px/.test(html), true);
 check('44px tall on touch', /@media \(pointer:coarse\), \(max-width:720px\)\{[\s\S]*?\.key-body button\.key-answer \{ min-height:44px; \}/.test(html), true);
 
 // the pressed-state painter, run for real
@@ -174,7 +180,7 @@ const fit = new Function('map', 'keyHalves', 'shapeBounds', 'viewPadding',
 fit({});
 check('one frame, around the places of both halves', [fits.length, fits[0][0].w, fits[0][0].s, fits[0][0].e, fits[0][0].n], [1, 77.55, 12.95, 77.60, 12.98]);
 check('with room for the panel and the phone sheet, and a little more for a pin and its name', fits[0][1].padding, { top: 72, right: 40, bottom: 356, left: 40 });
-check('and no closer than street level', fits[0][1].maxZoom, 15);
+check('and no closer than one place is opened at', fits[0][1].maxZoom, 16);
 
 console.log('\n  the names of the selected places are written');
 const on = new Function('KINDFILTER', 'layerById', 'keyHalves', section(js, 'answerNamesOn') + '\nreturn answerNamesOn;');
@@ -184,13 +190,48 @@ check('the selected answer\'s layer writes every name', isOn({ layer: 'L1' }, 'L
 check('and the other half of a split file too', isOn({ layer: 'L1' }, 'L1-pts'), true);
 check('another layer is left as it was', isOn({ layer: 'L1' }, 'L2'), false);
 check('nothing selected: names as normal', isOn(null, 'L1'), false);
-check('a pin layer lets its names overlap while selected, and puts it back after',
-  /var all = answerNamesOn\(L\) \|\| !!t\.alwaysShow;/.test(section(js, 'syncPinNames')) &&
-  /map\.setLayoutProperty\(L\.id \+ "-pinname", "text-allow-overlap", all\)/.test(section(js, 'syncPinNames')), true);
+const spn = section(js, 'syncPinNames');
+check('a pin layer writes its selected names wherever they fit, and puts its own settings back after',
+  /var on = answerNamesOn\(L\);/.test(spn) &&
+  /map\.setLayoutProperty\(L\.id \+ "-pinname", "text-variable-anchor", on \? \["top", "right", "left"\] : undefined\);/.test(spn) &&
+  /map\.setLayoutProperty\(L\.id \+ "-pinbox", "icon-ignore-placement", on\);/.test(spn), true);
+check('but never draws two names over each other (a smudge nobody can read)', /"-pinname", "text-allow-overlap"/.test(spn), false);
 const fade = section(js, 'applyShapeFade');
 check('an area layer writes its selected names however crowded', /map\.setLayoutProperty\(lbl, "text-allow-overlap", L\._shapeNamesAll\);/.test(fade) &&
   /map\.setLayoutProperty\(lbl, "text-ignore-placement", L\._shapeNamesAll\);/.test(fade), true);
 check('and the other areas\' names go, so they do not crowd them', /var fade = \(named && p === "text-opacity"\) \? 0 : SEARCH_FADE\[p\];/.test(fade), true);
+
+console.log('\n  a selected answer\'s places are never folded into numbered discs');
+const ce = section(js, 'clusterEntries');
+check('they are left out of the folding, whatever the zoom', /var free = answerNamesOn\(L\);/.test(ce) &&
+  /if \(free\) \{ e\._clustered = false; e\._absorbed = false; return; \}/.test(ce), true);
+check('nor folded into the layer\'s one overview badge', /map\.getZoom\(\) < L\.cluster\.belowZoom && !answerNamesOn\(L\);/.test(section(js, 'paintMarkerDisplay')) &&
+  /map\.getZoom\(\) < L\.cluster\.belowZoom && !answerNamesOn\(L\);/.test(section(js, 'syncPinNames')), true);
+check('the folding engine repaints them, since it no longer has a verdict on them', /paintAnswerLayers\(\);/.test(section(js, 'refreshClusterIndex')) && /paintAnswerLayers\(\);/.test(section(js, 'syncLeafVisibility')), true);
+check('a name follows its pin when the pin is set out of a shared spot', /if \(e\._off\) \{/.test(section(js, 'syncPinNames')), true);
+// the ring, run for real
+const pins = (pts) => pts.map((c) => { const e = { f: { geometry: { type: 'Point', coordinates: c } }, hidden: false, off: null,
+  mk: { setOffset(o) { e.off = o; } } }; return e; });
+// a stand-in map: one unit of the coordinates is one pixel
+const fakeMap = { project: (c) => ({ x: c[0], y: c[1] }) };
+const ringOf = (on, list) => new Function('markersByLayer', 'answerNamesOn', 'map',
+  (js.match(/var SPREAD_PX = \d+;/) || [''])[0] + (js.match(/var SPREAD_MAX = \d+;/) || [''])[0] + '\n' +
+  section(js, 'spreadAnswerPins') + '\nreturn spreadAnswerPins;')({ L: list }, () => on, fakeMap)({ id: 'L' });
+// three on one spot and one a few pixels off it (touching), and one well clear
+const three = pins([[100, 100], [100, 100], [110, 104], [400, 300]]);
+ringOf(true, three);
+check('places on one spot, or touching, are set out in a ring, each its own place', new Set(three.slice(0, 3).map((e) => String(e.off))).size, 3);
+check('far enough apart to tap each one', (() => {
+  const at = three.slice(0, 3).map((e, i) => [[100, 100], [100, 100], [110, 104]][i]).map((c, i) => [c[0] + three[i].off[0], c[1] + three[i].off[1]]);
+  return Math.min(...[[0, 1], [0, 2], [1, 2]].map(([a, b]) => Math.hypot(at[a][0] - at[b][0], at[a][1] - at[b][1])));
+})() >= 26, true);
+check('a place standing clear is not moved', three[3].off, null);
+ringOf(false, three);
+check('unselected, the ring closes', three.slice(0, 3).map((e) => e.off), [[0, 0], [0, 0], [0, 0]]);
+
+console.log('\n  framed clear of the credits pill');
+check('the frame keeps the selected places above the credits pill as well as the sheet',
+  /var cr = document\.getElementById\("map-attrib"\);/.test(section(js, 'fitAnswer')) && /pad\.bottom = Math\.max\(pad\.bottom, Math\.round\(mr\.bottom - ar\.top\) \+ 32\);/.test(section(js, 'fitAnswer')), true);
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
