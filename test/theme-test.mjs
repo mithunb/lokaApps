@@ -47,8 +47,8 @@ check('the festival purple becomes the accent', r.vars['--color-leaf'], '#6B1164
 check('its white page', r.vars['--color-page'], '#FFFDFD');
 check('its near-black words', r.vars['--color-text-primary'], '#060606');
 check('its red for the selected-place ring', r.vars['--color-sindoor'], '#FC3103');
-check('its headings face, Poppins, with LOKA’s behind it', r.vars['--font-display'], '"Poppins","Lora",var(--font-companions-serif),serif');
-check('its lighter heading weight', r.vars['--weight-display'], '500');
+check('its headings keep LOKA’s own face, Lora (Mithun, 2026-10-21): the theme sets no display font', r.vars['--font-display'], undefined);
+check('and LOKA’s own heading weight, since the face is LOKA’s', r.vars['--weight-display'], undefined);
 check('square corners', [r.vars['--radius-md'], r.vars['--radius-lg']], ['0', '0']);
 check('the fonts come from Google Fonts', r.fontCss, emergence.theme.fonts.cssUrl);
 const d = fakeDoc();

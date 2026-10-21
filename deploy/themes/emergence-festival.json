@@ -1,27 +1,25 @@
 {
- "about": "Emergence: Festival of Future Cities (Panaji, 29-31 Oct 2026). Colours, type and logo taken from https://emergencefestival.in/ on 21 Oct 2026, for the festival's own atlas. See docs/style-from-website.md.",
- "logo": "https://emergencefestival.in/wp-content/themes/emergence-theme/assets/images/emergence-logo-purple.png",
- "theme": {
-  "source": "https://emergencefestival.in/",
-  "colors": {
-   "page": "#FFFDFD",
-   "surface": "#FFFFFF",
-   "surfaceAlt": "#E8F7EC",
-   "text": "#060606",
-   "textSecondary": "#3D3C3C",
-   "textMuted": "#605F5F",
-   "accent": "#6B1164",
-   "accentDeep": "#4A0B45",
-   "highlight": "#FC3103",
-   "highlightDeep": "#CF2802"
-  },
-  "fonts": {
-   "display": "Poppins",
-   "text": "Poppins",
-   "displayWeight": 500,
-   "cssUrl": "https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
-  },
-  "corners": "square",
-  "logoMaxWidth": 180
- }
+  "about": "Emergence: Festival of Future Cities (Panaji, 29-31 Oct 2026). Colours, type and logo taken from https://emergencefestival.in/ on 21 Oct 2026, for the festival's own atlas. See docs/style-from-website.md.",
+  "logo": "https://emergencefestival.in/wp-content/themes/emergence-theme/assets/images/emergence-logo-purple.png",
+  "theme": {
+    "source": "https://emergencefestival.in/",
+    "colors": {
+      "page": "#FFFDFD",
+      "surface": "#FFFFFF",
+      "surfaceAlt": "#E8F7EC",
+      "text": "#060606",
+      "textSecondary": "#3D3C3C",
+      "textMuted": "#605F5F",
+      "accent": "#6B1164",
+      "accentDeep": "#4A0B45",
+      "highlight": "#FC3103",
+      "highlightDeep": "#CF2802"
+    },
+    "fonts": {
+      "text": "Poppins",
+      "cssUrl": "https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
+    },
+    "corners": "square",
+    "logoMaxWidth": 180
+  }
 }

@@ -9,6 +9,6 @@ const check = (label, got, want) => { if (got === want) { pass++; console.log(' 
 check('with a logo the header is one column', /\.org-head:has\(\.org-brand-logo\) \{ grid-template-columns:minmax\(0,1fr\);/.test(html), true);
 check('the logo on the first row', /\.org-head:has\(\.org-brand-logo\) \.org-brand-logo \{ grid-column:1; grid-row:1;/.test(html), true);
 check('the organisation name under it', /\.org-head:has\(\.org-brand-logo\) \.org-brand-line > span \{ grid-column:1; grid-row:2; \}/.test(html), true);
-check('the title under that', /\.org-head:has\(\.org-brand-logo\) #atlas-title \{ grid-column:1; grid-row:3; \}/.test(html), true);
+check('the title under that, and larger', /\.org-head:has\(\.org-brand-logo\) #atlas-title \{ grid-column:1; grid-row:3; font-size:1\.45rem; \}/.test(html), true);
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

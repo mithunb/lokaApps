@@ -155,7 +155,8 @@
     .org-head:has(.org-brand-logo) { grid-template-columns:minmax(0,1fr); column-gap:0; row-gap:.2rem; }
     .org-head:has(.org-brand-logo) .org-brand-logo { grid-column:1; grid-row:1; justify-self:start; }
     .org-head:has(.org-brand-logo) .org-brand-line > span { grid-column:1; grid-row:2; }
-    .org-head:has(.org-brand-logo) #atlas-title { grid-column:1; grid-row:3; }
+    /* the title has a row of its own under the logo, so it can be larger */
+    .org-head:has(.org-brand-logo) #atlas-title { grid-column:1; grid-row:3; font-size:1.45rem; }
     #org-branding, #org-branding a, .org-brand-line { display:contents; }
     #org-branding a { text-decoration:none; }
     .org-brand-logo { grid-column:1; grid-row:1 / span 2; height:30px; width:auto; max-width:var(--logo-max-width,120px); object-fit:contain; display:block; }
