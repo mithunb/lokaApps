@@ -1,0 +1,98 @@
+{
+  "about": "Event mode for this atlas (deploy/apply-event-mode.mjs, deploy/refresh-event-atlas.mjs). Spec by Fable, approved by Mithun 2026-10-22, with his overrides: at most 8 eat-and-drink places per venue, nearest first; the Vivanta venue is Vivanta Goa, Panaji (renamed, Campal address); Kala Academy's picture from its Wikipedia page; the Cafeteria's sessions merged into Kala Academy, which is the venue.",
+  "layer": "tags",
+  "venueFrom": {
+    "column": "pattern_4",
+    "equals": "Venue"
+  },
+  "programmeFrom": "festival_comment",
+  "mode": {
+    "name": "event",
+    "around": "around.geojson",
+    "days": [
+      "2026-10-29",
+      "2026-10-30",
+      "2026-10-31"
+    ],
+    "timeZone": "Asia/Kolkata",
+    "aroundRadiusM": 400,
+    "tagColumn": "categories",
+    "categories": [
+      {
+        "id": "venues",
+        "label": "Venues"
+      },
+      {
+        "id": "eat",
+        "label": "Eat & Drink",
+        "osm": [
+          "restaurant",
+          "cafe",
+          "fast_food",
+          "bar",
+          "pub"
+        ],
+        "perVenue": 8,
+        "namedOnly": true
+      },
+      {
+        "id": "art",
+        "label": "Art & Culture",
+        "tags": [
+          "Heritage",
+          "Culture"
+        ]
+      },
+      {
+        "id": "utils",
+        "label": "Utils",
+        "tags": [
+          "Services",
+          "Infrastructure"
+        ],
+        "osm": [
+          "toilets",
+          "pharmacy",
+          "atm",
+          "bus_stop",
+          "taxi"
+        ]
+      }
+    ]
+  },
+  "merges": [
+    {
+      "from": "Kala Academy Cafeteria",
+      "into": "Kala Academy",
+      "by": "loka_name",
+      "fromId": "626b18cc-495a-4b0e-b722-e6778f5ef550",
+      "intoId": "8726e793-06ef-4144-a4e2-3e0f7f7b524d",
+      "why": "Mithun, 2026-10-22: merge the Cafeteria into Kala Academy; Kala Academy is the venue."
+    }
+  ],
+  "placeFixes": [
+    {
+      "tag_id": "8b6501e0-14c2-4369-bdd0-3ab61a090eed",
+      "name": "Vivanta Goa, Panaji",
+      "lng": 73.820275,
+      "lat": 15.493958,
+      "source": "OpenStreetMap way 405337939 (tourism=hotel, \"Taj Vivanta\", Dr Atmaram Borkar Road, Campal, Panaji 403001), centre as given by Nominatim, looked up 2026-10-22. Not node 13475312001 \"Taj Vivanta Miramar\", which is the separate Vivanta Goa, Miramar.",
+      "set": {
+        "loka_name": "Vivanta Goa, Panaji",
+        "address": "Vivanta Goa, Panaji, Dr Atmaram Borkar Road, Campal, Panaji 403001"
+      },
+      "why": "Mithun, 2026-10-22: the venue is Vivanta Goa, Panaji (confirmed); rename it and give its Campal address. The tag said Taj Vivanta Miramar, the other hotel."
+    },
+    {
+      "tag_id": "8726e793-06ef-4144-a4e2-3e0f7f7b524d",
+      "name": "Kala Academy",
+      "photo": {
+        "file": "kala-academy.jpg",
+        "credit": "Press Information Bureau, Government of India (GODL-India), via Wikimedia Commons",
+        "link": "https://commons.wikimedia.org/wiki/File:A_view_of_Kala_Academy,_Goa,_the_main_venue_for_the_inaugural_ceremony_of_the_35th_International_Film_Festival_of_India-2004,_(to_be_held_from_29th_November_to_9th_December,_2004).jpg"
+      },
+      "source": "The lead photograph of https://en.wikipedia.org/wiki/Kala_Academy, downloaded 2026-10-22 (900 × 582). Licence GODL-India: free to use with credit to the source.",
+      "why": "Mithun, 2026-10-22: the tag's picture is a drawn marker; use a suitable image from the Kala Academy Wikipedia page."
+    }
+  ]
+}

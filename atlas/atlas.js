@@ -147,6 +147,10 @@
     rust: "#C9402B", moss: "#2A6B41", ochre: "#E9A237", sienna: "#D2692A", slate: "#3A7FA1",
   };
   var keyState = {};   // layer id -> { active: [column, ...], note: string|null }
+  /* Event mode (event-mode.js): set when the manifest's `mode` says so, and
+     null on every other atlas — every line below that asks `if (EV)` leaves an
+     atlas with no mode exactly as it was. */
+  var EV = null;
 
   // Signed-in state in the nav — on the home gallery and on every atlas.
   function initAuthNav() {
@@ -313,6 +317,7 @@
         });
       })
       .then(mergeLocalOverlay)
+      .then(applyMode)
       .then(applyAppBasemaps)
       .then(function (m) {
         // the everyday map is a style document that has to arrive before the
@@ -470,8 +475,57 @@
         if (typeof local.placeName === "string") manifest.placeName = local.placeName;
         // the atlas's own look (theme.js); kept here for the same reason
         if (local.theme && typeof local.theme === "object") manifest.theme = local.theme;
+        // how a visitor moves around this atlas (event-mode.js); kept here for the same reason
+        if (local.mode && typeof local.mode === "object") manifest.mode = local.mode;
         return manifest;
       });
+  }
+
+  /* An atlas whose manifest carries a `mode` the viewer knows is drawn that
+     way. Today there is one: "event" (event-mode.js), a festival guide. The
+     mode swaps how a visitor moves around the map — chips, a venue list, a
+     programme on each venue's card — and leaves the rest of the page as it is.
+     No mode, an unknown one, or a mode whose layer is missing: nothing changes. */
+  function applyMode(m) {
+    EV = null;
+    if (!window.LokaEventMode || !LokaEventMode.isOn(m)) return m;
+    try {
+      var v = LokaEventMode.viewer(m.mode, eventApi());
+      var ls = v.layers(m.layers || []);
+      if (ls) { m.layers = ls; EV = v; }
+    } catch (e) { console.error("Atlas event mode:", e && e.message); }
+    return m;
+  }
+  // what event-mode.js may use of this page, and nothing more
+  function eventApi() {
+    return {
+      esc: esc, el: el,
+      data: function (id) { return DATA[id] || null; },
+      markers: function (id) { return markersByLayer[id] || null; },
+      locPinEl: locPinEl,
+      shotsHTML: shotsHTML, linksIn: linksIn, cellShown: cellShown,
+      dataUrl: function (file) { return dataUrl(file); },
+      setLayerVisible: function (L, show) { if (map) setLayerVisible(L, show); else L._visible = show; },
+      onPhone: onPhone,
+      setSheet: function (h) { setSheet(h); },
+      closeCard: function () { if (CARD.open) closeCard(true); },
+      // a row in the list: the map goes to the place and its card opens
+      openPlace: function (L, f) {
+        if (!map) return;
+        var entry = (markersByLayer[L.id] || []).filter(function (e) { return e.f === f; })[0];
+        if (!entry) return;
+        var z = Math.max(map.getZoom(), 15.5);
+        map.once("moveend", function () { spiderClick(L, entry); });
+        map.easeTo({ center: f.geometry.coordinates, zoom: z, padding: viewPadding(), duration: reducedMotion() ? 0 : 450 });
+      },
+      // a venue and what is near it, framed clear of the panel and the sheet
+      fitPoints: function (pts) {
+        if (!map || !pts.length) return;
+        var b = new maplibregl.LngLatBounds(pts[0], pts[0]);
+        pts.forEach(function (p) { b.extend(p); });
+        map.fitBounds(b, { padding: viewPadding(), maxZoom: 17, duration: reducedMotion() ? 0 : 600 });
+      },
+    };
   }
 
   function start(manifest, styleDoc) {
@@ -590,6 +644,7 @@
              touches, but it bails early on a layer with no key-shaped column,
              and that layer is exactly the one whose door matters most. */
           (MANIFEST.layers || []).forEach(function (L) { if (L._extra) renderExtra(L); });
+          if (EV) EV.ready();   // the venue list now has its venues
           buildBar();        // the phone's tab now knows how many people or places
           if (!focusFit()) fitToData(false);
           setTimeout(showCue, 700);   // once the map has settled on the data
@@ -780,6 +835,7 @@
   function framedLayers() {
     // a draft preview asks for one particular layer, and still gets it
     if (MANIFEST.focusLayer) return [MANIFEST.focusLayer];
+    if (EV) return EV.framed();   // a festival opens on its venues
     return (MANIFEST.layers || [])
       .filter(function (L) { return L.userLayer && L.default !== false; })
       .map(function (L) { return L.id; });
@@ -797,7 +853,8 @@
     try {
       var stage = map.getContainer().closest(".atlas-stage");
       var sheet = parseFloat(stage && getComputedStyle(stage).getPropertyValue("--sheet-h")) || 0;
-      if (sheet > 0) pad.bottom = Math.min(sheet + 16, map.getContainer().clientHeight * 0.45);
+      // event mode's chips sit on the sheet's top edge (event-mode.js): room for them too
+      if (sheet > 0) pad.bottom = Math.min(sheet + 16 + (EV ? 46 : 0), map.getContainer().clientHeight * 0.45);
     } catch (e) {}
     try {
       var mr = map.getContainer().getBoundingClientRect();
@@ -1166,14 +1223,20 @@
     // is deterministic (array order = bottom→top; markers are DOM and sit on top).
     // Returns a promise that resolves once layers are added (so callers that need
     // layer ids — wirePopups, fitToData — can wait for it).
+    // a file several layers are cut from (event mode's categories) is fetched once
+    var shared = {};
+    var fetchJson = function (L) {
+      return fetch(layerUrl(L)).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+    };
     return Promise.all(layers.map(function (L) {
       if (L.type === "raster" || !L.source) return Promise.resolve();
       // One unreachable layer file must not take the atlas down — skip that
       // layer and say so in the console (silently empty layers are worse to
       // debug than a named miss).
-      return fetch(layerUrl(L))
-        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-        .then(function (d) { DATA[L.id] = d; numberRows(L, d); })
+      var url = layerUrl(L);
+      var got = L.rowsFrom ? (shared[url] || (shared[url] = fetchJson(L))) : fetchJson(L);
+      return got
+        .then(function (d) { if (L.rowsFrom) d = L.rowsFrom(d); DATA[L.id] = d; numberRows(L, d); })
         .catch(function (e) {
           L._missing = true;
           console.warn("Atlas: layer “" + L.id + "” couldn't load its data (" + L.source + "): " + e.message);
@@ -1765,6 +1828,9 @@
        other place at the one standard colour. */
     var perKind = !!(L.markers && L.markerBy);
     var pin = locPinEl((perKind && cfg.color) ? cfg.color : PIN_ONE, cfg.icon, perKind ? cfg.shape : null);
+    // event mode: a venue wears its number, a nearby place its category's colour
+    var evPin = EV && EV.pinEl(L, f);
+    if (evPin) pin = evPin;
     // Explicit icons and glyphs are an atlas's own bespoke styling (deoria's
     // factory and flask) and stay exactly as declared. The DERIVED icon —
     // guessed from a kind's words on contributed layers — is retired: those
@@ -1929,6 +1995,8 @@
   function initLayerKeys(L) {
     var H = keyHost(L);
     if (!H.userLayer || !hasPins(L)) return;
+    // event mode hides the questions; they are not deleted, and come back with the mode off
+    if (EV) return;
     var halves = keyHalves(H).filter(hasPins);
     if (H._keyOptions && H._keyHalves === halves.length) return;   // built over these halves already
     var feats = keyFeatures(H);
@@ -3190,6 +3258,7 @@
     var max = t.maxChars || 32;
     if (L._visible !== false && !folded) {
       (markersByLayer[L.id] || []).forEach(function (e) {
+        if (e.away) return;   // event mode: beyond "What's around here"
         if (e.hidden || e._clustered || e._absorbed || e._fanned) return;
         var v = labelNameOf(L, e.f, t);
         if (!v) return;
@@ -3244,7 +3313,7 @@
     spreadAnswerPins(L);
     (markersByLayer[L.id] || []).forEach(function (e) {
       e.mk.getElement().style.display =
-        (shown && !folded && !e.hidden && ((!e._clustered && !e._absorbed) || e._fanned)) ? "" : "none";
+        (shown && !folded && !e.hidden && !e.away && ((!e._clustered && !e._absorbed) || e._fanned)) ? "" : "none";
     });
     if (L._clusterMarker) L._clusterMarker.getElement().style.display = (shown && folded) ? "" : "none";
     syncPinNames(L);
@@ -3569,6 +3638,8 @@
   // clustering population — nothing else may fold into a disc.
   function clusterEntries() {
     var out = [];
+    // a festival guide's pins are few and each one matters: none fold
+    if (EV) return out;
     (MANIFEST.layers || []).forEach(function (L) {
       if (L._visible === false) return;
       /* A selected answer's places are never folded into a numbered disc,
@@ -5663,6 +5734,15 @@
     // "Boundaries & places" is the viewer's own name for an undeclared base
     // group — the same words the owner's menu uses for it. A manifest that
     // declares the group keeps whatever it called it.
+    /* Event mode: the chips and the venue list stand where the layer list
+       would. The search above and everything below stay as they are. */
+    if (EV) EV.buildPanel(panel);   // it takes its own old chips away first
+    else {
+      // a redraw into an atlas with no mode leaves nothing of the guide behind
+      var oldChips = document.querySelector(".ev-chips");
+      if (oldChips && oldChips.parentNode) oldChips.parentNode.removeChild(oldChips);
+      if (stage) stage.classList.remove("ev-on");
+    }
     var GROUP_LABELS = { userdata: "Your data", base: "Boundaries & places", agri: "Crops & value chain", eco: "Ecological landscape" };
     var declaredIds = {};
     MANIFEST.groups.forEach(function (g) { declaredIds[g.id] = true; });
@@ -5681,7 +5761,7 @@
       return (b.id === "userdata" ? 1 : 0) - (a.id === "userdata" ? 1 : 0);
     });
     var groupsShown = 0, layersShown = 0;
-    groupList.forEach(function (g) {
+    if (!EV) groupList.forEach(function (g) {
       var layers = MANIFEST.layers.filter(function (L) {
         // a points twin has no row of its own: it sits under its outlines (ONE FILE, ONE ROW)
         return (L.group || "userdata") === g.id && !isBaseMapRow(L) && !pairedPrimary(L);
@@ -5739,7 +5819,7 @@
     setText("#panel-count", groupsShown > 1 ? "· " + layersShown : "");   // the head already says "Layers"
     // an atlas with nothing on its shelf says so, in one line, rather than
     // standing there with an empty box
-    if (!layersShown) panel.appendChild(el("p", "ctl-empty", "This atlas has no layers yet."));
+    if (!layersShown && !EV) panel.appendChild(el("p", "ctl-empty", "This atlas has no layers yet."));
 
     // the owner's tools add their rows to this panel — see LokaAtlas.onControlsBuilt
     controlsHooks.forEach(function (fn) {
@@ -6792,6 +6872,8 @@
 
   function popupHTML(L, props, f) {
     POPUP_LAYER = L && L.id;   // the tag chips below belong to this layer
+    // a venue's card carries its programme; a nearby place's, how far it is
+    if (EV && L && L._ev) return EV.cardHTML(L, props, f) || "";
     var spec = L.popup;
     // the same key-by-key rows the hover bubble shows — a touch screen has
     // no hover, so the tap popup is where the marks get decoded there. A
@@ -7216,11 +7298,14 @@
       });
     });
     var odbl = $("#odbl-note");
+    // event mode's nearby places are OpenStreetMap's too, and the note says so in those words
+    var osmPlaces = (MANIFEST.layers || []).some(function (L) { return L.osmPlaces; });
     if (odbl && usesOsm) {
       odbl.hidden = false;
-      odbl.innerHTML = "Boundary data from OpenStreetMap on this map is available under the " +
-        '<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">' +
-        "Open Database Licence</a>, as are the files it is served from.";
+      var licence = '<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">' + "Open Database Licence</a>";
+      odbl.innerHTML = osmPlaces
+        ? "Places from OpenStreetMap on this map are available under the " + licence + ", as are the files they are served from."
+        : "Boundary data from OpenStreetMap on this map is available under the " + licence + ", as are the files it is served from.";
     }
 
     /* The people who walked the ground.
@@ -7447,6 +7532,12 @@
   function syncSheetHead() {
     var who = document.getElementById("sheet-layer");
     if (!who) return;
+    if (EV) {
+      var sh = EV.sheetHead();
+      who.innerHTML = "";
+      who.appendChild(el("span", "sheet-layer-name", esc(sh.small || sh.label)));
+      return;
+    }
     var sec = document.querySelector("#atlas-controls .ctl-group.on-show") ||
       document.querySelector("#atlas-controls .ctl-group[data-group]");
     if (!sec) { who.textContent = ""; return; }

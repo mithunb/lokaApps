@@ -1,0 +1,3928 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62.4 2390de5a",
+  "osm3s": {
+    "timestamp_osm_base": "2026-10-22T11:03:01Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "elements": [
+
+{
+  "type": "node",
+  "id": 487257218,
+  "lat": 15.4822637,
+  "lon": 73.8090430,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Cafe Coffee Day"
+  }
+},
+{
+  "type": "node",
+  "id": 1328303539,
+  "lat": 15.4986227,
+  "lon": 73.8277226,
+  "tags": {
+    "amenity": "fast_food",
+    "branch": "Panjim",
+    "brand": "Domino's",
+    "brand:wikidata": "Q839466",
+    "cuisine": "pizza",
+    "name": "Domino's",
+    "takeaway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1633045601,
+  "lat": 15.5014000,
+  "lon": 73.8269000,
+  "tags": {
+    "amenity": "toilets",
+    "shower": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 2100055211,
+  "lat": 15.4985961,
+  "lon": 73.8274921,
+  "tags": {
+    "addr:postcode": "403001",
+    "addr:street": "18th June Road",
+    "amenity": "pharmacy",
+    "check_date": "2023-10-14",
+    "name": "Farmacia Salcete",
+    "source": "field trip"
+  }
+},
+{
+  "type": "node",
+  "id": 2195780668,
+  "lat": 15.4980876,
+  "lon": 73.8324328,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Avanti"
+  }
+},
+{
+  "type": "node",
+  "id": 2195780710,
+  "lat": 15.4980616,
+  "lon": 73.8323476,
+  "tags": {
+    "amenity": "atm",
+    "check_date": "2023-10-14",
+    "name": "Union Bank"
+  }
+},
+{
+  "type": "node",
+  "id": 2195780749,
+  "lat": 15.4959838,
+  "lon": 73.8336285,
+  "tags": {
+    "amenity": "atm"
+  }
+},
+{
+  "type": "node",
+  "id": 2195780765,
+  "lat": 15.4987446,
+  "lon": 73.8333173,
+  "tags": {
+    "highway": "bus_stop"
+  }
+},
+{
+  "type": "node",
+  "id": 2682368848,
+  "lat": 15.4785584,
+  "lon": 73.8486667,
+  "tags": {
+    "highway": "bus_stop"
+  }
+},
+{
+  "type": "node",
+  "id": 2986347840,
+  "lat": 15.4955942,
+  "lon": 73.8314388,
+  "tags": {
+    "amenity": "restaurant",
+    "check_date": "2023-10-14",
+    "cuisine": "regional",
+    "name": "The Verandah Restaurant",
+    "operator": "WelcomHeritage Hotels"
+  }
+},
+{
+  "type": "node",
+  "id": 3155759214,
+  "lat": 15.5011499,
+  "lon": 73.8253101,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "Ferry Wharf"
+  }
+},
+{
+  "type": "node",
+  "id": 3249731515,
+  "lat": 15.4837079,
+  "lon": 73.8092568,
+  "tags": {
+    "amenity": "cafe",
+    "internet_access": "no",
+    "name": "Nescafe",
+    "smoking": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 3250334426,
+  "lat": 15.4803853,
+  "lon": 73.8121193,
+  "tags": {
+    "highway": "bus_stop"
+  }
+},
+{
+  "type": "node",
+  "id": 3250334427,
+  "lat": 15.4808305,
+  "lon": 73.8119033,
+  "tags": {
+    "amenity": "pharmacy",
+    "name": "Roger's Healthcare"
+  }
+},
+{
+  "type": "node",
+  "id": 3250334870,
+  "lat": 15.4791210,
+  "lon": 73.8123804,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Celebration"
+  }
+},
+{
+  "type": "node",
+  "id": 3250335692,
+  "lat": 15.4792457,
+  "lon": 73.8121499,
+  "tags": {
+    "amenity": "pharmacy"
+  }
+},
+{
+  "type": "node",
+  "id": 3250336005,
+  "lat": 15.4807058,
+  "lon": 73.8118809,
+  "tags": {
+    "amenity": "bank",
+    "brand:wikidata": "Q367008",
+    "brand:wikipedia": "en:Oriental Bank of Commerce",
+    "name": "Oriental Bank of Commerce",
+    "name:en": "Oriental Bank of Commerce",
+    "short_name": "OBC",
+    "website": "https://www.obcindia.co.in"
+  }
+},
+{
+  "type": "node",
+  "id": 3250336162,
+  "lat": 15.4810870,
+  "lon": 73.8114310,
+  "tags": {
+    "amenity": "bank",
+    "brand:wikidata": "Q1340361",
+    "brand:wikipedia": "en:State Bank of India",
+    "name": "State Bank of India",
+    "short_name": "SBI",
+    "website": "https://www.sbi.co.in/"
+  }
+},
+{
+  "type": "node",
+  "id": 3250336562,
+  "lat": 15.4836216,
+  "lon": 73.8092121,
+  "tags": {
+    "highway": "bus_stop"
+  }
+},
+{
+  "type": "node",
+  "id": 3250336794,
+  "lat": 15.4852825,
+  "lon": 73.8107520,
+  "tags": {
+    "highway": "bus_stop"
+  }
+},
+{
+  "type": "node",
+  "id": 3250336868,
+  "lat": 15.4861212,
+  "lon": 73.8114802,
+  "tags": {
+    "highway": "bus_stop",
+    "shelter": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 3250336955,
+  "lat": 15.4883098,
+  "lon": 73.8136994,
+  "tags": {
+    "highway": "bus_stop"
+  }
+},
+{
+  "type": "node",
+  "id": 3250336959,
+  "lat": 15.4897419,
+  "lon": 73.8149911,
+  "tags": {
+    "bench": "yes",
+    "highway": "bus_stop",
+    "shelter": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 3250337096,
+  "lat": 15.4941467,
+  "lon": 73.8181866,
+  "tags": {
+    "highway": "bus_stop"
+  }
+},
+{
+  "type": "node",
+  "id": 3250337100,
+  "lat": 15.4976726,
+  "lon": 73.8191110,
+  "tags": {
+    "amenity": "restaurant",
+    "cuisine": "regional",
+    "name": "ForRest"
+  }
+},
+{
+  "type": "node",
+  "id": 3250338244,
+  "lat": 15.4875057,
+  "lon": 73.8129768,
+  "tags": {
+    "highway": "bus_stop"
+  }
+},
+{
+  "type": "node",
+  "id": 3250338327,
+  "lat": 15.5003848,
+  "lon": 73.8213740,
+  "tags": {
+    "highway": "bus_stop",
+    "shelter": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 3250344101,
+  "lat": 15.5006039,
+  "lon": 73.8260349,
+  "tags": {
+    "amenity": "atm",
+    "brand": "Axis Bank",
+    "brand:wikidata": "Q2003549",
+    "name": "Axis Bank",
+    "operator": "Axis Bank",
+    "operator:wikidata": "Q2003549"
+  }
+},
+{
+  "type": "node",
+  "id": 3250344361,
+  "lat": 15.5008996,
+  "lon": 73.8261276,
+  "tags": {
+    "amenity": "bank",
+    "brand": "Bank of India",
+    "brand:wikidata": "Q2004439",
+    "brand:wikipedia": "en:Bank of India",
+    "name": "Bank of India",
+    "name:en": "Bank of India",
+    "short_name": "BoI",
+    "website": "http://www.bankofindia.co.in"
+  }
+},
+{
+  "type": "node",
+  "id": 3250344362,
+  "lat": 15.5002250,
+  "lon": 73.8267070,
+  "tags": {
+    "amenity": "bank",
+    "brand": "Bank of Baroda",
+    "brand:wikidata": "Q2003797",
+    "brand:wikipedia": "en:Bank of Baroda",
+    "name": "Bank of Baroda",
+    "name:en": "Bank of Baroda",
+    "short_name": "BoB",
+    "website": "http://www.bankofbaroda.com",
+    "wikidata": "Q73756092"
+  }
+},
+{
+  "type": "node",
+  "id": 3250558854,
+  "lat": 15.4976860,
+  "lon": 73.8321707,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Route 66",
+    "smoking": "outside"
+  }
+},
+{
+  "type": "node",
+  "id": 3250564441,
+  "lat": 15.4937962,
+  "lon": 73.8275984,
+  "tags": {
+    "amenity": "cafe",
+    "check_date": "2023-10-16",
+    "name": "Bodega"
+  }
+},
+{
+  "type": "node",
+  "id": 3250569761,
+  "lat": 15.4947051,
+  "lon": 73.8319557,
+  "tags": {
+    "bench": "no",
+    "highway": "bus_stop",
+    "shelter": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 3250588890,
+  "lat": 15.4959285,
+  "lon": 73.8317336,
+  "tags": {
+    "amenity": "atm",
+    "brand": "HDFC Bank",
+    "brand:wikidata": "Q631047",
+    "name": "HDFC Bank",
+    "operator": "HDFC Bank",
+    "operator:wikidata": "Q631047",
+    "short_name": "HDFC"
+  }
+},
+{
+  "type": "node",
+  "id": 3250591955,
+  "lat": 15.4976103,
+  "lon": 73.8321282,
+  "tags": {
+    "amenity": "atm",
+    "name": "Union Bank"
+  }
+},
+{
+  "type": "node",
+  "id": 3250602503,
+  "lat": 15.4952004,
+  "lon": 73.8371908,
+  "tags": {
+    "amenity": "atm",
+    "brand": "South Indian Bank",
+    "brand:wikidata": "Q2044973",
+    "name": "South Indian Bank",
+    "operator": "South Indian Bank",
+    "operator:wikidata": "Q2044973"
+  }
+},
+{
+  "type": "node",
+  "id": 3251072237,
+  "lat": 15.5003200,
+  "lon": 73.8268071,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Cafe Real"
+  }
+},
+{
+  "type": "node",
+  "id": 3251074345,
+  "lat": 15.5003037,
+  "lon": 73.8259145,
+  "tags": {
+    "amenity": "toilets"
+  }
+},
+{
+  "type": "node",
+  "id": 3257660096,
+  "lat": 15.4961070,
+  "lon": 73.8229274,
+  "tags": {
+    "amenity": "restaurant",
+    "cuisine": "indian;regional",
+    "internet_access": "wlan",
+    "internet_access:fee": "no",
+    "name": "Shalimar Restaurant",
+    "smoking": "no",
+    "wheelchair": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 3259436395,
+  "lat": 15.4985765,
+  "lon": 73.8282422,
+  "tags": {
+    "amenity": "restaurant",
+    "cuisine": "indian",
+    "name": "Kamat Restaurant"
+  }
+},
+{
+  "type": "node",
+  "id": 4075429089,
+  "lat": 15.4852215,
+  "lon": 73.8105584,
+  "tags": {
+    "amenity": "restaurant",
+    "cuisine": "italian_pizza;italian;pizza",
+    "name": "Da Maria",
+    "takeaway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 4075429431,
+  "lat": 15.4851333,
+  "lon": 73.8109462,
+  "tags": {
+    "addr:city": "Panjim, Goa",
+    "addr:district": "North Goa",
+    "addr:housenumber": "Ground floor, Chanson Apartment",
+    "addr:postcode": "403001",
+    "addr:street": "Dayanand Bandodkar Marg",
+    "air_conditioning": "yes",
+    "amenity": "cafe",
+    "branch": "Porvorim, Anjuna, Siolim, Nachinola",
+    "cuisine": "coffee_shop;pizza;burger;ice_cream",
+    "internet_access": "wlan",
+    "internet_access:fee": "customers",
+    "name": "Cream Choc",
+    "opening_hours": "Mo-Su 10:00-23:00",
+    "outdoor_seating": "yes",
+    "phone": "+919373163259",
+    "smoking": "outside",
+    "toilets": "yes",
+    "website": "https://creamchoc.com/",
+    "website:menu": "https://creamchoc.com/menu/"
+  }
+},
+{
+  "type": "node",
+  "id": 4075429733,
+  "lat": 15.4872926,
+  "lon": 73.8128227,
+  "tags": {
+    "amenity": "restaurant",
+    "cuisine": "regional",
+    "delivery": "no",
+    "name": "Mum's Kitchen",
+    "smoking": "no",
+    "takeaway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 4075442589,
+  "lat": 15.5005476,
+  "lon": 73.8283595,
+  "tags": {
+    "amenity": "cafe",
+    "internet_access": "yes",
+    "name": "Cremeux"
+  }
+},
+{
+  "type": "node",
+  "id": 4075444693,
+  "lat": 15.4833727,
+  "lon": 73.8110503,
+  "tags": {
+    "amenity": "restaurant",
+    "cuisine": "pizza",
+    "delivery": "yes",
+    "name": "Pizza Mia",
+    "smoking": "outside",
+    "takeaway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 4075492681,
+  "lat": 15.4937137,
+  "lon": 73.8358411,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Tato's"
+  }
+},
+{
+  "type": "node",
+  "id": 4075496634,
+  "lat": 15.4949233,
+  "lon": 73.8342747,
+  "tags": {
+    "amenity": "cafe",
+    "brand": "Cafe Coffee Day",
+    "brand:wikidata": "Q5017235",
+    "cuisine": "coffee_shop",
+    "name": "Cafe Coffee Day",
+    "takeaway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 4075496635,
+  "lat": 15.4942151,
+  "lon": 73.8353369,
+  "tags": {
+    "amenity": "atm"
+  }
+},
+{
+  "type": "node",
+  "id": 4077108691,
+  "lat": 15.4818203,
+  "lon": 73.8090054,
+  "tags": {
+    "amenity": "restaurant",
+    "cuisine": "burger",
+    "name": "D'Silva Fast Food",
+    "takeaway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 4077108755,
+  "lat": 15.4831079,
+  "lon": 73.8109885,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Cafe Basil"
+  }
+},
+{
+  "type": "node",
+  "id": 4077113471,
+  "lat": 15.4974745,
+  "lon": 73.8248725,
+  "tags": {
+    "amenity": "restaurant",
+    "delivery": "no",
+    "name": "Chilli 'n Spice",
+    "smoking": "no",
+    "takeaway": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 4077117122,
+  "lat": 15.4972302,
+  "lon": 73.8248028,
+  "tags": {
+    "amenity": "cafe",
+    "internet_access": "no",
+    "name": "Aunty Maria",
+    "smoking": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 4077121735,
+  "lat": 15.4979652,
+  "lon": 73.8250245,
+  "tags": {
+    "amenity": "pub",
+    "check_date": "2023-10-16",
+    "name": "Cafe Mojo"
+  }
+},
+{
+  "type": "node",
+  "id": 4077132028,
+  "lat": 15.5010061,
+  "lon": 73.8257930,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "Ferry Wharf"
+  }
+},
+{
+  "type": "node",
+  "id": 4077132030,
+  "lat": 15.5009882,
+  "lon": 73.8257504,
+  "tags": {
+    "amenity": "restaurant"
+  }
+},
+{
+  "type": "node",
+  "id": 4077135925,
+  "lat": 15.5009019,
+  "lon": 73.8293360,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "Old Secratariat"
+  }
+},
+{
+  "type": "node",
+  "id": 4081384274,
+  "lat": 15.5000649,
+  "lon": 73.8281199,
+  "tags": {
+    "amenity": "toilets"
+  }
+},
+{
+  "type": "node",
+  "id": 4081390280,
+  "lat": 15.4987941,
+  "lon": 73.8251693,
+  "tags": {
+    "amenity": "toilets"
+  }
+},
+{
+  "type": "node",
+  "id": 4081405658,
+  "lat": 15.4939208,
+  "lon": 73.8357882,
+  "tags": {
+    "amenity": "cafe",
+    "cuisine": "fruits",
+    "internet_access": "no",
+    "name": "Fruitilicious",
+    "smoking": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 4081405659,
+  "lat": 15.4932420,
+  "lon": 73.8362499,
+  "tags": {
+    "amenity": "pub",
+    "name": "Butter's",
+    "name:en": "The Curry's"
+  }
+},
+{
+  "type": "node",
+  "id": 4081405702,
+  "lat": 15.4933276,
+  "lon": 73.8363831,
+  "tags": {
+    "amenity": "restaurant",
+    "cuisine": "regional",
+    "delivery": "no",
+    "name": "Ritz Classic",
+    "takeaway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 4081412393,
+  "lat": 15.4918676,
+  "lon": 73.8271266,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Circuit House"
+  }
+},
+{
+  "type": "node",
+  "id": 4081413257,
+  "lat": 15.4906277,
+  "lon": 73.8294900,
+  "tags": {
+    "amenity": "restaurant",
+    "cuisine": "pizza",
+    "delivery": "no",
+    "name": "Barrels & Bones",
+    "smoking": "outside",
+    "takeaway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 4081428381,
+  "lat": 15.4975610,
+  "lon": 73.8259899,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Chai Pani"
+  }
+},
+{
+  "type": "node",
+  "id": 4081440470,
+  "lat": 15.5007457,
+  "lon": 73.8260766,
+  "tags": {
+    "amenity": "pharmacy"
+  }
+},
+{
+  "type": "node",
+  "id": 4082538544,
+  "lat": 15.4990160,
+  "lon": 73.8266917,
+  "tags": {
+    "amenity": "atm",
+    "brand": "Central Bank of India",
+    "brand:wikidata": "Q2007090",
+    "name": "Central Bank of India",
+    "operator": "Central Bank of India",
+    "operator:wikidata": "Q2007090"
+  }
+},
+{
+  "type": "node",
+  "id": 4107980094,
+  "lat": 15.4965054,
+  "lon": 73.8310584,
+  "tags": {
+    "amenity": "restaurant",
+    "check_date": "2023-10-15",
+    "name": "Viva Panjim",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 4110932890,
+  "lat": 15.4837630,
+  "lon": 73.8091800,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Food land"
+  }
+},
+{
+  "type": "node",
+  "id": 4246680194,
+  "lat": 15.4951840,
+  "lon": 73.8197400,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Daawat"
+  }
+},
+{
+  "type": "node",
+  "id": 4253995690,
+  "lat": 15.4951570,
+  "lon": 73.8242340,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Hotel Manoshanti"
+  }
+},
+{
+  "type": "node",
+  "id": 4258690391,
+  "lat": 15.4847553,
+  "lon": 73.8113680,
+  "tags": {
+    "amenity": "fast_food",
+    "name": "papa johns"
+  }
+},
+{
+  "type": "node",
+  "id": 4258728394,
+  "lat": 15.4811734,
+  "lon": 73.8113812,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "TTT"
+  }
+},
+{
+  "type": "node",
+  "id": 4258764791,
+  "lat": 15.4853816,
+  "lon": 73.8112340,
+  "tags": {
+    "amenity": "bank",
+    "name": "SIDBI Bank"
+  }
+},
+{
+  "type": "node",
+  "id": 4258764890,
+  "lat": 15.4848807,
+  "lon": 73.8115219,
+  "tags": {
+    "amenity": "pharmacy",
+    "name": "Unity medical stores"
+  }
+},
+{
+  "type": "node",
+  "id": 4258764891,
+  "lat": 15.4853783,
+  "lon": 73.8113306,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "ifood"
+  }
+},
+{
+  "type": "node",
+  "id": 4259787790,
+  "lat": 15.4797260,
+  "lon": 73.8123100,
+  "tags": {
+    "amenity": "fast_food",
+    "name": "Chicken Express"
+  }
+},
+{
+  "type": "node",
+  "id": 4259962695,
+  "lat": 15.4818850,
+  "lon": 73.8091350,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Punjabi dhaba"
+  }
+},
+{
+  "type": "node",
+  "id": 4259965389,
+  "lat": 15.4813550,
+  "lon": 73.8091300,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "chill out"
+  }
+},
+{
+  "type": "node",
+  "id": 4283860991,
+  "lat": 15.4820980,
+  "lon": 73.8221200,
+  "tags": {
+    "amenity": "fast_food",
+    "name": "Temptation Fast Food Center"
+  }
+},
+{
+  "type": "node",
+  "id": 4283881389,
+  "lat": 15.4961570,
+  "lon": 73.8236200,
+  "tags": {
+    "amenity": "fast_food",
+    "name": "NJO's"
+  }
+},
+{
+  "type": "node",
+  "id": 4284116790,
+  "lat": 15.4955340,
+  "lon": 73.8345950,
+  "tags": {
+    "amenity": "toilets",
+    "check_date": "2023-10-14"
+  }
+},
+{
+  "type": "node",
+  "id": 4288246894,
+  "lat": 15.5057500,
+  "lon": 73.8339000,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "POOJA UDUPI HOTEL"
+  }
+},
+{
+  "type": "node",
+  "id": 4291053292,
+  "lat": 15.4789280,
+  "lon": 73.8487350,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Niyaaz"
+  }
+},
+{
+  "type": "node",
+  "id": 4293146790,
+  "lat": 15.4881410,
+  "lon": 73.8184340,
+  "tags": {
+    "amenity": "bar",
+    "name": "Arsie's Bar"
+  }
+},
+{
+  "type": "node",
+  "id": 4293155789,
+  "lat": 15.4883970,
+  "lon": 73.8185630,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Cafe Mouaz Veg & Non Veg Restaurant"
+  }
+},
+{
+  "type": "node",
+  "id": 4296088013,
+  "lat": 15.4938680,
+  "lon": 73.8196230,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "The Fisherman's Wharf - Panjim"
+  }
+},
+{
+  "type": "node",
+  "id": 4296105796,
+  "lat": 15.4994972,
+  "lon": 73.8230764,
+  "tags": {
+    "amenity": "restaurant",
+    "diet:vegetarian": "yes",
+    "name": "Navtara Pure Veg Restaurant - Panjim"
+  }
+},
+{
+  "type": "node",
+  "id": 4296794901,
+  "lat": 15.4794620,
+  "lon": 73.8438200,
+  "tags": {
+    "amenity": "fast_food",
+    "name": "Lafanm"
+  }
+},
+{
+  "type": "node",
+  "id": 4296807492,
+  "lat": 15.4874590,
+  "lon": 73.8318400,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Hill Top Bar & Restaurant"
+  }
+},
+{
+  "type": "node",
+  "id": 4298590099,
+  "lat": 15.4992560,
+  "lon": 73.8242650,
+  "tags": {
+    "amenity": "fast_food",
+    "name": "Royal Only Chicken"
+  }
+},
+{
+  "type": "node",
+  "id": 4299627116,
+  "lat": 15.4956590,
+  "lon": 73.8260620,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Goenchin"
+  }
+},
+{
+  "type": "node",
+  "id": 4299633099,
+  "lat": 15.4989803,
+  "lon": 73.8311317,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Pakiza Restaurant"
+  }
+},
+{
+  "type": "node",
+  "id": 4299644197,
+  "lat": 15.5000725,
+  "lon": 73.8270340,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Delhi Darbar"
+  }
+},
+{
+  "type": "node",
+  "id": 4299644306,
+  "lat": 15.5005820,
+  "lon": 73.8278700,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Vinanti Restaurant & Bar"
+  }
+},
+{
+  "type": "node",
+  "id": 4299644402,
+  "lat": 15.4975910,
+  "lon": 73.8321600,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Horse Shoe Bar & Restaurant"
+  }
+},
+{
+  "type": "node",
+  "id": 4299665091,
+  "lat": 15.4872450,
+  "lon": 73.8129190,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Edu's Multi Cuisine Restaurant"
+  }
+},
+{
+  "type": "node",
+  "id": 4299665390,
+  "lat": 15.4850880,
+  "lon": 73.8216100,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "New Kohinoor Restaurant"
+  }
+},
+{
+  "type": "node",
+  "id": 4299718898,
+  "lat": 15.4996190,
+  "lon": 73.8278900,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "The Upper House"
+  }
+},
+{
+  "type": "node",
+  "id": 4303678191,
+  "lat": 15.4822800,
+  "lon": 73.8540700,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Cafe Kalaprasad"
+  }
+},
+{
+  "type": "node",
+  "id": 4303706591,
+  "lat": 15.4824710,
+  "lon": 73.8536600,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Cafe Siddhi (Bappa)"
+  }
+},
+{
+  "type": "node",
+  "id": 4318257453,
+  "lat": 15.4827646,
+  "lon": 73.8199891,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Branco's Restaurant and Bar"
+  }
+},
+{
+  "type": "node",
+  "id": 4343009891,
+  "lat": 15.4953966,
+  "lon": 73.8317306,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Sitara Restaurant"
+  }
+},
+{
+  "type": "node",
+  "id": 4343037190,
+  "lat": 15.4967443,
+  "lon": 73.8360100,
+  "tags": {
+    "amenity": "restaurant",
+    "diet:vegetarian": "yes",
+    "name": "Udupi Palace"
+  }
+},
+{
+  "type": "node",
+  "id": 4361193690,
+  "lat": 15.4999054,
+  "lon": 73.8268222,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Udupi Coffee House",
+    "name:en": "Udupi Coffee House"
+  }
+},
+{
+  "type": "node",
+  "id": 4367411892,
+  "lat": 15.4862699,
+  "lon": 73.8178757,
+  "tags": {
+    "amenity": "toilets"
+  }
+},
+{
+  "type": "node",
+  "id": 4426122491,
+  "lat": 15.5009604,
+  "lon": 73.8288232,
+  "tags": {
+    "amenity": "pub",
+    "name": "Top Gear",
+    "name:en": "Top Gear"
+  }
+},
+{
+  "type": "node",
+  "id": 4426128789,
+  "lat": 15.4971640,
+  "lon": 73.8250126,
+  "tags": {
+    "amenity": "pub",
+    "name": "Ace`s The Pub & Restaurant",
+    "name:en": "Ace`s The Pub & Restaurant"
+  }
+},
+{
+  "type": "node",
+  "id": 4462998289,
+  "lat": 15.5001430,
+  "lon": 73.8288353,
+  "tags": {
+    "amenity": "bank",
+    "brand": "Indian Bank",
+    "brand:wikidata": "Q2003789",
+    "brand:wikipedia": "en:Indian Bank",
+    "name": "Indian Bank",
+    "name:en": "Indian Bank",
+    "website": "https://www.indianbank.in/"
+  }
+},
+{
+  "type": "node",
+  "id": 4463057589,
+  "lat": 15.4971733,
+  "lon": 73.8335693,
+  "tags": {
+    "amenity": "bank",
+    "brand": "HDFC Bank",
+    "brand:wikidata": "Q631047",
+    "brand:wikipedia": "en:HDFC Bank",
+    "name": "HDFC Bank",
+    "name:en": "Hdfc bank",
+    "short_name": "HDFC",
+    "website": "https://www.hdfcbank.com"
+  }
+},
+{
+  "type": "node",
+  "id": 4463113592,
+  "lat": 15.5000610,
+  "lon": 73.8278929,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Cafe ritz",
+    "name:en": "Cafe ritz"
+  }
+},
+{
+  "type": "node",
+  "id": 4463203391,
+  "lat": 15.4999373,
+  "lon": 73.8278893,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Sher-e-Punjab",
+    "name:en": "Sher-e-Punjab"
+  }
+},
+{
+  "type": "node",
+  "id": 4524349135,
+  "lat": 15.5004445,
+  "lon": 73.8230156,
+  "tags": {
+    "amenity": "bank",
+    "brand": "IndusInd Bank",
+    "brand:wikidata": "Q2040323",
+    "brand:wikipedia": "en:IndusInd Bank",
+    "name": "IndusInd Bank",
+    "name:en": "IndusInd Bank",
+    "website": "https://www.indusind.com"
+  }
+},
+{
+  "type": "node",
+  "id": 4537357193,
+  "lat": 15.4857641,
+  "lon": 73.8551941,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Niyaazi",
+    "name:en": "Niyaazi"
+  }
+},
+{
+  "type": "node",
+  "id": 4537380492,
+  "lat": 15.4857030,
+  "lon": 73.8536450,
+  "tags": {
+    "amenity": "pharmacy",
+    "name": "Rock Of Ages Medical Stores",
+    "name:en": "Rock Of Ages Medical Stores"
+  }
+},
+{
+  "type": "node",
+  "id": 4537388989,
+  "lat": 15.4864030,
+  "lon": 73.8513100,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Canelo",
+    "name:en": "Canelo"
+  }
+},
+{
+  "type": "node",
+  "id": 4559955780,
+  "lat": 15.4961350,
+  "lon": 73.8317711,
+  "tags": {
+    "amenity": "bank",
+    "brand": "ICICI Bank",
+    "brand:wikidata": "Q1653258",
+    "name": "ICICI Bank",
+    "name:en": "ICICI Bank",
+    "short_name": "ICICI",
+    "website": "https://www.icicibank.com"
+  }
+},
+{
+  "type": "node",
+  "id": 4559955781,
+  "lat": 15.4962061,
+  "lon": 73.8317751,
+  "tags": {
+    "amenity": "bank",
+    "branch": "Regional Office",
+    "brand": "Indian Overseas Bank",
+    "brand:wikidata": "Q2003611",
+    "name": "Indian Overseas Bank"
+  }
+},
+{
+  "type": "node",
+  "id": 4559957930,
+  "lat": 15.4995510,
+  "lon": 73.8335456,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Corina (Seafood)"
+  }
+},
+{
+  "type": "node",
+  "id": 4559966671,
+  "lat": 15.4980886,
+  "lon": 73.8323553,
+  "tags": {
+    "amenity": "bank",
+    "check_date": "2024-10-11",
+    "name": "Citizen Credit Co-operative Bank Ltd (Panjim Branch)"
+  }
+},
+{
+  "type": "node",
+  "id": 4560525891,
+  "lat": 15.4960781,
+  "lon": 73.8246261,
+  "tags": {
+    "amenity": "bank",
+    "brand": "Syndicate Bank",
+    "brand:wikidata": "Q2004088",
+    "name": "Syndicate Bank",
+    "name:en": "Syndicate Bank",
+    "website": "https://www.syndicatebank.in"
+  }
+},
+{
+  "type": "node",
+  "id": 4560525893,
+  "lat": 15.4984642,
+  "lon": 73.8272682,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Moti mahal",
+    "name:en": "Moti mahal"
+  }
+},
+{
+  "type": "node",
+  "id": 4560563792,
+  "lat": 15.4788181,
+  "lon": 73.8486423,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "MFC",
+    "name:en": "MFC"
+  }
+},
+{
+  "type": "node",
+  "id": 4561760537,
+  "lat": 15.4972209,
+  "lon": 73.8263090,
+  "tags": {
+    "amenity": "bank",
+    "check_date": "2023-10-14",
+    "name": "TJSB Bank"
+  }
+},
+{
+  "type": "node",
+  "id": 4561760549,
+  "lat": 15.4965743,
+  "lon": 73.8254905,
+  "tags": {
+    "amenity": "bank",
+    "branch": "(Panjim Branch)",
+    "brand": "ICICI Bank",
+    "brand:wikidata": "Q1653258",
+    "name": "ICICI Bank",
+    "short_name": "ICICI"
+  }
+},
+{
+  "type": "node",
+  "id": 4561795054,
+  "lat": 15.4961944,
+  "lon": 73.8234305,
+  "tags": {
+    "amenity": "bank",
+    "brand": "Yes Bank",
+    "brand:wikidata": "Q2040394",
+    "brand:wikipedia": "en:Yes Bank",
+    "name": "Yes Bank",
+    "name:en": "YES Bank",
+    "website": "https://www.yesbank.in"
+  }
+},
+{
+  "type": "node",
+  "id": 4561809104,
+  "lat": 15.4968454,
+  "lon": 73.8233176,
+  "tags": {
+    "amenity": "bank",
+    "name": "Mapusa Urban Co-op Bank of Goa Ltd."
+  }
+},
+{
+  "type": "node",
+  "id": 4561875161,
+  "lat": 15.4987970,
+  "lon": 73.8242863,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Marietta"
+  }
+},
+{
+  "type": "node",
+  "id": 4561875178,
+  "lat": 15.4866925,
+  "lon": 73.8123544,
+  "tags": {
+    "amenity": "fast_food",
+    "brand": "Subway",
+    "brand:pa": "ਸਬਵੇਅ",
+    "brand:ur": "سب وے",
+    "brand:wikidata": "Q244457",
+    "brand:wikipedia": "en:Subway (restaurant)",
+    "name": "Subway",
+    "name:pa": "ਸਬਵੇਅ",
+    "name:ur": "سب وے"
+  }
+},
+{
+  "type": "node",
+  "id": 4561875180,
+  "lat": 15.4857682,
+  "lon": 73.8115056,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Antique Mardol"
+  }
+},
+{
+  "type": "node",
+  "id": 4561875181,
+  "lat": 15.4857359,
+  "lon": 73.8114707,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Cafe Coffee Day"
+  }
+},
+{
+  "type": "node",
+  "id": 4561875290,
+  "lat": 15.4828128,
+  "lon": 73.8125827,
+  "tags": {
+    "amenity": "restaurant"
+  }
+},
+{
+  "type": "node",
+  "id": 4561922823,
+  "lat": 15.4882918,
+  "lon": 73.8207687,
+  "tags": {
+    "amenity": "pharmacy",
+    "name": "Pharmax"
+  }
+},
+{
+  "type": "node",
+  "id": 4561922830,
+  "lat": 15.4898712,
+  "lon": 73.8197848,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Cafe Borkar"
+  }
+},
+{
+  "type": "node",
+  "id": 4561922832,
+  "lat": 15.4901855,
+  "lon": 73.8197986,
+  "tags": {
+    "amenity": "bank",
+    "name": "Union Bank"
+  }
+},
+{
+  "type": "node",
+  "id": 4561922836,
+  "lat": 15.4909024,
+  "lon": 73.8198987,
+  "tags": {
+    "amenity": "bank",
+    "brand": "Allahabad Bank",
+    "brand:wikidata": "Q2018840",
+    "brand:wikipedia": "en:Allahabad Bank",
+    "name": "Allahabad Bank",
+    "name:en": "Allahabad Bank",
+    "name:kn": "ಅಲ್ಲಹಾಬಾದ್ ಬ್ಯಾಂಕ್",
+    "website": "https://www.allahabadbank.in"
+  }
+},
+{
+  "type": "node",
+  "id": 4561954057,
+  "lat": 15.4938276,
+  "lon": 73.8206269,
+  "tags": {
+    "amenity": "bank",
+    "brand": "Karnataka Bank",
+    "brand:wikidata": "Q2042632",
+    "name": "Karnataka Bank"
+  }
+},
+{
+  "type": "node",
+  "id": 4561954064,
+  "lat": 15.4943876,
+  "lon": 73.8209016,
+  "tags": {
+    "amenity": "bank",
+    "brand": "State Bank of India",
+    "brand:wikidata": "Q1340361",
+    "brand:wikipedia": "en:State Bank of India",
+    "name": "State Bank of India",
+    "short_name": "SBI",
+    "website": "https://www.sbi.co.in"
+  }
+},
+{
+  "type": "node",
+  "id": 4561954065,
+  "lat": 15.4950113,
+  "lon": 73.8209768,
+  "tags": {
+    "amenity": "pharmacy",
+    "name": "Taj Medical Stores"
+  }
+},
+{
+  "type": "node",
+  "id": 4561954067,
+  "lat": 15.4949402,
+  "lon": 73.8208575,
+  "tags": {
+    "amenity": "bank",
+    "brand": "CSB Bank",
+    "brand:wikidata": "Q5053244",
+    "name": "CSB Bank",
+    "official_name": "Catholic Syrian Bank"
+  }
+},
+{
+  "type": "node",
+  "id": 4561954068,
+  "lat": 15.4937691,
+  "lon": 73.8191137,
+  "tags": {
+    "amenity": "bank",
+    "atm": "yes",
+    "brand": "Karur Vysya Bank",
+    "brand:wikidata": "Q6373724",
+    "brand:wikipedia": "en:Karur Vysya Bank",
+    "name": "Karur Vysya Bank",
+    "name:en": "Karur Vysya Bank",
+    "short_name": "KVB",
+    "website": "https://www.kvb.co.in"
+  }
+},
+{
+  "type": "node",
+  "id": 4561954074,
+  "lat": 15.4964838,
+  "lon": 73.8235779,
+  "tags": {
+    "amenity": "bank",
+    "brand": "Canara Bank",
+    "brand:en": "Canara Bank",
+    "brand:hi": "केनरा बैंक",
+    "brand:kn": "ಕೆನರಾ ಬ್ಯಾಂಕ್",
+    "brand:pa": "ਕੇਨਰਾ ਬੈਂਕ",
+    "brand:pnb": "کینرا بینک",
+    "brand:ur": "کینرا بینک",
+    "brand:wikidata": "Q2003777",
+    "brand:wikipedia": "en:Canara Bank",
+    "brand:wikipedia:pa": "ਕੇਨਰਾ ਬੈਂਕ",
+    "name": "Canara Bank",
+    "name:en": "Canara Bank",
+    "name:hi": "केनरा बैंक",
+    "name:kn": "ಕೆನರಾ ಬ್ಯಾಂಕ್",
+    "name:pa": "ਕੇਨਰਾ ਬੈਂਕ",
+    "name:pnb": "کینرا بینک",
+    "name:ur": "کینرا بینک",
+    "website": "https://www.canarabank.com/",
+    "wikidata": "Q73868862"
+  }
+},
+{
+  "type": "node",
+  "id": 4561954493,
+  "lat": 15.4977966,
+  "lon": 73.8308180,
+  "tags": {
+    "amenity": "bar",
+    "name": "Sushma Spot Bar"
+  }
+},
+{
+  "type": "node",
+  "id": 4561954494,
+  "lat": 15.4978030,
+  "lon": 73.8308676,
+  "tags": {
+    "amenity": "ice_cream",
+    "name": "Fabrica Oriental"
+  }
+},
+{
+  "type": "node",
+  "id": 4561954496,
+  "lat": 15.4975189,
+  "lon": 73.8317642,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Cremeux"
+  }
+},
+{
+  "type": "node",
+  "id": 4569290501,
+  "lat": 15.4993619,
+  "lon": 73.8262671,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Sanyog",
+    "name:en": "Sanyog"
+  }
+},
+{
+  "type": "node",
+  "id": 4569290993,
+  "lat": 15.4991702,
+  "lon": 73.8262814,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Texas Bar and Restaurant",
+    "name:en": "Texas Bar and Restaurant"
+  }
+},
+{
+  "type": "node",
+  "id": 4688414689,
+  "lat": 15.4992366,
+  "lon": 73.8259246,
+  "tags": {
+    "amenity": "atm",
+    "opening_hours": "24/7",
+    "operator": "Bank of Maharaashtra"
+  }
+},
+{
+  "type": "node",
+  "id": 4707815012,
+  "lat": 15.5013547,
+  "lon": 73.8262391,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Quarterdeck"
+  }
+},
+{
+  "type": "node",
+  "id": 4745146326,
+  "lat": 15.4903579,
+  "lon": 73.8321813,
+  "tags": {
+    "amenity": "bank",
+    "brand": "Canara Bank",
+    "brand:pa": "ਕੇਨਰਾ ਬੈਂਕ",
+    "brand:ur": "کینرا بینک",
+    "brand:wikidata": "Q2003777",
+    "brand:wikipedia": "en:Canara Bank",
+    "brand:wikipedia:pa": "ਕੇਨਰਾ ਬੈਂਕ",
+    "name": "Canara Bank",
+    "name:pa": "ਕੇਨਰਾ ਬੈਂਕ",
+    "name:ur": "کینرا بینک",
+    "website": "https://www.canarabank.com/"
+  }
+},
+{
+  "type": "node",
+  "id": 4759448738,
+  "lat": 15.4936171,
+  "lon": 73.8195282,
+  "tags": {
+    "amenity": "bank",
+    "brand": "Karur Vysya Bank",
+    "brand:wikidata": "Q6373724",
+    "brand:wikipedia": "en:Karur Vysya Bank",
+    "name": "Karur Vysya Bank",
+    "name:en": "Karur Vysya Bank",
+    "short_name": "KVB",
+    "website": "https://www.kvb.co.in"
+  }
+},
+{
+  "type": "node",
+  "id": 4808923121,
+  "lat": 15.4987453,
+  "lon": 73.8235781,
+  "tags": {
+    "amenity": "bank",
+    "name": "Kusum  Money Exchange",
+    "name:en": "Kusum  Money Exchange"
+  }
+},
+{
+  "type": "node",
+  "id": 4975706021,
+  "lat": 15.4986971,
+  "lon": 73.8210107,
+  "tags": {
+    "amenity": "fast_food",
+    "name": "NJos",
+    "name:en": "NJos"
+  }
+},
+{
+  "type": "node",
+  "id": 4975706022,
+  "lat": 15.4987212,
+  "lon": 73.8210524,
+  "tags": {
+    "amenity": "fast_food",
+    "name": "Hot dog",
+    "name:en": "Hot dog"
+  }
+},
+{
+  "type": "node",
+  "id": 4975706121,
+  "lat": 15.4987472,
+  "lon": 73.8210860,
+  "tags": {
+    "amenity": "fast_food",
+    "name": "Crazy Corn",
+    "name:en": "Crazy Corn"
+  }
+},
+{
+  "type": "node",
+  "id": 4980070026,
+  "lat": 15.4986756,
+  "lon": 73.8245353,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Crossroads Pub & Bistro"
+  }
+},
+{
+  "type": "node",
+  "id": 5279901413,
+  "lat": 15.4983379,
+  "lon": 73.8316409,
+  "tags": {
+    "amenity": "bar",
+    "check_date": "2023-10-14",
+    "name": "Joseph's Bar",
+    "traffic_calming": "bump"
+  }
+},
+{
+  "type": "node",
+  "id": 5286288424,
+  "lat": 15.5024665,
+  "lon": 73.8545509,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "River lounge"
+  }
+},
+{
+  "type": "node",
+  "id": 5309858321,
+  "lat": 15.4834498,
+  "lon": 73.8157784,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Simply Salads"
+  }
+},
+{
+  "type": "node",
+  "id": 5853498264,
+  "lat": 15.4939500,
+  "lon": 73.8356257,
+  "tags": {
+    "addr:city": "patto panjim",
+    "amenity": "bank",
+    "atm": "yes",
+    "brand": "Axis Bank",
+    "brand:wikidata": "Q2003549",
+    "brand:wikipedia": "en:Axis Bank",
+    "name": "Axis Bank",
+    "wikidata": "Q73752472"
+  }
+},
+{
+  "type": "node",
+  "id": 5853502573,
+  "lat": 15.4969513,
+  "lon": 73.8335847,
+  "tags": {
+    "addr:city": "patto panjim",
+    "amenity": "bank",
+    "atm": "yes",
+    "brand": "ICICI Bank",
+    "brand:wikidata": "Q1653258",
+    "name": "ICICI Bank",
+    "short_name": "ICICI"
+  }
+},
+{
+  "type": "node",
+  "id": 5868808280,
+  "lat": 15.4978938,
+  "lon": 73.8272669,
+  "tags": {
+    "amenity": "bank",
+    "atm": "yes",
+    "branch": "Panjim Branch",
+    "brand": "South Indian Bank",
+    "brand:wikidata": "Q2044973",
+    "name": "South Indian Bank"
+  }
+},
+{
+  "type": "node",
+  "id": 5868808282,
+  "lat": 15.4976634,
+  "lon": 73.8270682,
+  "tags": {
+    "amenity": "bank",
+    "atm": "yes",
+    "brand": "Punjab National Bank",
+    "brand:wikidata": "Q2743499",
+    "name": "Punjab National Bank"
+  }
+},
+{
+  "type": "node",
+  "id": 5868813599,
+  "lat": 15.5003650,
+  "lon": 73.8302902,
+  "tags": {
+    "amenity": "bank",
+    "atm": "no",
+    "branch": "Secreteriat Branch",
+    "brand": "State Bank of India",
+    "brand:wikidata": "Q1340361",
+    "name": "State Bank of India",
+    "operator": "State Bank of India",
+    "short_name": "SBI"
+  }
+},
+{
+  "type": "node",
+  "id": 5868813600,
+  "lat": 15.4980268,
+  "lon": 73.8269364,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Cafe Central",
+    "payment:american_express": "yes",
+    "payment:diners_club": "yes",
+    "payment:mastercard": "yes",
+    "payment:paytm": "yes",
+    "payment:rupay": "yes",
+    "payment:visa": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5927893273,
+  "lat": 15.4970307,
+  "lon": 73.8335009,
+  "tags": {
+    "amenity": "bank",
+    "brand": "HDFC Bank",
+    "brand:wikidata": "Q631047",
+    "name": "HDFC Bank",
+    "short_name": "HDFC"
+  }
+},
+{
+  "type": "node",
+  "id": 5963358385,
+  "lat": 15.5003268,
+  "lon": 73.8226820,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Food corner"
+  }
+},
+{
+  "type": "node",
+  "id": 6033753968,
+  "lat": 15.4809669,
+  "lon": 73.8435239,
+  "tags": {
+    "amenity": "fast_food",
+    "cuisine": "regional",
+    "name": "Goan Fast Food",
+    "opening_hours": "After 18:00 hrs",
+    "operator": "Dias",
+    "takeaway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6204178105,
+  "lat": 15.4984161,
+  "lon": 73.8288479,
+  "tags": {
+    "amenity": "taxi",
+    "name": "Auto Stand"
+  }
+},
+{
+  "type": "node",
+  "id": 6325448594,
+  "lat": 15.4950615,
+  "lon": 73.8309137,
+  "tags": {
+    "amenity": "cafe",
+    "check_date": "2023-10-14",
+    "name": "Bombay coffee roasters",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6501752885,
+  "lat": 15.4959757,
+  "lon": 73.8335728,
+  "tags": {
+    "amenity": "bank",
+    "brand": "State Bank of India",
+    "brand:wikidata": "Q1340361",
+    "name": "State Bank of India",
+    "short_name": "SBI"
+  }
+},
+{
+  "type": "node",
+  "id": 6627071785,
+  "lat": 15.4983972,
+  "lon": 73.8279205,
+  "tags": {
+    "amenity": "bank",
+    "brand": "Corporation Bank",
+    "brand:wikidata": "Q2003387",
+    "name": "Corporation Bank"
+  }
+},
+{
+  "type": "node",
+  "id": 6632738686,
+  "lat": 15.4985339,
+  "lon": 73.8283877,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Kwality"
+  }
+},
+{
+  "type": "node",
+  "id": 6639495985,
+  "lat": 15.4798865,
+  "lon": 73.8142224,
+  "tags": {
+    "amenity": "pharmacy",
+    "name": "Matrix"
+  }
+},
+{
+  "type": "node",
+  "id": 7118653785,
+  "lat": 15.4951251,
+  "lon": 73.8315684,
+  "tags": {
+    "addr:housenumber": "4/183",
+    "addr:postcode": "403001",
+    "addr:street": "Pauline Da Dias Road",
+    "amenity": "fast_food",
+    "name": "The Krunch Story",
+    "payment:credit_cards": "no",
+    "payment:debit_cards": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 7221837385,
+  "lat": 15.4983447,
+  "lon": 73.8367431,
+  "tags": {
+    "amenity": "toilets"
+  }
+},
+{
+  "type": "node",
+  "id": 7276181985,
+  "lat": 15.5032361,
+  "lon": 73.8106331,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Mike's Place"
+  }
+},
+{
+  "type": "node",
+  "id": 7701024385,
+  "lat": 15.4989830,
+  "lon": 73.8325938,
+  "tags": {
+    "amenity": "cafe",
+    "name": "blue tokai coffee"
+  }
+},
+{
+  "type": "node",
+  "id": 7968024585,
+  "lat": 15.4937544,
+  "lon": 73.8303598,
+  "tags": {
+    "amenity": "pharmacy",
+    "name": "Neha"
+  }
+},
+{
+  "type": "node",
+  "id": 8061511888,
+  "lat": 15.4960042,
+  "lon": 73.8252763,
+  "tags": {
+    "amenity": "bank",
+    "name": "फ़ेडरल बैंक पंजिम, गोआ",
+    "name:en": "Federal Bank, Panjim"
+  }
+},
+{
+  "type": "node",
+  "id": 8201515150,
+  "lat": 15.4995127,
+  "lon": 73.8316562,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Venite"
+  }
+},
+{
+  "type": "node",
+  "id": 8452214017,
+  "lat": 15.4832119,
+  "lon": 73.8109189,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Taste of place"
+  }
+},
+{
+  "type": "node",
+  "id": 8496125218,
+  "lat": 15.4966165,
+  "lon": 73.8338837,
+  "tags": {
+    "amenity": "bank",
+    "brand": "Canara Bank",
+    "brand:en": "Canara Bank",
+    "brand:hi": "केनरा बैंक",
+    "brand:kn": "ಕೆನರಾ ಬ್ಯಾಂಕ್",
+    "brand:pa": "ਕੇਨਰਾ ਬੈਂਕ",
+    "brand:pnb": "کینرا بینک",
+    "brand:ur": "کینرا بینک",
+    "brand:wikidata": "Q2003777",
+    "name": "Canara Bank",
+    "name:en": "Canara Bank",
+    "name:hi": "केनरा बैंक",
+    "name:kn": "ಕೆನರಾ ಬ್ಯಾಂಕ್",
+    "name:pa": "ਕੇਨਰਾ ਬੈਂਕ",
+    "name:pnb": "کینرا بینک",
+    "name:ur": "کینرا بینک"
+  }
+},
+{
+  "type": "node",
+  "id": 8496125219,
+  "lat": 15.4965878,
+  "lon": 73.8339112,
+  "tags": {
+    "amenity": "bank",
+    "name": "The Bicholim urban cooperative bank"
+  }
+},
+{
+  "type": "node",
+  "id": 8496647117,
+  "lat": 15.4855107,
+  "lon": 73.8118406,
+  "tags": {
+    "amenity": "ice_cream",
+    "name": "Amul"
+  }
+},
+{
+  "type": "node",
+  "id": 8506180618,
+  "lat": 15.4817179,
+  "lon": 73.8107463,
+  "tags": {
+    "amenity": "bank",
+    "name": "SBI"
+  }
+},
+{
+  "type": "node",
+  "id": 8527144718,
+  "lat": 15.4956956,
+  "lon": 73.8339073,
+  "tags": {
+    "amenity": "bank",
+    "brand": "Punjab National Bank",
+    "brand:wikidata": "Q2743499",
+    "name": "Punjab National Bank"
+  }
+},
+{
+  "type": "node",
+  "id": 8527212917,
+  "lat": 15.4955620,
+  "lon": 73.8340547,
+  "tags": {
+    "amenity": "bank",
+    "brand": "ICICI Bank",
+    "brand:wikidata": "Q1653258",
+    "name": "ICICI Bank",
+    "short_name": "ICICI"
+  }
+},
+{
+  "type": "node",
+  "id": 8531996268,
+  "lat": 15.4987644,
+  "lon": 73.8287917,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "George Restaurant & Bar",
+    "website": "https://georgebarpanaji.business.site/"
+  }
+},
+{
+  "type": "node",
+  "id": 8609907017,
+  "lat": 15.5002008,
+  "lon": 73.8227105,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Uday agar graha"
+  }
+},
+{
+  "type": "node",
+  "id": 8768376017,
+  "lat": 15.4990725,
+  "lon": 73.8326176,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Mo's cafe"
+  }
+},
+{
+  "type": "node",
+  "id": 10033498079,
+  "lat": 15.4847262,
+  "lon": 73.8219501,
+  "tags": {
+    "amenity": "restaurant",
+    "cuisine": "indian",
+    "name": "India Cafe",
+    "opening_hours": "Mo-Su 09:00-21:00"
+  }
+},
+{
+  "type": "node",
+  "id": 10033964531,
+  "lat": 15.4874484,
+  "lon": 73.8130213,
+  "tags": {
+    "amenity": "cafe",
+    "brand": "Starbucks",
+    "brand:wikidata": "Q37158",
+    "cuisine": "coffee_shop",
+    "name": "Starbucks",
+    "official_name": "Starbucks Coffee",
+    "takeaway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 10242164147,
+  "lat": 15.4989311,
+  "lon": 73.8334054,
+  "tags": {
+    "amenity": "restaurant",
+    "description": "Live Performances Monday-Wednesday, Karaoke Thursday; Authentic food - Goan, Baguettes, Italian, Continental etc;\nBeers and Cocktails; (1st floor)\nPub (Ground floor)",
+    "name": "Riverfront / Down the Road",
+    "opening_hours": "Mo-Su 10:00-03:00"
+  }
+},
+{
+  "type": "node",
+  "id": 10285622449,
+  "lat": 15.4966112,
+  "lon": 73.8269797,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Kokni Kanteen"
+  }
+},
+{
+  "type": "node",
+  "id": 10285641120,
+  "lat": 15.4964785,
+  "lon": 73.8267811,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Kutumbh"
+  }
+},
+{
+  "type": "node",
+  "id": 10285685319,
+  "lat": 15.4995637,
+  "lon": 73.8289395,
+  "tags": {
+    "amenity": "ice_cream",
+    "name": "Agencia Oriental"
+  }
+},
+{
+  "type": "node",
+  "id": 10748625300,
+  "lat": 15.4996342,
+  "lon": 73.8316796,
+  "tags": {
+    "amenity": "cafe",
+    "name": "The Caravella Cafe And Bistro"
+  }
+},
+{
+  "type": "node",
+  "id": 10751415929,
+  "lat": 15.4952197,
+  "lon": 73.8373819,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "PF 2: Mysuru, Mangaluru, Bengaluru, Hyderabad"
+  }
+},
+{
+  "type": "node",
+  "id": 10751415930,
+  "lat": 15.4952855,
+  "lon": 73.8367030,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "Platform 19-21 Altinho-Calangute-Aldona"
+  }
+},
+{
+  "type": "node",
+  "id": 10751415931,
+  "lat": 15.4949996,
+  "lon": 73.8370167,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "Platform 17-18 Madgaon-Vasco-Canacona"
+  }
+},
+{
+  "type": "node",
+  "id": 10751415934,
+  "lat": 15.4950140,
+  "lon": 73.8372111,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "Platform 16 Panjim-Madgaon Shuttle Bus Stop"
+  }
+},
+{
+  "type": "node",
+  "id": 10752433859,
+  "lat": 15.4973305,
+  "lon": 73.8312338,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Confetaria 31de Janerio"
+  }
+},
+{
+  "type": "node",
+  "id": 10753095268,
+  "lat": 15.4937004,
+  "lon": 73.8320476,
+  "tags": {
+    "bench": "no",
+    "highway": "bus_stop",
+    "shelter": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 10755732254,
+  "lat": 15.4944150,
+  "lon": 73.8291662,
+  "tags": {
+    "amenity": "toilets"
+  }
+},
+{
+  "type": "node",
+  "id": 10757172790,
+  "lat": 15.4917262,
+  "lon": 73.8150251,
+  "tags": {
+    "addr:city": "panjim",
+    "addr:postcode": "403001",
+    "addr:street": "Gymkhana, Dayanand Bandodkar Marg, near Sports Authority, Campal, Miramar",
+    "amenity": "restaurant",
+    "name": "Ritz Classic Panjim Gymkhana"
+  }
+},
+{
+  "type": "node",
+  "id": 10757172829,
+  "lat": 15.4835686,
+  "lon": 73.8104010,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "House of B"
+  }
+},
+{
+  "type": "node",
+  "id": 10758181909,
+  "lat": 15.4996253,
+  "lon": 73.8325112,
+  "tags": {
+    "amenity": "taxi",
+    "name": "Auto Stand"
+  }
+},
+{
+  "type": "node",
+  "id": 10758478851,
+  "lat": 15.4936275,
+  "lon": 73.8200106,
+  "tags": {
+    "highway": "bus_stop",
+    "shelter": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 10758498605,
+  "lat": 15.4884497,
+  "lon": 73.8136041,
+  "tags": {
+    "highway": "bus_stop",
+    "shelter": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 10969361347,
+  "lat": 15.4967583,
+  "lon": 73.8269745,
+  "tags": {
+    "amenity": "restaurant",
+    "cuisine": "seafood",
+    "name": "Kokni Kanteen"
+  }
+},
+{
+  "type": "node",
+  "id": 11262416443,
+  "lat": 15.4965194,
+  "lon": 73.8263154,
+  "tags": {
+    "amenity": "bank",
+    "brand": "Axis Bank",
+    "brand:wikidata": "Q2003549",
+    "name": "Axis Bank"
+  }
+},
+{
+  "type": "node",
+  "id": 11262417160,
+  "lat": 15.4969222,
+  "lon": 73.8263498,
+  "tags": {
+    "amenity": "fast_food",
+    "name": "Chai sutta bar",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 11262422524,
+  "lat": 15.4973371,
+  "lon": 73.8264790,
+  "tags": {
+    "amenity": "bank",
+    "brand": "State Bank of India",
+    "brand:wikidata": "Q1340361",
+    "name": "State Bank of India",
+    "short_name": "SBI"
+  }
+},
+{
+  "type": "node",
+  "id": 11262852174,
+  "lat": 15.4963663,
+  "lon": 73.8313485,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Viva panjim",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 11262857794,
+  "lat": 15.4963037,
+  "lon": 73.8313816,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Creek Cafe"
+  }
+},
+{
+  "type": "node",
+  "id": 11559868670,
+  "lat": 15.4990432,
+  "lon": 73.8335580,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "tataki"
+  }
+},
+{
+  "type": "node",
+  "id": 11607495269,
+  "lat": 15.4992966,
+  "lon": 73.8330145,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Cafe prassan"
+  }
+},
+{
+  "type": "node",
+  "id": 11782641565,
+  "lat": 15.5002882,
+  "lon": 73.8297357,
+  "tags": {
+    "addr:street": "Mahatma Gandhi Road",
+    "amenity": "restaurant",
+    "name": "Vijay Amruttulya Tea"
+  }
+},
+{
+  "type": "node",
+  "id": 11821206581,
+  "lat": 15.4973397,
+  "lon": 73.8317495,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Greenr",
+    "opening_hours": "Mo-Su 11:00-22:00",
+    "phone": "085911 38613",
+    "website": "https://www.greenr.in/"
+  }
+},
+{
+  "type": "node",
+  "id": 11893245269,
+  "lat": 15.4985136,
+  "lon": 73.8330489,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Bombay Coffee House"
+  }
+},
+{
+  "type": "node",
+  "id": 12243904170,
+  "lat": 15.4988105,
+  "lon": 73.8322499,
+  "tags": {
+    "air_conditioning": "yes",
+    "amenity": "cafe",
+    "check_date": "2024-10-11",
+    "diet:vegetarian": "yes",
+    "internet_access": "wlan",
+    "internet_access:fee": "customers",
+    "name": "Larder & Folk",
+    "outdoor_seating": "no",
+    "reservation": "yes",
+    "takeaway": "yes",
+    "toilets:wheelchair": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 12243904171,
+  "lat": 15.4983025,
+  "lon": 73.8326790,
+  "tags": {
+    "amenity": "restaurant",
+    "check_date": "2024-10-11",
+    "name": "Sarvaa"
+  }
+},
+{
+  "type": "node",
+  "id": 12243904172,
+  "lat": 15.4979575,
+  "lon": 73.8353993,
+  "tags": {
+    "amenity": "restaurant",
+    "check_date": "2024-10-11",
+    "diet:vegetarian": "yes",
+    "name": "Anand Sayar"
+  }
+},
+{
+  "type": "node",
+  "id": 12248651777,
+  "lat": 15.5004334,
+  "lon": 73.8215461,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "Panaji Market",
+    "shelter": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 12248651784,
+  "lat": 15.5003670,
+  "lon": 73.8221599,
+  "tags": {
+    "amenity": "atm",
+    "brand": "Bank of India",
+    "brand:wikidata": "Q2004439",
+    "operator": "Bank of India",
+    "operator:wikidata": "Q2004439"
+  }
+},
+{
+  "type": "node",
+  "id": 12248651792,
+  "lat": 15.5004815,
+  "lon": 73.8228539,
+  "tags": {
+    "amenity": "bank",
+    "brand": "IDBI Bank",
+    "brand:wikidata": "Q3633485",
+    "name": "IDBI Bank",
+    "short_name": "IDBI"
+  }
+},
+{
+  "type": "node",
+  "id": 12248651795,
+  "lat": 15.5003540,
+  "lon": 73.8221100,
+  "tags": {
+    "amenity": "bank",
+    "brand": "Bank of India",
+    "brand:wikidata": "Q2004439",
+    "name": "Bank of India"
+  }
+},
+{
+  "type": "node",
+  "id": 12248665805,
+  "lat": 15.5004719,
+  "lon": 73.8228099,
+  "tags": {
+    "amenity": "atm",
+    "brand": "IDBI Bank",
+    "brand:wikidata": "Q3633485",
+    "operator": "IDBI Bank",
+    "operator:wikidata": "Q3633485",
+    "short_name": "IDBI"
+  }
+},
+{
+  "type": "node",
+  "id": 12278709178,
+  "lat": 15.4991393,
+  "lon": 73.8274652,
+  "tags": {
+    "amenity": "toilets"
+  }
+},
+{
+  "type": "node",
+  "id": 12397231042,
+  "lat": 15.4951295,
+  "lon": 73.8346708,
+  "tags": {
+    "amenity": "toilets"
+  }
+},
+{
+  "type": "node",
+  "id": 12416524785,
+  "lat": 15.4940449,
+  "lon": 73.8188511,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Bombil restaurant"
+  }
+},
+{
+  "type": "node",
+  "id": 12512342025,
+  "lat": 15.4937823,
+  "lon": 73.8369848,
+  "tags": {
+    "highway": "bus_stop",
+    "shelter": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 12570682322,
+  "lat": 15.4996644,
+  "lon": 73.8226545,
+  "tags": {
+    "amenity": "restaurant",
+    "diet:vegetarian": "yes",
+    "name": "Navratna"
+  }
+},
+{
+  "type": "node",
+  "id": 12578699557,
+  "lat": 15.5001408,
+  "lon": 73.8215533,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "Panaji Market",
+    "shelter": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 12578699597,
+  "lat": 15.4813989,
+  "lon": 73.8110818,
+  "tags": {
+    "highway": "bus_stop"
+  }
+},
+{
+  "type": "node",
+  "id": 12603075130,
+  "lat": 15.4819598,
+  "lon": 73.8139680,
+  "tags": {
+    "amenity": "cafe",
+    "description": "Boutique Cafe",
+    "name": "Aurawell"
+  }
+},
+{
+  "type": "node",
+  "id": 12701303420,
+  "lat": 15.4958340,
+  "lon": 73.8365337,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Harman Chaiwala"
+  }
+},
+{
+  "type": "node",
+  "id": 12701303456,
+  "lat": 15.4959727,
+  "lon": 73.8366185,
+  "tags": {
+    "amenity": "taxi",
+    "name": "KTCL Motorcycle Taxi Stand",
+    "taxi_vehicle": "motorcycle"
+  }
+},
+{
+  "type": "node",
+  "id": 12776393616,
+  "lat": 15.4961797,
+  "lon": 73.8380679,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "Paulo Travels Panjim Pickup",
+    "operator": "Paulo Travels"
+  }
+},
+{
+  "type": "node",
+  "id": 12795832326,
+  "lat": 15.4997246,
+  "lon": 73.8241607,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "Panaji Police Station"
+  }
+},
+{
+  "type": "node",
+  "id": 12942249921,
+  "lat": 15.4946459,
+  "lon": 73.8176661,
+  "tags": {
+    "access": "yes",
+    "amenity": "fast_food",
+    "check_date": "2025-06-21",
+    "cuisine": "indian",
+    "diet:non-vegetarian": "yes",
+    "diet:vegetarian": "yes",
+    "drive_through": "no",
+    "fast_food": "cafeteria",
+    "internet_access": "no",
+    "name": "Kala Academy Cafeteria",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 12982721263,
+  "lat": 15.4991175,
+  "lon": 73.8278153,
+  "tags": {
+    "air_conditioning": "no",
+    "amenity": "restaurant",
+    "bar": "no",
+    "check_date": "2025-07-06",
+    "cuisine": "chinese;indian",
+    "diet:vegetarian": "yes",
+    "highchair": "no",
+    "microbrewery": "no",
+    "name": "Haryali Pure Veg Restaurant",
+    "name:en": "Haryali Pure Veg Restaurant",
+    "outdoor_seating": "no",
+    "smoking": "no",
+    "toilets": "yes",
+    "toilets:wheelchair": "no",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 13036705713,
+  "lat": 15.4812934,
+  "lon": 73.8129515,
+  "tags": {
+    "addr:city": "Panjim",
+    "addr:district": "North Goa",
+    "addr:postcode": "403002",
+    "addr:street": "St. Inez Road",
+    "amenity": "cafe",
+    "check_date:currency:XBT": "2025-08-06",
+    "currency:INR": "yes",
+    "currency:XBT": "yes",
+    "name": "Oya's Umami Cafe",
+    "opening_hours": "We-Mo 12:00- 22:30",
+    "outdoor_seating": "yes",
+    "payment:lightning": "yes",
+    "payment:lightning_contactless": "yes",
+    "payment:onchain": "no",
+    "survey:date": "2025-07-30"
+  }
+},
+{
+  "type": "node",
+  "id": 13126999650,
+  "lat": 15.4961544,
+  "lon": 73.8369354,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Panjim KTC Bus Stand",
+    "public_transport": "platform"
+  }
+},
+{
+  "type": "node",
+  "id": 13126999651,
+  "lat": 15.4960908,
+  "lon": 73.8369871,
+  "tags": {
+    "amenity": "taxi",
+    "name": "Prepaid Taxi"
+  }
+},
+{
+  "type": "node",
+  "id": 13127014679,
+  "lat": 15.4873380,
+  "lon": 73.8261989,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Altinho Circle",
+    "public_transport": "platform",
+    "shelter": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 13127556147,
+  "lat": 15.4973937,
+  "lon": 73.8229855,
+  "tags": {
+    "amenity": "fast_food",
+    "name": "Chat Street"
+  }
+},
+{
+  "type": "node",
+  "id": 13127556148,
+  "lat": 15.4975881,
+  "lon": 73.8229368,
+  "tags": {
+    "amenity": "fast_food",
+    "name": "Rangilo Gujarat"
+  }
+},
+{
+  "type": "node",
+  "id": 13127685527,
+  "lat": 15.4978470,
+  "lon": 73.8258291,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Artjuna Panjim"
+  }
+},
+{
+  "type": "node",
+  "id": 13127685529,
+  "lat": 15.4974805,
+  "lon": 73.8251319,
+  "tags": {
+    "amenity": "bank",
+    "brand": "State Bank of India",
+    "brand:wikidata": "Q1340361",
+    "name": "State Bank of India Treasury Branch",
+    "short_name": "SBI"
+  }
+},
+{
+  "type": "node",
+  "id": 13127685531,
+  "lat": 15.4972026,
+  "lon": 73.8246551,
+  "tags": {
+    "amenity": "restaurant",
+    "cuisine": "indian",
+    "name": "Legacy Of Bombay"
+  }
+},
+{
+  "type": "node",
+  "id": 13128165829,
+  "lat": 15.4956279,
+  "lon": 73.8372579,
+  "tags": {
+    "amenity": "fast_food",
+    "name": "Canteen"
+  }
+},
+{
+  "type": "node",
+  "id": 13128165830,
+  "lat": 15.4955866,
+  "lon": 73.8373035,
+  "tags": {
+    "amenity": "toilets"
+  }
+},
+{
+  "type": "node",
+  "id": 13128165834,
+  "lat": 15.4955387,
+  "lon": 73.8365431,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "public_transport": "platform",
+    "ref": "PF 28-34"
+  }
+},
+{
+  "type": "node",
+  "id": 13130874725,
+  "lat": 15.4870370,
+  "lon": 73.8109012,
+  "tags": {
+    "addr:city": "Goa",
+    "addr:district": "North Goa",
+    "addr:housenumber": "Wasab Building",
+    "addr:postcode": "403001",
+    "addr:street": "Nalanda Colony Main Road",
+    "air_conditioning": "yes",
+    "amenity": "restaurant",
+    "cuisine": "pizza;goan;chinese;north_indian;italian;continental;dessert",
+    "delivery": "yes",
+    "description": "Edu’s in Miramar, Panaji, is a cozy restaurant known for its pizzas, pastas, and multi-cuisine menu. Popular since the 2000s, it’s loved for its friendly staff, reasonable prices, and comforting food by the beach.",
+    "diet:non-vegetarian": "yes",
+    "diet:vegetarian": "yes",
+    "name": "Edu's",
+    "opening_hours": "Tu-Su 12:00-22:00",
+    "outdoor_seating": "yes",
+    "phone": "08322463777",
+    "smoking": "outside",
+    "takeaway": "yes",
+    "website:menu": "https://wa.me/c/918805461391"
+  }
+},
+{
+  "type": "node",
+  "id": 13273604201,
+  "lat": 15.4992190,
+  "lon": 73.8321784,
+  "tags": {
+    "amenity": "cafe",
+    "contact:facebook": "maverickcoffeeroasters",
+    "contact:instagram": "maverickandfarmer",
+    "cuisine": "cake;coffee_shop",
+    "name": "Maverick & Farmer Coffee"
+  }
+},
+{
+  "type": "node",
+  "id": 13388850336,
+  "lat": 15.4932208,
+  "lon": 73.8178023,
+  "tags": {
+    "bench": "yes",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Kala Academy",
+    "public_transport": "platform",
+    "shelter": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 13388850371,
+  "lat": 15.4946002,
+  "lon": 73.8186025,
+  "tags": {
+    "bench": "no",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "public_transport": "platform",
+    "shelter": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 13388850399,
+  "lat": 15.4931768,
+  "lon": 73.8177657,
+  "tags": {
+    "bench": "yes",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Kala Academy",
+    "public_transport": "platform",
+    "shelter": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 13413143892,
+  "lat": 15.4997429,
+  "lon": 73.8319539,
+  "tags": {
+    "amenity": "restaurant",
+    "check_date": "2025-12-28",
+    "name": "Vihar"
+  }
+},
+{
+  "type": "node",
+  "id": 13413143893,
+  "lat": 15.4997809,
+  "lon": 73.8318241,
+  "tags": {
+    "amenity": "fast_food",
+    "check_date": "2025-12-28",
+    "name": "Onebite"
+  }
+},
+{
+  "type": "node",
+  "id": 13413143894,
+  "lat": 15.5000048,
+  "lon": 73.8319221,
+  "tags": {
+    "amenity": "fast_food",
+    "check_date": "2025-12-28",
+    "cuisine": "pizza",
+    "name": "Pizza Hut"
+  }
+},
+{
+  "type": "node",
+  "id": 13413143895,
+  "lat": 15.4999641,
+  "lon": 73.8319010,
+  "tags": {
+    "amenity": "fast_food",
+    "check_date": "2025-12-28",
+    "name": "Sugarmama"
+  }
+},
+{
+  "type": "node",
+  "id": 13413143897,
+  "lat": 15.4997640,
+  "lon": 73.8316590,
+  "tags": {
+    "amenity": "bar",
+    "check_date": "2025-12-28",
+    "name": "Ye Catarina"
+  }
+},
+{
+  "type": "node",
+  "id": 13413143898,
+  "lat": 15.4996968,
+  "lon": 73.8316309,
+  "tags": {
+    "amenity": "bar",
+    "check_date": "2025-12-28",
+    "name": "Caravela"
+  }
+},
+{
+  "type": "node",
+  "id": 13413200901,
+  "lat": 15.4990539,
+  "lon": 73.8314011,
+  "tags": {
+    "amenity": "restaurant",
+    "check_date": "2025-12-28",
+    "name": "Casa Lusitana"
+  }
+},
+{
+  "type": "node",
+  "id": 13413200902,
+  "lat": 15.4986194,
+  "lon": 73.8315554,
+  "tags": {
+    "amenity": "restaurant",
+    "check_date": "2025-12-28",
+    "name": "Antonio"
+  }
+},
+{
+  "type": "node",
+  "id": 13413200904,
+  "lat": 15.4984175,
+  "lon": 73.8315191,
+  "tags": {
+    "amenity": "restaurant",
+    "check_date": "2025-12-28",
+    "cuisine": "asian",
+    "name": "Ma Kut Su"
+  }
+},
+{
+  "type": "node",
+  "id": 13413200905,
+  "lat": 15.4983503,
+  "lon": 73.8314374,
+  "tags": {
+    "amenity": "cafe",
+    "check_date": "2025-12-28",
+    "name": "Cafe Morongo"
+  }
+},
+{
+  "type": "node",
+  "id": 13413200906,
+  "lat": 15.4979304,
+  "lon": 73.8314148,
+  "tags": {
+    "amenity": "fast_food",
+    "check_date": "2025-12-28",
+    "name": "Chai Sutta Corner"
+  }
+},
+{
+  "type": "node",
+  "id": 13413200907,
+  "lat": 15.4977767,
+  "lon": 73.8312739,
+  "tags": {
+    "amenity": "restaurant",
+    "check_date": "2025-12-28",
+    "name": "Sunshine"
+  }
+},
+{
+  "type": "node",
+  "id": 13533443801,
+  "lat": 15.4875695,
+  "lon": 73.8322131,
+  "tags": {
+    "addr:postcode": "403001",
+    "addr:street": "Rua de Ourém",
+    "amenity": "restaurant",
+    "name:en": "Cafe Banglore Mala"
+  }
+},
+{
+  "type": "node",
+  "id": 13723061154,
+  "lat": 15.4899540,
+  "lon": 73.8325533,
+  "tags": {
+    "addr:door": "01",
+    "addr:floor": "G",
+    "amenity": "restaurant",
+    "check_date": "2026-04-11",
+    "level": "0",
+    "name": "Bumper Biryani"
+  }
+},
+{
+  "type": "node",
+  "id": 13723062758,
+  "lat": 15.4898420,
+  "lon": 73.8321929,
+  "tags": {
+    "amenity": "restaurant",
+    "check_date": "2026-04-11",
+    "name": "The Fish House"
+  }
+},
+{
+  "type": "node",
+  "id": 13723062759,
+  "lat": 15.4898545,
+  "lon": 73.8324667,
+  "tags": {
+    "amenity": "restaurant",
+    "check_date": "2026-04-11",
+    "name": "Larder + Folk"
+  }
+},
+{
+  "type": "node",
+  "id": 13833500167,
+  "lat": 15.5009219,
+  "lon": 73.8281602,
+  "tags": {
+    "amenity": "cafe",
+    "check_date": "2026-05-16",
+    "name": "Cafe Alfandega"
+  }
+},
+{
+  "type": "node",
+  "id": 13867001594,
+  "lat": 15.4984936,
+  "lon": 73.8266727,
+  "tags": {
+    "amenity": "ice_cream",
+    "check_date": "2026-05-23",
+    "name": "Yo By Hangyo"
+  }
+},
+{
+  "type": "node",
+  "id": 13867094401,
+  "lat": 15.4982521,
+  "lon": 73.8265830,
+  "tags": {
+    "addr:floor": "G",
+    "amenity": "restaurant",
+    "check_date": "2026-05-23",
+    "level": "0",
+    "name": "Sai Restaurant"
+  }
+},
+{
+  "type": "node",
+  "id": 13867094405,
+  "lat": 15.4979591,
+  "lon": 73.8259840,
+  "tags": {
+    "amenity": "restaurant",
+    "check_date": "2026-05-23",
+    "name": "Sher-e-Punjab"
+  }
+},
+{
+  "type": "node",
+  "id": 13867425295,
+  "lat": 15.4988436,
+  "lon": 73.8328352,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Ashok Bar And Restaurant"
+  }
+},
+{
+  "type": "node",
+  "id": 13891386940,
+  "lat": 15.4958583,
+  "lon": 73.8228250,
+  "tags": {
+    "amenity": "pharmacy",
+    "healthcare": "pharmacy",
+    "name": "Antila General Medicine"
+  }
+},
+{
+  "type": "node",
+  "id": 13891386953,
+  "lat": 15.4958971,
+  "lon": 73.8224180,
+  "tags": {
+    "amenity": "fast_food",
+    "name": "Vinod Vada Pav"
+  }
+},
+{
+  "type": "node",
+  "id": 13891386954,
+  "lat": 15.4970972,
+  "lon": 73.8225960,
+  "tags": {
+    "amenity": "ice_cream",
+    "brand": "Naturals",
+    "brand:wikidata": "Q24439154",
+    "name": "Naturals"
+  }
+},
+{
+  "type": "node",
+  "id": 13891404190,
+  "lat": 15.4991775,
+  "lon": 73.8223425,
+  "tags": {
+    "amenity": "restaurant",
+    "diet:vegetarian": "yes",
+    "name": "Prabhudev Restaurant"
+  }
+},
+{
+  "type": "node",
+  "id": 13891517110,
+  "lat": 15.4995684,
+  "lon": 73.8274882,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Cafe Bhonsle"
+  }
+},
+{
+  "type": "node",
+  "id": 13898914862,
+  "lat": 15.4886269,
+  "lon": 73.8152864,
+  "tags": {
+    "amenity": "atm",
+    "brand": "Kotak Mahindra Bank",
+    "operator": "Kotak Mahindra Bank",
+    "operator:wikidata": "Q2040404"
+  }
+},
+{
+  "type": "node",
+  "id": 13904136116,
+  "lat": 15.4954983,
+  "lon": 73.8373506,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "PF8: Sawantwadi"
+  }
+},
+{
+  "type": "node",
+  "id": 13904136117,
+  "lat": 15.4954555,
+  "lon": 73.8373520,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "PF7: Terekhol, Vengurla, Malvan, Sawantwadi"
+  }
+},
+{
+  "type": "node",
+  "id": 13904136119,
+  "lat": 15.4953987,
+  "lon": 73.8373673,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "PF6: Pune, Miraj, Solapur"
+  }
+},
+{
+  "type": "node",
+  "id": 13904136120,
+  "lat": 15.4953544,
+  "lon": 73.8373699,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "PF5: Belagavi Via Chorla"
+  }
+},
+{
+  "type": "node",
+  "id": 13904136121,
+  "lat": 15.4952634,
+  "lon": 73.8373787,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "PF3: Hubbali, Hospet, Karwar, Shimoga"
+  }
+},
+{
+  "type": "node",
+  "id": 13904136122,
+  "lat": 15.4953175,
+  "lon": 73.8373751,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "PF4: Belagavi Via Anmod, Bijapur, Kalaburgi"
+  }
+},
+{
+  "type": "node",
+  "id": 13908069839,
+  "lat": 15.4855302,
+  "lon": 73.8208422,
+  "tags": {
+    "amenity": "restaurant",
+    "check_date": "2026-05-31",
+    "name": "Mallu Republic"
+  }
+},
+{
+  "type": "node",
+  "id": 13908069841,
+  "lat": 15.4847836,
+  "lon": 73.8215746,
+  "tags": {
+    "amenity": "restaurant",
+    "check_date": "2026-05-31",
+    "name": "Narvekar's Restaurant"
+  }
+},
+{
+  "type": "node",
+  "id": 13908069842,
+  "lat": 15.4849510,
+  "lon": 73.8214644,
+  "tags": {
+    "amenity": "restaurant",
+    "check_date": "2026-05-31",
+    "name": "Appus Bar And Restaurant"
+  }
+},
+{
+  "type": "node",
+  "id": 13955843143,
+  "lat": 15.5008333,
+  "lon": 73.8279429,
+  "tags": {
+    "amenity": "restaurant",
+    "check_date": "2026-06-21",
+    "cuisine": "asian",
+    "name": "Bomblii"
+  }
+},
+{
+  "type": "node",
+  "id": 13955875433,
+  "lat": 15.5008059,
+  "lon": 73.8279577,
+  "tags": {
+    "amenity": "fast_food",
+    "check_date": "2026-06-21"
+  }
+},
+{
+  "type": "node",
+  "id": 14053139950,
+  "lat": 15.5003525,
+  "lon": 73.8288744,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Clube Nacional"
+  }
+},
+{
+  "type": "node",
+  "id": 14061833614,
+  "lat": 15.4956600,
+  "lon": 73.8366934,
+  "tags": {
+    "amenity": "fast_food",
+    "name": "Classic Pizza Sandwich Burger"
+  }
+},
+{
+  "type": "node",
+  "id": 14061833622,
+  "lat": 15.4956332,
+  "lon": 73.8367021,
+  "tags": {
+    "amenity": "fast_food",
+    "name": "Mumbai Special Bhel Puri"
+  }
+},
+{
+  "type": "node",
+  "id": 14061833629,
+  "lat": 15.4962284,
+  "lon": 73.8362930,
+  "tags": {
+    "amenity": "taxi",
+    "name": "Auto Stand"
+  }
+},
+{
+  "type": "node",
+  "id": 14061833630,
+  "lat": 15.4957154,
+  "lon": 73.8366341,
+  "tags": {
+    "amenity": "fast_food",
+    "cuisine": "juice",
+    "name": "Soda Stall"
+  }
+},
+{
+  "type": "node",
+  "id": 14061833643,
+  "lat": 15.4956527,
+  "lon": 73.8364268,
+  "tags": {
+    "bus": "yes",
+    "description": "20:20AC,21:30",
+    "highway": "bus_stop",
+    "name": "Mapusa KTC Shuttle",
+    "public_transport": "platform"
+  }
+},
+{
+  "type": "node",
+  "id": 14061833645,
+  "lat": 15.4961312,
+  "lon": 73.8367918,
+  "tags": {
+    "amenity": "taxi",
+    "name": "Prepaid Taxi Stand"
+  }
+},
+{
+  "type": "node",
+  "id": 14077993751,
+  "lat": 15.4960136,
+  "lon": 73.8360430,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "R"
+  }
+},
+{
+  "type": "node",
+  "id": 14077993763,
+  "lat": 15.4960397,
+  "lon": 73.8359828,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "G"
+  }
+},
+{
+  "type": "node",
+  "id": 14077993765,
+  "lat": 15.4873499,
+  "lon": 73.8260914,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Altinho Circle",
+    "public_transport": "platform",
+    "shelter": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 14077993767,
+  "lat": 15.4959941,
+  "lon": 73.8360699,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "B"
+  }
+},
+{
+  "type": "node",
+  "id": 14077993773,
+  "lat": 15.4960699,
+  "lon": 73.8359409,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "V: To St. Inez"
+  }
+},
+{
+  "type": "node",
+  "id": 14078309583,
+  "lat": 15.4995618,
+  "lon": 73.8290274,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Cafe Tato"
+  }
+},
+{
+  "type": "node",
+  "id": 14078631582,
+  "lat": 15.4961151,
+  "lon": 73.8347709,
+  "tags": {
+    "amenity": "cafe",
+    "name": "The Curry"
+  }
+},
+{
+  "type": "node",
+  "id": 14078631585,
+  "lat": 15.4960796,
+  "lon": 73.8347406,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Food Court"
+  }
+},
+{
+  "type": "node",
+  "id": 14078631587,
+  "lat": 15.4960420,
+  "lon": 73.8350034,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "public_transport": "platform"
+  }
+},
+{
+  "type": "node",
+  "id": 14078632502,
+  "lat": 15.4957007,
+  "lon": 73.8307450,
+  "tags": {
+    "amenity": "cafe",
+    "name": "Ederra Cafe"
+  }
+},
+{
+  "type": "node",
+  "id": 14078653396,
+  "lat": 15.4966957,
+  "lon": 73.8360446,
+  "tags": {
+    "amenity": "bar",
+    "name": "Refo's Food Palace"
+  }
+},
+{
+  "type": "node",
+  "id": 14078669619,
+  "lat": 15.4954846,
+  "lon": 73.8341285,
+  "tags": {
+    "amenity": "bank",
+    "brand": "HDFC Bank",
+    "brand:wikidata": "Q631047",
+    "name": "HDFC Bank",
+    "short_name": "HDFC"
+  }
+},
+{
+  "type": "node",
+  "id": 14078669624,
+  "lat": 15.4948415,
+  "lon": 73.8333638,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "City Pride"
+  }
+},
+{
+  "type": "node",
+  "id": 14078669630,
+  "lat": 15.4945847,
+  "lon": 73.8333688,
+  "tags": {
+    "amenity": "bank",
+    "brand": "Canara Bank",
+    "brand:en": "Canara Bank",
+    "brand:hi": "केनरा बैंक",
+    "brand:kn": "ಕೆನರಾ ಬ್ಯಾಂಕ್",
+    "brand:pa": "ਕੇਨਰਾ ਬੈਂਕ",
+    "brand:pnb": "کینرا بینک",
+    "brand:ur": "کینرا بینک",
+    "brand:wikidata": "Q2003777",
+    "name": "Canara Bank",
+    "name:en": "Canara Bank",
+    "name:hi": "केनरा बैंक",
+    "name:kn": "ಕೆನರಾ ಬ್ಯಾಂಕ್",
+    "name:pa": "ਕੇਨਰਾ ਬੈਂਕ",
+    "name:pnb": "کینرا بینک",
+    "name:ur": "کینرا بینک"
+  }
+},
+{
+  "type": "node",
+  "id": 14078669631,
+  "lat": 15.4954068,
+  "lon": 73.8340408,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "TaNaa Foods"
+  }
+},
+{
+  "type": "node",
+  "id": 14078698757,
+  "lat": 15.4967229,
+  "lon": 73.8353777,
+  "tags": {
+    "amenity": "bar",
+    "name": "Antique Mardols Family Bar And Restaurant"
+  }
+},
+{
+  "type": "node",
+  "id": 14078698759,
+  "lat": 15.4977753,
+  "lon": 73.8354510,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Sai Krupa Udupi Pure Veg"
+  }
+},
+{
+  "type": "node",
+  "id": 14078698760,
+  "lat": 15.4977580,
+  "lon": 73.8358025,
+  "tags": {
+    "amenity": "restaurant",
+    "name": "Hotel Swapna"
+  }
+},
+{
+  "type": "node",
+  "id": 14078698767,
+  "lat": 15.4969479,
+  "lon": 73.8355563,
+  "tags": {
+    "amenity": "pharmacy",
+    "healthcare": "pharmacy",
+    "name": "Patto Chemist And Druggists"
+  }
+},
+{
+  "type": "node",
+  "id": 14078710917,
+  "lat": 15.4958391,
+  "lon": 73.8362100,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "I: To Cujira Complex",
+    "public_transport": "platform"
+  }
+},
+{
+  "type": "node",
+  "id": 14078710918,
+  "lat": 15.4959108,
+  "lon": 73.8361361,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Y: To Miramar",
+    "public_transport": "platform"
+  }
+},
+{
+  "type": "node",
+  "id": 14078716976,
+  "lat": 15.4955256,
+  "lon": 73.8365755,
+  "tags": {
+    "bus": "yes",
+    "description": "20:20AC,21:30",
+    "highway": "bus_stop",
+    "name": "PF28: Porvorim-Mapusa",
+    "public_transport": "platform"
+  }
+},
+{
+  "type": "node",
+  "id": 14091123814,
+  "lat": 15.4959333,
+  "lon": 73.8345933,
+  "tags": {
+    "amenity": "fast_food",
+    "name": "Satvik Snacks"
+  }
+},
+{
+  "type": "node",
+  "id": 14168464987,
+  "lat": 15.4963937,
+  "lon": 73.8364617,
+  "tags": {
+    "bench": "no",
+    "bin": "no",
+    "bus": "yes",
+    "description": "Local bus to Market, Miramar, Dona Paula",
+    "highway": "bus_stop",
+    "name": "Panaji Bus Stand",
+    "public_transport": "platform",
+    "shelter": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 14213988944,
+  "lat": 15.4992116,
+  "lon": 73.8209843,
+  "tags": {
+    "amenity": "toilets",
+    "wheelchair": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 14213988962,
+  "lat": 15.4987748,
+  "lon": 73.8206069,
+  "tags": {
+    "amenity": "toilets",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 408576626,
+  "center": {
+    "lat": 15.5010276,
+    "lon": 73.8270456
+  },
+  "tags": {
+    "amenity": "bank",
+    "atm": "yes",
+    "branch": "Securities",
+    "brand": "State Bank of India",
+    "brand:wikidata": "Q1340361",
+    "building": "yes",
+    "name": "State Bank of India",
+    "short_name": "SBI"
+  }
+},
+{
+  "type": "way",
+  "id": 430889954,
+  "center": {
+    "lat": 15.4868179,
+    "lon": 73.8110261
+  },
+  "tags": {
+    "amenity": "restaurant",
+    "building": "yes",
+    "name": "Thai N Wok"
+  }
+},
+{
+  "type": "way",
+  "id": 430890146,
+  "center": {
+    "lat": 15.4888383,
+    "lon": 73.8150660
+  },
+  "tags": {
+    "amenity": "atm",
+    "brand": "Bank of India",
+    "building": "yes",
+    "operator": "Bank of India",
+    "operator:wikidata": "Q2004439"
+  }
+},
+{
+  "type": "way",
+  "id": 458672151,
+  "center": {
+    "lat": 15.4994507,
+    "lon": 73.8219807
+  },
+  "tags": {
+    "amenity": "toilets",
+    "building": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 618726585,
+  "center": {
+    "lat": 15.4961047,
+    "lon": 73.8058821
+  },
+  "tags": {
+    "amenity": "restaurant",
+    "building": "yes",
+    "cuisine": "regional",
+    "name": "Babazins",
+    "outdoor_seating": "yes",
+    "smoking": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 1340224346,
+  "center": {
+    "lat": 15.4943381,
+    "lon": 73.8354984
+  },
+  "tags": {
+    "amenity": "bank",
+    "brand": "Bank of India",
+    "brand:wikidata": "Q2004439",
+    "landuse": "commercial",
+    "name": "Bank of India"
+  }
+},
+{
+  "type": "way",
+  "id": 1352335028,
+  "center": {
+    "lat": 15.4937796,
+    "lon": 73.8365757
+  },
+  "tags": {
+    "amenity": "toilets",
+    "building": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 1545971427,
+  "center": {
+    "lat": 15.4962738,
+    "lon": 73.8355190
+  },
+  "tags": {
+    "amenity": "toilets",
+    "building": "yes",
+    "operator": "Sulabh International",
+    "operator:wikidata": "Q3064151"
+  }
+}
+
+  ]
+}

@@ -1,0 +1,139 @@
+{
+ "id": "emergence-festival-of-future-cities",
+ "title": "Festival Guide",
+ "subtitle": "Venues, sessions, and places worth a detour in Panjim.",
+ "about": "",
+ "center": [
+  73.9798,
+  15.5341
+ ],
+ "zoom": 9.3,
+ "bounds": [
+  [
+   73.62854136,
+   15.22450436
+  ],
+  [
+   74.33110463999999,
+   15.84372164
+  ]
+ ],
+ "minzoom": 7.1000000000000005,
+ "maxzoom": 17,
+ "glyphs": "https://tiles.basemaps.cartocdn.com/fonts/{fontstack}/{range}.pbf",
+ "basemaps": [
+  {
+   "id": "satellite",
+   "label": "Satellite",
+   "tiles": [
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+   ],
+   "tileSize": 256,
+   "maxzoom": 19,
+   "attribution": "Imagery © Esri, Maxar, Earthstar Geographics"
+  },
+  {
+   "id": "light",
+   "label": "Map",
+   "default": true,
+   "tiles": [
+    "https://a.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}@2x.png",
+    "https://b.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}@2x.png",
+    "https://c.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}@2x.png"
+   ],
+   "tileSize": 256,
+   "maxzoom": 19,
+   "attribution": "© OpenStreetMap contributors © CARTO"
+  }
+ ],
+ "groups": [
+  {
+   "id": "base",
+   "label": "Base",
+   "open": true
+  }
+ ],
+ "layers": [
+  {
+   "id": "admin",
+   "group": "base",
+   "type": "fill",
+   "source": "admin.geojson",
+   "label": "Admin boundaries",
+   "default": true,
+   "paint": {
+    "fillColor": "#000000",
+    "fillOpacity": 0,
+    "outlineColor": "#B0863A",
+    "outlineWidth": 2.6
+   },
+   "label_text": {
+    "property": "name",
+    "size": 15,
+    "color": "#1e2a1c",
+    "haloColor": "#ffffff",
+    "haloWidth": 2.2,
+    "transform": "uppercase",
+    "letterSpacing": 0.12,
+    "minzoom": 7,
+    "alwaysShow": true
+   },
+   "legend": [
+    {
+     "color": "#B0863A",
+     "label": "Boundary",
+     "shape": "line"
+    }
+   ]
+  },
+  {
+   "id": "labels",
+   "group": "base",
+   "type": "raster",
+   "default": true,
+   "label": "Place names",
+   "info": "Town, village and river names on the basemap.",
+   "tilesByBasemap": {
+    "light": [
+     "https://a.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}@2x.png",
+     "https://b.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}@2x.png",
+     "https://c.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}@2x.png"
+    ],
+    "satellite": [
+     "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+    ]
+   },
+   "tileSize": 256,
+   "attribution": "Labels © Esri, © CARTO"
+  }
+ ],
+ "attributions": [
+  {
+   "name": "Local Government Directory (LGD) via Bharatlas",
+   "url": "https://bharatlas.com",
+   "note": "District & block boundaries",
+   "license": "CC0"
+  },
+  {
+   "name": "Esri World Imagery",
+   "url": "https://www.esri.com",
+   "note": "Satellite basemap & place labels"
+  },
+  {
+   "name": "OpenStreetMap contributors & OpenFreeMap",
+   "url": "https://openfreemap.org",
+   "note": "Map basemap",
+   "license": "ODbL"
+  }
+ ],
+ "generator": "LOKA Atlas wizard",
+ "region": {
+  "iso3": "IND",
+  "names": [
+   "North Goa"
+  ]
+ },
+ "branding": {
+  "logo": "branding-logo.png"
+ }
+}

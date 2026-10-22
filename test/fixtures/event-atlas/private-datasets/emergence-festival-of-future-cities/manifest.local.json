@@ -1,0 +1,173 @@
+{
+ "layers": [
+  {
+   "id": "tags",
+   "group": "userdata",
+   "type": "marker",
+   "source": "user-tags.geojson",
+   "label": "Tags",
+   "default": true,
+   "marker": {
+    "color": "#C9402B"
+   },
+   "label_text": {
+    "property": "loka_name",
+    "maxChars": 32
+   },
+   "legend": [
+    {
+     "color": "#C9402B",
+     "label": "Tags",
+     "shape": "dot"
+    }
+   ],
+   "popup": {
+    "title": "loka_name",
+    "fields": []
+   },
+   "userLayer": true,
+   "lokaNames": {
+    "from": "address",
+    "by": "model",
+    "waiting": 0,
+    "long": 24,
+    "total": 24,
+    "at": 1792518601873
+   },
+   "contentHash": "65a5ccb9ec373c01",
+   "spec": {
+    "kind": "markers",
+    "label": "Tags",
+    "group": "userdata",
+    "popupTitleColumn": "loka_name",
+    "valueColumn": "description_chars",
+    "categoryColumn": "categories",
+    "placeNamesFrom": "address"
+   },
+   "uploadedAs": "emergence-festival-tags.csv",
+   "addedBy": {
+    "email": "mithun@socratus.org",
+    "name": "Mithun Sheshagiri",
+    "org": "Socratus"
+   },
+   "addedAt": 1792510259846,
+   "keyLabels": {
+    "pattern_1": "What kind of place is it?",
+    "pattern_2": "What is its general location?",
+    "pattern_3": "What is this place for?",
+    "pattern_4": "Is this a festival venue?"
+   },
+   "keyKinds": {
+    "pattern_1": [
+     {
+      "name": "Cultural venue",
+      "definition": "Places that are primarily art spaces, galleries, or cultural centers."
+     },
+     {
+      "name": "Service or facility",
+      "definition": "Places that provide essential services like hospitals, pharmacies, or ATMs."
+     },
+     {
+      "name": "Public amenity",
+      "definition": "Places that are public toilets or libraries."
+     },
+     {
+      "name": "Historical marker",
+      "definition": "Places that are memorials, markers, or historical buildings."
+     },
+     {
+      "name": "Viewpoint or natural site",
+      "definition": "Places that offer views or are natural attractions like beaches."
+     },
+     {
+      "name": "Transport hub",
+      "definition": "Places that are bus stops, auto-rickshaw stands, or main bus stands."
+     }
+    ],
+    "pattern_2": [
+     {
+      "name": "Fontainhas area",
+      "definition": "Places located in or explicitly associated with Fontainhas."
+     },
+     {
+      "name": "Campal area",
+      "definition": "Places located in or explicitly associated with Campal."
+     },
+     {
+      "name": "Altinho hill",
+      "definition": "Places located on Altinho hill."
+     },
+     {
+      "name": "Riverfront",
+      "definition": "Places located on the riverfront or by the Mandovi."
+     }
+    ],
+    "pattern_3": [
+     {
+      "name": "Breaks/Detours",
+      "definition": "Places suggested for visiting during gaps between sessions or as a short detour."
+     },
+     {
+      "name": "Sessions/Events",
+      "definition": "Places that host official festival sessions, mixers, or exhibitions."
+     },
+     {
+      "name": "Transport",
+      "definition": "Places related to transportation, such as bus stops or ride pick-up points."
+     }
+    ],
+    "pattern_4": [
+     {
+      "name": "Not a venue",
+      "definition": "Places that are not official festival venues but are points of interest."
+     },
+     {
+      "name": "Venue",
+      "definition": "Places that are official festival venues hosting sessions or events."
+     }
+    ]
+   },
+   "keyColumns": {
+    "pattern_3": [
+     "festival_comment"
+    ],
+    "pattern_4": [
+     "festival_comment"
+    ]
+   },
+   "keyNouns": {
+    "pattern_1": "place",
+    "pattern_2": "location",
+    "pattern_3": "place"
+   },
+   "reading": "These records describe places related to a festival, indicating whether they are official",
+   "facts": [
+    "whether a place is a festival venue or not",
+    "the number of sessions held at a venue",
+    "the type of activity or service offered at a non-venue place",
+    "the day(s) of the festival a place is relevant"
+   ]
+  }
+ ],
+ "theme": {
+  "source": "https://emergencefestival.in/",
+  "colors": {
+   "page": "#FFFDFD",
+   "surface": "#FFFFFF",
+   "surfaceAlt": "#E8F7EC",
+   "text": "#060606",
+   "textSecondary": "#3D3C3C",
+   "textMuted": "#605F5F",
+   "accent": "#6B1164",
+   "accentDeep": "#4A0B45",
+   "highlight": "#FC3103",
+   "highlightDeep": "#CF2802"
+  },
+  "fonts": {
+   "text": "Poppins",
+   "cssUrl": "https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
+  },
+  "corners": "square",
+  "logoMaxWidth": 180
+ }
+}
