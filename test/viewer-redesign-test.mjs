@@ -80,7 +80,9 @@ check('OpenStreetMap links to its copyright page', /href="https:\/\/www\.openstr
 check('"© OpenStreetMap contributors · OpenFreeMap" on arrival', /\.replace\(\/,\\s\*©\\s\*OpenFreeMap\/, " · OpenFreeMap"\)/.test(js) && /attribution: "© OpenStreetMap contributors, © OpenFreeMap",/.test(js), true);
 check('the satellite credit shows on Satellite (renderMapAttrib on every switch)', /function switchBasemap\(id\) \{[\s\S]*?renderMapAttrib\(\);/.test(js), true);
 check('it folds on the map\'s first move by the reader, or after five seconds', /creditFoldT = setTimeout\(fold, 5000\);/.test(js) && /var onMove = function \(e\) \{ if \(e && e\.originalEvent\) \{ map\.off\("movestart", onMove\); fold\(\); \} \};/.test(js), true);
-check('only on a phone: a wide screen keeps the line', /if \(!window\.matchMedia\("\(max-width: 720px\)"\)\.matches\) return;\s*pill\.classList\.add\("folded"\);/.test(js), true);
+check('on every screen now (Mithun, 23 Oct 2026): the credit is seen as the map opens, then folds', /var fold = function \(\) \{\s*clearTimeout\(creditFoldT\);\s*pill\.classList\.add\("folded"\);/.test(js), true);
+check('…and stays under "Built with" in the ☰ menu, linking the copyright page (the OSMF guideline: never only in a menu)',
+  /<div class="nav-builtwith" id="nav-builtwith" hidden>\s*<h3>Built with<\/h3>/.test(html) && /inMenu\.innerHTML = "Map data " \+ basemapCreditHTML\(\)/.test(js), true);
 check('folded, it is the 32px ⓘ alone', /\.map-attrib\.folded \{ max-width:32px; \}/.test(html), true);
 check('tapping it opens About & sources (the dialog is unchanged)', /if \(pill\) pill\.addEventListener\("click"/.test(html) && /<dialog class="atlas-sources" id="atlas-sources"/.test(html) && /function buildCredits\(\) \{/.test(js), true);
 check('the five seconds start once the map has drawn, not when it was made', /showLoading\(false\);\s*\/\*[\s\S]*?\*\/\s*watchCredit\(\);/.test(js) && !/renderMapAttrib\(\);\s*watchCredit\(\);/.test(js), true);
@@ -157,7 +159,7 @@ check('not there on a wide screen', /\.sheet-grip, \.sheet-layer, \.loka-badge\.
 console.log('\n  9. the phone\'s header navigation is behind one ☰');
 check('the ☰ is in the markup, 44px, named "Menu", and says whether it is open', /<button class="nav-burger" id="nav-burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav-menu">/.test(html) && /\.nav-burger \{ display:inline-flex;[^}]*width:44px; height:44px;/.test(phoneHead), true);
 check('the menu wraps Share and the links; on a wide screen it is display:contents, so the row is as it was', /<div class="nav-menu" id="nav-menu">[\s\S]*?<div class="hero-actions">[\s\S]*?<div class="links">/.test(html) && /\.nav-menu \{ display:contents; \}/.test(html), true);
-check('and the ☰, the menu\'s head, the scrim and the long words are not drawn there', /\.nav-burger, \.nav-menu-head, \.nav-menu-scrim, \.nav-menu-more, \.loka-badge-menu \{ display:none; \}/.test(html), true);
+check('and the ☰, the menu\'s head, the scrim and the long words are not drawn there', /\.nav-burger, \.nav-menu-head, \.nav-menu-scrim, \.nav-menu-more, \.loka-badge-menu, \.nav-builtwith \{ display:none; \}/.test(html), true);
 check('on a phone the menu is a panel under the header, shown by html.nav-open', /\.nav-menu \{ display:none; position:fixed; left:0; right:0; top:var\(--nav-h, 52px\); z-index:30;/.test(phoneHead) && /html\.nav-open \.nav-menu \{ display:flex; \}/.test(phoneHead), true);
 check('its rows are 48px, plain words, first letter up ("All atlases", "Sign in")', /padding:14px \.25rem; line-height:20px;/.test(phoneHead) && /\.nav-menu \.links a::first-letter, \.nav-menu \.links button::first-letter \{ text-transform:uppercase; \}/.test(phoneHead) && /a\[href\^="https:\/\/discoverloka"\]::first-letter \{ text-transform:none; \}/.test(phoneHead), true);
 check('Share reads "Share this atlas" in the menu', /<span>Share<span class="nav-menu-more"> this atlas<\/span><\/span>/.test(html) && /\.nav-menu-more \{ display:inline; \}/.test(phoneHead), true);
@@ -184,7 +186,7 @@ check('and the capabilities note the map button and the ⓘ', /Map or satellite/
 
 check('the low card fades at its foot, so more is plainly below', /\.atlas-panel\[data-h="low"\] \.sheet-card-body \{ overflow:hidden; cursor:pointer;[\s\S]{0,120}mask-image:linear-gradient\(to bottom, #000 calc\(100% - 28px\), transparent\)/.test(html), true);
 
-check('the menu\'s badge reads "Powered by LOKA Atlas" whole, and is hidden on a wide screen', /<a class="loka-badge loka-badge-menu" href="\.\/setup\/" title="Build your own atlas"><span class="loka-badge-by">Powered by<\/span> <img src="\.\/loka-logo\.png" alt="LOKA"> <em>Atlas<\/em><\/a>/.test(html) && /\.nav-menu-more, \.loka-badge-menu \{ display:none; \}/.test(html), true);
+check('the menu\'s badge reads "Powered by LOKA Atlas" whole, and is hidden on a wide screen', /<a class="loka-badge loka-badge-menu" href="\.\/setup\/" title="Build your own atlas"><span class="loka-badge-by">Powered by<\/span> <img src="\.\/loka-logo\.png" alt="LOKA"> <em>Atlas<\/em><\/a>/.test(html) && /\.nav-menu-more, \.loka-badge-menu, \.nav-builtwith \{ display:none; \}/.test(html), true);
 
 check('the menu\'s badge outranks the general badge rule, so a wide screen never shows it', /\.loka-badge\.loka-badge-menu \{ display:none; \}/.test(html), true);
 

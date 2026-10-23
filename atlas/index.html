@@ -122,7 +122,7 @@
        thing to the right of the title, and the menu is a panel under the
        header with the same items as plain rows. */
     .nav-menu { display:contents; }
-    .nav-burger, .nav-menu-head, .nav-menu-scrim, .nav-menu-more, .loka-badge-menu { display:none; }
+    .nav-burger, .nav-menu-head, .nav-menu-scrim, .nav-menu-more, .loka-badge-menu, .nav-builtwith { display:none; }
     .nav .links { display:flex; gap:1.25rem; align-items:center; flex-wrap:wrap; }
     .nav .links a, .nav .links button { color:var(--color-text-secondary); font-size:var(--t-ui);
       background:none; border:none; font-family:inherit; cursor:pointer; padding:0; }
@@ -1548,6 +1548,11 @@
       .nav-menu .share-btn svg { display:none; }   /* no row has an icon: one left edge for every label */
       .nav-menu .share-btn span { display:inline; }
       .nav-menu-more { display:inline; }
+      /* the map's credit, only where the ☰ is drawn */
+      .nav-menu .nav-builtwith:not([hidden]) { display:block; margin:16px .25rem 0; font-size:var(--t-meta); color:var(--color-text-secondary); line-height:1.45; }
+      .nav-menu .nav-builtwith h3 { margin:0 0 .3rem; font-size:var(--t-label,12px); font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--color-text-muted); }
+      .nav-menu .nav-builtwith p { margin:0 0 .2rem; }
+      .nav-menu .nav-builtwith a { color:var(--color-leaf-deep); }
       /* LOKA's badge at the menu's foot, only where the ☰ is drawn */
       .nav-menu .loka-badge.loka-badge-menu { display:inline-flex; align-self:flex-start; margin:16px .25rem 8px; min-height:44px; box-sizing:border-box; }
       /* on the phone every link is in the menu, the ones the wide screen keeps in About & sources too */
@@ -1947,6 +1952,13 @@
           <span id="nav-user" hidden></span>
           <a id="nav-signin" href="./setup/?signin=1">sign in</a>
           <button id="nav-signout" type="button" hidden>sign out</button>
+        </div>
+        <!-- the map's credit, for good, where the ☰ is (Mithun, 23 Oct 2026); on
+             the map it shows as the map opens and folds away (atlas.js watchCredit) -->
+        <div class="nav-builtwith" id="nav-builtwith" hidden>
+          <h3>Built with</h3>
+          <p id="nav-builtwith-map"></p>
+          <p><a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre GL</a>, the open-source map engine</p>
         </div>
         <a class="loka-badge loka-badge-menu" href="./setup/" title="Build your own atlas"><span class="loka-badge-by">Powered by</span> <img src="./loka-logo.png" alt="LOKA"> <em>Atlas</em></a>
       </div>

@@ -324,7 +324,7 @@
     ".ev-chip[aria-pressed=true]{background:var(--color-leaf,#2A6B41);border-color:var(--color-leaf,#2A6B41);color:#fff}\n" +
     ".ev-ic{display:inline-flex;width:16px;height:16px;flex:0 0 auto}.ev-ic svg{width:100%;height:100%}\n" +
     /* the second row: a category's sub-groups, one at a time, "All" first */
-    ".ev-subchips{display:flex;gap:6px;padding:0 10px 8px;overflow-x:auto;scrollbar-width:none}\n" +
+    ".ev-subchips{display:flex;flex-wrap:wrap;gap:6px;padding:0 10px 8px}\n" +
     ".ev-subchips[hidden]{display:none}.ev-subchips::-webkit-scrollbar{display:none}\n" +
     ".ev-sub{flex:0 0 auto;font:inherit;font-size:13px;font-weight:600;line-height:1;padding:7px 10px;min-height:32px;border:1px solid var(--color-border,#d9d3c7);" +
       "background:var(--color-surface,#fff);color:var(--color-text-primary,#24211D);border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}\n" +
@@ -343,7 +343,7 @@
       ".atlas-stage>.ev-chips .ev-chip{box-shadow:0 1px 4px rgba(36,33,29,.18);padding:6px 2px 5px;font-size:12px;min-height:50px;flex-direction:column;justify-content:center;gap:3px;white-space:nowrap}" +
       ".atlas-stage>.ev-chips .ev-chip .ev-ic{width:19px;height:19px}" +
       ".atlas-stage>.ev-chips .ev-chip i{display:none}" +
-      ".atlas-stage>.ev-subchips{position:absolute;left:0;right:0;bottom:calc(var(--sheet-h,0px) + 66px);z-index:6;padding:0 8px;transition:bottom .28s cubic-bezier(.22,1,.36,1)}" +
+      ".atlas-stage>.ev-subchips{position:absolute;left:0;right:0;bottom:calc(var(--sheet-h,0px) + 66px);z-index:6;padding:0 8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;transition:bottom .28s cubic-bezier(.22,1,.36,1)}" +
       ".atlas-stage>.ev-subchips .ev-sub{box-shadow:0 1px 4px rgba(36,33,29,.18)}" +
       ".atlas-stage.ev-on .map-attrib,.atlas-stage.ev-on .maplibregl-ctrl-bottom-right{transform:translateY(-60px)}" +
       ".atlas-stage.ev-on.ev-sub-on .map-attrib,.atlas-stage.ev-on.ev-sub-on .maplibregl-ctrl-bottom-right{transform:translateY(-100px)}" +

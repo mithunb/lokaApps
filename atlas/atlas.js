@@ -5351,6 +5351,10 @@
     if (inSources) inSources.innerHTML = "Map: " + basemapCreditHTML();
     var inPop = $("#map-style-credit");
     if (inPop) inPop.innerHTML = basemapCreditHTML();
+    // and under "Built with" in the ☰ menu, where it stays
+    var inMenu = $("#nav-builtwith-map"), menuBox = $("#nav-builtwith");
+    if (inMenu) inMenu.innerHTML = "Map data " + basemapCreditHTML();
+    if (menuBox) menuBox.hidden = !basemapCreditHTML();
   }
   /* The showing base map's credit, as one line with its licence a tap away:
      "© OpenStreetMap contributors · OpenFreeMap", where OpenStreetMap links to
@@ -5395,12 +5399,13 @@
     return parts;
   }
 
-  /* The credit pill folds to its ⓘ on a phone — on the map's first move by
-     the reader, or after five seconds — and stays folded. A phone's map is
-     375px wide and the full line covered a third of it; the licence stays
-     one tap away (the ⓘ opens About & sources, whose Map line links the
-     copyright page), which is what the OSMF guideline asks for a small
-     screen. A wide screen has room, so there the line stays as it is. */
+  /* The credit pill folds to its ⓘ — on the map's first move by the reader,
+     or after five seconds — and stays folded, on every screen (Mithun, 23 Oct
+     2026: the credit belongs in the ☰ menu under "Built with"). The OSMF
+     attribution guideline allows exactly this: the credit is seen as the map
+     opens, collapses after five seconds or on interaction, and stays
+     findable — here in the ☰ menu and behind the ⓘ (About & sources, whose
+     Map line links the copyright page). It may not live only in a menu. */
   var creditFoldT = null;
   function watchCredit() {
     var pill = $("#map-attrib"); if (!pill || !map) return;
@@ -5408,7 +5413,6 @@
     clearTimeout(creditFoldT);
     var fold = function () {
       clearTimeout(creditFoldT);
-      if (!window.matchMedia("(max-width: 720px)").matches) return;
       pill.classList.add("folded");
     };
     creditFoldT = setTimeout(fold, 5000);
