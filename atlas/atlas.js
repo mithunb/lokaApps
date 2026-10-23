@@ -569,6 +569,9 @@
       hash: false
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
+    // "Where am I", right above the zoom buttons (locate.js); event guides
+    // only (Mithun, 23 Oct 2026)
+    if (EV && window.LokaLocate) map.addControl(new LokaLocate.Control({ padding: viewPadding }), "bottom-right");
     // the scale note sits bottom-left, away from the zoom buttons (DESIGN.md §5)
     // with the zoom buttons: the bottom-left corner belongs to the credits chip
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-right");

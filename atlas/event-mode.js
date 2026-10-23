@@ -469,11 +469,31 @@
       return h + "</div>";
     }
 
-    /* ---- the chips and the list ---- */
-    function setCat(id, show) {
-      on[id] = show;
-      (byCat[id] || []).forEach(function (L) { api.setLayerVisible(L, show); });
+    /* ---- the chips and the list ----
+       One chip at a time (Mithun, 23 Oct 2026: "do not [allow] multiple
+       button selection"): a chip shows its own places and puts the others
+       away. Around a venue, that venue's pin stays as the place the list is
+       measured from. */
+    function choose(id) {
+      CATS.forEach(function (c) { on[c.id] = c.id === id; });
+      showChosen();
       syncChips();
+    }
+    function showChosen() {
+      CATS.forEach(function (c) {
+        var show = !!on[c.id] || (c.id === "venues" && !!state.around);
+        (byCat[c.id] || []).forEach(function (L) { api.setLayerVisible(L, show); });
+      });
+    }
+    // around a venue: frame it with what the chosen chip shows near it
+    function frameAround() {
+      var v = state.around; if (!v || !state.ready) return;
+      var pts = [v.geometry.coordinates];
+      CATS.forEach(function (c) {
+        if (!on[c.id] || c.id === "venues") return;
+        entriesOf(c.id).forEach(function (x) { if (!x.e.away) pts.push(x.e.f.geometry.coordinates); });
+      });
+      api.fitPoints(pts);
     }
     function syncChips() {
       if (!state.chips) return;
@@ -492,8 +512,12 @@
         b.style.setProperty("--ev-c", catColor(c.id));
         b.innerHTML = "<i aria-hidden=\"true\"></i>" + esc(c.label);
         b.addEventListener("click", function () {
-          setCat(c.id, !on[c.id]);
+          // Venues while looking around one venue: back to all of them
+          if (c.id === "venues" && state.around) { clearAround(); return; }
+          if (on[c.id]) return;
+          choose(c.id);
           renderList();
+          frameAround();
         });
         bar.appendChild(b);
       });
@@ -572,7 +596,24 @@
       p.innerHTML = window.LokaWait ? window.LokaWait.html(words) : esc(words);
       return p;
     }
+    // the sheet's head names the chip that is on, and how many it shows
+    function chosenCat() { return CATS.filter(function (c) { return on[c.id]; })[0] || CATS[0]; }
+    function sheetHead() {
+      var c = chosenCat();
+      if (!state.ready) return { label: catLabel(c.id), small: "" };
+      if (c.id === "venues") return { label: catLabel("venues"), small: countWord(venues().length, "venue", "venues") };
+      var n = entriesOf(c.id).filter(function (x) { return !x.e.away; }).length;
+      return { label: catLabel(c.id), small: state.around ? "Around " + nameOf(byCat.venues[0], state.around) : countWord(n, "place", "places") };
+    }
+    function syncHead() {
+      var sh = sheetHead();
+      var head = document.querySelector("#atlas-panel .sheet-who strong");
+      if (head) head.textContent = sh.label;
+      var who = document.getElementById("sheet-layer");
+      if (who) { who.innerHTML = ""; who.appendChild(el("span", "sheet-layer-name", esc(sh.small || sh.label))); }
+    }
     function renderList() {
+      syncHead();
       var box = state.list; if (!box) return;
       box.innerHTML = "";
       if (!state.ready) { box.appendChild(waitLine("Loading the venues…")); return; }
@@ -633,10 +674,9 @@
       var v = venues().filter(function (f) { return String(f._evNo) === String(no); })[0];
       if (!v) return;
       state.around = v;
-      var pts = [v.geometry.coordinates];
+      var first = null;
       CATS.forEach(function (c) {
         if (c.id === "venues") return;
-        on[c.id] = true;
         // within the radius; and where the category has a number per venue
         // (Eat & Drink: 8), only that many of its OpenStreetMap places, nearest first
         var near = [];
@@ -648,26 +688,23 @@
           });
         });
         if (c.perVenue) near.sort(function (a, b) { return a.m - b.m; }).slice(c.perVenue).forEach(function (x) { x.e.away = true; });
-        (byCat[c.id] || []).forEach(function (L) {
-          (api.markers(L.id) || []).forEach(function (e) { if (!e.away) pts.push(e.f.geometry.coordinates); });
-          api.setLayerVisible(L, true);
-        });
+        // the first chip with something near it opens: Eat & Drink, as a rule
+        if (!first && entriesOf(c.id).some(function (x) { return !x.e.away; })) first = c.id;
       });
-      syncChips();
+      choose(first || CATS.filter(function (c) { return c.id !== "venues"; }).map(function (c) { return c.id; })[0]);
       // a phone's card gives the sheet back to the list it came from
       if (api.onPhone()) { api.closeCard(); api.setSheet("half"); }
       renderList();
-      if (!state.ready) return;
-      api.fitPoints(pts);
+      frameAround();
     }
     function clearAround() {
       state.around = null;
       CATS.forEach(function (c) {
         (byCat[c.id] || []).forEach(function (L) {
           (api.markers(L.id) || []).forEach(function (e) { e.away = false; });
-          api.setLayerVisible(L, !!on[c.id]);
         });
       });
+      choose("venues");
       renderList();
     }
 
@@ -704,10 +741,7 @@
       buildPanel: buildPanel,
       ready: function () { state.ready = true; renderList(); },
       framed: function () { return ["ev-venues"]; },
-      sheetHead: function () {
-        var n = venues().length;
-        return { label: catLabel("venues"), small: state.ready ? countWord(n, "venue", "venues") : "" };
-      },
+      sheetHead: sheetHead,
       around: around,
       clearAround: clearAround,
       state: state,
