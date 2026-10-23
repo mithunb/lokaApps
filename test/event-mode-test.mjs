@@ -187,6 +187,10 @@ check('a place named for its street or shop goes by the opening of its descripti
   ['Toilets', 'Toilets', 'Toilets', 'Health']);
 check('…but only up to where it starts saying where the place is: a marker on a promenade is not a park',
   (EV.groupOf({ loka_name: 'Henry the Navigator Marker', description: 'A stone marker to Henry the Navigator on the Campal promenade.' }, see, false) || {}).label, 'Landmarks');
+check('bus stops say what they are: a bay letter, a route line, a stop named for its place',
+  [lib.transportName('bus_stop', 'G'), lib.transportName('bus_stop', 'V: To St. Inez'), lib.transportName('bus_stop', 'Kala Academy'), lib.transportName('bus_stop', 'Panjim KTC Bus Stand'), lib.transportName('taxi', 'Auto Stand'), lib.transportName('taxi', 'Miramar')],
+  ['Bus stop G', 'Bus stop V (to St. Inez)', 'Kala Academy bus stop', 'Panjim KTC Bus Stand', 'Auto Stand', 'Miramar taxi stand']);
+check('…and the row under the name does not say "Bus stop" again', EV.wordOf({ kind: 'bus_stop' }) && /indexOf\(w\.toLowerCase\(\)\) >= 0/.test(fs.readFileSync(ROOT + '/atlas/event-mode.js', 'utf8')), true);
 const atlasSrc = fs.readFileSync(ROOT + '/atlas/atlas.js', 'utf8');
 check('a pin put away by the second row is hidden, and so is its name', [/!e\.away && !e\.subOff/.test(atlasSrc), /if \(e\.away \|\| e\.subOff\) return;/.test(atlasSrc)], [true, true]);
 const evSrc = fs.readFileSync(ROOT + '/atlas/event-mode.js', 'utf8');

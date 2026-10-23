@@ -192,10 +192,10 @@
   function kindWord(kind) { return KIND_WORDS[kind] || String(kind || "").replace(/_/g, " "); }
   // a nearby place's own word: "Church" or "Temple" when the build knew, else its kind's
   function wordOf(props) { return (props && props.word) || kindWord(props && props.kind); }
-  // the word under a row's name, unless the name already says it ("Public toilets")
+  // the word under a row's name, unless the name already says it ("Public toilets", "Kala Academy bus stop")
   function rowWord(props, name) {
     var w = wordOf(props);
-    return String(name || "").toLowerCase().indexOf(w.toLowerCase()) === 0 ? "" : w;
+    return String(name || "").toLowerCase().indexOf(w.toLowerCase()) >= 0 ? "" : w;
   }
 
   /* A category's sub-groups (See & Do: Parks & views · Landmarks · Museums &
@@ -842,7 +842,8 @@
       var want = mode.aroundOpens && catById[mode.aroundOpens] ? mode.aroundOpens : null;
       choose(want || first || CATS.filter(function (c) { return c.id !== "venues"; }).map(function (c) { return c.id; })[0]);
       // a phone's card gives the sheet back to the list it came from
-      if (api.onPhone()) { api.closeCard(); api.setSheet("half"); }
+      // the list peeks so the map shows what is near (two heights, 23 Oct 2026)
+      if (api.onPhone()) { api.closeCard(); api.setSheet("peek"); }
       renderList();
       frameAround();
     }

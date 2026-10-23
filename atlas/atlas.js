@@ -5637,6 +5637,16 @@
     return strip;
   }
 
+  /* The search box's place: the top of the side panel on a wide screen, the
+     map's top strip (as a button that opens into the box) on a phone. */
+  function placeSearch() {
+    var sc = document.querySelector(".ctl-search");
+    var panel = document.getElementById("atlas-panel");
+    var strip = document.querySelector(".atlas-strip");
+    if (!sc || !panel || !strip) return;
+    if (onPhone()) { if (sc.parentNode !== strip) strip.insertBefore(sc, strip.firstChild); }
+    else if (sc.parentNode !== panel) panel.insertBefore(sc, panel.firstChild);
+  }
   var stripWired = false;
   function placeStripPieces() {
     var stage = document.querySelector(".atlas-stage");
@@ -5651,6 +5661,7 @@
        made the owner's header two rows tall and put the map's own controls
        a level away from the map. */
     if (strip.parentNode !== stage) stage.insertBefore(strip, stage.firstChild);
+    placeSearch();
     /* The map button (Map or satellite) is the stage's own at every width:
        it is appended to the stage by buildControls and never moves, so
        there is no phone branch here any more. The sheet has no foot. */
@@ -5716,11 +5727,33 @@
       si.addEventListener("input", function () { runSearch(si.value); });
       si.addEventListener("search", function () { runSearch(si.value); });
       slab.appendChild(si);
+      /* Mithun, 23 Oct 2026: on a wide screen the box heads the side panel;
+         on a phone it is a round search button that opens into the box, with
+         a ✕ that clears it and folds it away again (placeSearch, CSS). */
+      var sx = el("button", "ctl-search-close");
+      sx.type = "button"; sx.setAttribute("aria-label", "Close search");
+      sx.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+      sx.addEventListener("click", function (e) {
+        e.preventDefault();
+        si.value = ""; runSearch("");
+        sc.classList.add("collapsed");
+        so.focus();
+      });
+      slab.appendChild(sx);
+      var so = el("button", "ctl-search-open");
+      so.type = "button"; so.setAttribute("aria-label", "Search this map");
+      so.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
+      so.addEventListener("click", function () { sc.classList.remove("collapsed"); si.focus(); });
+      // an empty box folds back to its button when the phone's keyboard goes
+      si.addEventListener("blur", function () { setTimeout(function () { if (!si.value && onPhone() && document.activeElement !== sx) sc.classList.add("collapsed"); }, 150); });
+      sc.classList.add("collapsed");
+      sc.appendChild(so);
       sc.appendChild(slab);
       var cnt = el("div", "ctl-search-count"); cnt.id = "atlas-search-count"; cnt.hidden = true;
       cnt.setAttribute("aria-live", "polite");   // pins vanishing is silent otherwise
       sc.appendChild(cnt);
       strip.appendChild(sc);
+      placeSearch();
       if (!searchKeyWired) {
         searchKeyWired = true;
         // "/" reaches the box from anywhere on the page — the map idiom —
@@ -5732,6 +5765,7 @@
           var box = document.querySelector(".ctl-search-input");
           if (!box) return;
           e.preventDefault();
+          var wrap = box.closest(".ctl-search"); if (wrap) wrap.classList.remove("collapsed");
           box.focus();
         });
       }
@@ -7397,8 +7431,14 @@
      is a coloured map and the key that colours it. The old states — tabs
      only, and the "LAYERS" chip bottom-left — are gone: the sheet always
      shows at least its head, and one tap from there reaches the questions. */
-  var SHEET_HEIGHTS = ["peek", "half", "full"];
-  var SHEET = "half";
+  /* Two heights, one rule (Fable's design, Mithun's yes, 23 Oct 2026): the
+     sheet is peeked or full; a tap on its head swaps the two, and a drag
+     anywhere on the head or the list moves it with the finger and settles
+     at the nearer height (or the way it was flung). It opens peeked, so the
+     map comes first. The half height, the chevron and the three different
+     tap rules it replaced were what made it hard to read. */
+  var SHEET_HEIGHTS = ["peek", "full"];
+  var SHEET = "peek";
   function onPhone() { return window.matchMedia("(max-width: 720px)").matches; }
 
   /* ---- a place's card in the sheet (phones) ----
@@ -7415,8 +7455,9 @@
      map and Esc go back too. The sheet's height is still setSheet's: while
      the card is open it moves between low and full, and the layers' own
      height waits in SHEET untouched. */
-  var CARD_HEIGHTS = ["low", "full"];
-  var CARD = { open: false, h: "low", prev: null, lngLat: null, quietUntil: 0 };
+  // a card has the same two heights: peeked it shows the place's name over the map
+  var CARD_HEIGHTS = ["peek", "full"];
+  var CARD = { open: false, h: "peek", prev: null, lngLat: null, quietUntil: 0 };
   function heights() { return CARD.open ? CARD_HEIGHTS : SHEET_HEIGHTS; }
   function curH() { return CARD.open ? CARD.h : SHEET; }
   function openCardInSheet(L, feature, lngLat, html) {
@@ -7447,7 +7488,8 @@
     };
     CARD.pop = pop;
     LAST_POP = pop;
-    setSheet("low");
+    // opened from the list (sheet full) it is read full; from a pin, peeked over the map
+    setSheet(CARD.prev && CARD.prev.h === "full" ? "full" : "peek");
     keepPlaceAboveSheet(lngLat);
     // the keyboard lands on the way back, so the card is never a trap
     var back = document.getElementById("sheet-card-back");
@@ -7459,7 +7501,7 @@
     var panel = document.getElementById("atlas-panel");
     var body = document.getElementById("sheet-card-body");
     CARD.open = false;
-    CARD.h = "low";
+    CARD.h = "peek";
     CARD.quietUntil = Date.now() + 700;   // the sheet's size change is not the map's cue to re-frame
     if (panel) panel.classList.remove("card-mode");
     var cardEl = document.getElementById("sheet-card");
@@ -7468,7 +7510,7 @@
     LAST_POP = null;
     var closing = CARD.pop; CARD.pop = null;
     if (closing) closing._closers.forEach(function (fn) { try { fn({ target: closing }); } catch (e) {} });
-    var prev = CARD.prev || { h: "half", scroll: 0 };
+    var prev = CARD.prev || { h: "peek", scroll: 0 };
     CARD.prev = null;
     setSheet(prev.h);
     var controls = document.getElementById("atlas-controls");
@@ -7502,7 +7544,9 @@
     var panel = document.getElementById("atlas-panel");
     if (!stage || !panel) return;
     var hs = heights();
-    if (hs.indexOf(h) < 0) h = CARD.open ? "low" : "half";
+    // the old names still asked for by older callers: half and low were "open"
+    if (h === "half" || h === "low") h = "full";
+    if (hs.indexOf(h) < 0) h = "peek";
     var was = curH();
     if (CARD.open) CARD.h = h; else SHEET = h;
     panel.setAttribute("data-h", h);
@@ -7575,34 +7619,18 @@
     var grip = head.querySelector(".sheet-grip");
     var chev = head.querySelector(".panel-collapse");
     var who = head.querySelector(".sheet-who");
-    // the grabber: a tap cycles peek → half → full → peek (a card: low ↔ full)
-    if (grip) grip.addEventListener("click", function (e) {
+    // one rule: a tap on the head (the grabber, the words, the chevron where
+    // a wide screen still draws it) swaps peeked and full
+    var flip = function (e) {
       if (!onPhone()) return;
       e.stopPropagation();
-      var hs = heights();
-      setSheet(hs[(hs.indexOf(curH()) + 1) % hs.length]);
-    });
-    // the chevron: peeked → half; open → peek
-    if (chev) chev.addEventListener("click", function (e) {
-      if (!onPhone()) return;
-      e.stopPropagation();
-      setSheet(SHEET === "peek" ? "half" : "peek");
-    });
-    // the words: peeked → half; half → full
-    if (who) who.addEventListener("click", function (e) {
-      if (!onPhone()) return;
-      e.stopPropagation();
-      setSheet(SHEET === "peek" ? "half" : "full");
-    });
-    // a swipe on the head: down lowers one step, up raises one — and a swipe
-    // down from the low card goes back to the layers
-    var y0 = null;
-    head.addEventListener("touchstart", function (e) { y0 = e.touches[0].clientY; }, { passive: true });
-    head.addEventListener("touchend", function (e) {
-      if (y0 == null || !onPhone()) return;
-      var dy = e.changedTouches[0].clientY - y0; y0 = null;
-      swipeSheet(dy);
-    }, { passive: true });
+      if (Date.now() - (panel._dragEnd || 0) < 350) return;   // the end of a drag is not a tap
+      setSheet(curH() === "peek" ? "full" : "peek");
+    };
+    if (grip) grip.addEventListener("click", flip);
+    if (chev) chev.addEventListener("click", flip);
+    if (who) who.addEventListener("click", flip);
+    dragSheet(head, null);
     // the filter line's "show all" lives in the head on a phone
     var filt = head.querySelector("#sheet-filter");
     if (filt) filt.addEventListener("click", function (e) { e.stopPropagation(); });
@@ -7615,39 +7643,74 @@
     if (back) back.addEventListener("click", function (e) { e.stopPropagation(); closeCard(true); });
     if (close) close.addEventListener("click", function (e) { e.stopPropagation(); closeCard(false); });
     if (cardHead) {
-      cardHead.addEventListener("touchstart", function (e) { y0 = e.touches[0].clientY; }, { passive: true });
-      cardHead.addEventListener("touchend", function (e) {
-        if (y0 == null || !onPhone()) return;
-        var dy = e.changedTouches[0].clientY - y0; y0 = null;
-        swipeSheet(dy);
-      }, { passive: true });
+      cardHead.addEventListener("click", function (e) {
+        if (e.target.closest && e.target.closest("button, a")) return;
+        flip(e);
+      });
+      dragSheet(cardHead, null);
     }
     if (cardBody) {
-      // low: a tap anywhere that is not a control shows the whole card; a
-      // swipe up does the same, a swipe down goes back
+      // peeked: a tap on the name that is not a control shows the whole card
       cardBody.addEventListener("click", function (e) {
-        if (!CARD.open || CARD.h !== "low") return;
+        if (!CARD.open || CARD.h !== "peek") return;
         if (e.target.closest && e.target.closest("button, a, input, [data-fold]")) return;
+        if (Date.now() - (panel._dragEnd || 0) < 350) return;
         setSheet("full");
       });
-      var cy0 = null;
-      cardBody.addEventListener("touchstart", function (e) { cy0 = e.touches[0].clientY; }, { passive: true });
-      cardBody.addEventListener("touchend", function (e) {
-        if (cy0 == null || !CARD.open || CARD.h !== "low") return;
-        var dy = e.changedTouches[0].clientY - cy0; cy0 = null;
-        swipeSheet(dy);
-      }, { passive: true });
+      dragSheet(cardBody, cardBody);
     }
+    var list = document.getElementById("atlas-controls");
+    if (list) dragSheet(list, list);
     // a phone that grows into a wide screen keeps its card no longer
     window.matchMedia("(max-width: 720px)").addEventListener("change", function (e) { if (!e.matches && CARD.open) closeCard(true); });
   }
-  function swipeSheet(dy) {
-    var hs = heights();
-    var i = hs.indexOf(curH());
-    if (dy > 40) {
-      if (CARD.open && i === 0) closeCard(true);
-      else if (i > 0) setSheet(hs[i - 1]);
-    } else if (dy < -40 && i < hs.length - 1) setSheet(hs[i + 1]);
+  /* The sheet follows the finger. A drag on the head always moves it; on
+     the list (or a card's body) it moves the sheet only when it is peeked,
+     or when it is full and the list is at its top and the drag is downward —
+     otherwise the list scrolls, as on any phone. On release it settles at
+     the nearer height, or the way it was flung. */
+  function dragSheet(elm, scroller) {
+    if (!elm || elm._dragWired) return;
+    elm._dragWired = true;
+    var panel = document.getElementById("atlas-panel");
+    var stage = document.querySelector(".atlas-stage");
+    var y0 = 0, t0 = 0, h0 = 0, dy = 0, moving = false, armed = false;
+    elm.addEventListener("touchstart", function (e) {
+      if (!onPhone() || e.touches.length !== 1) { armed = false; return; }
+      armed = true; moving = false; dy = 0;
+      y0 = e.touches[0].clientY; t0 = Date.now(); h0 = panel.offsetHeight;
+    }, { passive: true });
+    elm.addEventListener("touchmove", function (e) {
+      if (!armed) return;
+      dy = e.touches[0].clientY - y0;
+      if (!moving) {
+        if (Math.abs(dy) < 8) return;
+        var peeked = curH() === "peek";
+        var atTop = !scroller || scroller.scrollTop <= 0;
+        var ok = !scroller || peeked || (atTop && dy > 0);
+        if (!ok) { armed = false; return; }   // it is the list's scroll
+        moving = true;
+        panel.classList.add("dragging");
+      }
+      e.preventDefault();
+      var full = stage.clientHeight * 0.9, low = 84;
+      panel.style.height = Math.max(low, Math.min(full, h0 - dy)) + "px";
+    }, { passive: false });
+    var end = function () {
+      if (!armed) return;
+      armed = false;
+      if (!moving) return;
+      moving = false;
+      var v = dy / Math.max(1, Date.now() - t0);   // px per ms; down is positive
+      var full = stage.clientHeight * 0.9, low = 84, now = panel.offsetHeight;
+      var to = v > 0.5 ? "peek" : v < -0.5 ? "full" : (now - low > (full - low) * 0.5 ? "full" : "peek");
+      panel.classList.remove("dragging");
+      panel.style.height = "";
+      panel._dragEnd = Date.now();
+      setSheet(to);
+    };
+    elm.addEventListener("touchend", end, { passive: true });
+    elm.addEventListener("touchcancel", end, { passive: true });
   }
   // a tap on the map lowers the sheet to its peek, so the map is the way out
   // (with a card open, it puts the card away first)
@@ -7656,7 +7719,8 @@
     map._sheetWired = true;
     map.on("click", function () {
       if (!onPhone()) return;
-      if (CARD.open) { closeCard(true); return; }
+      // a full card lowers to its name over the map; a peeked one goes back to the list
+      if (CARD.open) { if (CARD.h === "full") setSheet("peek"); else closeCard(true); return; }
       if (SHEET !== "peek") setSheet("peek");
     });
   }
@@ -7726,14 +7790,14 @@
     if (!stage || !panel) return;
     if (which) TRAY = which;
     if (!which) { setSheet("peek"); return; }
-    setSheet(SHEET === "peek" ? "half" : SHEET);
+    setSheet("full");
     var controls = document.getElementById("atlas-controls");
     if (controls) controls.scrollTop = 0;
   }
 
   /* The head's job on a phone: open a peeked sheet, or lower an open one. */
   function toggleSheet() {
-    setSheet(SHEET === "peek" ? "half" : "peek");
+    setSheet(SHEET === "peek" ? "full" : "peek");
   }
 
   document.addEventListener("keydown", function (e) {
@@ -7755,8 +7819,8 @@
     if (map) { try { map.remove(); } catch (e) {} map = null; }
     MANIFEST = null; activeBasemap = null;
     TRAY = null;                  // the tray cannot outlive the groups it was showing
-    SHEET = "half";               // the next draw opens as a first visit does
-    CARD.open = false; CARD.prev = null; CARD.h = "low";
+    SHEET = "peek";               // the next draw opens as a first visit does
+    CARD.open = false; CARD.prev = null; CARD.h = "peek";
     var panelEl = document.getElementById("atlas-panel");
     if (panelEl) panelEl.classList.remove("card-mode");
     var stageEl = document.querySelector(".atlas-stage");

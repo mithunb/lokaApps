@@ -405,6 +405,7 @@ export function buildAround(venues, data, mode, tagged = []) {
       name = EV.kindWord(kind) + (by ? ' · ' + by : '');
     }
     if (!name) { unnamed++; continue; }
+    name = transportName(kind, name);
     const group = EV.groupOf({ kind }, catOf[cat], true);
     if (tagged.some((t) => {
       if (t.cat !== cat) return false;
@@ -449,6 +450,28 @@ export function buildAround(venues, data, mode, tagged = []) {
     features,
   };
   return { fc, perVenue, unnamed };
+}
+
+/* A bus stop or taxi stand as the map data names it is often a bay letter
+   ("G"), a route line ("V: To St. Inez") or the place it serves ("Kala
+   Academy") — puzzling in a list beside the venue of that name (Mithun,
+   23 Oct 2026). Said as what it is: "Bus stop G", "Bus stop V (to St.
+   Inez)", "Kala Academy bus stop". A name that already says it is left be. */
+export function transportName(kind, name) {
+  const n = String(name || '').trim();
+  if (kind === 'bus_stop') {
+    let m = n.match(/^([A-Za-z0-9]{1,3})$/);
+    if (m) return 'Bus stop ' + m[1];
+    m = n.match(/^([A-Za-z0-9]{1,3})\s*[:\-–]\s*(to\s+.+)$/i);
+    if (m) return 'Bus stop ' + m[1] + ' (' + m[2].charAt(0).toLowerCase() + m[2].slice(1) + ')';
+    if (/\b(bus|stop|stand|terminal|terminus|station|depot)\b/i.test(n)) return n;
+    return n + ' bus stop';
+  }
+  if (kind === 'taxi') {
+    if (/\b(taxi|auto|rickshaw|cab|stand)\b/i.test(n)) return n;
+    return n + ' taxi stand';
+  }
+  return n;
 }
 
 // the team's own places, as buildAround wants them, to keep out doubles

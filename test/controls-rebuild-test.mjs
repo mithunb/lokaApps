@@ -74,7 +74,10 @@ function makePage() {
 const code =
   liftBlock(js, '  var MOVED_PIECES = ', ';') +
   liftBlock(js, '  function dropMovedPieces() {', '\n  }\n') +
-  liftBlock(js, '  function placeStripPieces() {', '\n  }\n');
+  liftBlock(js, '  function placeStripPieces() {', '\n  }\n') +
+  // placeStripPieces also places the search box (placeSearch), which asks onPhone
+  'function onPhone() { return window.matchMedia("(max-width: 720px)").matches; }\n' +
+  liftBlock(js, '  function placeSearch() {', '\n  }\n');
 const make = new Function('document', 'window', '$',
   code + 'return { dropMovedPieces: dropMovedPieces, placeStripPieces: placeStripPieces };');
 
