@@ -1382,7 +1382,9 @@
     .atlas-full, .atlas-full body { height:100%; }
     .atlas-full body { height:100dvh; min-height:0; overflow:hidden; }
     .atlas-full .atlas-hero, .atlas-full .atlas-cta, .atlas-full footer.site,
-    .atlas-full .nav .links a[href="../"], .atlas-full .nav .links a[href^="https://discoverloka"] { display:none; }
+    .atlas-full .nav .links a[href="../"], .atlas-full .nav .links a.nav-build { display:none; }
+    /* "About this atlas" is a phone-menu row on an atlas only */
+    html .nav .links .nav-about, html .nav .nav-menu .links .nav-about { display:none; }
     /* above the map's own floating pieces (the toolbar, the drawer), so the
        Owner menu hanging from the header is never under the search box */
     .atlas-full header.site { z-index:10; }
@@ -1517,7 +1519,7 @@
       .atlas-full .org-head { flex:1 1 auto; min-width:0; max-width:none; }   /* the title gives way, never the ☰ beside it */
       /* ---- the phone's menu ----
          Everything that stood to the right of the title — Share, the Owner
-         menu, sign in / the account, all atlases, all apps, discoverloka.org
+         menu, About this atlas, sign in / the account, all atlases, all apps, Build your own Atlas
          — is behind one 44px ☰. It opens a panel under the header with the
          same items as plain 48px rows; the ✕, a tap outside or Esc shuts it.
          The owner's button keeps its word here and its own panel opens over
@@ -1547,7 +1549,7 @@
         font:inherit; font-size:var(--t-control); font-weight:600; color:var(--color-text-primary);
         background:none; border:0; border-bottom:1px solid var(--color-divider); border-radius:0; text-decoration:none; white-space:nowrap; }
       .nav-menu .links a::first-letter, .nav-menu .links button::first-letter { text-transform:uppercase; }
-      .nav-menu .links a[href^="https://discoverloka"]::first-letter { text-transform:none; }
+      html.atlas-full .nav .nav-menu .links .nav-about { display:block; }
       .nav-menu #nav-user { font-weight:400; color:var(--color-text-secondary); overflow:hidden; text-overflow:ellipsis; }
       .nav-menu .share-btn { display:block; width:100%; margin:0; padding:14px .25rem; line-height:20px; min-height:0; box-sizing:border-box; text-align:left;
         font:inherit; font-size:var(--t-control); font-weight:600; color:var(--color-text-primary);
@@ -1563,7 +1565,7 @@
       /* LOKA's badge at the menu's foot, only where the ☰ is drawn */
       .nav-menu .loka-badge.loka-badge-menu { display:inline-flex; align-self:flex-start; margin:16px .25rem 8px; min-height:44px; box-sizing:border-box; }
       /* on the phone every link is in the menu, the ones the wide screen keeps in About & sources too */
-      .atlas-full .nav-menu .links a[href="../"], .atlas-full .nav-menu .links a[href^="https://discoverloka"] { display:block; }
+      .atlas-full .nav-menu .links a[href="../"], .atlas-full .nav-menu .links a.nav-build { display:block; }
       .nav-menu [hidden] { display:none !important; }
       /* the owner's button is a row here, in its own voice; its panel opens over the menu */
       .nav-menu .own-acts { display:block; width:100%; }
@@ -1742,6 +1744,10 @@
       .atlas-panel.card-mode[data-h="peek"] .sheet-card-body .pop-shots { display:none; }
       /* two heights and one tap rule: the chevron is not drawn on a phone */
       .panel-collapse { display:none !important; }
+      /* folded, the credit leaves the phone's map altogether: "About this
+         atlas" heads the ☰ menu and the credit is under "Built with" there
+         (the OSMF guideline: seen as the map opens, findable after) */
+      .map-attrib.folded { display:none; }
       /* full, the sliver of map above is only the way back: the map's own
          buttons and the credit wait until the sheet is down again */
       .atlas-stage:has(> #atlas-panel[data-h="full"]) .map-attrib,
@@ -1976,9 +1982,11 @@
           </button>
         </div>
         <div class="links">
+          <!-- the phone's way to About & sources, in place of the ⓘ on the map (Mithun, 23 Oct 2026) -->
+          <button class="nav-about" id="nav-about" type="button">About this atlas</button>
           <a href="./">all atlases</a>
           <a href="../">all apps</a>
-          <a href="https://discoverloka.org" target="_blank" rel="noopener">discoverloka.org</a>
+          <a class="nav-build" href="https://loka.place/apps/atlas/setup/">Build your own Atlas</a>
           <span id="nav-user" hidden></span>
           <a id="nav-signin" href="./setup/?signin=1">sign in</a>
           <button id="nav-signout" type="button" hidden>sign out</button>
@@ -1990,7 +1998,7 @@
           <p id="nav-builtwith-map"></p>
           <p><a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre GL</a>, the open-source map engine</p>
         </div>
-        <a class="loka-badge loka-badge-menu" href="./setup/" title="Build your own atlas"><span class="loka-badge-by">Powered by</span> <img src="./loka-logo.png" alt="LOKA"> <em>Atlas</em></a>
+        <a class="loka-badge loka-badge-menu" href="https://discoverloka.org" target="_blank" rel="noopener" title="LOKA: discover local places"><span class="loka-badge-by">Powered by</span> <img src="./loka-logo.png" alt="LOKA"></a>
       </div>
       <div class="nav-menu-scrim" id="nav-menu-scrim" hidden></div>
     </nav>
@@ -2035,7 +2043,7 @@
             <span class="panel-count" id="panel-count"></span>
             <span class="sheet-layer" id="sheet-layer"></span>
           </div>
-          <a class="loka-badge loka-badge-head" href="./setup/" title="Build your own atlas"><span class="loka-badge-by">Powered by</span> <img src="./loka-logo.png" alt="LOKA"> <em>Atlas</em></a>
+          <a class="loka-badge loka-badge-head" href="https://discoverloka.org" target="_blank" rel="noopener" title="LOKA: discover local places"><span class="loka-badge-by">Powered by</span> <img src="./loka-logo.png" alt="LOKA"></a>
           <button class="panel-collapse" type="button" aria-label="Show or hide map layers" aria-expanded="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
         </div>
         <!-- the phone's "27 of 134 places are … · show all" line, beside the
@@ -2070,7 +2078,7 @@
     </div>
     <!-- Bottom-right: LOKA's badge on a wide screen (on a phone it is in the
          sheet's head above, and here only while there is no sheet to hold it) -->
-    <a class="loka-badge loka-badge-float" href="./setup/" title="Build your own atlas">Powered by <img src="./loka-logo.png" alt="LOKA"> <em>Atlas</em></a>
+    <a class="loka-badge loka-badge-float" href="https://discoverloka.org" target="_blank" rel="noopener" title="LOKA: discover local places">Powered by <img src="./loka-logo.png" alt="LOKA"></a>
 
   <!-- The credits, opened from the "About & sources" chip. Not modal: the
        map stays live behind it, Esc or the × puts it away. -->
@@ -2185,6 +2193,15 @@
       var menu = document.getElementById("nav-menu");
       var scrim = document.getElementById("nav-menu-scrim");
       var close = document.getElementById("nav-menu-close");
+      // "About this atlas" in the menu opens what the map's ⓘ opens
+      var navAbout = document.getElementById("nav-about");
+      if (navAbout) navAbout.addEventListener("click", function (e) {
+        // the About panel shuts on any click outside it: this one opens it
+        e.stopPropagation();
+        if (close) close.click();
+        var info = document.getElementById("sources-btn");
+        if (info) info.click();
+      });
       var header = document.querySelector("header.site");
       if (!burger || !menu) return;
       function open() {
