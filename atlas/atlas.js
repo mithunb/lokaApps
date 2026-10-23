@@ -505,6 +505,7 @@
       locPinEl: locPinEl,
       shotsHTML: shotsHTML, linksIn: linksIn, cellShown: cellShown,
       dataUrl: function (file) { return dataUrl(file); },
+      lokaLinkHTML: lokaLinkHTML,
       setLayerVisible: function (L, show) { if (map) setLayerVisible(L, show); else L._visible = show; },
       onPhone: onPhone,
       setSheet: function (h) { setSheet(h); },
@@ -6861,6 +6862,22 @@
   }
 
   // worked out once per layer, when its places arrive
+  /* "See this place in LOKA": a place that came from a LOKA tag links to that
+     tag's own page, where the photographs, the notes and the app are (Fable's
+     first route to the LOKA app, Mithun's yes, 23 Oct 2026). The tag's page
+     address as the export gives it; failing that, built from its tag_id on a
+     layer that is LOKA's own export. Anything else gets no line. */
+  var LOKA_TAG_PAGE = /^https:\/\/loka\.place\/t\/[A-Za-z0-9-]{8,64}$/;
+  function lokaLinkHTML(L, props) {
+    if (!props) return "";
+    var url = String(props.public_link || "").trim();
+    if (!LOKA_TAG_PAGE.test(url)) {
+      var id = String(props.tag_id || "").trim();
+      url = (id && isLoka(L) && /^[A-Za-z0-9-]{8,64}$/.test(id)) ? "https://loka.place/t/" + id : "";
+    }
+    if (!url) return "";
+    return '<a class="pop-loka" href="' + esc(url) + '" target="_blank" rel="noopener">See this place in LOKA</a>';
+  }
   function isLoka(L) {
     if (!L) return false;
     if (L._loka === undefined) {
@@ -7087,6 +7104,7 @@
        to name; a curated atlas's own pins have none. */
     var src = sourceLine(L);
     if (src) h += '<div class="pop-src">Source · ' + esc(src) + "</div>";
+    if (h !== shell) h += lokaLinkHTML(L, props);
 
     // A popup stanza can point at columns the data no longer carries — that
     // used to open a bare white box with nothing but a close button. If

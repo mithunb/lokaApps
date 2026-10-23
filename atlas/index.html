@@ -1122,6 +1122,10 @@
     .pop-field-inline .pop-lbl { text-transform:none; letter-spacing:0; font-size:var(--t-meta); color:var(--color-text-secondary); }
     .pop-field-inline .pop-val { display:block; min-width:0; overflow-wrap:anywhere; font-weight:600; }
     /* Where this place came from — last, and quieter than the place itself. */
+    /* "See this place in LOKA" at a LOKA-tagged place's card foot (atlas.js lokaLinkHTML) */
+    .pop-loka { display:flex; width:max-content; max-width:100%; align-items:center; min-height:44px; margin-top:.4rem; font-size:var(--t-meta, 13px); font-weight:600;
+      color:var(--color-leaf-deep); text-decoration:underline; text-decoration-color:var(--color-border); text-underline-offset:3px; }
+    .pop-loka:hover { text-decoration-color:currentColor; }
     .pop-src { margin-top:.7rem; padding-top:.5rem; border-top:1px solid var(--color-border);
       font-size:var(--t-label); color:var(--color-text-muted); }
     .pop-img { display:block; width:100%; max-height:180px; object-fit:cover; border-radius:var(--radius-md); margin:.5rem 0 .1rem; }

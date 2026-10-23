@@ -519,6 +519,7 @@
         if (props.address) h += '<p class="ev-addr">' + esc(api.cellShown(props.address)) + "</p>";
         h += programmeHTML(props, mode, todayIn(mode.timeZone), esc);
         h += '<button type="button" class="ev-around-link" data-ev-around="' + esc(f && f._evNo || "") + '">What’s around here</button>';
+        if (api.lokaLinkHTML) h += api.lokaLinkHTML(srcLayer || L, props);
         return h + "</div>";
       }
       var word = L._ev.osm ? wordOf(props) : (api.cellShown(props[mode.tagColumn || "categories"]).replace(/\s*[;,]\s*/g, " · ") || catLabel(cat));
@@ -532,6 +533,7 @@
       var nv = pt ? nearestVenue(pt) : null;
       if (nv) h += '<p class="ev-near">' + esc(distanceWords(nv.m)) + " from " + esc(nameOf(byCat.venues[0], nv.f)) + " (venue " + esc(nv.f._evNo) + ")</p>";
       if (L._ev.osm) h += '<p class="ev-osm">Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors</p>';
+      else if (api.lokaLinkHTML) h += api.lokaLinkHTML(srcLayer || L, props);   // the team's own tags, not OpenStreetMap's
       return h + "</div>";
     }
 

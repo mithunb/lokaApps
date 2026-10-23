@@ -192,6 +192,10 @@ check('bus stops say what they are: a bay letter, a route line, a stop named for
   ['Bus stop G', 'Bus stop V (to St. Inez)', 'Kala Academy bus stop', 'Panjim KTC Bus Stand', 'Auto Stand', 'Miramar taxi stand']);
 check('…and the row under the name does not say "Bus stop" again', EV.wordOf({ kind: 'bus_stop' }) && /indexOf\(w\.toLowerCase\(\)\) >= 0/.test(fs.readFileSync(ROOT + '/atlas/event-mode.js', 'utf8')), true);
 const atlasSrc = fs.readFileSync(ROOT + '/atlas/atlas.js', 'utf8');
+check('a LOKA-tagged place\'s card says "See this place in LOKA", linking its tag page (venues and the team\'s places; never an OpenStreetMap place)',
+  /var LOKA_TAG_PAGE = \/\^https:\\\/\\\/loka\\\.place\\\/t\\\//.test(atlasSrc) && />See this place in LOKA<\/a>/.test(atlasSrc) &&
+  (fs.readFileSync(ROOT + '/atlas/event-mode.js', 'utf8').match(/api\.lokaLinkHTML\(srcLayer \|\| L, props\)/g) || []).length === 2 &&
+  /if \(L\._ev\.osm\) h \+= '<p class="ev-osm">[^\n]*\n\s*else if \(api\.lokaLinkHTML\)/.test(fs.readFileSync(ROOT + '/atlas/event-mode.js', 'utf8')), true);
 check('a pin put away by the second row is hidden, and so is its name', [/!e\.away && !e\.subOff/.test(atlasSrc), /if \(e\.away \|\| e\.subOff\) return;/.test(atlasSrc)], [true, true]);
 const evSrc = fs.readFileSync(ROOT + '/atlas/event-mode.js', 'utf8');
 check('choosing another category starts its second row at "All"', /function choose\(id\) \{\n.*\n\s*state\.sub = null;/.test(evSrc), true);
