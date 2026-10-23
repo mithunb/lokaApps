@@ -130,7 +130,7 @@ check('…its own session is still there', kOwn.sessions.some((x) => x.title ===
 console.log('\n  the four categories');
 const cats = {};
 tags.features.forEach((f) => { const c = EV.placeCategory(f.properties, mode); cats[c] = (cats[c] || 0) + 1; });
-check('Venues 7, Art & Culture 7, Utils 9 from the places’ own words (Kala Academy is a venue now; the Cafeteria is out)', cats, { venues: 7, art: 7, utils: 9, null: 1 });
+check('Venues 7, See & Do 7, Essentials 9 from the places’ own words (Kala Academy is a venue now; the Cafeteria is out)', cats, { venues: 7, see: 7, utils: 9, null: 1 });
 check('a place marked venue is a venue whatever its words', EV.placeCategory({ venue: true, categories: 'Services' }, mode), 'venues');
 check('OpenStreetMap kinds: a café is Eat & Drink, a bus stop Utils, a bank nothing', [EV.osmCategory('cafe', mode), EV.osmCategory('bus_stop', mode), EV.osmCategory('bank', mode)], ['eat', 'utils', null]);
 
@@ -154,7 +154,35 @@ check('no banks (spec: skip banks)', feats.some((f) => f.properties.kind === 'ba
 check('the file carries OpenStreetMap’s credit and licence', [/OpenStreetMap contributors/.test(around.fc.attribution), around.fc.license], [true, 'ODbL-1.0']);
 check('no opening hours are written', feats.some((f) => 'opening_hours' in f.properties), false);
 check('the query asks each venue on its own (one around per point; several points make a line)',
-  (lib.overpassQuery(vpts.map((v) => v.pt), 400, lib.osmKinds(mode)).match(/around:400,/g) || []).length, 14);
+  (lib.overpassQuery(vpts.map((v) => v.pt), 400, lib.osmKinds(mode)).match(/around:400,/g) || []).length, 7 * 6);
+check('…one line per OpenStreetMap key: amenity, highway (bus stops, as points), natural, tourism, leisure, historic',
+  ['"amenity"', 'node["highway"', '"natural"~"^(beach)$"', '"tourism"', '"leisure"~"^(park|garden)$"', '"historic"'].every((k) => lib.overpassQuery([vpts[0].pt], 400, lib.osmKinds(mode)).includes(k)), true);
+
+console.log('\n  See & Do');
+const see = mode.categories.find((c) => c.id === 'see');
+check('the chips read Venues · Eat & Drink · See & Do · Essentials', mode.categories.map((c) => c.label), ['Venues', 'Eat & Drink', 'See & Do', 'Essentials']);
+check('What’s around here opens Eat & Drink by setting, not by the chips’ order', mode.aroundOpens, 'eat');
+const grp = (name, description) => (EV.groupOf({ loka_name: name, description }, see, false) || {}).label;
+check('the team’s places find their heading by the words of their name, not their description',
+  [grp('Panjim city view point'), grp('Miramar Beach'), grp('National Museum of Customs'), grp('Mario de Miranda Gallery'), grp('Henry the Navigator Marker', 'A stone marker on the Campal promenade'), grp('Panaji Market')],
+  ['Parks & views', 'Parks & views', 'Museums & galleries', 'Museums & galleries', 'Landmarks', 'Markets']);
+check('a map place goes by its kind; a church is a landmark', ['park', 'beach', 'gallery', 'marketplace', 'place_of_worship', 'memorial'].map((k) => EV.groupOf({ kind: k }, see, true).label),
+  ['Parks & views', 'Parks & views', 'Museums & galleries', 'Markets', 'Landmarks', 'Landmarks']);
+const V = [{ name: 'V', pt: [73.83, 15.50] }];
+const at = (dLng) => ({ lon: 73.83 + dLng, lat: 15.50 });
+const fake = { osm3s: {}, elements: [
+  Object.assign({ type: 'node', id: 1, tags: { amenity: 'place_of_worship', religion: 'christian', name: 'Plain Chapel' } }, at(0.0005)),
+  Object.assign({ type: 'node', id: 2, tags: { amenity: 'place_of_worship', religion: 'christian', name: 'Landmark Church', wikidata: 'Q1' } }, at(0.0006)),
+  Object.assign({ type: 'node', id: 3, tags: { amenity: 'place_of_worship', religion: 'hindu', name: 'Old Temple', heritage: '2' } }, at(0.0007)),
+  Object.assign({ type: 'node', id: 4, tags: { tourism: 'viewpoint', name: 'Hill View' } }, at(0.0008)),
+  Object.assign({ type: 'node', id: 5, tags: { leisure: 'park', name: 'Riverside Park' } }, at(0.0009)),
+  Object.assign({ type: 'node', id: 6, tags: { tourism: 'museum', name: 'City Museum Annexe' } }, at(0.0010)),
+] };
+const got = lib.buildAround(V, fake, mode, [{ name: 'City Museum', pt: [73.8301, 15.50], cat: 'see', group: see.groups[2] }]).fc.features.map((f) => f.properties);
+check('churches and temples come in only when the data marks them notable (Wikipedia/Wikidata, heritage, a sight)', got.filter((p) => p.kind === 'place_of_worship').map((p) => p.name).sort(), ['Landmark Church', 'Old Temple']);
+check('…and say Church or Temple, not "place of worship"', got.filter((p) => p.kind === 'place_of_worship').map((p) => EV.wordOf(p)).sort(), ['Church', 'Temple']);
+check('a map place within 100 m of a team place under the same heading is the same place twice: left out', got.some((p) => p.name === 'City Museum Annexe'), false);
+check('…a park and a viewpoint beside it still come in', ['Hill View', 'Riverside Park'].every((n) => got.some((p) => p.name === n)), true);
 
 console.log('\n  each venue’s card');
 const sess = (f) => EV.sessionsOf(f.properties);
@@ -177,7 +205,7 @@ check('a thing that runs every day sits on each day too', (EV.programmeHTML(sun.
 check('a programme left as text is shown whole', /pre-line|ev-prog-text/.test(EV.programmeHTML({ programme_text: 'THU\n  a' }, mode, '2026-10-22', esc)), true);
 
 console.log('\n  what’s around each venue');
-const tagged = tags.features.filter((f) => ['art', 'utils'].includes(EV.placeCategory(f.properties, mode)));
+const tagged = tags.features.filter((f) => ['see', 'utils'].includes(EV.placeCategory(f.properties, mode)));
 const aroundCount = vpts.map((v) => [...feats, ...tagged].filter((f) => EV.metres(v.pt, f.geometry.coordinates) <= 400).length);
 check('every venue has something around it', aroundCount.every((n) => n >= 1), true);
 
@@ -186,7 +214,7 @@ const L = [{ id: 'admin', type: 'fill', source: 'admin.geojson' },
   { id: 'tags', type: 'marker', source: 'user-tags.geojson', userLayer: true, popup: { title: 'loka_name' }, label_text: { property: 'loka_name' }, contentHash: 'abc' }];
 const api = { esc, el: () => ({}), data: () => null, markers: () => [], locPinEl: () => ({}), shotsHTML: () => '', linksIn: () => [], cellShown: (v) => String(v || ''), setLayerVisible() {}, onPhone: () => false };
 const made = EV.viewer(Object.assign({ layer: 'tags' }, mode), api).layers(L.slice());
-check('the venues’ layer becomes one layer per category, and two from OpenStreetMap', made.map((x) => x.id), ['admin', 'ev-venues', 'ev-eat-osm', 'ev-art', 'ev-utils', 'ev-utils-osm']);
+check('the venues’ layer becomes one layer per category, and two from OpenStreetMap', made.map((x) => x.id), ['admin', 'ev-venues', 'ev-eat-osm', 'ev-see', 'ev-see-osm', 'ev-utils', 'ev-utils-osm']);
 check('only Venues is on at first', made.filter((x) => x._ev && x.default).map((x) => x.id), ['ev-venues']);
 check('the OpenStreetMap layers carry the credit', made.filter((x) => x.osmPlaces).every((x) => x.credits && /OpenStreetMap/.test(x.credits[0].name)), true);
 check('the venues are numbered most sessions first', made[1].rowsFrom(tags).features.map((f) => f._evNo + ' ' + f.properties.loka_name).slice(0, 3), ['1 Old Secretariat', '2 Sunaparanta Goa Centre', '3 Kala Academy']);

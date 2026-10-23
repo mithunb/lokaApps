@@ -20,7 +20,7 @@
  *
  * What it changes, and only this: the way a visitor moves around the map. The
  * questions (keys) and the layer list give way to four chips (Venues, Eat &
- * Drink, Art & Culture, Utils), a list of venues, a programme on each venue's
+ * Drink, See & Do, Essentials), a list of venues, a programme on each venue's
  * card, and "What's around here". Search, the cards' photographs, share, the
  * phone's sheet, the menu, the theme and the credits stay atlas.js's own.
  *
@@ -185,8 +185,37 @@
     restaurant: "Restaurant", cafe: "Café", fast_food: "Fast food", bar: "Bar", pub: "Pub",
     toilets: "Public toilets", pharmacy: "Pharmacy", atm: "Cash machine (ATM)",
     bus_stop: "Bus stop", taxi: "Taxi stand",
+    park: "Park", garden: "Garden", viewpoint: "Viewpoint", beach: "Beach", attraction: "Sight",
+    monument: "Monument", memorial: "Memorial", place_of_worship: "Place of worship",
+    museum: "Museum", gallery: "Gallery", marketplace: "Market",
   };
   function kindWord(kind) { return KIND_WORDS[kind] || String(kind || "").replace(/_/g, " "); }
+  // a nearby place's own word: "Church" or "Temple" when the build knew, else its kind's
+  function wordOf(props) { return (props && props.word) || kindWord(props && props.kind); }
+
+  /* A category's sub-groups (See & Do: Parks & views · Landmarks · Museums &
+     galleries · Markets — Fable's call, Mithun's yes, 23 Oct 2026), shown as
+     headings in its list. An OpenStreetMap place goes by its kind; a place
+     the event team tagged goes by the words of its name only (a description
+     says where a place is — "on the Campal promenade" — as often as what it
+     is); what matches nothing goes to the group marked "other". */
+  function groupOf(props, cat, osm) {
+    var gs = (cat && cat.groups) || [];
+    if (!gs.length || !props) return null;
+    var i;
+    if (osm) {
+      for (i = 0; i < gs.length; i++) if ((gs[i].kinds || []).indexOf(props.kind) >= 0) return gs[i];
+    } else {
+      var texts = [props.loka_name || props.name || ""];
+      for (var t = 0; t < texts.length; t++) {
+        var low = String(texts[t]).toLowerCase();
+        for (i = 0; i < gs.length; i++) {
+          if ((gs[i].words || []).some(function (w) { return new RegExp("\\b" + String(w).toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).test(low); })) return gs[i];
+        }
+      }
+    }
+    return gs.filter(function (g) { return g.other; })[0] || gs[gs.length - 1];
+  }
 
   // metres between two [lng, lat] points, on the ground (as the crow flies)
   function metres(a, b) {
@@ -274,8 +303,8 @@
      each card, buildPanel() when the panel is drawn, and ready() once the
      places are in. Everything else it draws stays atlas.js's.
   ================================================================== */
-  var COLORS = { eat: "#B5541B", art: "#2F6F8F", utils: "#4E4A44" };
-  var ICON = { eat: "utensils", art: "palette", utils: null };
+  var COLORS = { eat: "#B5541B", see: "#2F6F8F", utils: "#4E4A44" };
+  var ICON = { eat: "utensils", see: "palette", utils: null };
   var CSS =
     ".ev-chips{display:flex;gap:6px;padding:8px 10px;flex:0 0 auto;flex-wrap:wrap;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--color-divider,#e5e0d6)}\n" +
     ".ev-chips::-webkit-scrollbar{display:none}\n" +
@@ -295,6 +324,7 @@
       ".atlas-stage>#atlas-panel[data-h=full]~.ev-chips{display:none}" +
       ".atlas-stage.ev-on:has(>#atlas-panel[data-h=full]) .map-attrib,.atlas-stage.ev-on:has(>#atlas-panel[data-h=full]) .maplibregl-ctrl-bottom-right{transform:none}}\n" +
     ".ev-wrap{padding:.2rem 0 .6rem}\n" +
+    ".ev-sh{font-size:var(--t-meta,13px);font-weight:700;color:var(--color-text-secondary,#5A5751);margin:.85rem 0 .2rem}\n" +
     ".ev-h{font-size:var(--t-label,12px);font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--color-text-muted,#6E6A63);margin:.9rem 0 .35rem}\n" +
     ".ev-row{display:flex;align-items:flex-start;gap:.6rem;width:100%;text-align:left;font:inherit;background:none;border:0;border-bottom:1px solid var(--color-divider,#ece7dc);padding:.6rem .1rem;cursor:pointer;color:inherit}\n" +
     ".ev-row:hover{background:var(--color-surface-alt,rgba(0,0,0,.03))}\n" +
@@ -455,7 +485,7 @@
         h += '<button type="button" class="ev-around-link" data-ev-around="' + esc(f && f._evNo || "") + '">What’s around here</button>';
         return h + "</div>";
       }
-      var word = L._ev.osm ? kindWord(props.kind) : (api.cellShown(props[mode.tagColumn || "categories"]).replace(/\s*[;,]\s*/g, " · ") || catLabel(cat));
+      var word = L._ev.osm ? wordOf(props) : (api.cellShown(props[mode.tagColumn || "categories"]).replace(/\s*[;,]\s*/g, " · ") || catLabel(cat));
       h += '<div class="pop-sub">' + esc(word) + "</div>";
       h += '<div class="pop-title">' + esc(name) + "</div>";
       if (!L._ev.osm) {
@@ -612,6 +642,20 @@
       var who = document.getElementById("sheet-layer");
       if (who) { who.innerHTML = ""; who.appendChild(el("span", "sheet-layer-name", esc(sh.small || sh.label))); }
     }
+    /* rows under their sub-group's heading, groups in the order the mode
+       lists them, each keeping the rows' own order; a group with nothing in
+       it gets no heading. A category without groups: the rows as they are. */
+    function inGroups(rows, draw) {
+      var cat = rows.length && rows[0].c;
+      var gs = (cat && cat.groups) || [];
+      if (!gs.length) { rows.forEach(draw); return; }
+      gs.forEach(function (g) {
+        var mine = rows.filter(function (r) { return groupOf(r.x.e.f.properties, r.c, !!r.x.L._ev.osm) === g; });
+        if (!mine.length) return;
+        state.list.appendChild(el("div", "ev-sh", esc(g.label) + " · " + mine.length));
+        mine.forEach(draw);
+      });
+    }
     function renderList() {
       syncHead();
       var box = state.list; if (!box) return;
@@ -635,9 +679,10 @@
         });
         rows.sort(function (a, b) { return a.m - b.m; });
         if (!rows.length) box.appendChild(el("p", "ev-hint", "Nothing listed within " + R + " m of this venue."));
-        rows.forEach(function (r) {
-          var word = r.x.L._ev.osm ? kindWord(r.x.e.f.properties.kind) : r.c.label;
-          box.appendChild(rowFor(r.x.L, r.x.e.f, esc(word) + " · <b>" + esc(distanceWords(r.m)) + "</b>",
+        inGroups(rows, function (r) {
+          // a team place under a heading needs no word: the heading says it
+          var word = r.x.L._ev.osm ? wordOf(r.x.e.f.properties) : (r.c.groups && r.c.groups.length ? "" : r.c.label);
+          box.appendChild(rowFor(r.x.L, r.x.e.f, (word ? esc(word) + " · " : "") + "<b>" + esc(distanceWords(r.m)) + "</b>",
             '<span class="ev-dot" style="--ev-c:' + catColor(r.c.id) + '" aria-hidden="true"></span>'));
         });
         return;
@@ -660,8 +705,8 @@
         }).sort(function (a, b) { return (a.nv ? a.nv.m : 0) - (b.nv ? b.nv.m : 0); });
         box.appendChild(el("div", "ev-h", esc(c.label) + " · " + xs.length));
         if (!xs.length) box.appendChild(el("p", "ev-hint", "None listed."));
-        xs.forEach(function (r) {
-          var word = r.x.L._ev.osm ? kindWord(r.x.e.f.properties.kind) : "";
+        inGroups(xs.map(function (r) { r.c = c; return r; }), function (r) {
+          var word = r.x.L._ev.osm ? wordOf(r.x.e.f.properties) : "";
           var meta = (word ? esc(word) + " · " : "") + (r.nv ? esc(distanceWords(r.nv.m)) + " from " + esc(nameOf(byCat.venues[0], r.nv.f)) : "");
           box.appendChild(rowFor(r.x.L, r.x.e.f, meta, '<span class="ev-dot" style="--ev-c:' + catColor(c.id) + '" aria-hidden="true"></span>'));
         });
@@ -691,7 +736,11 @@
         // the first chip with something near it opens: Eat & Drink, as a rule
         if (!first && entriesOf(c.id).some(function (x) { return !x.e.away; })) first = c.id;
       });
-      choose(first || CATS.filter(function (c) { return c.id !== "venues"; }).map(function (c) { return c.id; })[0]);
+      // which chip opens is a setting (mode.aroundOpens: Eat & Drink, Mithun's
+      // yes 23 Oct 2026), not the order of the chips; else the first with
+      // something near
+      var want = mode.aroundOpens && catById[mode.aroundOpens] ? mode.aroundOpens : null;
+      choose(want || first || CATS.filter(function (c) { return c.id !== "venues"; }).map(function (c) { return c.id; })[0]);
       // a phone's card gives the sheet back to the list it came from
       if (api.onPhone()) { api.closeCard(); api.setSheet("half"); }
       renderList();
@@ -765,6 +814,8 @@
     metres: metres,
     distanceWords: distanceWords,
     kindWord: kindWord,
+    wordOf: wordOf,
+    groupOf: groupOf,
     KIND_WORDS: KIND_WORDS,
     viewer: viewer,
   };

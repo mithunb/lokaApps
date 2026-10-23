@@ -281,14 +281,23 @@ export function osmKinds(mode) {
 /* One statement per venue: Overpass reads several points in one `around` as
    a line through them, not as several circles. Named places only is applied
    after, so the count of unnamed ones can be reported. */
+/* Which OpenStreetMap key each kind lives under; a kind not listed here is
+   an amenity (restaurant, cafe, toilets, marketplace, place_of_worship…). */
+export const KIND_KEY = {
+  bus_stop: 'highway', beach: 'natural',
+  viewpoint: 'tourism', attraction: 'tourism', museum: 'tourism', gallery: 'tourism',
+  park: 'leisure', garden: 'leisure', monument: 'historic', memorial: 'historic',
+};
 export function overpassQuery(points, radius, kinds) {
-  const amen = kinds.filter((k) => k !== 'bus_stop');
-  const bus = kinds.includes('bus_stop');
+  const byKey = {};
+  for (const k of kinds) (byKey[KIND_KEY[k] || 'amenity'] = byKey[KIND_KEY[k] || 'amenity'] || []).push(k);
   const parts = [];
   for (const [lng, lat] of points) {
     const at = `(around:${radius},${lat.toFixed(6)},${lng.toFixed(6)})`;
-    if (amen.length) parts.push(`nwr["amenity"~"^(${amen.join('|')})$"]${at};`);
-    if (bus) parts.push(`node["highway"="bus_stop"]${at};`);
+    for (const [key, ks] of Object.entries(byKey)) {
+      // a bus stop is a point on the road; anything else may be drawn as an area
+      parts.push(`${key === 'highway' ? 'node' : 'nwr'}["${key}"~"^(${ks.join('|')})$"]${at};`);
+    }
   }
   return `[out:json][timeout:90];\n(\n${parts.join('\n')}\n);\nout center tags;`;
 }
@@ -331,23 +340,46 @@ async function askMirror(url, query, log) {
   }
 }
 
-function kindOf(tags) {
+// the first kind the mode asks for that this place is, key by key
+const KEY_ORDER = ['amenity', 'highway', 'natural', 'tourism', 'leisure', 'historic'];
+function kindOf(tags, wanted) {
   if (!tags) return null;
-  if (tags.amenity) return tags.amenity;
-  if (tags.highway === 'bus_stop') return 'bus_stop';
+  for (const key of KEY_ORDER) {
+    const v = tags[key];
+    if (v && (KIND_KEY[v] || 'amenity') === key && (!wanted || wanted.includes(v))) return v;
+  }
   return null;
 }
+/* "Architectural significance" read from the data (Fable's rule, Mithun's
+   yes, 23 Oct 2026): a place listed under a category's `notableOnly` kinds
+   (a church or temple) comes in only with a Wikipedia or Wikidata link, a
+   heritage or historic mark, or as a listed sight. A place the event team
+   tags always shows; that is how a notable one the data misses gets in. */
+export function isNotable(tags) {
+  return !!(tags && (tags.wikipedia || tags.wikidata || tags.heritage || tags.historic || tags.tourism === 'attraction'));
+}
+const FAITH_WORD = { christian: 'Church', hindu: 'Temple', muslim: 'Mosque', sikh: 'Gurdwara', jain: 'Jain temple', buddhist: 'Buddhist temple' };
 /* The nearby places, from what OpenStreetMap returned, category by category
    as the mode's categories say:
      - a category with `perVenue` (Eat & Drink: 8, Mithun 2026-10-22): per
        venue, the nearest that many within the radius — bars and pubs count
        within the number — and fewer if fewer exist;
-     - any other (Utils): every one within the radius of any venue;
+     - any other (Essentials): every one within the radius of any venue;
    a category with `namedOnly` keeps named places only (a nameless restaurant
    is no use); the others call a nameless place by its kind ("Public
    toilets", "Bus stop"), since Mithun asked for all of them. Each place
    once; no opening hours (OpenStreetMap rarely has them; none are invented). */
-export function buildAround(venues, data, mode) {
+/* `tagged`: the places the event team tagged ({ name, pt, cat, group }); an
+   OpenStreetMap place standing within 100 m of one under the same sub-group
+   (where the category has sub-groups) or sharing a word of its name (where
+   it has none: a tagged pharmacy must not hide the toilets next door) is the
+   same place twice and is left out — the team's own words win. */
+function sharesWord(a, b) {
+  const ws = (x) => String(x || '').toLowerCase().split(/[^a-z0-9\u00c0-\u024f]+/).filter((w) => w.length >= 4);
+  const A = new Set(ws(a));
+  return ws(b).some((w) => A.has(w));
+}
+export function buildAround(venues, data, mode, tagged = []) {
   const R = mode.aroundRadiusM || 400;
   const cats = (mode.categories || []).filter((c) => c.osm && c.osm.length);
   const catOf = Object.fromEntries(cats.map((c) => [c.id, c]));
@@ -358,9 +390,10 @@ export function buildAround(venues, data, mode) {
     const key = el.type + '/' + el.id;
     if (seen.has(key)) continue;
     seen.add(key);
-    const kind = kindOf(el.tags);
+    const kind = kindOf(el.tags, osmKinds(mode));
     const cat = EV.osmCategory(kind, mode);
     if (!cat) continue;
+    if ((catOf[cat].notableOnly || []).includes(kind) && !isNotable(el.tags)) continue;
     const pt = el.lon != null ? [el.lon, el.lat] : el.center ? [el.center.lon, el.center.lat] : null;
     if (!pt) continue;
     let name = String((el.tags && el.tags.name) || '').trim();
@@ -371,8 +404,12 @@ export function buildAround(venues, data, mode) {
       name = EV.kindWord(kind) + (by ? ' · ' + by : '');
     }
     if (!name) { unnamed++; continue; }
+    const group = EV.groupOf({ kind }, catOf[cat], true);
+    if (tagged.some((t) => t.cat === cat && EV.metres(t.pt, pt) <= 100 &&
+      (group ? t.group && t.group.label === group.label : sharesWord(t.name, name)))) continue;
     const d = venues.map((v) => EV.metres(v.pt, pt));
-    items.push({ key, kind, cat, pt, name, d });
+    const word = kind === 'place_of_worship' ? FAITH_WORD[String(el.tags.religion || '').toLowerCase()] || null : null;
+    items.push({ key, kind, cat, pt, name, d, word });
   }
   const keep = new Map();
   const perVenue = venues.map((v) => Object.assign({ name: v.name }, Object.fromEntries(cats.map((c) => [c.id, 0]))));
@@ -391,7 +428,7 @@ export function buildAround(venues, data, mode) {
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [+it.pt[0].toFixed(7), +it.pt[1].toFixed(7)] },
       properties: {
-        name: it.name, kind: it.kind, category: it.cat, source: 'osm', osm: it.key,
+        name: it.name, kind: it.kind, ...(it.word ? { word: it.word } : {}), category: it.cat, source: 'osm', osm: it.key,
         near: venues[best].name, near_m: Math.round(it.d[best]),
       },
     };
@@ -405,6 +442,16 @@ export function buildAround(venues, data, mode) {
     features,
   };
   return { fc, perVenue, unnamed };
+}
+
+// the team's own places, as buildAround wants them, to keep out doubles
+export function taggedOf(gj, mode) {
+  const catOf = Object.fromEntries((mode.categories || []).map((c) => [c.id, c]));
+  return (gj.features || []).map((f) => {
+    const cat = EV.placeCategory(f.properties, mode);
+    if (!cat || cat === 'venues' || !f.geometry) return null;
+    return { name: f.properties.loka_name || f.properties.name, pt: f.geometry.coordinates, cat, group: EV.groupOf(f.properties, catOf[cat], false) };
+  }).filter(Boolean);
 }
 
 /* ---- the whole job, shared by both commands ---- */
@@ -462,7 +509,7 @@ export async function run(opts) {
   let around = null, osmFrom = '';
   const aroundFile = path.join(dir, mode.around || 'around.geojson');
   if (opts.osmFile) {
-    around = buildAround(venues, JSON.parse(fs.readFileSync(opts.osmFile, 'utf8')), mode);
+    around = buildAround(venues, JSON.parse(fs.readFileSync(opts.osmFile, 'utf8')), mode, taggedOf(gj, mode));
     osmFrom = 'file ' + opts.osmFile;
   } else if (opts.keepOsm) {
     if (!fs.existsSync(aroundFile)) die('--keep-osm, but there is no ' + path.basename(aroundFile) + ' to keep');
@@ -471,7 +518,7 @@ export async function run(opts) {
     log('OpenStreetMap: asking for places within ' + mode.aroundRadiusM + ' m of each venue');
     const got = await fetchOverpass(overpassQuery(venues.map((v) => v.pt), mode.aroundRadiusM, osmKinds(mode)), log);
     if (!got) die('OpenStreetMap could not be reached on any mirror. Try again in a few minutes, or add --keep-osm to refresh the programmes and keep the nearby places as they are.');
-    around = buildAround(venues, got.data, mode);
+    around = buildAround(venues, got.data, mode, taggedOf(gj, mode));
     osmFrom = got.mirror.split('/')[2] + ', data as of ' + (got.data.osm3s && got.data.osm3s.timestamp_osm_base);
   }
 
