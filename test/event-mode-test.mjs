@@ -168,6 +168,23 @@ check('the team’s places find their heading by the words of their name, not th
   ['Parks & views', 'Parks & views', 'Museums & galleries', 'Museums & galleries', 'Landmarks', 'Markets']);
 check('a map place goes by its kind; a church is a landmark', ['park', 'beach', 'gallery', 'marketplace', 'place_of_worship', 'memorial'].map((k) => EV.groupOf({ kind: k }, see, true).label),
   ['Parks & views', 'Parks & views', 'Museums & galleries', 'Markets', 'Landmarks', 'Landmarks']);
+console.log('\n  icons and the second row');
+globalThis.window = globalThis.window || globalThis;
+require(ROOT + '/atlas/iconkit.js');
+const kit = globalThis.LokaIcons.ICONS;
+const named = [];
+mode.categories.forEach((c) => { named.push(c.icon); (c.groups || []).forEach((g) => named.push(g.icon)); });
+check('every button has an icon, and every icon is in the icon kit', named.filter((n) => !n || !kit[n]), []);
+const ess = mode.categories.find((c) => c.id === 'utils');
+check('Essentials has its own second row: Toilets · Cash · Health · Transport · Other', ess.groups.map((g) => g.label), ['Toilets', 'Cash', 'Health', 'Transport', 'Other']);
+const eg = (name) => (EV.groupOf({ loka_name: name }, ess, false) || {}).label;
+check('the team’s Essentials find their row by name', [eg('HDFC Bank'), eg('CMM Hospital'), eg('Taj Medical Stores'), eg('Panjim KTC Bus Stand'), eg('Auto Stand'), eg('Patto Circle')],
+  ['Cash', 'Health', 'Health', 'Transport', 'Transport', 'Other']);
+const atlasSrc = fs.readFileSync(ROOT + '/atlas/atlas.js', 'utf8');
+check('a pin put away by the second row is hidden, and so is its name', [/!e\.away && !e\.subOff/.test(atlasSrc), /if \(e\.away \|\| e\.subOff\) return;/.test(atlasSrc)], [true, true]);
+const evSrc = fs.readFileSync(ROOT + '/atlas/event-mode.js', 'utf8');
+check('choosing another category starts its second row at "All"', /function choose\(id\) \{\n.*\n\s*state\.sub = null;/.test(evSrc), true);
+
 const V = [{ name: 'V', pt: [73.83, 15.50] }];
 const at = (dLng) => ({ lon: 73.83 + dLng, lat: 15.50 });
 const fake = { osm3s: {}, elements: [

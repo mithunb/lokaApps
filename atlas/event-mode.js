@@ -192,6 +192,11 @@
   function kindWord(kind) { return KIND_WORDS[kind] || String(kind || "").replace(/_/g, " "); }
   // a nearby place's own word: "Church" or "Temple" when the build knew, else its kind's
   function wordOf(props) { return (props && props.word) || kindWord(props && props.kind); }
+  // the word under a row's name, unless the name already says it ("Public toilets")
+  function rowWord(props, name) {
+    var w = wordOf(props);
+    return String(name || "").toLowerCase().indexOf(w.toLowerCase()) === 0 ? "" : w;
+  }
 
   /* A category's sub-groups (See & Do: Parks & views · Landmarks · Museums &
      galleries · Markets — Fable's call, Mithun's yes, 23 Oct 2026), shown as
@@ -304,6 +309,11 @@
      places are in. Everything else it draws stays atlas.js's.
   ================================================================== */
   var COLORS = { eat: "#B5541B", see: "#2F6F8F", utils: "#4E4A44" };
+  // a button's icon, from the shared icon kit (iconkit.js); none when it is not loaded
+  function iconSvg(name) {
+    var kit = typeof window !== "undefined" && window.LokaIcons && window.LokaIcons.ICONS;
+    return (name && kit && kit[name]) ? '<span class="ev-ic" aria-hidden="true">' + kit[name] + "</span>" : "";
+  }
   var ICON = { eat: "utensils", see: "palette", utils: null };
   var CSS =
     ".ev-chips{display:flex;gap:6px;padding:8px 10px;flex:0 0 auto;flex-wrap:wrap;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--color-divider,#e5e0d6)}\n" +
@@ -312,17 +322,33 @@
       "background:var(--color-surface,#fff);color:var(--color-text-primary,#24211D);border-radius:var(--radius-md,8px);cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}\n" +
     ".ev-chip i{width:9px;height:9px;border-radius:50%;background:var(--ev-c);display:block}\n" +
     ".ev-chip[aria-pressed=true]{background:var(--color-leaf,#2A6B41);border-color:var(--color-leaf,#2A6B41);color:#fff}\n" +
+    ".ev-ic{display:inline-flex;width:16px;height:16px;flex:0 0 auto}.ev-ic svg{width:100%;height:100%}\n" +
+    /* the second row: a category's sub-groups, one at a time, "All" first */
+    ".ev-subchips{display:flex;gap:6px;padding:0 10px 8px;overflow-x:auto;scrollbar-width:none}\n" +
+    ".ev-subchips[hidden]{display:none}.ev-subchips::-webkit-scrollbar{display:none}\n" +
+    ".ev-sub{flex:0 0 auto;font:inherit;font-size:13px;font-weight:600;line-height:1;padding:7px 10px;min-height:32px;border:1px solid var(--color-border,#d9d3c7);" +
+      "background:var(--color-surface,#fff);color:var(--color-text-primary,#24211D);border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}\n" +
+    ".ev-sub .ev-ic{width:14px;height:14px}\n" +
+    ".ev-sub[aria-pressed=true]{background:var(--color-text-primary,#24211D);border-color:var(--color-text-primary,#24211D);color:#fff}\n" +
+    ".ev-sub:focus-visible{outline:2px solid var(--color-leaf,#2A6B41);outline-offset:2px}\n" +
+    ".atlas-panel.collapsed .ev-subchips{display:none}\n" +
     ".ev-chip[aria-pressed=true] i{box-shadow:0 0 0 1.5px #fff}\n" +
     ".ev-chip:focus-visible,.ev-row:focus-visible,.ev-tab:focus-visible,.ev-around-link:focus-visible,.ev-back:focus-visible{outline:2px solid var(--color-leaf,#2A6B41);outline-offset:2px}\n" +
     ".atlas-panel.collapsed .ev-chips{display:none}\n" +
     /* a phone: one row of chips right above the sheet, across the map's
        width; the credit pill and the zoom buttons step up to make room */
     "@media (max-width:720px){.atlas-stage>.ev-chips{position:absolute;left:8px;right:8px;bottom:calc(var(--sheet-h,0px) + 8px);z-index:6;border:0;padding:0;background:none;flex-wrap:nowrap;gap:5px;transition:bottom .28s cubic-bezier(.22,1,.36,1)}" +
-      ".atlas-stage>.ev-chips .ev-chip{box-shadow:0 1px 4px rgba(36,33,29,.18);padding:8px 10px;font-size:13px;min-height:36px}" +
+      ".atlas-stage>.ev-chips{display:grid;grid-template-columns:repeat(var(--ev-n,4),minmax(0,1fr))}" +
+      /* a phone: icon over word, four equal buttons across */
+      ".atlas-stage>.ev-chips .ev-chip{box-shadow:0 1px 4px rgba(36,33,29,.18);padding:6px 2px 5px;font-size:12px;min-height:50px;flex-direction:column;justify-content:center;gap:3px;white-space:nowrap}" +
+      ".atlas-stage>.ev-chips .ev-chip .ev-ic{width:19px;height:19px}" +
       ".atlas-stage>.ev-chips .ev-chip i{display:none}" +
-      ".atlas-stage.ev-on .map-attrib,.atlas-stage.ev-on .maplibregl-ctrl-bottom-right{transform:translateY(-46px)}" +
-      ".atlas-stage>#atlas-panel[data-h=full]~.ev-chips{display:none}" +
-      ".atlas-stage.ev-on:has(>#atlas-panel[data-h=full]) .map-attrib,.atlas-stage.ev-on:has(>#atlas-panel[data-h=full]) .maplibregl-ctrl-bottom-right{transform:none}}\n" +
+      ".atlas-stage>.ev-subchips{position:absolute;left:0;right:0;bottom:calc(var(--sheet-h,0px) + 66px);z-index:6;padding:0 8px;transition:bottom .28s cubic-bezier(.22,1,.36,1)}" +
+      ".atlas-stage>.ev-subchips .ev-sub{box-shadow:0 1px 4px rgba(36,33,29,.18)}" +
+      ".atlas-stage.ev-on .map-attrib,.atlas-stage.ev-on .maplibregl-ctrl-bottom-right{transform:translateY(-60px)}" +
+      ".atlas-stage.ev-on.ev-sub-on .map-attrib,.atlas-stage.ev-on.ev-sub-on .maplibregl-ctrl-bottom-right{transform:translateY(-100px)}" +
+      ".atlas-stage>#atlas-panel[data-h=full]~.ev-chips,.atlas-stage>#atlas-panel[data-h=full]~.ev-subchips{display:none}" +
+      ".atlas-stage.ev-on:has(>#atlas-panel[data-h=full]) .map-attrib,.atlas-stage.ev-on:has(>#atlas-panel[data-h=full]) .maplibregl-ctrl-bottom-right{transform:none!important}}\n" +
     ".ev-wrap{padding:.2rem 0 .6rem}\n" +
     ".ev-sh{font-size:var(--t-meta,13px);font-weight:700;color:var(--color-text-secondary,#5A5751);margin:.85rem 0 .2rem}\n" +
     ".ev-h{font-size:var(--t-label,12px);font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--color-text-muted,#6E6A63);margin:.9rem 0 .35rem}\n" +
@@ -376,7 +402,7 @@
     var on = {}; CATS.forEach(function (c) { on[c.id] = c.id === "venues"; });
     var byCat = {};             // category id -> [layer, ...]
     var srcLayer = null;
-    var state = { around: null, ready: false, chips: null, list: null };
+    var state = { around: null, ready: false, chips: null, subs: null, list: null, sub: null };
     var titleProp = "name";
 
     function catLabel(id) { return (catById[id] && catById[id].label) || id; }
@@ -506,8 +532,59 @@
        measured from. */
     function choose(id) {
       CATS.forEach(function (c) { on[c.id] = c.id === id; });
+      state.sub = null;
+      applySub();
       showChosen();
       syncChips();
+      buildSubs();
+    }
+    /* ---- the second row: the chosen category's sub-groups ----
+       One at a time, "All" first; a group with no places gets no button.
+       Choosing one keeps only its pins on the map and its rows in the list. */
+    function groupsWithPlaces(c) {
+      return ((c && c.groups) || []).filter(function (g) {
+        return entriesOf(c.id).some(function (x) { return groupOf(x.e.f.properties, c, !!x.L._ev.osm) === g; });
+      });
+    }
+    function applySub() {
+      CATS.forEach(function (c) {
+        entriesOf(c.id).forEach(function (x) {
+          x.e.subOff = !!(state.sub && on[c.id] && groupOf(x.e.f.properties, c, !!x.L._ev.osm) !== state.sub);
+        });
+      });
+    }
+    function buildSubs() {
+      var bar = state.subs; if (!bar) return;
+      var c = chosenCat();
+      var gs = state.ready ? groupsWithPlaces(c) : [];
+      var stage = document.querySelector(".atlas-stage");
+      bar.innerHTML = "";
+      bar.hidden = gs.length < 2;
+      if (stage) stage.classList.toggle("ev-sub-on", !bar.hidden);
+      if (bar.hidden) return;
+      bar.setAttribute("aria-label", "Which " + c.label);
+      [{ label: "All", all: true }].concat(gs).forEach(function (g) {
+        var b = el("button", "ev-sub");
+        b.type = "button";
+        b.setAttribute("aria-pressed", String(g.all ? !state.sub : state.sub === g));
+        b.innerHTML = iconSvg(g.icon) + esc(g.label);
+        b.addEventListener("click", function () {
+          state.sub = g.all ? null : g;
+          applySub();
+          showChosen();
+          buildSubs();
+          renderList();
+          if (state.around) frameAround();
+          else if (state.sub) frameShown();
+        });
+        bar.appendChild(b);
+      });
+    }
+    // the map comes to what the chosen sub-group shows
+    function frameShown() {
+      var c = chosenCat(), pts = [];
+      entriesOf(c.id).forEach(function (x) { if (!x.e.away && !x.e.subOff) pts.push(x.e.f.geometry.coordinates); });
+      if (pts.length) api.fitPoints(pts);
     }
     function showChosen() {
       CATS.forEach(function (c) {
@@ -521,7 +598,7 @@
       var pts = [v.geometry.coordinates];
       CATS.forEach(function (c) {
         if (!on[c.id] || c.id === "venues") return;
-        entriesOf(c.id).forEach(function (x) { if (!x.e.away) pts.push(x.e.f.geometry.coordinates); });
+        entriesOf(c.id).forEach(function (x) { if (!x.e.away && !x.e.subOff) pts.push(x.e.f.geometry.coordinates); });
       });
       api.fitPoints(pts);
     }
@@ -540,7 +617,7 @@
         b.type = "button";
         b.setAttribute("data-cat", c.id);
         b.style.setProperty("--ev-c", catColor(c.id));
-        b.innerHTML = "<i aria-hidden=\"true\"></i>" + esc(c.label);
+        b.innerHTML = (c.icon ? iconSvg(c.icon) : "<i aria-hidden=\"true\"></i>") + "<span>" + esc(c.label) + "</span>";
         b.addEventListener("click", function () {
           // Venues while looking around one venue: back to all of them
           if (c.id === "venues" && state.around) { clearAround(); return; }
@@ -551,7 +628,12 @@
         });
         bar.appendChild(b);
       });
+      bar.style.setProperty("--ev-n", String(CATS.length));
       state.chips = bar;
+      var subs = el("div", "ev-subchips");
+      subs.setAttribute("role", "group");
+      subs.hidden = true;
+      state.subs = subs;
       syncChips();
       return bar;
     }
@@ -561,18 +643,23 @@
       var panel = document.getElementById("atlas-panel");
       var stage = document.querySelector(".atlas-stage");
       if (stage) stage.classList.add("ev-on");
-      if (api.onPhone()) { if (stage && bar.parentNode !== stage) stage.appendChild(bar); }
-      else if (panel) {
+      var subs = state.subs;
+      if (api.onPhone()) {
+        if (stage && bar.parentNode !== stage) stage.appendChild(bar);
+        if (stage && subs && subs.parentNode !== stage) stage.appendChild(subs);
+      } else if (panel) {
         var body = panel.querySelector(".sheet-body");
         if (bar.parentNode !== panel) panel.insertBefore(bar, body || null);
+        if (subs && subs.parentNode !== panel) panel.insertBefore(subs, body || null);
       }
     }
     var placeWired = false;
 
     function buildPanel(panel) {
       injectStyle(document);
-      var old = document.querySelector(".ev-chips");
-      if (old && old.parentNode) old.parentNode.removeChild(old);
+      Array.prototype.forEach.call(document.querySelectorAll(".ev-chips,.ev-subchips"), function (old) {
+        if (old.parentNode) old.parentNode.removeChild(old);
+      });
       buildChips();
       placeChips();
       if (!placeWired) {
@@ -633,7 +720,8 @@
       if (!state.ready) return { label: catLabel(c.id), small: "" };
       if (c.id === "venues") return { label: catLabel("venues"), small: countWord(venues().length, "venue", "venues") };
       var n = entriesOf(c.id).filter(function (x) { return !x.e.away; }).length;
-      return { label: catLabel(c.id), small: state.around ? "Around " + nameOf(byCat.venues[0], state.around) : countWord(n, "place", "places") };
+      if (state.sub) n = entriesOf(c.id).filter(function (x) { return !x.e.away && !x.e.subOff; }).length;
+      return { label: catLabel(c.id) + (state.sub ? " · " + state.sub.label : ""), small: state.around ? "Around " + nameOf(byCat.venues[0], state.around) : countWord(n, "place", "places") };
     }
     function syncHead() {
       var sh = sheetHead();
@@ -650,6 +738,7 @@
       var gs = (cat && cat.groups) || [];
       if (!gs.length) { rows.forEach(draw); return; }
       gs.forEach(function (g) {
+        if (state.sub && state.sub !== g) return;
         var mine = rows.filter(function (r) { return groupOf(r.x.e.f.properties, r.c, !!r.x.L._ev.osm) === g; });
         if (!mine.length) return;
         state.list.appendChild(el("div", "ev-sh", esc(g.label) + " · " + mine.length));
@@ -681,7 +770,7 @@
         if (!rows.length) box.appendChild(el("p", "ev-hint", "Nothing listed within " + R + " m of this venue."));
         inGroups(rows, function (r) {
           // a team place under a heading needs no word: the heading says it
-          var word = r.x.L._ev.osm ? wordOf(r.x.e.f.properties) : (r.c.groups && r.c.groups.length ? "" : r.c.label);
+          var word = r.x.L._ev.osm ? rowWord(r.x.e.f.properties, nameOf(r.x.L, r.x.e.f)) : (r.c.groups && r.c.groups.length ? "" : r.c.label);
           box.appendChild(rowFor(r.x.L, r.x.e.f, (word ? esc(word) + " · " : "") + "<b>" + esc(distanceWords(r.m)) + "</b>",
             '<span class="ev-dot" style="--ev-c:' + catColor(r.c.id) + '" aria-hidden="true"></span>'));
         });
@@ -703,10 +792,11 @@
           var nv = nearestVenue(x.e.f.geometry.coordinates);
           return { x: x, nv: nv };
         }).sort(function (a, b) { return (a.nv ? a.nv.m : 0) - (b.nv ? b.nv.m : 0); });
-        box.appendChild(el("div", "ev-h", esc(c.label) + " · " + xs.length));
+        // with a sub-group chosen, its own heading carries the count
+        if (!state.sub) box.appendChild(el("div", "ev-h", esc(c.label) + " · " + xs.length));
         if (!xs.length) box.appendChild(el("p", "ev-hint", "None listed."));
         inGroups(xs.map(function (r) { r.c = c; return r; }), function (r) {
-          var word = r.x.L._ev.osm ? wordOf(r.x.e.f.properties) : "";
+          var word = r.x.L._ev.osm ? rowWord(r.x.e.f.properties, nameOf(r.x.L, r.x.e.f)) : "";
           var meta = (word ? esc(word) + " · " : "") + (r.nv ? esc(distanceWords(r.nv.m)) + " from " + esc(nameOf(byCat.venues[0], r.nv.f)) : "");
           box.appendChild(rowFor(r.x.L, r.x.e.f, meta, '<span class="ev-dot" style="--ev-c:' + catColor(c.id) + '" aria-hidden="true"></span>'));
         });
@@ -788,7 +878,7 @@
       pinEl: pinEl,
       cardHTML: cardHTML,
       buildPanel: buildPanel,
-      ready: function () { state.ready = true; renderList(); },
+      ready: function () { state.ready = true; buildSubs(); renderList(); },
       framed: function () { return ["ev-venues"]; },
       sheetHead: sheetHead,
       around: around,

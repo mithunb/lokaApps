@@ -856,8 +856,10 @@
     try {
       var stage = map.getContainer().closest(".atlas-stage");
       var sheet = parseFloat(stage && getComputedStyle(stage).getPropertyValue("--sheet-h")) || 0;
-      // event mode's chips sit on the sheet's top edge (event-mode.js): room for them too
-      if (sheet > 0) pad.bottom = Math.min(sheet + 16 + (EV ? 46 : 0), map.getContainer().clientHeight * 0.45);
+      // event mode's buttons sit on the sheet's top edge (event-mode.js): room for
+      // them too — one row, or two while a category's sub-groups are showing
+      var evRows = EV ? (stage.classList.contains("ev-sub-on") ? 104 : 62) : 0;
+      if (sheet > 0) pad.bottom = Math.min(sheet + 16 + evRows, map.getContainer().clientHeight * (EV ? 0.6 : 0.45));
     } catch (e) {}
     try {
       var mr = map.getContainer().getBoundingClientRect();
@@ -3261,7 +3263,7 @@
     var max = t.maxChars || 32;
     if (L._visible !== false && !folded) {
       (markersByLayer[L.id] || []).forEach(function (e) {
-        if (e.away) return;   // event mode: beyond "What's around here"
+        if (e.away || e.subOff) return;   // event mode: beyond "What's around here", or another sub-group
         if (e.hidden || e._clustered || e._absorbed || e._fanned) return;
         var v = labelNameOf(L, e.f, t);
         if (!v) return;
@@ -3316,7 +3318,7 @@
     spreadAnswerPins(L);
     (markersByLayer[L.id] || []).forEach(function (e) {
       e.mk.getElement().style.display =
-        (shown && !folded && !e.hidden && !e.away && ((!e._clustered && !e._absorbed) || e._fanned)) ? "" : "none";
+        (shown && !folded && !e.hidden && !e.away && !e.subOff && ((!e._clustered && !e._absorbed) || e._fanned)) ? "" : "none";
     });
     if (L._clusterMarker) L._clusterMarker.getElement().style.display = (shown && folded) ? "" : "none";
     syncPinNames(L);

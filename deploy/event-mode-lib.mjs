@@ -370,10 +370,11 @@ const FAITH_WORD = { christian: 'Church', hindu: 'Temple', muslim: 'Mosque', sik
    toilets", "Bus stop"), since Mithun asked for all of them. Each place
    once; no opening hours (OpenStreetMap rarely has them; none are invented). */
 /* `tagged`: the places the event team tagged ({ name, pt, cat, group }); an
-   OpenStreetMap place standing within 100 m of one under the same sub-group
-   (where the category has sub-groups) or sharing a word of its name (where
-   it has none: a tagged pharmacy must not hide the toilets next door) is the
-   same place twice and is left out — the team's own words win. */
+   OpenStreetMap place within 100 m of one, under the same sub-group where
+   the category has them, that shares a word of its name — or stands within
+   50 m under the same sub-group — is the same place twice and is left out;
+   the team's own words win. A tagged hospital must not hide the pharmacy
+   across the road, nor a tagged pharmacy the toilets next door. */
 function sharesWord(a, b) {
   const ws = (x) => String(x || '').toLowerCase().split(/[^a-z0-9\u00c0-\u024f]+/).filter((w) => w.length >= 4);
   const A = new Set(ws(a));
@@ -405,8 +406,14 @@ export function buildAround(venues, data, mode, tagged = []) {
     }
     if (!name) { unnamed++; continue; }
     const group = EV.groupOf({ kind }, catOf[cat], true);
-    if (tagged.some((t) => t.cat === cat && EV.metres(t.pt, pt) <= 100 &&
-      (group ? t.group && t.group.label === group.label : sharesWord(t.name, name)))) continue;
+    if (tagged.some((t) => {
+      if (t.cat !== cat) return false;
+      const m = EV.metres(t.pt, pt);
+      if (m > 100) return false;
+      if (group && !(t.group && t.group.label === group.label)) return false;
+      // the same name, or (under the same heading) practically the same spot
+      return sharesWord(t.name, name) || (group && m <= 50);
+    })) continue;
     const d = venues.map((v) => EV.metres(v.pt, pt));
     const word = kind === 'place_of_worship' ? FAITH_WORD[String(el.tags.religion || '').toLowerCase()] || null : null;
     items.push({ key, kind, cat, pt, name, d, word });

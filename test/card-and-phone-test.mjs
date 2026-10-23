@@ -148,7 +148,7 @@ check('the zoom buttons and the scale bar clear it',
 check('and the framing leaves room for it, so pins do not load under it',
   /if \(sheet > 0\) pad\.bottom = Math\.min\(sheet \+ 16/.test(atlas), true);
 check('but never so much room that the map has nowhere to draw',
-  /map\.getContainer\(\)\.clientHeight \* 0\.45/.test(atlas), true);
+  /map\.getContainer\(\)\.clientHeight \* \(EV \? 0\.6 : 0\.45\)/.test(atlas), true);
 
 console.log('\n  on a phone, a place’s card sits along the bottom');
 /* Measured before this: on Bengaluru a card 320 pixels wide on a 375-pixel map

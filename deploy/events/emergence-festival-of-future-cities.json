@@ -1,5 +1,5 @@
 {
-  "about": "Event mode for this atlas (deploy/apply-event-mode.mjs, deploy/refresh-event-atlas.mjs). Spec by Fable, approved by Mithun 2026-10-22, with his overrides: at most 8 eat-and-drink places per venue, nearest first; the Vivanta venue is Vivanta Goa, Panaji (renamed, Campal address); Kala Academy's picture from its Wikipedia page; the Cafeteria's sessions merged into Kala Academy, which is the venue. 23 Oct 2026: one chip at a time; See & Do (Fable's call, Mithun's yes) replaces Art & Culture with parks, views, beaches, landmarks, museums, galleries and markets in four headings, churches and temples only when the data marks them notable; Utils renamed Essentials; What's around here opens Eat & Drink.",
+  "about": "Event mode for this atlas (deploy/apply-event-mode.mjs, deploy/refresh-event-atlas.mjs). Spec by Fable, approved by Mithun 2026-10-22, with his overrides: at most 8 eat-and-drink places per venue, nearest first; the Vivanta venue is Vivanta Goa, Panaji (renamed, Campal address); Kala Academy's picture from its Wikipedia page; the Cafeteria's sessions merged into Kala Academy, which is the venue. 23 Oct 2026: one chip at a time; See & Do (Fable's call, Mithun's yes) replaces Art & Culture with parks, views, beaches, landmarks, museums, galleries and markets in four headings, churches and temples only when the data marks them notable; Utils renamed Essentials; What's around here opens Eat & Drink. Later 23 Oct: icons on every button, and a second row of buttons for See & Do's and Essentials' sub-groups (Mithun).",
   "layer": "tags",
   "venueFrom": {
     "column": "pattern_4",
@@ -20,7 +20,8 @@
     "categories": [
       {
         "id": "venues",
-        "label": "Venues"
+        "label": "Venues",
+        "icon": "ticket"
       },
       {
         "id": "eat",
@@ -33,7 +34,8 @@
           "pub"
         ],
         "perVenue": 8,
-        "namedOnly": true
+        "namedOnly": true,
+        "icon": "utensils"
       },
       {
         "id": "see",
@@ -76,7 +78,8 @@
               "view point",
               "beach",
               "boardwalk"
-            ]
+            ],
+            "icon": "trees"
           },
           {
             "label": "Landmarks",
@@ -86,7 +89,8 @@
               "memorial",
               "place_of_worship"
             ],
-            "other": true
+            "other": true,
+            "icon": "landmark"
           },
           {
             "label": "Museums & galleries",
@@ -97,7 +101,8 @@
             "words": [
               "museum",
               "gallery"
-            ]
+            ],
+            "icon": "palette"
           },
           {
             "label": "Markets",
@@ -107,9 +112,11 @@
             "words": [
               "market",
               "bazaar"
-            ]
+            ],
+            "icon": "store"
           }
-        ]
+        ],
+        "icon": "camera"
       },
       {
         "id": "utils",
@@ -124,6 +131,68 @@
           "atm",
           "bus_stop",
           "taxi"
+        ],
+        "icon": "lifebuoy",
+        "groups": [
+          {
+            "label": "Toilets",
+            "icon": "toilet",
+            "kinds": [
+              "toilets"
+            ],
+            "words": [
+              "toilet",
+              "toilets",
+              "restroom",
+              "washroom"
+            ]
+          },
+          {
+            "label": "Cash",
+            "icon": "cash",
+            "kinds": [
+              "atm"
+            ],
+            "words": [
+              "atm",
+              "bank",
+              "cash"
+            ]
+          },
+          {
+            "label": "Health",
+            "icon": "health",
+            "kinds": [
+              "pharmacy"
+            ],
+            "words": [
+              "pharmacy",
+              "medical",
+              "chemist",
+              "hospital",
+              "clinic"
+            ]
+          },
+          {
+            "label": "Transport",
+            "icon": "bus",
+            "kinds": [
+              "bus_stop",
+              "taxi"
+            ],
+            "words": [
+              "bus",
+              "taxi",
+              "auto",
+              "ferry",
+              "station"
+            ]
+          },
+          {
+            "label": "Other",
+            "icon": "dots",
+            "other": true
+          }
         ]
       }
     ],
