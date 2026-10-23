@@ -180,6 +180,13 @@ check('Essentials has its own second row: Toilets · Cash · Health · Transport
 const eg = (name) => (EV.groupOf({ loka_name: name }, ess, false) || {}).label;
 check('the team’s Essentials find their row by name', [eg('HDFC Bank'), eg('CMM Hospital'), eg('Taj Medical Stores'), eg('Panjim KTC Bus Stand'), eg('Auto Stand'), eg('Patto Circle')],
   ['Cash', 'Health', 'Health', 'Transport', 'Transport', 'Other']);
+const egd = (name, description) => (EV.groupOf({ loka_name: name, description }, ess, false) || {}).label;
+check('a place named for its street or shop goes by the opening of its description (Mithun: these are toilets and a pharmacy)',
+  [egd('Patto Circle', 'Public toilets at Patto Circle, on the east side of the city.'), egd('Dr TB Cunha Road', 'Public toilets on Dr T B Cunha Road in the city centre.'),
+   egd('Rua Conde de Redondo', 'Public toilets on Rua Conde de Redondo in Mala.'), egd('Neha', 'Neha, a pharmacy on Rua 31 de Janeiro in Mala, Fontainhas.')],
+  ['Toilets', 'Toilets', 'Toilets', 'Health']);
+check('…but only up to where it starts saying where the place is: a marker on a promenade is not a park',
+  (EV.groupOf({ loka_name: 'Henry the Navigator Marker', description: 'A stone marker to Henry the Navigator on the Campal promenade.' }, see, false) || {}).label, 'Landmarks');
 const atlasSrc = fs.readFileSync(ROOT + '/atlas/atlas.js', 'utf8');
 check('a pin put away by the second row is hidden, and so is its name', [/!e\.away && !e\.subOff/.test(atlasSrc), /if \(e\.away \|\| e\.subOff\) return;/.test(atlasSrc)], [true, true]);
 const evSrc = fs.readFileSync(ROOT + '/atlas/event-mode.js', 'utf8');

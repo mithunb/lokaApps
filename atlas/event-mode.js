@@ -201,9 +201,19 @@
   /* A category's sub-groups (See & Do: Parks & views · Landmarks · Museums &
      galleries · Markets — Fable's call, Mithun's yes, 23 Oct 2026), shown as
      headings in its list. An OpenStreetMap place goes by its kind; a place
-     the event team tagged goes by the words of its name only (a description
-     says where a place is — "on the Campal promenade" — as often as what it
-     is); what matches nothing goes to the group marked "other". */
+     the event team tagged goes by the words of its name, and when the name
+     is a street's or a shop's ("Patto Circle", "Neha"), by the opening of
+     its description up to where it starts saying where the place is:
+     "Public toilets | at Patto Circle", "Neha, a pharmacy | on Rua 31 de
+     Janeiro", "A stone marker to Henry the Navigator | on the Campal
+     promenade" — so a promenade it stands on does not make it a park
+     (Mithun, 23 Oct 2026). What matches nothing goes to the group marked
+     "other". */
+  function whatItIs(description) {
+    var d = String(description || "");
+    var m = d.search(/\s(?:on|at|in|near|by|beside|behind|opposite|off|along|across|between|within|inside|outside|from|of)\s/i);
+    return (m < 0 ? d.split(/[.;]/)[0] : d.slice(0, m));
+  }
   function groupOf(props, cat, osm) {
     var gs = (cat && cat.groups) || [];
     if (!gs.length || !props) return null;
@@ -211,7 +221,7 @@
     if (osm) {
       for (i = 0; i < gs.length; i++) if ((gs[i].kinds || []).indexOf(props.kind) >= 0) return gs[i];
     } else {
-      var texts = [props.loka_name || props.name || ""];
+      var texts = [props.loka_name || props.name || "", whatItIs(props.description)];
       for (var t = 0; t < texts.length; t++) {
         var low = String(texts[t]).toLowerCase();
         for (i = 0; i < gs.length; i++) {
