@@ -321,8 +321,10 @@
       var rows = shown().map(function (e) {
         return { e: e, m: mid ? metres(mid, e.f.geometry.coordinates) : 0, n: nameOf(e.f) };
       }).sort(function (a, b) { return a.m - b.m || a.n.localeCompare(b.n); });
-      // the panel's own head already says "Around here": the list says how many, and in what order
-      box.appendChild(el("p", "ex-note", esc(countWord(rows.length, "place", "places") + ", nearest the middle of the map first.")));
+      // the panel's own head already says "Around here": the list says how many, and in what order;
+      // a phone's sheet head already gives the count, so there it says only the order
+      box.appendChild(el("p", "ex-note", api.onPhone() ? "Nearest the middle of the map first." :
+        esc(countWord(rows.length, "place", "places") + ", nearest the middle of the map first.")));
       if (!rows.length) box.appendChild(el("p", "ev-hint", "None listed."));
       rows.forEach(function (r) {
         var row = rowOf(r.e);
