@@ -132,7 +132,7 @@
           "bus_stop",
           "taxi"
         ],
-        "icon": "lifebuoy",
+        "icon": "firstaid",
         "groups": [
           {
             "label": "Toilets",

@@ -198,6 +198,10 @@ check('a LOKA-tagged place\'s card says "See this place in LOKA", linking its ta
   /if \(L\._ev\.osm\) h \+= '<p class="ev-osm">[^\n]*\n\s*else if \(api\.lokaLinkHTML\)/.test(fs.readFileSync(ROOT + '/atlas/event-mode.js', 'utf8')), true);
 check('a pin put away by the second row is hidden, and so is its name', [/!e\.away && !e\.subOff/.test(atlasSrc), /if \(e\.away \|\| e\.subOff\) return;/.test(atlasSrc)], [true, true]);
 const evSrc = fs.readFileSync(ROOT + '/atlas/event-mode.js', 'utf8');
+check('around a venue, a group with nothing near it gets no button (Fable, 24 Oct)', /return !x\.e\.away && groupOf\(/.test(evSrc), true);
+check('the second row is read as "Within Essentials", its first button "All Essentials", and comes first on a phone', /"Within " \+ c\.label/.test(evSrc) && /"All " \+ c\.label/.test(evSrc) && /stage\.insertBefore\(subs, bar\)/.test(evSrc), true);
+check('the phone row fades at its right edge, a hint it slides on', /mask-image:linear-gradient\(to right,#000 calc\(100% - 28px\),transparent\)/.test(evSrc), true);
+check('Essentials wears a first-aid kit, not a life-ring', mode.categories.find((c) => c.id === 'utils').icon, 'firstaid');
 check('choosing another category starts its second row at "All"', /function choose\(id\) \{\n.*\n\s*state\.sub = null;/.test(evSrc), true);
 
 const V = [{ name: 'V', pt: [73.83, 15.50] }];

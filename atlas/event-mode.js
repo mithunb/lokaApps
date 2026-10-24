@@ -353,7 +353,9 @@
       ".atlas-stage>.ev-chips .ev-chip{box-shadow:0 1px 4px rgba(36,33,29,.18);padding:6px 2px 5px;font-size:12px;min-height:50px;flex-direction:column;justify-content:center;gap:3px;white-space:nowrap}" +
       ".atlas-stage>.ev-chips .ev-chip .ev-ic{width:19px;height:19px}" +
       ".atlas-stage>.ev-chips .ev-chip i{display:none}" +
-      ".atlas-stage>.ev-subchips{position:absolute;left:0;right:0;bottom:calc(var(--sheet-h,0px) + 66px);z-index:6;padding:0 8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;transition:bottom .28s cubic-bezier(.22,1,.36,1)}" +
+      ".atlas-stage>.ev-subchips{position:absolute;left:0;right:0;bottom:calc(var(--sheet-h,0px) + 66px);z-index:6;padding:0 32px 0 8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;transition:bottom .28s cubic-bezier(.22,1,.36,1);" +
+        /* a soft fade at the right edge: the row slides on (Fable's review, 24 Oct 2026) */
+        "-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent)}" +
       ".atlas-stage>.ev-subchips .ev-sub{box-shadow:0 1px 4px rgba(36,33,29,.18)}" +
       ".atlas-stage.ev-on .map-attrib,.atlas-stage.ev-on .maplibregl-ctrl-bottom-right{transform:translateY(-60px)}" +
       ".atlas-stage.ev-on.ev-sub-on .map-attrib,.atlas-stage.ev-on.ev-sub-on .maplibregl-ctrl-bottom-right{transform:translateY(-100px)}" +
@@ -555,7 +557,8 @@
        Choosing one keeps only its pins on the map and its rows in the list. */
     function groupsWithPlaces(c) {
       return ((c && c.groups) || []).filter(function (g) {
-        return entriesOf(c.id).some(function (x) { return groupOf(x.e.f.properties, c, !!x.L._ev.osm) === g; });
+        // "away" is set while looking around a venue: a group with nothing near it gets no button
+        return entriesOf(c.id).some(function (x) { return !x.e.away && groupOf(x.e.f.properties, c, !!x.L._ev.osm) === g; });
       });
     }
     function applySub() {
@@ -574,12 +577,13 @@
       bar.hidden = gs.length < 2;
       if (stage) stage.classList.toggle("ev-sub-on", !bar.hidden);
       if (bar.hidden) return;
-      bar.setAttribute("aria-label", "Which " + c.label);
+      bar.setAttribute("aria-label", "Within " + c.label);
       [{ label: "All", all: true }].concat(gs).forEach(function (g) {
         var b = el("button", "ev-sub");
         b.type = "button";
         b.setAttribute("aria-pressed", String(g.all ? !state.sub : state.sub === g));
         b.innerHTML = iconSvg(g.icon) + esc(g.label);
+        if (g.all) b.setAttribute("aria-label", "All " + c.label);
         b.addEventListener("click", function () {
           state.sub = g.all ? null : g;
           applySub();
@@ -657,8 +661,10 @@
       if (stage) stage.classList.add("ev-on");
       var subs = state.subs;
       if (api.onPhone()) {
+        // the second row sits above the first on a phone: it comes first in the
+        // page too, so the keyboard and a screen reader meet them as they are seen
         if (stage && bar.parentNode !== stage) stage.appendChild(bar);
-        if (stage && subs && subs.parentNode !== stage) stage.appendChild(subs);
+        if (stage && subs && subs.nextSibling !== bar) stage.insertBefore(subs, bar);
       } else if (panel) {
         var body = panel.querySelector(".sheet-body");
         if (bar.parentNode !== panel) panel.insertBefore(bar, body || null);
