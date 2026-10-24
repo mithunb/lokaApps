@@ -487,6 +487,36 @@ export function taggedOf(gj, mode) {
 /* ---- the whole job, shared by both commands ---- */
 function die(msg) { const e = new Error(msg); e.stop = true; throw e; }
 
+/* The same safety as run() below, for the other atlas scripts
+   (make-small-photos.mjs, apply-explore-mode.mjs): an atlas address only,
+   never one in NEVER, and no writing while the server is up. */
+export function stop(msg) { die(msg); }
+export function checkSlug(slug, command) {
+  if (!slug) die('usage: node deploy/' + command + ' <atlas address> [--apply]');
+  if (!/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(slug)) die('not an atlas address: ' + slug);
+  if (NEVER.has(slug)) die(slug + ' is never touched by this script');
+  const dir = atlasDir(slug);
+  if (!dir) die('no atlas called ' + slug + ' here');
+  return dir;
+}
+export async function checkServerStopped(serverIsStopped) {
+  if (serverIsStopped) return;
+  let online = false;
+  try {
+    const { execSync } = await import('node:child_process');
+    const list = JSON.parse(execSync('pm2 jlist', { stdio: ['ignore', 'pipe', 'ignore'] }).toString());
+    online = list.some((p) => p.name === 'lokaApps' && p.pm2_env && p.pm2_env.status === 'online');
+  } catch { /* no pm2 here (a local run): nothing to clash with */ }
+  if (online) die('lokaApps is running: stop it first (pm2 stop lokaApps), or add --server-is-stopped');
+}
+export function backupFiles(kind, slug, dir, files) {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backup = path.join(dataDir(), 'backups', kind + '-' + slug + '-' + stamp);
+  fs.mkdirSync(backup, { recursive: true });
+  for (const f of files) if (fs.existsSync(path.join(dir, f))) fs.copyFileSync(path.join(dir, f), path.join(backup, f));
+  return backup;
+}
+
 export async function run(opts) {
   const log = opts.log || console.log;
   const { slug, apply } = opts;

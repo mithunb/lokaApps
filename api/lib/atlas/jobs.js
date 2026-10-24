@@ -282,6 +282,8 @@ export const CONTRIBUTED = [
   /^search-[a-z0-9-]+\.vec$/,
   /^branding-logo\.png$/,        // re-emitted from the spec, but harmless to keep
   /^around\.geojson$/,           // event mode's nearby places (deploy/apply-event-mode.mjs)
+  /^small-[A-Za-z0-9-]+\.jpg$/,  // the lists' small photos (deploy/make-small-photos.mjs)
+  /^small-photos\.json$/,        // …and where each one came from
 ];
 export function carryContributed(fromDir, toDir, job) {
   let names;

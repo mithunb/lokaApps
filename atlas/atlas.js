@@ -147,7 +147,8 @@
     rust: "#C9402B", moss: "#2A6B41", ochre: "#E9A237", sienna: "#D2692A", slate: "#3A7FA1",
   };
   var keyState = {};   // layer id -> { active: [column, ...], note: string|null }
-  /* Event mode (event-mode.js): set when the manifest's `mode` says so, and
+  /* Event mode (event-mode.js), or Explore mode (explore-mode.js, built on
+     Event mode's pieces): set when the manifest's `mode` says so, and
      null on every other atlas — every line below that asks `if (EV)` leaves an
      atlas with no mode exactly as it was. */
   var EV = null;
@@ -488,6 +489,16 @@
      No mode, an unknown one, or a mode whose layer is missing: nothing changes. */
   function applyMode(m) {
     EV = null;
+    // Explore mode (explore-mode.js): a city's places by button and by what is
+    // near; built from Event mode's pieces and handed the same page
+    if (window.LokaExploreMode && LokaExploreMode.isOn(m)) {
+      try {
+        var x = LokaExploreMode.viewer(m.mode, eventApi());
+        var xs = x.layers(m.layers || []);
+        if (xs) { m.layers = xs; EV = x; }
+      } catch (e) { console.error("Atlas explore mode:", e && e.message); }
+      return m;
+    }
     if (!window.LokaEventMode || !LokaEventMode.isOn(m)) return m;
     try {
       var v = LokaEventMode.viewer(m.mode, eventApi());
@@ -525,6 +536,19 @@
         var b = new maplibregl.LngLatBounds(pts[0], pts[0]);
         pts.forEach(function (p) { b.extend(p); });
         map.fitBounds(b, { padding: viewPadding(), maxZoom: 17, duration: reducedMotion() ? 0 : 600 });
+      },
+      // Explore mode: the middle of the map, a call when it stops moving, and a move to one place
+      center: function () {
+        if (!map) return null;
+        // the middle of what can be seen: clear of the side panel and the sheet
+        var box = map.getContainer(), pad = viewPadding();
+        var x = (pad.left + box.clientWidth - pad.right) / 2, y = (pad.top + box.clientHeight - pad.bottom) / 2;
+        try { return map.unproject([x, y]).toArray(); } catch (e) { return map.getCenter().toArray(); }
+      },
+      onMoveEnd: function (fn) { if (map) map.on("moveend", fn); },
+      centreOn: function (pt) {
+        if (!map || !pt) return;
+        map.easeTo({ center: pt, zoom: Math.max(map.getZoom(), 14), padding: viewPadding(), duration: reducedMotion() ? 0 : 450 });
       },
     };
   }
@@ -898,7 +922,7 @@
        It is cheap and it always computes from what the build asked for, so
        calling it from both paths costs nothing and leaves neither uncovered. */
     floorFitsTheRegion();
-    var w = 180, s = 90, e = -180, n = -90, seen = 0;
+    var w = 180, s = 90, e = -180, n = -90, seen = 0, pts = [];
     ids.forEach(function (id) {
       var d = DATA[id];
       if (!d || !d.features || !d.features.length) return;
@@ -907,6 +931,7 @@
           if (!Array.isArray(c)) return;
           if (typeof c[0] === "number") {
             seen++;
+            if (EV) pts.push(c);
             if (c[0] < w) w = c[0]; if (c[0] > e) e = c[0];
             if (c[1] < s) s = c[1]; if (c[1] > n) n = c[1];
           } else c.forEach(walk);
@@ -914,6 +939,9 @@
       });
     });
     if (!seen || e < w || n < s) return false;
+    // Explore mode opens on most of the places, the few far ones left out (explore-mode.js frameBox)
+    var most = EV && EV.frameBox ? EV.frameBox(pts) : null;
+    if (most) { w = most[0][0]; s = most[0][1]; e = most[1][0]; n = most[1][1]; }
     /* One place, or several stacked on the same spot, has no width to frame, so
        it is given some. It used to be given a great deal: anything narrower
        than 0.01 degrees was pushed out by 0.02 either way, and 0.01 degrees is
@@ -5785,7 +5813,7 @@
       // a redraw into an atlas with no mode leaves nothing of the guide behind
       var oldChips = document.querySelector(".ev-chips");
       if (oldChips && oldChips.parentNode) oldChips.parentNode.removeChild(oldChips);
-      if (stage) stage.classList.remove("ev-on");
+      if (stage) { stage.classList.remove("ev-on"); stage.classList.remove("ex-on"); }
     }
     var GROUP_LABELS = { userdata: "Your data", base: "Boundaries & places", agri: "Crops & value chain", eco: "Ecological landscape" };
     var declaredIds = {};

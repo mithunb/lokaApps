@@ -1,0 +1,15 @@
+{
+  "about": "Explore mode for Bengaluru on LOKA (atlas/explore-mode.js). Copied into the atlas's manifest.local.json by deploy/apply-explore-mode.mjs. A place belongs to a button when one of its own categories is one of the button's words; it may belong to several, or to none (it stays on the map and in the list). The buttons, their order and their words are Fable's analysis of 24 Oct 2026.",
+  "mode": {
+    "name": "explore",
+    "layer": "bengaluru-tags",
+    "tagColumn": "categories",
+    "frameShare": 0.8,
+    "buttons": [
+      { "id": "nature", "label": "Nature", "icon": "leaf", "color": "#2A6B41", "words": ["Nature"] },
+      { "id": "art", "label": "Art & history", "icon": "landmark", "color": "#C9402B", "words": ["Culture", "Heritage"] },
+      { "id": "do", "label": "Things to do", "icon": "ticket", "color": "#B5541B", "words": ["Activities", "Social", "Food and Drink", "Market"] },
+      { "id": "street", "label": "Street life", "icon": "users", "color": "#3A7FA1", "words": ["Civic", "Learning"] }
+    ]
+  }
+}

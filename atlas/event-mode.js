@@ -359,6 +359,9 @@
       ".atlas-stage>.ev-subchips .ev-sub{box-shadow:0 1px 4px rgba(36,33,29,.18)}" +
       ".atlas-stage.ev-on .map-attrib,.atlas-stage.ev-on .maplibregl-ctrl-bottom-right{transform:translateY(-60px)}" +
       ".atlas-stage.ev-on.ev-sub-on .map-attrib,.atlas-stage.ev-on.ev-sub-on .maplibregl-ctrl-bottom-right{transform:translateY(-100px)}" +
+      /* the first-visit line ("Tap a pin…") sits above the lifted credit, never on the buttons */
+      ".atlas-stage.ev-on .atlas-cue{bottom:calc(var(--sheet-h,0px) + 112px)}" +
+      ".atlas-stage.ev-on.ev-sub-on .atlas-cue{bottom:calc(var(--sheet-h,0px) + 152px)}" +
       ".atlas-stage>#atlas-panel[data-h=full]~.ev-chips,.atlas-stage>#atlas-panel[data-h=full]~.ev-subchips{display:none}" +
       ".atlas-stage.ev-on:has(>#atlas-panel[data-h=full]) .map-attrib,.atlas-stage.ev-on:has(>#atlas-panel[data-h=full]) .maplibregl-ctrl-bottom-right{transform:none!important}}\n" +
     ".ev-wrap{padding:.2rem 0 .6rem}\n" +
@@ -927,5 +930,8 @@
     groupOf: groupOf,
     KIND_WORDS: KIND_WORDS,
     viewer: viewer,
+    // shared with Explore mode (explore-mode.js): the same buttons, rows and phone layout
+    injectStyle: injectStyle,
+    iconSvg: iconSvg,
   };
 });
