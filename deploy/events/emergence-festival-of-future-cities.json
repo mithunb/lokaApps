@@ -229,8 +229,11 @@
         "credit": "Press Information Bureau, Government of India (GODL-India), via Wikimedia Commons",
         "link": "https://commons.wikimedia.org/wiki/File:A_view_of_Kala_Academy,_Goa,_the_main_venue_for_the_inaugural_ceremony_of_the_35th_International_Film_Festival_of_India-2004,_(to_be_held_from_29th_November_to_9th_December,_2004).jpg"
       },
-      "source": "The lead photograph of https://en.wikipedia.org/wiki/Kala_Academy, downloaded 2026-10-22 (900 × 582). Licence GODL-India: free to use with credit to the source.",
-      "why": "Mithun, 2026-10-22: the tag's picture is a drawn marker; use a suitable image from the Kala Academy Wikipedia page."
+      "set": {
+        "description": "Goa's main cultural centre, at Campal in Panaji. The Government of Goa set it up in 1970 to promote music, dance, theatre, fine art, folk art and literature. The building is by the architect Charles Correa. (From Wikipedia.)"
+      },
+      "source": "The lead photograph of https://en.wikipedia.org/wiki/Kala_Academy, downloaded 2026-10-22 (900 × 582). Licence GODL-India: free to use with credit to the source. Description written from the same Wikipedia page, 2026-10-25.",
+      "why": "Mithun, 2026-10-22: the tag's picture is a drawn marker; use a suitable image from the Kala Academy Wikipedia page. Mithun, 2026-10-25: the tag described the city bus stops named Kala Academy; describe the venue from Wikipedia instead."
     }
   ]
 }
