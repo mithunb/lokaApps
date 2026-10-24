@@ -129,17 +129,27 @@
      (a leaf is green, a drop of water blue); otherwise its place in the row.
      No two buttons share a colour: a later one takes its place's colour, or
      else the first one still free. Odds & ends is always the fifth colour.
+     Pictures with a natural colour claim it first, wherever they sit in the
+     row, so a book first in the row cannot take the leaf's green.
      Every Explore atlas, category buttons too (Mithun, 24 Oct 2026). */
   var PICTURE_COLOR = { leaf: PALETTE[0], footprints: PALETTE[0], landmark: PALETTE[1], ticket: PALETTE[2], droplet: PALETTE[3], store: PALETTE[3] };
   function colourOf(list) {
     var used = {}, out = [];
-    (list || []).forEach(function (b, i) {
-      if (!b) { out.push(null); return; }
-      if (b.rest) { out.push(REST_COLOR); return; }
-      var want = [PICTURE_COLOR[b.icon], PALETTE[i % 4]].concat(PALETTE.slice(0, 4), PALETTE[4]);
-      var c = want.filter(function (x) { return x && !used[x]; })[0] || PALETTE[i % PALETTE.length];
+    list = list || [];
+    // first pass: natural colours, earlier buttons first
+    list.forEach(function (b, i) {
+      if (!b) { out[i] = null; return; }
+      if (b.rest) { out[i] = REST_COLOR; return; }
+      var c = PICTURE_COLOR[b.icon];
+      if (c && !used[c]) { used[c] = true; out[i] = c; }
+    });
+    // second pass: the rest take their place's colour, or else the first one free
+    list.forEach(function (b, i) {
+      if (out[i] !== undefined) return;
+      var want = [PALETTE[i % 4]].concat(PALETTE.slice(0, 4), PALETTE[4]);
+      var c = want.filter(function (x) { return !used[x]; })[0] || PALETTE[i % PALETTE.length];
       used[c] = true;
-      out.push(c);
+      out[i] = c;
     });
     return out;
   }
