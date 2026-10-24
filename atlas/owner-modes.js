@@ -217,9 +217,9 @@
      viewer's setButtons), and visitors get them only on Save. Colours follow
      the place in the row; at most four. The rules for what may be saved are
      explore-mode.js's, the same file the server checks with. */
-  var BTN = { saved: null, draft: null, saving: false, saved1: false, err: "", icons: -1, tries: 0 };
+  var BTN = { saved: null, draft: null, saving: false, saved1: false, err: "", icons: -1, tries: 0, grouping: "", groupErr: "" };
   var ICON_WORDS = { leaf: "Leaf", landmark: "Landmark", ticket: "Ticket", users: "People", utensils: "Knife and fork",
-    camera: "Camera", music: "Music", book: "Book" };
+    camera: "Camera", music: "Music", book: "Book", store: "Shop", droplet: "Water drop", footprints: "Footprints" };
   function XM() { return window.LokaExploreMode; }
   function exploreMode() {
     var M = window.LokaAtlas && window.LokaAtlas.manifest, m = M && M.mode;
@@ -237,13 +237,32 @@
   }
   function plainButtons(list) {
     return (list || []).map(function (b) {
-      return { id: b.id, label: String(b.label || ""), icon: b.icon, words: (b.words || []).slice() };
+      var o = { id: b.id, label: String(b.label || ""), icon: b.icon, words: (b.words || []).slice() };
+      if (b.rest) o.rest = true;
+      return o;
     });
+  }
+  function topicCount(list) { return (list || []).filter(function (b) { return !b.rest; }).length; }
+  // the layer's own stanza (its questions: keyLabels, keyKinds, keyNouns), as the page has it
+  function exploreStanza(mode) {
+    var M = window.LokaAtlas && window.LokaAtlas.manifest;
+    return ((M && M.layers) || []).filter(function (L) { return L && L.id === mode.layer; })[0] || null;
+  }
+  /* The server's answer to "Group by" or Save is the mode in use: the page's
+     own copy (the one the map is drawn from) takes it, so the buttons on the
+     map read the same column the server will. */
+  function takeMode(m) {
+    var live = exploreMode();
+    if (!live || !m || typeof m !== "object") return;
+    Object.keys(live).forEach(function (k) { if (!(k in m)) delete live[k]; });
+    Object.keys(m).forEach(function (k) { live[k] = m[k]; });
   }
   function btnDirty() { return JSON.stringify(BTN.draft) !== JSON.stringify(BTN.saved); }
   function previewList(list) {
     return (list || BTN.draft).map(function (b, i) {
-      return { id: b.id || "new-" + (i + 1), label: b.label.trim() || "Untitled", icon: b.icon, words: b.words };
+      var o = { id: b.id || "new-" + (i + 1), label: b.label.trim() || "Untitled", icon: b.icon, words: b.words };
+      if (b.rest) o.rest = true;
+      return o;
     });
   }
   function previewButtons() {
@@ -255,12 +274,41 @@
     return (kit && kit[name]) || "";
   }
   function btnCount(b, feats, mode) {
-    var one = { tagColumn: mode.tagColumn, buttons: [{ id: "x", label: "x", words: b.words }] };
+    if (b.rest) {
+      var all = { tagColumn: mode.tagColumn, buttonsFrom: mode.buttonsFrom, buttons: previewList() };
+      return XM().countButtons(feats, all)[XM().REST_ID] || 0;
+    }
+    var one = { tagColumn: mode.tagColumn, buttonsFrom: mode.buttonsFrom, buttons: [{ id: "x", label: "x", words: b.words }] };
     return XM().countButtons(feats, one).x;
   }
   function btnCountLine(b, n) {
+    if (b.rest) return "Places under no other button — <b>" + n + "</b>";
     return esc(b.label.trim() || "Untitled") + " — <b>" + n + "</b> " + (n === 1 ? "place" : "places") +
-      (n === 0 ? ' <span class="own-bhint">· tick a category below</span>' : "");
+      (n === 0 ? ' <span class="own-bhint">· tick ' + (fromAnalysis() ? "an answer" : "a category") + " below</span>" : "");
+  }
+  function fromAnalysis() { var m = exploreMode(); return !!(m && m.buttonsFrom === "analysis"); }
+  /* "Group by": the atlas's own analysis (offered only when one of its
+     questions qualifies, explore-mode.js pickQuestion — the server's own
+     rule) or LOKA's categories. Choosing asks the server, which makes the
+     buttons afresh and keeps them at once. */
+  function groupByHTML(mode, stanza, pick) {
+    var from = mode.buttonsFrom === "analysis" ? "analysis" : "categories";
+    if (!pick && from !== "analysis") return "";
+    var q = from === "analysis" && stanza ? { noun: (stanza.keyNouns || {})[mode.tagColumn], question: (stanza.keyLabels || {})[mode.tagColumn] } : pick;
+    var opts = [["analysis", XM().groupByLabel(q) || "What LOKA found"], ["categories", "LOKA categories"]];
+    var busy = !!BTN.grouping;
+    var h = '<div class="own-bgroup"><span class="own-bgroup-k" id="own-bgroup-k">Group by:</span>' +
+      '<span class="own-bgroup-opts" role="radiogroup" aria-labelledby="own-bgroup-k">' + opts.map(function (o) {
+        var on = (BTN.grouping || from) === o[0];
+        return '<label class="own-tick' + (on ? " on" : "") + '"><input type="radio" name="own-bgroup" value="' + o[0] + '"' +
+          (on ? " checked" : "") + (busy ? " disabled" : "") + "> " + esc(o[1]) + "</label>";
+      }).join("") + "</span></div>";
+    if (busy) h += '<p class="own-bwait" role="status"><span class="own-mode-spin" aria-hidden="true"></span>' +
+      (BTN.grouping === "analysis" ? "Choosing buttons from what the atlas found…" : "Choosing buttons from LOKA categories…") + "</p>";
+    else if (BTN.groupErr) h += '<p class="own-err" role="alert">' + esc(BTN.groupErr) + "</p>";
+    else if (from === "analysis" && mode.buttonsEdited) h += '<p class="own-bedited">You\u2019ve edited these buttons, so rebuilding the atlas won\u2019t change them. ' +
+      '<button type="button" class="own-blink" id="own-bagain">Let LOKA choose again</button></p>';
+    return h;
   }
   function btnSaveBar() {
     var d = btnDirty(), msg;
@@ -285,12 +333,30 @@
       if (BTN.tries++ < 40) setTimeout(function () { if (!host.hidden) drawButtonShelf(host); }, 400);
       return;
     }
-    var pal = XM().PALETTE, cats = XM().wordCounts(feats, mode), choices = XM().ICON_CHOICES;
-    var h = '<div class="own-bbody"><p class="own-set-p">What visitors press on the map. Tick which categories go under each button.</p>';
+    var pal = XM().PALETTE, cols = XM().colourOf(BTN.draft), cats = XM().wordCounts(feats, mode), choices = XM().ICON_CHOICES;
+    var stanza = exploreStanza(mode), analysis = mode.buttonsFrom === "analysis";
+    var pick = stanza ? XM().pickQuestion(stanza, feats) : null;
+    // an answer's own definition, as the analysis wrote it, is the tick's title
+    var defs = {};
+    if (analysis && stanza) ((stanza.keyKinds || {})[mode.tagColumn] || []).forEach(function (k) {
+      if (k && k.name) defs[String(k.name).toLowerCase()] = String(k.definition || "");
+    });
+    var qWords = analysis && stanza ? String((stanza.keyLabels || {})[mode.tagColumn] || "").trim() : "";
+    var h = '<div class="own-bbody">' + groupByHTML(mode, stanza, pick) + '<p class="own-set-p">' + (analysis
+      ? "What visitors press on the map. Each place has one answer to \u201c" + esc(qWords) + "\u201d. Tick the answers each button should show."
+      : "What visitors press on the map. Tick which categories go under each button.") + "</p>";
     BTN.draft.forEach(function (b, i) {
       var n = btnCount(b, feats, mode);
+      if (b.rest) {
+        // Odds & ends: its name only; it holds whatever no other button does
+        h += '<div class="own-bcard own-brest" style="--bc:' + pal[4] + '"><div class="own-bc-top">' +
+          '<span class="own-bicon own-bicon-fixed" aria-hidden="true">' + iconSvg(XM().REST_ICON) + "</span>" +
+          '<input class="own-bname" type="text" data-name="' + i + '" value="' + esc(b.label) + '" aria-label="Name of the button for the places under no other button (at most ' + XM().MAX_LABEL + ' letters)">' +
+          "</div>" + '<div class="own-bcount">' + btnCountLine(b, n) + "</div></div>";
+        return;
+      }
       var has = {}; b.words.forEach(function (w) { has[String(w).toLowerCase()] = true; });
-      h += '<div class="own-bcard" style="--bc:' + pal[i % pal.length] + '">' +
+      h += '<div class="own-bcard" style="--bc:' + (cols[i] || pal[i % pal.length]) + '">' +
         '<div class="own-bc-top">' +
           '<button type="button" class="own-bicon" data-icon="' + i + '" aria-expanded="' + (BTN.icons === i) + '" aria-label="Choose a picture for ' +
             esc(b.label.trim() || "this button") + " (now: " + esc(ICON_WORDS[b.icon] || b.icon) + ')">' + iconSvg(b.icon) +
@@ -305,27 +371,31 @@
         '<div class="own-bcount">' + btnCountLine(b, n) + "</div>" +
         '<div class="own-ticks">' + cats.map(function (c) {
           var on = !!has[c.w.toLowerCase()];
-          return '<label class="own-tick' + (on ? " on" : "") + '"><input type="checkbox" data-tk="' + i + '" value="' + esc(c.w) + '"' + (on ? " checked" : "") + ">" +
+          var def = defs[c.w.toLowerCase()];
+          return '<label class="own-tick' + (on ? " on" : "") + '"' + (def ? ' title="' + esc(def) + '"' : "") + '><input type="checkbox" data-tk="' + i + '" value="' + esc(c.w) + '"' + (on ? " checked" : "") + ">" +
             esc(c.w) + ' <span class="own-tick-n">' + c.n + "</span></label>";
         }).join("") + "</div>" +
       "</div>";
     });
-    var full = BTN.draft.length >= XM().MAX_BUTTONS;
+    var full = topicCount(BTN.draft) >= XM().MAX_BUTTONS;
     h += '<button type="button" class="own-badd" id="own-badd"' + (full ? " disabled" : "") + ">" +
       (full ? "Four buttons is the most: a row of four still fits on a phone" : "+ Add a button") + "</button>";
     // the places under no button, and what they are
-    var pm = { tagColumn: mode.tagColumn, buttons: previewList() }, none = 0, theirs = {}, order = [];
+    var pm = { tagColumn: mode.tagColumn, buttonsFrom: mode.buttonsFrom, buttons: previewList().filter(function (b) { return !b.rest; }) }, none = 0, theirs = {}, order = [];
+    var rest = BTN.draft.filter(function (b) { return b.rest; })[0];
     var shown = {}; cats.forEach(function (c) { shown[c.w.toLowerCase()] = c.w; });
     feats.forEach(function (f) {
       if (XM().placeButtons(f.properties, pm).length) return;
       none++;
       var ws = XM().placeWords(f.properties, mode);
-      if (!ws.length) ws = ["no category"];
+      if (!ws.length) ws = [analysis ? "no answer" : "no category"];
       ws.forEach(function (w) { if (!theirs[w]) { theirs[w] = true; order.push(shown[w] || w); } });
     });
     var line;
     if (!BTN.draft.length) line = "No buttons: visitors see the map and the Around here list.";
     else if (!none) line = "Every place is under at least one button.";
+    else if (rest) line = "<b>" + none + (none === 1 ? " place has" : " places have") + " none of these</b> (" + esc(order.join(", ")) + "), so " +
+      (none === 1 ? "it is" : "they are") + " under \u201c" + esc(rest.label.trim() || XM().REST_LABEL) + "\u201d.";
     else line = "<b>" + none + (none === 1 ? " place is" : " places are") + " under no button</b> (" + esc(order.join(", ")) + "). " +
       (none === 1 ? "It stays" : "They stay") + " on the map and in Around here.";
     h += '<p class="own-bnone">' + line + "</p></div>";
@@ -340,7 +410,13 @@
   function wireButtonShelf(host) {
     if (host._wired) return;
     host._wired = true;
-    function changed() { BTN.saved1 = false; BTN.err = ""; previewButtons(); drawButtonShelf(host); }
+    function changed() {
+      BTN.saved1 = false; BTN.err = "";
+      // "Odds & ends" comes and goes by itself, as the places under no other button do
+      var mode = exploreMode(), feats = exploreFeatures();
+      if (mode && feats) BTN.draft = plainButtons(XM().withRest(BTN.draft, feats, mode));
+      previewButtons(); drawButtonShelf(host);
+    }
     host.addEventListener("click", function (e) {
       var t = e.target && e.target.closest && e.target.closest("button");
       if (!t || BTN.saving) return;
@@ -354,15 +430,18 @@
         var back = host.querySelector('[data-icon="' + p[0] + '"]'); if (back) back.focus();
         return;
       }
-      if (d.rm !== undefined) { BTN.draft.splice(+d.rm, 1); BTN.icons = -1; changed(); return; }
+      if (d.rm !== undefined) { if (BTN.draft[+d.rm] && !BTN.draft[+d.rm].rest) BTN.draft.splice(+d.rm, 1); BTN.icons = -1; changed(); return; }
+      if (t.id === "own-bagain") { groupBy(host, "analysis"); return; }
       if (t.id === "own-badd") {
-        if (BTN.draft.length >= XM().MAX_BUTTONS) return;
+        var nt = topicCount(BTN.draft);
+        if (nt >= XM().MAX_BUTTONS) return;
         var used = BTN.draft.map(function (x) { return x.icon; });
         var icon = XM().ICON_CHOICES.filter(function (k) { return used.indexOf(k) < 0; })[0] || "camera";
-        BTN.draft.push({ label: "New button", icon: icon, words: [] });
+        // new buttons go before "Odds & ends", which stays last
+        BTN.draft.splice(nt, 0, { label: "New button", icon: icon, words: [] });
         changed();
-        var names = host.querySelectorAll(".own-bname");
-        if (names.length) { names[names.length - 1].focus(); names[names.length - 1].select(); }
+        var named = host.querySelector('.own-bname[data-name="' + nt + '"]');
+        if (named) { named.focus(); named.select(); }
         return;
       }
       if (t.id === "own-bundo") { BTN.draft = plainButtons(BTN.saved); BTN.icons = -1; changed(); return; }
@@ -370,6 +449,7 @@
     });
     host.addEventListener("change", function (e) {
       var cb = e.target;
+      if (cb && cb.name === "own-bgroup") { groupBy(host, cb.value); return; }
       if (!cb || cb.getAttribute("data-tk") == null) return;
       var b = BTN.draft[+cb.getAttribute("data-tk")];
       if (!b) return;
@@ -401,11 +481,33 @@
     });
   }
 
+  function groupBy(host, to) {
+    var mode = exploreMode();
+    if (!mode || BTN.grouping || BTN.saving) return;
+    if (to === (mode.buttonsFrom === "analysis" ? "analysis" : "categories") && !(to === "analysis" && mode.buttonsEdited)) return;
+    BTN.grouping = to; BTN.groupErr = ""; BTN.err = ""; BTN.icons = -1;
+    drawButtonShelf(host);
+    api("instances/" + encodeURIComponent(SLUG) + "/mode", { method: "POST", body: { groupBy: to } })
+      .then(function (j) {
+        takeMode(j && j.mode);
+        BTN.saved = plainButtons(j && j.mode && j.mode.buttons);
+        BTN.draft = plainButtons(BTN.saved);
+        BTN.grouping = ""; BTN.saved1 = true;
+        previewButtons();
+        drawButtonShelf(host);
+      })
+      .catch(function (e) {
+        BTN.grouping = ""; BTN.groupErr = errMsg(e);
+        drawButtonShelf(host);
+      });
+  }
+
   function saveButtons(host) {
     if (!btnDirty() || BTN.saving) return;
     var send = BTN.draft.map(function (b) {
       var o = { label: b.label.trim(), icon: b.icon, words: b.words.slice() };
       if (b.id) o.id = b.id;
+      if (b.rest) o.rest = true;
       return o;
     });
     if (send.some(function (b) { return !b.label; })) { BTN.err = "Give every button a name."; drawButtonShelf(host); return; }
@@ -413,6 +515,7 @@
     drawButtonShelf(host);
     api("instances/" + encodeURIComponent(SLUG) + "/mode", { method: "POST", body: { buttons: send } })
       .then(function (j) {
+        takeMode(j && j.mode);
         BTN.saved = plainButtons(j && j.mode && j.mode.buttons);
         BTN.draft = plainButtons(BTN.saved);
         BTN.saving = false; BTN.saved1 = true;
@@ -502,6 +605,16 @@
       ".own-bmsg{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:.4rem;font-size:var(--t-meta);color:var(--color-text-muted)}",
       ".own-bok{color:var(--color-leaf);font-weight:700}",
       ".own-bsave .share-btn{flex:none}",
+      /* Group by, and Odds & ends */
+      ".own-bgroup{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;margin:0 0 .5rem}",
+      ".own-bgroup-k{font-size:var(--t-meta);font-weight:700;color:var(--color-text-secondary)}",
+      ".own-bgroup-opts{display:flex;flex-wrap:wrap;gap:.3rem}",
+      ".own-bgroup .own-tick input{accent-color:var(--color-leaf)}",
+      ".own-bwait{display:flex;align-items:center;gap:.45rem;margin:0 0 .6rem;font-size:var(--t-meta);color:var(--color-text-secondary)}",
+      ".own-bedited{margin:0 0 .6rem;font-size:var(--t-meta);color:var(--color-text-secondary)}",
+      ".own-blink{font:inherit;font-weight:700;color:var(--color-leaf);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}",
+      ".own-blink:focus-visible{outline:2px solid var(--color-leaf);outline-offset:2px}",
+      ".own-bicon-fixed{cursor:default}",
     ].join("\n");
     document.head.appendChild(s);
   }

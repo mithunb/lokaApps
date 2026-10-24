@@ -44,22 +44,34 @@
     return !!(m && typeof m === "object" && m.name === "explore");
   }
 
-  // a place's own words: "Culture; Heritage" -> ["culture", "heritage"]
+  /* a place's own words: "Culture; Heritage" -> ["culture", "heritage"].
+     Buttons made from an analysis question (buttonsFrom "analysis") read the
+     place's one answer whole: "Cultural or spiritual" is one word here. */
+  function splitValue(v, mode) {
+    if (v == null) return [];
+    if (mode && mode.buttonsFrom === "analysis") {
+      var one = String(Array.isArray(v) ? v.join("; ") : v).trim();
+      return one ? [one] : [];
+    }
+    return Array.isArray(v) ? v : String(v).split(";");
+  }
   function placeWords(props, mode) {
     var v = props && props[(mode && mode.tagColumn) || "categories"];
-    if (v == null) return [];
-    var parts = Array.isArray(v) ? v : String(v).split(";");
-    return parts.map(function (s) { return String(s).trim().toLowerCase(); }).filter(Boolean);
+    return splitValue(v, mode).map(function (s) { return String(s).trim().toLowerCase(); }).filter(Boolean);
   }
   function buttonsOf(mode) {
     return ((mode && mode.buttons) || []).filter(function (b) { return b && b.id && b.label; });
   }
-  // the ids of the buttons a place belongs to, in the buttons' order
+  /* the ids of the buttons a place belongs to, in the buttons' order. The
+     "Odds & ends" button (rest: true) holds the places under no other one. */
   function placeButtons(props, mode) {
-    var w = placeWords(props, mode);
-    return buttonsOf(mode).filter(function (b) {
+    var w = placeWords(props, mode), rest = null;
+    var ids = buttonsOf(mode).filter(function (b) {
+      if (b.rest) { rest = b; return false; }
       return (b.words || []).some(function (x) { return w.indexOf(String(x).trim().toLowerCase()) >= 0; });
     }).map(function (b) { return b.id; });
+    if (!ids.length && rest) ids.push(rest.id);
+    return ids;
   }
   // how many places each button holds, and how many have none
   function countButtons(features, mode) {
@@ -107,9 +119,40 @@
      both, so the page cannot offer what the server would refuse. ---- */
   // colour by place in the row (the first four as the first atlas in Explore chose them)
   var PALETTE = ["#2A6B41", "#C9402B", "#B5541B", "#3A7FA1", "#B99A1C"];
-  var ICON_CHOICES = ["leaf", "landmark", "ticket", "users", "utensils", "camera", "music", "book"];
+  var ICON_CHOICES = ["leaf", "landmark", "ticket", "users", "utensils", "camera", "music", "book", "store", "droplet", "footprints"];
   var DEFAULT_ICONS = ["leaf", "landmark", "ticket", "users"];
-  var MAX_BUTTONS = 4, MAX_LABEL = 20, MAX_WORD = 40, MAX_WORDS = 12;
+  // a category is a word or two; an analysis answer ("Observation or habitat") can be longer
+  var MAX_BUTTONS = 4, MAX_LABEL = 20, MAX_WORD = 40, MAX_ANSWER = 60, MAX_WORDS = 12;
+  // the button for the places under no other one: always last, always this picture
+  var REST_ID = "odds", REST_LABEL = "Odds & ends", REST_ICON = "dots", REST_COLOR = PALETTE[4];
+  /* A button's colour follows its picture when the picture has a natural one
+     (a leaf is green, a drop of water blue); otherwise its place in the row.
+     No two buttons share a colour: a later one takes its place's colour, or
+     else the first one still free. Odds & ends is always the fifth colour.
+     Every Explore atlas, category buttons too (Mithun, 24 Oct 2026). */
+  var PICTURE_COLOR = { leaf: PALETTE[0], footprints: PALETTE[0], landmark: PALETTE[1], ticket: PALETTE[2], droplet: PALETTE[3], store: PALETTE[3] };
+  function colourOf(list) {
+    var used = {}, out = [];
+    (list || []).forEach(function (b, i) {
+      if (!b) { out.push(null); return; }
+      if (b.rest) { out.push(REST_COLOR); return; }
+      var want = [PICTURE_COLOR[b.icon], PALETTE[i % 4]].concat(PALETTE.slice(0, 4), PALETTE[4]);
+      var c = want.filter(function (x) { return x && !used[x]; })[0] || PALETTE[i % PALETTE.length];
+      used[c] = true;
+      out.push(c);
+    });
+    return out;
+  }
+  // the same list, each button wearing its colour (new objects)
+  function colourButtons(list) {
+    var cs = colourOf(list);
+    return (list || []).map(function (b, i) {
+      var c = {};
+      for (var k in b) c[k] = b[k];
+      c.color = cs[i];
+      return c;
+    });
+  }
 
   /* Every word the places use, with how many places use it, most first. A
      word is the same word in any case; it is shown as most places write it. */
@@ -120,7 +163,7 @@
       var v = f && f.properties && f.properties[col];
       if (v == null) return;
       var seen = {};
-      (Array.isArray(v) ? v : String(v).split(";")).forEach(function (raw) {
+      splitValue(v, mode).forEach(function (raw) {
         var w = String(raw).trim(), k = w.toLowerCase();
         if (!w || seen[k]) return;
         seen[k] = true;
@@ -138,26 +181,32 @@
   }
   // a new Explore: one button for each of the four words most places use
   function defaultButtons(features, mode) {
-    return wordCounts(features, mode).slice(0, MAX_BUTTONS).map(function (x, i) {
+    return colourButtons(wordCounts(features, mode).slice(0, MAX_BUTTONS).map(function (x, i) {
       return { id: "b" + (i + 1), label: Array.from(x.w).slice(0, MAX_LABEL).join("").trim(),
         icon: DEFAULT_ICONS[i], color: PALETTE[i], words: [x.w] };
-    });
+    }));
   }
   /* What an owner sent, made safe or refused. Returns { buttons } or
      { error } in plain words. Ids are kept when they are plain and unique,
-     otherwise made; colours always follow the place in the row. */
+     otherwise made; colours always follow the place in the row. At most four
+     buttons, and one more: "Odds & ends" (rest: true), which holds the places
+     under no other button — its name is the owner's, the rest is fixed, and
+     it always stands last. */
   function cleanButtons(list) {
     if (!Array.isArray(list)) return { error: "The buttons were not sent as a list." };
-    if (list.length > MAX_BUTTONS) return { error: "Four buttons is the most: a row of four still fits on a phone." };
+    var rests = list.filter(function (b) { return b && typeof b === "object" && b.rest === true; });
+    if (rests.length > 1) return { error: "There can be only one \u201c" + REST_LABEL + "\u201d button." };
+    var topics = list.filter(function (b) { return !(b && typeof b === "object" && b.rest === true); });
+    if (topics.length > MAX_BUTTONS) return { error: "Four buttons is the most: a row of four still fits on a phone." };
     var out = [], ids = {};
-    for (var i = 0; i < list.length; i++) {
-      var b = list[i];
+    for (var i = 0; i < topics.length; i++) {
+      var b = topics[i];
       if (!b || typeof b !== "object") return { error: "Button " + (i + 1) + " is not a button." };
       var label = typeof b.label === "string" ? b.label.replace(/\s+/g, " ").trim() : "";
       if (!label) return { error: "Give every button a name." };
       // letters, not code units: an emoji or a conjunct's parts count as they are seen
       if (Array.from(label).length > MAX_LABEL) return { error: "A button's name can be at most " + MAX_LABEL + " letters: \u201c" + label + "\u201d is longer." };
-      if (ICON_CHOICES.indexOf(b.icon) < 0) return { error: "Choose one of the eight pictures for \u201c" + label + "\u201d." };
+      if (ICON_CHOICES.indexOf(b.icon) < 0) return { error: "Choose one of the pictures offered for \u201c" + label + "\u201d." };
       if (b.words != null && !Array.isArray(b.words)) return { error: "The categories for \u201c" + label + "\u201d were not sent as a list." };
       var words = [], seen = {};
       var raw = b.words || [];
@@ -165,13 +214,15 @@
         if (typeof raw[j] !== "string") return { error: "A category for \u201c" + label + "\u201d is not a word." };
         var w = raw[j].trim(), k = w.toLowerCase();
         if (!w) continue;
-        if (Array.from(w).length > MAX_WORD) return { error: "A category can be at most " + MAX_WORD + " letters." };
+        // one word (a category) at most 40 letters; an analysis answer, a few words, at most 60
+        var len = Array.from(w).length;
+        if (len > MAX_ANSWER || (len > MAX_WORD && !/\s/.test(w))) return { error: "A category can be at most " + MAX_WORD + " letters." };
         if (seen[k]) continue;
         seen[k] = true;
         words.push(w);
       }
       if (words.length > MAX_WORDS) return { error: "A button can hold at most " + MAX_WORDS + " categories." };
-      var id = typeof b.id === "string" && /^[a-z0-9_-]{1,24}$/i.test(b.id) && !ids[b.id] ? b.id : null;
+      var id = typeof b.id === "string" && /^[a-z0-9_-]{1,24}$/i.test(b.id) && b.id !== REST_ID && !ids[b.id] ? b.id : null;
       out.push({ id: id, label: label, icon: b.icon, color: PALETTE[i], words: words });
       if (id) ids[id] = true;
     }
@@ -181,7 +232,251 @@
       while (ids["b" + n]) n++;
       b.id = "b" + n; ids[b.id] = true;
     });
-    return { buttons: out };
+    if (rests.length) {
+      var rl = typeof rests[0].label === "string" ? rests[0].label.replace(/\s+/g, " ").trim() : "";
+      if (!rl) return { error: "Give every button a name." };
+      if (Array.from(rl).length > MAX_LABEL) return { error: "A button's name can be at most " + MAX_LABEL + " letters: \u201c" + rl + "\u201d is longer." };
+      out.push(restButton(rl));
+    }
+    return { buttons: colourButtons(out) };
+  }
+  function restButton(label) {
+    return { id: REST_ID, label: label || REST_LABEL, icon: REST_ICON, color: REST_COLOR, rest: true, words: [] };
+  }
+  /* "Odds & ends" comes and goes by itself: there whenever at least one place
+     is under none of the other buttons (and there is at least one other
+     button), gone when every place has one. Its name, once the owner has
+     given it one, is kept. Answers a new list; colours by place in the row. */
+  function withRest(list, features, mode) {
+    var all = (list || []).filter(Boolean);
+    var old = all.filter(function (b) { return b.rest; })[0];
+    var topics = all.filter(function (b) { return !b.rest; }).map(function (b, i) {
+      var c = {};
+      for (var k in b) c[k] = b[k];
+      return c;
+    });
+    var had = all.some(function (b) { return "color" in b; });
+    if (!topics.length) return topics;
+    var m = { tagColumn: mode && mode.tagColumn, buttonsFrom: mode && mode.buttonsFrom, buttons: topics };
+    var left = (features || []).some(function (f) { return !placeButtons(f && f.properties, m).length; });
+    if (left) topics.push(restButton(old && old.label));
+    if (!had) return topics.map(function (b) { if (!b.rest) return b; var c = {}; for (var k in b) if (k !== "color") c[k] = b[k]; return c; });
+    return colourButtons(topics);
+  }
+
+  /* ==================================================================
+     BUTTONS FROM THE ATLAS'S OWN ANALYSIS ("smart buttons")
+     An atlas that has been read has questions about its places (the layer's
+     keyLabels, each place's answer in pattern_N). One of them can sort the
+     places for visitors instead of LOKA's categories. The rule that picks it
+     is fixed and needs no model: the server and the owner's page run this
+     same code, so the page never offers what the server would refuse.
+  ================================================================== */
+  var MIN_COVER = 0.6, MIN_PLACES = 3;
+  function questionRating(label, noun) {
+    var t = String(label || "") + " " + String(noun || "");
+    if (/\b(for|function|use|used|purpose|kind|type)\b/i.test(t)) return 3;
+    if (/\b(feature|species|see|find)\b/i.test(t)) return 2;
+    return 1;
+  }
+  // LOKA's categories as a set of words: "Culture; Heritage" and "{Civic,Nature}" alike
+  function categoryWords(props) {
+    var v = props && props.categories;
+    if (v == null) return [];
+    return String(Array.isArray(v) ? v.join(";") : v).split(/[;,{}]/)
+      .map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+  }
+  function placeTitle(props) {
+    return String((props && (props.loka_name || props.name || props.title)) || "").trim();
+  }
+  function jaccard(a, b) {
+    var inter = 0, uni = {};
+    Object.keys(a).forEach(function (k) { uni[k] = true; if (b[k]) inter++; });
+    Object.keys(b).forEach(function (k) { uni[k] = true; });
+    var u = Object.keys(uni).length;
+    return u ? inter / u : 0;
+  }
+  function sortGroups(gs) {
+    return gs.sort(function (a, b) { return b.count - a.count || a.order - b.order; });
+  }
+  /* One question, looked at: its answers, folded to at most four buttons of
+     at least three places each, or null when it is not a question to sort by. */
+  function lookAt(layer, features, col) {
+    var labels = (layer && layer.keyLabels) || {};
+    var label = String(labels[col] || "").trim();
+    var copied = (layer && layer.keyColumns) || {};
+    if (!label || /^who\b/i.test(label)) return null;
+    if (copied && Object.prototype.hasOwnProperty.call(copied, col) && copied[col] != null) return null;
+    var noun = ((layer && layer.keyNouns) || {})[col] || "";
+    var rating = questionRating(label, noun);
+    var kinds = ((layer && layer.keyKinds) || {})[col] || [];
+    var kindAt = {};
+    kinds.forEach(function (k, i) { if (k && k.name) kindAt[String(k.name).trim().toLowerCase()] = { i: i, k: k }; });
+    var by = {}, list = [], have = 0, total = (features || []).length;
+    (features || []).forEach(function (f) {
+      var p = (f && f.properties) || {};
+      var v = p[col] == null ? "" : String(p[col]).trim();
+      if (!v || v.toLowerCase() === "other") return;
+      have++;
+      var key = v.toLowerCase();
+      if (!by[key]) {
+        var kd = kindAt[key];
+        by[key] = { name: kd ? String(kd.k.name).trim() : v, definition: kd ? String(kd.k.definition || "") : "", count: 0,
+          order: kd ? kd.i : 1000 + list.length, cats: {}, examples: [] };
+        list.push(by[key]);
+      }
+      var a = by[key];
+      a.count++;
+      categoryWords(p).forEach(function (w) { a.cats[w] = true; });
+      var t = placeTitle(p);
+      if (t && a.examples.length < 3) a.examples.push(t);
+    });
+    if (list.length < 2) return null;
+    var answers = sortGroups(list.slice()).map(function (a) { return { name: a.name, count: a.count, definition: a.definition }; });
+    var groups = sortGroups(list.map(function (a) {
+      var cats = {}; for (var k in a.cats) cats[k] = true;
+      return { names: [a.name], definitions: [a.definition], count: a.count, order: a.order, cats: cats, examples: a.examples.slice() };
+    }));
+    // fold: the smallest joins the answer whose places share the most LOKA categories with it
+    while (groups.length > 1 && (groups.length > MAX_BUTTONS || groups[groups.length - 1].count < MIN_PLACES)) {
+      var small = groups.pop(), best = null, bestJ = -1;
+      groups.forEach(function (g) {
+        var j = jaccard(small.cats, g.cats);
+        if (j > bestJ || (j === bestJ && g.count > best.count)) { best = g; bestJ = j; }
+      });
+      best.names = best.names.concat(small.names);
+      best.definitions = best.definitions.concat(small.definitions);
+      best.count += small.count;
+      for (var c in small.cats) best.cats[c] = true;
+      best.examples = best.examples.concat(small.examples).slice(0, 3);
+      sortGroups(groups);
+    }
+    var coverage = total ? have / total : 0;
+    var ok = rating >= 2 && coverage >= MIN_COVER && groups.length >= 2 && groups[groups.length - 1].count >= MIN_PLACES;
+    return {
+      column: col, question: label, noun: noun, rating: rating, coverage: coverage, places: total, answered: have,
+      answers: answers,
+      groups: groups.map(function (g) { return { names: g.names, definitions: g.definitions, count: g.count, examples: g.examples }; }),
+      balance: groups.length ? groups[groups.length - 1].count / groups[0].count : 0,
+      qualifies: ok,
+    };
+  }
+  /* The question the buttons come from, or null (then LOKA's categories, as
+     before). Best kind of question first, then the most places answered,
+     then the most even buttons. */
+  function pickQuestion(layer, features) {
+    var labels = (layer && layer.keyLabels) || {};
+    var cols = Object.keys(labels).sort(function (a, b) {
+      var na = Number(String(a).split("_")[1]), nb = Number(String(b).split("_")[1]);
+      return (isFinite(na) && isFinite(nb)) ? na - nb : (a < b ? -1 : a > b ? 1 : 0);
+    });
+    var best = null;
+    cols.forEach(function (col) {
+      var q = lookAt(layer, features, col);
+      if (!q || !q.qualifies) return;
+      if (!best || q.rating > best.rating || (q.rating === best.rating && (q.coverage > best.coverage ||
+          (q.coverage === best.coverage && q.balance > best.balance)))) best = q;
+    });
+    return best;
+  }
+
+  /* The plain name a button gets before (or without) the model's: its first
+     answer, "… or …" dropped, cut at a word to 20 letters. */
+  function fallbackLabel(name) {
+    var s = String(name || "").replace(/\s+/g, " ").trim().split(/\s+or\s+/i)[0].trim();
+    if (Array.from(s).length <= MAX_LABEL) return s;
+    var out = "";
+    s.split(" ").some(function (w) {
+      var next = out ? out + " " + w : w;
+      if (Array.from(next).length > MAX_LABEL) return true;
+      out = next;
+      return false;
+    });
+    return out || Array.from(s).slice(0, MAX_LABEL).join("");
+  }
+  var ICON_WORDS = [
+    [/\b(water|pond|lake|river|stream|well|tank|pool)/i, "droplet"],
+    [/\b(tree|nature|natural|habitat|wildlife|plant|garden|bark|species|bird)/i, "leaf"],
+    [/\b(cultur|spiritual|heritage|worship|temple|church|art)/i, "landmark"],
+    [/\b(recreation|leisure|play|sport|fun)/i, "ticket"],
+    [/\b(commerce|shop|service|market|trade|store)/i, "store"],
+    [/\b(education|learning|school|library|study)/i, "book"],
+    [/\b(ground|path|road|walk|trail|grass)/i, "footprints"],
+    [/\b(food|eat|drink|restaurant|cafe)/i, "utensils"],
+    [/\b(music|sound|song)/i, "music"],
+    [/\b(people|human|social|community|street)/i, "users"],
+  ];
+  function iconForNames(names, used) {
+    var pick = null;
+    (names || []).some(function (n) {
+      return ICON_WORDS.some(function (r) {
+        if (r[0].test(String(n)) && (!used || used.indexOf(r[1]) < 0)) { pick = r[1]; return true; }
+        return false;
+      });
+    });
+    if (!pick) pick = ["camera"].concat(ICON_CHOICES).filter(function (k) { return !used || used.indexOf(k) < 0; })[0] || "camera";
+    return pick;
+  }
+  /* Plain names for the answers analyses most often give, for when there is
+     no model to ask; anything else gets fallbackLabel. */
+  var PLAIN_NAMES = [
+    [/\b(observation|habitat|nature|natural|wildlife)/i, "Nature & wildlife"],
+    [/\b(cultur|spiritual|heritage)/i, "Art & heritage"],
+    [/\b(education|learning)/i, "Learning"],
+    [/\b(recreation|leisure)/i, "Fun & leisure"],
+    [/\b(commerce|services?)\b/i, "Shops & services"],
+    [/\btrees?\b/i, "Trees"],
+    [/\bwater/i, "Water"],
+    [/\b(ground|path)/i, "Paths & grass"],
+  ];
+  function plainName(answer) {
+    var hit = null;
+    PLAIN_NAMES.some(function (r) { if (r[0].test(String(answer || ""))) { hit = r[1]; return true; } return false; });
+    return hit || fallbackLabel(answer);
+  }
+  // a folded button: its two first answers joined when that fits, else the larger one's
+  function groupName(names) {
+    var a = plainName((names || [])[0]);
+    if (!names || names.length < 2) return a;
+    var b = plainName(names[1]);
+    var both = a + " & " + b;
+    return b && b.toLowerCase() !== a.toLowerCase() && Array.from(both).length <= MAX_LABEL ? both : a;
+  }
+  function fallbackNames(groups) {
+    var used = [], seen = {};
+    return (groups || []).map(function (g, i) {
+      var label = groupName(g.names) || "Group " + (i + 1);
+      if (seen[label.toLowerCase()]) label = Array.from(label + " " + (i + 1)).slice(0, MAX_LABEL).join("");
+      seen[label.toLowerCase()] = true;
+      var icon = iconForNames(g.names, used);
+      used.push(icon);
+      return { label: label, icon: icon };
+    });
+  }
+  /* The buttons a picked question gives, named plainly; the server swaps in
+     the model's names when it has them. null when no question qualifies. */
+  function smartButtons(layer, features) {
+    var q = pickQuestion(layer, features);
+    if (!q) return null;
+    var names = fallbackNames(q.groups);
+    var buttons = colourButtons(q.groups.map(function (g, i) {
+      return { id: "a" + (i + 1), label: names[i].label, icon: names[i].icon, words: g.names.slice() };
+    }));
+    var mode = { tagColumn: q.column, buttonsFrom: "analysis" };
+    return { tagColumn: q.column, buttons: withRest(buttons, features, mode), from: "analysis", question: q };
+  }
+  /* The words the owner's "Group by" offers for a question, in plain words:
+     a question about what a place is for → "What the place is for"; one
+     about what is there to see → "What you'll find there"; else its noun
+     ("Kind of place"), else its own wording. */
+  function groupByLabel(q) {
+    var t = String((q && q.question) || "") + " " + String((q && q.noun) || "");
+    var rating = questionRating(q && q.question, q && q.noun);
+    if (rating === 3 && /\b(for|function|use|used|purpose)\b/i.test(t)) return "What the place is for";
+    if (rating === 2) return "What you\u2019ll find there";
+    var n = String((q && q.noun) || "").trim();
+    if (n) return n.charAt(0).toUpperCase() + n.slice(1);
+    return String((q && q.question) || "").trim();
   }
 
   /* ==================================================================
@@ -191,6 +486,12 @@
      frameBox(), for the opening view.
   ================================================================== */
   var NO_BUTTON = "#7A756C";
+  // a phone with five buttons: one row that slides sideways, its right edge fading (as Event's second row)
+  var CSS_ROW5 =
+    "@media (max-width:720px){.atlas-stage>.ev-chips.ex-scroll{display:flex;left:0;right:0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:0 32px 0 8px;" +
+      "-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent)}" +
+      ".atlas-stage>.ev-chips.ex-scroll::-webkit-scrollbar{display:none}" +
+      ".atlas-stage>.ev-chips.ex-scroll .ev-chip{flex:0 0 auto;min-width:68px;padding:6px 10px 5px}}\n";
   var NO_BUTTON_ICON = "pin";   // a list row's mark for a place with no button, or a photo that will not load
   var CSS =
     ".ex-thumb{flex:0 0 auto;width:48px;height:48px;border-radius:var(--radius-sm,6px);object-fit:cover;display:block;background:var(--color-surface-alt,#efe9dd)}\n" +
@@ -201,7 +502,7 @@
     /* a phone: the first-visit line ("Tap a pin…") goes above the credit,
        which Event mode's layout has already lifted over the buttons — so the
        buttons, the credit and the line never sit on one another */
-    "@media (max-width:720px){.atlas-stage.ex-on .atlas-cue{bottom:calc(var(--sheet-h,0px) + 112px)}}\n";
+    "@media (max-width:720px){.atlas-stage.ex-on .atlas-cue{bottom:calc(var(--sheet-h,0px) + 112px)}}\n" + CSS_ROW5;
 
   function viewer(mode, api) {
     var esc = api.esc, el = api.el;
@@ -209,7 +510,7 @@
     function takeButtons() {
       BUTTONS = buttonsOf(mode);
       byId = {};
-      BUTTONS.forEach(function (b, i) { byId[b.id] = b; if (!b.color) b.color = PALETTE[i % PALETTE.length]; });
+      BUTTONS.forEach(function (b, i) { byId[b.id] = b; if (!b.color) b.color = b.rest ? REST_COLOR : PALETTE[i % PALETTE.length]; });
     }
     takeButtons();
     var srcLayer = null, X = null, titleProp = "name";
@@ -300,6 +601,8 @@
         bar.appendChild(b);
       });
       bar.style.setProperty("--ev-n", String(BUTTONS.length));
+      // four fit across a phone; five ("Odds & ends" the fifth) slide sideways
+      if (BUTTONS.length > MAX_BUTTONS) bar.classList.add("ex-scroll");
       state.chips = bar;
       syncChips();
       return bar;
@@ -378,7 +681,7 @@
       var thumb = p.photo_small && api.dataUrl
         ? '<img class="ex-thumb" src="' + esc(api.dataUrl(String(p.photo_small))) + '" alt="" loading="lazy" width="48" height="48" referrerpolicy="no-referrer">'
         : mark;
-      var word = b ? b.label : (placeWords(p, mode)[0] ? api.cellShown(String(p[mode.tagColumn || "categories"]).split(";")[0]) : "");
+      var word = b ? b.label : (placeWords(p, mode)[0] ? api.cellShown(String(splitValue(p[mode.tagColumn || "categories"], mode)[0])) : "");
       var row = el("button", "ev-row ex-row");
       row.type = "button";
       row.innerHTML = thumb + '<span class="ev-rw"><span class="ev-rn">' + esc(nameOf(f)) + '</span><span class="ev-rm">' +
@@ -447,8 +750,11 @@
        map as they are edited: the same drawing, handed a new list. Colours
        follow the place in the row, as the server will save them. */
     function setButtons(list) {
+      var cs = colourOf(list || []);
       mode.buttons = (list || []).map(function (b, i) {
-        return { id: b.id, label: b.label, icon: b.icon, color: PALETTE[i % PALETTE.length], words: (b.words || []).slice() };
+        var c = { id: b.id, label: b.label, icon: b.rest ? REST_ICON : b.icon, color: cs[i], words: (b.words || []).slice() };
+        if (b.rest) c.rest = true;
+        return c;
       });
       takeButtons();
       if (state.chosen && !byId[state.chosen]) state.chosen = null;
@@ -503,9 +809,26 @@
     wordCounts: wordCounts,
     defaultButtons: defaultButtons,
     cleanButtons: cleanButtons,
+    withRest: withRest,
+    colourOf: colourOf,
+    colourButtons: colourButtons,
+    plainName: plainName,
+    restButton: restButton,
+    questionRating: questionRating,
+    categoryWords: categoryWords,
+    lookAt: lookAt,
+    pickQuestion: pickQuestion,
+    smartButtons: smartButtons,
+    fallbackLabel: fallbackLabel,
+    fallbackNames: fallbackNames,
+    iconForNames: iconForNames,
+    groupByLabel: groupByLabel,
     PALETTE: PALETTE,
     ICON_CHOICES: ICON_CHOICES,
     MAX_BUTTONS: MAX_BUTTONS,
+    REST_ID: REST_ID,
+    REST_LABEL: REST_LABEL,
+    REST_ICON: REST_ICON,
     MAX_LABEL: MAX_LABEL,
     viewer: viewer,
   };

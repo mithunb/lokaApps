@@ -21,6 +21,7 @@ import * as owed from '../lib/atlas/owed.js';
 import { queue as QUESTIONS, createQueue, fileSignatureOf, NEVER_READ, payerOf } from '../lib/atlas/questions-queue.js';
 import * as shortLabels from '../lib/atlas/short-labels.js';
 import * as keyNouns from '../lib/atlas/key-nouns.js';
+import * as buttonNames from '../lib/atlas/button-names.js';
 import * as placeNames from '../lib/atlas/place-names.js';
 import {
   enqueueBuild, getJob, setJobDoneHook, setStrandedBuildHook, DATASETS_ROOT, PRIVATE_ROOT,
@@ -1760,25 +1761,127 @@ function modeAnswer(local) {
   if (name === 'explore') out.mode = local.mode;
   return out;
 }
-/* A new Explore, with nothing kept: the atlas's own places (the first of its
-   layers whose places have categories, else its first layer of its own), and
-   a button for each of the four words most of them use. */
-function defaultExplore(inst, local) {
-  const dir = datasetDirFor(inst);
-  const col = 'categories';
-  const layers = (local.layers || []).filter((L) => L && (L.group || 'userdata') === 'userdata' &&
+/* The atlas's own layers whose file the private data route would serve (a
+   file name only, never a path out of the folder), and one layer's places. */
+function ownLayers(local) {
+  return ((local && local.layers) || []).filter((L) => L && (L.group || 'userdata') === 'userdata' &&
     SAFE_LAYER_FILE.test(String(L.source || '')) && !String(L.source).includes('..'));
-  const read = (L) => { try { return JSON.parse(fs.readFileSync(path.join(dir, L.source), 'utf8')).features || []; } catch { return null; } };
-  let layer = null, feats = null;
+}
+function placesOf(inst, L) {
+  try { return JSON.parse(fs.readFileSync(path.join(datasetDirFor(inst), L.source), 'utf8')).features || []; } catch { return null; }
+}
+/* The model caller for naming Explore buttons: one call, the server's own
+   allowance (as the nouns job), null with no model. The stand-in
+   (FAKE_READING) answers with the plain names, worked out from the prompt. */
+function buttonNamesCaller(payer) {
+  if (!ai && !FAKE_READING) return null;
+  const stub = FAKE_READING ? async (model, prompt) => {
+    let j = null;
+    try { j = JSON.parse(String(prompt).split('\n').pop()); } catch { j = null; }
+    const groups = ((j && j.buttons) || []).map((b) => ({ names: (b.answers || []).map((a) => a.answer) }));
+    return buttonNames.standInAnswer(groups);
+  } : null;
+  // the owner's own allowance when they asked (their request); the server's for a rebuild
+  return aiCaller(payer || 'server', 1, stub);
+}
+/* Buttons from the atlas's own analysis, named (button-names.js): the layer
+   asked for first, then the atlas's other layers. null when no question of
+   any layer qualifies. Never throws. */
+async function smartExplore(inst, local, prev, preferLayer, payer) {
+  const layers = ownLayers(local);
+  layers.sort((a, b) => (b.id === preferLayer) - (a.id === preferLayer));
   for (const L of layers) {
-    const f = read(L);
+    if (!L.keyLabels) continue;
+    const feats = placesOf(inst, L);
+    if (!feats || !feats.length) continue;
+    let r = null;
+    try {
+      r = await buttonNames.nameSmartButtons({ layer: L, features: feats, prev, call: buttonNamesCaller(payer),
+        model: getFlashLiteModel(), Type, title: inst.title || '' });
+    } catch (e) {
+      console.warn('[buttons] ' + inst.slug + ' — ' + (e && e.message));
+      r = null;
+    }
+    if (r) {
+      console.log('[buttons] ' + inst.slug + ' — names: ' + r.by);
+      return { layer: L, feats, ...r };
+    }
+  }
+  return null;
+}
+// LOKA's categories: a button for each of the four words most places use, and Odds & ends
+function categoryButtons(feats) {
+  const col = { tagColumn: 'categories' };
+  return EXPLORE.withRest(EXPLORE.defaultButtons(feats, col), feats, col);
+}
+/* A new Explore, with nothing kept: buttons from the atlas's own analysis
+   when one of its questions sorts most places into a few groups
+   (explore-mode.js pickQuestion); otherwise the atlas's own places (the first
+   of its layers whose places have categories, else its first layer of its
+   own), and a button for each of the four words most of them use. Either way
+   "Odds & ends" holds the places under no other button. */
+async function defaultExplore(inst, local, req) {
+  if (!NEVER_READ.has(inst.slug)) {
+    // names LOKA gave before, if an Explore was ever set up here and put aside
+    const was = keptOf(local).explore;
+    const smart = await smartExplore(inst, local, was && typeof was === 'object' ? { analysisNames: was.analysisNames } : null, null, req);
+    if (smart) {
+      return { name: 'explore', layer: smart.layer.id, tagColumn: smart.tagColumn, frameShare: 0.8,
+        buttons: smart.buttons, buttonsFrom: 'analysis', buttonsSig: smart.buttonsSig, ...(smart.analysisNames ? { analysisNames: smart.analysisNames } : {}) };
+    }
+  }
+  const col = 'categories';
+  let layer = null, feats = null;
+  for (const L of ownLayers(local)) {
+    const f = placesOf(inst, L);
     if (!f) continue;
     if (!layer) { layer = L; feats = f; }
     if (f.some((x) => x && x.properties && x.properties[col] != null && String(x.properties[col]).trim())) { layer = L; feats = f; break; }
   }
   if (!layer) return null;
   return { name: 'explore', layer: layer.id, tagColumn: col, frameShare: 0.8,
-    buttons: EXPLORE.defaultButtons(feats, { tagColumn: col }) };
+    buttons: categoryButtons(feats), buttonsFrom: 'categories' };
+}
+// the places of the layer an Explore draws (its own layer, else the first of the atlas's)
+function exploreLayerOf(inst, local) {
+  const layers = ownLayers(local);
+  const L = layers.find((x) => x.id === (local.mode && local.mode.layer)) || layers[0];
+  if (!L) return null;
+  const feats = placesOf(inst, L);
+  return feats ? { layer: L, feats } : null;
+}
+
+/* After an atlas's reading is written (commitLayer, fromReading), its
+   Explore buttons are worked out again — only when it is in Explore, its
+   buttons came from the analysis and the owner has not edited them
+   (button-names.js shouldRework); never the operator's own atlas. The names
+   are kept when the answers make the same buttons; otherwise named afresh.
+   If no question qualifies any more, the buttons go back to LOKA's
+   categories. Written only if nothing changed while the names were asked
+   for. Never throws. */
+async function reworkSmartButtons(dataset, layerId) {
+  const inst = reg.getInstance(dataset);
+  if (!inst) return 'no atlas';
+  const first = readOverlay(inst);
+  const why = buttonNames.shouldRework(dataset, first.local, layerId, NEVER_READ);
+  if (why !== true) return why;
+  const prev = first.local.mode;
+  const smart = await smartExplore(inst, first.local, prev, prev.layer || layerId, 'server');
+  const { file, local } = readOverlay(inst);
+  if (buttonNames.shouldRework(dataset, local, layerId, NEVER_READ) !== true) return 'changed meanwhile';
+  if (smart) {
+    local.mode = { ...local.mode, layer: smart.layer.id, tagColumn: smart.tagColumn, buttons: smart.buttons,
+      buttonsFrom: 'analysis', buttonsSig: smart.buttonsSig, ...(smart.analysisNames ? { analysisNames: smart.analysisNames } : {}) };
+  } else {
+    const got = exploreLayerOf(inst, local);
+    if (!got) return 'no places';
+    local.mode = { ...local.mode, tagColumn: 'categories', buttons: categoryButtons(got.feats), buttonsFrom: 'categories' };
+    delete local.mode.buttonsSig;
+  }
+  if (!writeOverlay(file, local)) return 'not written';
+  console.log('[buttons] ' + dataset + ' — Explore buttons worked out again from ' +
+    (smart ? '"' + smart.question + '" (names: ' + smart.by + ')' : 'LOKA categories (no question sorts the places now)'));
+  return 'reworked';
 }
 
 router.get('/instances/:slug/mode', (req, res) => {
@@ -1789,7 +1892,13 @@ router.get('/instances/:slug/mode', (req, res) => {
   res.json({ ...modeAnswer(local || {}), canChange: callerRole(req, inst) === 'owner' });
 });
 
-router.post('/instances/:slug/mode', (req, res) => {
+router.post('/instances/:slug/mode', async (req, res) => {
+  try { await postMode(req, res); } catch (e) {
+    console.warn('[atlas] mode — ' + (e && e.message));
+    if (!res.headersSent) res.status(500).json({ error: 'Something went wrong. Nothing changed — try again.' });
+  }
+});
+async function postMode(req, res) {
   const inst = reg.getInstance(String(req.params.slug));
   if (!inst) return res.status(404).json({ error: 'not found' });
   const role = callerRole(req, inst);
@@ -1799,18 +1908,52 @@ router.post('/instances/:slug/mode', (req, res) => {
     return res.status(409).json({ error: 'Wait for the atlas to finish building, then try again.' });
   }
   const b = req.body && typeof req.body === 'object' ? req.body : {};
-  const { file, local } = readOverlay(inst);
+  let { file, local } = readOverlay(inst);
   if (!local) return res.status(409).json({ error: 'This atlas has no places of its own yet. Add your data first.' });
   const now = modeNow(local);
 
-  // Explore's buttons, edited and saved
-  if (b.name === undefined && b.buttons !== undefined) {
+  // Explore's buttons, edited and saved: from now on a rebuild leaves them as they are
+  if (b.name === undefined && b.groupBy === undefined && b.buttons !== undefined) {
     if (now !== 'explore') return res.status(409).json({ error: 'Buttons are for Explore. Switch the atlas to Explore first.' });
     const clean = EXPLORE.cleanButtons(b.buttons);
     if (clean.error) return res.status(400).json({ error: clean.error });
-    local.mode = { ...local.mode, buttons: clean.buttons };
+    // "Odds & ends" comes and goes by itself, as the places under no other button do
+    const got = exploreLayerOf(inst, local);
+    const buttons = got ? EXPLORE.withRest(clean.buttons, got.feats, local.mode) : clean.buttons;
+    local.mode = { ...local.mode, buttons, buttonsEdited: true };
     if (!writeOverlay(file, local)) return res.status(500).json({ error: 'Could not save the buttons. Nothing changed — try again.' });
     return res.json({ ok: true, ...modeAnswer(local) });
+  }
+
+  // Explore's "Group by": the atlas's own analysis, or LOKA's categories — buttons made afresh, written at once
+  if (b.name === undefined && b.groupBy !== undefined) {
+    if (now !== 'explore') return res.status(409).json({ error: 'Buttons are for Explore. Switch the atlas to Explore first.' });
+    if (b.groupBy !== 'analysis' && b.groupBy !== 'categories') return res.status(400).json({ error: 'Group the buttons by the atlas\u2019s own analysis or by LOKA categories.' });
+    let next;
+    if (b.groupBy === 'analysis') {
+      /* LOKA's names, not the ones the owner typed: the last ones LOKA gave
+         these same answers (analysisNames) are used again with no call */
+      const prev = local.mode.buttonsEdited ? { analysisNames: local.mode.analysisNames } : local.mode;
+      const smart = NEVER_READ.has(inst.slug) ? null : await smartExplore(inst, local, prev, local.mode.layer, req);
+      if (!smart) {
+        return res.status(409).json({ error: 'None of the questions LOKA found about these places sorts most of them into a few groups, so the buttons stay with LOKA categories.' });
+      }
+      next = { layer: smart.layer.id, tagColumn: smart.tagColumn, buttons: smart.buttons, buttonsFrom: 'analysis', buttonsSig: smart.buttonsSig };
+      if (smart.analysisNames) next.analysisNames = smart.analysisNames;
+    } else {
+      const got = exploreLayerOf(inst, local);
+      if (!got) return res.status(409).json({ error: 'Explore needs places of your own on the atlas. Add your data first.' });
+      next = { layer: got.layer.id, tagColumn: 'categories', buttons: categoryButtons(got.feats), buttonsFrom: 'categories' };
+    }
+    // the newest copy: the names may have taken a few seconds
+    const fresh = readOverlay(inst);
+    if (!fresh.local || modeNow(fresh.local) !== 'explore') return res.status(409).json({ error: 'The atlas changed while the buttons were being chosen. Try again.' });
+    const mode = { ...fresh.local.mode, ...next };
+    delete mode.buttonsEdited;
+    if (next.buttonsFrom !== 'analysis') delete mode.buttonsSig;
+    fresh.local.mode = mode;
+    if (!writeOverlay(fresh.file, fresh.local)) return res.status(500).json({ error: 'Could not save the buttons. Nothing changed — try again.' });
+    return res.json({ ok: true, ...modeAnswer(fresh.local) });
   }
 
   const want = typeof b.name === 'string' ? b.name : '';
@@ -1822,7 +1965,17 @@ router.post('/instances/:slug/mode', (req, res) => {
   }
   let next = null;
   if (want === 'explore') {
-    next = kept.explore && typeof kept.explore === 'object' ? kept.explore : defaultExplore(inst, local);
+    if (kept.explore && typeof kept.explore === 'object') next = kept.explore;
+    else {
+      next = await defaultExplore(inst, local, req);
+      /* the names may have taken a few seconds: the newest copy is the one
+         written, and only if the mode in use and the kept ones are as they were */
+      const fresh = readOverlay(inst);
+      if (!fresh.local || modeNow(fresh.local) !== now || JSON.stringify(keptOf(fresh.local)) !== JSON.stringify(keptOf(local))) {
+        return res.status(409).json({ error: 'The atlas changed while Explore was being set up. Try again.' });
+      }
+      file = fresh.file; local = fresh.local;
+    }
     if (!next) return res.status(409).json({ error: 'Explore needs places of your own on the atlas. Add your data first.' });
   } else if (want === 'event') next = kept.event;
   // what is in use now is put aside, never thrown away — an unknown mode too,
@@ -1838,7 +1991,7 @@ router.post('/instances/:slug/mode', (req, res) => {
   if (Object.keys(kept).length) local.modeKept = kept; else delete local.modeKept;
   if (!writeOverlay(file, local)) return res.status(500).json({ error: 'Could not save your choice. Nothing changed — try again.' });
   res.json({ ok: true, from: now, ...modeAnswer(local) });
-});
+}
 
 // Fast edit — text, branding, logo and public/private — with no rebuild.
 router.post('/instances/:slug/details', (req, res) => {
@@ -6322,6 +6475,15 @@ function commitLayer({ importId, dataset }, who, opts) {
       // and short names for its places, when their only name is a sentence
       try { considerPlaceNames(session.dataset, id); } catch (e) {
         console.warn('[names] could not look at ' + session.dataset + '/' + id + ' — ' + (e && e.message));
+      }
+      /* and a reading's own write: an Explore whose buttons came from the
+         analysis has them worked out again from the new answers (unless the
+         owner edited them). After this commit, never holding it up. */
+      if (opts && opts.fromReading) {
+        const ds = session.dataset;
+        setImmediate(() => {
+          reworkSmartButtons(ds, id).catch((e) => console.warn('[buttons] could not rework ' + ds + '/' + id + ' — ' + (e && e.message)));
+        });
       }
     }
     return { ok: true, layerId: layerId || pointsLayerId, pointsLayerId, dataset: session.dataset };

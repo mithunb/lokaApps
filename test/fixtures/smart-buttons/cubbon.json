@@ -1,0 +1,733 @@
+{
+"about": "Stripped copy for test/smart-buttons-test.mjs: a layer's questions and each place's name, LOKA categories and answers, 24 Oct 2026. No taggers' names or ids (the \"Who created\" answers are anonymised).",
+"layer": {
+"id": "place-tags",
+"keyLabels": {
+"pattern_1": "What is this place's main feature?",
+"pattern_2": "What is this place used for?",
+"pattern_3": "What is the place's condition?",
+"pattern_4": "what species can be seen?",
+"pattern_5": "what locations are human-friendly and wh"
+},
+"keyKinds": {
+"pattern_1": [
+{
+"name": "Tree or bark",
+"definition": "Places that highlight a tree, its bark, roots, or branches as a primary feature."
+},
+{
+"name": "Water body",
+"definition": "Places that describe a pond, pool, or water source."
+},
+{
+"name": "Ground or path",
+"definition": "Places that focus on the ground, grass, or a road."
+}
+],
+"pattern_2": [
+{
+"name": "Shelter or home",
+"definition": "Places that serve as a refuge, dwelling, or habitat for living things."
+},
+{
+"name": "Rest or relaxation",
+"definition": "Places intended for people to pause, nap, or cool off."
+},
+{
+"name": "Food or water source",
+"definition": "Places where food or water is available, especially for animals."
+}
+],
+"pattern_3": [
+{
+"name": "Natural and peaceful",
+"definition": "Places described as tranquil, secluded, or unspoiled nature."
+},
+{
+"name": "Unsafe or poor",
+"definition": "Places with muddy, stagnant water, or scarce grass."
+}
+],
+"pattern_4": [
+{
+"name": "Trees",
+"definition": "Places that explicitly mention trees or specific tree features as a species."
+},
+{
+"name": "Ants",
+"definition": "Places that mention ants or ant activity."
+},
+{
+"name": "Squirrels",
+"definition": "Places that mention squirrels."
+},
+{
+"name": "Birds",
+"definition": "Places that mention birds or specific bird species."
+},
+{
+"name": "Bugs",
+"definition": "Places that mention bugs or insects."
+}
+],
+"pattern_5": [
+{
+"name": "Human Rest",
+"definition": "Places that offer comfort, rest, or recreation specifically for humans."
+},
+{
+"name": "Species Shelter",
+"definition": "Places that provide shelter or a home for various species."
+},
+{
+"name": "Species Resources",
+"definition": "Places that offer essential resources like water or food for species."
+},
+{
+"name": "Species Habitat",
+"definition": "Places described as a living environment or pathway for species."
+},
+{
+"name": "Human Utility",
+"definition": "Places that serve a practical, non-recreational purpose for humans."
+}
+]
+},
+"keyColumns": null,
+"keyNouns": {
+"pattern_1": "main feature",
+"pattern_3": "condition",
+"pattern_4": "species",
+"pattern_5": "locations"
+}
+},
+"features": [
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.59131,
+12.975276
+]
+},
+"properties": {
+"loka_name": "Cubbon Park",
+"categories": "{Nature}",
+"pattern_1": "Tree or bark",
+"pattern_2": "Shelter or home",
+"pattern_3": "",
+"pattern_4": "Ants",
+"pattern_5": "Species Shelter"
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.598404,
+12.976793
+]
+},
+"properties": {
+"loka_name": "afternoon nap",
+"categories": "{Activities}",
+"pattern_1": "Ground or path",
+"pattern_2": "Rest or relaxation",
+"pattern_3": "Natural and peaceful",
+"pattern_4": "",
+"pattern_5": "Human Rest"
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.59702,
+12.977557
+]
+},
+"properties": {
+"loka_name": "tree bark",
+"categories": "{Nature}",
+"pattern_1": "Tree or bark",
+"pattern_2": "Shelter or home",
+"pattern_3": "",
+"pattern_4": "Ants",
+"pattern_5": "Species Shelter"
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.598461,
+12.976774
+]
+},
+"properties": {
+"loka_name": "Tree stump seats",
+"categories": "{Activities,Nature}",
+"pattern_1": "",
+"pattern_2": "Rest or relaxation",
+"pattern_3": "",
+"pattern_4": "Trees",
+"pattern_5": "Human Rest"
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.596991,
+12.977593
+]
+},
+"properties": {
+"loka_name": "tree bark",
+"categories": "{Nature}",
+"pattern_1": "Tree or bark",
+"pattern_2": "",
+"pattern_3": "",
+"pattern_4": "Trees",
+"pattern_5": ""
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.598493,
+12.977412
+]
+},
+"properties": {
+"loka_name": "This road is also for non cars",
+"categories": "{Civic}",
+"pattern_1": "Ground or path",
+"pattern_2": "",
+"pattern_3": "",
+"pattern_4": "",
+"pattern_5": "Human Utility"
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.596976,
+12.978149
+]
+},
+"properties": {
+"loka_name": "tree as a space to keep luggage",
+"categories": "{Others}",
+"pattern_1": "Tree or bark",
+"pattern_2": "",
+"pattern_3": "",
+"pattern_4": "Trees",
+"pattern_5": "Human Utility"
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.596839,
+12.97758
+]
+},
+"properties": {
+"loka_name": "scorching heat",
+"categories": "{Nature}",
+"pattern_1": "Ground or path",
+"pattern_2": "Rest or relaxation",
+"pattern_3": "Natural and peaceful",
+"pattern_4": "",
+"pattern_5": "Human Rest"
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.598586,
+12.97734
+]
+},
+"properties": {
+"loka_name": "muddy pool",
+"categories": "{Civic}",
+"pattern_1": "Water body",
+"pattern_2": "Food or water source",
+"pattern_3": "Unsafe or poor",
+"pattern_4": "",
+"pattern_5": "Species Resources"
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.597874,
+12.977997
+]
+},
+"properties": {
+"loka_name": "Back and fro",
+"categories": "{Others}",
+"pattern_1": "",
+"pattern_2": "",
+"pattern_3": "",
+"pattern_4": "",
+"pattern_5": ""
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.598318,
+12.977275
+]
+},
+"properties": {
+"loka_name": "fast food",
+"categories": "{Others}",
+"pattern_1": "",
+"pattern_2": "Food or water source",
+"pattern_3": "",
+"pattern_4": "Ants",
+"pattern_5": "Species Resources"
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.597014,
+12.977876
+]
+},
+"properties": {
+"loka_name": "squirrels",
+"categories": "{Nature}",
+"pattern_1": "",
+"pattern_2": "",
+"pattern_3": "",
+"pattern_4": "Squirrels",
+"pattern_5": ""
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.596998,
+12.977597
+]
+},
+"properties": {
+"loka_name": "🪾Trunk Or 🐘 Trunk?",
+"categories": "{Others}",
+"pattern_1": "Tree or bark",
+"pattern_2": "",
+"pattern_3": "",
+"pattern_4": "",
+"pattern_5": ""
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.598722,
+12.975973
+]
+},
+"properties": {
+"loka_name": "Tired",
+"categories": "{Others}",
+"pattern_1": "",
+"pattern_2": "",
+"pattern_3": "",
+"pattern_4": "",
+"pattern_5": ""
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.59681,
+12.979954
+]
+},
+"properties": {
+"loka_name": "Cause I was the first John Cena",
+"categories": "{Others}",
+"pattern_1": "",
+"pattern_2": "",
+"pattern_3": "",
+"pattern_4": "",
+"pattern_5": ""
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.59699,
+12.977602
+]
+},
+"properties": {
+"loka_name": "Cozy home",
+"categories": "{Nature}",
+"pattern_1": "Tree or bark",
+"pattern_2": "Shelter or home",
+"pattern_3": "",
+"pattern_4": "Squirrels",
+"pattern_5": "Species Shelter"
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.596491,
+12.980075
+]
+},
+"properties": {
+"loka_name": "animals",
+"categories": "{Others}",
+"pattern_1": "",
+"pattern_2": "",
+"pattern_3": "",
+"pattern_4": "",
+"pattern_5": ""
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.596559,
+12.980473
+]
+},
+"properties": {
+"loka_name": "Tree",
+"categories": "{Nature}",
+"pattern_1": "Tree or bark",
+"pattern_2": "",
+"pattern_3": "",
+"pattern_4": "Trees",
+"pattern_5": ""
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.598297,
+12.97673
+]
+},
+"properties": {
+"loka_name": "Ant Mansion",
+"categories": "{Nature}",
+"pattern_1": "Tree or bark",
+"pattern_2": "Shelter or home",
+"pattern_3": "",
+"pattern_4": "Ants",
+"pattern_5": "Species Shelter"
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.596854,
+12.979568
+]
+},
+"properties": {
+"loka_name": "2 trees",
+"categories": "{Nature}",
+"pattern_1": "Tree or bark",
+"pattern_2": "",
+"pattern_3": "",
+"pattern_4": "Trees",
+"pattern_5": ""
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.597602,
+12.977177
+]
+},
+"properties": {
+"loka_name": "Hydration spot for crows! 💧🐦‍⬛",
+"categories": "{Nature}",
+"pattern_1": "Water body",
+"pattern_2": "Food or water source",
+"pattern_3": "",
+"pattern_4": "Birds",
+"pattern_5": "Species Resources"
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.595569,
+12.979782
+]
+},
+"properties": {
+"loka_name": "Are we colonisers?!",
+"categories": "{Others}",
+"pattern_1": "",
+"pattern_2": "",
+"pattern_3": "",
+"pattern_4": "",
+"pattern_5": ""
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.596428,
+12.980034
+]
+},
+"properties": {
+"loka_name": "Cycle of ignorance",
+"categories": "{Others}",
+"pattern_1": "",
+"pattern_2": "",
+"pattern_3": "",
+"pattern_4": "",
+"pattern_5": ""
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.596812,
+12.97826
+]
+},
+"properties": {
+"loka_name": "eco system services",
+"categories": "{Civic,Nature}",
+"pattern_1": "",
+"pattern_2": "",
+"pattern_3": "",
+"pattern_4": "",
+"pattern_5": ""
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.596421,
+12.980023
+]
+},
+"properties": {
+"loka_name": "I wonder who lives under",
+"categories": "{Others}",
+"pattern_1": "",
+"pattern_2": "",
+"pattern_3": "",
+"pattern_4": "",
+"pattern_5": ""
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.596336,
+12.979771
+]
+},
+"properties": {
+"loka_name": "overhead highway",
+"categories": "{Nature}",
+"pattern_1": "Tree or bark",
+"pattern_2": "",
+"pattern_3": "",
+"pattern_4": "Bugs",
+"pattern_5": "Species Habitat"
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.595074,
+12.976928
+]
+},
+"properties": {
+"loka_name": "species",
+"categories": "{Nature}",
+"pattern_1": "",
+"pattern_2": "",
+"pattern_3": "",
+"pattern_4": "",
+"pattern_5": ""
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.59579,
+12.977316
+]
+},
+"properties": {
+"loka_name": "Just nature, peace and you",
+"categories": "{Nature}",
+"pattern_1": "",
+"pattern_2": "Rest or relaxation",
+"pattern_3": "Natural and peaceful",
+"pattern_4": "",
+"pattern_5": "Human Rest"
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.593283,
+12.976489
+]
+},
+"properties": {
+"loka_name": "Green pond",
+"categories": "{Nature}",
+"pattern_1": "Water body",
+"pattern_2": "",
+"pattern_3": "Unsafe or poor",
+"pattern_4": "",
+"pattern_5": ""
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.596399,
+12.979173
+]
+},
+"properties": {
+"loka_name": "old tree",
+"categories": "{Nature}",
+"pattern_1": "Tree or bark",
+"pattern_2": "Shelter or home",
+"pattern_3": "",
+"pattern_4": "Bugs",
+"pattern_5": "Species Habitat"
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.598357,
+12.976825
+]
+},
+"properties": {
+"loka_name": "bifurcatree",
+"categories": "{Nature}",
+"pattern_1": "Tree or bark",
+"pattern_2": "",
+"pattern_3": "",
+"pattern_4": "Trees",
+"pattern_5": ""
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.595851,
+12.978787
+]
+},
+"properties": {
+"loka_name": "banyan tree",
+"categories": "{Nature}",
+"pattern_1": "Tree or bark",
+"pattern_2": "",
+"pattern_3": "Unsafe or poor",
+"pattern_4": "Trees",
+"pattern_5": ""
+}
+},
+{
+"type": "Feature",
+"geometry": {
+"type": "Point",
+"coordinates": [
+77.599109,
+12.976319
+]
+},
+"properties": {
+"loka_name": "Water for birds",
+"categories": "{Nature,Civic}",
+"pattern_1": "Water body",
+"pattern_2": "Food or water source",
+"pattern_3": "",
+"pattern_4": "Birds",
+"pattern_5": "Species Resources"
+}
+}
+]
+}

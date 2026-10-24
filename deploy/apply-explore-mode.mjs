@@ -45,7 +45,13 @@ export async function run(opts) {
   const found = loadExplore(opts.slug, dir);
   if (!found) stop('no explore settings for ' + opts.slug + ' (deploy/explores/' + opts.slug + '.json)');
   const mode = Object.assign({}, found.cfg.mode, { name: 'explore' });
-  if (!XM.isOn({ mode }) || !(mode.buttons || []).length) stop('the settings have no buttons');
+  /* buttonsFrom: "categories" (the settings' own buttons, LOKA's categories)
+     or "analysis" — the buttons worked out from the atlas's own analysis
+     (explore-mode.js smartButtons), plain-named here; the server names them
+     afresh the next time the atlas's reading is written. */
+  if (mode.buttonsFrom != null && mode.buttonsFrom !== 'analysis' && mode.buttonsFrom !== 'categories') stop('buttonsFrom must be "analysis" or "categories"');
+  const fromAnalysis = mode.buttonsFrom === 'analysis';
+  if (!XM.isOn({ mode }) || (!fromAnalysis && !(mode.buttons || []).length)) stop('the settings have no buttons');
   const localFile = path.join(dir, 'manifest.local.json');
   if (!fs.existsSync(localFile)) stop('this atlas has no places of its own (no manifest.local.json)');
   const local = JSON.parse(fs.readFileSync(localFile, 'utf8'));
@@ -60,6 +66,13 @@ export async function run(opts) {
   if (!layer) stop('could not find a layer whose places have "' + col + '"');
   mode.layer = layer.id;
   const feats = read(layer).features || [];
+  if (fromAnalysis) {
+    const smart = XM.smartButtons(layer, feats);
+    if (!smart) stop('none of the questions found on "' + layer.id + '" sorts most of its places into a few groups; use LOKA categories');
+    mode.tagColumn = smart.tagColumn;
+    mode.buttons = smart.buttons;
+    delete mode.buttonsSig;   // so the server names them afresh
+  }
 
   log(opts.apply ? 'APPLYING' : 'DRY RUN — nothing is written; add --apply to write');
   log('Atlas:   ' + opts.slug + '  (' + dir + ')');
@@ -67,7 +80,7 @@ export async function run(opts) {
   log('Places:  layer "' + layer.id + '", ' + layer.source + ', ' + feats.length + ' places');
   const counts = XM.countButtons(feats, mode);
   log('Buttons:');
-  for (const b of mode.buttons) log('  ' + String(counts[b.id]).padStart(4) + '  ' + b.label + '  (' + b.words.join(', ') + ')');
+  for (const b of mode.buttons) log('  ' + String(counts[b.id]).padStart(4) + '  ' + b.label + '  (' + (b.rest ? 'the places under no other button' : b.words.join(', ')) + ')');
   log('  ' + String(counts.none).padStart(4) + '  with no button (on the map and in the list all the same)');
   const box = XM.frameBox(feats.map((f) => f.geometry && f.geometry.coordinates), mode.frameShare);
   if (box) log('Opens on: ' + Math.round((mode.frameShare || 0.8) * 100) + '% of the places, ' + JSON.stringify(box));

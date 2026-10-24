@@ -53,7 +53,7 @@ check('an empty name is refused', !!XM.cleanButtons([{ label: '   ', icon: 'leaf
 check('more than 12 categories on one button are refused', !!XM.cleanButtons([{ label: 'A', icon: 'leaf', words: 'abcdefghijklm'.split('') }]).error, true);
 check('a category over 40 letters is refused', !!XM.cleanButtons([{ label: 'A', icon: 'leaf', words: ['x'.repeat(41)] }]).error, true);
 check('a category that is not a word is refused', !!XM.cleanButtons([{ label: 'A', icon: 'leaf', words: [{}] }]).error, true);
-check('the eight pictures', XM.ICON_CHOICES, ['leaf', 'landmark', 'ticket', 'users', 'utensils', 'camera', 'music', 'book']);
+check('the eleven pictures (store, droplet and footprints added for buttons from the analysis)', XM.ICON_CHOICES, ['leaf', 'landmark', 'ticket', 'users', 'utensils', 'camera', 'music', 'book', 'store', 'droplet', 'footprints']);
 const cleaned = XM.cleanButtons([{ id: 'nature', label: ' Nature ', icon: 'leaf', words: ['Nature', 'nature', ' '], extra: 'dropped' }, { label: 'New', icon: 'music', words: [] }, { id: 'nature', label: 'Twin', icon: 'book', words: [] }]);
 check('kept ids stay, new and doubled ones are made; names trimmed; doubled words once; colours by place in the row; nothing else kept',
   cleaned.buttons, [
@@ -280,7 +280,9 @@ try {
   check('a good edit is saved: renamed, re-ticked, one removed, one added with a new id, colours by place in the row',
     [saved.status, f.mode.buttons.map((b) => [b.id, b.label, b.icon, b.color, b.words])],
     [200, [['nature', 'Green places', 'leaf', XM.PALETTE[0], ['Nature', 'Others']], ['art', 'Art & history', 'landmark', XM.PALETTE[1], ['Culture', 'Heritage']],
-      ['do', 'Things to do', 'ticket', XM.PALETTE[2], ['Activities', 'Social', 'Food and Drink', 'Market']], ['b1', 'Music', 'music', XM.PALETTE[3], ['Culture']]]]);
+      ['do', 'Things to do', 'ticket', XM.PALETTE[2], ['Activities', 'Social', 'Food and Drink', 'Market']], ['b1', 'Music', 'music', XM.PALETTE[3], ['Culture']],
+      // the places under none of the four go under "Odds & ends", added by itself (smart buttons, 24 Oct 2026)
+      ['odds', 'Odds & ends', 'dots', XM.PALETTE[4], []]]]);
   check('the rest of the mode is as it was', [f.mode.layer, f.mode.tagColumn, f.mode.frameShare], [was.mode.layer, was.mode.tagColumn, was.mode.frameShare]);
   check('the answer carries the saved buttons', saved.j.mode.buttons, f.mode.buttons);
   check('no buttons at all is allowed', [(await B([])).status, fileOf(PUB).mode.buttons], [200, []]);
@@ -290,10 +292,11 @@ try {
   const pv = fileOf(PRIV);
   const first = await call('POST', M(PRIVSLUG), { cookie: ownerC, body: { name: 'explore' } });
   let p = fileOf(PRIV);
-  const want = XM.defaultButtons(blr.features, { tagColumn: 'categories' });
+  // and "Odds & ends" for the places under none of the four (smart buttons, 24 Oct 2026)
+  const want = XM.withRest(XM.defaultButtons(blr.features, { tagColumn: 'categories' }), blr.features, { tagColumn: 'categories' });
   check('Explore with nothing kept: the places\' own layer, and a button for each of the four most-used categories',
     [first.status, p.mode.name, p.mode.layer, p.mode.tagColumn, p.mode.frameShare, p.mode.buttons], [200, 'explore', 'bengaluru-tags', 'categories', 0.8, want]);
-  check('…four of them, b1..b4, leaf · landmark · ticket · users', p.mode.buttons.map((b) => b.id + ' ' + b.icon), ['b1 leaf', 'b2 landmark', 'b3 ticket', 'b4 users']);
+  check('…four of them, b1..b4, leaf · landmark · ticket · users', p.mode.buttons.map((b) => b.id + ' ' + b.icon), ['b1 leaf', 'b2 landmark', 'b3 ticket', 'b4 users', 'odds dots']);
   check('written where a private atlas lives, never in the public folder', fs.existsSync(path.join(ROOT, 'atlas', 'datasets', PRIVSLUG)), false);
   const firstMode = p.mode;
   await call('POST', M(PRIVSLUG), { cookie: ownerC, body: { name: 'standard' } });
