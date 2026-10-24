@@ -102,13 +102,94 @@
 
   function countWord(n, one, many) { return n + " " + (n === 1 ? one : many); }
 
+  /* ---- the buttons, as the owner sets them (owner.js, the Buttons tab) and
+     the server keeps them (POST /instances/:slug/mode). One set of rules for
+     both, so the page cannot offer what the server would refuse. ---- */
+  // colour by place in the row (the first four as the first atlas in Explore chose them)
+  var PALETTE = ["#2A6B41", "#C9402B", "#B5541B", "#3A7FA1", "#B99A1C"];
+  var ICON_CHOICES = ["leaf", "landmark", "ticket", "users", "utensils", "camera", "music", "book"];
+  var DEFAULT_ICONS = ["leaf", "landmark", "ticket", "users"];
+  var MAX_BUTTONS = 4, MAX_LABEL = 20, MAX_WORD = 40, MAX_WORDS = 12;
+
+  /* Every word the places use, with how many places use it, most first. A
+     word is the same word in any case; it is shown as most places write it. */
+  function wordCounts(features, mode) {
+    var col = (mode && mode.tagColumn) || "categories";
+    var by = {}, order = [];
+    (features || []).forEach(function (f) {
+      var v = f && f.properties && f.properties[col];
+      if (v == null) return;
+      var seen = {};
+      (Array.isArray(v) ? v : String(v).split(";")).forEach(function (raw) {
+        var w = String(raw).trim(), k = w.toLowerCase();
+        if (!w || seen[k]) return;
+        seen[k] = true;
+        if (!by[k]) { by[k] = { n: 0, forms: {} }; order.push(k); }
+        by[k].n++;
+        by[k].forms[w] = (by[k].forms[w] || 0) + 1;
+      });
+    });
+    return order.map(function (k, i) {
+      var forms = by[k].forms, best = null;
+      Object.keys(forms).forEach(function (w) { if (best === null || forms[w] > forms[best]) best = w; });
+      return { w: best, n: by[k].n, i: i };
+    }).sort(function (a, b) { return b.n - a.n || a.i - b.i; })
+      .map(function (x) { return { w: x.w, n: x.n }; });
+  }
+  // a new Explore: one button for each of the four words most places use
+  function defaultButtons(features, mode) {
+    return wordCounts(features, mode).slice(0, MAX_BUTTONS).map(function (x, i) {
+      return { id: "b" + (i + 1), label: Array.from(x.w).slice(0, MAX_LABEL).join("").trim(),
+        icon: DEFAULT_ICONS[i], color: PALETTE[i], words: [x.w] };
+    });
+  }
+  /* What an owner sent, made safe or refused. Returns { buttons } or
+     { error } in plain words. Ids are kept when they are plain and unique,
+     otherwise made; colours always follow the place in the row. */
+  function cleanButtons(list) {
+    if (!Array.isArray(list)) return { error: "The buttons were not sent as a list." };
+    if (list.length > MAX_BUTTONS) return { error: "Four buttons is the most: a row of four still fits on a phone." };
+    var out = [], ids = {};
+    for (var i = 0; i < list.length; i++) {
+      var b = list[i];
+      if (!b || typeof b !== "object") return { error: "Button " + (i + 1) + " is not a button." };
+      var label = typeof b.label === "string" ? b.label.replace(/\s+/g, " ").trim() : "";
+      if (!label) return { error: "Give every button a name." };
+      // letters, not code units: an emoji or a conjunct's parts count as they are seen
+      if (Array.from(label).length > MAX_LABEL) return { error: "A button's name can be at most " + MAX_LABEL + " letters: \u201c" + label + "\u201d is longer." };
+      if (ICON_CHOICES.indexOf(b.icon) < 0) return { error: "Choose one of the eight pictures for \u201c" + label + "\u201d." };
+      if (b.words != null && !Array.isArray(b.words)) return { error: "The categories for \u201c" + label + "\u201d were not sent as a list." };
+      var words = [], seen = {};
+      var raw = b.words || [];
+      for (var j = 0; j < raw.length; j++) {
+        if (typeof raw[j] !== "string") return { error: "A category for \u201c" + label + "\u201d is not a word." };
+        var w = raw[j].trim(), k = w.toLowerCase();
+        if (!w) continue;
+        if (Array.from(w).length > MAX_WORD) return { error: "A category can be at most " + MAX_WORD + " letters." };
+        if (seen[k]) continue;
+        seen[k] = true;
+        words.push(w);
+      }
+      if (words.length > MAX_WORDS) return { error: "A button can hold at most " + MAX_WORDS + " categories." };
+      var id = typeof b.id === "string" && /^[a-z0-9_-]{1,24}$/i.test(b.id) && !ids[b.id] ? b.id : null;
+      out.push({ id: id, label: label, icon: b.icon, color: PALETTE[i], words: words });
+      if (id) ids[id] = true;
+    }
+    var n = 1;
+    out.forEach(function (b) {
+      if (b.id) return;
+      while (ids["b" + n]) n++;
+      b.id = "b" + n; ids[b.id] = true;
+    });
+    return { buttons: out };
+  }
+
   /* ==================================================================
      THE VIEWER. atlas.js hands over what it owns (`api`, the same one Event
      mode gets) and calls back at the same points: layers(), pinEl(),
      cardHTML(), buildPanel(), ready(), framed(), sheetHead(); and one more,
      frameBox(), for the opening view.
   ================================================================== */
-  var PALETTE = ["#2A6B41", "#C9402B", "#3A7FA1", "#B5541B", "#B99A1C"];
   var NO_BUTTON = "#7A756C";
   var NO_BUTTON_ICON = "pin";   // a list row's mark for a place with no button, or a photo that will not load
   var CSS =
@@ -124,9 +205,13 @@
 
   function viewer(mode, api) {
     var esc = api.esc, el = api.el;
-    var BUTTONS = buttonsOf(mode);
-    var byId = {};
-    BUTTONS.forEach(function (b, i) { byId[b.id] = b; if (!b.color) b.color = PALETTE[i % PALETTE.length]; });
+    var BUTTONS = [], byId = {};
+    function takeButtons() {
+      BUTTONS = buttonsOf(mode);
+      byId = {};
+      BUTTONS.forEach(function (b, i) { byId[b.id] = b; if (!b.color) b.color = PALETTE[i % PALETTE.length]; });
+    }
+    takeButtons();
     var srcLayer = null, X = null, titleProp = "name";
     var state = { chosen: null, ready: false, chips: null, list: null };
     var moveTimer = null;
@@ -225,6 +310,8 @@
       var panel = document.getElementById("atlas-panel");
       var stage = document.querySelector(".atlas-stage");
       if (stage) { stage.classList.add("ev-on"); stage.classList.add("ex-on"); }
+      // no buttons: no row at all, the plain map and the list
+      if (!BUTTONS.length) { if (bar.parentNode) bar.parentNode.removeChild(bar); return; }
       if (api.onPhone()) {
         if (stage && bar.parentNode !== stage) stage.appendChild(bar);
       } else if (panel) {
@@ -356,7 +443,33 @@
       });
     }
 
+    /* The owner's Buttons tab (owner.js) shows its unsaved buttons on the
+       map as they are edited: the same drawing, handed a new list. Colours
+       follow the place in the row, as the server will save them. */
+    function setButtons(list) {
+      mode.buttons = (list || []).map(function (b, i) {
+        return { id: b.id, label: b.label, icon: b.icon, color: PALETTE[i % PALETTE.length], words: (b.words || []).slice() };
+      });
+      takeButtons();
+      if (state.chosen && !byId[state.chosen]) state.chosen = null;
+      if (!X) return;
+      ((api.data(X.id) || {}).features || []).forEach(function (f) { f._exB = placeButtons(f.properties, mode); });
+      entries().forEach(function (e) {
+        e._exRow = null;   // a row wears its button's word and picture
+        var old = e.node && e.node.querySelector && e.node.querySelector(".atlas-pin");
+        var pin = old && pinEl(X, e.f);
+        if (pin && old.parentNode) old.parentNode.replaceChild(pin, old);
+      });
+      if (typeof document !== "undefined") {
+        if (state.chips && state.chips.parentNode) state.chips.parentNode.removeChild(state.chips);
+        buildChips();
+        placeChips();
+      }
+      if (state.ready) { apply(); renderList(); }
+    }
+
     var me = {
+      setButtons: setButtons,
       layers: layers,
       pinEl: pinEl,
       cardHTML: cardHTML,
@@ -387,6 +500,13 @@
     placeButtons: placeButtons,
     countButtons: countButtons,
     frameBox: frameBox,
+    wordCounts: wordCounts,
+    defaultButtons: defaultButtons,
+    cleanButtons: cleanButtons,
+    PALETTE: PALETTE,
+    ICON_CHOICES: ICON_CHOICES,
+    MAX_BUTTONS: MAX_BUTTONS,
+    MAX_LABEL: MAX_LABEL,
     viewer: viewer,
   };
 });

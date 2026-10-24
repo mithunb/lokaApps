@@ -129,7 +129,8 @@ check('--apply writes the mode into manifest.local.json, with a backup', [wet.st
 check('…and leaves the layers as they were', after.layers, local.layers);
 fs.writeFileSync(A + '/manifest.local.json', JSON.stringify(Object.assign({}, local, { mode: { name: 'event' } })));
 const ev = run(['explore-test-copy', '--apply', '--server-is-stopped']);
-check('an atlas in Event mode is refused: one mode at a time', [ev.status, /one mode at a time/.test(ev.stderr)], [1, true]);
+const evAfter = JSON.parse(fs.readFileSync(A + '/manifest.local.json', 'utf8'));
+check('an atlas in Event mode: the event settings are put aside in modeKept, never overwritten', [ev.status, evAfter.mode && evAfter.mode.name, evAfter.modeKept], [0, 'explore', { event: { name: 'event' } }]);
 const deo = run(['deoria-bioregion']);
 check('deoria-bioregion is never touched', [deo.status, /never touched/.test(deo.stderr)], [1, true]);
 fs.writeFileSync(A + '/manifest.local.json', JSON.stringify(Object.assign({}, local, { mode: after.mode })));

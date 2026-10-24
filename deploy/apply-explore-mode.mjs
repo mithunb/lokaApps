@@ -12,7 +12,8 @@
  *
  * The dry run says how many places each button holds, how many have no
  * button (they stay on the map and in the list), and the box the map opens
- * on. An atlas in Event mode is refused: one mode at a time.
+ * on. A mode in use (Event, say) is put aside under modeKept[its name], as
+ * the Owner menu's switch does, never overwritten.
  *
  * Options: --server-is-stopped. Backups go to api/data/atlas/backups/
  * explore-<atlas>-<time>/. Never touches deoria-bioregion.
@@ -21,7 +22,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { ROOT, checkSlug, checkServerStopped, backupFiles, writeJson, stop } from './event-mode-lib.mjs';
+import { ROOT, checkSlug, checkServerStopped, backupFiles, writeJson, stop, keepAside } from './event-mode-lib.mjs';
 
 const require = createRequire(import.meta.url);
 const XM = require(path.join(ROOT, 'atlas', 'explore-mode.js'));
@@ -48,7 +49,6 @@ export async function run(opts) {
   const localFile = path.join(dir, 'manifest.local.json');
   if (!fs.existsSync(localFile)) stop('this atlas has no places of its own (no manifest.local.json)');
   const local = JSON.parse(fs.readFileSync(localFile, 'utf8'));
-  if (local.mode && local.mode.name && local.mode.name !== 'explore') stop('this atlas is in ' + local.mode.name + ' mode: one mode at a time');
   // a file name only, as the private data route serves it: never a path out of the atlas's folder
   const layers = (local.layers || []).filter((L) => (L.group || 'userdata') === 'userdata' &&
     SAFE_NAME.test(String(L.source || '')) && !String(L.source).includes('..') && fs.existsSync(path.join(dir, L.source)));
@@ -71,13 +71,17 @@ export async function run(opts) {
   log('  ' + String(counts.none).padStart(4) + '  with no button (on the map and in the list all the same)');
   const box = XM.frameBox(feats.map((f) => f.geometry && f.geometry.coordinates), mode.frameShare);
   if (box) log('Opens on: ' + Math.round((mode.frameShare || 0.8) * 100) + '% of the places, ' + JSON.stringify(box));
-  log('Mode:    ' + (local.mode ? 'updated' : 'switched on') + ' in manifest.local.json');
+  const aside = local.mode != null && !(local.mode && local.mode.name === 'explore');
+  log('Mode:    ' + (aside ? 'switched on; the ' + ((local.mode && local.mode.name) || 'unnamed') + ' mode in use is put aside in modeKept' : local.mode ? 'updated' : 'switched on') + ' in manifest.local.json');
   if (!opts.apply) return { counts, box, mode };
 
   await checkServerStopped(opts.serverIsStopped);
   const backup = backupFiles('explore', opts.slug, dir, ['manifest.local.json']);
   log('Backup:  ' + backup);
   const fresh = JSON.parse(fs.readFileSync(localFile, 'utf8'));   // the newest copy
+  // only `mode` is replaced; a different mode in use goes into `modeKept`, which otherwise stays as it is
+  fresh.modeKept = keepAside(fresh, 'explore');
+  if (!fresh.modeKept) delete fresh.modeKept;
   fresh.mode = mode;
   writeJson(localFile, fresh, 1);
   log('Wrote:   manifest.local.json');

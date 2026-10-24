@@ -44,7 +44,10 @@
     cash: svgIcon('<rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/>'),
     toilet: svgIcon('<circle cx="7" cy="4" r="2"/><path d="M7 8v14"/><path d="M4 8h6l1 7H3z"/><circle cx="17" cy="4" r="2"/><path d="M15 8h4v7h-1v7h-2v-7h-1z"/>'),
     firstaid: svgIcon('<path d="M12 11v4"/><path d="M14 13h-4"/><path d="M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><path d="M18 6v14"/><path d="M6 6v14"/><rect width="20" height="14" x="2" y="6" rx="2"/>'),
-    dots: svgIcon('<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>')
+    dots: svgIcon('<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>'),
+    // two more pictures an owner may give an Explore button (explore-mode.js ICON_CHOICES)
+    music: svgIcon('<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'),
+    book: svgIcon('<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>')
   };
 
   /* Category → icon. Entries are WORD STEMS, matched against whole words in the

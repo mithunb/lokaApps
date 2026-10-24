@@ -1721,6 +1721,125 @@ function writePlaceName(inst) {
   } catch { return false; }
 }
 
+/* ---------- how visitors explore: Standard, Event or Explore ----------
+   An atlas's mode lives in its overlay (manifest.local.json) as `mode`;
+   Standard is no `mode` at all. The settings of a mode not in use wait under
+   `modeKept[<name>]`, so switching back brings them back as they were left.
+   One rule for every atlas, public or private (datasetDirFor). Only the
+   owner switches, and only the owner edits Explore's buttons. */
+const EXPLORE = requireScript(path.join(REPO_ROOT, 'atlas', 'explore-mode.js'));
+const MODE_NAMES = ['standard', 'event', 'explore'];
+const EVENT_NOT_SET_UP = 'An event guide needs its venues and programme set up first. LOKA sets this up for you — write to us.';
+const SAFE_LAYER_FILE = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+
+function readOverlay(inst) {
+  const file = path.join(datasetDirFor(inst), 'manifest.local.json');
+  let local = null;
+  try { local = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { local = null; }
+  return { file, local: local && typeof local === 'object' && !Array.isArray(local) ? local : null };
+}
+function writeOverlay(file, local) {
+  try {
+    fs.writeFileSync(file + '.tmp', JSON.stringify(local, null, 1));
+    fs.renameSync(file + '.tmp', file);
+    return true;
+  } catch { return false; }
+}
+// the mode in use: 'explore' or 'event' when the overlay says so, else 'standard'
+function modeNow(local) {
+  const m = local && local.mode;
+  return m && typeof m === 'object' && (m.name === 'explore' || m.name === 'event') ? m.name : 'standard';
+}
+function keptOf(local) {
+  const k = local && local.modeKept;
+  return k && typeof k === 'object' && !Array.isArray(k) ? k : {};
+}
+function modeAnswer(local) {
+  const name = modeNow(local), kept = keptOf(local);
+  const out = { name, kept: Object.keys(kept).filter((k) => kept[k] && typeof kept[k] === 'object'), canEvent: name === 'event' || !!(kept.event && typeof kept.event === 'object') };
+  if (name === 'explore') out.mode = local.mode;
+  return out;
+}
+/* A new Explore, with nothing kept: the atlas's own places (the first of its
+   layers whose places have categories, else its first layer of its own), and
+   a button for each of the four words most of them use. */
+function defaultExplore(inst, local) {
+  const dir = datasetDirFor(inst);
+  const col = 'categories';
+  const layers = (local.layers || []).filter((L) => L && (L.group || 'userdata') === 'userdata' &&
+    SAFE_LAYER_FILE.test(String(L.source || '')) && !String(L.source).includes('..'));
+  const read = (L) => { try { return JSON.parse(fs.readFileSync(path.join(dir, L.source), 'utf8')).features || []; } catch { return null; } };
+  let layer = null, feats = null;
+  for (const L of layers) {
+    const f = read(L);
+    if (!f) continue;
+    if (!layer) { layer = L; feats = f; }
+    if (f.some((x) => x && x.properties && x.properties[col] != null && String(x.properties[col]).trim())) { layer = L; feats = f; break; }
+  }
+  if (!layer) return null;
+  return { name: 'explore', layer: layer.id, tagColumn: col, frameShare: 0.8,
+    buttons: EXPLORE.defaultButtons(feats, { tagColumn: col }) };
+}
+
+router.get('/instances/:slug/mode', (req, res) => {
+  const inst = reg.getInstance(String(req.params.slug));
+  if (!inst) return res.status(404).json({ error: 'not found' });
+  if (!callerCanEdit(req, inst)) return res.status(403).json({ error: 'not allowed' });
+  const { local } = readOverlay(inst);
+  res.json({ ...modeAnswer(local || {}), canChange: callerRole(req, inst) === 'owner' });
+});
+
+router.post('/instances/:slug/mode', (req, res) => {
+  const inst = reg.getInstance(String(req.params.slug));
+  if (!inst) return res.status(404).json({ error: 'not found' });
+  const role = callerRole(req, inst);
+  if (!role) return res.status(403).json({ error: 'not allowed' });
+  if (role !== 'owner') return res.status(403).json({ error: 'Only the owner can change how visitors explore this atlas.' });
+  if (inst.status === 'building' || inst.status === 'pending-approval') {
+    return res.status(409).json({ error: 'Wait for the atlas to finish building, then try again.' });
+  }
+  const b = req.body && typeof req.body === 'object' ? req.body : {};
+  const { file, local } = readOverlay(inst);
+  if (!local) return res.status(409).json({ error: 'This atlas has no places of its own yet. Add your data first.' });
+  const now = modeNow(local);
+
+  // Explore's buttons, edited and saved
+  if (b.name === undefined && b.buttons !== undefined) {
+    if (now !== 'explore') return res.status(409).json({ error: 'Buttons are for Explore. Switch the atlas to Explore first.' });
+    const clean = EXPLORE.cleanButtons(b.buttons);
+    if (clean.error) return res.status(400).json({ error: clean.error });
+    local.mode = { ...local.mode, buttons: clean.buttons };
+    if (!writeOverlay(file, local)) return res.status(500).json({ error: 'Could not save the buttons. Nothing changed — try again.' });
+    return res.json({ ok: true, ...modeAnswer(local) });
+  }
+
+  const want = typeof b.name === 'string' ? b.name : '';
+  if (!MODE_NAMES.includes(want)) return res.status(400).json({ error: 'Choose Standard, Event or Explore.' });
+  if (want === now) return res.json({ ok: true, already: true, ...modeAnswer(local) });
+  const kept = { ...keptOf(local) };
+  if (want === 'event' && !(kept.event && typeof kept.event === 'object')) {
+    return res.status(409).json({ error: EVENT_NOT_SET_UP, needsSetUp: true });
+  }
+  let next = null;
+  if (want === 'explore') {
+    next = kept.explore && typeof kept.explore === 'object' ? kept.explore : defaultExplore(inst, local);
+    if (!next) return res.status(409).json({ error: 'Explore needs places of your own on the atlas. Add your data first.' });
+  } else if (want === 'event') next = kept.event;
+  // what is in use now is put aside, never thrown away — an unknown mode too,
+  // and one with no proper name under "_unnamed" (then "_unnamed-2", …)
+  const cur = local.mode;
+  if (cur !== undefined && cur !== null) {
+    let key = cur && typeof cur === 'object' && typeof cur.name === 'string' && /^[a-z]{1,20}$/.test(cur.name) ? cur.name : '_unnamed';
+    if (key === '_unnamed') for (let n = 2; kept[key] !== undefined; n++) key = '_unnamed-' + n;
+    kept[key] = cur;
+  }
+  if (want !== 'standard') delete kept[want];
+  if (next) local.mode = { ...next, name: want }; else delete local.mode;
+  if (Object.keys(kept).length) local.modeKept = kept; else delete local.modeKept;
+  if (!writeOverlay(file, local)) return res.status(500).json({ error: 'Could not save your choice. Nothing changed — try again.' });
+  res.json({ ok: true, from: now, ...modeAnswer(local) });
+});
+
 // Fast edit — text, branding, logo and public/private — with no rebuild.
 router.post('/instances/:slug/details', (req, res) => {
   const inst = reg.getInstance(String(req.params.slug));

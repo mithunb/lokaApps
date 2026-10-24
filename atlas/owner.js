@@ -80,7 +80,7 @@
   /* ---- one toast element, reused: a shared timer with several nodes orphans
           whichever one the timer did not belong to ---- */
   var toastTimer, toastNode;
-  function toast(text) {
+  function toast(text, ms) {
     if (!toastNode) {
       toastNode = document.createElement("div");
       toastNode.className = "own-toast";
@@ -90,7 +90,7 @@
     toastNode.textContent = text;
     toastNode.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { toastNode.hidden = true; }, 2600);
+    toastTimer = setTimeout(function () { toastNode.hidden = true; }, ms || 2600);
   }
 
   /* ---- dialogs: focus enters, Tab is trapped, the page behind is inert ----
@@ -625,6 +625,7 @@
       "</button>" +
       '<div class="own-panel" id="own-panel" hidden>' +
         '<div class="own-panel-t">Owner</div>' +
+        '<div class="own-panel-ln" id="own-panel-visitor"></div>' +
         '<div class="own-panel-ln">' +
           '<span class="own-status" id="own-status" role="status">' +
             '<span class="own-dot" aria-hidden="true"></span>' +
@@ -633,6 +634,7 @@
           "</span>" +
           '<button class="own-act" id="own-live" hidden type="button"></button>' +
         "</div>" +
+        '<div class="own-panel-ln" id="own-panel-mode"></div>' +
         '<div class="own-panel-ln" id="own-panel-region"></div>' +
         '<div class="own-panel-ln" id="own-panel-open"><span class="own-panel-k">Open data layers</span>' +
           '<button class="own-act" id="own-open-data" type="button">Add or remove</button>' +
@@ -659,6 +661,28 @@
     }
     wireOwnerMenu();
     paintStatus();
+    loadModesKit();
+  }
+
+  /* How visitors explore, See it as a visitor, Explore's Buttons tab: their
+     own file (owner-modes.js), fetched like this one, with what it needs. */
+  var MODES_KIT = null;
+  function loadModesKit() {
+    var me = document.querySelector('script[src*="owner.js"]'), js = document.createElement("script");
+    var v = /[?&]v=[0-9A-Za-z._-]+/.exec((me && me.getAttribute("src")) || "");
+    js.src = "./owner-modes.js" + (v ? "?" + v[0].slice(1) : "");
+    js.onload = function () {
+      if (window.LokaOwnerModes) MODES_KIT = window.LokaOwnerModes.mount({ api: api, errMsg: errMsg, esc: esc, toast: toast, openDialog: openDialog,
+        rowsOnMap: rowsOnMap, inst: INST, slug: SLUG, showShelf: function () { if (SHOW_SHELF) SHOW_SHELF(); },
+        closeFold: function () { if (FOLD) closeFold(true); } });
+      if (MODES_KIT) augmentPanel();
+    };
+    document.head.appendChild(js);
+  }
+  // the mode the page is drawing, which the owner's tabs follow
+  function modeDrawn() {
+    var M = window.LokaAtlas && window.LokaAtlas.manifest, m = M && M.mode;
+    return m && typeof m === "object" && (m.name === "explore" || m.name === "event") ? m.name : "standard";
   }
 
   /* Open on press; shut on a press outside, on Esc, or when a line has done
@@ -688,6 +712,7 @@
     panel.addEventListener("click", function (e) {
       var t = e.target && e.target.closest && e.target.closest("#own-settings, #own-region, #own-open-data, #add-data-btn");
       if (t) shut();
+      if (e.target && e.target.closest && e.target.closest("#own-mode-change, #own-visitor")) shut();
     });
   }
 
@@ -1405,18 +1430,33 @@
      not. */
   var SHOW_SHELF = null;
 
+  /* The tabs follow how visitors explore the atlas (the Owner menu's "How
+     visitors explore"): Standard has Layers · Questions, as it always had;
+     Explore has Around here (the list visitors get) · Buttons (what they
+     press); an Event guide has no tabs — its owner sees the venue list
+     exactly as visitors do. Questions belong to Standard alone: they are
+     about reading the layers, and Explore and Event do not show layers. */
   function addShelves() {
     var head = $("#atlas-panel .panel-head");
     var body = $("#atlas-controls");
     if (!head || !body) return;
     if (head.querySelector(".own-shelves")) { if (SHOW_SHELF) SHOW_SHELF(); return; }
-    if (!keyedLayers().length) return;      // nothing to put on a second shelf
+    var drawn = modeDrawn();
+    if (drawn === "event") return;          // the guide's own list, as visitors see it
+    var pairs;
+    if (drawn === "explore") pairs = [["around", "Around here"], ["buttons", "Buttons"]];
+    else {
+      if (!keyedLayers().length) return;      // nothing to put on a second shelf
+      pairs = [["layers", "Layers"], ["questions", "Questions"]];
+    }
+    var first = pairs[0][0], second = pairs[1][0];
+    if (SHELF !== first && SHELF !== second) SHELF = first;
 
     var strong = head.querySelector("strong");
     var tabs = el("div", "own-shelves");
     tabs.setAttribute("role", "tablist");
     var made = {};
-    [["layers", "Layers"], ["questions", "Questions"]].forEach(function (pair) {
+    pairs.forEach(function (pair) {
       var t = el("button", "own-shelf" + (SHELF === pair[0] ? " on" : ""), pair[1]);
       t.type = "button";
       t.setAttribute("role", "tab");
@@ -1429,21 +1469,25 @@
       made[pair[0]] = t;
       tabs.appendChild(t);
     });
-    if (strong) strong.replaceWith(tabs); else head.insertBefore(tabs, head.firstChild);
+    // the head's own words stay, out of sight, for See it as a visitor
+    if (strong) strong.parentNode.insertBefore(tabs, strong); else head.insertBefore(tabs, head.firstChild);
+    head.setAttribute("data-own-shelves", drawn);
 
-    var qs = el("div", "own-qshelf");
-    qs.id = "own-qshelf";
+    var qs = second === "buttons" ? el("div", "own-bshelf") : el("div", "own-qshelf");
+    qs.id = second === "buttons" ? "own-bshelf" : "own-qshelf";
     body.parentNode.insertBefore(qs, body.nextSibling);
 
     function showShelf() {
-      var onQ = SHELF === "questions";
+      // seen as a visitor, the panel is the visitor's: its own list, no second shelf
+      var onQ = SHELF === second && !(MODES_KIT && MODES_KIT.visitor());
       body.hidden = onQ;
       qs.hidden = !onQ;
-      made.layers.classList.toggle("on", !onQ);
-      made.questions.classList.toggle("on", onQ);
-      made.layers.setAttribute("aria-selected", String(!onQ));
-      made.questions.setAttribute("aria-selected", String(onQ));
-      if (onQ) drawQuestionShelf(qs);
+      made[first].classList.toggle("on", !onQ);
+      made[second].classList.toggle("on", onQ);
+      made[first].setAttribute("aria-selected", String(!onQ));
+      made[second].setAttribute("aria-selected", String(onQ));
+      if (onQ && second === "questions") drawQuestionShelf(qs);
+      else if (onQ && MODES_KIT) MODES_KIT.drawButtonShelf(qs);
     }
     SHOW_SHELF = showShelf;
     showShelf();

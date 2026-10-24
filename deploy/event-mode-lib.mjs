@@ -517,6 +517,20 @@ export function backupFiles(kind, slug, dir, files) {
   return backup;
 }
 
+/* The mode in use, when it is not the one being applied, put aside under
+   modeKept[its name] (the same rule as POST /instances/:slug/mode): one with
+   no proper name under "_unnamed". Returns the new modeKept, or undefined. */
+export function keepAside(local, applying) {
+  const kept = Object.assign({}, local.modeKept && typeof local.modeKept === 'object' ? local.modeKept : {});
+  const cur = local.mode;
+  if (cur !== undefined && cur !== null && !(cur && cur.name === applying)) {
+    let key = cur && typeof cur === 'object' && typeof cur.name === 'string' && /^[a-z]{1,20}$/.test(cur.name) ? cur.name : '_unnamed';
+    if (key === '_unnamed') for (let n = 2; kept[key] !== undefined; n++) key = '_unnamed-' + n;
+    kept[key] = cur;
+  }
+  return Object.keys(kept).length ? kept : undefined;
+}
+
 export async function run(opts) {
   const log = opts.log || console.log;
   const { slug, apply } = opts;
@@ -650,6 +664,11 @@ export async function run(opts) {
   if (around) writeJson(aroundFile, around.fc);
   for (const ph of photos) fs.copyFileSync(photoSrc(slug, ph), path.join(dir, ph));
   const fresh = JSON.parse(fs.readFileSync(localFile, 'utf8'));   // the newest copy, not the one read minutes ago
+  /* Only `mode` is replaced: everything else in the file stays, `modeKept`
+     (the settings of the modes not in use, POST /instances/:slug/mode) with
+     it. A different mode in use is put aside there, never thrown away. */
+  fresh.modeKept = keepAside(fresh, 'event');
+  if (!fresh.modeKept) delete fresh.modeKept;
   fresh.mode = newMode;
   writeJson(localFile, fresh, 1);
   log('Wrote:   ' + layer.source + (around ? ', ' + path.basename(aroundFile) : '') + photos.map((ph) => ', ' + ph).join('') + ', manifest.local.json');
