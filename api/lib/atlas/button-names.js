@@ -44,9 +44,11 @@ export function groupsOf(smart) {
 }
 
 // the fingerprint of what is being named: the column and its answer groups
+const NAMING_VERSION = 2; // 2: everyday words over the answer's formal word (Mithun, 25 Oct 2026)
 export function buttonsSig(column, groups) {
   return crypto.createHash('sha1')
-    .update(String(column) + '\u0003' + (groups || []).map((g) => g.names.join('\u0002')).join('\u0001'))
+    // NAMING_VERSION: raised when the naming instructions change, so saved names are asked for again once
+    .update(NAMING_VERSION + '\u0004' + String(column) + '\u0003' + (groups || []).map((g) => g.names.join('\u0002')).join('\u0001'))
     .digest('hex').slice(0, 20);
 }
 
@@ -55,6 +57,8 @@ export function promptFor(question, groups, title) {
     'A map' + (title ? ' called "' + title + '"' : '') + ' has buttons that show its places by their answer to the question: "' + question + '".',
     'Each button below holds one or more answers. Give each button a short name a visitor understands at a glance:',
     'plain everyday words, at most ' + MAX_LABEL + ' letters, no jargon, no quotes, no emoji. Names should be different from each other.',
+    'Name what a visitor would go there to do or see, the way a friend would say it, not the formal word in the answer:',
+    'say "Fun & leisure", not "Recreation"; "Shops & services", not "Commerce & services"; "Nature & wildlife", not "Observation or habitat".',
     'You may join two ideas with "&" (for example "Art & history"). Also choose one picture for each button from: ' + ICONS.join(', ') + '.',
     'Answer for every button, giving its number as "group".',
     JSON.stringify({ buttons: (groups || []).map((g, i) => ({
