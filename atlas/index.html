@@ -43,8 +43,8 @@
   <script>if (/[?&]dataset=[^&]/.test(location.search)) { document.documentElement.classList.add("atlas-full"); document.documentElement.classList.add("atlas-pending"); } else { document.documentElement.classList.add("atlas-home"); }
   if (/[?&]embed=(1|map)(&|$)/.test(location.search)) document.documentElement.classList.add("atlas-embed");
   document.write(document.documentElement.classList.contains("atlas-full")
-    ? '<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600;700&family=Lora:wght@700&display=swap" onload="this.onload=null;this.rel=\'stylesheet\'" />'
-    : '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600;700&family=Lora:wght@700&display=swap" />');</script>
+    ? '<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600;700&family=Lora:ital,wght@0,700;1,400&display=swap" onload="this.onload=null;this.rel=\'stylesheet\'" />'
+    : '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600;700&family=Lora:ital,wght@0,700;1,400&display=swap" />');</script>
   <title>LOKA Atlas</title>
   <meta name="description" content="LOKA Atlas — layered, shareable maps for any geography, built from open data. Pick a region, choose layers, add your own data, and publish." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -160,12 +160,17 @@
     #org-branding, #org-branding a, .org-brand-line { display:contents; }
     #org-branding a { text-decoration:none; }
     .org-brand-logo { grid-column:1; grid-row:1 / span 2; height:30px; width:auto; max-width:var(--logo-max-width,120px); object-fit:contain; display:block; }
-    .org-brand-line > span { grid-column:2; grid-row:1; font-size:var(--t-label); font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+    .org-brand-line > span { grid-column:2; grid-row:1; font-size:var(--t-label); font-weight:700; letter-spacing:.12em; text-transform:uppercase;
       color:var(--color-text-secondary); line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:320px; }
     .org-brand-line b { font-weight:700; }
     #org-branding a:hover .org-brand-line b { color:var(--color-leaf); }
-    .org-head #atlas-title { grid-column:2; grid-row:2; margin:0; font-size:1.1rem; line-height:1.2; letter-spacing:-.005em;
+    /* the atlas's name is the page's heading: 1.55rem on a wide screen,
+       1.3rem on a phone (below). Under a logo it was already larger
+       (1.45rem); there it takes the wide screen's size and keeps its own on
+       a phone, so no atlas's title gets smaller. */
+    .org-head #atlas-title { grid-column:2; grid-row:2; margin:0; font-size:1.55rem; line-height:1.2; letter-spacing:-.005em;
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-wrap:initial; }
+    @media (min-width:721px){ .org-head:has(.org-brand-logo) #atlas-title { font-size:1.55rem; } }
     .org-credit-logo { height:30px; width:auto; max-width:var(--logo-max-width,160px); object-fit:contain; display:block; margin-bottom:.4rem; }
     .org-credit-name { font-weight:600; }
     .org-credit-line { font-size:var(--t-ui); color:var(--color-text-secondary); margin-bottom:.9rem; }
@@ -268,14 +273,18 @@
       border:1px solid var(--color-border); border-radius:var(--radius-md); box-shadow:var(--shadow-md); }
 
     /* ---- control widget ---- */
-    /* The shelf floats over the map, 8px in from the frame and just under the
-       strip: Surface at 95% on the one sanctioned shadow, because it sits over
-       map imagery whose colours nobody can predict. It folds to a small
-       "Map layers" pill when the map is what you want (see below). */
-    .atlas-panel { position:absolute; top:8px; left:8px; bottom:8px; z-index:5; width:19.5rem; max-width:calc(100% - 3rem);
+    /* The shelf is docked, not floating (Mithun, 25 Oct 2026): flush to the
+       map's left edge, from under the header to the bottom, solid Surface,
+       one hairline on its inner edge, no corners and no shadow. 400px on a
+       laptop; on a narrower wide screen it gives way (never below the old
+       312px) so a card docked at the right still has the map between them.
+       The map frames its places to the right of it (viewPadding measures
+       it). It folds to a small "Map layers" head when the map is what you
+       want (see below), and folded it floats again. */
+    .atlas-panel { position:absolute; top:0; left:0; bottom:0; z-index:5; width:clamp(19.5rem, 36%, 400px); max-width:calc(100% - 3rem);
       max-height:none; display:flex; flex-direction:column;
-      background:rgba(253,252,248,.95);
-      border:1px solid var(--color-border); border-radius:var(--radius-md); box-shadow:var(--shadow-lg); overflow:hidden; }
+      background:var(--color-surface);
+      border:0; border-right:1px solid var(--color-divider); border-radius:0; box-shadow:none; overflow:hidden; }
     /* the sheet's own body: on a wide screen it is just the scroller's box;
        on a phone it is what slides open (see the mobile block) */
     .sheet-body { display:flex; flex-direction:column; min-height:0; flex:1 1 auto; }
@@ -293,10 +302,11 @@
        the panel, and the bar is not merely invisible — it is not there, so it
        takes no space and nothing can tab into it. */
     .atlas-bar { display:none; }
-    /* the panel's head wears a 2px Leaf rule beneath it: the one line of
-       product colour in the shelf, and the rule every group head sits under */
+    /* the panel's head sits on a hairline; its word wears a 2px Sindoor
+       underline under the word alone (wide screen, below), the way a chosen
+       tab does */
     .panel-head { display:flex; align-items:center; gap:.45rem;
-      padding:.7rem .9rem; border-bottom:2px solid var(--color-leaf); flex:0 0 auto; }
+      padding:.7rem .9rem; border-bottom:1px solid var(--color-divider); flex:0 0 auto; }
     .panel-head strong { font-size:var(--t-label); font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--color-text-primary); }
     .panel-count { font-size:var(--t-label); color:var(--color-text-muted); white-space:nowrap; font-variant-numeric:tabular-nums; }
     .panel-count:empty { display:none; }
@@ -313,6 +323,8 @@
       .panel-head { cursor:pointer; }
       .panel-collapse { display:inline-flex; transition:transform .2s cubic-bezier(.25,1,.5,1); }
       .atlas-panel.collapsed { width:auto; }
+      .panel-head strong { border-bottom:2px solid var(--color-sindoor); padding:.15rem .1rem; }
+      .atlas-panel.collapsed .panel-head strong { border-bottom:0; padding:0; }
       .atlas-panel.collapsed #atlas-controls { display:none; }
       .atlas-panel.collapsed .panel-head { border-bottom:none; padding:.55rem .8rem; }
       .atlas-panel.collapsed .panel-collapse { transform:rotate(180deg); }
@@ -1045,11 +1057,11 @@
     @media (prefers-reduced-motion:reduce) { .pop .key-chev { transition:none; } }
 
     /* ---- the place card ----
-       Surface, small corners, a 3px Sindoor top edge (this is the one you
-       chose), the panel's shadow because it sits over map imagery. The edge is
-       drawn on the card's own box, so the tip below stays plain Surface. */
-    .atlas-popup .maplibregl-popup-content { border-radius:var(--radius-md); padding:0; box-shadow:var(--shadow-lg);
-      background:var(--color-surface); border-top:3px solid var(--color-sindoor);
+       Surface with a hairline all round, 6px corners and a deeper lift than
+       the panel's, because it sits over map imagery (Mithun, 25 Oct 2026; the
+       3px Sindoor top edge went: the pin's own Sindoor mark says which one). */
+    .atlas-popup .maplibregl-popup-content { border-radius:var(--radius-lg); padding:0; box-shadow:0 10px 28px rgba(36,33,29,.18);
+      background:var(--color-surface); border:1px solid var(--color-border);
       font-family:var(--font-body); overflow:hidden; animation:pop-in .18s cubic-bezier(.25,1,.5,1); }
     .atlas-popup .maplibregl-popup-tip { border-top-color:var(--color-surface); border-bottom-color:var(--color-surface); }
     .atlas-popup.maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color:var(--color-surface); }
@@ -1108,14 +1120,20 @@
     /* The fact list: two columns, the label in Meta beside a value that lines
        up with the value above it, numbers tabular. A long value wraps in its
        own column and never pushes the label off its line. */
-    .pop-facts { display:grid; grid-template-columns:minmax(5rem,max-content) 1fr; gap:.22rem .7rem; margin-top:.6rem; align-items:baseline; }
-    .pop-facts + .pop-facts { margin-top:.22rem; }
+    /* Each fact is a row with a hairline above it (Mithun, 25 Oct 2026): the
+       line is its own grid item across both columns (the field's ::before;
+       the field itself is display:contents), so label and value keep their
+       shared baseline. */
+    .pop-facts { display:grid; grid-template-columns:minmax(5rem,max-content) 1fr; gap:0 .7rem; margin-top:.6rem; align-items:baseline; }
+    .pop-facts + .pop-facts { margin-top:0; }
+    .pop-facts:not(.pop-facts-stacked) > .pop-field-inline::before { content:''; grid-column:1 / -1; border-top:1px solid var(--color-divider); }
+    .pop-facts:not(.pop-facts-stacked) > .pop-field-inline > .pop-lbl, .pop-facts:not(.pop-facts-stacked) > .pop-field-inline > .pop-val { padding:.4rem 0; }
     /* A card whose labels are questions stacks instead: the question on its own
        line, quiet and small, the answer beneath it across the whole card. Side
        by side, the label column takes what its longest label wants, and a
        sixty-letter question left the answer 56 pixels to live in. */
-    .pop-facts-stacked { grid-template-columns:1fr; gap:.55rem 0; }
-    .pop-facts-stacked .pop-field-inline { display:block; }
+    .pop-facts-stacked { grid-template-columns:1fr; gap:0; }
+    .pop-facts-stacked .pop-field-inline { display:block; padding:.4rem 0; border-top:1px solid var(--color-divider); }
     .pop-facts-stacked .pop-lbl { display:block; margin-bottom:.1rem; line-height:1.35; }
     .pop-facts-stacked .pop-val { font-size:var(--t-ui); line-height:1.45; }
     .pop-field-inline { display:contents; }
@@ -1184,6 +1202,8 @@
        eight-line title. */
     .pop-caption { margin:.45rem 0 .1rem; font-size:var(--t-ui); line-height:1.4;
       color:var(--color-text-primary); text-wrap:pretty; }
+    /* words quoted from a place ("Read from: …") in the serif's italic */
+    .pop q { font-family:var(--font-display); font-style:italic; font-weight:400; }
     .pop-lbl { font-size:var(--t-label); text-transform:uppercase; letter-spacing:.06em;
       color:var(--color-text-muted); }
     /* a label above a block of chips still gets its own line — chips wrap, and
@@ -1427,11 +1447,20 @@
       .atlas-full .nav { gap:.6rem .75rem; }
       .atlas-full .org-head { flex:0 1 auto; min-width:10rem; }
     }
-    /* the drawer starts under the header now, not under a strip, and stops
-       above the chips row at the foot so the credits are never under it */
+    /* the drawer runs from under the header to the foot of the map, docked
+       at its left edge; the credit chip moves to the right of it, so the
+       credits are never under it. Folded, the head floats where it always
+       did, 8px in, on the panel's old materials, and the credit goes back. */
     @media (min-width:721px){
-      .atlas-full .atlas-stage.has-strip .atlas-panel { top:8px; }
-      .atlas-full .atlas-panel { bottom:44px; }
+      .atlas-full .atlas-stage.has-strip .atlas-panel { top:0; }
+      .atlas-full .atlas-panel { bottom:0; }
+      .atlas-full .atlas-stage .atlas-panel.collapsed { top:8px; left:8px; background:rgba(253,252,248,.95);
+        border:1px solid var(--color-border); border-radius:var(--radius-md); box-shadow:var(--shadow-lg); }
+      .atlas-full .atlas-stage:has(> #atlas-panel:not(.collapsed)) .map-attrib { left:calc(var(--panel-w, 400px) + 8px); }
+      .atlas-full .atlas-stage:has(> #atlas-panel:not(.collapsed)) .map-attrib:not(.folded) { max-width:calc(100% - var(--panel-w, 400px) - 9rem); }
+      /* and while a card is docked at the right, it stops short of the card */
+      .atlas-full .atlas-stage.card-docked:has(> #atlas-panel:not(.collapsed)) .map-attrib:not(.folded) {
+        max-width:calc(100% - var(--panel-w, 400px) - 364px); }
       /* ---- the place card, docked at the right ----
          Beside its pin the card opened wherever the pin was — under the
          toolbar, off the bottom, half out of the frame — and a reader had
@@ -1563,7 +1592,7 @@
       .nav-menu-more { display:inline; }
       /* the map's credit, only where the ☰ is drawn */
       .nav-menu .nav-builtwith:not([hidden]) { display:block; margin:16px .25rem 0; font-size:var(--t-meta); color:var(--color-text-secondary); line-height:1.45; }
-      .nav-menu .nav-builtwith h3 { margin:0 0 .3rem; font-size:var(--t-label,12px); font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--color-text-muted); }
+      .nav-menu .nav-builtwith h3 { margin:0 0 .3rem; font-size:var(--t-label,12px); font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--color-text-muted); }
       .nav-menu .nav-builtwith p { margin:0 0 .2rem; }
       .nav-menu .nav-builtwith a { color:var(--color-leaf-deep); }
       /* LOKA's badge at the menu's foot, only where the ☰ is drawn */
@@ -1582,7 +1611,7 @@
       .atlas-embed .nav-burger { display:none; }
       .org-brand-logo { height:28px; max-width:min(var(--logo-max-width,120px), 120px); }   /* a theme's wider logo leaves the title room on a phone */
       .org-brand-line > span { max-width:none; }
-      .org-head #atlas-title { font-size:1rem; }
+      .org-head #atlas-title { font-size:1.3rem; }
       /* the badge is in the sheet's head on a phone; it floats only while
          the empty drawer is not drawn (loading, the private page) */
       .loka-badge-float { display:none; }
@@ -1764,7 +1793,7 @@
       .panel-head-row { display:flex; align-items:center; gap:.5rem; height:48px; }
       .panel-icon { display:none; }
       .sheet-who { display:block; flex:1 1 auto; min-width:0; cursor:pointer; }
-      .sheet-who strong { display:block; font-size:var(--t-label); font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--color-text-muted); line-height:1.1; }
+      .sheet-who strong { display:block; font-size:var(--t-label); font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--color-text-muted); line-height:1.1; }
       .panel-count { display:none; }
       .sheet-layer { display:flex; align-items:baseline; gap:.4rem; min-width:0; font-size:var(--t-control); font-weight:700; line-height:1.2; color:var(--color-text-primary); }
       .sheet-layer-name { flex:0 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -1852,7 +1881,7 @@
       .atlas-panel[data-h="peek"] .atlas-bar { display:none; }
       .atlas-tab {
         flex:0 0 auto; scroll-snap-align:start; height:40px; padding:0 .75rem;
-        font:inherit; font-size:var(--t-label); font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+        font:inherit; font-size:var(--t-label); font-weight:700; letter-spacing:.12em; text-transform:uppercase;
         color:var(--color-text-primary); background:var(--color-surface); border:1px solid var(--color-border);
         border-radius:var(--radius-md); cursor:pointer; white-space:nowrap; display:inline-flex; align-items:center; gap:.4rem;
         transition:background .15s ease, color .15s ease, border-color .15s ease;
@@ -1922,9 +1951,6 @@
       }
       .atlas-stage .atlas-popup .maplibregl-popup-tip { display:none; }
       .atlas-stage .atlas-popup .maplibregl-popup-content { width:100%; }
-      /* across the full width the 3px Sindoor edge read as a heavy red rule;
-         1.5px keeps the "this one" mark without shouting */
-      .atlas-stage .atlas-popup .maplibregl-popup-content { border-top-width:1.5px; }
       /* Shorter, because it is sharing the map's height rather than floating
          over it, and the map underneath is worth still seeing. */
       .atlas-stage .atlas-popup .pop { max-height:min(38vh, 320px); }

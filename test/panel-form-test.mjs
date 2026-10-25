@@ -16,17 +16,22 @@ function check(label, got, want) {
     (ok ? '' : '\n        got  ' + JSON.stringify(got) + '\n        want ' + JSON.stringify(want)));
 }
 
-console.log('\n  on a wide screen the drawer floats just inside the map frame');
-check('it sits 8px in from the frame', /\.atlas-panel \{ position:absolute; top:8px; left:8px; bottom:8px;/.test(html), true);
-/* an atlas fills the page (html.atlas-full): the drawer starts under the header
-   and stops above the chips row at the foot, so the credits are never under it */
-check('on an atlas it stops above the credits chip', /\n\s+\.atlas-full \.atlas-panel \{ bottom:44px; \}/.test(html), true);
+console.log('\n  on a wide screen the drawer is docked at the map\'s left edge (25 Oct 2026)');
+check('it is flush to the frame, full height, 400px on a laptop', /\.atlas-panel \{ position:absolute; top:0; left:0; bottom:0; z-index:5; width:clamp\(19\.5rem, 36%, 400px\);/.test(html), true);
+check('solid Surface, a hairline on its inner edge, no corners, no shadow',
+  /background:var\(--color-surface\);\s*border:0; border-right:1px solid var\(--color-divider\); border-radius:0; box-shadow:none;/.test(html), true);
+/* an atlas fills the page (html.atlas-full): the drawer runs from under the
+   header to the foot, and the credits chip moves to the right of it */
+check('on an atlas it runs to the foot of the map', /\n\s+\.atlas-full \.atlas-panel \{ bottom:0; \}/.test(html), true);
+check('and the credits chip sits to the right of the open drawer, never under it',
+  /\.atlas-full \.atlas-stage:has\(> #atlas-panel:not\(\.collapsed\)\) \.map-attrib \{ left:calc\(var\(--panel-w, 400px\) \+ 8px\); \}/.test(html), true);
 check('folded, its head alone is the "Layers · N" button', /\.atlas-full \.atlas-panel\.collapsed \{ bottom:auto; width:auto; \}/.test(html), true);
 check('and those two are wide-screen rules, not the phone sheet\'s',
-  /@media \(min-width:721px\)\{\n\s+\.atlas-full \.atlas-stage\.has-strip \.atlas-panel \{ top:8px; \}\n\s+\.atlas-full \.atlas-panel \{ bottom:44px; \}/.test(html), true);
+  /@media \(min-width:721px\)\{\n\s+\.atlas-full \.atlas-stage\.has-strip \.atlas-panel \{ top:0; \}\n\s+\.atlas-full \.atlas-panel \{ bottom:0; \}/.test(html), true);
 check('and it is open when the page loads, at either width', /panel\.classList\.toggle\("collapsed", mq\.matches\)/.test(html), false);
-check('no corner of map is trapped behind a rounded card', /border-radius:0;/.test(html), true);
-check('it is near-opaque paper, so the map never shows through the words', /background:rgba\(253,252,248,\.95\)/.test(html), true);
+const openDrawer = (html.match(/\n    \.atlas-panel \{[^}]*\}/) || [''])[0];
+check('no corner of map is trapped behind a rounded drawer', /border-radius:0;/.test(openDrawer), true);
+check('it is solid paper, so the map never shows through the words', /background:var\(--color-surface\);/.test(openDrawer) && !/rgba\(/.test(openDrawer.replace(/border-right:[^;]*;/, '')), true);
 /* the phone sheet's top edge is the Block hairline, which reads on the cream ground */
 check('the phone sheet keeps an edge where it meets the map', /border-top:1px solid var\(--map-block\)/.test(html), true);
 
@@ -90,7 +95,10 @@ check('the header keeps sign in and sign out on a phone',
 check('and on a phone sign in is a 48px row in the ☰ menu', /html \.nav \.nav-menu \.links a, html \.nav \.nav-menu \.links button, html \.nav \.nav-menu #nav-user \{\s*display:block; width:100%; margin:0; padding:14px \.25rem; line-height:20px; min-height:0; box-sizing:border-box;/.test(html), true);
 check('only one script measures the sheet', /function sheetH\(\)/.test(html), false);
 
-check('a phone card wears a thinner red edge than the desktop one', /\.atlas-popup \.maplibregl-popup-content \{ border-top-width:1\.5px; \}/.test(html), true);
+/* the red top edge went (25 Oct 2026): a hairline all round, 6px corners, a deeper lift */
+check('the card has no red edge, at either width', /border-top(-width)?:[^;]*(1\.5px|var\(--color-sindoor\))/.test(html.match(/\.atlas-popup \.maplibregl-popup-content \{[^}]*\}/g).join('')), false);
+check('a hairline all round, 6px corners, a deeper lift',
+  /\.atlas-popup \.maplibregl-popup-content \{ border-radius:var\(--radius-lg\); padding:0; box-shadow:0 10px 28px rgba\(36,33,29,\.18\);\s*background:var\(--color-surface\); border:1px solid var\(--color-border\);/.test(html), true);
 
 console.log('\n  a resized window frames the region again');
 check('a resize re-frames while nobody has moved the map',

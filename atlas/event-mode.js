@@ -337,7 +337,7 @@
     ".ev-subchips{display:flex;flex-wrap:wrap;gap:6px;padding:0 10px 8px}\n" +
     ".ev-subchips[hidden]{display:none}.ev-subchips::-webkit-scrollbar{display:none}\n" +
     ".ev-sub{flex:0 0 auto;font:inherit;font-size:13px;font-weight:600;line-height:1;padding:7px 10px;min-height:32px;border:1px solid var(--color-border,#d9d3c7);" +
-      "background:var(--color-surface,#fff);color:var(--color-text-primary,#24211D);border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}\n" +
+      "background:var(--color-surface,#fff);color:var(--color-text-primary,#24211D);border-radius:var(--radius-md,4px);cursor:pointer;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}\n" +
     ".ev-sub .ev-ic{width:14px;height:14px}\n" +
     ".ev-sub[aria-pressed=true]{background:var(--color-text-primary,#24211D);border-color:var(--color-text-primary,#24211D);color:#fff}\n" +
     ".ev-sub:focus-visible{outline:2px solid var(--color-leaf,#2A6B41);outline-offset:2px}\n" +
@@ -366,25 +366,27 @@
       ".atlas-stage.ev-on:has(>#atlas-panel[data-h=full]) .map-attrib,.atlas-stage.ev-on:has(>#atlas-panel[data-h=full]) .maplibregl-ctrl-bottom-right{transform:none!important}}\n" +
     ".ev-wrap{padding:.2rem 0 .6rem}\n" +
     ".ev-sh{font-size:var(--t-meta,13px);font-weight:700;color:var(--color-text-secondary,#5A5751);margin:.85rem 0 .2rem}\n" +
-    ".ev-h{font-size:var(--t-label,12px);font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--color-text-muted,#6E6A63);margin:.9rem 0 .35rem}\n" +
-    ".ev-row{display:flex;align-items:flex-start;gap:.6rem;width:100%;text-align:left;font:inherit;background:none;border:0;border-bottom:1px solid var(--color-divider,#ece7dc);padding:.6rem .1rem;cursor:pointer;color:inherit}\n" +
-    ".ev-row:hover{background:var(--color-surface-alt,rgba(0,0,0,.03))}\n" +
+    ".ev-h{font-size:var(--t-label,12px);font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--color-text-muted,#6E6A63);margin:.9rem 0 .35rem}\n" +
+    ".ev-row{display:flex;align-items:flex-start;gap:.6rem;width:100%;text-align:left;font:inherit;background:none;border:0;border-bottom:1px solid var(--color-divider,#ece7dc);padding:.4rem 0;cursor:pointer;color:inherit}\n" +
+    /* the row under the hand, and the one just tapped: a Marigold wash (25 Oct 2026) */
+    ".ev-row:hover,.ev-row:active,.ev-row.ev-open{background:var(--color-marigold-tint,rgba(233,162,55,.16))}\n" +
     ".ev-no{flex:0 0 auto;min-width:24px;height:24px;border-radius:50%;background:var(--color-leaf,#2A6B41);color:#fff;font-weight:700;font-size:12px;display:inline-flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}\n" +
     ".ev-dot{flex:0 0 auto;width:12px;height:12px;border-radius:50%;margin:5px 6px 0;background:var(--ev-c)}\n" +
     ".ev-rw{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto}\n" +
-    ".ev-rn{font-weight:600;color:var(--color-text-primary,#24211D);line-height:1.3}\n" +
+    ".ev-rn{font-size:var(--t-ui,.9rem);font-weight:600;color:var(--color-text-primary,#24211D);line-height:1.25}\n" +
     ".ev-rm{font-size:var(--t-meta,13px);color:var(--color-text-secondary,#5A5751);line-height:1.35}\n" +
     ".ev-rm b{color:var(--color-text-primary,#24211D);font-weight:600}\n" +
     ".ev-hint{font-size:var(--t-meta,13px);color:var(--color-text-secondary,#5A5751);margin:.8rem 0}\n" +
     ".ev-back{font:inherit;font-size:var(--t-meta,13px);font-weight:600;color:var(--color-leaf,#2A6B41);background:none;border:0;padding:.5rem 0;cursor:pointer;min-height:36px}\n" +
-    ".ev-card .ev-addr{margin:.5rem 0 0;font-size:var(--t-meta,13px);color:var(--color-text-secondary,#5A5751);line-height:1.4}\n" +
-    ".ev-card .ev-near{margin:.5rem 0 0;font-size:var(--t-ui,14px);color:var(--color-text-primary,#24211D)}\n" +
+    /* the card's facts sit in rows, a hairline above each (25 Oct 2026) */
+    ".ev-card .ev-addr{margin:.5rem 0 0;padding:.4rem 0;border-top:1px solid var(--color-divider,rgba(36,33,29,.10));font-size:var(--t-meta,13px);color:var(--color-text-secondary,#5A5751);line-height:1.4}\n" +
+    ".ev-card .ev-near{margin:.5rem 0 0;padding:.4rem 0;border-top:1px solid var(--color-divider,rgba(36,33,29,.10));font-size:var(--t-ui,14px);color:var(--color-text-primary,#24211D)}\n" +
     ".ev-card .ev-photo-credit{margin:.25rem 0 0;font-size:11px;color:var(--color-text-muted,#6E6A63);line-height:1.35}\n" +
     ".ev-card .ev-photo-credit a{color:inherit}\n" +
     ".ev-card .ev-osm{margin:.6rem 0 0;font-size:var(--t-meta,12px);color:var(--color-text-muted,#6E6A63)}\n" +
     ".ev-card .ev-osm a{color:inherit}\n" +
     ".ev-prog{margin-top:.8rem}\n" +
-    ".ev-prog-h{font-size:var(--t-label,12px);font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--color-text-muted,#6E6A63);margin-bottom:.4rem}\n" +
+    ".ev-prog-h{font-size:var(--t-label,12px);font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--color-text-muted,#6E6A63);margin-bottom:.4rem}\n" +
     ".ev-prog-text{white-space:pre-line;font-size:var(--t-meta,13px);line-height:1.45;margin:0}\n" +
     ".ev-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:.4rem}\n" +
     ".ev-tab{font:inherit;font-size:var(--t-meta,13px);font-weight:600;padding:7px 10px;min-height:34px;border:1px solid var(--color-border,#d9d3c7);background:var(--color-surface,#fff);color:var(--color-text-primary,#24211D);border-radius:var(--radius-md,8px);cursor:pointer}\n" +
@@ -418,6 +420,21 @@
     var byCat = {};             // category id -> [layer, ...]
     var srcLayer = null;
     var state = { around: null, ready: false, chips: null, subs: null, list: null, sub: null };
+
+    /* the row whose card is open keeps a Marigold wash until the card closes
+       (atlas.js says which place's card is open: "atlas:card") */
+    var openF = null;
+    function sameF(a, b) { return !!a && !!b && (a === b || (!!a.properties && a.properties === b.properties)); }
+    function markOpen() {
+      if (typeof document === "undefined" || !document.querySelectorAll) return;
+      Array.prototype.forEach.call(document.querySelectorAll(".ev-row"), function (r) {
+        var f = r._evF;
+        if (r.classList) r.classList.toggle("ev-open", sameF(f, openF));
+      });
+    }
+    if (typeof document !== "undefined" && document.addEventListener) {
+      document.addEventListener("atlas:card", function (e) { openF = (e && e.detail && e.detail.feature) || null; markOpen(); });
+    }
     var titleProp = "name";
 
     function catLabel(id) { return (catById[id] && catById[id].label) || id; }
@@ -709,6 +726,8 @@
       b.type = "button";
       b.innerHTML = lead + '<span class="ev-rw"><span class="ev-rn">' + esc(nameOf(L, f)) + '</span><span class="ev-rm">' + meta + "</span></span>";
       b.addEventListener("click", function () { api.openPlace(L, f); });
+      b._evF = f;
+      if (b.classList && sameF(f, openF)) b.classList.add("ev-open");
       return b;
     }
     function venueMeta(f) {

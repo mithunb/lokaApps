@@ -525,6 +525,21 @@
     takeButtons();
     var srcLayer = null, X = null, titleProp = "name";
     var state = { chosen: null, ready: false, chips: null, list: null };
+
+    /* the row whose card is open keeps a Marigold wash until the card closes
+       (atlas.js says which place's card is open: "atlas:card") */
+    var openF = null;
+    function sameF(a, b) { return !!a && !!b && (a === b || (!!a.properties && a.properties === b.properties)); }
+    function markOpen() {
+      if (typeof document === "undefined" || !document.querySelectorAll) return;
+      Array.prototype.forEach.call(document.querySelectorAll(".ev-row"), function (r) {
+        var f = r._evF;
+        if (r.classList) r.classList.toggle("ev-open", sameF(f, openF));
+      });
+    }
+    if (typeof document !== "undefined" && document.addEventListener) {
+      document.addEventListener("atlas:card", function (e) { openF = (e && e.detail && e.detail.feature) || null; markOpen(); });
+    }
     var moveTimer = null;
 
     function layers(list) {
@@ -697,6 +712,8 @@
       row.innerHTML = thumb + '<span class="ev-rw"><span class="ev-rn">' + esc(nameOf(f)) + '</span><span class="ev-rm">' +
         (word ? esc(word) + " · " : "") + "<b></b></span></span>";
       row.addEventListener("click", function () { api.openPlace(X, f); });
+      row._evF = f;
+      if (row.classList && sameF(f, openF)) row.classList.add("ev-open");
       // a small photo that will not load gives way to the place's mark, never an empty square
       var img = row.querySelector && row.querySelector("img.ex-thumb");
       if (img) img.addEventListener("error", function () {

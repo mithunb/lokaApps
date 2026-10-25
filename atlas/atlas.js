@@ -5631,7 +5631,7 @@
       var h = (onPhone ? panel.offsetHeight : 0);
       stage.style.setProperty("--sheet-h", h + "px");
       /* The map's toolbar sits just to the right of the drawer, whether the
-         drawer is open (19.5rem) or folded to its "Layers · N" head — so the
+         drawer is open (up to 400px) or folded to its "Layers · N" head — so the
          drawer's width is measured too, and the toolbar follows it. */
       stage.style.setProperty("--panel-w", (onPhone ? 0 : panel.offsetWidth) + "px");
       /* The sheet opening a group rises over the foot of the map, and whatever
@@ -6666,6 +6666,21 @@
      a name in the Map Browser is not a tap on the map, and the cards piled up
      — the first one still on top, saying the wrong name. */
   var LAST_POP = null;
+  /* Which place's card is open, told to the page as "atlas:card" so a list
+     can keep that place's row marked while its card is open (Event, Explore
+     and Insight wear a Marigold wash on it). Said again with no feature when
+     the card closes; a card replaced by another is simply superseded. */
+  var CARD_TOKEN = null;
+  function announceCard(L, feature, pop) {
+    if (!pop) return;
+    var token = {};
+    CARD_TOKEN = token;
+    var say = function (f) {
+      try { document.dispatchEvent(new CustomEvent("atlas:card", { detail: { layer: f ? L : null, feature: f } })); } catch (e) {}
+    };
+    say(feature);
+    pop.on("close", function () { if (CARD_TOKEN === token) { CARD_TOKEN = null; say(null); } });
+  }
   function openPopup(L, feature, lngLat, offsetPx, anchor, rows) {
     hideHint();   // the popup says everything the tooltip did, and more
     dismissCue(); // a card is open: the reader has found the way in
@@ -6679,6 +6694,7 @@
     if (onPhone()) {
       var cpop = openCardInSheet(L, feature, lngLat, html);
       if (cpop && rows && rows.length > 1) wireChooser(cpop, L, rows);
+      announceCard(L, feature, cpop);
       return cpop;
     }
     var opts = { closeButton: true, maxWidth: "320px", className: "atlas-popup" };
@@ -6708,6 +6724,7 @@
     if (LAST_POP) { try { LAST_POP.remove(); } catch (e) {} }
     var pop = new maplibregl.Popup(opts).setLngLat(lngLat).setHTML(html).addTo(map);
     LAST_POP = pop;
+    announceCard(L, feature, pop);
     if (rows && rows.length > 1) wireChooser(pop, L, rows);
     var stage = map.getContainer().closest(".atlas-stage");
     if (docked) {
@@ -6775,9 +6792,13 @@
     if (offsetPx) { p.x += offsetPx[0]; p.y += offsetPx[1]; }
     var room = 48;                                     // the pin and a little air
     var rightLimit = (cr.width ? cr.left - mr.left : mr.width) - room;
+    /* and clear of the side panel docked at the left (the room viewPadding
+       makes for it, which measures the panel), so the pin is never under it */
+    var padL = viewPadding().left;                     // 40 when no panel is over the map
+    var leftLimit = padL > 40 ? Math.max(room, padL - 24 + room) : room;
     var dx = 0, dy = 0;
     if (p.x > rightLimit) dx = p.x - rightLimit;
-    else if (p.x < room) dx = p.x - room;
+    else if (p.x < leftLimit) dx = p.x - leftLimit;
     var topLimit = 40;
     var strip = document.querySelector(".atlas-strip");
     if (strip && strip.offsetHeight) {

@@ -131,8 +131,9 @@ components:
     padding: "0.55rem 0.65rem"
   place-card:
     backgroundColor: "{colors.surface}"
-    rounded: "{rounded.md}"
-    borderTop: "3px solid {colors.sindoor}"
+    rounded: "{rounded.lg}"
+    border: "1px solid {colors.border}"
+    shadow: "0 10px 28px rgba(36,33,29,.18)"
 ---
 
 # Design System: LOKA Atlas
@@ -180,8 +181,8 @@ holds one map, one shelf of layers, and a credits ledger, in that order of impor
 
 ### Action and selection
 - **Leaf** (#2A6B41): the product's one voice — primary buttons, switches when on, links, focus rings, the active Map/Satellite segment, the active phone tab. White on Leaf is 6.4:1. Deepens to **Leaf Deep** (#1F5232) on hover/press. **Leaf Tint** for eyebrow chips and selection washes.
-- **Sindoor** (#C9402B): "this thing, here" — the ring around a selected map feature, the top edge of the place card, the selected-row mark. 4.8:1 on Surface, so it may also carry short warning text as **Sindoor Deep** (#9E3220). Never a button fill.
-- **Marigold** (#E9A237): the middle of the data ramp and a marker colour. Never text. **Marigold Tint** rgba(233,162,55,.16) is the ground a quoted reason sits on (the "because" chips); **Blue Tint** rgba(58,127,161,.14) is the wash for a water-coloured chip in the owner's pickers. Both are washes, never fills for text to sit on unless the text is Ink.
+- **Sindoor** (#C9402B): "this thing, here" — the ring around a selected map feature, the underline under the panel head's word, the selected-row mark. 4.8:1 on Surface, so it may also carry short warning text as **Sindoor Deep** (#9E3220). Never a button fill.
+- **Marigold** (#E9A237): the middle of the data ramp and a marker colour. Never text. **Marigold Tint** rgba(233,162,55,.16) is the ground a quoted reason sits on (the "because" chips) and the wash on a picked place row or answer; **Blue Tint** rgba(58,127,161,.14) is the wash for a water-coloured chip in the owner's pickers. Both are washes, never fills for text to sit on unless the text is Ink.
 
 ### Map tokens
 - **Ground** (#F5F1E6) inside the atlas region; **Outside** (#EAE6DC) beyond it; the framed well's background is Ground.
@@ -217,7 +218,7 @@ The closest pair after red-green simulation is Marigold vs Turmeric (ΔE 8.7); t
 
 ## 3. Typography
 
-**Display font:** Lora (700; 600 only if a file is added)
+**Display font:** Lora (700; and italic 400 for words quoted from a place, "Read from: …"; 600 only if a file is added)
 **Body font:** Karla (400, 600, 700)
 **Mono:** ui-monospace / Menlo — build logs, tokens, embed snippets only.
 
@@ -229,7 +230,7 @@ The closest pair after red-green simulation is Marigold vs Turmeric (ΔE 8.7); t
 - **Body** (Sans 400, 1rem, 1.55): prose, capped at 65–75ch, `text-wrap: pretty`.
 - **Control / UI** (Sans 600, 0.9–0.95rem): switch names, buttons, form labels. A switched-off row drops to 400 and Ink Soft.
 - **Meta** (Sans 400, 0.8rem): keys, hints, counts, credits.
-- **Label** (Sans 700, 0.72rem, uppercase, +0.12em): the panel head ("MAP LAYERS"), group heads ("CROPS & LAND"), the place-card kicker, the eyebrow chip.
+- **Label** (Sans 700, 0.72rem, uppercase, +0.12em): the panel head ("MAP LAYERS"), group heads ("CROPS & LAND"), the place-card kicker, the eyebrow chip, Event's section heads, the phone sheet's head, the organisation's name in the header. Every uppercase stamp is +0.12em; none at .1em or .08em (25 Oct 2026).
 - **Numeral**: `font-variant-numeric: tabular-nums` on every column of numbers — legend counts, percentages, place-card facts, stats.
 - **Map labels**: district names Serif 700 uppercase +0.2em; place names Sans 600; always with the Ground halo.
 
@@ -244,7 +245,7 @@ The closest pair after red-green simulation is Marigold vs Turmeric (ΔE 8.7); t
 
 ## 4. Elevation
 
-Flat, ink on paper (kept). Depth is a hairline of Ink Border on a lighter Surface — not a shadow. Two sanctioned exceptions remain: the floating layer shelf over the map (`0 2px 12px rgba(36,33,29,.12)` plus a ≥ 94%-opaque backdrop) and the place card (`0 2px 12px rgba(0,0,0,.14)`), both legibility devices over unpredictable map imagery. The map well is not shadowed any more; it is **framed**: a 1px Ink line, then a 2px gap, then a second 1px Ink line (`border` + `outline` with `outline-offset: 2px`).
+Flat, ink on paper (kept). Depth is a hairline of Ink Border on a lighter Surface — not a shadow. Two sanctioned exceptions remain: the floating toolbar over the map (`0 2px 12px rgba(36,33,29,.12)` plus a ≥ 94%-opaque backdrop; the drawer wears it only while folded) and the place card (`0 10px 28px rgba(36,33,29,.18)`, since 25 Oct 2026), both legibility devices over unpredictable map imagery. The open drawer is docked, solid and unshadowed. The map well is not shadowed any more; it is **framed**: a 1px Ink line, then a 2px gap, then a second 1px Ink line (`border` + `outline` with `outline-offset: 2px`).
 
 **The Ink-on-Paper Rule** (kept). Surfaces are flat at rest and flat on hover. Try a border, then a tone step, then ask.
 
@@ -264,7 +265,7 @@ Refined and restrained (kept): thin strokes, small radii, generous whitespace, q
 - **Data chips:** Surface with Ink Border and an 8px swatch; selected = Leaf border + Leaf Tint wash + 600. Cost badges: `free` in Leaf Tint, `needs approval` in Sindoor Tint.
 
 ### Cards / containers
-6px, Surface, 1px Ink Border, no shadow, 1.35rem padding. Cards are rare; lists and dividers are the default. The **place card** is the exception that carries a 3px Sindoor top edge and the panel shadow.
+6px, Surface, 1px Ink Border, no shadow, 1.35rem padding. Cards are rare; lists and dividers are the default. The **place card** is the exception that carries a lift (`0 10px 28px rgba(36,33,29,.18)`); it has the same hairline all round and 6px corners, and no coloured edge (the red top edge went on 25 Oct 2026).
 
 ### Inputs
 Surface fill, 1px Ink Border, 4px, Sans 0.95rem. Labels small bold Ink Soft above. Focus: the 2px Leaf outline. Error text in Sindoor Deep, never a red border wall.
@@ -273,13 +274,13 @@ Surface fill, 1px Ink Border, 4px, Sans 0.95rem. Labels small bold Ink Soft abov
 32×18 pill track (#CFCBC2 off → Leaf on), white knob, 0.2s ease-out; tri-state masters render indeterminate as Leaf at 60% with a centred knob. Touch target ≥ 44px on phones. The most-touched control in the product: calm and instant.
 
 ### The atlas page: map edge to edge (September 2026, layout B)
-An atlas is the map. Below one thin header (44px on a wide screen, 52px on a phone) the stage fills the whole viewport; the page does not scroll. The lead text, the call-to-action band and the site footer are not drawn on an atlas — their words are reached from the map (the "About & sources" panel, LOKA's badge). The home gallery keeps its page shape.
+An atlas is the map. Below one thin header (54px on a wide screen as measured on 25 Oct 2026 with the 1.55rem title; taller with a logo, 77px on the festival; on a phone it is taller than the old 52px, and a long title takes two lines) the stage fills the whole viewport; the page does not scroll. The lead text, the call-to-action band and the site footer are not drawn on an atlas — their words are reached from the map (the "About & sources" panel, LOKA's badge). The home gallery keeps its page shape.
 
 ### The header (org branding first; one row for everyone)
-The header carries the organisation that built the atlas: its logo (30px, if it gave one) at the left spanning two lines, its name in Label type above, the atlas title in Lora 700 (1.1rem) beneath. With no logo the name alone reads finished. At the right, one group of acts: the **Owner** button (owner only, see below), **Share**, then the site links in Meta type — "all atlases", the signed-in email, sign out (or sign in). The row never wraps: long names and titles shorten with an ellipsis (the full name stays in the credits and the page title), so the header is 44px for a visitor and for an owner alike, and the map starts at the same place for both. Between a phone and a wide screen (721–1100px) Share is its icon and only sign in / sign out stay among the links; on a phone the Owner button is its dot alone. Nothing about the map lives in the header. No "LOKA / APPS" wordmark: LOKA's presence on an atlas is the badge.
+The header carries the organisation that built the atlas: its logo (30px, if it gave one) at the left spanning two lines, its name in Label type above, the atlas title in Lora 700 beneath: 1.55rem on a wide screen, 1.3rem on a phone (25 Oct 2026; was 1.1rem / 1rem). Under a logo the title was already 1.45rem; it takes 1.55rem on a wide screen and keeps 1.45rem on a phone, so no title gets smaller. With no logo the name alone reads finished. At the right, one group of acts: the **Owner** button (owner only, see below), **Share**, then the site links in Meta type — "all atlases", the signed-in email, sign out (or sign in). The row never wraps: long names and titles shorten with an ellipsis (the full name stays in the credits and the page title), so the header is one height (54px measured, 25 Oct 2026) for a visitor and for an owner alike, and the map starts at the same place for both. Between a phone and a wide screen (721–1100px) Share is its icon and only sign in / sign out stay among the links; on a phone the Owner button is its dot alone. Nothing about the map lives in the header. No "LOKA / APPS" wordmark: LOKA's presence on an atlas is the badge.
 
 ### The map toolbar and the drawer (signature, kept; the strip moved to the map)
-The **map toolbar** (the code still calls it the strip) holds search alone (the viewer redesign of October 2026 moved Map/Satellite to the **map button**, below). It floats at the map's top edge just right of the Layers drawer — 8px down, 8px in from the drawer's edge, following the drawer when it folds — wearing the drawer's own materials (Surface at 95%, hairline edge, panel-lift shadow, 4px corners) so the two read as one family of controls over the map. Inside it the search box drops its own box; the box returns on focus. The count line under search ("16 of 66 places are Green Space · show all") hangs from the toolbar's left edge, clear of the drawer. On a phone the toolbar is the floating search box the phone always had, full width. The **drawer**: it floats 8px inside the stage under the header, holds layers and nothing else (switches, questions, legends, fold notes), stops 44px above the stage's foot, is open when the page loads, and folds to its "Layers · N" head. A layer's row reads **"bengaluru-tags · 134"** — the count beside the name, in the layer's own noun on a phone ("134 places", "33 tags"; "27 of 134" while an answer or a search narrows the map), the same number the phone's tab reads, one count over both halves of a split file. Its ⓘ (a 44px box) opens one quiet paragraph under the row: the name and count, who added it and from what, the how-to ("Mark each place by one of the questions below. Open a question to colour the map by its answers; tap an answer to show only those places.") only when the layer offers questions, and "Short names are written by LOKA from the tagger's own words." only when it has them. The questions sit **flush with the layer at the drawer's full width** — no caption, no hint and no indent above or beside them; an open question is Leaf Deep with its caret turned, and its answers stand behind a 3px Leaf rule.
+The **map toolbar** (the code still calls it the strip) holds search alone (the viewer redesign of October 2026 moved Map/Satellite to the **map button**, below). It floats at the map's top edge just right of the Layers drawer — 8px down, 8px in from the drawer's edge, following the drawer when it folds — wearing the drawer's own materials (Surface at 95%, hairline edge, panel-lift shadow, 4px corners) so the two read as one family of controls over the map. Inside it the search box drops its own box; the box returns on focus. The count line under search ("16 of 66 places are Green Space · show all") hangs from the toolbar's left edge, clear of the drawer. On a phone the toolbar is the floating search box the phone always had, full width. The **drawer**: since 25 Oct 2026 it is docked, not floating — flush to the stage's left edge, from under the header to the stage's foot, solid Surface with one 1px Divider on its inner edge, no corners, no shadow, 400px wide on a laptop (it gives way on a narrower wide screen, never below 312px, so a docked card still has map between them). The map frames places to the right of it, and pans a pin clear of it as it does of the card; the credit pill sits to its right. Its head sits on a 1px Divider, the head's word with a 2px Sindoor underline under the word only (no Leaf rule across the head). It holds layers and nothing else (switches, questions, legends, fold notes), is open when the page loads, and folds to its "Layers · N" head, which floats 8px in on the toolbar's materials. List rows of places (Event, Explore) are .4rem top and bottom with names in UI type (.9rem, line-height 1.25); the row under the hand or just tapped wears a Marigold Tint wash. A layer's row reads **"bengaluru-tags · 134"** — the count beside the name, in the layer's own noun on a phone ("134 places", "33 tags"; "27 of 134" while an answer or a search narrows the map), the same number the phone's tab reads, one count over both halves of a split file. Its ⓘ (a 44px box) opens one quiet paragraph under the row: the name and count, who added it and from what, the how-to ("Mark each place by one of the questions below. Open a question to colour the map by its answers; tap an answer to show only those places.") only when the layer offers questions, and "Short names are written by LOKA from the tagger's own words." only when it has them. The questions sit **flush with the layer at the drawer's full width** — no caption, no hint and no indent above or beside them; an open question is Leaf Deep with its caret turned, and its answers stand behind a 3px Leaf rule.
 
 ### The map button: Map or satellite (October 2026)
 One round 44px button at the map's top-right (under the search box on a phone), on Surface with a hairline edge, wearing the layers-stack mark; Leaf with white ink while the satellite is showing, so the button says which. It opens a small sheet — "Map or satellite" — with the two base maps as swatches (the atlas's usual map first) and the showing map's credit beneath them; a scrim behind it, the × or Esc or the scrim puts it away. On a phone the sheet rises from the foot of the stage; on a wide screen it hangs from the button, and the button steps left of a docked place card. Not drawn for an atlas with one base map. It replaced the Satellite/Map segment that sat in the toolbar on a wide screen and in the data sheet's foot on a phone: a map setting does not belong among the data. Panel head has a 2px Leaf rule beneath it; group heads are Label type over a hairline. An undeclared base group is called "Boundaries & places" — the owner's words for it; a manifest that declares the group keeps its own name ("Base" on Deoria).
@@ -367,7 +368,7 @@ One **credit pill** bottom-left of the map (October 2026): a 32px Surface pill h
 - The map well: Ground background, double ink frame (see Elevation), 8px inset from the shelf.
 - Zoom controls: 22–26px Surface squares with Ink Border, 4px, bottom-right; no compass.
 - The scale bar sits with the zoom buttons bottom-right (the bottom-left corner belongs to the credit pill).
-- **Place card:** Surface, 4px, 3px Sindoor top edge, photo band, Label kicker in Leaf ("SURVEY VILLAGE · GORAKHPUR"), Headline name, then a two-column fact list with tabular values. Close is a 14px circle top-right.
+- **Place card:** Surface, 6px corners, a hairline (Ink Border) all round, the card lift, no coloured edge; photo band, Label kicker in Leaf ("SURVEY VILLAGE · GORAKHPUR"), Headline name, then the facts in rows, each with a 1px Divider above it and .4rem above and below (a two-column fact list with tabular values; an Event or Explore card's address and "near" line the same way). Words quoted from a place are Lora italic 400. Close is a 14px circle top-right. On a phone the card keeps its place (in the sheet, or along the bottom) and takes the same materials.
 - **Where the card opens (late September 2026):** on a wide screen (721px and up) every card is **docked at the right** of the map — 8px in from the top and right edges, 340px wide, as tall as it needs up to the badge, then it scrolls as one piece; no tip. The zoom buttons step left of it while it is open. The pin or shape it is about keeps its Sindoor mark, and the map pans it clear of the card if it would sit underneath. Esc, × or a tap on the map close it. On a phone the card stays along the bottom, above the sheet, as before. Measured on Bengaluru at 1280×800: a 691px card fits without a scroll; the pin, 200px left of the card, is not moved.
 - **Selected feature:** a 2px Sindoor ring plus a faint 1px outer ring; the label is not changed. A chosen **pin** wears the same ring around its head (`.atlas-mnode.sel`).
 - **Counted discs:** where pins would collide they are one disc with a count. A counted disc is **ink, not Leaf** — Ink Soft (#5A5751) under 10, #3F3C37 to 49, Ink (#24211D) from 50 — with a 2px white ring and a white count (7.0:1 on the palest step). Green read as a key colour ("Green Space"), and a disc is a count, not a kind of place. Discs never touch: two discs, or a disc and a lone pin, that would land on each other on screen are drawn once as one disc that counts them all (see MERGED DISCS in atlas.js).
@@ -403,7 +404,7 @@ Not shipped. The product is used outdoors and on projectors in light rooms; a da
 - No emoji as icons; use the icon kit.
 - No purple, no indigo, no teal; nothing outside the tokens above without a measured pair.
 - No `border-left` stripes, hero-metric blocks or identical icon-card grids.
-- No radius over 6px on containers; pills are for the switch track only.
+- No radius over 6px on containers; pills are for the switch track only (re-affirmed 25 Oct 2026, when the rest of the mock-up's look was taken: buttons and chips keep their 4px boxes).
 
 ## 9. What changed from the previous design (September 2026)
 

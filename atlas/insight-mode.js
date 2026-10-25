@@ -389,7 +389,7 @@
     ".in-caveat{font-size:var(--t-meta,.8rem);color:var(--color-text-secondary,#5A5751);background:var(--color-surface-alt,#F0EDE4);border-radius:var(--radius-md,.25rem);padding:.45rem .6rem;margin:.6rem 0 0}",
     ".in-caveat.warn{background:var(--color-marigold-tint,rgba(233,162,55,.16))}",
     ".in-cmprow{display:flex;align-items:center;gap:.5rem;margin-top:.7rem;font-size:var(--t-meta,.8rem);color:var(--color-text-secondary,#5A5751)}",
-    ".in-cmprow select{font:inherit;font-size:var(--t-meta,.8rem);border:1px solid var(--color-border,rgba(36,33,29,.18));border-radius:999px;padding:.2rem .5rem;background:var(--color-surface,#FDFCF8);max-width:230px;min-width:0;color:inherit}",
+    ".in-cmprow select{font:inherit;font-size:var(--t-meta,.8rem);border:1px solid var(--color-border,rgba(36,33,29,.18));border-radius:var(--radius-md,.25rem);padding:.2rem .5rem;background:var(--color-surface,#FDFCF8);max-width:230px;min-width:0;color:inherit}",
     ".in-cmp{margin-top:.6rem}",
     ".in-cmp .in-lg{display:flex;flex-wrap:wrap;gap:.2rem .7rem;font-size:var(--t-meta,.8rem);margin:.2rem 0 .5rem}",
     ".in-cmp .in-lg span{display:inline-flex;align-items:center;gap:.3rem}",
@@ -407,13 +407,15 @@
     ".in-plist .in-ph button{white-space:nowrap;background:none;border:none;padding:0;font:inherit;color:var(--color-sindoor-deep,#9E3220);font-weight:700;font-size:var(--t-meta,.8rem);cursor:pointer}",
     ".in-prow{display:block;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--color-divider,rgba(36,33,29,.10));padding:.4rem 0;font:inherit;color:inherit;cursor:pointer}",
     ".in-prow:hover .in-rn{text-decoration:underline}",
+    // the place whose card is open (25 Oct 2026)
+    ".in-prow.in-open{background:var(--color-marigold-tint,rgba(233,162,55,.16))}",
     ".in-rn{font-weight:600;line-height:1.25}",
     ".in-more{background:none;border:none;color:var(--color-text-secondary,#5A5751);font:inherit;font-size:var(--t-meta,.8rem);padding:.4rem 0;font-weight:700;cursor:pointer}",
     ".in-panel button:focus-visible,.in-panel select:focus-visible,.in-chips button:focus-visible{outline:2px solid var(--color-leaf,#2A6B41);outline-offset:2px}",
     // the map's chips: what colours the map, and what it is showing
     ".atlas-stage>.in-chips{position:absolute;z-index:4;top:12px;left:calc(var(--in-left,24px));right:64px;display:flex;gap:.4rem;flex-wrap:wrap;pointer-events:none}",
     ".in-chips>*{pointer-events:auto}",
-    ".in-chip{display:inline-flex;align-items:center;gap:.4rem;background:var(--color-surface,#FDFCF8);border:1px solid var(--color-border,rgba(36,33,29,.18));border-radius:999px;padding:.28rem .75rem;font-size:var(--t-meta,.8rem);font-weight:600;box-shadow:0 1px 3px rgba(36,33,29,.1);max-width:100%;color:var(--color-text-primary,#24211D)}",
+    ".in-chip{display:inline-flex;align-items:center;gap:.4rem;background:var(--color-surface,#FDFCF8);border:1px solid var(--color-border,rgba(36,33,29,.18));border-radius:var(--radius-md,.25rem);padding:.28rem .75rem;font-size:var(--t-meta,.8rem);font-weight:600;box-shadow:0 1px 3px rgba(36,33,29,.1);max-width:100%;color:var(--color-text-primary,#24211D)}",
     ".in-chip .in-chip-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}",
     ".in-chip button{background:none;border:none;padding:0 0 0 .2rem;font:inherit;font-weight:700;font-size:1rem;line-height:1;color:var(--color-text-muted,#6E6A63);cursor:pointer;min-width:24px;min-height:24px}",
     // a wide screen: clear of the layers button and of a place's card docked at the right
@@ -436,6 +438,21 @@
     var esc = api.esc, el = api.el;
     var srcLayer = null, X = null, titleProp = "name";
     var state = { ready: false, open: null, filter: null, cmp: null, showAll: false, sumOpen: false, box: null, chips: null };
+
+    /* the row whose card is open keeps a Marigold wash until the card closes
+       (atlas.js says which place's card is open: "atlas:card") */
+    var openF = null;
+    function sameF(a, b) { return !!a && !!b && (a === b || (!!a.properties && a.properties === b.properties)); }
+    function markOpen() {
+      if (typeof document === "undefined" || !document.querySelectorAll) return;
+      Array.prototype.forEach.call(document.querySelectorAll(".in-prow"), function (r) {
+        var f = feats()[+r.getAttribute("data-i")];
+        if (r.classList) r.classList.toggle("in-open", sameF(f, openF));
+      });
+    }
+    if (typeof document !== "undefined" && document.addEventListener) {
+      document.addEventListener("atlas:card", function (e) { openF = (e && e.detail && e.detail.feature) || null; markOpen(); });
+    }
     var cache = null, pollT = null;
 
     function layers(list) {
@@ -652,7 +669,7 @@
         '</span><button type="button" data-in="clear">Show all</button></div>';
       idx.slice(0, lim).forEach(function (i) {
         var p = all[i].properties || {}, w = whyOf(p, st.col);
-        h += '<button type="button" class="in-prow" data-in="place" data-i="' + i + '"><div class="in-rn">' + escText(nameOf(all[i])) + "</div>" +
+        h += '<button type="button" class="in-prow' + (sameF(all[i], openF) ? " in-open" : "") + '" data-in="place" data-i="' + i + '"><div class="in-rn">' + escText(nameOf(all[i])) + "</div>" +
           (w ? '<div class="in-from">Read from: <q>' + escText(w) + "</q></div>" : "") + "</button>";
       });
       if (idx.length > lim) h += '<button type="button" class="in-more" data-in="more">Show all ' + idx.length + "</button>";
