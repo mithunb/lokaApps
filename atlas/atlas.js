@@ -2194,6 +2194,29 @@
     return shared / perPlace.length;
   }
 
+  /* A question whose answers are people (read from created_by or a *_user_id
+     column). The test lives in label-rules.js, shared with Insight; the same
+     rule stands here if that file is not loaded, so a missing file never shows
+     people. Any column of the question counts, on either half of a split file.
+     There is no owner/visitor split on the map's keys, so it is hidden from
+     everyone here; the owner's own tools (owner.js) are unchanged. */
+  function peopleQuestion(L, col) {
+    var halves;
+    try { halves = keyHalves(L); } catch (e) { halves = [L]; }
+    if (!halves || !halves.length) halves = [L];
+    return halves.some(function (h) {
+      if (typeof LokaLabelRules !== "undefined" && LokaLabelRules && typeof LokaLabelRules.isPeopleQuestion === "function") {
+        return !!LokaLabelRules.isPeopleQuestion(h, col);
+      }
+      var kc = ((h && h.keyColumns) || {})[col];
+      var list = Array.isArray(kc) ? kc : kc ? [kc] : [];
+      return list.some(function (c) {
+        var s = String(c || "").trim().toLowerCase();
+        return s === "created_by" || s === "created_by_user_id" || /_user_id$/.test(s);
+      });
+    });
+  }
+
   function computeKeyOptions(L, feats) {
     var committedCol = null;
     if (L.markerBy) {
@@ -2309,6 +2332,21 @@
          offered. The owner puts it back from the layer's own fold, which is the
          only place it is still visible. */
       if (isQuestion && (L.hiddenKeys || []).indexOf(col) >= 0) return;
+      /* A question read from who made the record would show contributors'
+         names to a visitor — on the map's colour keys and on the place card
+         (which only shows a question through its key). Never offered. */
+      if (isQuestion) {
+        var kcols = ((L.keyColumns || {})[col]);
+        var kl = Array.isArray(kcols) ? kcols : kcols ? [kcols] : [];
+        // the shared test (label-rules.js); the same rule here if it is not loaded
+        var ofPeople = (typeof LokaLabelRules !== "undefined" && LokaLabelRules && typeof LokaLabelRules.isPeopleQuestion === "function")
+          ? LokaLabelRules.isPeopleQuestion(L, col)
+          : kl.some(function (c) {
+            var sc = String(c || "").trim().toLowerCase();
+            return sc === "created_by" || sc === "created_by_user_id" || /_user_id$/.test(sc);
+          });
+        if (ofPeople) return;
+      }
       if (!committed && !isQuestion && named / feats.length < 0.6) return;
       /* A question answered by fewer than 30% of the places is not offered as
          a key (Mithun, October 2026): switched on, it leaves most of the map
@@ -4577,6 +4615,8 @@
       // a reason quotes words the place already carries, so counting it again
       // would weight those places twice in a search
       if (/^pattern_\d+_why$/.test(k)) continue;
+      // a question about who made the record is never searched: the words would find people
+      if (/^pattern_\d+$/.test(k) && peopleQuestion(L, k)) continue;
       if (skipSearchProp(k) || skipSearchValue(f.properties[k])) continue;
       parts.push(cellText(f.properties[k]));
     }
@@ -4726,6 +4766,15 @@
       });
     });
     var face = Object.create(L);
+    // where a question was read from, on either half: one half saying "people" is enough
+    var cols = {};
+    hs.forEach(function (h) {
+      Object.keys(h.keyColumns || {}).forEach(function (c) {
+        var v = h.keyColumns[c], l = Array.isArray(v) ? v : v ? [v] : [];
+        cols[c] = (cols[c] || []).concat(l);
+      });
+    });
+    face.keyColumns = cols;
     face.keyLabels = labels;
     face.hiddenKeys = hidden;
     face.keyNouns = nouns;

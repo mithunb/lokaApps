@@ -1,7 +1,8 @@
 /* LOKA Atlas — Insight mode: for people reading patterns. The questions LOKA
  * asked of the places, each answered as a bar list that colours the map, and
  * a short summary written by AI from the answer counts, in its own tab
- * ("What the places say · Questions", the summary first).
+ * (a visitor: "Explore Insights · What the places say", opening on the
+ * questions; the owner: "What the places say · Questions · Settings").
  *
  * An atlas is in Insight when the `mode` in its manifest.local.json says so
  * (the owner's "How visitors explore" switch, POST /instances/:slug/mode):
@@ -77,8 +78,12 @@
       return (isFinite(na) && isFinite(nb)) ? na - nb : (a < b ? -1 : a > b ? 1 : 0);
     });
   }
-  // a question whose answers are people: read from who created the place
+  // a question whose answers are people: read from who created the place.
+  // The test is shared with the viewer (label-rules.js); the same rule stands
+  // here in case that file is not loaded, so a missing file never shows people.
   function isPeople(layer, col) {
+    var shared = typeof LokaLabelRules !== "undefined" && LokaLabelRules && LokaLabelRules.isPeopleQuestion;
+    if (typeof shared === "function") return !!shared(layer, col);
     var kc = ((layer && layer.keyColumns) || {})[col];
     var list = Array.isArray(kc) ? kc : kc ? [kc] : [];
     return list.some(function (c) {
@@ -451,18 +456,26 @@
     });
     return out.length >= MIN_SENTENCES ? out : [];
   }
-  /* The panel's tabs: "What the places say" first, then "Questions". With no
+  /* The panel's tabs. With no
      summary to show (turned off, under two sentences on show, or none written
      and none being written) there is no tab row at all, only the questions.
      `extra` is a tab the owner's tools add (Settings, owner-modes.js); a
      visitor never has one. Fewer than two tabs: none. */
+  /* A visitor (signed out, or signed in without owning the atlas) sees the
+     questions first, named "Explore Insights", and the atlas opens on them
+     (Mithun, 25 Oct 2026); the owner, who has Settings, keeps the summary
+     first and the plainer "Questions". */
   function panelTabs(mode, shownCols, extra) {
     var t = [];
-    if (!(mode && mode.summaryOn === false) && (visibleSentences(mode && mode.summary, shownCols).length || isPending(mode))) {
-      t.push({ key: "sum", label: "What the places say", short: "Summary" });
+    var sum = !(mode && mode.summaryOn === false) && (visibleSentences(mode && mode.summary, shownCols).length || isPending(mode));
+    if (extra) {
+      if (sum) t.push({ key: "sum", label: "What the places say", short: "Summary" });
+      t.push({ key: "q", label: "Questions" });
+      t.push(extra);
+    } else {
+      t.push({ key: "q", label: "Explore Insights" });
+      if (sum) t.push({ key: "sum", label: "What the places say", short: "Summary" });
     }
-    t.push({ key: "q", label: "Questions" });
-    if (extra) t.push(extra);
     return t.length > 1 ? t : [];
   }
 
@@ -582,7 +595,7 @@
   function viewer(mode, api) {
     var esc = api.esc, el = api.el;
     var srcLayer = null, X = null, titleProp = "name";
-    var state = { ready: false, tab: "sum", open: null, filter: null, cmp: null, showAll: false, box: null, chips: null };
+    var state = { ready: false, tab: null, open: null, filter: null, cmp: null, showAll: false, box: null, chips: null };
 
     /* the row whose card is open keeps a Marigold wash until the card closes
        (atlas.js says which place's card is open: "atlas:card") */

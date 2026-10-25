@@ -449,7 +449,22 @@
     });
   }
 
+  /* A question whose answers are people: it was read from a column that says
+     who made the record (created_by, created_by_user_id, any *_user_id).
+     Visitors never see these, in any mode, so this one test is shared by the
+     viewer and by Insight. Any of the question's columns is enough (a mixed
+     list is hidden too): when unsure, hide. */
+  function isPeopleQuestion(layer, col) {
+    var kc = ((layer && layer.keyColumns) || {})[col];
+    var list = Array.isArray(kc) ? kc : kc ? [kc] : [];
+    return list.some(function (c) {
+      var s = String(c || "").trim().toLowerCase();
+      return s === "created_by" || s === "created_by_user_id" || /_user_id$/.test(s);
+    });
+  }
+
   return {
+    isPeopleQuestion: isPeopleQuestion,
     distinctHeadings: distinctHeadings,
     NOUN_WORDS: NOUN_WORDS,
     NOUN_MAX: NOUN_MAX,
