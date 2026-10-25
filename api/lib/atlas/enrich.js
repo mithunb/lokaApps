@@ -1785,14 +1785,17 @@ export async function enrichRows(opts) {
       return { verdict: 'nothing_new', columns: report(askedBefore), found };
     }
 
-    /* Answered by the cheaper model, then every answer checked by the reading
-       model (checkAnswers). The check spends from the same allowance as the
+    /* Answered by the careful (reading) model: measured on Bengaluru (25 Oct
+       2026) it changed about 1 answer in 9 between identical runs, against 1 in
+       4 for the cheaper model, and Mithun judged it right more often (15 to 11
+       of 30). Answers to judging questions are then checked by the same model
+       (checkAnswers). The check spends from the same allowance as the
        rest of this attempt: what the caller has left (aiCaller in
        api/apps/atlas.js says its cap and what it has spent), or without limit
        for a caller that keeps no count. */
     const counted = Boolean(callJSON && Number.isFinite(callJSON.cap) && typeof callJSON.spent === 'function');
     const filed = await answerQuestions({
-      digest, questions: kept, title, callJSON, model: models.flashLite || models.flash,
+      digest, questions: kept, title, callJSON, model: models.flash || models.flashLite,
       checkModel: models.flash || null,
       checkRoom: counted ? () => callJSON.cap - callJSON.spent() : Infinity,
     });
