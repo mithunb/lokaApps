@@ -1436,8 +1436,8 @@
      press); an Event guide has no tabs — its owner sees the venue list
      exactly as visitors do. Questions belong to Standard alone: they are
      about reading the layers, and Explore and Event do not show layers.
-     Insight has Patterns (what visitors see) · Questions (which show, their
-     order, the summary — owner-modes.js draws it, as Explore's Buttons). */
+     Insight's tabs are the viewer's own (What the places say · Questions,
+     insight-mode.js), and owner-modes.js adds Settings to them. */
   function addShelves() {
     var head = $("#atlas-panel .panel-head");
     var body = $("#atlas-controls");
@@ -1445,9 +1445,9 @@
     if (head.querySelector(".own-shelves")) { if (SHOW_SHELF) SHOW_SHELF(); return; }
     var drawn = modeDrawn();
     if (drawn === "event") return;          // the guide's own list, as visitors see it
+    if (drawn === "insight") return;        // the viewer's tabs, with Settings (owner-modes.js)
     var pairs;
     if (drawn === "explore") pairs = [["around", "Around here"], ["buttons", "Buttons"]];
-    else if (drawn === "insight") pairs = [["patterns", "Patterns"], ["iquestions", "Questions"]];
     else {
       if (!keyedLayers().length) return;      // nothing to put on a second shelf
       pairs = [["layers", "Layers"], ["questions", "Questions"]];

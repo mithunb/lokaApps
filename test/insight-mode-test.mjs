@@ -2,7 +2,8 @@
  *
  * Insight mode (atlas/insight-mode.js, api/lib/atlas/insight-summary.js),
  * 25 October 2026: the questions LOKA asked of the places, as bar lists that
- * colour the map, with a short summary on top written by AI from the counts.
+ * colour the map, with a short summary written by AI from the counts (in its
+ * own tab since the same day: What the places say · Questions).
  * These checks hold:
  *   - which questions show: never one whose answers are people, even if the
  *     owner tries; the owner's order and switches otherwise;
@@ -131,6 +132,21 @@ check('a sentence naming no question is never shown', IM.visibleSentences({ sent
 check('a sentence naming any hidden question is hidden', IM.visibleSentences({ sentences: [good1, good2, { text: 'x 5', questions: ['pattern_3', 'pattern_2'] }] }, ['pattern_3', 'pattern_4']).length, 2);
 check('"being written" for over two minutes is stuck, not pending; no time is not pending',
   [IM.isPending({ summaryPending: true, summaryPendingAt: Date.now() - 1000 }), IM.isPending({ summaryPending: true, summaryPendingAt: Date.now() - 121000 }), IM.isPending({ summaryPending: true })], [true, false, false]);
+
+console.log('\n  the panel\'s tabs: What the places say · Questions, or no tabs at all');
+const keys = (t) => t.map((x) => x.key);
+const sumMode = { summaryOn: true, summary: { sentences: [good1, good2] } };
+const shownBoth = ['pattern_3', 'pattern_4'];
+check('a summary to show: two tabs, the summary first', keys(IM.panelTabs(sumMode, shownBoth)), ['sum', 'q']);
+check('…named in plain words, "Summary" where they do not fit', IM.panelTabs(sumMode, shownBoth).map((x) => [x.label, x.short || '']), [['What the places say', 'Summary'], ['Questions', '']]);
+check('summary turned off: no tab row', IM.panelTabs({ summaryOn: false, summary: sumMode.summary }, shownBoth), []);
+check('under two sentences on show: no tab row', IM.panelTabs(sumMode, ['pattern_3']), []);
+check('none written yet: no tab row', IM.panelTabs({ summaryOn: true, summary: null }, shownBoth), []);
+check('being written: the summary tab stays (it says so)', keys(IM.panelTabs({ summaryOn: true, summary: null, summaryPending: true, summaryPendingAt: Date.now() }, shownBoth)), ['sum', 'q']);
+check('the owner\'s Settings comes third, and stands even with no summary', [keys(IM.panelTabs(sumMode, shownBoth, { key: 'settings' })), keys(IM.panelTabs({ summaryOn: false }, shownBoth, { key: 'settings' }))], [['sum', 'q', 'settings'], ['q', 'settings']]);
+check('the atlas opens on the summary; the Questions tab has no summary card', /state = \{ ready: false, tab: "sum",/.test(imSrc) && /if \(curTab\(\) === "sum"\) return summaryHTML\(\);/.test(imSrc), true);
+check('the summary tab links to the questions', /See the questions these numbers come from/.test(imSrc) && /data-in="tab" data-tab="q"/.test(imSrc), true);
+check('the whole summary on a phone too: no cut-off left', /Read the whole summary|summore|sumOpen/.test(imSrc), false);
 check('a sentence is escaped, its numbers bold', IM.sentenceHTML('<b>x</b> & 73 of 1,115'), '&lt;b&gt;x&lt;/b&gt; &amp; <b>73</b> of <b>1,115</b>');
 
 console.log('\n  the summary: written once, kept by its fingerprint');
@@ -177,11 +193,15 @@ check('a place with no answer wears a hollow grey pin', /pin\.classList\.add\("i
 check('the look is scoped to Insight (every rule\'s selector names an in- class)', imSrc.slice(imSrc.indexOf('var CSS = ['), imSrc.indexOf('].join("\\n");')).split('\n')
   .filter((l) => /^\s*"[^@]/.test(l)).filter((l) => !/\.in-[a-z]/.test(l.split('{')[0])).length, 0);
 check('the place card says what each answer was read from', /Read from: <q>/.test(imSrc) && /Doesn\\u2019t say: /.test(imSrc), true);
-check('owner tabs: Insight has Patterns · Questions', /else if \(drawn === "insight"\) pairs = \[\["patterns", "Patterns"\], \["iquestions", "Questions"\]\];/.test(ownerJs), true);
+check('owner tabs: Insight has the visitor\'s two and Settings (owner.js builds none; owner-modes.js adds Settings)',
+  /if \(drawn === "insight"\) return;/.test(ownerJs) && !/"patterns", "Patterns"/.test(ownerJs) && /key: "settings", label: "Settings",/.test(ownerModes), true);
+check('an editor gets no Settings tab (only the owner can save it): the visitor\'s tabs only',
+  /if \(!INST \|\| INST\.role !== "owner"\) return;/.test(ownerModes.slice(ownerModes.indexOf('function insightTabs()'), ownerModes.indexOf('IM().viewer.extraTab = {'))), true);
+check('See it as a visitor puts Settings away: the visitor\'s two tabs are left', /hidden: function \(\) \{ return VISITOR; \}/.test(ownerModes) && /if \(iv && iv\.renderPanel\) iv\.renderPanel\(\);/.test(ownerModes), true);
 check('the dialog offers Insight, last, with its words', /var MODE_ORDER = \["standard", "event", "explore", "insight"\];/.test(ownerModes) && /For people reading patterns: the questions, with a short summary on top\./.test(ownerModes), true);
 check('no questions yet: the sentence, and no Switch button', /if \(to === "insight" && !\(MODEINFO && MODEINFO\.canInsight\)\) \{\s*conf\.innerHTML = "<p>" \+ esc\(INSIGHT_NOT_READY\) \+ "<\/p>";\s*go\.hidden = true;/.test(ownerModes) &&
   /Insight needs the questions LOKA asks of the places\. They appear once the atlas has been read\./.test(ownerModes), true);
-check('the Questions tab: summary switch, Write it again, a switch and arrows per question, the people one locked with its reason',
+check('the Settings tab: summary switch, Write it again, a switch and arrows per question, the people one locked with its reason',
   /data-iact="sum"/.test(ownerModes) && /Write it again/.test(ownerModes) && /Writing…/.test(ownerModes) && /data-iact="up"/.test(ownerModes) && /data-iact="show"/.test(ownerModes) && /st\.people \? IM\(\)\.PEOPLE_REASON/.test(ownerModes), true);
 check('saves say "Saved" and "Order saved"', /"Order saved"/.test(ownerModes) && /, "Saved"\)/.test(ownerModes), true);
 check('the deploy scripts put an Insight in use aside, never away', keepAside({ mode: { name: 'insight', order: ['pattern_1'] } }, 'explore'), { insight: { name: 'insight', order: ['pattern_1'] } });

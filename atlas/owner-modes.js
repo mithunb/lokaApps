@@ -5,8 +5,9 @@
  *   - the Owner menu's "How visitors explore · <mode>" line and its dialog
  *     (Standard, Event, Explore, Insight; POST /instances/:slug/mode);
  *   - "See it as a visitor", the menu's first line;
- *   - Explore's Buttons tab, and Insight's Questions tab (owner.js builds the
- *     tabs; this draws what is in them).
+ *   - Explore's Buttons tab (owner.js builds the tabs; this draws what is in
+ *     them), and Insight's Settings tab (added here to the visitor's own
+ *     tabs, What the places say · Questions, which insight-mode.js draws).
  * The rules for buttons are explore-mode.js's, and for Insight's questions
  * insight-mode.js's: the same files the server checks with. */
 (function () {
@@ -138,7 +139,7 @@
           lines.push("To start, LOKA makes up to four buttons from the categories your places use most. You can change them under Buttons.");
         }
         if (to === "insight") {
-          lines.push("LOKA writes a short summary of what the places say. It takes about a minute; visitors see the questions meanwhile. You choose which questions show, and their order, under Questions.");
+          lines.push("LOKA writes a short summary of what the places say. It takes about a minute; visitors see the questions meanwhile. You choose which questions show, and their order, under Settings.");
         }
         conf.innerHTML = "<p>Switch " + esc(title) + " from " + MODES[cur].t + " to " + MODES[to].t + "?</p><ul>" +
           lines.map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("") + "</ul>";
@@ -222,6 +223,8 @@
     // seen as a visitor, the map wears the SAVED buttons; back to editing, the draft again
     if (BTN.saved && btnDirty()) previewButtons();
     C.showShelf();
+    var iv = insightViewer();   // Insight: the visitor's two tabs and what is under them, Settings put away (or back)
+    if (iv && iv.renderPanel) iv.renderPanel();
     var to = VISITOR ? document.getElementById("atlas-visitor-back") : $("#own-btn");
     if (to) to.focus();
   }
@@ -338,8 +341,6 @@
   }
 
   function drawButtonShelf(host) {
-    // Insight's second tab is its Questions (owner.js asks for "the second shelf")
-    if (modeDrawn() === "insight") { drawInsightShelf(host); return; }
     var mode = exploreMode();
     if (!mode || !XM()) { host.innerHTML = ""; return; }
     if (!BTN.saved) { BTN.saved = plainButtons(mode.buttons); BTN.draft = plainButtons(mode.buttons); }
@@ -545,7 +546,7 @@
       });
   }
 
-  /* ---------------- Insight: the Questions tab ----------------
+  /* ---------------- Insight: the Settings tab ----------------
      Three settings and nothing else: the summary on top (on or off, and
      "Write it again"), which questions show, and their order. A question whose
      answers are people's names is locked off, with the reason. Each change is
@@ -582,8 +583,8 @@
     var s = IM().settingsOf(L, mode), busy = INS.saving || INS.writing;
     var writing = INS.writing || IM().isPending(mode);
     var h = '<div class="own-bbody own-ibody">';
-    h += '<div class="own-icard"><div class="own-irow"><div class="own-ik"><b id="own-isum-k">Summary on top</b>' +
-      "<small>A few sentences in plain words, written by AI from the answers each time the atlas is updated.</small></div>" +
+    h += '<div class="own-icard"><div class="own-irow"><div class="own-ik"><b id="own-isum-k">Summary</b>' +
+      "<small>A few sentences in plain words, written by AI from the answers each time the atlas is updated. Visitors see it first, under \u201cWhat the places say\u201d.</small></div>" +
       '<button class="own-switch" type="button" role="switch" data-iact="sum" aria-checked="' + s.summaryOn + '" aria-labelledby="own-isum-k"' + (busy ? " disabled" : "") +
       '><span class="own-switch-tr" aria-hidden="true"></span></button></div>';
     if (s.summaryOn) {
@@ -673,6 +674,38 @@
         toast(errMsg(e));
         drawInsightShelf(host);
       });
+  }
+  /* Insight's tabs are the visitor's own (What the places say · Questions,
+     drawn by insight-mode.js); the owner gets one more, Settings, which puts
+     the panel's list away and shows the settings in its place. Kept on the
+     viewer itself, so a redrawn viewer has it too; See it as a visitor hides
+     it, and the visitor's tabs are what is left. */
+  function insightTabs() {
+    var body = document.getElementById("atlas-controls");
+    if (modeDrawn() !== "insight" || !IM() || !IM().viewer || !body) return;
+    if (!INST || INST.role !== "owner") return;   // an editor could not save these: no Settings, the visitor's tabs only
+    var host = document.getElementById("own-ishelf");
+    if (!host) {
+      host = document.createElement("div");
+      host.className = "own-bshelf";
+      host.id = "own-ishelf";
+      host.hidden = true;
+      body.parentNode.insertBefore(host, body.nextSibling);
+    }
+    IM().viewer.extraTab = {
+      key: "settings", label: "Settings",
+      hidden: function () { return VISITOR; },
+      show: function (on) {
+        var b = document.getElementById("atlas-controls"), h = document.getElementById("own-ishelf");
+        if (!b || !h) return;
+        var was = !h.hidden;
+        b.hidden = on;
+        h.hidden = !on;
+        if (on && !was) drawInsightShelf(h);
+      },
+    };
+    var v = insightViewer();
+    if (v && v.renderPanel) v.renderPanel();
   }
   function wireInsightShelf(host) {
     if (host._insWired) return;
@@ -787,7 +820,7 @@
       ".own-blink{font:inherit;font-weight:700;color:var(--color-leaf);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}",
       ".own-blink:focus-visible{outline:2px solid var(--color-leaf);outline-offset:2px}",
       ".own-bicon-fixed{cursor:default}",
-      /* Insight's Questions tab */
+      /* Insight's Settings tab */
       ".own-ibody{display:flex;flex-direction:column;gap:.8rem}",
       ".own-icard{border:1px solid var(--color-border);border-radius:var(--radius-lg,.375rem);padding:.7rem .8rem;background:var(--color-surface)}",
       ".own-icard>b{display:block;font-size:var(--t-ui)}",
@@ -835,6 +868,7 @@
     paintMode();
     loadModeInfo();
     modeArrived();
+    insightTabs();
     return { drawButtonShelf: drawButtonShelf, visitor: function () { return VISITOR; } };
   }
 

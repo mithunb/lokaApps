@@ -1,6 +1,7 @@
 /* LOKA Atlas — Insight mode: for people reading patterns. The questions LOKA
- * asked of the places, each answered as a bar list that colours the map, with
- * a short summary on top written by AI from the answer counts.
+ * asked of the places, each answered as a bar list that colours the map, and
+ * a short summary written by AI from the answer counts, in its own tab
+ * ("What the places say · Questions", the summary first).
  *
  * An atlas is in Insight when the `mode` in its manifest.local.json says so
  * (the owner's "How visitors explore" switch, POST /instances/:slug/mode):
@@ -8,7 +9,7 @@
  *   mode: {
  *     name: "insight",
  *     layer: "<the layer whose questions are read>",
- *     summaryOn: true,                     // the "What the places say" card
+ *     summaryOn: true,                     // the "What the places say" tab
  *     order: ["pattern_3", "pattern_4", …],   // the owner's order
  *     shown: { pattern_1: true, pattern_5: false, … },
  *     summary: { sig, sentences: [{ text, questions: [col…] }], at } | null,
@@ -18,7 +19,7 @@
  * The rules (which questions show, the few-places shelf, when two questions
  * can be compared, which numbers a summary may say) are here, once: the
  * server (api/apps/atlas.js, api/lib/atlas/insight-summary.js), the owner's
- * Questions tab (owner-modes.js) and the visitor's page all run this file.
+ * Settings tab (owner-modes.js) and the visitor's page all run this file.
  *
  * Never shown: a question whose answers are people — the layer's keyColumns
  * for it name created_by, created_by_user_id or any *_user_id column. No
@@ -332,6 +333,20 @@
     });
     return out.length >= MIN_SENTENCES ? out : [];
   }
+  /* The panel's tabs: "What the places say" first, then "Questions". With no
+     summary to show (turned off, under two sentences on show, or none written
+     and none being written) there is no tab row at all, only the questions.
+     `extra` is a tab the owner's tools add (Settings, owner-modes.js); a
+     visitor never has one. Fewer than two tabs: none. */
+  function panelTabs(mode, shownCols, extra) {
+    var t = [];
+    if (!(mode && mode.summaryOn === false) && (visibleSentences(mode && mode.summary, shownCols).length || isPending(mode))) {
+      t.push({ key: "sum", label: "What the places say", short: "Summary" });
+    }
+    t.push({ key: "q", label: "Questions" });
+    if (extra) t.push(extra);
+    return t.length > 1 ? t : [];
+  }
 
   /* ==================================================================
      THE VIEWER. atlas.js hands over what it owns (eventApi, the same one
@@ -351,8 +366,19 @@
     ".in-sum{background:var(--color-page,#FAF8F3);border:1px solid var(--color-divider,rgba(36,33,29,.10));border-left:3px solid var(--color-leaf,#2A6B41);border-radius:var(--radius-md,.25rem);padding:.75rem .85rem .7rem;margin:0 0 1.1rem}",
     ".in-sum .in-stamp{color:var(--color-leaf-deep,#1F5232)}",
     ".in-sum p{margin:.3rem 0 0;font-size:.92rem;line-height:1.5;color:var(--color-text-primary,#24211D)}",
-    ".in-sum.short p.in-s:not(:first-of-type),.in-sum.short .in-by{display:none}",
-    ".in-more-sum{background:none;border:none;padding:0;margin-top:.35rem;font:inherit;font-size:var(--t-meta,.8rem);font-weight:700;color:var(--color-leaf-deep,#1F5232);cursor:pointer}",
+    ".in-tolink{display:inline-block;background:none;border:none;padding:.2rem 0;margin:0;font:inherit;font-size:var(--t-ui,.9rem);font-weight:700;color:var(--color-leaf-deep,#1F5232);cursor:pointer;text-align:left;text-decoration:underline;text-underline-offset:2px}",
+    // the panel's tabs stand where the head's word stood, and look as it did: the chosen one underlined in Sindoor
+    ".panel-head.in-tabbed .sheet-who>strong{display:none !important}",
+    ".in-tabs{display:flex;gap:.9rem;min-width:0;flex:1 1 auto;overflow:hidden}",
+    ".in-tab{flex:none;position:relative;white-space:nowrap;background:none;border:0;border-bottom:2px solid transparent;border-radius:0;margin:0;padding:.15rem .1rem;font:inherit;font-size:var(--t-label,.72rem);font-weight:700;letter-spacing:.12em;text-transform:uppercase;line-height:1.1;color:var(--color-text-muted,#6E6A63);cursor:pointer}",
+    ".in-tab:hover{color:var(--color-text-secondary,#5A5751)}",
+    ".in-tab.on{color:var(--color-text-primary,#24211D);border-bottom-color:var(--color-sindoor,#C9402B)}",
+    ".in-tab:focus-visible,.in-tolink:focus-visible{outline:2px solid var(--color-leaf,#2A6B41);outline-offset:2px}",
+    ".in-tab .in-ts,.in-tabs.in-short .in-tab .in-tl{display:none}",
+    ".in-tabs.in-short .in-tab .in-ts{display:inline}",
+    ".atlas-panel.collapsed .in-tab.on{border-bottom-color:transparent}",
+    // a phone: the head's row is one line taller than the word, so each tab gets a taller target than it shows
+    "@media (max-width:720px){.in-tabs{margin-bottom:.2rem}.in-tab::after{content:\"\";position:absolute;left:-.4rem;right:-.4rem;top:-10px;bottom:-6px}}",
     ".in-sum .in-by{margin-top:.55rem;font-size:var(--t-meta,.8rem);color:var(--color-text-muted,#6E6A63)}",
     ".in-writing{display:flex;gap:.7rem;align-items:flex-start}",
     ".in-writing .in-lines{flex:none;width:44px;padding-top:.45rem}",
@@ -438,7 +464,7 @@
   function viewer(mode, api) {
     var esc = api.esc, el = api.el;
     var srcLayer = null, X = null, titleProp = "name";
-    var state = { ready: false, open: null, filter: null, cmp: null, showAll: false, sumOpen: false, box: null, chips: null };
+    var state = { ready: false, tab: "sum", open: null, filter: null, cmp: null, showAll: false, box: null, chips: null };
 
     /* the row whose card is open keeps a Marigold wash until the card closes
        (atlas.js says which place's card is open: "atlas:card") */
@@ -587,20 +613,90 @@
     }
 
     /* ---- the panel ---- */
+    /* ---- the tabs ---- */
+    function tabList() {
+      if (!state.ready) return [];
+      var x = viewer.extraTab;
+      return panelTabs(mode, Q().cols, x && !(x.hidden && x.hidden()) ? x : null);
+    }
+    function curTab(list) {
+      list = list || tabList();
+      if (!list.length) return "q";
+      return list.some(function (t) { return t.key === state.tab; }) ? state.tab : list[0].key;
+    }
+    function showTab(k) {
+      state.tab = k;
+      renderPanel();
+      if (typeof document === "undefined") return;
+      var box = state.box, sc = box && box.closest && box.closest(".sheet-body"), ctl = document.getElementById("atlas-controls");
+      if (sc) sc.scrollTop = 0;
+      if (ctl) ctl.scrollTop = 0;
+    }
+    function onTab(e) {
+      var t = e.target && e.target.closest && e.target.closest("[data-tab]");
+      if (!t) return;
+      var panel = document.getElementById("atlas-panel");
+      // a folded wide panel opens as it always did; otherwise the head's own tap (fold, or the sheet's flip) waits
+      if (!(panel && panel.classList.contains("collapsed") && !api.onPhone())) e.stopPropagation();
+      if (api.onPhone() && panel && panel.getAttribute("data-h") === "peek" && api.setSheet) api.setSheet("full");
+      showTab(t.getAttribute("data-tab"));
+    }
+    /* The tab row sits in the head where its word ("Patterns") stood. Drawn
+       again only when the tabs themselves change, so a tab keeps its focus. */
+    function renderTabs() {
+      if (typeof document === "undefined") return;
+      var head = document.querySelector("#atlas-panel .panel-head"), who = head && head.querySelector(".sheet-who");
+      var list = tabList(), cur = curTab(list), row = who && who.querySelector(".in-tabs");
+      if (who && !list.length) {
+        if (row) row.parentNode.removeChild(row);
+        head.classList.remove("in-tabbed");
+      } else if (who) {
+        var sig = list.map(function (t) { return t.key + ":" + t.label; }).join("|");
+        if (!row) {
+          row = el("div", "in-tabs");
+          row.setAttribute("role", "tablist");
+          row.setAttribute("aria-label", "What the panel shows");
+          row.addEventListener("click", onTab);
+          who.insertBefore(row, who.firstChild);
+        }
+        if (row._sig !== sig) {
+          row._sig = sig;
+          row.innerHTML = list.map(function (t) {
+            return '<button type="button" role="tab" class="in-tab" data-tab="' + escAttr(t.key) + '">' +
+              (t.short ? '<span class="in-tl">' + escText(t.label) + '</span><span class="in-ts">' + escText(t.short) + "</span>" : escText(t.label)) + "</button>";
+          }).join("");
+        }
+        Array.prototype.forEach.call(row.querySelectorAll(".in-tab"), function (b) {
+          var on = b.getAttribute("data-tab") === cur;
+          b.classList.toggle("on", on);
+          b.setAttribute("aria-selected", String(on));
+        });
+        head.classList.add("in-tabbed");
+        // "What the places say" gives way to "Summary" only where the tabs do not fit (a phone)
+        row.classList.remove("in-short");
+        if (row.clientWidth && row.scrollWidth > row.clientWidth + 1) row.classList.add("in-short");
+      }
+      var x = viewer.extraTab;
+      if (x && x.show) x.show(cur === x.key);
+    }
+
+    /* ---- the panel ---- */
+    function toQuestions(words) {
+      return '<button type="button" class="in-tolink" data-in="tab" data-tab="q">' + words + "</button>";
+    }
     function summaryHTML() {
-      if (mode.summaryOn === false) return "";
-      var sents = visibleSentences(mode.summary, Q().cols);
+      var sents = mode.summaryOn === false ? [] : visibleSentences(mode.summary, Q().cols);
       if (sents.length) {
-        var short = api.onPhone() && !state.sumOpen;
-        return '<section class="in-sum' + (short ? " short" : "") + '" aria-label="What the places say"><div class="in-stamp">What the places say</div>' +
+        return '<section class="in-sum" aria-label="What the places say">' +
           sents.map(function (s) { return '<p class="in-s">' + sentenceHTML(s.text) + "</p>"; }).join("") +
-          (short ? '<button type="button" class="in-more-sum" data-in="summore">Read the whole summary (' + sents.length + " sentences)</button>" : "") +
-          '<div class="in-by">Written by AI from the answers below, when the atlas was last updated. Numbers count places, not people.</div></section>';
+          '<div class="in-by">Written by AI from the answers to the questions, when the atlas was last updated. Numbers count places, not people.</div></section>' +
+          toQuestions("See the questions these numbers come from");
       }
       if (isPending(mode)) {
-        return '<section class="in-sum" aria-live="polite"><div class="in-stamp">What the places say</div><div class="in-writing">' +
+        return '<section class="in-sum" aria-live="polite"><div class="in-stamp">Being written</div><div class="in-writing">' +
           '<div class="in-lines" aria-hidden="true"><i></i><i></i><i></i></div><p>LOKA is reading the ' + feats().length +
-          " places to write a short summary. This takes about a minute. The questions below are ready now.</p></div></section>";
+          " places to write a short summary. This takes about a minute. The questions are ready now.</p></div></section>" +
+          toQuestions("See the questions");
       }
       return "";
     }
@@ -678,11 +774,11 @@
     }
     function panelHTML() {
       if (!state.ready) return '<p class="ev-hint">' + (typeof window !== "undefined" && window.LokaWait ? window.LokaWait.html("Loading the places\u2026") : "Loading the places\u2026") + "</p>";
+      if (curTab() === "sum") return summaryHTML();
       var list = Q().list;
-      if (!list.length) return summaryHTML() + '<p class="in-hint">No questions to show yet.</p>';
+      if (!list.length) return '<p class="in-hint">No questions to show yet.</p>';
       var main = list.filter(function (st) { return !st.sparse; }), few = list.filter(function (st) { return st.sparse; });
-      var h = summaryHTML();
-      h += '<div class="in-sect"><span class="in-stamp">The questions</span><span class="in-cov">' + list.length + " asked of every place</span></div>" +
+      var h = '<div class="in-sect"><span class="in-stamp">The questions</span><span class="in-cov">' + list.length + " asked of every place</span></div>" +
         '<p class="in-hint">Open a question to colour the map by its answers. Tap an answer to see only those places.</p>';
       h += main.map(questionHTML).join("");
       if (few.length) h += '<div class="in-sect" style="margin-top:1rem"><span class="in-stamp">Said by only a few places</span></div>' + few.map(questionHTML).join("");
@@ -705,6 +801,7 @@
     }
     function syncHead() {
       if (typeof document === "undefined") return;
+      renderTabs();
       var sh = sheetHead();
       var head = document.querySelector("#atlas-panel .sheet-who strong");
       if (head) head.textContent = sh.label;
@@ -752,7 +849,7 @@
       }
       if (d === "clear") { state.filter = null; state.showAll = false; changed(false); return; }
       if (d === "more") { state.showAll = true; renderPanel(); return; }
-      if (d === "summore") { state.sumOpen = true; renderPanel(); return; }
+      if (d === "tab") { showTab(t.getAttribute("data-tab")); return; }
       if (d === "place") {
         var fe = feats()[+t.getAttribute("data-i")];
         if (fe) api.openPlace(X, fe);
@@ -826,7 +923,7 @@
       }, 6000);
     }
 
-    /* The owner's Questions tab (owner-modes.js) hands over the mode as the
+    /* The owner's Settings tab (owner-modes.js) hands over the mode as the
        server saved it: the panel and the map follow at once. */
     function setMode(m) {
       if (!m || typeof m !== "object") return;
@@ -855,7 +952,7 @@
         if (api.onMoveEnd) api.onMoveEnd(function () { renderChips(); });
         if (typeof window !== "undefined" && !viewer._resizeWired) {
           viewer._resizeWired = true;
-          window.addEventListener("resize", function () { if (viewer._current) viewer._current.renderChips(); });
+          window.addEventListener("resize", function () { if (viewer._current) { viewer._current.renderTabs(); viewer._current.renderChips(); } });
         }
         pollSummary();
       },
@@ -865,6 +962,8 @@
       sheetHead: sheetHead,
       setMode: setMode,
       renderChips: renderChips,
+      renderTabs: renderTabs,
+      renderPanel: renderPanel,
       state: state,
     };
     viewer._current = me;
@@ -894,6 +993,7 @@
     allowedNumbers: allowedNumbers,
     checkSentences: checkSentences,
     visibleSentences: visibleSentences,
+    panelTabs: panelTabs,
     hasNumberWords: hasNumberWords,
     isPending: isPending,
     PENDING_STALE_MS: PENDING_STALE_MS,
