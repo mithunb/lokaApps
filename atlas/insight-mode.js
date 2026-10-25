@@ -306,7 +306,8 @@
     (Array.isArray(list) ? list : []).forEach(function (s) {
       if (kept.length >= MAX_SENTENCES) return;
       var text = typeof s === "string" ? s : s && typeof s.text === "string" ? s.text : "";
-      text = text.replace(/\s+/g, " ").trim();
+      // the model sometimes tags a sentence with its question's id ("(pattern_2)"): not a number, never shown
+      text = text.replace(/\s*\(?\bpattern_\d+\b\)?/g, "").replace(/\s+/g, " ").trim();
       if (!text || text.length > MAX_SENTENCE) return;
       if (/[%<>*#`_\[\]{}|\\]|https?:/i.test(text)) return;
       if (hasNumberWords(text)) return;
