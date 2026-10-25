@@ -13,6 +13,8 @@
  *   --stub          no model at all: a stand-in answers by matching kind names, and the check says yes
  *   --stability     instead: how steady the answers are — quick model twice, careful model twice,
  *                   and "answer twice, keep what agrees" (default --max-calls 80 in this mode)
+ *   --sample=N      with --stability: write <out>/sample-<slug>.json, N place-and-question pairs where
+ *                   the quick and careful models answered differently (never questions about people)
  *
  * Three runs over the same places and the layer's settled questions (keyLabels /
  * keyKinds / keyColumns, as a reading would answer them):
@@ -57,13 +59,14 @@ function readJSON(f) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } ca
 function die(msg) { console.error(msg); process.exit(1); }
 
 export function parseArgs(argv) {
-  const o = { slug: '', layer: '', out: os.tmpdir(), maxCalls: 0, noise: true, file: '', stub: false, stability: false, help: false };
+  const o = { slug: '', layer: '', out: os.tmpdir(), maxCalls: 0, noise: true, file: '', stub: false, stability: false, sample: 0, help: false };
   for (const a of argv) {
     if (a === '--help' || a === '-h') o.help = true;
     else if (a === '--no-noise') o.noise = false;
     else if (a === '--noise') o.noise = true;
     else if (a === '--stub') o.stub = true;
     else if (a === '--stability') o.stability = true;
+    else if (a.startsWith('--sample=')) o.sample = Math.max(0, Math.floor(Number(a.slice(9)) || 0));
     else if (a.startsWith('--layer=')) o.layer = a.slice(8);
     else if (a.startsWith('--out=')) o.out = a.slice(6);
     else if (a.startsWith('--max-calls=')) o.maxCalls = Math.max(1, Number(a.slice(12)) || 0);
@@ -71,6 +74,7 @@ export function parseArgs(argv) {
     else if (!a.startsWith('--')) o.slug = a;
     else die('unknown option ' + a + ' — see --help');
   }
+  if (o.sample && !o.stability) die('--sample goes with --stability');
   if (!o.maxCalls) o.maxCalls = o.stability ? 80 : 60;
   return o;
 }
@@ -161,8 +165,12 @@ async function realCall(model, prompt, schema, o) {
 /* A stand-in, for trying the script without a model: a place gets the first
    kind whose name has a word (four letters or more) on its line, quoting it;
    the check says yes to everything. */
+/* The stand-in "careful" model (named "stub") takes the LAST kind that
+   matches, and passes over every fifth place, so the stability figures and
+   the sample have differences to show. */
 async function stubCall(model, prompt, schema) {
   if (schema.properties && schema.properties.checks) return { checks: [] };
+  const careful = model === 'stub';
   const qs = [...prompt.matchAll(/^q(\d+) — .*\n((?:   .*\n?)+)/gm)].map((m) => ({
     n: Number(m[1]), kinds: m[2].split('\n').map((l) => l.trim().split(' — ')[0]).filter(Boolean) }));
   const lines = [...prompt.matchAll(/^(\d+)\. ([^\n]*(?:\n    [^\n]*)*)/gm)];
@@ -171,7 +179,8 @@ async function stubCall(model, prompt, schema) {
     const text = m[2].toLowerCase();
     for (const q of qs) {
       r['q' + q.n] = 'other'; r['w' + q.n] = [];
-      for (const k of q.kinds) {
+      if (careful && r.i % 5 === 0) continue;
+      for (const k of (careful ? q.kinds.slice().reverse() : q.kinds)) {
         const w = k.toLowerCase().split(/[^a-z]+/).find((x) => x.length >= 4 && text.includes(x));
         if (w) { r['q' + q.n] = k; r['w' + q.n] = [w]; break; }
       }
@@ -305,10 +314,91 @@ export function agreements(a, b, n) {
   return { first, kept };
 }
 
+/* ---------- a sample of disagreements, for a person to read ---------- */
+/* Columns that name the people who added places. A question drawn from one
+   of these, or asked "Who …", is about people, and is never sampled; and the
+   names in them are scrubbed from everything else the sample carries. */
+const PEOPLE_COLUMN = (c) => /^created_by$/i.test(c) || /_user_id$/i.test(c);
+export function peopleQuestions(layer, settled) {
+  const out = new Set();
+  const labels = (layer && layer.keyLabels) || {}, from = (layer && layer.keyColumns) || {};
+  for (const col of Object.keys(labels)) {
+    if ((from[col] || []).some(PEOPLE_COLUMN)) out.add(String(labels[col]).trim());
+  }
+  for (const q of settled || []) if ((q.columns || []).some(PEOPLE_COLUMN)) out.add(String(q.question).trim());
+  return out;
+}
+export const isAboutPeople = (question, people) => people.has(String(question).trim()) || /^\s*who\b/i.test(String(question));
+
+// a small seeded generator, so the same run picks the same sample
+function seeded(seed) {
+  let t = seed >>> 0;
+  return () => { t += 0x6D2B79F5; let r = Math.imul(t ^ (t >>> 15), 1 | t); r ^= r + Math.imul(r ^ (r >>> 7), 61 | r); return ((r ^ (r >>> 14)) >>> 0) / 4294967296; };
+}
+
+/* N place-and-question pairs where the quick run and the careful run gave
+   different answers (one giving no answer counts), spread evenly over the
+   questions — round the questions in turn, each question's pairs in a seeded
+   order — and never a question about people. Each pair carries the place's
+   name, its own words and labels, and both answers with their quoted words and
+   definitions. Every name found in a people column is scrubbed from all of it. */
+export function pickSample({ questions, quick, careful, rows, names, n, people, seed = 1 }) {
+  const answered = (x) => Boolean(x && x !== 'other');
+  const tagged = new Set();
+  for (const r of rows) for (const k of Object.keys(r || {})) {
+    if (!PEOPLE_COLUMN(k)) continue;
+    for (const v of [].concat(r[k])) { const t = String(v == null ? '' : v).trim(); if (t.length >= 3) tagged.add(t); }
+  }
+  const byLength = [...tagged].sort((a, b) => b.length - a.length);
+  const scrub = (t) => {
+    let out = String(t == null ? '' : t);
+    for (const name of byLength) out = out.split(name).join('[someone]');
+    return out;
+  };
+  const scrubWords = (ws) => (ws || []).map(scrub).filter((w) => w !== '[someone]');
+  const textOf = (v) => v == null ? '' : Array.isArray(v) ? v.map((x) => (x == null ? '' : String(x))).join('; ') : String(v);
+  const pools = [];
+  questions.forEach((q, qi) => {
+    if (isAboutPeople(q.question, people)) return;
+    const pool = [];
+    for (let i = 0; i < quick.answers[qi].length; i++) {
+      const a = quick.answers[qi][i], b = careful.answers[qi][i];
+      if (!answered(a) && !answered(b)) continue;
+      if (a === b) continue;
+      pool.push(i);
+    }
+    const rand = seeded(seed + qi * 7919);
+    for (let k = pool.length - 1; k > 0; k--) { const j = Math.floor(rand() * (k + 1)); [pool[k], pool[j]] = [pool[j], pool[k]]; }
+    if (pool.length) pools.push({ qi, pool });
+  });
+  const items = [];
+  const defOf = (q, kind) => ((q.kinds.find((k) => k.name === kind) || {}).definition || '');
+  const side = (q, run, qi, i) => {
+    const a = run.answers[qi][i];
+    return answered(a) ? { answer: a, words: scrubWords(run.why[qi][i]), definition: defOf(q, a) }
+      : { answer: a === 'other' ? 'other' : 'no answer', words: [], definition: '' };
+  };
+  for (let round = 0; items.length < n && pools.some((p) => round < p.pool.length); round++) {
+    for (const { qi, pool } of pools) {
+      if (items.length >= n) break;
+      if (round >= pool.length) continue;
+      const i = pool[round], q = questions[qi], r = rows[i] || {};
+      const desc = ['description', 'desc', 'notes', 'text', 'comment'].map((k) => textOf(r[k])).find((t) => t.trim()) || '';
+      const labels = ['labels', 'categories', 'tags'].filter((k) => textOf(r[k]).trim()).map((k) => ({ column: k, value: scrub(textOf(r[k])) }));
+      items.push({
+        place: scrub(names[i] || ''), text: scrub(desc).slice(0, 400), labels,
+        question: q.question,
+        quick: side(q, quick, qi, i), careful: side(q, careful, qi, i),
+      });
+    }
+  }
+  return items;
+}
+
 /* Four answering runs, each as a reading answers today (the stricter rule on
    judging questions, no check): the quick model twice, the careful (reading)
    model twice. The agreement figure reuses the quick model's two runs. */
-async function stability({ o, digest, questions, title, models, names, layer, rows, outDir }) {
+async function stability({ o, digest, questions, title, models, names, layer, rows, settled, outDir }) {
   const pot = budget(o.maxCalls, o.stub);
   const runs = {};
   const calls = {};
@@ -356,6 +446,14 @@ async function stability({ o, digest, questions, title, models, names, layer, ro
   fs.writeFileSync(path.join(outDir, stem + '.json'), JSON.stringify(rep, null, 2));
   fs.writeFileSync(path.join(outDir, stem + '.md'), md);
   console.log('Reports: ' + path.join(outDir, stem + '.json') + ' and .md');
+  if (o.sample > 0) {
+    const items = pickSample({ questions, quick: runs.quick1, careful: runs.careful1, rows, names, n: o.sample,
+      people: peopleQuestions(layer, settled) });
+    const file = path.join(outDir, 'sample-' + String(o.slug || path.basename(o.file, '.json')).replace(/[^\w-]+/g, '_') + '.json');
+    fs.writeFileSync(file, JSON.stringify({ atlas: o.slug || path.basename(o.file), layer: layer.id || '', when: rep.when,
+      models: rep.models, asked: o.sample, items }, null, 2));
+    console.log('Sample: ' + items.length + ' pairs where the two models differ — ' + file);
+  }
 }
 
 async function main(argv) {
@@ -394,7 +492,7 @@ async function main(argv) {
   console.log('Measuring ' + (o.slug || o.file) + (layer.id ? ' / ' + layer.id : '') + ': ' + rows.length + ' places, ' +
     questions.length + ' questions, ' + batches + ' batch' + (batches === 1 ? '' : 'es') + ' a run; at most ' + o.maxCalls + ' calls.');
 
-  if (o.stability) return stability({ o, digest, questions, title, models, names, layer, rows, outDir });
+  if (o.stability) return stability({ o, digest, questions, title, models, names, layer, rows, settled, outDir });
 
   const pot = budget(o.maxCalls, o.stub);
   const oldCall = pot.view();
