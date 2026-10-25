@@ -87,7 +87,7 @@ const long = await E.enrichRows({ rows, fields: ['description', 'categories', 'l
   models: { flash: 'stub', flashLite: 'stub-lite' },
   callJSON: async (m, p, sc, o) => {
     if (o && o.think) return { verdict: 'questions', reading: 'r', facts: [], questions: [{
-      question: 'What sort of material was this thing built out of?',   // 49 characters
+      question: 'What sort of material was this thing built out of, and who chose it, and when was it first put up, and was it ever mended or changed later on?',   // 142 characters
       kinds: [{ name: 'Zephyr', definition: 'Places that', examples: [1, 2, 3] },
               { name: 'Quixote', definition: 'Places that', examples: [4, 5, 6] }] }] };
     // the line is labelled with its column now ("description: …"); the label is not a word of the place
@@ -100,9 +100,9 @@ const long = await E.enrichRows({ rows, fields: ['description', 'categories', 'l
 const asked = (long.questions || [])[0] || {};
 check('it is asked at all rather than lost', long.verdict, 'questions');
 check('it still ends in a question mark', /\?$/.test(asked.question || ''), true);
-check('it is within the cap', (asked.question || '').length <= 40, true);
+check('it is within the cap', (asked.question || '').length <= 120, true);
 check('and it is not cut mid-word',
-  (asked.question || '') , 'What sort of material was this thing?');
+  (asked.question || '') , 'What sort of material was this thing built out of, and who chose it, and when was it first put up, and was it ever?');
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -345,15 +345,23 @@ console.log('\n  the summary: proofread once more, by the same model, each sente
   check('the prompt asks for short sentences, one fact each, finished, in one of four shapes',
     [/Under 25 words\. One fact per sentence; never join two facts with "and", "while" or a comma\. Finish every sentence\./, /- One question: /, /- Unanswered: /, /- A pair: /, /- Few answers /].every((r) => r.test(P)), true);
   check('a pair\'s row is the places that answer both: the shape says so',
-    P.includes('- A pair: "Of the N places whose <first question, in plain words> is <Answer A> and that also answer <second question, in plain words>, M say <Answer B>."'), true);
+    P.includes('- A pair: "Of the N places whose <first topic> is <Answer A> and that also name a <second topic>, M say <Answer B>."'), true);
   check('…and so does its fact', SUM.factFor(T, { cell: { shape: 'pair', questions: ['pattern_1', 'pattern_2'], answers: ['Natural feature', 'Natural elements'], count: 37, of: 38, ofRow: true } }),
     'Of the 38 places whose answer to “What is its current status?” is Natural feature and that also answer “What is its primary material or design?”, 37 answer Natural elements.');
   check('…"all" only when M equals N, and answer names kept as spelt',
     /Say "all" or "every" only when M equals N/.test(P) && /Keep every answer name exactly as the tables spell it/.test(P), true);
   check('the rules name no atlas\'s own answers', /tree|bark|shelter|species/i.test(SUM.promptFor({ places: 0, questions: [], pairs: [] })), false);
+  check('the prompt tells the writer to name each question by its topic, not copy it',
+    [P.includes('Name each question by its topic in two or three plain words, never by copying the question.'), P.includes('Never write "what is" or "answer what".'), /<first topic>/.test(P)], [true, true, true]);
+  const ENR = await import('../api/lib/atlas/enrich.js');
+  const q70 = 'What kinds of places here are meant for people to sit and rest awhile?';
+  check('a 70-character question is kept whole; one over 120 is cut at a word with "?"',
+    [q70.length, ENR.clipQuestion(q70), ENR.clipQuestion('word '.repeat(40)).length <= 121, /\?$/.test(ENR.clipQuestion('word '.repeat(40))), / \?$/.test(ENR.clipQuestion('word '.repeat(40)))], [70, q70, true, true, false]);
+  check('the clip agrees with the server\'s own cap',
+    [/const MAX_QUESTION_CHARS = (\d+);/.exec(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '../api/apps/atlas.js'), 'utf8'))[1] * 1], [ENR.MAX_QUESTION_CHARS]);
   const crypto = await import('node:crypto');
   const v2 = crypto.createHash('sha1').update('2\u0004' + JSON.stringify(T)).digest('hex').slice(0, 20);
-  check('SUMMARY_VERSION is 3, so a summary kept under 2 is written again', [SUM.SUMMARY_VERSION, SUM.summarySig(T) !== v2], [3, true]);
+  check('SUMMARY_VERSION is 4, so a summary kept under 2 is written again', [SUM.SUMMARY_VERSION, SUM.summarySig(T) !== v2], [4, true]);
   const kept2 = await SUM.writeSummary({ layer: bl, features: bf, prev: { summary: { sig: v2, sentences: [good1, good2] } }, call: fake({ sentences: [good1, good2] }), model: 'm', Type });
   check('…and is', kept2.by, 'model');
 }

@@ -195,17 +195,19 @@ function stripCredit(text) {
   return lines.join(' ');
 }
 
-/* A question is capped at 40 characters so it fits the key's own row, and the
-   model is told so. When it went over anyway the cap was a blunt cut, which
-   took the tail AND the question mark with it — leaving a key labelled with
-   half a sentence and no sign it was ever a question. Cut at a word instead,
-   and give the mark back. */
-function clipQuestion(raw) {
+/* A question is kept whole up to 120 characters — the same cap the server
+   puts on a question (MAX_QUESTION_CHARS, api/apps/atlas.js:2728; a test
+   checks the two agree). The model is still asked for at most 40, so a longer
+   one is rare; but a cap at 40 cut the questions it did write long into half
+   sentences ("what locations are human-friendly and?"). Past 120, cut at a
+   word instead of blunt, and give the question mark back. */
+export const MAX_QUESTION_CHARS = 120;
+export function clipQuestion(raw) {
   const q = String(raw || '').trim();
-  if (q.length <= 40) return q;
-  const cut = q.slice(0, 40);
+  if (q.length <= MAX_QUESTION_CHARS) return q;
+  const cut = q.slice(0, MAX_QUESTION_CHARS);
   const sp = cut.lastIndexOf(' ');
-  return (sp > 20 ? cut.slice(0, sp) : cut).replace(/[\s?.,;:]+$/, '') + '?';
+  return (sp > MAX_QUESTION_CHARS / 2 ? cut.slice(0, sp) : cut).replace(/[\s?.,;:]+$/, '') + '?';
 }
 
 function clipAtWord(s, n) {

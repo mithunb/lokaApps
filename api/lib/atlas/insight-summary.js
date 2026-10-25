@@ -40,7 +40,7 @@ export const IM = createRequire(import.meta.url)(path.join(HERE, '..', '..', '..
    2 (25 October 2026): the short-sentence and "all" rules, and the proofread.
    3 (25 October 2026): each sentence names its cell, checked exactly; the
    proofread reads each sentence beside its own fact; one re-write. */
-export const SUMMARY_VERSION = 3;
+export const SUMMARY_VERSION = 4;
 export const TIMEOUT_MS = 25000;
 
 export function summarySig(tables) {
@@ -58,10 +58,11 @@ export function promptFor(tables) {
   return [
     'A map shows ' + tables.places + ' places. LOKA asked each place a few questions. The tables below count how many places give each answer; a place may say nothing about a question. "pairs" show, for the places that answer both of two questions, how the answers to the first split by the answers to the second: each row is one answer to the first question, and its "split" is how those places answer the second.',
     'Write 3 to 5 short sentences in plain everyday words for a reader who is not an expert. Each sentence states one fact from one cell of the tables, in one of these shapes:',
-    '- One question: "Of the N places that answer <what the question asks, in plain words>, M say <Answer>." N is that question\'s "answered", M is that answer\'s "places".',
-    '- Unanswered: "N of the ' + tables.places + ' places say nothing about <what the question asks>." N is "saysNothing".',
-    '- A pair: "Of the N places whose <first question, in plain words> is <Answer A> and that also answer <second question, in plain words>, M say <Answer B>." N is that row\'s "places", M is the matching "split" entry\'s "places".',
-    '- Few answers (a question marked fewPlaces): "Only N places say anything about <what the question asks>, so this is a hint, not a finding." N is "answered".',
+    '- One question: "Of the N places that answer <its topic>, M say <Answer>." N is that question\'s "answered", M is that answer\'s "places".',
+    '- Unanswered: "N of the ' + tables.places + ' places say nothing about <its topic>." N is "saysNothing".',
+    '- A pair: "Of the N places whose <first topic> is <Answer A> and that also name a <second topic>, M say <Answer B>." N is that row\'s "places", M is the matching "split" entry\'s "places".',
+    '- Few answers (a question marked fewPlaces): "Only N places say anything about <its topic>, so this is a hint, not a finding." N is "answered".',
+    '- Name each question by its topic in two or three plain words, never by copying the question. For a question like "What material is it made of?" write: "Of the 40 places that name a material, 25 say Wood." For a pair: "Of the 12 places made of Wood that also name a use, 9 say Housing." Never write "what is" or "answer what".',
     'What to pick: start with the answer the most places give on each of the 2 or 3 questions the most places answer. Add a pair sentence only when one split entry holds most of its row, so it says something a single question does not. Skip a cell that repeats a sentence already written.',
     'Rules:',
     '- Copy every number as digits from the table cell. Never work out a percentage, fraction, sum, difference or any other number. Never write an amount in words: not "two", "half", "a third", "twice", "a dozen" or "one in five". "Most" and "few" are fine.',
