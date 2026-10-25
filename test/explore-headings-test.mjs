@@ -153,8 +153,9 @@ console.log('\n  the reading stores the noun beside the wording, and keeps it');
   check('a settled question comes back with its noun, so a later reading keeps it',
     RULES.settledQuestions(layer, shaped.rows).map((q) => q.noun), ['function', '']);
 }
+// the checklist item (about) comes first since 25 Oct 2026; the noun still sits between question and kinds
 check('the finder\'s schema asks for the noun after the question, before the kinds',
-  /required: \['question', 'noun', 'kinds'\],\n\s*propertyOrdering: \['question', 'noun', 'kinds'\]/.test(enrichSrc), true);
+  /required: \['about', 'question', 'noun', 'kinds'\],[\s\S]{0,400}?propertyOrdering: \['about', 'question', 'noun', 'kinds'\]/.test(enrichSrc), true);
 check('the finder is told the rule, with no example to borrow', /NOUN_RULE,\n/.test(enrichSrc) && !/NOUN_RULE = [^\n]*function/.test(enrichSrc), true);
 check('the finder\'s noun is checked against its own question',
   /noun: LABELS\.nounFromQuestion\(q\.noun, clipQuestion\(q\.question\)\)/.test(enrichSrc), true);

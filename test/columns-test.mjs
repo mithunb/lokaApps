@@ -153,9 +153,11 @@ console.log('\n  a reading: every column asked on its own, the comments included
 const r1 = await read({}, { perColumn: {
   description: found([sortQ]), festival_comment: found([dayQ]), address: found([areaQ]) } });
 check('it lands', r1.verdict, 'questions');
-check('one call to find questions for each of the three groups', r1.log.think.length, 3);
+/* Two questions from three groups is fewer than 4, so the columns are also
+   read together once (G2, 25 Oct 2026): one call more. */
+check('one call to find questions for each of the three groups, and one for all of them together', r1.log.think.length, 4);
 check('one call to answer 24 places', r1.log.file.length, 1);
-check('four calls in all; the old reading cost two', r1.log.think.length + r1.log.file.length, 4);
+check('five calls in all; the old reading cost two', r1.log.think.length + r1.log.file.length, 5);
 const commentPrompt = r1.log.think.find((p) => /called "festival_comment"/.test(p));
 check('the comments column is asked by name', Boolean(commentPrompt), true);
 check('and the lines put to it hold the comments alone', /Festival venue: Thursday/.test(commentPrompt) && !/where the festival gathers people/.test(commentPrompt), true);
@@ -175,14 +177,17 @@ check('the facts carry the column they came from', r1.facts, ['Festival comment:
 
 console.log('\n  the record says what became of every column');
 const lineOf = (c) => (r1.columns.find((x) => x.column === c) || {}).line || '';
-check('one line per word column, none missing', r1.columns.map((c) => c.column).sort(), fields.slice().sort());
+const perColumn1 = r1.columns.filter((c) => c.column !== 'all columns together');
+check('one line per word column, none missing', perColumn1.map((c) => c.column).sort(), fields.slice().sort());
+check('and one more for the columns read together, saying why', lineOf('all columns together'),
+  'All columns together: read together once more because the columns on their own yielded fewer than 4 questions; no question kept — nothing in it sorts the places into groups');
 check('the comments: a question kept, and how far it reaches', lineOf('festival_comment'),
   'Festival comment: 1 question kept: “Which day is it on?” (reaches 24 of 24 places)');
 check('the description likewise', /^Description: 1 question kept: “What sort of place is it\?” \(reaches 24 of 24 places\)$/.test(lineOf('description')), true);
 check('a column the model found nothing in says so in a fixed plain sentence, not the model\'s own note', lineOf('tree'),
   'Tree: no question kept — nothing in it sorts the places into groups (read with Keeper and Labels — each holds only a word or two)');
 check('a column passed over says why', lineOf('status'), 'Status: not asked — says the same thing for every place');
-check('the lines are marked asked or not', r1.columns.filter((c) => c.asked).map((c) => c.column), ['festival_comment', 'description', 'tree', 'keeper', 'labels']);
+check('the lines are marked asked or not', r1.columns.filter((c) => c.asked).map((c) => c.column), ['festival_comment', 'description', 'tree', 'keeper', 'labels', 'all columns together']);
 check('the address says why it was not asked', lineOf('address'), 'Address: not asked — an address: the map already shows where each place is');
 
 console.log('\n  the evidence for an answer must come from the column the question was asked of');
@@ -205,7 +210,7 @@ console.log('\n  every column says no: the model\'s own no, column by column');
 const r4 = await read({}, {});
 check('the verdict is the model\'s', r4.verdict, 'no_clear_questions');
 check('in a fixed plain sentence, not the model\'s own notes strung together', r4.note, 'None of the 3 columns read had anything that sorts the places into groups.');
-check('and the record still has a line for every column', r4.columns.map((c) => c.column).sort(), fields.slice().sort());
+check('and the record still has a line for every column', r4.columns.filter((c) => c.column !== 'all columns together').map((c) => c.column).sort(), fields.slice().sort());
 
 console.log('\n  a second attempt re-asks only the column that left a hole');
 const r5 = await read({ missed: [{ word: 'friday', places: 8, under: 'Which day is it on?' }], reuseFound: r1.found },

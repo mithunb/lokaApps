@@ -63,15 +63,19 @@ await E.enrichRows({ rows, fields, title: 'LOKA x Bengaluru', mode: 'questions',
   } });
 check('the borrowed "granite, hand-carved" example is gone', /granite, hand-carved/.test(prompt), false);
 check('and the "dry since 2019" one', /dry since 2019/.test(prompt), false);
-check('it is told what a question becomes', /turns into a switch beside the map/.test(prompt), true);
+/* The paragraph on what a question becomes (a switch beside the map) and the
+   "split a large group" rule gave way, 25 Oct 2026, to a fixed checklist of
+   where to look and a stricter rule for a kind (Fable's review). */
+check('it is told where to look, from a fixed checklist', /go through this checklist of things a place can be told about/.test(prompt) &&
+  !/turns into a switch beside the map/.test(prompt), true);
 check('it is told the map already sorts by categories',
   /ALREADY sorts places by its categories \(Social, Culture, Heritage/.test(prompt), true);
 check('and that those words cannot be a kind\'s name',
   /do not give a kind one of those words as its name/.test(prompt), true);
 check('the half rule that fought the leave-a-home rule is gone',
   /no kind may fit more than about half/.test(prompt), false);
-check('replaced by one that says split a large group rather than orphan it',
-  /split it into narrower kinds/.test(prompt), true);
+check('replaced by one that says no kind may take nearly all the places, and a kind is judged strictly',
+  /No kind may take nearly all the places\./.test(prompt) && /judged strictly: a second reader/.test(prompt), true);
 check('and there is a test for whether a question is worth asking',
   /at least two of its kinds must each fit three or more/.test(prompt), true);
 check('the closed list is named as closed', /The categories column is a CLOSED list of 10/.test(prompt), true);

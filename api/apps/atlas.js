@@ -3252,6 +3252,11 @@ async function geminiJSONFileImpl(model, prompt, schema) {
    step because on 2.5 models thought tokens count against it — without the
    headroom the JSON answer would truncate mid-object. */
 const INDUCE_THINK_BUDGET = 2048;
+/* Room for the answer as well as the thinking. The finder now lists every
+   place that belongs to each kind (up to 12) and goes through an eight-line
+   checklist first, and at 8,192 one Bengaluru reading of 25 Oct 2026 stopped
+   early (MAX_TOKENS) and came back with nothing. */
+const INDUCE_MAX_TOKENS = 16384;
 /* Left unset, this call ran at the default of 1.0 — and 1.0 is what produced
    four different sets of questions from the same sixty-six places in one day,
    same model, same data. The territory was stable (what a place is, what it is
@@ -3276,7 +3281,7 @@ async function geminiJSONDeepImpl(model, prompt, schema) {
         generationConfig: {
           responseMimeType: 'application/json',
           responseSchema: schema,
-          maxOutputTokens: 8192,
+          maxOutputTokens: INDUCE_MAX_TOKENS,
           temperature: INDUCE_TEMPERATURE,
           thinkingConfig: { thinkingBudget: INDUCE_THINK_BUDGET },
         },
@@ -4751,7 +4756,10 @@ async function fakeReading(rows, fields, asked, pay, planned, nameCol, previous)
   const firstWords = (t) => t.split(/\s+/).filter(Boolean).slice(0, 2);
   const LONG = 'A few lines', SHORT = 'A short note', WATER = 'Mentions water';
   const wet = /\b(water|river|lake|pond|well|stream|tank)s?\b/i;
+  /* Each names a checklist item of its own (about, as the real finder does),
+     so nothing that counts items folds the two into one. */
   const q1 = {
+    about: 7,
     question: (asked[0] && asked[0].question) || 'How much is written about this place?',
     noun: (asked[0] && asked[0].noun) || '',
     counts: [{ name: LONG, definition: 'forty letters or more' }, { name: SHORT, definition: 'fewer than forty letters' }],
@@ -4759,6 +4767,7 @@ async function fakeReading(rows, fields, asked, pay, planned, nameCol, previous)
     why: rows.map((r) => firstWords(textOf(r))),
   };
   const q2 = {
+    about: 8,
     question: (asked[1] && asked[1].question) || 'Does it mention water?',
     noun: (asked[1] && asked[1].noun) || '',
     counts: [{ name: WATER, definition: 'names a river, lake, pond, well or the like' }],

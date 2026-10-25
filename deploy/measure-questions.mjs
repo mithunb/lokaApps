@@ -156,7 +156,7 @@ const quietOf = new Map();
 // geminiJSONDeep for { think }, geminiJSONFile for { file } — every call a reading makes is one of the two
 async function realCall(model, prompt, schema, o) {
   if (o && o.think) {
-    return post(model, prompt, schema, { maxOutputTokens: 8192, temperature: 0.2, thinkingConfig: { thinkingBudget: 2048 } }, 90000);
+    return post(model, prompt, schema, { maxOutputTokens: 16384, temperature: 0.2, thinkingConfig: { thinkingBudget: 2048 } }, 90000);
   }
   const tries = quietOf.has(model) ? [quietOf.get(model)] : QUIET;
   let last = null;
@@ -178,7 +178,11 @@ async function realCall(model, prompt, schema, o) {
    the lines but not on all of them, commonest first, make two questions of
    three kinds each. Answering: a place takes the first kind its own column
    says, quoting the word. The check says yes to everything. Enough to run the
-   whole of a reading with nothing on the network. */
+   whole of a reading with nothing on the network. Each question names a
+   checklist item (about) of its own, counting on from the last call's, so
+   the one-question-per-item rule (enrich.js G1) does not fold the stand-in's
+   questions together before the six-question cap would. */
+let stubAbout = 0;
 const FENCE = /----- BEGIN PLACES[^\n]*\n([\s\S]*?)\n----- END PLACES -----/;
 function stubFind(prompt) {
   const lines = ((prompt.match(FENCE) || [])[1] || '').split('\n').filter((l) => /^\d+\. /.test(l));
@@ -189,6 +193,7 @@ function stubFind(prompt) {
   const words = [...on.entries()].filter(([, n]) => n >= 3 && n < lines.length)
     .sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0])).map(([w]) => w);
   const qs = [words.slice(0, 3), words.slice(3, 6)].filter((k) => k.length >= 2).map((k) => ({
+    about: (stubAbout++ % 8) + 1,
     question: 'Does it say ' + k.slice(0, -1).join(', ') + ' or ' + k[k.length - 1] + '?', noun: '',
     kinds: k.map((w) => ({ name: w, definition: 'Places that say ' + w, examples: [1, 2, 3] })),
   }));
@@ -196,14 +201,16 @@ function stubFind(prompt) {
     : { reading: 'stand-in', facts: [], verdict: 'no_clear_questions', note: 'no word on three places' };
 }
 function stubAnswer(prompt) {
-  const qs = [...prompt.matchAll(/^q(\d+) — (.*?)(?:   \(asked of the "([^"]+)" column only\))?\n((?:   .*\n?)+)/gm)]
-    .map((x) => ({ n: Number(x[1]), col: x[3], kinds: x[4].split('\n').map((l) => l.trim().split(' — ')[0]).filter(Boolean) }));
+  // a question asked of several columns at once (the columns read together, enrich.js G2) is answered from the whole place
+  const qs = [...prompt.matchAll(/^q(\d+) — (.*?)(?:   \(asked of the ("[^\n]*?") columns? only\))?\n((?:   .*\n?)+)/gm)]
+    .map((x) => ({ n: Number(x[1]), col: x[3] && !/" and "/.test(x[3]) ? x[3].slice(1, -1) : '', several: Boolean(x[3] && /" and "/.test(x[3])),
+      kinds: x[4].split('\n').map((l) => l.trim().split(' — ')[0]).filter(Boolean) }));
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const blocks = prompt.split(/\n(?=\d+\. )/).filter((b) => /^\d+\. /.test(b));
   return { rows: blocks.map((b) => {
     const r = { i: Number(b.match(/^(\d+)\./)[1]) };
     for (const q of qs) {
-      const part = ((b.match(new RegExp('(?:^\\d+\\. |\\n    )' + esc(q.col || 'whole record') + ': ([^\\n]*)')) || [])[1] ||
+      const part = q.several ? b.toLowerCase() : ((b.match(new RegExp('(?:^\\d+\\. |\\n    )' + esc(q.col || 'whole record') + ': ([^\\n]*)')) || [])[1] ||
         (!/\n    /.test(b) ? b.replace(/^\d+\. /, '') : '')).toLowerCase();
       const hit = q.kinds.find((k) => new RegExp('\\b' + esc(k.toLowerCase()) + '\\b').test(part));
       r['q' + q.n] = hit || 'other';
