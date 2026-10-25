@@ -10,10 +10,15 @@
  *   - the few-places shelf (under a quarter, or under 8) and the compare rule
  *     (at least a tenth of the places AND at least 5 answer both), on the
  *     Bengaluru and Cubbon Park fixtures, with the mock-up's numbers;
- *   - the summary: every number must be in the counts, a sentence with an
- *     invented one is dropped; kept by its fingerprint (one model call across
+ *   - the summary: each sentence names the cell it states and the cell is
+ *     checked exactly (in the tables, its numbers and no others, its answers
+ *     named, "all" only for the whole), a sentence that fails is dropped and
+ *     the retry is told why; kept by its fingerprint (one model call across
  *     repeated switches); written again after a reading only in Insight with
- *     the summary on, never on the operator's own atlas;
+ *     the summary on, never on the operator's own atlas; the sentences that
+ *     pass are proofread once more, each beside its fact, and a proofread
+ *     that fails changes nothing; one that leaves under two brings one
+ *     re-write, four calls at most;
  *   - the route, on a throwaway server, public and private: owner only,
  *     canInsight, settings, Write it again, modeKept round trip;
  *   - Standard, Event and Explore are as they were (their own tests run untouched).
@@ -112,22 +117,84 @@ const T = IM.summaryTables(bl, bf);
 check('the tables hold no people question and no tagger', [T.questions.some((q) => q.id === 'pattern_5'), /Person [A-D]|Other users/.test(JSON.stringify(T))], [false, false]);
 check('…and no place\'s own words (no read-from words, no names of places)', /stone-carving|Krishna and Radha/.test(JSON.stringify(T)), false);
 check('the pairs in them pass the compare rule', T.pairs.every((p) => IM.canCompare(p.answerBoth, T.places)), true);
-const good1 = { text: 'Most of these 134 places are good for their surroundings: 73 of the 115 that say.', questions: ['pattern_3'] };
-const good2 = { text: 'Watching nature is the largest single use, at 35 places.', questions: ['pattern_4'] };
-const bad = { text: 'Harm shows at 17 places of 115.', questions: ['pattern_3'] };
-const pct = { text: 'About 54% of the 134 places are positive.', questions: ['pattern_3'] };
+// each sentence names the cell it states: its questions, answers, count and group (v3)
+const good1 = { text: 'Of the 115 places that say what their impact is, 73 say Positive or preserved.', questions: ['pattern_3'], answers: ['Positive or preserved'], count: 73, of: 115 };
+const good2 = { text: 'Of the 123 places that say what they are for, 35 say Observation or habitat.', questions: ['pattern_4'], answers: ['Observation or habitat'], count: 35, of: 123 };
+const bad = { text: 'Of the 115 places that say what their impact is, 17 say Negative or degraded.', questions: ['pattern_3'], answers: ['Negative or degraded'], count: 17, of: 115 };
+const pct = { text: 'About 54% of the 134 places say Positive or preserved.', questions: ['pattern_3'], answers: ['Positive or preserved'], count: 73, of: 115 };
+// the reasons a sentence is dropped, alone (none: kept)
+const why = (s, t = T) => IM.checkSentencesWithReasons([s], t).dropped.map((d) => d.why);
 const kept = IM.checkSentences([good1, bad, good2, pct], T);
-check('a sentence with an invented number (17) is dropped; one with a percentage too; the true ones stay', kept.map((s) => s.text), [good1.text, good2.text]);
-check('a number true for another question is not true for this one', IM.checkSentences([good1, { text: 'Natural elements lead at 55 places.', questions: ['pattern_3'] }], T).length, 0);
-check('a sentence with no number is dropped', IM.checkSentences([good1, good2, { text: 'Trees are lovely.', questions: [] }], T).length, 2);
+check('a sentence with a number not its cell\'s (17) is dropped; one with a percentage too; the true ones stay, as { text, questions } only',
+  kept, [{ text: good1.text, questions: good1.questions }, { text: good2.text, questions: good2.questions }]);
+check('…and the reasons say which, and what the table says', IM.checkSentencesWithReasons([good1, bad, good2, pct], T).dropped.map((d) => [d.index, d.why]),
+  [[1, '17 is not the cell for Negative or degraded; the table says 14'], [3, 'it has a percentage, a link or markup']]);
+const pairRight = { text: 'Of the 38 places whose status is Natural feature, 37 also say Natural elements for what they are made of.',
+  questions: ['pattern_1', 'pattern_2'], answers: ['Natural feature', 'Natural elements'], count: 37, of: 38 };
+check('a pair: the cell under its row is kept', why(pairRight), []);
+check('a pair: 36 for a cell the table holds as 37 (36 is true of another row) is dropped, not the cell',
+  why({ ...pairRight, text: pairRight.text.replace('37', '36'), count: 36 }), ['36 is not the cell for Natural feature + Natural elements; the table says 37']);
+check('a pair with one answer is no cell', why({ ...pairRight, answers: ['Natural feature'] }).map((w) => w.startsWith('no such cell')), [true]);
+check('a pair out of the places answering both (99) is a cell too; any other group is not',
+  [why({ ...pairRight, text: 'Of the 99 places that say both, 37 say Natural feature and Natural elements.', of: 99 }).length,
+    why({ ...pairRight, text: 'Of the 133 places, 37 say Natural feature and Natural elements.', of: 133 }).length], [0, 1]);
+check('the ids the other way round, with the answers the other way round: the same cell, kept',
+  why({ text: 'Of the 38 places that are a Natural feature, 37 are made of Natural elements.', questions: ['pattern_2', 'pattern_1'], answers: ['Natural elements', 'Natural feature'], count: 37, of: 38 }), []);
+check('…and with the answers left as they were: no cell',
+  why({ text: 'Of the 38 places that are a Natural feature, 37 are made of Natural elements.', questions: ['pattern_2', 'pattern_1'], answers: ['Natural feature', 'Natural elements'], count: 37, of: 38 }).map((w) => w.startsWith('no such cell')), [true]);
+check('"all" when the count is a part of its group is dropped; "all" when it is the whole is kept',
+  [why({ ...pairRight, text: 'All of the 38 places whose status is Natural feature have Natural elements, 37 of them.' }),
+    why({ text: 'All 8 places made of Upcycled or reused say Positive or preserved for their impact.', questions: ['pattern_2', 'pattern_3'], answers: ['Upcycled or reused', 'Positive or preserved'], count: 8, of: 8 })],
+  [['it says all but the count is a part (37 of 38)'], []]);
+check('a number in the text outside its cell (and the map\'s total) is dropped',
+  why({ ...good1, text: 'Of the 115 places that say what their impact is, 73 say Positive or preserved, against 28 others.' }), ['number 28 is not in its cell']);
+check('…and so is a sentence missing its cell\'s number', why({ ...good1, text: 'Of the places that say what their impact is, 73 say Positive or preserved.' }), ['number 115 of its cell is not in it']);
+check('an answer the cell names but the text does not is dropped', why({ ...good1, text: 'Of the 115 places that say what their impact is, 73 say it is good.' }), ['it does not name Positive or preserved']);
+check('one answer: the group is the places that answer, never the whole map',
+  why({ ...good1, text: 'Of the 134 places, 73 say Positive or preserved.', of: 134 }), ['134 is not the group for Positive or preserved; the table says 115 places answer pattern_3']);
+check('unanswered: "N of the {places} places say nothing" is kept (either way round); out of the answered it is not',
+  [why({ text: '19 of the 134 places say nothing about their impact.', questions: ['pattern_3'], answers: [], count: 19, of: 134 }),
+    why({ text: '19 of the 134 places say nothing about their impact.', questions: ['pattern_3'], answers: [], count: 134, of: 19 }),
+    why({ text: '19 of the 115 places say nothing about their impact.', questions: ['pattern_3'], answers: [], count: 19, of: 115 }).length], [[], [], 1]);
+const TC = IM.summaryTables(cl, cf);
+const fewS = { text: 'Only 6 places say anything about their condition, so this is a hint, not a finding.', questions: ['pattern_3'], answers: [], count: 6, of: 6 };
+check('few answers: count and group are the few that answer; on a question not marked few it is no cell',
+  [why(fewS, TC), why({ ...fewS, text: 'Only 20 places say anything about the main feature, so this is a hint.', questions: ['pattern_1'], count: 20, of: 20 }, TC).length], [[], 1]);
+{
+  const TA = { places: 10, questions: [{ id: 'pattern_1', question: 'What is it?', answered: 8, places: 10, saysNothing: 2, fewPlaces: false, answers: [{ answer: 'Children\'s  play', places: 5 }] }], pairs: [] };
+  check('answer names match whatever the case, spacing and kind of apostrophe',
+    IM.checkSentencesWithReasons([{ text: 'Of the 8 places that answer, 5 say children’s play.', questions: ['pattern_1'], answers: ['CHILDREN’S PLAY '], count: 5, of: 8 },
+      { text: '2 of the 10 places say nothing about it.', questions: ['pattern_1'], answers: [], count: 2, of: 10 }], TA).kept.map((x) => x.answers), [['Children\'s  play'], []]);
+}
+{
+  // answers that look like numbers or number words, and short answers inside longer words
+  const one = (answers, answered, places) => ({ places, pairs: [], questions: [{ id: 'pattern_1', question: 'What is it?', answered, places, saysNothing: places - answered, fewPlaces: false,
+    answers: answers.map(([answer, n]) => ({ answer, places: n })) }] });
+  const TN = one([['1', 12], ['4', 28]], 40, 50);
+  check('answers "1" and "4": a sentence with 12 and 40 in it keeps its numbers whole, and is kept',
+    IM.checkSentencesWithReasons([{ text: 'Of the 40 places that answer how many floors, 12 say 1.', questions: ['pattern_1'], answers: ['1'], count: 12, of: 40 },
+      { text: 'Of the 40 places that answer how many floors, 28 say 4.', questions: ['pattern_1'], answers: ['4'], count: 28, of: 40 }], TN).kept.length, 2);
+  const TY = one([['No', 5], ['Yes', 3]], 8, 10);
+  check('"No" is not named by "nothing", nor "Yes" by "eyes"; named whole, they are',
+    [why({ text: 'Of the 8 places that answer, 5 say nothing more.', questions: ['pattern_1'], answers: ['No'], count: 5, of: 8 }, TY),
+      why({ text: 'Of the 8 places that answer, 3 have eyes on it.', questions: ['pattern_1'], answers: ['Yes'], count: 3, of: 8 }, TY),
+      why({ text: 'Of the 8 places that answer, 5 say No.', questions: ['pattern_1'], answers: ['No'], count: 5, of: 8 }, TY)],
+    [['it does not name No'], ['it does not name Yes'], []]);
+  const TW = one([['Two-wheeler', 6]], 9, 12);
+  check('the answer "Two-wheeler" is not an amount in words; "two" of the sentence\'s own still is',
+    [why({ text: 'Of the 9 places that answer how people come, 6 say Two-wheeler.', questions: ['pattern_1'], answers: ['Two-wheeler'], count: 6, of: 9 }, TW),
+      why({ text: 'Of the 9 places that answer, 6 say Two-wheeler, two more than cars.', questions: ['pattern_1'], answers: ['Two-wheeler'], count: 6, of: 9 }, TW)],
+    [[], ['it writes an amount in words']]);
+}
 check('fewer than two left: no summary', IM.checkSentences([good1, bad], T), []);
-check('a pair\'s numbers are allowed when both its questions are named', IM.checkSentences([good1, { text: 'Harm shows most at shops and services: 5 of 21.', questions: ['pattern_3', 'pattern_4'] }], T).length, 2);
+check('a stray comma after the full stop is taken off', IM.checkSentences([{ ...good1, text: good1.text + ',' }, good2], T)[0].text, good1.text);
+check('amounts in words are dropped ("two", "half", "twice", "one in five"); "one of the" and "no one" are fine',
+  ['Two of the 115 places say Positive or preserved, 73.', 'Half of the 115 places say Positive or preserved, 73.', 'Positive or preserved is twice as common, at 73 of 115 places.', 'One in five of the 115 places, 73, say Positive or preserved.', 'Of the 115 places, one of the answers leads: 73 say Positive or preserved.', 'No one answer beats Positive or preserved: 73 of the 115 places.']
+    .map((t) => IM.checkSentences([good1, { ...good1, text: t }], T).length), [0, 0, 0, 0, 2, 2]);
+check('a sentence must name the questions it draws on, each one of the tables\'',
+  [IM.checkSentences([good1, { ...good2, questions: [] }], T).length, IM.checkSentences([good1, { ...good2, questions: ['pattern_9'] }], T).length, IM.checkSentences([good1, { ...good2, questions: ['pattern_4', 'pattern_9'] }], T).length], [0, 0, 0]);
 check('the visitor sees only sentences about questions on show', IM.visibleSentences({ sentences: [good1, good2, { text: 'x 9', questions: ['pattern_2'] }] }, ['pattern_3', 'pattern_4']).length, 2);
 check('…and none when under two remain', IM.visibleSentences({ sentences: [good1, good2] }, ['pattern_3']), []);
-check('amounts in words are dropped ("two", "half", "twice", "one in five"); "one of the" and "no one" are fine',
-  ['Two of the 73 places are parks.', 'Half of the 115 places say so.', 'Harm is twice as common, at 14 places.', 'One in five of the 134 places.', 'Most of these 134 places, one of the 115 that say.', 'No one place stands out among the 115.']
-    .map((t) => IM.checkSentences([good1, { text: t, questions: ['pattern_3'] }], T).length), [0, 0, 0, 0, 2, 2]);
-check('a sentence must name at least one question it draws on', [IM.checkSentences([good1, { text: good2.text, questions: [] }], T).length, IM.checkSentences([good1, { text: good2.text, questions: ['pattern_9'] }], T).length], [0, 0]);
 check('a sentence naming no question is never shown', IM.visibleSentences({ sentences: [good1, good2, { text: 'x 9', questions: [] }] }, ['pattern_3', 'pattern_4']).length, 2);
 check('a sentence naming any hidden question is hidden', IM.visibleSentences({ sentences: [good1, good2, { text: 'x 5', questions: ['pattern_3', 'pattern_2'] }] }, ['pattern_3', 'pattern_4']).length, 2);
 check('"being written" for over two minutes is stuck, not pending; no time is not pending',
@@ -151,29 +218,145 @@ check('a sentence is escaped, its numbers bold', IM.sentenceHTML('<b>x</b> & 73 
 
 console.log('\n  the summary: written once, kept by its fingerprint');
 let calls = 0;
-const fake = (answer) => async () => { calls++; return answer; };
-const Type = { OBJECT: 'object', ARRAY: 'array', STRING: 'string' };
+// the proofread (the call marked proofread: true) passes every sentence, as the stand-in's does
+const fake = (answer) => async (m, prompt, schema, o) => { calls++; return o && o.proofread ? SUM.standInProofread(prompt) : answer; };
+const Type = { OBJECT: 'object', ARRAY: 'array', STRING: 'string', BOOLEAN: 'boolean', INTEGER: 'integer' };
 const r1 = await SUM.writeSummary({ layer: bl, features: bf, prev: null, call: fake({ sentences: [good1, bad, good2] }), model: 'm', Type });
-check('first time: one call; the invented sentence dropped', [calls, r1.by, r1.summary.sentences.length, r1.dropped], [1, 'model', 2, 1]);
+check('first time: one call to write and one to proofread; the invented sentence dropped', [calls, r1.by, r1.summary.sentences.length, r1.dropped], [2, 'model', 2, 1]);
 const r2 = await SUM.writeSummary({ layer: bl, features: bf, prev: { summary: r1.summary }, call: fake({ sentences: [] }), model: 'm', Type });
-check('the same answers again: kept, no call', [calls, r2.by, r2.summary], [1, 'kept', r1.summary]);
+check('the same answers again: kept, no call', [calls, r2.by, r2.summary], [2, 'kept', r1.summary]);
 const r3 = await SUM.writeSummary({ layer: bl, features: bf, prev: { summary: r1.summary }, call: fake({ sentences: [good2, good1] }), model: 'm', Type, force: true });
-check('"Write it again" asks again', [calls, r3.by], [2, 'model']);
+check('"Write it again" asks again (and proofreads again)', [calls, r3.by], [4, 'model']);
 const changed = bf.map((f, i) => i ? f : { ...f, properties: { ...f.properties, pattern_3: 'Negative or degraded' } });
 const r4 = await SUM.writeSummary({ layer: bl, features: changed, prev: { summary: r1.summary }, call: fake({ sentences: [] }), model: 'm', Type });
-check('new answers: asked again; nothing usable means no summary', [calls, r4.by, r4.summary], [3, 'nothing usable', null]);
+check('new answers: asked again; nothing usable means no summary (and nothing to proofread)', [calls, r4.by, r4.summary], [5, 'nothing usable', null]);
 const slow = () => new Promise(() => {});
 const r5 = await SUM.writeSummary({ layer: bl, features: changed, prev: { summary: r1.summary }, call: slow, model: 'm', Type, timeoutMs: 50 });
 check('a model that takes too long: the old summary is kept, nothing thrown', [r5.summary, r5.keep], [r1.summary, true]);
 const r6 = await SUM.writeSummary({ layer: bl, features: bf, prev: null, call: () => { throw new Error('too many'); }, model: 'm', Type });
 check('a refused call: no summary, nothing thrown', [r6.summary, r6.keep], [null, true]);
-check('the stand-in\'s sentences always pass the check', IM.checkSentences(SUM.standInAnswer(T).sentences, T).length >= 2, true);
-check('the prompt carries the counts only: not even the atlas\'s title', !/Bengaluru Secret Title/.test(SUM.promptFor(T, 'Bengaluru Secret Title')) && /never in words/.test(SUM.promptFor(T)), true);
+check('the stand-in\'s sentences always pass the cell check, on both atlases', [IM.checkSentences(SUM.standInAnswer(T).sentences, T).length >= 2, IM.checkSentences(SUM.standInAnswer(TC).sentences, TC).length >= 2], [true, true]);
+check('the prompt carries the counts only: not even the atlas\'s title', !/Bengaluru Secret Title/.test(SUM.promptFor(T, 'Bengaluru Secret Title')) && /Never write an amount in words/.test(SUM.promptFor(T)), true);
 check('one summary job per atlas at a time; a stuck pending flag lets a new one start',
   /if \(INSIGHT_RUNNING\.has\(slug\)\) return 'already writing';/.test(server) && /finally \{\s*INSIGHT_RUNNING\.delete\(slug\);/.test(server) && /!INSIGHT\.isPending\(mode\) && !INSIGHT_RUNNING\.has\(inst\.slug\)/.test(server), true);
 check('the visitor page stops asking: a cap, a failed fetch, or the mode gone',
   /if \(tries > MAX_TRIES\) \{ stop\(true\); return; \}/.test(imSrc) && /if \(!m \|\| m\.name !== "insight"\) \{ stop\(true\); return; \}/.test(imSrc) && /\.catch\(function \(\) \{ if \(pollT\) stop\(true\); \}\)/.test(imSrc), true);
-check('the prompt carries the tables and asks for numbers copied exactly', /copied exactly from the tables/.test(SUM.promptFor(T, 'x')) && SUM.promptFor(T, 'x').endsWith(JSON.stringify(T)), true);
+check('the prompt carries the tables and asks for numbers copied from the cell', /Copy every number as digits from the table cell/.test(SUM.promptFor(T, 'x')) && SUM.promptFor(T, 'x').endsWith(JSON.stringify(T)), true);
+check('…and for the cell each sentence states, which the answer\'s shape carries',
+  /give the cell it states: questions .*answers .*count \(M\) and of \(N\)/.test(SUM.promptFor(T)) && /134 of|of the 134 places say nothing/.test(SUM.promptFor(T)) &&
+  JSON.stringify(SUM.schemaFor(Type).properties.sentences.items.required) === JSON.stringify(['text', 'questions', 'answers', 'count', 'of']), true);
+
+console.log('\n  the summary: proofread once more, by the same model, each sentence beside its fact');
+{
+  const good3 = { text: 'Of the 14 places whose impact is Negative or degraded, 5 also say Commerce or services for what they are for.',
+    questions: ['pattern_3', 'pattern_4'], answers: ['Negative or degraded', 'Commerce or services'], count: 5, of: 14 };
+  const three = { sentences: [good1, good2, good3] };
+  // a fake model: the write answers `write`; the proofread answers `proof` (or throws it)
+  const seen = [];
+  const model = (write, proof) => async (m, prompt, schema, o) => {
+    seen.push(o || {});
+    if (!(o && o.proofread)) return typeof write === 'function' ? write(prompt) : write;
+    if (proof instanceof Error) throw proof;
+    return typeof proof === 'function' ? proof(prompt) : proof;
+  };
+  // the write: `first` the first time, `later` after
+  const turns = (first, later) => { let k = 0; return () => (k++ ? later : first); };
+  const warned = [];
+  const warn = console.warn;
+  console.warn = (msg) => { warned.push(String(msg)); };
+  const p2Prompts = [];
+  let p1, p2, p2b, p3, p4, p5, p6;
+  try {
+    p1 = await SUM.writeSummary({ layer: bl, features: bf, prev: null, model: 'm', Type,
+      call: model(three, { checks: [{ index: 0, ok: true, why: '' }, { index: 1, ok: false, why: 'says all, but its number is not the whole group' }, { index: 2, ok: true, why: '' }] }) });
+    const second = turns(three, { sentences: [good2, good1] });
+    p2 = await SUM.writeSummary({ layer: bl, features: bf, prev: null, model: 'm', Type,
+      call: model((pr) => { p2Prompts.push(pr); return second(); }, { checks: [{ index: 0, ok: false, why: 'stops part way' }, { index: 2, ok: false, why: 'contradicts itself' }] }) });
+    p2b = await SUM.writeSummary({ layer: bl, features: bf, prev: null, model: 'm', Type,
+      call: model(turns(three, { sentences: [good1, bad] }), { checks: [{ index: 0, ok: false, why: 'stops part way' }, { index: 2, ok: false, why: 'contradicts itself' }] }) });
+    p3 = await SUM.writeSummary({ layer: bl, features: bf, prev: null, model: 'm', Type, call: model(three, new Error('too many readings in the last hour')) });
+    p4 = await SUM.writeSummary({ layer: bl, features: bf, prev: null, model: 'm', Type, call: model(three, { checks: 'nonsense' }) });
+    p5 = await SUM.writeSummary({ layer: bl, features: bf, prev: null, model: 'm', Type, call: model(three, { checks: [{ index: 9, ok: false, why: 'x' }, { index: '1', ok: 'no' }] }) });
+    p6 = await SUM.writeSummary({ layer: bl, features: bf, prev: null, model: 'm', Type, timeoutMs: 50, call: model(three, () => new Promise(() => {})) });
+  } finally { console.warn = warn; }
+  check('a sentence the proofread marks not ok is dropped; the rest are kept, in order', p1.summary.sentences.map((s) => s.text), [good1.text, good3.text]);
+  check('…kept as { text, questions } only: the cell is for checking', p1.summary.sentences.map((s) => Object.keys(s)), [['text', 'questions'], ['text', 'questions']]);
+  check('…and the result says what the cell check kept and what the proofread dropped, and why',
+    [p1.by, p1.checked.length, p1.proofread.dropped, p1.proofread.skipped, p1.rewrite], ['model', 3, [{ text: good2.text, why: 'says all, but its number is not the whole group' }], '', undefined]);
+  check('…and the server\'s log says so, sentence and reason',
+    warned.includes('[insight] proofread dropped: ' + good2.text + ' — says all, but its number is not the whole group'), true);
+  check('the proofread is its own call, marked so, and asked as the write is', [seen[0].proofread, seen[1].proofread, seen[1].file], [undefined, true, true]);
+  check('under two left after the proofread: written once more (no second proofread), and that is the summary',
+    [p2.by, p2.summary.sentences.map((s) => s.text), p2.proofread.dropped.map((d) => d.why), p2.rewrite.kept.length, p2Prompts.length], ['model', [good2.text, good1.text], ['stops part way', 'contradicts itself'], 2, 2]);
+  check('…the re-write is told what the proofread found, sentence by sentence',
+    p2Prompts[1].startsWith(SUM.promptFor(T) + '\n') && p2Prompts[1].includes('Sentence 1 (“' + good1.text + '”): stops part way.') && p2Prompts[1].includes('Sentence 3 (“' + good3.text + '”): contradicts itself.'), true);
+  check('…and when the re-write fails the cell check too: no summary', [p2b.summary, p2b.by, p2b.rewrite.dropped.map((d) => d.why)], [null, 'nothing usable', ['17 is not the cell for Negative or degraded; the table says 14']]);
+  check('a refused proofread: the checked sentences stand, nothing thrown', [p3.summary.sentences.length, p3.by, /too many readings/.test(p3.proofread.skipped)], [3, 'model', true]);
+  check('a proofread answer with nothing usable in it: the checked sentences stand', [p4.summary.sentences.length, p4.proofread.skipped, p5.summary.sentences.length, p5.proofread.skipped], [3, 'no usable answer', 3, 'no usable answer']);
+  check('a proofread that takes too long: the checked sentences stand', [p6.summary.sentences.length, /took too long/.test(p6.proofread.skipped)], [3, true]);
+  check('…and each skip is in the log', warned.filter((w) => w.startsWith('[insight] proofread skipped: ')).length, 4);
+  const cells = IM.checkSentencesWithReasons([good1, good3, { ...pairRight, text: 'Of the 99 places that say both, 37 say Natural feature and Natural elements.', of: 99 }], T).kept;
+  const pp = SUM.proofreadPromptFor(T, cells);
+  check('the proofread is shown no tables: only the sentences, numbered, each with the fact its cell states',
+    [pp.includes(JSON.stringify(T)), pp.includes('"pairs"'), pp.endsWith(JSON.stringify([
+      { index: 0, text: good1.text, fact: 'Of the 115 places that answer “What is its environmental impact?”, 73 say Positive or preserved.' },
+      { index: 1, text: good3.text, fact: 'Of the 14 places whose answer to “What is its environmental impact?” is Negative or degraded and that also answer “What is its primary function?”, 5 answer Commerce or services.' },
+      { index: 2, text: 'Of the 99 places that say both, 37 say Natural feature and Natural elements.', fact: 'Of the 99 places that answer both “What is its current status?” and “What is its primary material or design?”, 37 answer Natural feature and Natural elements.' }]))],
+    [false, false, true]);
+  check('…the facts of the other shapes', IM.checkSentencesWithReasons([fewS,
+    { text: '13 of the 33 places say nothing about the main feature.', questions: ['pattern_1'], answers: [], count: 13, of: 33 }], TC).kept.map((x) => SUM.factFor(TC, x)),
+    ['Only 6 places answer “What is the place\'s condition?”.', '13 of the 33 places say nothing about “What is this place\'s main feature?”.']);
+  check('…and asked only for an unfinished sentence or one saying what its fact does not; when unsure, ok',
+    [/it is unfinished/, /it says something its fact does not/, /a number attached to the wrong answer/, /Different wording for the same fact is fine/, /When unsure, mark it ok/].every((r) => r.test(pp)), true);
+  check('the stand-in\'s proofread passes every sentence', SUM.standInProofread(pp), { checks: [{ index: 0, ok: true, why: '' }, { index: 1, ok: true, why: '' }, { index: 2, ok: true, why: '' }] });
+  // the server's cap is four calls: a write whose cells all fail, the retry, the proofread, the re-write
+  const capped = (rewriteAnswer) => {
+    let n = 0, proofs = 0;
+    const prompts = [];
+    const c = async (m, prompt, schema, o) => {
+      if (n >= 4) throw new Error('this reading has used its share of the model');
+      n++;
+      if (o && o.proofread) { proofs++; return { checks: [{ index: 0, ok: false, why: 'stops part way' }, { index: 1, ok: false, why: 'stops part way' }] }; }
+      prompts.push(prompt);
+      return n === 1 ? { sentences: [bad, pct] } : n === 2 ? three : rewriteAnswer;
+    };
+    c.state = () => ({ n, proofs, prompts });
+    return c;
+  };
+  const warned2 = [];
+  console.warn = (msg) => { warned2.push(String(msg)); };
+  let cA, cB, pcA, pcB;
+  try {
+    cA = capped({ sentences: [good1, good2] });
+    pcA = await SUM.writeSummary({ layer: bl, features: bf, prev: null, model: 'm', Type, call: cA });
+    cB = capped({ sentences: [bad] });
+    pcB = await SUM.writeSummary({ layer: bl, features: bf, prev: null, model: 'm', Type, call: cB });
+  } finally { console.warn = warn; }
+  check('the retry is told what was wrong with each sentence, and what the table says',
+    cA.state().prompts[1].includes('Sentence 1 (“' + bad.text + '”): 17 is not the cell for Negative or degraded; the table says 14.') &&
+    cA.state().prompts[1].includes('Sentence 2 (“' + pct.text + '”): it has a percentage, a link or markup.'), true);
+  check('the write, its retry, the proofread and the re-write fit the caller\'s four calls; one proofread', [cA.state().n, cA.state().proofs, pcA.by, pcA.summary.sentences.length], [4, 1, 'model', 2]);
+  check('…and a re-write that fails too: no summary, still four calls', [cB.state().n, pcB.summary, pcB.by], [4, null, 'nothing usable']);
+  check('the server\'s summary caller allows four; its stand-in answers the proofread',
+    /return aiCaller\(payer \|\| 'server', 4, stub\);/.test(server) && /if \(o && o\.proofread\) return insightSummary\.standInProofread\(prompt\);/.test(server), true);
+}
+{
+  const P = SUM.promptFor(T);
+  check('the prompt asks for short sentences, one fact each, finished, in one of four shapes',
+    [/Under 25 words\. One fact per sentence; never join two facts with "and", "while" or a comma\. Finish every sentence\./, /- One question: /, /- Unanswered: /, /- A pair: /, /- Few answers /].every((r) => r.test(P)), true);
+  check('a pair\'s row is the places that answer both: the shape says so',
+    P.includes('- A pair: "Of the N places whose <first question, in plain words> is <Answer A> and that also answer <second question, in plain words>, M say <Answer B>."'), true);
+  check('…and so does its fact', SUM.factFor(T, { cell: { shape: 'pair', questions: ['pattern_1', 'pattern_2'], answers: ['Natural feature', 'Natural elements'], count: 37, of: 38, ofRow: true } }),
+    'Of the 38 places whose answer to “What is its current status?” is Natural feature and that also answer “What is its primary material or design?”, 37 answer Natural elements.');
+  check('…"all" only when M equals N, and answer names kept as spelt',
+    /Say "all" or "every" only when M equals N/.test(P) && /Keep every answer name exactly as the tables spell it/.test(P), true);
+  check('the rules name no atlas\'s own answers', /tree|bark|shelter|species/i.test(SUM.promptFor({ places: 0, questions: [], pairs: [] })), false);
+  const crypto = await import('node:crypto');
+  const v2 = crypto.createHash('sha1').update('2\u0004' + JSON.stringify(T)).digest('hex').slice(0, 20);
+  check('SUMMARY_VERSION is 3, so a summary kept under 2 is written again', [SUM.SUMMARY_VERSION, SUM.summarySig(T) !== v2], [3, true]);
+  const kept2 = await SUM.writeSummary({ layer: bl, features: bf, prev: { summary: { sig: v2, sentences: [good1, good2] } }, call: fake({ sentences: [good1, good2] }), model: 'm', Type });
+  check('…and is', kept2.by, 'model');
+}
 
 console.log('\n  after a reading: only in Insight with the summary on, never the operator\'s own atlas');
 const NEVER = new Set(['deoria-bioregion']);
@@ -306,8 +489,8 @@ try {
     check('switched: Insight, every question shown but people ones, the summary being written', [sw.status, sw.j.name, sw.j.mode.summaryOn, sw.j.mode.summaryPending, sw.j.mode.shown],
       [200, 'insight', true, true, IM.defaultInsight(fx.layer).shown]);
     let f = await settled(dir);
-    check('the summary is written after the answer: at least two sentences, every number in the counts', [!!f.mode.summary, f.mode.summary && f.mode.summary.sentences.length >= 2,
-      f.mode.summary && IM.checkSentences(f.mode.summary.sentences, IM.summaryTables(fx.layer, fx.features)).length === f.mode.summary.sentences.length], [true, true, true]);
+    check('the summary is written after the answer: at least two sentences, the stand-in\'s, each through the cell check', [!!f.mode.summary, f.mode.summary && f.mode.summary.sentences.length >= 2,
+      f.mode.summary && JSON.stringify(f.mode.summary.sentences) === JSON.stringify(IM.checkSentences(SUM.standInAnswer(IM.summaryTables(fx.layer, fx.features)).sentences, IM.summaryTables(fx.layer, fx.features)))], [true, true, true]);
     check('one model call', written(slug), 1);
     if (label === 'public') {
       const peep = await call('POST', M(slug), { cookie: ownerC, body: { insight: { shown: { pattern_5: true } } } });

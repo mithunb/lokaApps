@@ -279,50 +279,168 @@
   function numbersIn(text) {
     return (String(text || "").match(/\d+(?:,\d{3})*(?:\.\d+)?/g) || []).map(function (s) { return s.replace(/,/g, ""); });
   }
-  // every number the tables hold for these questions (all of them when none are named)
-  function allowedNumbers(tables, cols) {
-    var ok = {}, add = function (n) { ok[String(n)] = true; };
-    var want = cols && cols.length ? cols : null;
-    add(tables.places);
-    (tables.questions || []).forEach(function (q) {
-      if (want && want.indexOf(q.id) < 0) return;
-      add(q.answered); add(q.saysNothing);
-      q.answers.forEach(function (a) { add(a.places); numbersIn(a.answer).forEach(add); });
-      numbersIn(q.question).forEach(add);
-    });
-    (tables.pairs || []).forEach(function (p) {
-      if (want && !(want.indexOf(p.questions[0]) >= 0 && want.indexOf(p.questions[1]) >= 0)) return;
-      add(p.answerBoth);
-      p.rows.forEach(function (r) { add(r.places); r.split.forEach(function (c) { add(c.places); }); });
-      (p.columns || []).forEach(function (c) { add(c.places); });
-    });
-    return ok;
+  /* ---------------- the summary's check (v3, Mithun, 25 Oct 2026) ----------------
+     Each sentence comes with the one cell of the tables it states: its
+     questions (for a pair, the first question first), the answers it names in
+     the same order, its count (M) and the group that count is out of (of, N).
+     The cell must be in the tables exactly, and the sentence must say it:
+       - one question, one answer: count is that answer's places, of is the
+         places that answer the question;
+       - one question, no answer: the places that say nothing, out of every
+         place; or, for a question few places answer, those few (count = of);
+       - a pair: count is the split entry under the first answer's row, of is
+         that row or the places that answer both.
+     Then: no number but the cell's own (and the map's total); both of them in
+     the text; every answer named; "all" or "every" only when count is the
+     whole group. The old check asked only whether each number was true
+     somewhere for the questions named, so 36 where the cell says 37 passed
+     when 36 was true of another row. */
+  // answer names as a reader sees them: case, spacing and the kind of apostrophe or quote do not count
+  function foldName(s) {
+    return String(s == null ? "" : s).replace(/[‘’`“”"']/g, "'").replace(/\s+/g, " ").trim().toLowerCase();
   }
-  /* The model's sentences, checked one by one: plain text, at least one
-     number, and every number in it one the tables hold for the questions it
-     names. A failing sentence is dropped; under two left, no summary. */
-  function checkSentences(list, tables) {
-    var ids = (tables.questions || []).map(function (q) { return q.id; });
-    var kept = [];
-    (Array.isArray(list) ? list : []).forEach(function (s) {
+  /* A name stands whole in a text when no letter or digit touches it on
+     either side (and no "1,2" or "1.5" runs on from it): answer "1" is not in
+     "12", "No" is not in "nothing", "4" is not in "40". Both already folded. */
+  var WORD_CHAR = /[\p{L}\p{N}\p{M}]/u;
+  function wholeAt(hay, needle, from) {
+    var at = hay.indexOf(needle, from);
+    while (at >= 0) {
+      var b = hay.charAt(at - 1), bb = hay.charAt(at - 2), e = at + needle.length, a = hay.charAt(e), aa = hay.charAt(e + 1);
+      var before = at > 0 && (WORD_CHAR.test(b) || (/[.,]/.test(b) && /\d/.test(bb)));
+      var after = e < hay.length && (WORD_CHAR.test(a) || (/[.,]/.test(a) && /\d/.test(aa)));
+      if (!before && !after) return at;
+      at = hay.indexOf(needle, at + 1);
+    }
+    return -1;
+  }
+  function hasWhole(hay, needle) { return !!needle && wholeAt(hay, needle, 0) >= 0; }
+  // the text with every whole stand of the name taken out
+  function cutWhole(hay, needle) {
+    if (!needle) return hay;
+    var at = wholeAt(hay, needle, 0);
+    while (at >= 0) {
+      hay = hay.slice(0, at) + " " + hay.slice(at + needle.length);
+      at = wholeAt(hay, needle, at + 1);
+    }
+    return hay;
+  }
+  function findAnswer(list, name) {
+    var f = foldName(name);
+    for (var i = 0; i < (list || []).length; i++) if (foldName(list[i].answer) === f) return list[i];
+    return null;
+  }
+  function toCount(v) {
+    if (typeof v === "number" && isFinite(v) && Math.floor(v) === v && v >= 0) return v;
+    if (typeof v === "string" && /^\s*\d+\s*$/.test(v)) return Number(v);
+    return null;
+  }
+  /* The cell a sentence says it states: { cell } or { why }. The cell holds
+     its shape (single, unanswered, few, pair), its questions and answers in
+     the tables' order, count, of, and for a pair whether of is the row. */
+  function sentenceCell(s, tables) {
+    var byId = {};
+    (tables.questions || []).forEach(function (q) { byId[q.id] = q; });
+    var qs = Array.isArray(s.questions) ? s.questions.filter(function (c, i, a) { return a.indexOf(c) === i; }) : [];
+    if (!qs.length) return { why: "names no question" };
+    for (var i = 0; i < qs.length; i++) if (!byId[qs[i]]) return { why: "no such cell: there is no question " + qs[i] };
+    var ans = Array.isArray(s.answers) ? s.answers.filter(function (a) { return typeof a === "string" && a.trim(); }) : [];
+    var count = toCount(s.count), of = toCount(s.of);
+    if (count === null || of === null) return { why: "no such cell: it gives no count and group" };
+    if (qs.length === 1) {
+      var q = byId[qs[0]];
+      if (!ans.length) {
+        if (q.fewPlaces && count === q.answered && of === q.answered) return { cell: { shape: "few", questions: [q.id], answers: [], count: count, of: of } };
+        // "N of the {places} places say nothing": the two numbers either way round are the same cell
+        if ((count === q.saysNothing && of === tables.places) || (of === q.saysNothing && count === tables.places)) {
+          return { cell: { shape: "unanswered", questions: [q.id], answers: [], count: q.saysNothing, of: tables.places } };
+        }
+        return { why: "no such cell: " + count + " of " + of + " for " + q.id + "; the table says " + q.saysNothing + " of the " + tables.places + " places say nothing" +
+          (q.fewPlaces ? ", and " + q.answered + " answer" : "") };
+      }
+      if (ans.length !== 1) return { why: "no such cell: one question with " + ans.length + " answers" };
+      var a = findAnswer(q.answers, ans[0]);
+      if (!a) return { why: "no such cell: " + q.id + " has no answer " + ans[0] };
+      if (count !== a.places) return { why: count + " is not the cell for " + a.answer + "; the table says " + a.places };
+      if (of !== q.answered) return { why: of + " is not the group for " + a.answer + "; the table says " + q.answered + " places answer " + q.id };
+      return { cell: { shape: "single", questions: [q.id], answers: [a.answer], count: count, of: of } };
+    }
+    if (qs.length === 2) {
+      var pair = null;
+      (tables.pairs || []).forEach(function (p) {
+        if (!pair && p.questions.length === 2 && p.questions.indexOf(qs[0]) >= 0 && p.questions.indexOf(qs[1]) >= 0) pair = p;
+      });
+      if (!pair) return { why: "no such cell: the tables do not compare " + qs[0] + " and " + qs[1] };
+      if (ans.length !== 2) return { why: "no such cell: a pair needs one answer to each of its questions" };
+      // the ids the other way round from the pair: the answers too
+      var flip = pair.questions[0] !== qs[0];
+      var A = flip ? ans[1] : ans[0], B = flip ? ans[0] : ans[1];
+      var row = findAnswer(pair.rows, A);
+      if (!row) return { why: "no such cell: no row " + A + " for " + pair.questions[0] };
+      var hit = findAnswer(row.split, B);
+      if (!hit) return { why: "no such cell: no place answers both " + row.answer + " and " + B };
+      var label = row.answer + " + " + hit.answer;
+      if (count !== hit.places) return { why: count + " is not the cell for " + label + "; the table says " + hit.places };
+      if (of !== row.places && of !== pair.answerBoth) {
+        return { why: of + " is not the group for " + label + "; the table says " + row.places + " (the row) or " + pair.answerBoth + " (both answered)" };
+      }
+      return { cell: { shape: "pair", questions: pair.questions.slice(), answers: [row.answer, hit.answer], count: count, of: of,
+        ofRow: of === row.places && of !== pair.answerBoth, flip: flip } };
+    }
+    return { why: "no such cell: a sentence states one question or one pair" };
+  }
+  /* The model's sentences, checked one by one: { kept, dropped }. kept holds
+     { text, questions, answers, count, of, cell } and is empty when under two
+     pass (no summary); dropped holds { index, text, why } for each that
+     failed, `index` its place in the list given. The sentences are written
+     from the counts only, so the reasons are safe to log and to show the
+     model again. */
+  function checkSentencesWithReasons(list, tables) {
+    var byId = {};
+    (tables.questions || []).forEach(function (q) { byId[q.id] = q; });
+    var kept = [], dropped = [];
+    (Array.isArray(list) ? list : []).forEach(function (s, i) {
       if (kept.length >= MAX_SENTENCES) return;
-      var text = typeof s === "string" ? s : s && typeof s.text === "string" ? s.text : "";
+      var raw = typeof s === "string" ? s : s && typeof s.text === "string" ? s.text : "";
+      var drop = function (why) { dropped.push({ index: i, text: String(raw).slice(0, MAX_SENTENCE), why: why }); };
       // the model sometimes tags a sentence with its question's id ("(pattern_2)"): not a number, never shown
-      text = text.replace(/\s*\(?\bpattern_\d+\b\)?/g, "").replace(/\s+/g, " ").trim();
-      if (!text || text.length > MAX_SENTENCE) return;
-      if (/[%<>*#`_\[\]{}|\\]|https?:/i.test(text)) return;
-      if (hasNumberWords(text)) return;
-      var nums = numbersIn(text);
-      if (!nums.length) return;
-      // every sentence names at least one of the questions it draws on
-      var cited = s && typeof s === "object" && Array.isArray(s.questions)
-        ? s.questions.filter(function (c, i, a) { return ids.indexOf(c) >= 0 && a.indexOf(c) === i; }) : [];
-      if (!cited.length) return;
-      var ok = allowedNumbers(tables, cited);
-      if (!nums.every(function (n) { return ok[n]; })) return;
-      kept.push({ text: text, questions: cited });
+      var text = raw.replace(/\s*\(?\bpattern_\d+\b\)?/g, "").replace(/\s+/g, " ").trim().replace(/([.!?])[,;]+$/, "$1");
+      if (!text) return drop("it is empty");
+      if (text.length > MAX_SENTENCE) return drop("it is too long");
+      if (/[%<>*#`_\[\]{}|\\]|https?:/i.test(text)) return drop("it has a percentage, a link or markup");
+      var r = sentenceCell(s && typeof s === "object" ? s : {}, tables);
+      if (r.why) return drop(r.why);
+      var c = r.cell;
+      var cited = s.questions.filter(function (q, k, a) { return a.indexOf(q) === k; });
+      var qTexts = cited.map(function (q) { return byId[q].question; });
+      /* The words a sentence borrows from its cell (an answer's name, a
+         question quoted whole) are not its own: a number or a number word
+         in them is allowed ("Two-wheeler"), and an "all" in them is not the
+         sentence saying all. Taken out only where they stand whole. */
+      var folded = foldName(text), bare = folded;
+      c.answers.concat(qTexts).forEach(function (n) { bare = cutWhole(bare, foldName(n)); });
+      if (hasNumberWords(bare)) return drop("it writes an amount in words");
+      var ok = {};
+      [c.count, c.of, tables.places].forEach(function (n) { ok[String(n)] = true; });
+      qTexts.forEach(function (t) { numbersIn(t).forEach(function (n) { ok[n] = true; }); });
+      var nums = numbersIn(bare);
+      var stray = nums.filter(function (n) { return !ok[n]; });
+      if (stray.length) return drop("number " + stray[0] + " is not in its cell");
+      var missing = [c.count, c.of].filter(function (n) { return nums.indexOf(String(n)) < 0; });
+      if (missing.length) return drop("number " + missing[0] + " of its cell is not in it");
+      var unnamed = c.answers.filter(function (n) { return !hasWhole(folded, foldName(n)); });
+      if (unnamed.length) return drop("it does not name " + unnamed[0]);
+      if (/\b(all|every)\b/i.test(bare) && c.count !== c.of) return drop("it says all but the count is a part (" + c.count + " of " + c.of + ")");
+      // the answers in the sentence's own order of questions, spelt as the tables spell them
+      var answers = c.flip ? c.answers.slice().reverse() : c.answers.slice();
+      kept.push({ text: text, questions: cited, answers: answers, count: c.count, of: c.of, cell: c });
     });
-    return kept.length >= MIN_SENTENCES ? kept : [];
+    return { kept: kept.length >= MIN_SENTENCES ? kept : [], dropped: dropped };
+  }
+  /* The sentences that pass, as they are kept and shown: { text, questions }.
+     Under two pass: none (no summary). */
+  function checkSentences(list, tables) {
+    return checkSentencesWithReasons(list, tables).kept.map(function (s) { return { text: s.text, questions: s.questions }; });
   }
   // the sentences a visitor sees: those whose every question is on show; under two, none
   function visibleSentences(summary, shownCols) {
@@ -990,8 +1108,8 @@
     cleanSettings: cleanSettings,
     summaryTables: summaryTables,
     numbersIn: numbersIn,
-    allowedNumbers: allowedNumbers,
     checkSentences: checkSentences,
+    checkSentencesWithReasons: checkSentencesWithReasons,
     visibleSentences: visibleSentences,
     panelTabs: panelTabs,
     hasNumberWords: hasNumberWords,

@@ -1900,15 +1900,19 @@ function insightSource(inst, local, layerId) {
   }
   return null;
 }
-// the model caller for the summary: one call; the stand-in (FAKE_READING) writes from the tables
+/* The model caller for the summary. The stand-in (FAKE_READING) writes from
+   the tables, and passes every sentence at the proofread (the call marked
+   proofread: true), so its summary is its sentences as before. */
 function insightCaller(payer) {
   if (!ai && !FAKE_READING) return null;
-  const stub = FAKE_READING ? async (model, prompt) => {
+  const stub = FAKE_READING ? async (model, prompt, schema, o) => {
+    if (o && o.proofread) return insightSummary.standInProofread(prompt);
     let t = null;
     try { t = JSON.parse(String(prompt).split('\n').pop()); } catch { t = null; }
     return insightSummary.standInAnswer(t);
   } : null;
-  return aiCaller(payer || 'server', 2, stub); // 2: one retry when no sentence passes the number check
+  // 4: the write, one retry when no sentence passes the cell check, the proofread, one re-write when it leaves under two
+  return aiCaller(payer || 'server', 4, stub);
 }
 /* One summary job per atlas at a time; a pending flag carries when it was
    set (summaryPendingAt), and one older than two minutes is stuck, not pending. */
