@@ -682,7 +682,7 @@
   // the mode the page is drawing, which the owner's tabs follow
   function modeDrawn() {
     var M = window.LokaAtlas && window.LokaAtlas.manifest, m = M && M.mode;
-    return m && typeof m === "object" && (m.name === "explore" || m.name === "event") ? m.name : "standard";
+    return m && typeof m === "object" && (m.name === "explore" || m.name === "event" || m.name === "insight") ? m.name : "standard";
   }
 
   /* Open on press; shut on a press outside, on Esc, or when a line has done
@@ -1435,7 +1435,9 @@
      Explore has Around here (the list visitors get) · Buttons (what they
      press); an Event guide has no tabs — its owner sees the venue list
      exactly as visitors do. Questions belong to Standard alone: they are
-     about reading the layers, and Explore and Event do not show layers. */
+     about reading the layers, and Explore and Event do not show layers.
+     Insight has Patterns (what visitors see) · Questions (which show, their
+     order, the summary — owner-modes.js draws it, as Explore's Buttons). */
   function addShelves() {
     var head = $("#atlas-panel .panel-head");
     var body = $("#atlas-controls");
@@ -1445,6 +1447,7 @@
     if (drawn === "event") return;          // the guide's own list, as visitors see it
     var pairs;
     if (drawn === "explore") pairs = [["around", "Around here"], ["buttons", "Buttons"]];
+    else if (drawn === "insight") pairs = [["patterns", "Patterns"], ["iquestions", "Questions"]];
     else {
       if (!keyedLayers().length) return;      // nothing to put on a second shelf
       pairs = [["layers", "Layers"], ["questions", "Questions"]];
@@ -1473,8 +1476,8 @@
     if (strong) strong.parentNode.insertBefore(tabs, strong); else head.insertBefore(tabs, head.firstChild);
     head.setAttribute("data-own-shelves", drawn);
 
-    var qs = second === "buttons" ? el("div", "own-bshelf") : el("div", "own-qshelf");
-    qs.id = second === "buttons" ? "own-bshelf" : "own-qshelf";
+    var qs = second !== "questions" ? el("div", "own-bshelf") : el("div", "own-qshelf");
+    qs.id = second !== "questions" ? "own-bshelf" : "own-qshelf";
     body.parentNode.insertBefore(qs, body.nextSibling);
 
     function showShelf() {

@@ -489,6 +489,16 @@
      No mode, an unknown one, or a mode whose layer is missing: nothing changes. */
   function applyMode(m) {
     EV = null;
+    // Insight mode (insight-mode.js): the questions as bar lists that colour
+    // the map, a short summary on top; no row of buttons
+    if (window.LokaInsightMode && LokaInsightMode.isOn(m)) {
+      try {
+        var n = LokaInsightMode.viewer(m.mode, eventApi());
+        var ns = n.layers(m.layers || []);
+        if (ns) { m.layers = ns; EV = n; }
+      } catch (e) { console.error("Atlas insight mode:", e && e.message); }
+      return m;
+    }
     // Explore mode (explore-mode.js): a city's places by button and by what is
     // near; built from Event mode's pieces and handed the same page
     if (window.LokaExploreMode && LokaExploreMode.isOn(m)) {
@@ -883,7 +893,7 @@
       var sheet = parseFloat(stage && getComputedStyle(stage).getPropertyValue("--sheet-h")) || 0;
       // event mode's buttons sit on the sheet's top edge (event-mode.js): room for
       // them too — one row, or two while a category's sub-groups are showing
-      var evRows = EV ? (stage.classList.contains("ev-sub-on") ? 104 : 62) : 0;
+      var evRows = EV && !EV.insight ? (stage.classList.contains("ev-sub-on") ? 104 : 62) : 0;
       if (sheet > 0) pad.bottom = Math.min(sheet + 16 + evRows, map.getContainer().clientHeight * (EV ? 0.6 : 0.45));
     } catch (e) {}
     try {
@@ -5813,7 +5823,9 @@
       // a redraw into an atlas with no mode leaves nothing of the guide behind
       var oldChips = document.querySelector(".ev-chips");
       if (oldChips && oldChips.parentNode) oldChips.parentNode.removeChild(oldChips);
-      if (stage) { stage.classList.remove("ev-on"); stage.classList.remove("ex-on"); }
+      if (stage) { stage.classList.remove("ev-on"); stage.classList.remove("ex-on"); stage.classList.remove("in-on"); }
+      var oldInChips = document.querySelector(".atlas-stage > .in-chips");   // Insight's chips over the map
+      if (oldInChips && oldInChips.parentNode) oldInChips.parentNode.removeChild(oldInChips);
     }
     var GROUP_LABELS = { userdata: "Your data", base: "Boundaries & places", agri: "Crops & value chain", eco: "Ecological landscape" };
     var declaredIds = {};

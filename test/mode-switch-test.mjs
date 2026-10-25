@@ -93,7 +93,8 @@ check('owner.js fetches the kit, as it is fetched itself (a visitor never downlo
 check('seen as a visitor, the map wears the saved buttons; back to editing, the draft', /v\.setButtons\(previewList\(VISITOR \? BTN\.saved : BTN\.draft\)\)/.test(owner) && /if \(BTN\.saved && btnDirty\(\)\) previewButtons\(\);/.test(owner), true);
 check('a name is cut at 20 letters, not 20 code units', /var chars = Array\.from\(inp\.value\);/.test(owner) && !/maxlength/.test(owner), true);
 check('an editor sees the line without Change', /small\.textContent = owner \? MODES\[name\]\.d : "Only the owner can change this";\s*act\.hidden = !owner/.test(owner), true);
-check('the dialog: three choices only', /var MODE_ORDER = \["standard", "event", "explore"\];/.test(owner) && !/Field|Insight/.test(owner.slice(owner.indexOf('var MODES = {'), owner.indexOf('var MODE_ORDER'))), true);
+// Insight joined as the fourth (25 Oct 2026, test/insight-mode-test.mjs); Field is not offered
+check('the dialog: four choices only', /var MODE_ORDER = \["standard", "event", "explore", "insight"\];/.test(owner) && !/Field/.test(owner.slice(owner.indexOf('var MODES = {'), owner.indexOf('var MODE_ORDER'))), true);
 check('its question', /How should visitors find their way\?/.test(owner), true);
 check('the confirm says nothing is lost and the old settings are kept', /Nothing is lost: /.test(owner) && /’s settings are kept\. Switch back and they return as you left them\./.test(owner) && /"Keep " \+ MODES\[cur\]\.t/.test(owner) && /"Switch to " \+ MODES\[to\]\.t/.test(owner), true);
 check('an event guide not set up: the sentence, and no Switch button', /if \(to === "event" && !\(MODEINFO && MODEINFO\.canEvent\)\) \{\s*conf\.innerHTML = "<p>" \+ esc\(EVENT_NOT_SET_UP\) \+ "<\/p>";\s*go\.hidden = true;/.test(owner), true);

@@ -22,6 +22,7 @@ import { queue as QUESTIONS, createQueue, fileSignatureOf, NEVER_READ, payerOf }
 import * as shortLabels from '../lib/atlas/short-labels.js';
 import * as keyNouns from '../lib/atlas/key-nouns.js';
 import * as buttonNames from '../lib/atlas/button-names.js';
+import * as insightSummary from '../lib/atlas/insight-summary.js';
 import * as placeNames from '../lib/atlas/place-names.js';
 import {
   enqueueBuild, getJob, setJobDoneHook, setStrandedBuildHook, DATASETS_ROOT, PRIVATE_ROOT,
@@ -1722,14 +1723,15 @@ function writePlaceName(inst) {
   } catch { return false; }
 }
 
-/* ---------- how visitors explore: Standard, Event or Explore ----------
+/* ---------- how visitors explore: Standard, Event, Explore or Insight ----------
    An atlas's mode lives in its overlay (manifest.local.json) as `mode`;
    Standard is no `mode` at all. The settings of a mode not in use wait under
    `modeKept[<name>]`, so switching back brings them back as they were left.
    One rule for every atlas, public or private (datasetDirFor). Only the
    owner switches, and only the owner edits Explore's buttons. */
 const EXPLORE = requireScript(path.join(REPO_ROOT, 'atlas', 'explore-mode.js'));
-const MODE_NAMES = ['standard', 'event', 'explore'];
+const INSIGHT = insightSummary.IM;   // atlas/insight-mode.js: the rules the page runs too
+const MODE_NAMES = ['standard', 'event', 'explore', 'insight'];
 const EVENT_NOT_SET_UP = 'An event guide needs its venues and programme set up first. LOKA sets this up for you — write to us.';
 const SAFE_LAYER_FILE = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 
@@ -1746,10 +1748,10 @@ function writeOverlay(file, local) {
     return true;
   } catch { return false; }
 }
-// the mode in use: 'explore' or 'event' when the overlay says so, else 'standard'
+// the mode in use: 'explore', 'event' or 'insight' when the overlay says so, else 'standard'
 function modeNow(local) {
   const m = local && local.mode;
-  return m && typeof m === 'object' && (m.name === 'explore' || m.name === 'event') ? m.name : 'standard';
+  return m && typeof m === 'object' && (m.name === 'explore' || m.name === 'event' || m.name === 'insight') ? m.name : 'standard';
 }
 function keptOf(local) {
   const k = local && local.modeKept;
@@ -1758,7 +1760,7 @@ function keptOf(local) {
 function modeAnswer(local) {
   const name = modeNow(local), kept = keptOf(local);
   const out = { name, kept: Object.keys(kept).filter((k) => kept[k] && typeof kept[k] === 'object'), canEvent: name === 'event' || !!(kept.event && typeof kept.event === 'object') };
-  if (name === 'explore') out.mode = local.mode;
+  if (name === 'explore' || name === 'insight') out.mode = local.mode;
   return out;
 }
 /* The atlas's own layers whose file the private data route would serve (a
@@ -1884,12 +1886,98 @@ async function reworkSmartButtons(dataset, layerId) {
   return 'reworked';
 }
 
+/* ---------- Insight: the questions, with a short summary on top ----------
+   The layer whose questions Insight reads: the mode's own, else the first of
+   the atlas's layers with a question some place answers that is not about
+   people (insight-mode.js canInsight). null when there is none — then
+   Insight cannot be chosen yet. */
+function insightSource(inst, local, layerId) {
+  const layers = ownLayers(local).filter((L) => L.keyLabels && typeof L.keyLabels === 'object');
+  layers.sort((a, b) => (b.id === layerId) - (a.id === layerId));
+  for (const L of layers) {
+    const feats = placesOf(inst, L);
+    if (feats && feats.length && INSIGHT.canInsight(L, feats)) return { layer: L, feats };
+  }
+  return null;
+}
+// the model caller for the summary: one call; the stand-in (FAKE_READING) writes from the tables
+function insightCaller(payer) {
+  if (!ai && !FAKE_READING) return null;
+  const stub = FAKE_READING ? async (model, prompt) => {
+    let t = null;
+    try { t = JSON.parse(String(prompt).split('\n').pop()); } catch { t = null; }
+    return insightSummary.standInAnswer(t);
+  } : null;
+  return aiCaller(payer || 'server', 1, stub);
+}
+/* One summary job per atlas at a time; a pending flag carries when it was
+   set (summaryPendingAt), and one older than two minutes is stuck, not pending. */
+const INSIGHT_RUNNING = new Set();
+function markPending(mode) { mode.summaryPending = true; mode.summaryPendingAt = Date.now(); return mode; }
+function clearPendingOf(mode) { delete mode.summaryPending; delete mode.summaryPendingAt; return mode; }
+// does the mode need its summary written: on, and none kept for these same answers
+function insightNeedsSummary(mode, src) {
+  if (!mode || mode.summaryOn === false || !src) return false;
+  const sig = insightSummary.summarySig(INSIGHT.summaryTables(src.layer, src.feats));
+  return !(mode.summary && mode.summary.sig === sig);
+}
+/* Write (or keep) the summary of an atlas in Insight, and store it in the
+   mode. `payer`: the owner's request when they asked, 'server' after a
+   reading. Written only if the atlas is still in Insight; summaryPending is
+   cleared whatever happens. Never throws. */
+async function runInsightSummary(slug, payer, opts) {
+  if (INSIGHT_RUNNING.has(slug)) return 'already writing';
+  INSIGHT_RUNNING.add(slug);
+  try {
+    const inst = reg.getInstance(slug);
+    if (!inst) return 'no atlas';
+    const o = opts || {};
+    const first = readOverlay(inst);
+    const why = insightSummary.shouldRewrite(slug, first.local, NEVER_READ);
+    const clearPending = () => {
+      const f = readOverlay(inst);
+      if (f.local && modeNow(f.local) === 'insight' && f.local.mode.summaryPending) {
+        f.local.mode = clearPendingOf({ ...f.local.mode });
+        writeOverlay(f.file, f.local);
+      }
+    };
+    if (why !== true) { clearPending(); return why; }
+    const m = first.local.mode;
+    const src = insightSource(inst, first.local, m.layer);
+    if (!src) { clearPending(); return 'no questions'; }
+    if (o.markPending && !o.force && insightNeedsSummary(m, src) && !INSIGHT.isPending(m)) {
+      first.local.mode = markPending({ ...m });
+      writeOverlay(first.file, first.local);
+    }
+    const r = await insightSummary.writeSummary({ layer: src.layer, features: src.feats, prev: m, call: insightCaller(payer),
+      model: getFlashModel(), Type, force: !!o.force });
+    const { file, local } = readOverlay(inst);
+    if (!local || modeNow(local) !== 'insight') return 'changed meanwhile';
+    const mode = { ...local.mode };
+    if (r.summary) mode.summary = r.summary;
+    else if (!r.keep) mode.summary = null;
+    clearPendingOf(mode);
+    local.mode = mode;
+    if (!writeOverlay(file, local)) return 'not written';
+    console.log('[insight] ' + slug + ' — summary: ' + r.by + (r.dropped ? ' (' + r.dropped + ' sentence(s) dropped: numbers not in the counts)' : ''));
+    return r.by;
+  } catch (e) {
+    console.warn('[insight] ' + slug + ' — ' + (e && e.message));
+    return 'failed';
+  } finally {
+    INSIGHT_RUNNING.delete(slug);
+  }
+}
+
 router.get('/instances/:slug/mode', (req, res) => {
   const inst = reg.getInstance(String(req.params.slug));
   if (!inst) return res.status(404).json({ error: 'not found' });
   if (!callerCanEdit(req, inst)) return res.status(403).json({ error: 'not allowed' });
   const { local } = readOverlay(inst);
-  res.json({ ...modeAnswer(local || {}), canChange: callerRole(req, inst) === 'owner' });
+  const ans = modeAnswer(local || {});
+  // Insight can be chosen once the atlas has been read: a question, not about people, that places answer
+  ans.canInsight = ans.name === 'insight' || !!(local && insightSource(inst, local, null));
+  res.json({ ...ans, canChange: callerRole(req, inst) === 'owner' });
 });
 
 router.post('/instances/:slug/mode', async (req, res) => {
@@ -1925,6 +2013,37 @@ async function postMode(req, res) {
     return res.json({ ok: true, ...modeAnswer(local) });
   }
 
+  /* Insight's settings: the summary on or off, which questions show and their
+     order (insight-mode.js cleanSettings: a people question can never be
+     shown). Turning the summary on writes it, if none is kept for these answers. */
+  if (b.name === undefined && b.insight !== undefined) {
+    if (now !== 'insight') return res.status(409).json({ error: 'These settings are for Insight. Switch the atlas to Insight first.' });
+    const src = insightSource(inst, local, local.mode.layer);
+    if (!src) return res.status(409).json({ error: INSIGHT.NO_QUESTIONS });
+    const clean = INSIGHT.cleanSettings(src.layer, b.insight, local.mode);
+    if (clean.error) return res.status(400).json({ error: clean.error });
+    const mode = { ...local.mode, layer: src.layer.id, ...clean.settings };
+    const write = !NEVER_READ.has(inst.slug) && insightNeedsSummary(mode, src) && !INSIGHT.isPending(mode) && !INSIGHT_RUNNING.has(inst.slug);
+    if (write) markPending(mode);
+    local.mode = mode;
+    if (!writeOverlay(file, local)) return res.status(500).json({ error: 'Could not save. Nothing changed — try again.' });
+    res.json({ ok: true, ...modeAnswer(local) });
+    if (write) setImmediate(() => { runInsightSummary(inst.slug, req); });
+    return;
+  }
+  // "Write it again": the owner's allowance; visitors see the questions meanwhile
+  if (b.name === undefined && b.rewriteSummary !== undefined) {
+    if (now !== 'insight') return res.status(409).json({ error: 'The summary is for Insight. Switch the atlas to Insight first.' });
+    if (local.mode.summaryOn === false) return res.status(409).json({ error: 'Turn the summary on first.' });
+    if (NEVER_READ.has(inst.slug)) return res.status(409).json({ error: 'LOKA does not write a summary for this atlas.' });
+    if (INSIGHT_RUNNING.has(inst.slug)) return res.json({ ok: true, by: 'already writing', ...modeAnswer(local) });
+    local.mode = markPending({ ...local.mode });
+    writeOverlay(file, local);
+    const by = await runInsightSummary(inst.slug, req, { force: true });
+    const fresh = readOverlay(inst);
+    return res.json({ ok: true, by, ...modeAnswer(fresh.local || {}) });
+  }
+
   // Explore's "Group by": the atlas's own analysis, or LOKA's categories — buttons made afresh, written at once
   if (b.name === undefined && b.groupBy !== undefined) {
     if (now !== 'explore') return res.status(409).json({ error: 'Buttons are for Explore. Switch the atlas to Explore first.' });
@@ -1957,7 +2076,7 @@ async function postMode(req, res) {
   }
 
   const want = typeof b.name === 'string' ? b.name : '';
-  if (!MODE_NAMES.includes(want)) return res.status(400).json({ error: 'Choose Standard, Event or Explore.' });
+  if (!MODE_NAMES.includes(want)) return res.status(400).json({ error: 'Choose Standard, Event, Explore or Insight.' });
   if (want === now) return res.json({ ok: true, already: true, ...modeAnswer(local) });
   const kept = { ...keptOf(local) };
   if (want === 'event' && !(kept.event && typeof kept.event === 'object')) {
@@ -1978,6 +2097,17 @@ async function postMode(req, res) {
     }
     if (!next) return res.status(409).json({ error: 'Explore needs places of your own on the atlas. Add your data first.' });
   } else if (want === 'event') next = kept.event;
+  /* Insight: the settings kept from last time, else every question shown
+     but those about people; never without a question to show */
+  let insightSrc = null;
+  if (want === 'insight') {
+    const was = kept.insight && typeof kept.insight === 'object' ? kept.insight : null;
+    insightSrc = insightSource(inst, local, was && was.layer);
+    if (!insightSrc) return res.status(409).json({ error: INSIGHT.NO_QUESTIONS, needsQuestions: true });
+    next = was ? { ...was, layer: insightSrc.layer.id } : INSIGHT.defaultInsight(insightSrc.layer);
+    clearPendingOf(next);
+    if (!NEVER_READ.has(inst.slug) && insightNeedsSummary(next, insightSrc)) markPending(next);
+  }
   // what is in use now is put aside, never thrown away — an unknown mode too,
   // and one with no proper name under "_unnamed" (then "_unnamed-2", …)
   const cur = local.mode;
@@ -1991,6 +2121,8 @@ async function postMode(req, res) {
   if (Object.keys(kept).length) local.modeKept = kept; else delete local.modeKept;
   if (!writeOverlay(file, local)) return res.status(500).json({ error: 'Could not save your choice. Nothing changed — try again.' });
   res.json({ ok: true, from: now, ...modeAnswer(local) });
+  // the summary is written after the answer: the page shows "being written" and the questions meanwhile
+  if (want === 'insight' && local.mode && local.mode.summaryPending) setImmediate(() => { runInsightSummary(inst.slug, req); });
 }
 
 // Fast edit — text, branding, logo and public/private — with no rebuild.
@@ -6483,6 +6615,11 @@ function commitLayer({ importId, dataset }, who, opts) {
         const ds = session.dataset;
         setImmediate(() => {
           reworkSmartButtons(ds, id).catch((e) => console.warn('[buttons] could not rework ' + ds + '/' + id + ' — ' + (e && e.message)));
+          // and an atlas in Insight with its summary on: written again if the answers changed (the server's allowance)
+          try {
+            const ins = reg.getInstance(ds);
+            if (ins && insightSummary.shouldRewrite(ds, readOverlay(ins).local, NEVER_READ) === true) runInsightSummary(ds, 'server', { markPending: true });
+          } catch (e) { console.warn('[insight] could not look at ' + ds + ' — ' + (e && e.message)); }
         });
       }
     }

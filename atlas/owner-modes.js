@@ -3,10 +3,12 @@
  * Loaded by owner.js (never by a visitor's page), which hands over what it
  * owns — api, toast, dialogs, the shelves — through mount(ctx). Three things:
  *   - the Owner menu's "How visitors explore · <mode>" line and its dialog
- *     (Standard, Event, Explore; POST /instances/:slug/mode);
+ *     (Standard, Event, Explore, Insight; POST /instances/:slug/mode);
  *   - "See it as a visitor", the menu's first line;
- *   - Explore's Buttons tab (owner.js builds the tabs; this draws the editor).
- * The rules for buttons are explore-mode.js's, the file the server checks with. */
+ *   - Explore's Buttons tab, and Insight's Questions tab (owner.js builds the
+ *     tabs; this draws what is in them).
+ * The rules for buttons are explore-mode.js's, and for Insight's questions
+ * insight-mode.js's: the same files the server checks with. */
 (function () {
   "use strict";
 
@@ -29,16 +31,19 @@
       sees: "the venues, each venue's programme, and what is near each one" },
     explore: { t: "Explore", d: "For visitors finding their way around: up to four buttons, and a list of what is around here.",
       sees: "up to four buttons and a list of what is around here" },
+    insight: { t: "Insight", d: "For people reading patterns: the questions, with a short summary on top.",
+      sees: "the questions LOKA asked of the places, each answer counted and coloured on the map, with a short summary on top" },
   };
-  var MODE_ORDER = ["standard", "event", "explore"];
+  var MODE_ORDER = ["standard", "event", "explore", "insight"];
+  var INSIGHT_NOT_READY = "Insight needs the questions LOKA asks of the places. They appear once the atlas has been read.";
   var EVENT_NOT_SET_UP = "An event guide needs its venues and programme set up first. LOKA sets this up for you — write to us.";
   var MODE_SWITCHED = "loka-mode-switched";
-  var MODEINFO = null;   // the server's answer: { name, kept, canEvent, canChange }
+  var MODEINFO = null;   // the server's answer: { name, kept, canEvent, canInsight, canChange }
 
   // the mode the page is drawing (what the owner's tabs must match)
   function modeDrawn() {
     var M = window.LokaAtlas && window.LokaAtlas.manifest, m = M && M.mode;
-    return m && typeof m === "object" && (m.name === "explore" || m.name === "event") ? m.name : "standard";
+    return m && typeof m === "object" && (m.name === "explore" || m.name === "event" || m.name === "insight") ? m.name : "standard";
   }
   function modeName() { return (MODEINFO && MODES[MODEINFO.name]) ? MODEINFO.name : modeDrawn(); }
 
@@ -116,6 +121,12 @@
           go.hidden = true;
           return;
         }
+        // Insight reads the questions LOKA asked; an atlas not yet read has none
+        if (to === "insight" && !(MODEINFO && MODEINFO.canInsight)) {
+          conf.innerHTML = "<p>" + esc(INSIGHT_NOT_READY) + "</p>";
+          go.hidden = true;
+          return;
+        }
         var n = rowsOnMap();
         var lines = [
           "Visitors will see " + MODES[to].sees + ".",
@@ -125,6 +136,9 @@
         ];
         if (to === "explore" && !(MODEINFO && (MODEINFO.kept || []).indexOf("explore") >= 0)) {
           lines.push("To start, LOKA makes up to four buttons from the categories your places use most. You can change them under Buttons.");
+        }
+        if (to === "insight") {
+          lines.push("LOKA writes a short summary of what the places say. It takes about a minute; visitors see the questions meanwhile. You choose which questions show, and their order, under Questions.");
         }
         conf.innerHTML = "<p>Switch " + esc(title) + " from " + MODES[cur].t + " to " + MODES[to].t + "?</p><ul>" +
           lines.map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("") + "</ul>";
@@ -172,6 +186,7 @@
             err.textContent = errMsg(e);
             // the server knows best whether an event guide is set up
             if (e && e.needsSetUp && MODEINFO) { MODEINFO.canEvent = false; say(); err.textContent = errMsg(e); }
+            if (e && e.needsQuestions && MODEINFO) { MODEINFO.canInsight = false; say(); err.textContent = errMsg(e); }
           });
       };
     }, function () { return !busy; });
@@ -323,6 +338,8 @@
   }
 
   function drawButtonShelf(host) {
+    // Insight's second tab is its Questions (owner.js asks for "the second shelf")
+    if (modeDrawn() === "insight") { drawInsightShelf(host); return; }
     var mode = exploreMode();
     if (!mode || !XM()) { host.innerHTML = ""; return; }
     if (!BTN.saved) { BTN.saved = plainButtons(mode.buttons); BTN.draft = plainButtons(mode.buttons); }
@@ -528,6 +545,161 @@
       });
   }
 
+  /* ---------------- Insight: the Questions tab ----------------
+     Three settings and nothing else: the summary on top (on or off, and
+     "Write it again"), which questions show, and their order. A question whose
+     answers are people's names is locked off, with the reason. Each change is
+     saved at once (POST /instances/:slug/mode { insight }) and the page shows
+     it straight away (the insight viewer's setMode). */
+  var INS = { saving: false, writing: false, tries: 0, polls: 0 };
+  function IM() { return window.LokaInsightMode; }
+  function insightMode() {
+    var M = window.LokaAtlas && window.LokaAtlas.manifest, m = M && M.mode;
+    return m && m.name === "insight" ? m : null;
+  }
+  function insightViewer() { return IM() && IM().viewer && IM().viewer._current; }
+  function takeInsight(m) {
+    var v = insightViewer(), live = insightMode();
+    if (v && v.setMode) v.setMode(m);
+    else if (live && m) { Object.keys(live).forEach(function (k) { if (!(k in m)) delete live[k]; }); Object.keys(m).forEach(function (k) { live[k] = m[k]; }); }
+  }
+  function writtenWhen(at) {
+    if (!at) return "";
+    try { return new Date(at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }); } catch (e) { return ""; }
+  }
+  function drawInsightShelf(host) {
+    var mode = insightMode();
+    if (!mode || !IM()) { host.innerHTML = ""; return; }
+    wireInsightShelf(host);
+    var L = exploreStanza(mode), A = window.LokaAtlas;
+    var d = L && A.dataFor ? A.dataFor(L.id) : null, feats = d && d.features;
+    if (!L || !feats) {
+      host.innerHTML = '<p class="own-set-p">' + (window.LokaWait ? window.LokaWait.html("Loading the places…") : "Loading the places…") + "</p>";
+      if (INS.tries++ < 40) setTimeout(function () { if (!host.hidden) drawInsightShelf(host); }, 400);
+      return;
+    }
+    INS.tries = 0;
+    var s = IM().settingsOf(L, mode), busy = INS.saving || INS.writing;
+    var writing = INS.writing || IM().isPending(mode);
+    var h = '<div class="own-bbody own-ibody">';
+    h += '<div class="own-icard"><div class="own-irow"><div class="own-ik"><b id="own-isum-k">Summary on top</b>' +
+      "<small>A few sentences in plain words, written by AI from the answers each time the atlas is updated.</small></div>" +
+      '<button class="own-switch" type="button" role="switch" data-iact="sum" aria-checked="' + s.summaryOn + '" aria-labelledby="own-isum-k"' + (busy ? " disabled" : "") +
+      '><span class="own-switch-tr" aria-hidden="true"></span></button></div>';
+    if (s.summaryOn) {
+      h += '<div class="own-irow own-irow2"><button class="share-btn" type="button" data-iact="rewrite"' + (writing || busy ? " disabled" : "") + ">" +
+        (writing ? '<span class="own-mode-spin" aria-hidden="true"></span>Writing…' : "Write it again") + "</button>" +
+        '<span class="own-inote" role="status">' + (writing ? "Visitors still see the questions while it is written."
+          : mode.summary ? "Last written " + esc(writtenWhen(mode.summary.at)) + ", from these answers."
+          : "No summary for now: LOKA could not write one from these answers.") + "</span></div>";
+    }
+    h += "</div>";
+    h += '<div class="own-icard"><b>Questions visitors see</b><small class="own-is">Switch a question off to hide it; use the arrows to change the order. ' +
+      "The first one opens when a visitor arrives and colours the map.</small>";
+    s.order.forEach(function (col, i) {
+      var st = IM().stats(L, feats, col), on = !!s.shown[col], q = st.question || col;
+      var small = st.people ? IM().PEOPLE_REASON : !st.answered ? "No place answers this yet." :
+        IM().coverWords(st) + (st.sparse ? " (shown under \u201cSaid by only a few places\u201d)" : "");
+      h += '<div class="own-iq' + (on ? "" : " off") + '"><div class="own-imv">' +
+        '<button type="button" data-iact="up" data-col="' + esc(col) + '"' + (i === 0 || busy ? " disabled" : "") + ' aria-label="Move \u201c' + esc(q) + '\u201d up">▲</button>' +
+        '<button type="button" data-iact="down" data-col="' + esc(col) + '"' + (i === s.order.length - 1 || busy ? " disabled" : "") + ' aria-label="Move \u201c' + esc(q) + '\u201d down">▼</button></div>' +
+        '<div class="own-ik"><span>' + esc(q) + "</span><small>" + esc(small) + "</small></div>" +
+        '<button class="own-switch" type="button" role="switch" data-iact="show" data-col="' + esc(col) + '" aria-checked="' + on + '"' + (st.people || busy ? " disabled" : "") +
+        ' aria-label="Show \u201c' + esc(q) + '\u201d to visitors"><span class="own-switch-tr" aria-hidden="true"></span></button></div>';
+    });
+    h += '</div><button class="share-btn primary" type="button" data-iact="asvisitor">See it as a visitor</button></div>';
+    var keep = host.querySelector(".own-ibody"), top = keep ? keep.scrollTop : 0;
+    host.innerHTML = h;
+    var body = host.querySelector(".own-ibody");
+    if (body) body.scrollTop = top;
+    if (IM().isPending(mode) && !INS.writing) pollInsight(host);
+  }
+  // while the server writes the summary (after a switch, or the summary turned on), ask now and then
+  function pollInsight(host, again) {
+    if (INS.pollT) return;
+    if (!again) INS.polls = 0;   // a new wait starts its own count
+    INS.pollT = setTimeout(function () {
+      INS.pollT = null;
+      api("instances/" + encodeURIComponent(SLUG) + "/mode").then(function (j) {
+        var m = j && j.mode;
+        if (!m || m.name !== "insight") return;
+        if (IM().isPending(m) && INS.polls++ < 45) { if (!host.hidden) pollInsight(host, true); return; }
+        if (IM().isPending(m)) { delete m.summaryPending; delete m.summaryPendingAt; }
+        takeInsight(m);
+        if (m.summary) toast("Summary written");
+        drawInsightShelf(host);
+      }).catch(function () { if (INS.polls++ < 45) pollInsight(host, true); });
+    }, 4000);
+  }
+  function saveInsight(host, patch, said) {
+    INS.saving = true;
+    drawInsightShelf(host);
+    api("instances/" + encodeURIComponent(SLUG) + "/mode", { method: "POST", body: { insight: patch } })
+      .then(function (j) {
+        INS.saving = false;
+        if (j && j.mode) takeInsight(j.mode);
+        toast(said);
+        drawInsightShelf(host);
+      })
+      .catch(function (e) {
+        INS.saving = false;
+        toast(errMsg(e));
+        drawInsightShelf(host);
+      });
+  }
+  function rewriteSummary(host) {
+    var mode = insightMode();
+    if (!mode || INS.writing) return;
+    INS.writing = true;
+    var was = {};
+    Object.keys(mode).forEach(function (k) { was[k] = mode[k]; });
+    var pending = {};
+    Object.keys(mode).forEach(function (k) { pending[k] = mode[k]; });
+    pending.summary = null; pending.summaryPending = true; pending.summaryPendingAt = Date.now();
+    takeInsight(pending);   // the page shows "being written", the questions still there
+    drawInsightShelf(host);
+    api("instances/" + encodeURIComponent(SLUG) + "/mode", { method: "POST", body: { rewriteSummary: true } })
+      .then(function (j) {
+        INS.writing = false;
+        if (j && j.mode) takeInsight(j.mode);
+        if (j && j.mode && IM().isPending(j.mode)) { /* another write was under way: the tab waits for it */ }
+        else toast(j && j.mode && j.mode.summary ? "Summary written again" : "LOKA could not write a summary this time. Visitors see the questions.");
+        drawInsightShelf(host);
+      })
+      .catch(function (e) {
+        INS.writing = false;
+        delete was.summaryPending; delete was.summaryPendingAt;
+        takeInsight(was);
+        toast(errMsg(e));
+        drawInsightShelf(host);
+      });
+  }
+  function wireInsightShelf(host) {
+    if (host._insWired) return;
+    host._insWired = true;
+    host.addEventListener("click", function (e) {
+      var t = e.target && e.target.closest && e.target.closest("[data-iact]");
+      if (!t || t.disabled || !insightMode() || modeDrawn() !== "insight") return;
+      var act = t.getAttribute("data-iact"), col = t.getAttribute("data-col");
+      var mode = insightMode(), L = exploreStanza(mode);
+      if (!L) return;
+      var s = IM().settingsOf(L, mode);
+      if (act === "asvisitor") { setVisitorView(true); return; }
+      if (act === "rewrite") { rewriteSummary(host); return; }
+      if (INS.saving) return;
+      if (act === "sum") { saveInsight(host, { summaryOn: !s.summaryOn }, "Saved"); return; }
+      if (act === "show") { var sh = {}; sh[col] = !s.shown[col]; saveInsight(host, { shown: sh }, "Saved"); return; }
+      if (act === "up" || act === "down") {
+        var i = s.order.indexOf(col), j = act === "up" ? i - 1 : i + 1;
+        if (i < 0 || j < 0 || j >= s.order.length) return;
+        var order = s.order.slice(), x = order[i];
+        order[i] = order[j]; order[j] = x;
+        saveInsight(host, { order: order }, "Order saved");
+        setTimeout(function () { var b = host.querySelector('[data-iact="' + act + '"][data-col="' + col.replace(/["\\]/g, "\\$&") + '"]'); if (b && !b.disabled) b.focus(); }, 0);
+      }
+    });
+  }
+
   // the look of the pieces above; owner.css is shared with every owner tool, these are only here
   function modeStyle() {
     if (document.getElementById("own-mode-style")) return;
@@ -615,6 +787,25 @@
       ".own-blink{font:inherit;font-weight:700;color:var(--color-leaf);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}",
       ".own-blink:focus-visible{outline:2px solid var(--color-leaf);outline-offset:2px}",
       ".own-bicon-fixed{cursor:default}",
+      /* Insight's Questions tab */
+      ".own-ibody{display:flex;flex-direction:column;gap:.8rem}",
+      ".own-icard{border:1px solid var(--color-border);border-radius:var(--radius-lg,.375rem);padding:.7rem .8rem;background:var(--color-surface)}",
+      ".own-icard>b{display:block;font-size:var(--t-ui)}",
+      ".own-is{display:block;font-size:var(--t-meta);color:var(--color-text-muted);line-height:1.35;margin:.1rem 0 .3rem}",
+      ".own-irow{display:flex;justify-content:space-between;align-items:center;gap:.6rem}",
+      ".own-irow2{justify-content:flex-start;flex-wrap:wrap;margin-top:.6rem}",
+      ".own-irow2 .share-btn{display:inline-flex;align-items:center;gap:.4rem}",
+      ".own-inote{font-size:var(--t-meta);color:var(--color-text-muted)}",
+      ".own-ik{flex:1 1 auto;min-width:0;font-size:var(--t-ui)}",
+      ".own-ik small{display:block;color:var(--color-text-muted);font-size:var(--t-meta);line-height:1.35}",
+      ".own-iq{display:flex;gap:.6rem;align-items:center;padding:.55rem 0;border-top:1px solid var(--color-divider)}",
+      ".own-iq.off .own-ik>span{color:var(--color-text-muted)}",
+      ".own-imv{display:flex;flex-direction:column;gap:2px;flex:none}",
+      ".own-imv button{background:none;border:1px solid var(--color-border);border-radius:var(--radius-xs,2px);width:28px;height:22px;line-height:1;font-size:.7rem;padding:0;cursor:pointer;color:var(--color-text-primary)}",
+      ".own-imv button[disabled]{opacity:.3;cursor:default}",
+      ".own-imv button:focus-visible{outline:2px solid var(--color-leaf);outline-offset:2px}",
+      ".own-switch[disabled]{opacity:.5;cursor:not-allowed}",
+      ".own-ibody>.share-btn.primary{align-self:flex-start}",
     ].join("\n");
     document.head.appendChild(s);
   }
