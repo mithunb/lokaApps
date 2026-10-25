@@ -2737,6 +2737,16 @@ const geminiRate = new Map();
 const AI_CALLS_PER_HOUR = 150;      // per signed-in account
 const AI_CALLS_PER_HOUR_IP = 40;    // per address, when nobody is signed in
 const AI_CALLS_PER_READING = 24;    // one ATTEMPT at a reading may not exceed this; its one retry has its own
+/* Room on top of that for the careful check on answers (enrich.js
+   checkAnswers), which runs after answering and spends what the attempt has
+   left. Kept apart from AI_CALLS_PER_READING because that number also decides
+   how many columns get a look of their own (planColumns), and the check must
+   not change which columns are read. The check reads only the questions that
+   judge a place: Bengaluru's saved answers (134 places) hold about 115 such,
+   three calls at 40 a call, mostly from room the columns left unspent. When
+   room is short the check hands each call more answers instead (up to 160),
+   and past that leaves the rest as first answered. */
+const ANSWER_CHECK_CALLS = 4;
 
 function aiWho(req) {
   // work the server is finishing on an owner's behalf keeps its own allowance,
@@ -2770,7 +2780,7 @@ function aiTake(req) {
    means the reading is simply not saved. Nothing is invented to fill the gap
    and nothing half-done is kept. */
 function aiCaller(req, perReading, stub) {
-  const cap = perReading || AI_CALLS_PER_READING;
+  const cap = perReading || (AI_CALLS_PER_READING + ANSWER_CHECK_CALLS);
   let spent = 0;
   const call = function (model, prompt, schema, o) {
     if (spent >= cap) throw new Error('this reading has used its share of the model');
@@ -2783,6 +2793,7 @@ function aiCaller(req, perReading, stub) {
     return geminiJSON(model, prompt, schema);
   };
   call.spent = () => spent;
+  call.cap = cap;
   return call;
 }
 

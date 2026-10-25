@@ -27,6 +27,8 @@ function check(label, got, want) {
 // --- 1. is the question-finder now told what recurs, on a small set? ---
 let sawPrompt = '';
 async function peek(model, prompt, schema, o) {
+  // the careful check on answers (answer-check-test.mjs has its own checks): it says yes to all
+  if (schema && schema.properties && schema.properties.checks) return { checks: [] };
   if (o && o.think) {
     sawPrompt = prompt;
     return { verdict: 'questions', reading: '', facts: [], questions: [

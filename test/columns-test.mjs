@@ -98,6 +98,8 @@ check('a plan never spends past the allowance: looks + answers + one retry', tig
 function stub({ perColumn = {}, cheat = false, log = {} } = {}) {
   log.think = []; log.file = [];
   return async (model, prompt, schema, o) => {
+    // the careful check on answers (answer-check-test.mjs has its own checks): it says yes to all
+    if (schema && schema.properties && schema.properties.checks) { (log.check = log.check || []).push(prompt); return { checks: [] }; }
     if (o && o.think) {
       log.think.push(prompt);
       const col = (prompt.match(/of its data, called "([^"]+)"/) || [])[1] || (prompt.match(/columns of its data say[^:]*: "([^"]+)"/) || [])[1] || '?';
