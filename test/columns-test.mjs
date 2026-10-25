@@ -64,7 +64,7 @@ const whyOf = (c) => (tc.passed.find((p) => p.column === c) || {}).why || '';
 const kindOf = (c) => (tc.ask.find((a) => a.column === c) || {}).kind || '';
 check('the description is free text, read on its own', kindOf('description'), 'text');
 check('so is the festival comment — the column the old reading never drew on', kindOf('festival_comment'), 'text');
-check('the address is read too, known for what it is', kindOf('address'), 'address');
+check('an address is not asked, and says why (Mithun, 25 Oct 2026)', [kindOf('address'), whyOf('address')], ['', 'an address: the map already shows where each place is']);
 check('a word or two a place with real variety is read, as a short column', [kindOf('tree'), kindOf('keeper')], ['short', 'short']);
 check('the closed list the map already colours by is not asked again',
   whyOf('categories'), 'the map can already colour places by this (3 answers)');
@@ -80,17 +80,17 @@ check('a column name reads as a label', [E.columnLabel('festival_comment'), E.co
 
 console.log('\n  the plan: one look per column, prose first, short columns together, within the allowance');
 const plan = E.planColumns(rows, fields, { nameCol: 'loka_name', budget: 24, batches: 1 });
-// prose first, the fuller column first (the made-up comments are longer than the descriptions), tags, then the address, then the short ones together
-check('four groups: comment, description, address, and the short columns together',
-  plan.groups.map((g) => g.label), ['festival_comment', 'description', 'address', 'tree + keeper + labels']);
-check('the short columns are one group of two', plan.groups[3].columns, ['tree', 'keeper', 'labels']);
-check('and say so', /read together/.test(plan.groups[3].why), true);
-check('prose before an address, whatever their lengths', plan.groups.findIndex((g) => g.label === 'address') > plan.groups.findIndex((g) => g.label === 'description'), true);
+// prose first, the fuller column first (the made-up comments are longer than the descriptions), tags, then the short ones together
+check('three groups: comment, description, and the short columns together',
+  plan.groups.map((g) => g.label), ['festival_comment', 'description', 'tree + keeper + labels']);
+check('the short columns are one group of two', plan.groups[2].columns, ['tree', 'keeper', 'labels']);
+check('and say so', /read together/.test(plan.groups[2].why), true);
+check('no group holds the address', plan.groups.some((g) => g.columns.includes('address')), false);
 check('room for ' + plan.maxGroups + ' looks on their own at 24 calls and 1 batch', plan.maxGroups, 21);
 const tight = E.planColumns(rows, fields, { nameCol: 'loka_name', budget: 24, batches: 11 });
 check('a reading of 420 places (11 batches) can afford one look', tight.maxGroups, 1);
 check('so every column is read together in it', tight.groups.length, 1);
-check('with every column on the line', tight.groups[0].columns, ['festival_comment', 'description', 'address', 'tree', 'keeper', 'labels']);
+check('with every column on the line', tight.groups[0].columns, ['festival_comment', 'description', 'tree', 'keeper', 'labels']);
 check('and the record says why, without counting calls', tight.groups[0].why, 'read together with other columns, to keep the cost of one reading down');
 check('a plan never spends past the allowance: looks + answers + one retry', tight.groups.length + 11 + 1 + 11 <= 24, true);
 
@@ -153,25 +153,25 @@ console.log('\n  a reading: every column asked on its own, the comments included
 const r1 = await read({}, { perColumn: {
   description: found([sortQ]), festival_comment: found([dayQ]), address: found([areaQ]) } });
 check('it lands', r1.verdict, 'questions');
-check('one call to find questions for each of the four groups', r1.log.think.length, 4);
+check('one call to find questions for each of the three groups', r1.log.think.length, 3);
 check('one call to answer 24 places', r1.log.file.length, 1);
-check('five calls in all; the old reading cost two', r1.log.think.length + r1.log.file.length, 5);
+check('four calls in all; the old reading cost two', r1.log.think.length + r1.log.file.length, 4);
 const commentPrompt = r1.log.think.find((p) => /called "festival_comment"/.test(p));
 check('the comments column is asked by name', Boolean(commentPrompt), true);
 check('and the lines put to it hold the comments alone', /Festival venue: Thursday/.test(commentPrompt) && !/where the festival gathers people/.test(commentPrompt), true);
 check('and it is told a different line on every place is not the same as no pattern',
   /not the same as no pattern/.test(commentPrompt) && /which day, morning against evening/.test(commentPrompt), true);
-check('the short columns are asked together, labelled', /columns of its data say[^\n]*"tree" \(a word or two\), "keeper"/.test(r1.log.think[3]), true);
+check('the short columns are asked together, labelled', /columns of its data say[^\n]*"tree" \(a word or two\), "keeper"/.test(r1.log.think[2]), true);
 check('the closed list is still told to every column\'s finder',
   r1.log.think.every((p) => /The categories column is a CLOSED list of 4/.test(p)), true);
-check('three questions kept, one from each column', r1.questions.map((q) => q.column), ['festival_comment', 'description', 'address']);
-check('each knows the column its words come from', r1.questions.map((q) => q.columns), [['festival_comment'], ['description'], ['address']]);
+check('two questions kept, one from each column asked; the address is not asked', r1.questions.map((q) => q.column), ['festival_comment', 'description']);
+check('each knows the column its words come from', r1.questions.map((q) => q.columns), [['festival_comment'], ['description']]);
 check('the answer prompt labels each place\'s line by column', /^0\. festival_comment: EMERGENCE/m.test(r1.log.file[0]) && /\n    description: A hotel/.test(r1.log.file[0]), true);
 check('and says which column each question is asked of', /Which day is it on\?   \(asked of the "festival_comment" column only\)/.test(r1.log.file[0]), true);
 const day = r1.questions.find((q) => q.column === 'festival_comment');
 check('the day question reaches every place', day.answered, 24);
 check('with its words taken from the comments', day.why.every((w) => w.length === 1 && DAYS.includes(w[0])), true);
-check('the facts carry the column they came from', r1.facts, ['Festival comment: f', 'Description: f', 'Address: f']);
+check('the facts carry the column they came from', r1.facts, ['Festival comment: f', 'Description: f']);
 
 console.log('\n  the record says what became of every column');
 const lineOf = (c) => (r1.columns.find((x) => x.column === c) || {}).line || '';
@@ -182,7 +182,8 @@ check('the description likewise', /^Description: 1 question kept: “What sort o
 check('a column the model found nothing in says so in a fixed plain sentence, not the model\'s own note', lineOf('tree'),
   'Tree: no question kept — nothing in it sorts the places into groups (read with Keeper and Labels — each holds only a word or two)');
 check('a column passed over says why', lineOf('status'), 'Status: not asked — says the same thing for every place');
-check('the lines are marked asked or not', r1.columns.filter((c) => c.asked).map((c) => c.column), ['festival_comment', 'description', 'address', 'tree', 'keeper', 'labels']);
+check('the lines are marked asked or not', r1.columns.filter((c) => c.asked).map((c) => c.column), ['festival_comment', 'description', 'tree', 'keeper', 'labels']);
+check('the address says why it was not asked', lineOf('address'), 'Address: not asked — an address: the map already shows where each place is');
 
 console.log('\n  the evidence for an answer must come from the column the question was asked of');
 const r2 = await read({}, { cheat: true, perColumn: { festival_comment: found([dayQ]) } });
@@ -192,27 +193,27 @@ check('so the question falls, and the record says why', (r2.columns.find((c) => 
   'Festival comment: no question kept — “Which day is it on?” — fewer than two of its answers fit three or more places');
 
 console.log('\n  one question, asked by two columns, is one question');
-const r3 = await read({}, { perColumn: { description: found([sortQ]), festival_comment: found([dayQ]), address: found([sortQ]) } });
+const r3 = await read({}, { perColumn: { description: found([sortQ]), festival_comment: found([dayQ]), tree: found([sortQ]) } });
 check('the column read first keeps it', r3.questions.map((q) => q.question + ' ← ' + q.column),
   ['Which day is it on? ← festival_comment', 'What sort of place is it? ← description']);
-check('and the address\'s copy is not counted twice', (r3.columns.find((c) => c.column === 'address') || {}).line,
-  'Address: no question kept — its question was one another column had already asked');
-const r3c = await read({}, { perColumn: { description: found([sortQ]), festival_comment: found([dayQ]), address: found([{ question: 'What sort of place is this?', kinds: sortQ.kinds }]) } });
+check('and the short columns\' copy is not counted twice', (r3.columns.find((c) => c.column === 'tree') || {}).line,
+  'Tree: no question kept — its question was one another column had already asked (read with Keeper and Labels — each holds only a word or two)');
+const r3c = await read({}, { perColumn: { description: found([sortQ]), festival_comment: found([dayQ]), tree: found([{ question: 'What sort of place is this?', kinds: sortQ.kinds }]) } });
 check('the same question in slightly different words is the same question', r3c.questions.map((q) => q.question), ['Which day is it on?', 'What sort of place is it?']);
 
 console.log('\n  every column says no: the model\'s own no, column by column');
 const r4 = await read({}, {});
 check('the verdict is the model\'s', r4.verdict, 'no_clear_questions');
-check('in a fixed plain sentence, not the model\'s own notes strung together', r4.note, 'None of the 4 columns read had anything that sorts the places into groups.');
+check('in a fixed plain sentence, not the model\'s own notes strung together', r4.note, 'None of the 3 columns read had anything that sorts the places into groups.');
 check('and the record still has a line for every column', r4.columns.map((c) => c.column).sort(), fields.slice().sort());
 
 console.log('\n  a second attempt re-asks only the column that left a hole');
 const r5 = await read({ missed: [{ word: 'friday', places: 8, under: 'Which day is it on?' }], reuseFound: r1.found },
   { perColumn: { description: found([sortQ]), festival_comment: found([dayQ]), address: found([areaQ]) } });
-check('one finder call, not four', r5.log.think.length, 1);
+check('one finder call, not three', r5.log.think.length, 1);
 check('to the comments', /called "festival_comment"/.test(r5.log.think[0]), true);
 check('told it is the second attempt', /IMPORTANT, this is a second attempt/.test(r5.log.think[0]), true);
-check('the other columns\' questions are reused, unpaid', r5.questions.map((q) => q.column), ['festival_comment', 'description', 'address']);
+check('the other columns\' questions are reused, unpaid', r5.questions.map((q) => q.column), ['festival_comment', 'description']);
 check('and the whole set is answered again, once', r5.log.file.length, 1);
 
 console.log('\n  a layer read under the old rule: keep its questions, add from the columns they never drew on');
@@ -223,8 +224,8 @@ check('one finder call, to the named column only', r6.log.think.length, 1);
 check('the settled question comes first, so its key keeps its place', r6.questions[0].question, 'What sort of place is it?');
 check('and has no column, as it was found from the pile', r6.questions[0].column, '');
 check('the new one follows, from the comments', [r6.questions[1].question, r6.questions[1].column], ['Which day is it on?', 'festival_comment']);
-check('a column not named this time is never called "not asked": it was read in the earlier reading', (r6.columns.find((c) => c.column === 'address') || {}).line,
-  'Address: read earlier — nothing new this time');
+check('a column not named this time is never called "not asked": it was read in the earlier reading', (r6.columns.find((c) => c.column === 'description') || {}).line,
+  'Description: read earlier — nothing new this time');
 const r7 = await read({ keepQuestions: settled }, { perColumn: { festival_comment: found([dayQ]) } });
 check('a plain re-answer of settled questions asks no column', r7.log.think.length, 0);
 check('and answers them once', [r7.log.file.length, r7.questions.length], [1, 1]);
@@ -291,10 +292,10 @@ console.log('\n  the one-off script: layers whose questions never drew on a colu
   put('deoria-bioregion', { id: 'tags', type: 'marker', source: 'user-tags.geojson' }, old);
   const u = unusedColumns({ popup: { title: 'loka_name' } }, old);
   check('the description is drawn on', u.drawnOn, ['description']);
-  check('the comments and the address are not', u.unused.map((x) => x.column), ['festival_comment', 'labels', 'address', 'tree', 'keeper']);
+  check('the comments are not (an address is never offered)', u.unused.map((x) => x.column), ['festival_comment', 'labels', 'tree', 'keeper']);
   const { want, skipped } = survey([root]);
   check('the layer read under the old rule is listed', want.map((w) => w.dataset + '/' + w.layerId), ['festival/tags']);
-  check('with the columns to add', want[0].unused.map((x) => x.column), ['festival_comment', 'labels', 'address', 'tree', 'keeper']);
+  check('with the columns to add', want[0].unused.map((x) => x.column), ['festival_comment', 'labels', 'tree', 'keeper']);
   check('a layer never read is not this script\'s business', want.some((w) => w.dataset === 'unread'), false);
   check('deoria is skipped, visibly', skipped, [{ dataset: 'deoria-bioregion', why: 'never touched (standing rule)' }]);
   // and --apply, on a list of its own
@@ -306,7 +307,7 @@ console.log('\n  the one-off script: layers whose questions never drew on a colu
   const applied = spawnSync(process.execPath, [path.join(ROOT, 'deploy', 'queue-question-rereads.mjs'), '--apply', '--queue', qf, '--registry', path.join(TMP, 'none.json'), root], { encoding: 'utf8' });
   const line = createQueue({ file: qf }).get('festival', 'tags');
   check('--apply puts it on the list', [applied.status, line && line.state], [0, 'queued']);
-  check('with the columns to add', line && line.addColumns, ['festival_comment', 'labels', 'address', 'tree', 'keeper']);
+  check('with the columns to add', line && line.addColumns, ['festival_comment', 'labels', 'tree', 'keeper']);
   check('nothing in the atlas folder was written', fs.readdirSync(path.join(root, 'festival')).sort(), ['manifest.json', 'manifest.local.json', 'user-tags.geojson']);
   fs.rmSync(TMP, { recursive: true, force: true });
 }
@@ -386,9 +387,9 @@ console.log('\n  4. the column a question came from is kept with it, and used ne
 {
   const shaped = RULES.shapeReading(rows, r1.questions);
   check('the reading\'s shape carries each question\'s column', shaped.keyColumns,
-    { pattern_1: ['festival_comment'], pattern_2: ['description'], pattern_3: ['address'] });
+    { pattern_1: ['festival_comment'], pattern_2: ['description'] });
   const settledAgain = RULES.settledQuestions({ keyLabels: shaped.keyLabels, keyKinds: shaped.keyKinds, keyColumns: shaped.keyColumns }, shaped.rows);
-  check('and a layer gives it back as settled', settledAgain.map((q) => q.columns), [['festival_comment'], ['description'], ['address']]);
+  check('and a layer gives it back as settled', settledAgain.map((q) => q.columns), [['festival_comment'], ['description']]);
   check('a question from before has none', RULES.settledQuestions({ keyLabels: { pattern_1: 'Q?' }, keyKinds: { pattern_1: [{ name: 'a' }] } }, []).map((q) => q.columns), [[]]);
   const again = await read({ keepQuestions: settledAgain.slice(0, 1) }, { cheat: true });
   check('re-answered, it is asked of its own column', /Which day is it on\?   \(asked of the "festival_comment" column only\)/.test(again.log.file[0]), true);
@@ -426,8 +427,8 @@ console.log('\n  7. the owner\'s per-column lines stay accurate');
   const r = await read({ keepQuestions: settled, addColumns: ['festival_comment'], previousColumns: r1.columns },
     { perColumn: { festival_comment: found([dayQ]) } });
   const ln = (x, c) => (x.columns.find((y) => y.column === c) || {}).line;
-  check('a column this reading did not look at keeps its earlier line', ln(r, 'address'), ln(r1, 'address'));
-  check('and is still marked as asked', (r.columns.find((y) => y.column === 'address') || {}).asked, true);
+  check('a column this reading did not look at keeps its earlier line', ln(r, 'description'), ln(r1, 'description'));
+  check('and is still marked as asked', (r.columns.find((y) => y.column === 'description') || {}).asked, true);
   check('the column it did look at gets a new line', /^Festival comment: 1 question kept/.test(ln(r, 'festival_comment')), true);
   check('a passed-over column keeps its line too', ln(r, 'status'), ln(r1, 'status'));
   const settledCols = [{ question: 'Which area is it in?', kinds: areaQ.kinds.map((k) => ({ name: k.name, definition: '' })), columns: ['address'] }];
@@ -535,7 +536,7 @@ console.log('\n  10. plain words on the owner\'s page');
     'X: no question kept — nothing in it sorts the places into groups (read with Tree and Keeper — each holds only a word or two)');
   const sq = E.columnReport(tight, { [tight.groups[0].label]: { state: 'none' } }, [], [], 0, {});
   check('a column squeezed in with others says why, without numbers', sq[0].line,
-    'Festival comment: no question kept — nothing in it sorts the places into groups (read together with other columns, to keep the cost of one reading down: with Description, Address, Tree, Keeper and Labels)');
+    'Festival comment: no question kept — nothing in it sorts the places into groups (read together with other columns, to keep the cost of one reading down: with Description, Tree, Keeper and Labels)');
 }
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');

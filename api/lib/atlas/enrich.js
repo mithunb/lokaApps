@@ -49,6 +49,13 @@ const KEY_DOMINANCE = 0.85;
    answers, and the reading is trimmed to what the counting supports. */
 const KIND_FLOOR = 3;            // a kind holding fewer places than this is not a kind
 const FLAT_SHARE = 0.6;          // one answer holding this much of a question is barely a sorting
+/* Past this share a NEW question is not kept at all. Asked afresh of Cubbon's
+   places, "What division of Bengaluru?" came back with one answer for 33 of
+   33: a switch that paints every place the same colour tells a reader nothing
+   apart, and it took a place another question could have used. Nine in ten
+   is the line: one answer on 30 of 33 places goes, on 8 of 9 (89 in 100) it
+   stays. A question already on the map is never held to it (see the gate). */
+const ONE_SIDED_SHARE = 0.9;
 const SAME_QUESTION = 0.8;       // agreement at which a question IS a column already on the map
 const CLIP = 280;                // description characters per digest line
 
@@ -150,6 +157,8 @@ export function assignBySeed(texts, seedSet) {
    address with no digits in it at all. */
 const ADDRESS_TAIL = 0.6;      // the last piece is this often the same one
 const ADDRESS_UNIQUE = 0.5;    // and the pieces are this far from a shared few
+// the test counts how lists end, so it needs a few of them: one list always "ends the same way"
+const ADDRESS_MIN = 5;
 function looksLikeAPlace(filled, delim) {
   const last = new Map();
   const pieces = new Set();
@@ -649,7 +658,7 @@ const NOUN_RULE = '- For each question also give its noun: the word, or the few 
    a column is now read with the other short ones, which costs no extra call.
 
    Everything that is read is one of three shapes: free TEXT (four words or
-   more a place: a description, a comment, an address), TAGS (a delimited
+   more a place: a description, a comment; never an address, see below), TAGS (a delimited
    list), or SHORT (a word or two a place). Text and tag columns are each read
    alone. Short columns are read together as one group, since one word a place
    is too little to read a pattern from on its own and three such columns side
@@ -692,13 +701,27 @@ export function textColumns(rows, fields, { nameCol = '' } = {}) {
     }
     const avgLen = filled.reduce((n, v) => n + v.length, 0) / filled.length;
     const avgWords = filled.reduce((n, v) => n + v.split(/\s+/).length, 0) / filled.length;
-    /* An address is text, and it is read — but it is a place's whereabouts,
-       not words about it, so it is read after the columns that describe, and
-       the model is told what it is looking at. The test is the digest's own
-       (looksLikeAPlace): a list that ends the same way on most places. */
-    const address = !delim && avgWords >= TEXT_WORDS && /[,;]/.test(filled[0] || '') &&
+    /* An address is not asked (Mithun, 25 Oct 2026, after real runs). It
+       says where a place is, and the map already shows that. Asked afresh,
+       Cubbon's Address column gave three of its six questions — "Is it a
+       specific named place?", "What division of Bengaluru?" (one answer for
+       33 of 33), "What neighborhood is it in?" — and crowded out questions
+       about what the places are. So it is passed over like the other columns
+       here, with its reason on its line, on every atlas. The test is the
+       digest's own (looksLikeAPlace): a list that ends the same way on most
+       places.
+
+       A question an earlier reading found in an address column is not lost:
+       it is settled, so it is answered from its own column whether or not
+       that column is asked anything (enrichRows builds the column's words
+       for it when no group holds them). */
+    const address = !delim && filled.length >= ADDRESS_MIN && avgWords >= TEXT_WORDS && /[,;]/.test(filled[0] || '') &&
       looksLikeAPlace(filled, filled.filter((v) => v.includes(';')).length > filled.length / 2 ? ';' : ',');
-    const kind = delim ? 'tags' : address ? 'address' : avgWords >= TEXT_WORDS ? 'text' : 'short';
+    if (address) {
+      passed.push({ column: f, why: 'an address: the map already shows where each place is' });
+      continue;
+    }
+    const kind = delim ? 'tags' : avgWords >= TEXT_WORDS ? 'text' : 'short';
     ask.push({ column: f, kind, filled: filled.length, distinct, avgLen: Math.round(avgLen), avgWords: Math.round(avgWords * 10) / 10 });
   }
   return { ask, passed };
@@ -840,6 +863,17 @@ export function columnReport(plan, outcomes, questions, fell = [], total = 0, op
     if (carried) {
       lines.push({ column: p.column, label: columnLabel(p.column), asked: false, found: 0, earlier: true,
         line: columnLabel(p.column) + ': passed over this time — ' + p.why + ' (it was read in an earlier reading)' });
+      continue;
+    }
+    /* Passed over now, but holding a question an earlier reading found in it
+       — an address read before addresses were passed over. That question is
+       still on the map and still answered from this column, so the line says
+       so rather than "not asked". */
+    const mine = settled.filter((x) => (x.columns || []).includes(p.column));
+    if (mine.length) {
+      lines.push({ column: p.column, label: columnLabel(p.column), asked: false, found: 0, earlier: true,
+        line: columnLabel(p.column) + ': looked at in an earlier reading, which kept ' +
+          mine.map((x) => q(x.question) + (x.answered != null ? reach(x) : '')).join(', ') + '; not asked again — ' + p.why });
       continue;
     }
     lines.push({ column: p.column, label: columnLabel(p.column), asked: false, found: 0,
@@ -2000,6 +2034,20 @@ export async function enrichRows(opts) {
       fell.push({ question: q.question, column: q.column, why: 'fewer than two of its answers fit three or more places' });
       return false;
     })
+      /* A new question one answer nearly fills is dropped here, not just put
+         last. FLAT_SHARE (six in ten) only moves a question down the list, and
+         a question with one answer on 33 of 33 places was still kept whenever
+         the layer had room for it. At ONE_SIDED_SHARE (nine in ten) the switch
+         would paint the map one colour, so it goes, and the column's line says
+         why. A settled question is exempt, as from every test here: it is
+         already on a map somebody may have linked to. */
+      .filter((q) => {
+        if (q.settled) return true;
+        if (!(q.answered && q.lopsided >= ONE_SIDED_SHARE)) return true;
+        fell.push({ question: q.question, column: q.column,
+          why: 'one answer covers ' + q.biggestCount + ' of ' + q.answered + ' places — it tells nothing apart' });
+        return false;
+      })
       /* Dropped before anything is written. A settled question is exempt: it is
          already on a map somebody may have linked to, and taking a key away is
          a bigger harm than a key that says the same as another. A new question
