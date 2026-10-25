@@ -1908,7 +1908,7 @@ function insightCaller(payer) {
     try { t = JSON.parse(String(prompt).split('\n').pop()); } catch { t = null; }
     return insightSummary.standInAnswer(t);
   } : null;
-  return aiCaller(payer || 'server', 1, stub);
+  return aiCaller(payer || 'server', 2, stub); // 2: one retry when no sentence passes the number check
 }
 /* One summary job per atlas at a time; a pending flag carries when it was
    set (summaryPendingAt), and one older than two minutes is stuck, not pending. */

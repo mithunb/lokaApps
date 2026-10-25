@@ -119,8 +119,21 @@ export async function writeSummary({ layer, features, prev, call, model, Type, t
   } catch (e) {
     return { summary: old, by: 'kept (' + String((e && e.message) || 'no answer').slice(0, 80) + ')', sig, tables, keep: true };
   }
-  const asked = answer && Array.isArray(answer.sentences) ? answer.sentences : [];
-  const sentences = IM.checkSentences(asked, tables);
+  let asked = answer && Array.isArray(answer.sentences) ? answer.sentences : [];
+  let sentences = IM.checkSentences(asked, tables);
+  if (!sentences.length && asked.length) {
+    // nothing passed: say what came back (the sentences are written from the counts only), then ask once more
+    asked.slice(0, 5).forEach((s) => console.warn('[insight] dropped: ' + String((s && s.text) || s).slice(0, 200) + ' — cites ' + JSON.stringify((s && s.questions) || [])));
+    try {
+      const again = await Promise.race([
+        Promise.resolve().then(() => call(model, promptFor(tables) + '\nYour last answer could not be used: each sentence must use only numbers that appear in the tables for the questions it names, as digits, with no percentages.', schemaFor(Type), { file: true })),
+        new Promise((_, no) => setTimeout(() => no(new Error('the model took too long')), timeoutMs || TIMEOUT_MS)),
+      ]);
+      const more = again && Array.isArray(again.sentences) ? again.sentences : [];
+      const kept = IM.checkSentences(more, tables);
+      if (kept.length) { asked = more; sentences = kept; }
+    } catch { /* keep "nothing usable" */ }
+  }
   const dropped = Math.min(asked.length, 5) - sentences.length;
   if (!sentences.length) return { summary: null, by: 'nothing usable', sig, tables, dropped: asked.length };
   return { summary: { sig, sentences, at: Date.now() }, by: 'model', sig, tables, dropped: Math.max(0, dropped) };
