@@ -29,6 +29,12 @@ export function isPeopleRawColumn(name) {
    pattern_N column whose question is about people. */
 export function isPeopleColumn(stanza, col) {
   if (isPeopleRawColumn(col)) return true;
+  /* The model's note on why it gave an answer ("pattern_5_why") quotes the
+     place's own words, and for a question about who made the record that is
+     the person's name: it goes wherever its question goes (found live on
+     Bengaluru, 26 Oct 2026). */
+  const why = /^(pattern_\d+)_why$/.exec(String(col));
+  if (why) col = why[1];
   if (!/^pattern_\d+$/.test(String(col))) return false;
   if (!LABEL_RULES || typeof LABEL_RULES.isPeopleQuestion !== 'function') return true;   // fail closed
   try { return !!LABEL_RULES.isPeopleQuestion(stanza || {}, col); } catch { return true; }

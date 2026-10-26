@@ -34,8 +34,8 @@ export const DEFAULT_ROOTS = [
   path.join(REPO, 'atlas', 'datasets'),
   path.join(REPO, 'api', 'data', 'atlas', 'private-datasets'),
 ];
-const INDEX_V = 3;        // api/apps/atlas.js SEARCH_INDEX_V
-const ROW_VEC_V = 2;      // api/apps/atlas.js ROW_VEC_V
+const INDEX_V = 4;        // api/apps/atlas.js SEARCH_INDEX_V
+const ROW_VEC_V = 3;      // api/apps/atlas.js ROW_VEC_V
 const MAX_TERMS = 300;    // api/apps/atlas.js SEARCH_MAX_TERMS
 
 function readJSON(f) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } }

@@ -5966,10 +5966,10 @@ router.post('/layers/resolve', (req, res) => {
    "sofa made out of recycled materials". Rows are now scored directly against
    the query embedding, and the lexical pass survives unchanged underneath. */
 const SEARCH_MAX_TERMS = 300;
-// 3: who made a record is left out of the vocabulary; 2 and earlier still hold names
-const SEARCH_INDEX_V = 3;
-// the same for the meaning vectors: version 1 files were built from text with names in it
-const ROW_VEC_V = 2;
+// 4: nor the model's notes on answers about who made it; 3 and earlier still hold names
+const SEARCH_INDEX_V = 4;
+// the same for the meaning vectors: versions 1 and 2 were built from text with names in it
+const ROW_VEC_V = 3;
 /* Floor for a semantic row hit. The old TERM floor was 0.62, tuned for
    short-text vs short-text. A row vector averages a whole feature —
    description, address, category, whatever enrichment added — so the query's

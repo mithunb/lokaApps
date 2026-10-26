@@ -27,6 +27,9 @@ const text = featureSearchText(props, stanza);
 check('place answer stays in the search text', text.indexOf('pond') >= 0 && text.indexOf('bengaluru') >= 0, true);
 check('a people question\'s answer is left out', text.indexOf('asha') < 0 && text.indexOf('vikram') < 0, true);
 check('the created_by column is left out', text.indexOf('rao') < 0, true);
+// the model's note on a people answer quotes the name; a place answer's note stays
+const whyText = featureSearchText(Object.assign({}, props, { pattern_2_why: 'Added by Meera Iyer', pattern_1_why: 'mentions a lotus pond' }), stanza);
+check('the why-note of a people answer is left out; a place answer\'s note stays', [whyText.indexOf('meera') < 0, whyText.indexOf('lotus') >= 0], [true, true]);
 
 const terms = layerVocabTerms(stanza, [{ properties: props }], 300);
 check('vocabulary keeps the place answers', terms.indexOf('pond') >= 0 && terms.indexOf('bengaluru') >= 0, true);
@@ -87,7 +90,7 @@ const dry = rebuild([tmp], false);
 check('dry run writes nothing', fs.readFileSync(path.join(dirA, 'search.local.json'), 'utf8').indexOf('asha rao') >= 0, true);
 rebuild([tmp], true);
 const after = JSON.parse(fs.readFileSync(path.join(dirA, 'search.local.json'), 'utf8')).spots;
-check('rebuilt words have no person and the new version', after.v === 3 && !after.terms.some((t) => /asha/.test(t.t)) && after.terms.some((t) => t.t === 'pond'), true);
+check('rebuilt words have no person and the new version', after.v === 4 && !after.terms.some((t) => /asha/.test(t.t)) && after.terms.some((t) => t.t === 'pond'), true);
 check('the old meaning file is removed so it is built again', fs.existsSync(path.join(dirA, 'search-spots.vec')), false);
 check('deoria is left exactly as it was', fs.readFileSync(path.join(dirD, 'search.local.json'), 'utf8') === before && fs.existsSync(path.join(dirD, 'search-spots.vec')), true);
 check('a second run changes nothing', rebuild([tmp], true).filter((r) => !r.skipped).length, 0);
