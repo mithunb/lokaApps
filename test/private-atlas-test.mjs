@@ -173,7 +173,7 @@ console.log('\n  the deploy script finds layers without a meaning index in both 
     fs.writeFileSync(path.join(d, 'user-rows.geojson'), JSON.stringify({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: null, properties: { name: 'x' } }] }));
     if (withVec) {
       const st = fs.statSync(path.join(d, 'user-rows.geojson'));
-      fs.writeFileSync(path.join(d, 'search-rows.vec'), JSON.stringify({ v: 1, sig: st.size + ':' + Math.round(st.mtimeMs), model: 'gemini-embedding-001', dim: 768, count: 1 }) + '\n');
+      fs.writeFileSync(path.join(d, 'search-rows.vec'), JSON.stringify({ v: 2, sig: st.size + ':' + Math.round(st.mtimeMs), model: 'gemini-embedding-001', dim: 768, count: 1 }) + '\n');
     }
   };
   mk(pub, 'open-one', false); mk(priv, 'closed-one', false); mk(priv, 'closed-done', true); mk(pub, 'deoria-bioregion', false);

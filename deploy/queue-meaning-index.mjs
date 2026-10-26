@@ -76,7 +76,7 @@ function vecState(dir, L, sig, model) {
   const nl = buf.indexOf(10);
   let h = null;
   try { h = nl > 0 ? JSON.parse(buf.subarray(0, nl).toString('utf8')) : null; } catch { return 'unreadable'; }
-  if (!h || h.v !== 1) return 'unreadable';
+  if (!h || h.v !== 2) return 'unreadable';   // api/apps/atlas.js ROW_VEC_V
   if (h.sig !== sig) return 'stale (the places changed)';
   if (h.model !== model) return 'stale (written by ' + h.model + ')';
   if (h.dim !== EMBED_DIM) return 'stale (a different width)';

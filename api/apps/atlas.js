@@ -24,6 +24,7 @@ import * as keyNouns from '../lib/atlas/key-nouns.js';
 import * as buttonNames from '../lib/atlas/button-names.js';
 import * as insightSummary from '../lib/atlas/insight-summary.js';
 import * as placeNames from '../lib/atlas/place-names.js';
+import * as searchText from '../lib/atlas/search-text.js';
 import {
   enqueueBuild, getJob, setJobDoneHook, setStrandedBuildHook, DATASETS_ROOT, PRIVATE_ROOT,
 } from '../lib/atlas/jobs.js';
@@ -5965,6 +5966,10 @@ router.post('/layers/resolve', (req, res) => {
    "sofa made out of recycled materials". Rows are now scored directly against
    the query embedding, and the lexical pass survives unchanged underneath. */
 const SEARCH_MAX_TERMS = 300;
+// 3: who made a record is left out of the vocabulary; 2 and earlier still hold names
+const SEARCH_INDEX_V = 3;
+// the same for the meaning vectors: version 1 files were built from text with names in it
+const ROW_VEC_V = 2;
 /* Floor for a semantic row hit. The old TERM floor was 0.62, tuned for
    short-text vs short-text. A row vector averages a whole feature —
    description, address, category, whatever enrichment added — so the query's
@@ -6046,103 +6051,11 @@ function cosine(a, b) {
   for (let i = 0; i < n; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
   return na && nb ? dot / (Math.sqrt(na) * Math.sqrt(nb)) : 0;
 }
-/* What counts as searchable text. Enrichment writes its output (category,
-   labels) into the row as ordinary properties before the layer is committed, so
-   "user-submitted" and "enriched" are the same thing by the time we get here:
-   index EVERY text-bearing property rather than a curated tag column. Ids,
-   urls, coordinates and timestamps are excluded — they would make a stray digit
-   or date match on every feature. */
-function searchSkipProp(name) {
-  const n = String(name == null ? '' : name).toLowerCase();
-  // the short name LOKA wrote is the description's own words: counting it
-  // again would weight those places twice (its place is the hit's title)
-  if (n === placeNames.NAME_FIELD) return true;
-  if (/(^|[^a-z])(id|ids|uuid|guid|url|uri|link|href|image|images|img|photo|photos|thumb|thumbnail|icon|lat|latitude|lon|lng|long|longitude|x|y|geom|geometry|wkt|color|colour)([^a-z]|$)/.test(n)) return true;
-  return /(created|updated|modified|timestamp)/.test(n);
-}
-function searchCellText(v) {
-  if (v == null) return '';
-  if (Array.isArray(v)) return v.map((x) => (x == null ? '' : String(x))).join('; ');
-  if (typeof v === 'object') return '';
-  return String(v);
-}
-function searchSkipValue(v) {
-  const s = searchCellText(v).trim();
-  if (s.length < 2) return true;
-  if (!/[a-z]/i.test(s)) return true;                        // numbers, codes, coordinates
-  if (/^(https?:|www\.|data:|\/\/)/i.test(s)) return true;   // urls
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-/i.test(s)) return true;  // uuids
-  if (/^\d{4}-\d{2}-\d{2}[t ]/i.test(s)) return true;        // timestamps
-  return false;
-}
-// One searchable blob per feature: what the viewer matches a raw query against.
-function featureSearchText(props) {
-  const parts = [];
-  for (const k in (props || {})) {
-    if (searchSkipProp(k)) continue;
-    const v = props[k];
-    if (searchSkipValue(v)) continue;
-    parts.push(searchCellText(v));
-  }
-  return parts.join(' · ').toLowerCase().slice(0, 4000);
-}
-
-const SEARCH_STOP = new Set(('the a an and or of in on at to for with from by is are was were this that these those it its as be' +
-  ' been near not no you your our their they he she we i but if then than so such very more most other some any all each' +
-  ' one two three new near around about into over under out up down off can will just also').split(' '));
-// A cell becomes either one term (a tag / short phrase) or its significant words
-// (free text), so "bamboo-wall" survives whole while a sentence contributes
-// "recycled", "library".
-function termsFromValue(v, out) {
-  const s = searchCellText(v);
-  if (!s) return;
-  for (const cell of s.split(/\s*[;|\n]\s*|\s*,\s+/)) {
-    const c = cell.trim().toLowerCase().replace(/\s+/g, ' ');
-    if (!/[a-z]/.test(c)) continue;
-    const words = c.split(' ');
-    if (c.length <= 40 && words.length <= 4) { out.push(c); continue; }
-    for (const w of words) {
-      const t = w.replace(/^[^a-z0-9]+/, '').replace(/[^a-z0-9]+$/, '');
-      if (t.length >= 4 && t.length <= 40 && !SEARCH_STOP.has(t)) out.push(t);
-    }
-  }
-}
-// The layer's vocabulary. Declared tag columns and everything else are gathered
-// separately, then merged under a quota: a layer with a rich tag column must not
-// spend the whole cap (and the whole embedding budget) before its descriptions
-// and addresses get a look in.
-const SEARCH_TAG_QUOTA = 0.6;
-function layerVocabTerms(stanza, features) {
-  const tagFields = [];
-  if (stanza.markerBy) tagFields.push(stanza.markerBy);
-  ((stanza.popup && stanza.popup.fields) || []).forEach((f) => { if (f.type === 'tags' && f.property) tagFields.push(f.property); });
-
-  const seen = new Set();
-  const gather = (pick) => {
-    const list = [];
-    for (const f of features) {
-      if (list.length >= SEARCH_MAX_TERMS) break;
-      const out = [];
-      pick(f.properties || {}, out);
-      for (const t of out) {
-        if (seen.has(t) || list.length >= SEARCH_MAX_TERMS) continue;
-        seen.add(t); list.push(t);
-      }
-    }
-    return list;
-  };
-  const tagged = gather((p, out) => { for (const fld of tagFields) termsFromValue(p[fld], out); });
-  const free = gather((p, out) => {
-    for (const k in p) {
-      if (tagFields.indexOf(k) >= 0 || searchSkipProp(k) || searchSkipValue(p[k])) continue;
-      termsFromValue(p[k], out);
-    }
-  });
-  const quota = Math.round(SEARCH_MAX_TERMS * SEARCH_TAG_QUOTA);
-  const merged = tagged.slice(0, quota).concat(free.slice(0, SEARCH_MAX_TERMS - Math.min(tagged.length, quota)));
-  // room left over (few free-text terms) goes back to the tag column
-  return merged.concat(tagged.slice(quota)).slice(0, SEARCH_MAX_TERMS);
-}
+/* What counts as searchable text, and the vocabulary built from it, lives in
+   api/lib/atlas/search-text.js so the server and the rebuild script read a
+   place the same way. Answers to a question about people are left out there. */
+const { searchSkipProp, searchCellText, searchSkipValue, featureSearchText, SEARCH_STOP, termsFromValue, peopleTerms } = searchText;
+const layerVocabTerms = (stanza, features) => searchText.layerVocabTerms(stanza, features, SEARCH_MAX_TERMS);
 
 /* ---- the index: which layers, when to rebuild, and reading their text ---- */
 
@@ -6164,7 +6077,8 @@ function layerSearchRows(dir, stanza, sig) {
   // the naming columns are part of the key: a rename rewrites only the
   // manifest, not the file, and search must show the new names at once
   const key = dir + '|' + stanza.source + '|' + sig + '|' +
-    ((stanza.popup && stanza.popup.title) || '') + '|' + ((stanza.popup && stanza.popup.titleAlso) || '');
+    ((stanza.popup && stanza.popup.title) || '') + '|' + ((stanza.popup && stanza.popup.titleAlso) || '') +
+    '|' + JSON.stringify(stanza.keyColumns || {});   // which questions are about people decides what is left out
   const hit = layerTextCache.get(key);
   if (hit) return hit;
   let gj = null;
@@ -6173,7 +6087,7 @@ function layerSearchRows(dir, stanza, sig) {
   const alsoProp = (stanza.popup && stanza.popup.titleAlso) || '';
   const rows = ((gj && gj.features) || []).map((f, i) => {
     const p = (f && f.properties) || {};
-    const text = featureSearchText(p);
+    const text = featureSearchText(p, stanza);
     // the stanza's title property can be missing from the data (older layers) —
     // fall back to the head of the searchable text so a hit is still legible.
     // A second naming column is joined the way the card joins it.
@@ -6185,6 +6099,22 @@ function layerSearchRows(dir, stanza, sig) {
   if (layerTextCache.size >= 8) layerTextCache.delete(layerTextCache.keys().next().value);
   layerTextCache.set(key, rows);
   return rows;
+}
+
+// The words that came from people columns of a layer, read once per version of its file.
+const peopleTermCache = new Map();
+function layerPeopleTerms(dir, stanza, sig) {
+  const key = dir + '|' + stanza.source + '|' + sig + '|' + JSON.stringify(stanza.keyColumns || {});
+  const hit = peopleTermCache.get(key);
+  if (hit) return hit;
+  let set = new Set();
+  try {
+    const gj = JSON.parse(fs.readFileSync(path.join(dir, String(stanza.source)), 'utf8'));
+    set = peopleTerms(stanza, (gj && gj.features) || []);
+  } catch { /* unreadable file: nothing to hide, and nothing to search either */ }
+  if (peopleTermCache.size >= 8) peopleTermCache.delete(peopleTermCache.keys().next().value);
+  peopleTermCache.set(key, set);
+  return set;
 }
 
 /* ---- row vectors: an int8 side-file per layer, next to its geojson ---- */
@@ -6216,7 +6146,7 @@ function rowVecFile(dir, layerId) {
 }
 function writeRowVectors(dir, layerId, sig, vecs) {
   const file = rowVecFile(dir, layerId);
-  if (!file) return;
+  if (!file || searchText.isNeverTouched(dir)) return;   // last line of defence: never deoria's folder
   const count = vecs.length;
   const scales = Buffer.alloc(count * 4);
   const body = Buffer.alloc(count * EMBED_DIM);
@@ -6229,7 +6159,7 @@ function writeRowVectors(dir, layerId, sig, vecs) {
     scales.writeFloatLE(scale, i * 4);
     body.set(q, i * EMBED_DIM);   // Int8Array → Buffer keeps two's complement
   }
-  const header = Buffer.from(JSON.stringify({ v: 1, sig, model: embedModelName(), dim: EMBED_DIM, count }) + '\n');
+  const header = Buffer.from(JSON.stringify({ v: ROW_VEC_V, sig, model: embedModelName(), dim: EMBED_DIM, count }) + '\n');
   const tmp = file + '.tmp';
   fs.writeFileSync(tmp, Buffer.concat([header, scales, body]));
   fs.renameSync(tmp, file);
@@ -6249,7 +6179,7 @@ function readRowVectors(dir, layerId, sig) {
   try { h = JSON.parse(buf.subarray(0, nl).toString('utf8')); } catch { return null; }
   // stale or foreign vectors are worse than none: the query embedding they
   // would be compared against comes from today's model, dim and geojson
-  if (!h || h.v !== 1 || h.sig !== sig || h.model !== embedModelName() || h.dim !== EMBED_DIM) return null;
+  if (!h || !searchText.vecVersionOk(h.v, ROW_VEC_V, dir) || h.sig !== sig || h.model !== embedModelName() || h.dim !== EMBED_DIM) return null;
   const count = h.count | 0;
   const scalesEnd = nl + 1 + count * 4;
   if (count < 0 || buf.length !== scalesEnd + count * EMBED_DIM) return null;
@@ -6296,7 +6226,8 @@ function ensureSearchIndex(dataset) {
   for (const L of out.layers) {
     const sig = layerSig(m.dir, L);
     const cur = out.idx[L.id];
-    if (cur && cur.terms && cur.terms.length && cur.sig === sig) continue;
+    // an entry written before people were left out (v 2) is rebuilt even though the file has not changed
+    if (cur && searchText.indexVersionOk(cur.v, SEARCH_INDEX_V, dataset) && cur.terms && cur.terms.length && cur.sig === sig) continue;
     let features = null;
     try { features = JSON.parse(fs.readFileSync(path.join(m.dir, String(L.source)), 'utf8')).features || []; } catch { continue; }
     if (!features.length) continue;
@@ -6304,9 +6235,12 @@ function ensureSearchIndex(dataset) {
     if (!terms.length) continue;
     // Terms are written bare: their vectors moved to the row side-file, so a
     // rebuild is also the moment an old vector-carrying entry slims down.
-    const entry = { v: 2, sig, terms: terms.map((t) => ({ t })) };
+    const entry = { v: SEARCH_INDEX_V, sig, terms: terms.map((t) => ({ t })) };
     out.idx[L.id] = entry;
     out.built.push(L.id);
+    // the deoria-bioregion atlas is never written to, not even by a visitor's search:
+    // its words are held in memory for this answer only
+    if (searchText.isNeverTouched(dataset)) continue;
     try { imports.writeSearchIndex(dataset, L.id, entry); } catch (e) { console.warn('[atlas] search index write failed:', e.message); }
   }
   return out;
@@ -6318,7 +6252,7 @@ function ensureSearchIndex(dataset) {
 // stampede the API, it just takes a few searches' worth of background time.
 const embedInFlight = new Set();
 function queueRowEmbeddings(dataset, layerIds) {
-  if (!embedReady() || !layerIds.length || embedInFlight.has(dataset)) return;
+  if (!embedReady() || !layerIds.length || embedInFlight.has(dataset) || searchText.isNeverTouched(dataset)) return;
   embedInFlight.add(dataset);
   (async () => {
     try {
@@ -6352,6 +6286,7 @@ function queueRowEmbeddings(dataset, layerIds) {
 export const MEANING_INDEX_FILE = path.join(reg.DATA_DIR, 'meaning-index.json');
 const meaningQueue = createQueue({ file: MEANING_INDEX_FILE });
 async function meaningIndexJob(job) {
+  if (searchText.isNeverTouched(job.dataset)) return { state: 'failed', reason: 'never touched (standing rule)' };
   if (!embedReady()) return { state: 'failed', reason: 'there is no embedding model configured' };
   const m = imports.readManifest(job.dataset);
   if (!m) return { state: 'failed', reason: 'no such atlas' };
@@ -6372,9 +6307,9 @@ async function embedAndStoreVocab(dataset, layerId, stanza, features) {
   const dir = imports.datasetDir(dataset);
   const sig = dir ? layerSig(dir, stanza) : '';
   const terms = layerVocabTerms(stanza, features);
-  if (terms.length) imports.writeSearchIndex(dataset, layerId, { v: 2, sig, terms: terms.map((t) => ({ t })) });
+  if (terms.length) imports.writeSearchIndex(dataset, layerId, { v: SEARCH_INDEX_V, sig, terms: terms.map((t) => ({ t })) });
   if (!dir || !embedReady()) return;
-  await embedRowsForLayer(dir, layerId, sig, features.map((f) => featureSearchText((f && f.properties) || {})));
+  await embedRowsForLayer(dir, layerId, sig, features.map((f) => featureSearchText((f && f.properties) || {}, stanza)));
 }
 
 // Fingerprint the data the user UPLOADED, not the features we derived from it:
@@ -6461,8 +6396,10 @@ router.post('/layers/search', async (req, res) => {
   const words = q.split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !SEARCH_STOP.has(w) && w !== q);
   const seen = new Set(), tags = [], byWord = [];
   for (const L of built.layers) {
-    for (const t of ((built.idx[L.id] || {}).terms || [])) {
-      const term = String(t && t.t || '');
+    // an index written before people were left out may still hold names, so
+    // anything that came from a people column is dropped here as well
+    const ofPeople = layerPeopleTerms(built.dir, L, layerSig(built.dir, L));
+    for (const term of searchText.tagTerms(built.idx[L.id], ofPeople)) {
       if (!term || seen.has(term)) continue;
       if (term.indexOf(q) >= 0 || q.indexOf(term) >= 0) { seen.add(term); tags.push(term); }
       else if (words.some((w) => term.indexOf(w) >= 0)) { seen.add(term); byWord.push(term); }

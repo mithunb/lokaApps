@@ -147,10 +147,18 @@ export function readSearchIndex(datasetId) {
   catch { return null; }
 }
 export function writeSearchIndex(datasetId, layerId, entry) {
-  const dir = datasetDir(datasetId);
+  // the deoria-bioregion atlas is never written to (standing rule), by name or by where its folder really is
+  if (/deoria-bioregion/i.test(String(datasetId))) return;
+  writeSearchIndexIn(datasetDir(datasetId), layerId, entry);
+}
+// the write itself, given the folder; refuses deoria's folder by path and by where a link leads
+export function writeSearchIndexIn(dir, layerId, entry) {
   if (!dir) return;
+  if (/deoria-bioregion/i.test(String(dir))) return;
+  try { if (/deoria-bioregion/i.test(fs.realpathSync(dir))) return; } catch { return; }
   const p = path.join(dir, 'search.local.json');
-  const idx = readSearchIndex(datasetId) || {};
+  let idx = {};
+  try { idx = JSON.parse(fs.readFileSync(p, 'utf8')) || {}; } catch { idx = {}; }
   idx[layerId] = entry;
   const tmp = p + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(idx));

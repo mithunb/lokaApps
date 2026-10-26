@@ -317,7 +317,7 @@ console.log('\n  the wiring: server, viewer, owner\'s fold, data bench, docs');
   check('a split file\'s other half follows', /if \(layer\.sameFileAs\) switchOnPlaceNames\(dataset, layer\.sameFileAs, from\)/.test(server), true);
   check('the owner\'s page is told where the names have got to', /placeNames: placeNames\.stateFor\(l, placeNames\.queue\.get\(dataset, l\.id\)\)/.test(server), true);
   check('the bench is told how many places each column is a sentence for', /longValues: placeNames\.countLong/.test(server), true);
-  check('search does not count the name twice, on the server or in the browser', /if \(n === placeNames\.NAME_FIELD\) return true;/.test(server) && /if \(n === LokaLabelRules\.NAME_FIELD\) return true;/.test(viewer), true);
+  check('search does not count the name twice, on the server or in the browser', /if \(n === placeNames\.NAME_FIELD\) return true;/.test(fs.readFileSync(ROOT + '/api/lib/atlas/search-text.js', 'utf8')) && /if \(n === LokaLabelRules\.NAME_FIELD\) return true;/.test(viewer), true);
   check('a written name is never a key', /if \(col === LokaLabelRules\.NAME_FIELD\) return;/.test(viewer), true);
   check('never a card column either', /c !== 'loka_name'\)/.test(imports), true);
   check('the LOKA card gets the name as its heading, above the photo', /if \(title && title\.trim\(\) !== caption\.trim\(\)\) h \+= '<div class="pop-title">' \+ esc\(title\) \+ "<\/div>" \+ byLoka;\n\s*h \+= lokaLead\(L, props, caption, krows\);/.test(viewer), true);
