@@ -45,5 +45,10 @@ check('in Event mode the badge rises above the category buttons with the credit 
   /\.atlas-stage\.ev-on \.maplibregl-ctrl-bottom-right,\.atlas-stage\.ev-on \.loka-badge-float\{transform:translateY\(-60px\)\}/.test(ev) &&
   /\.atlas-stage\.ev-on\.ev-sub-on \.maplibregl-ctrl-bottom-right,\.atlas-stage\.ev-on\.ev-sub-on \.loka-badge-float\{transform:translateY\(-100px\)\}/.test(ev), true);
 
+check('the credit in words shows once per browser; after that the map wears only its ⓘ',
+  /if \(creditSeen\(\)\) \{ pill\.classList\.add\("folded"\); return; \}/.test(js) && /localStorage\.setItem\("atlas-credit-seen", "1"\)/.test(js) && /creditFoldT = setTimeout\(fold, 5000\);/.test(js), true);
+check('and for a returning visitor it is folded from the first frame, before the map has loaded', /\(function \(\) \{ var p = document\.getElementById\("map-attrib"\); if \(p && creditSeen\(\)\) p\.classList\.add\("folded", "no-anim"\); \}\)\(\);/.test(js), true);
+check('the ⓘ opens About, whose head carries the credit', /<button id="sources-btn" class="map-attrib-i"[^>]*aria-controls="atlas-sources"/.test(html) && /<p class="sources-map" id="sources-map"><\/p>/.test(html), true);
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

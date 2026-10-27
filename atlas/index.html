@@ -216,6 +216,7 @@
     .map-attrib a:hover { color:var(--color-leaf-deep); text-decoration-color:currentColor; }
     .map-attrib:hover, .map-attrib:has([aria-expanded="true"]) { background:var(--color-surface); color:var(--color-text-primary); }
     .map-attrib.folded { max-width:32px; }
+    .map-attrib.no-anim { transition:none; }   /* a returning visitor's ⓘ is small from the start, not shrinking */
     .map-attrib-words { transition:opacity .2s ease; }
     .map-attrib.folded .map-attrib-words { opacity:0; visibility:hidden; }
     /* the home gallery has no map, so nothing to credit */
@@ -1807,10 +1808,9 @@
       .atlas-panel.card-mode[data-h="peek"] .sheet-card-body .pop-shots { display:none; }
       /* two heights and one tap rule: the chevron is not drawn on a phone */
       .panel-collapse { display:none !important; }
-      /* folded, the credit leaves the phone's map altogether: "About this
-         atlas" heads the ☰ menu and the credit is under "Built with" there
+      /* folded, the credit is its ⓘ alone on a phone too (Mithun, 27 Oct 2026), which
+         opens About with the credit at its head; it is also under "Built with" in the ☰
          (the OSMF guideline: seen as the map opens, findable after) */
-      .map-attrib.folded { display:none; }
       /* full, the sliver of map above is only the way back: the map's own
          buttons and the credit wait until the sheet is down again */
       .atlas-stage:has(> #atlas-panel[data-h="full"]) .map-attrib,

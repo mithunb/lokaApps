@@ -5505,10 +5505,19 @@
      findable — here in the ☰ menu and behind the ⓘ (About & sources, whose
      Map line links the copyright page). It may not live only in a menu. */
   var creditFoldT = null;
+  /* The map's credit in words shows once per browser, on its first atlas, for its five
+     seconds (Mithun, 27 Oct 2026: "just the icon"). After that the map wears only the
+     ⓘ, which opens About with the credit at its head — OpenStreetMap's guideline: shown
+     unasked at first, findable after, and not needed on every visit. */
+  function creditSeen() { try { return localStorage.getItem("atlas-credit-seen") === "1"; } catch (e) { return false; } }
+  // folded from the first frame, so the words never flash while the map is still loading
+  (function () { var p = document.getElementById("map-attrib"); if (p && creditSeen()) p.classList.add("folded", "no-anim"); })();
   function watchCredit() {
     var pill = $("#map-attrib"); if (!pill || !map) return;
-    pill.classList.remove("folded");
     clearTimeout(creditFoldT);
+    if (creditSeen()) { pill.classList.add("folded"); return; }
+    try { localStorage.setItem("atlas-credit-seen", "1"); } catch (e) {}
+    pill.classList.remove("folded");
     var fold = function () {
       clearTimeout(creditFoldT);
       pill.classList.add("folded");
