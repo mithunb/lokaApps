@@ -357,8 +357,8 @@
         /* a soft fade at the right edge: the row slides on (Fable's review, 24 Oct 2026) */
         "-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent)}" +
       ".atlas-stage>.ev-subchips .ev-sub{box-shadow:0 1px 4px rgba(36,33,29,.18)}" +
-      ".atlas-stage.ev-on .map-attrib,.atlas-stage.ev-on .maplibregl-ctrl-bottom-right{transform:translateY(-60px)}" +
-      ".atlas-stage.ev-on.ev-sub-on .map-attrib,.atlas-stage.ev-on.ev-sub-on .maplibregl-ctrl-bottom-right{transform:translateY(-100px)}" +
+      ".atlas-stage.ev-on .map-attrib,.atlas-stage.ev-on .maplibregl-ctrl-bottom-right,.atlas-stage.ev-on .loka-badge-float{transform:translateY(-60px)}" +
+      ".atlas-stage.ev-on.ev-sub-on .map-attrib,.atlas-stage.ev-on.ev-sub-on .maplibregl-ctrl-bottom-right,.atlas-stage.ev-on.ev-sub-on .loka-badge-float{transform:translateY(-100px)}" +
       /* the first-visit line ("Tap a pin…") sits above the lifted credit, never on the buttons */
       ".atlas-stage.ev-on .atlas-cue{bottom:calc(var(--sheet-h,0px) + 112px)}" +
       ".atlas-stage.ev-on.ev-sub-on .atlas-cue{bottom:calc(var(--sheet-h,0px) + 152px)}" +

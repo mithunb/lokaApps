@@ -40,5 +40,10 @@ check('a manifest\'s madeFor turns it into "Made for" and the name, escaped and 
   /var madeFor = typeof manifest\.madeFor === "string" \? manifest\.madeFor\.trim\(\)\.slice\(0, 120\) : "";/.test(js) && /head\.textContent = "Made for";/.test(js) && /el\("div", "org-credit-name", esc\(madeFor\)\)/.test(js), true);
 check('without madeFor the heading stays "Made by"', /if \(madeFor && head && cred\)/.test(js), true);
 
+const ev = fs.readFileSync(ROOT + '/atlas/event-mode.js', 'utf8');
+check('in Event mode the badge rises above the category buttons with the credit and the zoom buttons',
+  /\.atlas-stage\.ev-on \.maplibregl-ctrl-bottom-right,\.atlas-stage\.ev-on \.loka-badge-float\{transform:translateY\(-60px\)\}/.test(ev) &&
+  /\.atlas-stage\.ev-on\.ev-sub-on \.maplibregl-ctrl-bottom-right,\.atlas-stage\.ev-on\.ev-sub-on \.loka-badge-float\{transform:translateY\(-100px\)\}/.test(ev), true);
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
