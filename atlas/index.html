@@ -1157,6 +1157,16 @@
     .pop-nav svg { width:16px; height:16px; flex:0 0 auto; }
     .pop-nav:hover { background:var(--color-leaf-tint); text-decoration:none; }
     .pop-nav:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; }
+    /* on an iPhone or iPad, Navigate opens a choice of two: Apple Maps or Google Maps */
+    .pop-navs > summary { list-style:none; cursor:pointer; }
+    .pop-navs > summary::-webkit-details-marker { display:none; }
+    .pop-navs[open] > summary { background:var(--color-leaf-tint); }
+    .pop-navs-opts { display:flex; flex-wrap:wrap; gap:.5rem; margin-top:.5rem; }
+    .pop-nav-opt { display:flex; align-items:center; min-height:44px; box-sizing:border-box; padding:0 14px;
+      font-size:var(--t-control, 14px); font-weight:600; color:#fff; text-decoration:none;
+      background:var(--color-leaf); border:1px solid var(--color-leaf); border-radius:var(--radius-md); }
+    .pop-nav-opt:hover { background:var(--color-leaf-deep); text-decoration:none; }
+    .pop-nav-opt:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; }
     .pop-src { margin-top:.7rem; padding-top:.5rem; border-top:1px solid var(--color-border);
       font-size:var(--t-label); color:var(--color-text-muted); }
     .pop-img { display:block; width:100%; max-height:180px; object-fit:cover; border-radius:var(--radius-md); margin:.5rem 0 .1rem; }

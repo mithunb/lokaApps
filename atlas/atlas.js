@@ -7015,11 +7015,13 @@
     var ll = lat.toFixed(6) + "," + lng.toFixed(6);
     // brackets too: a geo: link's name sits in brackets, and "IPSCDL (Old Secretariat)" has its own
     name = encodeURIComponent(name || "").replace(/\(/g, "%28").replace(/\)/g, "%29");
-    if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && touch > 1))
+    if (isAppleTouch(ua, touch))
       return "https://maps.apple.com/?daddr=" + ll + (name ? "&q=" + name : "");
     if (/Android/.test(ua)) return "geo:0,0?q=" + ll + (name ? "(" + name + ")" : "");
     return "https://www.google.com/maps/dir/?api=1&destination=" + ll;
   }
+  var NAV_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>';
+  function isAppleTouch(ua, touch) { return /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && touch > 1); }
   function navLinkHTML(props, f) {
     var g = f && f.geometry;
     if (!g || g.type !== "Point" || !g.coordinates) return "";
@@ -7027,10 +7029,21 @@
     if (!isFinite(lng) || !isFinite(lat) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return "";
     var p = props || {};
     var name = String(p.loka_name || p.name || "").trim().slice(0, 80);
-    var url = navURL(lng, lat, name, navigator.userAgent || "", navigator.maxTouchPoints || 0);
-    var away = /^https:\/\/www\.google\.com\//.test(url);
-    return '<a class="pop-nav" href="' + esc(url) + '"' + (away ? ' target="_blank" rel="noopener"' : "") + ">" +
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>Navigate</a>';
+    var ua = navigator.userAgent || "", touch = navigator.maxTouchPoints || 0;
+    var google = navURL(lng, lat, name, "", 0);
+    /* an iPhone or iPad offers both (Mithun, 27 Oct 2026, after trying it on his iPhone):
+       Apple Maps, the phone's own, and Google Maps (its app when installed, else its site
+       in a new tab, so the atlas stays open). One tap opens the two; no pop-up. */
+    if (isAppleTouch(ua, touch)) {
+      return '<details class="pop-navs"><summary class="pop-nav">' + NAV_ICON + "Navigate</summary>" +
+        '<div class="pop-navs-opts">' +
+        '<a class="pop-nav-opt" href="' + esc(navURL(lng, lat, name, ua, touch)) + '">Apple Maps</a>' +
+        '<a class="pop-nav-opt" href="' + esc(google) + '" target="_blank" rel="noopener">Google Maps</a>' +
+        "</div></details>";
+    }
+    var url = navURL(lng, lat, name, ua, touch);
+    var away = url === google;
+    return '<a class="pop-nav" href="' + esc(url) + '"' + (away ? ' target="_blank" rel="noopener"' : "") + ">" + NAV_ICON + "Navigate</a>";
   }
   function isLoka(L) {
     if (!L) return false;
