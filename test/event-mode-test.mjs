@@ -232,10 +232,10 @@ vfeats.forEach((f) => {
   check(f.properties.loka_name + ': its whole programme under "All days" (' + sess(f).length + ')', n, sess(f).length);
 });
 check('36 sessions shown across the 7 cards', shown, 36);
-const sun = vfeats.find((f) => f.properties.loka_name === 'Sunaparanta Goa Centre');
+const sun = vfeats.find((f) => f.properties.loka_name === 'Sunaparanta Goa Centre for the Arts');   // renamed by the festival's fixes (27 Oct 2026)
 const tabsOf = (html) => (html.match(/data-ev-tab="[^"]+"[^>]*>[^<]+/g) || []).map((s) => s.replace(/.*>/, ''));
 check('day tabs, then "All days"', tabsOf(EV.programmeHTML(sun.properties, mode, '2026-10-22', esc)), ['Thu 29', 'Fri 30', 'Sat 31', 'All days']);
-check('before the festival the card opens on the first day the venue has something', EV.openingTab(sess(vfeats.find((f) => f.properties.loka_name === 'MDR2')), mode.days, '2026-10-22'), '2026-10-31');
+check('before the festival the card opens on the first day the venue has something', EV.openingTab(sess(vfeats.find((f) => f.properties.loka_name === 'Sadhana Dell \'Arte')), mode.days, '2026-10-22'), '2026-10-31');
 check('during it, on today', EV.openingTab(sess(sun), mode.days, '2026-10-30'), '2026-10-30');
 check('a thing that runs every day sits on each day too', (EV.programmeHTML(sun.properties, mode, '2026-10-22', esc).split('data-ev-day="2026-10-29"')[1].split('data-ev-day=')[0].match(/Exhibition on Wetlands/g) || []).length, 1);
 check('a programme left as text is shown whole', /pre-line|ev-prog-text/.test(EV.programmeHTML({ programme_text: 'THU\n  a' }, mode, '2026-10-22', esc)), true);
@@ -253,7 +253,7 @@ const made = EV.viewer(Object.assign({ layer: 'tags' }, mode), api).layers(L.sli
 check('the venues’ layer becomes one layer per category, and two from OpenStreetMap', made.map((x) => x.id), ['admin', 'ev-venues', 'ev-eat-osm', 'ev-see', 'ev-see-osm', 'ev-utils', 'ev-utils-osm']);
 check('only Venues is on at first', made.filter((x) => x._ev && x.default).map((x) => x.id), ['ev-venues']);
 check('the OpenStreetMap layers carry the credit', made.filter((x) => x.osmPlaces).every((x) => x.credits && /OpenStreetMap/.test(x.credits[0].name)), true);
-check('the venues are numbered most sessions first', made[1].rowsFrom(tags).features.map((f) => f._evNo + ' ' + f.properties.loka_name).slice(0, 3), ['1 Old Secretariat', '2 Sunaparanta Goa Centre', '3 Kala Academy']);
+check('the venues are numbered most sessions first', made[1].rowsFrom(tags).features.map((f) => f._evNo + ' ' + f.properties.loka_name).slice(0, 3), ['1 IPSCDL (Old Secretariat)', '2 Sunaparanta Goa Centre for the Arts', '3 Kala Academy']);
 check('no layer to draw from: no guide, the atlas is left as it is', EV.viewer(mode, api).layers([L[0]]), null);
 check('the mode is "event" or nothing', [EV.isOn({}), EV.isOn({ mode: { name: 'other' } }), EV.isOn({ mode: { name: 'event' } })], [false, false, true]);
 
