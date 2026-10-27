@@ -589,6 +589,7 @@
       var all = (api.data(X.id) || {}).features || [];
       var no = f ? all.indexOf(f) : -1;
       if (no >= 0) h += '<button type="button" class="ev-around-link" data-ex-around="' + no + '">What’s around here</button>';
+      if (api.navLinkHTML) h += api.navLinkHTML(props, f);
       if (api.lokaLinkHTML) h += api.lokaLinkHTML(srcLayer || L, props);
       return h + "</div>";
     }

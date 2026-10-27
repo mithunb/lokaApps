@@ -1149,6 +1149,13 @@
     .pop-loka { display:flex; width:max-content; max-width:100%; align-items:center; min-height:44px; margin-top:.4rem; font-size:var(--t-meta, 13px); font-weight:600;
       color:var(--color-leaf-deep); text-decoration:underline; text-decoration-color:var(--color-border); text-underline-offset:3px; }
     .pop-loka:hover { text-decoration-color:currentColor; }
+    /* "Navigate": the way there in the phone's own map app (atlas.js navLinkHTML) */
+    .pop-nav { display:flex; width:max-content; max-width:100%; align-items:center; gap:.45rem; min-height:44px; box-sizing:border-box; margin-top:.6rem; padding:0 14px;
+      font-size:var(--t-control, 14px); font-weight:600; color:var(--color-leaf-deep); text-decoration:none;
+      background:var(--color-surface); border:1px solid var(--color-leaf); border-radius:var(--radius-md); }
+    .pop-nav svg { width:16px; height:16px; flex:0 0 auto; }
+    .pop-nav:hover { background:var(--color-leaf-tint); text-decoration:none; }
+    .pop-nav:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; }
     .pop-src { margin-top:.7rem; padding-top:.5rem; border-top:1px solid var(--color-border);
       font-size:var(--t-label); color:var(--color-text-muted); }
     .pop-img { display:block; width:100%; max-height:180px; object-fit:cover; border-radius:var(--radius-md); margin:.5rem 0 .1rem; }

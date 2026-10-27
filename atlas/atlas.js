@@ -527,6 +527,7 @@
       shotsHTML: shotsHTML, linksIn: linksIn, cellShown: cellShown,
       dataUrl: function (file) { return dataUrl(file); },
       lokaLinkHTML: lokaLinkHTML,
+      navLinkHTML: navLinkHTML, navURL: navURL,
       setLayerVisible: function (L, show) { if (map) setLayerVisible(L, show); else L._visible = show; },
       onPhone: onPhone,
       setSheet: function (h) { setSheet(h); },
@@ -6997,6 +6998,31 @@
     if (!url) return "";
     return '<a class="pop-loka" href="' + esc(url) + '" target="_blank" rel="noopener">See this place in LOKA</a>';
   }
+  /* "Navigate" on every place with a point (Mithun, 27 Oct 2026): opens the phone's own map
+     app with the way there. An iPhone or iPad gets Apple Maps' directions, an Android phone a
+     geo: link its default map app answers, anything else Google Maps' directions in a new
+     tab. No location is asked for: the map app works out the start itself. */
+  function navURL(lng, lat, name, ua, touch) {
+    var ll = lat.toFixed(6) + "," + lng.toFixed(6);
+    // brackets too: a geo: link's name sits in brackets, and "IPSCDL (Old Secretariat)" has its own
+    name = encodeURIComponent(name || "").replace(/\(/g, "%28").replace(/\)/g, "%29");
+    if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && touch > 1))
+      return "https://maps.apple.com/?daddr=" + ll + (name ? "&q=" + name : "");
+    if (/Android/.test(ua)) return "geo:0,0?q=" + ll + (name ? "(" + name + ")" : "");
+    return "https://www.google.com/maps/dir/?api=1&destination=" + ll;
+  }
+  function navLinkHTML(props, f) {
+    var g = f && f.geometry;
+    if (!g || g.type !== "Point" || !g.coordinates) return "";
+    var lng = Number(g.coordinates[0]), lat = Number(g.coordinates[1]);
+    if (!isFinite(lng) || !isFinite(lat) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return "";
+    var p = props || {};
+    var name = String(p.loka_name || p.name || "").trim().slice(0, 80);
+    var url = navURL(lng, lat, name, navigator.userAgent || "", navigator.maxTouchPoints || 0);
+    var away = /^https:\/\/www\.google\.com\//.test(url);
+    return '<a class="pop-nav" href="' + esc(url) + '"' + (away ? ' target="_blank" rel="noopener"' : "") + ">" +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>Navigate</a>';
+  }
   function isLoka(L) {
     if (!L) return false;
     if (L._loka === undefined) {
@@ -7223,7 +7249,7 @@
        to name; a curated atlas's own pins have none. */
     var src = sourceLine(L);
     if (src) h += '<div class="pop-src">Source · ' + esc(src) + "</div>";
-    if (h !== shell) h += lokaLinkHTML(L, props);
+    if (h !== shell) h += navLinkHTML(props, f) + lokaLinkHTML(L, props);
 
     // A popup stanza can point at columns the data no longer carries — that
     // used to open a bare white box with nothing but a close button. If

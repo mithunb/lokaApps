@@ -739,6 +739,7 @@
         not.map(function (st) { return escText(st.noun || st.question); }).join(" \u00b7 ") + "</div></div>";
       h += "</div>";
       if (props.address) h += '<p class="ev-addr">' + esc(api.cellShown(props.address)) + "</p>";
+      if (api.navLinkHTML) h += api.navLinkHTML(props, f);
       if (api.lokaLinkHTML) h += api.lokaLinkHTML(srcLayer || L, props);
       return h + "</div>";
     }
