@@ -122,7 +122,12 @@
        thing to the right of the title, and the menu is a panel under the
        header with the same items as plain rows. */
     .nav-menu { display:contents; }
-    .nav-burger, .nav-menu-head, .nav-menu-scrim, .nav-menu-more, .loka-badge-menu, .nav-builtwith { display:none; }
+    .nav-burger, .nav-menu-head, .nav-menu-scrim, .nav-menu-more, .loka-badge-menu, .nav-builtwith, .nav-stores { display:none; }
+    .nav .links a small { display:none; }
+    /* on an atlas the menu promotes the LOKA app and the Atlas; the way to every atlas is in
+       About, and signing in is the setup page's (the owner's tools follow the session) */
+    html:not(.atlas-full) .nav .links .nav-app,
+    .atlas-full .nav .links a[href="./"], .atlas-full .nav .links a[href="../"], .atlas-full #nav-signin { display:none !important; }
     .nav .links { display:flex; gap:1.25rem; align-items:center; flex-wrap:wrap; }
     .nav .links a, .nav .links button { color:var(--color-text-secondary); font-size:var(--t-ui);
       background:none; border:none; font-family:inherit; cursor:pointer; padding:0; }
@@ -1306,6 +1311,17 @@
     .cr-lede { font-size:var(--t-ui); color:var(--color-text-secondary); margin:0 0 1.1rem; max-width:36ch; }
     .cr-lede b { color:var(--color-text-primary); font-weight:600; }
     .cr-orgs { display:flex; flex-direction:column; gap:.9rem; }
+    /* the LOKA app's two store badges, Apple's and Google's own art, unaltered: About on every
+       atlas, and the foot of the phone's menu. Google's art carries its own clear space. */
+    .cr-app { margin-top:.25rem; }
+    .cr-app p { font-size:var(--t-ui); color:var(--color-text-secondary); margin:0 0 .6rem; max-width:36ch; }
+    .cr-app .cr-tm { font-size:var(--t-label); color:var(--color-text-muted); margin:.6rem 0 0; }
+    .store-badges { display:flex; flex-wrap:wrap; align-items:center; gap:.4rem; }
+    .store-badges a { display:inline-flex; }
+    .store-badges .sb-apple { height:40px; width:auto; }
+    .store-badges .sb-google { height:58px; width:auto; margin:-9px; }
+    html:not(.atlas-full) .cr-app { display:none; }
+    .nav-menu .nav-stores { display:none; }   /* the badges are a ☰ row only; a wide screen has About */
     .cr-org { display:flex; align-items:center; gap:.7rem; }
     .cr-org .cr-icon { width:34px; height:34px; border-radius:var(--radius-lg); flex:0 0 auto; display:flex; align-items:center; justify-content:center; background:var(--color-leaf-tint); color:var(--color-leaf); }
     .cr-org .cr-icon svg { width:18px; height:18px; }
@@ -1440,7 +1456,7 @@
        The owner's button keeps its word: "Owner" is what tells the owner
        the menu is theirs. */
     @media (min-width:721px) and (max-width:1100px){
-      .atlas-full .nav .links > :not(#nav-signin):not(#nav-signout) { display:none; }
+      .atlas-full .nav .links > :not(#nav-signin):not(#nav-signout):not(.nav-app) { display:none; }
       .atlas-full #share-btn span { display:none; }
       .atlas-full #share-btn { padding:.3rem .45rem; }
       .atlas-full #share-btn svg { margin:0; }
@@ -1599,6 +1615,9 @@
       .nav-menu .loka-badge.loka-badge-menu { display:inline-flex; align-self:flex-start; margin:16px .25rem 8px; min-height:44px; box-sizing:border-box; }
       /* on the phone every link is in the menu, the ones the wide screen keeps in About & sources too */
       .atlas-full .nav-menu .links a[href="../"], .atlas-full .nav-menu .links a.nav-build { display:block; }
+      /* a row's second line says what it is for, in the muted voice */
+      .nav-menu .links a small { display:block; margin-top:2px; font-size:var(--t-meta); font-weight:400; color:var(--color-text-secondary); line-height:1.35; }
+      .atlas-full .nav-menu .nav-stores { display:flex; margin:14px .25rem 0; }
       .nav-menu [hidden] { display:none !important; }
       /* the owner's button is a row here, in its own voice; its panel opens over the menu */
       .nav-menu .own-acts { display:block; width:100%; }
@@ -1612,12 +1631,16 @@
       .org-brand-logo { height:28px; max-width:min(var(--logo-max-width,120px), 120px); }   /* a theme's wider logo leaves the title room on a phone */
       .org-brand-line > span { max-width:none; }
       .org-head #atlas-title { font-size:1.3rem; }
-      /* the badge is in the sheet's head on a phone; it floats only while
-         the empty drawer is not drawn (loading, the private page) */
+      /* LOKA's badge sits at the map's bottom right, just above the sheet (Mithun, 27 Oct 2026);
+         the zoom buttons stand on it. With the empty drawer not drawn (loading, the private
+         page) it drops to the foot. An embed has it in the sheet's head instead. */
       .loka-badge-float { display:none; }
+      .atlas-full .loka-badge-float { display:inline-flex; bottom:calc(var(--sheet-h, 0px) + 8px); }
       .atlas-full .atlas-panel:has(#atlas-controls:empty) ~ .loka-badge-float { display:inline-flex; bottom:calc(8px + env(safe-area-inset-bottom)); }
-      /* the credit pill sits just above the sheet, with the map's own buttons */
-      .map-attrib { left:8px; bottom:calc(var(--sheet-h, 0px) + 8px); max-width:calc(100% - 4.5rem); }
+      .atlas-embed .loka-badge-float { display:none !important; }
+      .atlas-full .atlas-stage .maplibregl-ctrl-bottom-right { bottom:calc(var(--sheet-h, 0px) + 40px); }
+      /* the credit pill sits just above the sheet, left of the badge */
+      .map-attrib { left:8px; bottom:calc(var(--sheet-h, 0px) + 8px); max-width:calc(100% - 9rem); }
       /* the waiting label steps up above the sheet and the chips, like the cue */
       .atlas-loading.aside { bottom:calc(var(--sheet-h, 0px) + 52px); }
       .atlas-full .maplibregl-ctrl-bottom-left { bottom:calc(var(--sheet-h, 0px) + 40px); }
@@ -1785,6 +1808,7 @@
          buttons and the credit wait until the sheet is down again */
       .atlas-stage:has(> #atlas-panel[data-h="full"]) .map-attrib,
       .atlas-stage:has(> #atlas-panel[data-h="full"]) .maplibregl-ctrl-bottom-right,
+      .atlas-stage:has(> #atlas-panel[data-h="full"]) .loka-badge-float,
       .atlas-stage:has(> #atlas-panel[data-h="full"]) .map-style-btn { visibility:hidden; }
       /* the head: the grabber band over one row — the words, the badge, the chevron */
       .panel-head { position:relative; display:block; cursor:default; padding:0 8px 0 14px; border-bottom:0; min-height:0; flex:0 0 auto; }
@@ -2016,10 +2040,17 @@
           <button class="nav-about" id="nav-about" type="button">About this atlas</button>
           <a href="./">all atlases</a>
           <a href="../">all apps</a>
-          <a class="nav-build" href="https://loka.place/apps/atlas/setup/">Build your own Atlas</a>
+          <!-- an atlas's menu sells what made it: the LOKA app that tagged the places, and the
+               Atlas that maps them (Mithun, 27 Oct 2026: no all atlases / all apps / sign in there) -->
+          <a class="nav-app" href="https://discoverloka.org" target="_blank" rel="noopener">Get the LOKA app<small>Add your own places and stories</small></a>
+          <a class="nav-build" href="https://loka.place/apps/atlas/setup/">Build your own Atlas<small>Turn LOKA tags into a map like this one</small></a>
           <span id="nav-user" hidden></span>
           <a id="nav-signin" href="./setup/?signin=1">sign in</a>
           <button id="nav-signout" type="button" hidden>sign out</button>
+        </div>
+        <div class="store-badges nav-stores">
+          <a href="https://apps.apple.com/in/app/loka-discover-local/id6758565297" target="_blank" rel="noopener"><img src="./badge-app-store.svg" alt="Download on the App Store" class="sb-apple"></a>
+          <a href="https://play.google.com/store/apps/details?id=com.find_ar.app" target="_blank" rel="noopener"><img src="./badge-google-play.png" alt="Get it on Google Play" class="sb-google"></a>
         </div>
         <!-- the map's credit, for good, where the ☰ is (Mithun, 23 Oct 2026); on
              the map it shows as the map opens and folds away (atlas.js watchCredit) -->
@@ -2028,7 +2059,6 @@
           <p id="nav-builtwith-map"></p>
           <p><a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre GL</a>, the open-source map engine</p>
         </div>
-        <a class="loka-badge loka-badge-menu" href="https://discoverloka.org" target="_blank" rel="noopener" title="LOKA: discover local places"><span class="loka-badge-by">Powered by</span> <img src="./loka-logo.png" alt="LOKA"></a>
       </div>
       <div class="nav-menu-scrim" id="nav-menu-scrim" hidden></div>
     </nav>
@@ -2106,8 +2136,8 @@
       <button id="sources-btn" class="map-attrib-i" type="button" aria-expanded="false" aria-controls="atlas-sources" aria-label="About this atlas and its sources">i</button>
       <span class="map-attrib-words" id="map-attrib-words"></span>
     </div>
-    <!-- Bottom-right: LOKA's badge on a wide screen (on a phone it is in the
-         sheet's head above, and here only while there is no sheet to hold it) -->
+    <!-- Bottom-right: LOKA's badge, on every screen; on a phone it sits just above
+         the sheet (in an embed it is in the sheet's head above instead) -->
     <a class="loka-badge loka-badge-float" href="https://discoverloka.org" target="_blank" rel="noopener" title="LOKA: discover local places">Powered by <img src="./loka-logo.png" alt="LOKA"></a>
 
   <!-- The credits, opened from the "About & sources" chip. Not modal: the
@@ -2129,13 +2159,21 @@
       <div class="credits-col">
         <h2>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          Made by
+          <span id="made-head">Made by</span>
         </h2>
         <div id="org-credit"></div>
         <p class="cr-lede">A platform built by Socratus.<span id="collab-lede"></span></p>
         <div class="cr-orgs">
           <!-- instance-specific collaborators (from the manifest) render here -->
           <div id="collab-credits" style="display:contents"></div>
+        </div>
+        <div class="cr-app">
+          <p>The places and stories on this map were tagged in the LOKA app.</p>
+          <div class="store-badges">
+            <a href="https://apps.apple.com/in/app/loka-discover-local/id6758565297" target="_blank" rel="noopener"><img src="./badge-app-store.svg" alt="Download on the App Store" class="sb-apple"></a>
+            <a href="https://play.google.com/store/apps/details?id=com.find_ar.app" target="_blank" rel="noopener"><img src="./badge-google-play.png" alt="Get it on Google Play" class="sb-google"></a>
+          </div>
+          <p class="cr-tm">App Store is a service mark of Apple Inc. Google Play and the Google Play logo are trademarks of Google LLC.</p>
         </div>
       </div>
       <div class="credits-col">

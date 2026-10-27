@@ -28,8 +28,8 @@ check('the title gives way before the acts beside it (wide)', /\.atlas-full \.or
 check('and on a phone', /\.atlas-full \.org-head \{ flex:1 1 auto; min-width:0; max-width:none; \}/.test(html), true);
 check('Share and the links sit together at the right', /\.atlas-full \.hero-actions \{ flex:0 0 auto; margin-left:auto;/.test(html), true);
 check('nothing is moved into the header any more', /head-tools/.test(html) || /head-tools/.test(js), false);
-check('between 721 and 1100px only sign in / sign out stay among the links',
-  /@media \(min-width:721px\) and \(max-width:1100px\)\{\s*\.atlas-full \.nav \.links > :not\(#nav-signin\):not\(#nav-signout\) \{ display:none; \}/.test(html), true);
+check('between 721 and 1100px only "Get the LOKA app" and sign out stay among the links',
+  /@media \(min-width:721px\) and \(max-width:1100px\)\{\s*\.atlas-full \.nav \.links > :not\(#nav-signin\):not\(#nav-signout\):not\(\.nav-app\) \{ display:none; \}/.test(html), true);
 check('and Share is its icon there — Share alone, not every button', /\.atlas-full #share-btn span \{ display:none; \}/.test(html), true);
 check('the header sits above the map\'s floating pieces, so a menu hanging from it is never under the search box',
   /\.atlas-full header\.site \{ z-index:10; \}/.test(html), true);
