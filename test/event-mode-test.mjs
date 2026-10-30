@@ -250,7 +250,7 @@ const L = [{ id: 'admin', type: 'fill', source: 'admin.geojson' },
   { id: 'tags', type: 'marker', source: 'user-tags.geojson', userLayer: true, popup: { title: 'loka_name' }, label_text: { property: 'loka_name' }, contentHash: 'abc' }];
 const api = { esc, el: () => ({}), data: () => null, markers: () => [], locPinEl: () => ({}), shotsHTML: () => '', linksIn: () => [], cellShown: (v) => String(v || ''), setLayerVisible() {}, onPhone: () => false };
 const made = EV.viewer(Object.assign({ layer: 'tags' }, mode), api).layers(L.slice());
-check('the venues’ layer becomes one layer per category, and two from OpenStreetMap', made.map((x) => x.id), ['admin', 'ev-venues', 'ev-eat-osm', 'ev-see', 'ev-see-osm', 'ev-utils', 'ev-utils-osm']);
+check('the venues’ layer becomes one layer per category, and two from OpenStreetMap', made.map((x) => x.id), ['admin', 'ev-venues', 'ev-eat', 'ev-eat-osm', 'ev-see', 'ev-see-osm', 'ev-utils', 'ev-utils-osm']);   // Eat & Drink takes the team's Food and Drink tags too (30 Oct 2026)
 check('only Venues is on at first', made.filter((x) => x._ev && x.default).map((x) => x.id), ['ev-venues']);
 check('the OpenStreetMap layers carry the credit', made.filter((x) => x.osmPlaces).every((x) => x.credits && /OpenStreetMap/.test(x.credits[0].name)), true);
 check('the venues are numbered most sessions first', made[1].rowsFrom(tags).features.map((f) => f._evNo + ' ' + f.properties.loka_name).slice(0, 3), ['1 IPSCDL (Old Secretariat)', '2 Sunaparanta Goa Centre for the Arts', '3 Kala Academy']);

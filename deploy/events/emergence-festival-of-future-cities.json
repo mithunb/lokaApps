@@ -1,5 +1,5 @@
 {
-  "about": "Event mode for this atlas (deploy/apply-event-mode.mjs, deploy/refresh-event-atlas.mjs). Spec by Fable, approved by Mithun 2026-10-22, with his overrides: at most 8 eat-and-drink places per venue, nearest first; the Vivanta venue is Vivanta Goa, Panaji (renamed, Campal address); Kala Academy's picture from its Wikipedia page; the Cafeteria's sessions merged into Kala Academy, which is the venue. 23 Oct 2026: one chip at a time; See & Do (Fable's call, Mithun's yes) replaces Art & Culture with parks, views, beaches, landmarks, museums, galleries and markets in four headings, churches and temples only when the data marks them notable; Utils renamed Essentials; What's around here opens Eat & Drink. Later 23 Oct: icons on every button, and a second row of buttons for See & Do's and Essentials' sub-groups (Mithun).",
+  "about": "Event mode for this atlas (deploy/apply-event-mode.mjs, deploy/refresh-event-atlas.mjs). Spec by Fable, approved by Mithun 2026-10-22, with his overrides: at most 8 eat-and-drink places per venue, nearest first; the Vivanta venue is Vivanta Goa, Panaji (renamed, Campal address); Kala Academy's picture from its Wikipedia page; the Cafeteria's sessions merged into Kala Academy, which is the venue. 23 Oct 2026: one chip at a time; See & Do (Fable's call, Mithun's yes) replaces Art & Culture with parks, views, beaches, landmarks, museums, galleries and markets in four headings, churches and temples only when the data marks them notable; Utils renamed Essentials; What's around here opens Eat & Drink. Later 23 Oct: icons on every button, and a second row of buttons for See & Do's and Essentials' sub-groups (Mithun). 30 Oct 2026 (Mithun: refresh from the website and LOKA): the team's own Food and Drink tags (Joseph's, added in LOKA on 29 Oct) show under Eat & Drink beside OpenStreetMap's; Saturday's programmes corrected to emergencefestival.in in programmes-2026-10-30.json (give it as --full-text).",
   "layer": "tags",
   "venueFrom": {
     "column": "pattern_4",
@@ -26,6 +26,9 @@
       {
         "id": "eat",
         "label": "Eat & Drink",
+        "tags": [
+          "Food and Drink"
+        ],
         "osm": [
           "restaurant",
           "cafe",

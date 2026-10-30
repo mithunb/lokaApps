@@ -1,0 +1,198 @@
+{
+ "type": "FeatureCollection",
+ "about": "Festival programmes as LOKA holds them on 30 Oct 2026, corrected to emergencefestival.in read the same day (Sunaparanta, Sadhana Dell Arte, IPSCDL on Sat 31 Oct)",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "02f84489-ba94-46bc-a149-caab32868151",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nNot a venue. A short detour on the walk between the Central Library, IPSCDL and Sunaparanta, with the Mario de Miranda gallery next door."
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "1f07ff4b-f07b-4ca9-8e26-5b1ea6b99cbd",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nFestival venue · 1 session\n\nSAT 31 OCT\n  18:30–21:30 Goa Climate Party · The Climate Party\n\nTimes and registration: emergencefestival.in"
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "23b24b1a-598f-4abe-9c99-7c60439e4cab",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nNot a venue. The nearest public toilets to the Central Library."
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "370ad946-3366-4fc3-b8a8-8cfeca660c05",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nNot a venue. Two hundred metres from IPSCDL, the festival's busiest venue, if you have a gap between sessions there."
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "43d2fb17-4b44-48ba-832e-a73648d7f703",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nNot a venue. A five-minute walk west along the river from IPSCDL, past Dharohar, for a gap between sessions."
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "45f8ce51-dc38-43f0-a829-5d8d2275ec22",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nNot a venue. The nearest ride from IPSCDL out to the evening venues in Miramar (Friday) and Merces (Saturday)."
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "4b696a30-3ad6-4823-9df8-66a19d0ee3b8",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nNot a venue. The pharmacy for the Central Library and Sunaparanta end of the festival."
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "57c93c22-5deb-491a-b19e-5c1ac9133a9f",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nNot a venue. The nearest pharmacy to Kala Academy."
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "59fe3500-15d0-469d-b44c-4def431ffb91",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nFestival venue · 1 session\n\nTHU 29 OCT\n  17:00–19:00 The Great Indian Ukada (theatre/play) · Asar\n\nTimes and registration: emergencefestival.in"
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "626b18cc-495a-4b0e-b722-e6778f5ef550",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nFestival venue · 5 sessions\n\nTHU 29 OCT\n  14:00–16:00 People Within the System · Charles Correa Foundation\n\nFRI 30 OCT\n  11:00–13:00 The City We Build, the Lives We Overlook · Charles Correa Foundation\n  14:00–15:30 Welcome to Kachra Crisis Housing Society · Purpose\n  15:00–16:30 Who Shapes the Story of Our Cities? · Momentum Shifts\n  18:00–19:30 Earth, Unplugged: Music Show + Street Play on Waste · Momentum Shifts | Jyoti Mhapsekar\n\nTimes and registration: emergencefestival.in"
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "6cf7f3f9-2f3a-47d0-b3bd-962a52ea49a4",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nNot a venue. The nearest gallery to the Central Library and IPSCDL, next to the Fontainhas Viewpoint, if you have a gap between sessions."
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "7c59ba9c-6002-4729-910f-9a09675e34dc",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nFestival venue · 1 session\n\nFRI 30 OCT\n  19:30–21:30 Mixer: City Climate Stories · Asar\n\nTimes and registration: emergencefestival.in"
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "7f071cef-d905-4c29-ac6d-0ceecc6f695b",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nNot a venue. The nearest public toilets marked on OpenStreetMap to IPSCDL, the festival's busiest venue."
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "8688674c-8b4c-4516-bae6-708ffa1bffaa",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nNot a venue. At Kala Academy's door; a minute's look on the way in or out of a session there."
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "8726e793-06ef-4144-a4e2-3e0f7f7b524d",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nNot a venue. The bus stop for Kala Academy sessions, at the western end of the festival's walking route."
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "8b6501e0-14c2-4369-bdd0-3ab61a090eed",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nFestival venue · 2 sessions\n\nTHU 29 OCT\n  09:30–11:00 Opening Ceremony: Keynote & Panaji Net Zero Roadmap Launch\n  11:30–13:00 From Climate Plans to City Action: Building Resilient Cities · Friedrich-Ebert-Stiftung (FES)\n\nTimes and registration: emergencefestival.in"
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "97c2f6bf-a103-44d1-8ce6-20fc972e3094",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nNot a venue. Doolally on Friday evening and, if confirmed, Vivanta on Thursday morning are the only festival reasons to be out at Miramar, and this is the thing to see while you are."
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "98a8dc90-b0bb-458a-b692-c9b05d21a3e7",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nNot a venue. The nearest hospital to the middle of the festival's walking route."
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "9e3f0815-6762-4074-b0a5-bbc48ed2f60a",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nNot a venue. The cash machine nearest the Central Library, and within a ten-minute walk of IPSCDL and Sunaparanta."
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "ab7dea2e-535e-416e-bf75-09f09f63ad47",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nNot a venue. The easiest place to pick up a ride to the two evening venues outside the walking zone: Doolally Taproom in Miramar (Friday 30 October) and Sadhana Dell 'Arte in Merces (Saturday 31 October)."
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "b9d6c4d1-7f18-4212-913e-cae41c06b53a",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nNot a venue. The view worth the climb between sessions at Sunaparanta, about 440 m up the hill."
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "bbf56b26-bdfa-4d68-8e26-4db61525fd94",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nFestival venue · 17 sessions\n\nTHU 29 OCT\n  14:00–15:30 24/7 Power – A City Imagined on Renewables · Transitions Research / CSTEP\n  14:00–17:30 EDGE Expert Training Program · International Finance Corporation (IFC)\n  16:00–17:30 AI and the Future of Cities · AI Knowledge Consortium\n\nFRI 30 OCT\n  09:30–11:00 The Emerging Panjim: Rethinking Buildings, Business & Urban Life · International Finance Corporation (IFC)\n  09:30–11:00 Climate Tech Storybuilding · Storiculture\n  11:30–13:00 Cities in Dialogue: Lessons on Managing Wet Waste · Global Methane Hub\n  11:30–13:30 Thermocene: Speculations on Warmer Worlds · Socratus Collective Wisdom Corporation\n  14:00–15:30 When Extremes Collide: Planning for Heat and Flood Risk in Indian Cities · Center for Study of Science, Technology and Policy (CSTEP)\n  14:00–15:30 Mental Wellbeing & Collective Agency in an Emerging City\n  16:00–17:30 Clean Air by Design: Rethinking Air Quality in Emerging Cities · Clean Air Fund\n\nSAT 31 OCT\n  09:30–11:00 Liveable cities: Can you make them? · UCAN / Janagraha\n  11:30–13:00 A Commons (and Commoning) Lens to Urban Planning and Policy for the Indian City · Sattva Trust (Integrated Design)\n  11:30–13:00 City Minds: The Emotional Life of an Emerging City · Sangath\n  14:00–15:30 WISE Cities: Panjim Reimagined · Blue Ribbon Movement\n  14:00–15:30 Governance Action Lab · Nagrika\n  16:00–17:30 Naata Shahi · Blue Ribbon Movement\n  16:30–18:30 Make Your City: Designing for Local Production and Urban Resilience · Makers Asylum\n\nTimes and registration: emergencefestival.in"
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "d0700515-2238-44d6-bcbe-53d11aa1245a",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nNot a venue. The nearest public toilets to Sunaparanta."
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "tag_id": "d1a0d52a-eebf-480c-9a82-dd42c98f1784",
+    "festival_comment": "EMERGENCE: FESTIVAL OF FUTURE CITIES · 29–31 Oct 2026\nFestival venue · 8 sessions\n\nALL THREE DAYS\n  Exhibition on Wetlands · Biopod+Co.\n  Playable Panjim (Arcade) · Storiculture\n  Scorched: Exhibition on Heat · Asar\n\nTHU 29 OCT\n  16:00–17:30 Make your own Climate Recipes on Multispecies Co-existence · Socratus Collective Wisdom Corporation\n\nFRI 30 OCT\n  09:30–11:00 Solutioning on Social Crises: Solver Jam · ReapBenefit\n  15:00–16:30 Small City Narratives · Storiculture\n\nSAT 31 OCT\n  15:30–16:30 Map your climate career\n  17:00–19:00 Designing with Nature: Wetland Walk & Community hour · Biopod+Co.\n\nTimes and registration: emergencefestival.in"
+   },
+   "geometry": null
+  }
+ ]
+}
