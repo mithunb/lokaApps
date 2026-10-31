@@ -478,6 +478,9 @@
         if (local.theme && typeof local.theme === "object") manifest.theme = local.theme;
         // how a visitor moves around this atlas (event-mode.js); kept here for the same reason
         if (local.mode && typeof local.mode === "object") manifest.mode = local.mode;
+        // who this atlas is made for (set from the Owner menu, super admin only);
+        // "" here means "cleared" and must win over a madeFor baked into manifest.json
+        if (typeof local.madeFor === "string") manifest.madeFor = local.madeFor;
         return manifest;
       });
   }

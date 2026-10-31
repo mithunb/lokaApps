@@ -860,6 +860,86 @@
     }
   }
 
+  /* ---------------- two more lines in the Owner menu ----------------
+     Neither is in owner.js's own panel template — that file is at its size
+     ceiling (test/fold-test.mjs guards against the panel-swallowing card
+     coming back in some other shape, by counting lines). Both rows are
+     plain DOM, added here, where owner.js already loads this kit for every
+     atlas's Owner menu — one more reason nothing here depends on a mode
+     being switched on. */
+  function panelRow(id) {
+    var panel = $("#own-panel");
+    if (!panel || $("#" + id)) return $("#" + id);
+    var row = document.createElement("div");
+    row.className = "own-panel-ln";
+    row.id = id;
+    row.hidden = true;
+    panel.insertBefore(row, panel.lastElementChild); // before "Title, logo, about"
+    return row;
+  }
+
+  /* Small photos for the lists (deploy/make-small-photos.mjs): made by the
+     server on its own, after a build and after every reading. This line says
+     so while it runs, polled every 3 s, and says nothing the rest of the
+     time — a quiet process with no result to approve. */
+  var photosTimer = null;
+  function pollSmallPhotos() {
+    var slot = panelRow("own-panel-photos");
+    if (!slot) return;
+    api("instances/" + encodeURIComponent(SLUG) + "/small-photos").then(function (s) {
+      clearTimeout(photosTimer);
+      // not running: look again now and then, so a run started by a later reading is seen
+      if (!s.running) { slot.hidden = true; photosTimer = setTimeout(pollSmallPhotos, 30000); return; }
+      slot.hidden = false;
+      slot.innerHTML = '<span class="own-panel-note">Preparing photos for the list — ' + s.done + " of " + s.total + "</span>";
+      photosTimer = setTimeout(pollSmallPhotos, 3000);
+    }).catch(function () {});
+  }
+
+  /* "Made for" (super admin only): set by the LOKA team when an atlas is
+     built for another organisation; About this atlas then says "Made for
+     <name>" instead of "Made by" (atlas.js renderCollaborators). Nobody
+     else sees this line or its dialog. */
+  var SUPER_ADMIN = false;
+  function madeForNow() {
+    var m = window.LokaAtlas && window.LokaAtlas.manifest;
+    return m && typeof m.madeFor === "string" ? m.madeFor.trim() : "";
+  }
+  function paintMadeFor() {
+    var slot = panelRow("own-panel-madefor");
+    if (!slot) return;
+    slot.hidden = !SUPER_ADMIN;
+    if (!SUPER_ADMIN) return;
+    var v = madeForNow();
+    slot.innerHTML = '<span class="own-panel-k">' + (v ? "Made for · " + esc(v) : "Made for · not set") + "</span>" +
+      '<button class="own-act" id="own-made-for" type="button">Change</button>';
+    $("#own-made-for").onclick = openMadeFor;
+  }
+  function madeForHTML(current) {
+    return '<div class="own-sheet" role="dialog" aria-labelledby="own-mf-h"><h2 id="own-mf-h">Who is this atlas made for?</h2>' +
+      '<p class="own-set-p">Their name shows under ‘Made for’ in About this atlas. Leave it empty to show ‘Made by’.</p>' +
+      '<div class="own-row own-row-top"><input type="text" id="own-mf-input" value="' + esc(current) + '" style="width:100%"></div>' +
+      '<div class="own-row own-row-top"><button class="share-btn primary" id="own-mf-save">Save</button>' +
+      '<button class="share-btn" data-close>Cancel</button><span class="own-err" id="own-mf-err" role="alert"></span></div></div>';
+  }
+  function openMadeFor() {
+    openDialog(madeForHTML(madeForNow()), function (scrim) {
+      scrim.querySelector("#own-mf-save").onclick = function () {
+        var v = scrim.querySelector("#own-mf-input").value, err = scrim.querySelector("#own-mf-err");
+        err.textContent = "";
+        api("instances/" + encodeURIComponent(SLUG) + "/made-for", { method: "POST", body: { madeFor: v } }).then(function (r) {
+          var LA = window.LokaAtlas;
+          if (LA && LA.manifest) LA.manifest.madeFor = r.madeFor;
+          var close = scrim.querySelector("[data-close]"); if (close) close.click(); // real click: owner.js's own listener tears the dialog down properly
+          toast(r.madeFor ? "Saved — made for " + r.madeFor : "Saved — shows ‘Made by’ again");
+          paintMadeFor();
+          // About this atlas is drawn once as the page loads: reload so it says the new words
+          setTimeout(function () { location.reload(); }, 1200);
+        }).catch(function (e) { err.textContent = errMsg(e); });
+      };
+    });
+  }
+
   function mount(ctx) {
     C = ctx; api = ctx.api; errMsg = ctx.errMsg; esc = ctx.esc; toast = ctx.toast; openDialog = ctx.openDialog;
     rowsOnMap = ctx.rowsOnMap; INST = ctx.inst; SLUG = ctx.slug;
@@ -869,6 +949,8 @@
     loadModeInfo();
     modeArrived();
     insightTabs();
+    api("auth/me").then(function (me) { SUPER_ADMIN = !!(me && me.superAdmin); paintMadeFor(); }).catch(function () {});
+    pollSmallPhotos();
     return { drawButtonShelf: drawButtonShelf, visitor: function () { return VISITOR; } };
   }
 

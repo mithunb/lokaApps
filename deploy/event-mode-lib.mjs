@@ -672,6 +672,18 @@ export async function run(opts) {
   fresh.mode = newMode;
   writeJson(localFile, fresh, 1);
   log('Wrote:   ' + layer.source + (around ? ', ' + path.basename(aroundFile) : '') + photos.map((ph) => ', ' + ph).join('') + ', manifest.local.json');
+
+  // the refreshed places get their list photos made now, same as the server
+  // does after a commit — the server is stopped here already, so this is the
+  // one chance before the next deploy
+  try {
+    const { makeSmallPhotos } = await import('./make-small-photos.mjs');
+    const r = await makeSmallPhotos({ dir, slug, apply: true, log: () => {} });
+    log('Photos:  ' + r.made + ' made, ' + r.kept + ' kept, ' + r.failed.length + ' failed');
+  } catch (e) {
+    log('Photos:  not made — ' + (e && e.message));
+  }
+
   log('Done. Undo: copy the files in the backup folder back into place.');
   return { venues, fixes, around, total, backup };
 }

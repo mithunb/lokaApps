@@ -129,10 +129,29 @@ export async function fetchTo(url, file, hosts = HOSTS, maxBytes = MAX_BYTES) {
   } finally { clearTimeout(t); }
 }
 
-export async function run(opts) {
+// Never deoria-bioregion — by name (any case) or by where the name actually
+// points (a symlink, a server temp copy): the standing rule, checked again
+// here because the core is also called from the server, which never ran
+// checkSlug. See docs/server-temp-copies-link-live for why the real path
+// matters as much as the one given.
+function refuseDeoria(dir) {
+  const bad = (s) => String(s || '').toLowerCase().indexOf('deoria-bioregion') >= 0;
+  if (bad(dir)) stop('deoria-bioregion is never touched by this script');
+  let real = dir;
+  try { real = fs.realpathSync(dir); } catch { /* not there yet: the name already told us enough */ }
+  if (bad(real)) stop('deoria-bioregion is never touched by this script');
+}
+
+/* The core: given a folder (and the slug it is known by, for backups and log
+   lines), make the small photos. No checkSlug, no checkServerStopped — the
+   caller already knows what folder this is and whether it is safe to write
+   to right now. `onProgress({ done, total })` is called as photos are
+   fetched and made, so a caller (the server) can show "120 of 200". */
+export async function makeSmallPhotos(opts) {
+  const { dir, slug } = opts;
   const log = opts.log || console.log;
-  const command = 'make-small-photos.mjs';
-  const dir = checkSlug(opts.slug, command);
+  const onProgress = opts.onProgress || (() => {});
+  refuseDeoria(dir);
   const localFile = path.join(dir, 'manifest.local.json');
   if (!fs.existsSync(localFile)) stop('this atlas has no places of its own (no manifest.local.json)');
   const local = JSON.parse(fs.readFileSync(localFile, 'utf8'));
@@ -143,7 +162,7 @@ export async function run(opts) {
   const index = fs.existsSync(indexFile) ? JSON.parse(fs.readFileSync(indexFile, 'utf8')) : {};
 
   log(opts.apply ? 'APPLYING' : 'DRY RUN — nothing is written; add --apply to write');
-  log('Atlas:   ' + opts.slug + '  (' + dir + ')');
+  log('Atlas:   ' + slug + '  (' + dir + ')');
   const hosts = opts.hosts && opts.hosts.length ? opts.hosts : HOSTS;
   const files = [];          // { L, gj, changed }
   const todo = [];           // places that need a small photo made
@@ -152,8 +171,9 @@ export async function run(opts) {
   const was = new Set();     // small photos named before this run
   let kept = 0, none = 0, dropped = 0;
   for (const L of layers) {
-    const gj = JSON.parse(fs.readFileSync(path.join(dir, L.source), 'utf8'));
-    const rec = { L, gj, changed: false };
+    const raw = fs.readFileSync(path.join(dir, L.source), 'utf8');
+    const gj = JSON.parse(raw);
+    const rec = { L, gj, raw, changed: false };   // raw: to tell, at writing time, whether the file changed meanwhile
     files.push(rec);
     let n = 0;
     for (const f of gj.features || []) {
@@ -190,20 +210,24 @@ export async function run(opts) {
   for (const f of failed) log('         ' + f.name + ' (' + f.place + '): ' + f.why);
   if (!opts.apply) return { made: 0, kept, failed, none, todo: todo.length, orphans };
 
-  await checkServerStopped(opts.serverIsStopped);
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'loka-small-'));
   const jobs = [];
+  const total = todo.length;
+  let fetched = 0;
+  onProgress({ done: 0, total });
   try {
     // fetch the photographs, six at a time
     let at = 0;
     const worker = async () => {
       while (at < todo.length) {
         const t = todo[at++];
-        if (t.src.file) { jobs.push({ t, in: t.src.file }); continue; }
+        if (t.src.file) { jobs.push({ t, in: t.src.file }); fetched++; onProgress({ done: fetched, total }); continue; }
         const into = path.join(tmp, t.name + '.src');
         const why = await fetchTo(t.src.url, into, hosts);
         if (why) failed.push({ name: t.name, place: t.p.loka_name || t.p.name || t.p.tag_id || '', why });
         else jobs.push({ t, in: into });
+        fetched++;
+        onProgress({ done: fetched, total });
       }
     };
     await Promise.all(Array.from({ length: 6 }, worker));
@@ -220,19 +244,56 @@ export async function run(opts) {
         else failed.push({ name: j.t.name, place: j.t.p.loka_name || j.t.p.name || j.t.p.tag_id || '', why: (o && o.why) || 'Pillow said nothing about it' });
       }
     }
-    // a backup of every file about to change, then the writes
+    onProgress({ done: total, total });
+    // the caller may say no at the last moment (the server: a rebuild has started) — nothing is written
+    if (opts.beforeWrite && opts.beforeWrite() === false) { log('Stopped: the atlas is being rebuilt; nothing written'); return { made: 0, kept, failed, none, stopped: true }; }
     for (const m of made) { m.j.t.p.photo_small = m.j.t.name; m.j.t.rec.changed = true; }
-    const changed = files.filter((r) => r.changed);
-    const gone = orphans.filter((nm) => fs.existsSync(path.join(dir, nm)) && path.dirname(path.resolve(dir, nm)) === path.resolve(dir));
-    const backup = backupFiles('small-photos', opts.slug, dir, changed.map((r) => r.L.source).concat([INDEX], gone));
+    /* Never write back the copy read minutes ago: a reading or a commit may have
+       replaced a file since (new places, new answers, short names). Each file is
+       read again now. Unchanged: this run's copy is written. Changed, and every
+       place carries a tag_id: only photo_small is carried across, by tag_id.
+       Changed, and some place has no tag_id: the file is left as it is — a place
+       cannot be matched by its position when places may have moved — and the
+       next run (the commit that changed it queued one) gives it its photos. */
+    const plan = [];   // { file, out } to write
+    const onDisk = []; // every layer's places as they will be after this run
+    const hasIds = (g) => (g.features || []).every((f) => f && f.properties && f.properties.tag_id);
+    let leftAlone = 0;
+    for (const r of files) {
+      const file = path.join(dir, r.L.source);
+      let raw2, fresh;
+      try { raw2 = fs.readFileSync(file, 'utf8'); fresh = JSON.parse(raw2); } catch { continue; }
+      if (!r.changed) { onDisk.push(fresh); continue; }
+      if (raw2 === r.raw) { plan.push({ file, out: r.gj }); onDisk.push(r.gj); continue; }
+      if (!hasIds(r.gj) || !hasIds(fresh)) { leftAlone++; onDisk.push(fresh); continue; }
+      const small = new Map((r.gj.features || []).map((f) => [f.properties.tag_id, f.properties.photo_small]));
+      const before = new Map((JSON.parse(r.raw).features || []).map((f) => [f.properties.tag_id, f.properties.photo_small]));
+      for (const f of fresh.features || []) {
+        if (!small.has(f.properties.tag_id)) continue;   // a place added since: the next run gives it its photo
+        const v = small.get(f.properties.tag_id);
+        if (v) f.properties.photo_small = v;
+        // take a name away only if it is still the one this run saw: a name written meanwhile stays
+        else if (f.properties.photo_small === before.get(f.properties.tag_id)) delete f.properties.photo_small;
+      }
+      plan.push({ file, out: fresh });
+      onDisk.push(fresh);
+    }
+    // a small photo is deleted only when no place names it in the files as they will be
+    const stillNamed = new Set();
+    for (const g of onDisk) for (const f of g.features || []) if (f && f.properties && f.properties.photo_small) stillNamed.add(String(f.properties.photo_small));
+    const dead = orphans.filter((nm) => !stillNamed.has(nm));
+    const gone = dead.filter((nm) => fs.existsSync(path.join(dir, nm)) && path.dirname(path.resolve(dir, nm)) === path.resolve(dir));
+    // a backup of every file about to change, then the writes
+    const backup = backupFiles('small-photos', slug, dir, plan.map((x) => path.basename(x.file)).concat([INDEX], gone));
     log('Backup:  ' + backup);
-    for (const nm of orphans) delete index[nm];
+    for (const nm of dead) delete index[nm];
     for (const nm of gone) fs.unlinkSync(path.join(dir, nm));
     for (const m of made) {
       fs.copyFileSync(path.join(tmp, m.j.t.name), path.join(dir, m.j.t.name));
       index[m.j.t.name] = { src: m.j.t.src.label, bytes: m.bytes, at: new Date().toISOString() };
     }
-    for (const r of changed) writeJson(path.join(dir, r.L.source), r.gj);
+    for (const x of plan) writeJson(x.file, x.out);
+    if (leftAlone) log('Left as they are: ' + leftAlone + ' files changed meanwhile whose places have no tag_id (the next run does them)');
     writeJson(path.join(dir, INDEX), index, 1);
     const sizes = made.map((m) => m.bytes).sort((a, b) => a - b);
     const kb = (b) => (b / 1024).toFixed(1) + ' KB';
@@ -242,12 +303,22 @@ export async function run(opts) {
     log('Failed:  ' + failed.length);
     for (const f of failed) log('         ' + f.name + ' (' + f.place + '): ' + f.why);
     if (made.length) log('Example: ' + made[0].j.t.name + ' from ' + made[0].j.t.src.label);
-    log('Wrote:   ' + changed.map((r) => r.L.source).concat([INDEX]).join(', ') + ' and ' + made.length + ' small photos');
+    log('Wrote:   ' + plan.map((x) => path.basename(x.file)).concat([INDEX]).join(', ') + ' and ' + made.length + ' small photos');
     log('Done. Undo: copy the files in the backup folder back into place.');
     return { made: made.length, kept, failed, none, sizes, backup, deleted: gone.length };
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
+}
+
+// CLI entry: the checks that only make sense run by hand — a real atlas
+// address, never NEVER, the server stopped before anything is written —
+// then the core above does the actual work.
+export async function run(opts) {
+  const command = 'make-small-photos.mjs';
+  const dir = checkSlug(opts.slug, command);
+  if (opts.apply) await checkServerStopped(opts.serverIsStopped);
+  return makeSmallPhotos({ ...opts, dir });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {

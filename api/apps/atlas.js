@@ -25,6 +25,7 @@ import * as buttonNames from '../lib/atlas/button-names.js';
 import * as insightSummary from '../lib/atlas/insight-summary.js';
 import * as placeNames from '../lib/atlas/place-names.js';
 import * as searchText from '../lib/atlas/search-text.js';
+import { makeSmallPhotos } from '../../deploy/make-small-photos.mjs';
 import {
   enqueueBuild, getJob, setJobDoneHook, setStrandedBuildHook, DATASETS_ROOT, PRIVATE_ROOT,
 } from '../lib/atlas/jobs.js';
@@ -1503,6 +1504,8 @@ setJobDoneHook((job) => {
       sizeBytes: job.sizeBytes || 0, builtAt: Date.now(),
       rebuildKeepPublished: undefined, rebuildPrior: undefined, failReason: undefined,
     });
+    // the freshly built atlas gets its list photos made in the background
+    setImmediate(() => { const fresh = reg.getInstance(job.slug); if (fresh) queueSmallPhotos(fresh); });
   } else {
     // a rebuild failed — the build only swaps on success, so the old dataset
     // is untouched (and still live if it was); the record goes back with it
@@ -1680,6 +1683,53 @@ router.post('/instances/:slug/claim', (req, res) => {
 function datasetDirFor(inst) {
   const root = inst.visibility === 'private' ? PRIVATE_ROOT : DATASETS_ROOT;
   return path.join(root, inst.slug);
+}
+
+/* Small photos for an atlas's lists (deploy/make-small-photos.mjs), kept up to
+   date on their own: queued after a build finishes and after every committed
+   layer, public or private, with no request ever waiting on it. One run per
+   atlas at a time — a second request to run while one is already going just
+   marks "run again when it's done", because the places may have changed again
+   meanwhile. Never blocks, never fails a request; trouble goes to console.warn
+   only. SMALL_PHOTOS holds the one status line the Owner menu polls. */
+const SMALL_PHOTOS = new Map(); // slug -> { running, done, total, made, failed, finishedAt, again }
+function queueSmallPhotos(inst) {
+  if (!inst || searchText.isNeverTouched(inst.slug)) return;
+  // a build swaps the whole folder; the build-done hook queues the photos afterwards
+  if (inst.status === 'building') return;
+  const slug = inst.slug;
+  const st = SMALL_PHOTOS.get(slug);
+  if (st && st.running) { st.again = true; return; }
+  SMALL_PHOTOS.set(slug, { running: true, done: 0, total: 0, made: 0, failed: 0, finishedAt: null });
+  setImmediate(() => runSmallPhotos(slug));
+}
+async function runSmallPhotos(slug) {
+  const rec = SMALL_PHOTOS.get(slug) || { running: true, done: 0, total: 0, made: 0, failed: 0, finishedAt: null };
+  rec.running = true;
+  SMALL_PHOTOS.set(slug, rec);
+  try {
+    const inst = reg.getInstance(slug);
+    if (!inst) return;
+    const dir = datasetDirFor(inst);
+    const r = await makeSmallPhotos({
+      dir, slug, apply: true,
+      log: () => {}, // the CLI's own narration; the server keeps only the numbers
+      onProgress: ({ done, total }) => { rec.done = done; rec.total = total; },
+      // a rebuild started while the photos were fetched: write nothing into a folder being swapped
+      beforeWrite: () => { const now = reg.getInstance(slug); return !!now && now.status !== 'building'; },
+    });
+    rec.made = (r && r.made) || 0;
+    rec.failed = ((r && r.failed) || []).length;
+  } catch (e) {
+    console.warn('[small-photos] ' + slug + ' — ' + (e && e.message));
+  } finally {
+    rec.running = false;
+    rec.finishedAt = Date.now();
+    const again = rec.again;
+    rec.again = false;
+    SMALL_PHOTOS.set(slug, rec);
+    if (again) setImmediate(() => runSmallPhotos(slug));
+  }
 }
 
 // Keep the viewer's manifest.json in step with edited details — the viewer reads
@@ -2130,6 +2180,42 @@ async function postMode(req, res) {
   if (want === 'insight' && local.mode && local.mode.summaryPending) setImmediate(() => { runInsightSummary(inst.slug, req); });
 }
 
+/* "Made for" — whose atlas this is, set by the LOKA team (the super admin) when
+   it is built for another organisation. Lives on the overlay, top level, beside
+   `mode` and `placeName`, for the same reason: a rebuild of the base map must
+   leave it alone. An empty string clears it, and the viewer treats an overlay
+   value of "" as "no 'Made for'" even when manifest.json carries one from the
+   server (atlas.js mergeLocalOverlay). Never for the deoria-bioregion atlas. */
+router.post('/instances/:slug/made-for', (req, res) => {
+  const inst = reg.getInstance(String(req.params.slug));
+  if (!inst) return res.status(404).json({ error: 'not found' });
+  if (!(auth.isAdmin(req) || auth.isAdminSession(req))) {
+    return res.status(403).json({ error: 'Only LOKA can set who an atlas is made for.' });
+  }
+  if (searchText.isNeverTouched(inst.slug)) return res.status(403).json({ error: 'not allowed' });
+  if (inst.status === 'building') {
+    return res.status(409).json({ error: 'Wait for the atlas to finish building, then try again.' });
+  }
+  // eslint-disable-next-line no-control-regex
+  const madeFor = String((req.body && req.body.madeFor) || '').trim().replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 120);
+  const { file, local: existing } = readOverlay(inst);
+  const local = existing || { layers: [] };
+  local.madeFor = madeFor;   // "" is kept: it must win over a madeFor written into manifest.json
+  if (!writeOverlay(file, local)) return res.status(500).json({ error: 'Could not save. Nothing changed — try again.' });
+  res.json({ ok: true, madeFor });
+});
+
+// How the background small-photos run for this atlas is getting on, for the
+// Owner menu's quiet progress line. Owner or editor only — it says nothing a
+// reader needs, and nothing a stranger should see about how it is running.
+router.get('/instances/:slug/small-photos', (req, res) => {
+  const inst = reg.getInstance(String(req.params.slug));
+  if (!inst) return res.status(404).json({ error: 'not found' });
+  if (!callerCanEdit(req, inst)) return res.status(403).json({ error: 'not allowed' });
+  const st = SMALL_PHOTOS.get(inst.slug) || { running: false, done: 0, total: 0, made: 0, failed: 0, finishedAt: null };
+  res.json({ running: !!st.running, done: st.done || 0, total: st.total || 0, made: st.made || 0, failed: st.failed || 0, finishedAt: st.finishedAt || null });
+});
+
 // Fast edit — text, branding, logo and public/private — with no rebuild.
 router.post('/instances/:slug/details', (req, res) => {
   const inst = reg.getInstance(String(req.params.slug));
@@ -2539,6 +2625,7 @@ router.get('/auth/me', (req, res) => {
     verifiedAt: acc ? acc.verifiedAt : null,
     name: (acc && acc.name) || '',
     org: (acc && acc.org) || '',
+    superAdmin: auth.isAdminSession(req),
     instances,
     drafts: reg.listDrafts(session.email).map((d) => ({ id: d.id, title: d.title || '', updatedAt: d.updatedAt })),
   });
@@ -6584,6 +6671,8 @@ function commitLayer({ importId, dataset }, who, opts) {
         });
       }
     }
+    // places were added or replaced: the list's small photos may need remaking
+    setImmediate(() => { const ds = reg.getInstance(session.dataset); if (ds) queueSmallPhotos(ds); });
     return { ok: true, layerId: layerId || pointsLayerId, pointsLayerId, dataset: session.dataset };
   } catch (e) {
     if (e && e.status) throw e;
