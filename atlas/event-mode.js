@@ -760,6 +760,11 @@
     function sheetHead() {
       var c = chosenCat();
       if (!state.ready) return { label: catLabel(c.id), small: "" };
+      if (state.search) {
+        var found = 0;
+        CATS.forEach(function (c) { entriesOf(c.id).forEach(function (x) { if (!x.e.hidden) found++; }); });
+        return { label: "Search", small: countWord(found, "place found", "places found") };
+      }
       if (c.id === "venues") return { label: catLabel("venues"), small: countWord(venues().length, "venue", "venues") };
       var n = entriesOf(c.id).filter(function (x) { return !x.e.away; }).length;
       if (state.sub) n = entriesOf(c.id).filter(function (x) { return !x.e.away && !x.e.subOff; }).length;
@@ -787,11 +792,76 @@
         mine.forEach(draw);
       });
     }
+    /* ---- a search: every place that matches, in one list ----
+       (Mithun, 30 Oct 2026: "Search flow is confusing and it's hard to see the
+       search results"). While the box has words in it the list is the answer,
+       whatever chip was on: the venues that match first, each with the sessions
+       that carry the words, then the other places under their buttons' names.
+       Every button's pins show, so a match is on the map wherever it is; clearing
+       the box gives back the chip that was on. */
+    function searched(q) {
+      var was = state.search;
+      state.search = q ? String(q).trim() : null;
+      if (state.search && state.around) {
+        state.around = null;
+        CATS.forEach(function (c) { entriesOf(c.id).forEach(function (x) { x.e.away = false; }); });
+      }
+      if (state.search) CATS.forEach(function (c) { (byCat[c.id] || []).forEach(function (L) { api.setLayerVisible(L, true); }); });
+      else if (was) showChosen();
+      if (state.ready) renderList();
+    }
+    function showResults() {
+      if (state.search && api.onPhone()) { api.closeCard(); api.setSheet("full"); }
+    }
+    function sessionHits(props, ql) {
+      return sessionsOf(props).filter(function (s) {
+        return (String(s.title || "") + " " + String(s.organiser || "")).toLowerCase().indexOf(ql) >= 0;
+      });
+    }
+    function renderSearch(box) {
+      var q = state.search, ql = q.toLowerCase();
+      var vs = venues().filter(function (f) { return !hiddenF(byCat.venues, f); });
+      var others = CATS.filter(function (c) { return c.id !== "venues"; }).map(function (c) {
+        return { c: c, xs: entriesOf(c.id).filter(function (x) { return !x.e.hidden; }) };
+      });
+      var n = vs.length + others.reduce(function (t, o) { return t + o.xs.length; }, 0);
+      // the count and "show all" are said once, in the line under the box; the list is the places
+      if (!n) { box.appendChild(el("p", "ev-hint", "Try a venue, a session, a speaker or a word like café or toilet.")); return; }
+      if (vs.length) {
+        box.appendChild(el("div", "ev-sh", esc(catLabel("venues")) + " · " + vs.length));
+        vs.forEach(function (f) {
+          var hits = sessionHits(f.properties, ql).sort(function (a, b) { return String(a.day).localeCompare(String(b.day)) || byStart(a, b); });
+          var meta = hits.length
+            ? hits.slice(0, 3).map(function (s) {
+                return (s.day && s.day !== "all" ? esc(dayLabel(s.day)) + (s.start ? " · " + esc(s.start) : "") + " — " : "All days — ") + "<b>" + esc(s.title) + "</b>";
+              }).join("<br>") + (hits.length > 3 ? "<br>and " + (hits.length - 3) + " more on the card" : "")
+            : venueMeta(f);
+          box.appendChild(rowFor(byCat.venues[0], f, meta, '<span class="ev-no" aria-hidden="true">' + esc(f._evNo) + "</span>"));
+        });
+      }
+      others.forEach(function (o) {
+        if (!o.xs.length) return;
+        box.appendChild(el("div", "ev-sh", esc(o.c.label) + " · " + o.xs.length));
+        o.xs.forEach(function (x) {
+          var nv = nearestVenue(x.e.f.geometry.coordinates);
+          var word = x.L._ev.osm ? rowWord(x.e.f.properties, nameOf(x.L, x.e.f)) : "";
+          var meta = (word ? esc(word) + " · " : "") + (nv ? esc(distanceWords(nv.m)) + " from " + esc(nameOf(byCat.venues[0], nv.f)) : "");
+          box.appendChild(rowFor(x.L, x.e.f, meta, '<span class="ev-dot" style="--ev-c:' + catColor(o.c.id) + '" aria-hidden="true"></span>'));
+        });
+      });
+    }
+    // a venue row is hidden by a search when its pin is
+    function hiddenF(Ls, f) {
+      var hid = false;
+      (Ls || []).forEach(function (L) { (api.markers(L.id) || []).forEach(function (e) { if (e.f === f && e.hidden) hid = true; }); });
+      return hid;
+    }
     function renderList() {
       syncHead();
       var box = state.list; if (!box) return;
       box.innerHTML = "";
       if (!state.ready) { box.appendChild(waitLine("Loading the venues…")); return; }
+      if (state.search) { renderSearch(box); return; }
       var others = CATS.filter(function (c) { return c.id !== "venues"; });
       if (state.around) {
         var v = state.around;
@@ -926,6 +996,8 @@
       sheetHead: sheetHead,
       around: around,
       clearAround: clearAround,
+      searched: searched,
+      showResults: showResults,
       state: state,
     };
     viewer._current = me;

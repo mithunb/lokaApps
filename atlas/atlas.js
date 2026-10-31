@@ -4602,9 +4602,18 @@
     if (/(^|[^a-z])(id|ids|uuid|guid|url|uri|link|href|image|images|img|photo|photos|thumb|thumbnail|icon|lat|latitude|lon|lng|long|longitude|x|y|geom|geometry|wkt|color|colour)([^a-z]|$)/.test(n)) return true;
     return /(created|updated|modified|timestamp)/.test(n);
   }
+  // a list of records (a venue's sessions: day, time, title, who runs it) reads as its words
+  function recordWords(x) {
+    if (x == null) return "";
+    if (typeof x !== "object") return String(x);
+    var out = [];
+    // its dates and clock times are not words anyone searches by (and a leading date reads as a timestamp)
+    for (var k in x) if (x[k] != null && typeof x[k] !== "object" && !/^(\d{4}-\d{2}-\d{2}|\d{1,2}:\d{2})$/.test(String(x[k]).trim())) out.push(String(x[k]));
+    return out.join(" ");
+  }
   function cellText(v) {
     if (v == null) return "";
-    if (Array.isArray(v)) return v.join("; ");
+    if (Array.isArray(v)) return v.map(recordWords).join("; ");
     if (typeof v === "object") return "";
     return String(v);
   }
@@ -5062,13 +5071,20 @@
     tags.forEach(function (t) { t = String(t || "").toLowerCase(); if (t && terms.indexOf(t) < 0) terms.push(t); });
     rows = rows || {};
     var shown = 0, total = 0, matchPts = [], layers = searchableLayers(), shapes = false, b = null;
+    /* Words first (Mithun, 30 Oct 2026: "hard to see the search results"): when what was
+       typed appears, as typed, in some places, those places are the answer. Related
+       words and matches by meaning only answer when the typed words found nothing —
+       "Governance Action Lab" finds the venue running it, not a venue that sounds alike. */
+    var typedFound = !!q && layers.some(function (L) {
+      return searchRows(L).some(function (e) { return featureText(L, e.f).indexOf(q) >= 0; });
+    });
     layers.forEach(function (L) {
       var byRow = rows[L.id] || {};
       searchRows(L).forEach(function (e) {
         total++;
         var text = featureText(L, e.f);
-        var match = !!(q && text.indexOf(q) >= 0) || !!byRow[e.f._row];
-        for (var i = 0; !match && i < terms.length; i++) match = termRe(terms[i]).test(text);
+        var match = !!(q && text.indexOf(q) >= 0) || (!typedFound && !!byRow[e.f._row]);
+        for (var i = 0; !match && !typedFound && i < terms.length; i++) match = termRe(terms[i]).test(text);
         e.hidden = !match;
         if (match) { shown++; if (hasPins(L) && !areaPins(L)) matchPts.push(e.f.geometry.coordinates); }
       });
@@ -5080,8 +5096,11 @@
         if (sb) b = b ? b.extend(sb) : sb;
       }
     });
+    // a mode with its own list (an event guide) lists the answer there
+    if (EV && EV.searched) EV.searched(searchWord || q);
     // A pin-only atlas keeps its old line and its "Show me" offer, unchanged.
-    if (!shapes) { updateSearchCount(shown, total, matchPts); return; }
+    // the line names the word and the way back: "3 of 110 places match ‘climate’ · show all"
+    if (!shapes) { updateSearchCount(shown, total, matchPts, null, searchWord || q, searchNoun(layers)); return; }
     updateSearchCount(shown, total, null, null, searchWord || q, searchNoun(layers));
     /* The map goes to the matching areas, making room for the drawer and the
        phone sheet as every other fit does. Only when the set of matches has
@@ -5345,6 +5364,7 @@
     searchableLayers().forEach(function (L) { searchRows(L).forEach(function (e) { e.hidden = false; }); applyRowVisibility(L); });
     if (kinded) keyHalves(kinded).forEach(function (h) { searchRows(h).forEach(function (e) { e.hidden = false; }); applyRowVisibility(h); });
     updateSearchCount(null);
+    if (EV && EV.searched) EV.searched(null);
   }
   /* The words pass answers at once; the pass by meaning is a round trip to
      the server. When it has taken longer than a blink, the count line gets
@@ -5833,6 +5853,10 @@
       si.type = "search"; si.placeholder = "Search this map…"; si.setAttribute("aria-label", "Search this map");
       si.addEventListener("input", function () { runSearch(si.value); });
       si.addEventListener("search", function () { runSearch(si.value); });
+      si.addEventListener("keydown", function (e) {
+        if (e.key !== "Enter") return;
+        if (EV && EV.showResults && si.value.trim()) { e.preventDefault(); si.blur(); EV.showResults(); }
+      });
       slab.appendChild(si);
       /* Mithun, 23 Oct 2026: on a wide screen the box heads the side panel;
          on a phone it is a round search button that opens into the box, with

@@ -55,9 +55,17 @@ export function searchSkipProp(name, stanza) {
   if (/(^|[^a-z])(id|ids|uuid|guid|url|uri|link|href|image|images|img|photo|photos|thumb|thumbnail|icon|lat|latitude|lon|lng|long|longitude|x|y|geom|geometry|wkt|color|colour)([^a-z]|$)/.test(n)) return true;
   return /(created|updated|modified|timestamp)/.test(n);
 }
+// a list of records (a venue's sessions: day, time, title, who runs it) reads as its words;
+// only atlases holding such lists change, so no index version moves (30 Oct 2026)
+function recordWords(x) {
+  if (x == null) return '';
+  if (typeof x !== 'object') return String(x);
+  // its dates and clock times are not words anyone searches by (and a leading date reads as a timestamp)
+  return Object.values(x).filter((y) => y != null && typeof y !== 'object' && !/^(\d{4}-\d{2}-\d{2}|\d{1,2}:\d{2})$/.test(String(y).trim())).map(String).join(' ');
+}
 export function searchCellText(v) {
   if (v == null) return '';
-  if (Array.isArray(v)) return v.map((x) => (x == null ? '' : String(x))).join('; ');
+  if (Array.isArray(v)) return v.map(recordWords).join('; ');
   if (typeof v === 'object') return '';
   return String(v);
 }

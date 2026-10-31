@@ -51,7 +51,7 @@ check('a searchable shape carries the number where the map paint can read it', /
 check('the server numbers rows in feature order, the same way', /\.map\(\(f, i\) => \{[\s\S]*?return \{ i, title, text \};/.test(api), true);
 check('and reports hits by layer and row', /features: found\.slice\(0, 50\)\.map\(\(f\) => \(f\.score == null/.test(api), true);
 check('the viewer reads those rows back', /\(rows\[h\.layer\] = rows\[h\.layer\] \|\| \{\}\)\[f\.i\] = 1/.test(js), true);
-check('a row found by meaning matches even when no word does', /var match = !!\(q && text\.indexOf\(q\) >= 0\) \|\| !!byRow\[e\.f\._row\];/.test(js), true);
+check('a row found by meaning matches when no word does, and only then (words first, 30 Oct 2026)', /var match = !!\(q && text\.indexOf\(q\) >= 0\) \|\| \(!typedFound && !!byRow\[e\.f\._row\]\);/.test(js) && /match && !typedFound && i < terms\.length/.test(js), true);
 check('with nothing from the server, the words alone decide (no crash, no change)', /if \(!searchTags\.length && !anyRow\) return;/.test(js), true);
 
 console.log('\n  a non-match fades, it does not vanish');
@@ -80,7 +80,7 @@ check('it says how many matched what, and names the way back', /\+ " match ‘" 
 check('nothing matched says so plainly, with the same way back', /"nothing matched ‘" \+ word \+ "’ — try another word"/.test(js), true);
 check('the word is shown as typed, matching lowercases its own copy', /searchWord = \(raw \|\| ""\)\.trim\(\);\n\s*var q = searchWord\.toLowerCase\(\);/.test(js), true);
 check('"show all" empties the box as well as the map', /all\.onclick = function \(\) \{ var box = \$\("\.ctl-search-input"\); if \(box\) box\.value = ""; unpickAnswer\(\); \};/.test(js), true);
-check('a pin-only atlas keeps its old line and its "Show me" offer', /if \(!shapes\) \{ updateSearchCount\(shown, total, matchPts\); return; \}/.test(js), true);
+check('a pin-only atlas keeps its "Show me" offer and now names the word and the way back (30 Oct 2026)', /if \(!shapes\) \{ updateSearchCount\(shown, total, matchPts, null, searchWord \|\| q, searchNoun\(layers\)\); return; \}/.test(js), true);
 check('what the rows are called: places for pins, areas for shapes, or what the manifest says', /var n = L\.noun \|\| \(markersByLayer\[L\.id\] \? "places" : "areas"\);/.test(js), true);
 check('the old pin wording is untouched', /c\.textContent = shown \? \(shown \+ " of " \+ total \+ " shown"\) : "nothing matched — try another word";/.test(js), true);
 
