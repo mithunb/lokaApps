@@ -1312,6 +1312,8 @@ router.post('/instances', async (req, res) => {
     status: needsApproval ? 'pending-approval' : 'building',
     createdAt: Date.now(), publishedAt: null, sizeBytes: 0, createdByIp: ip,
     jobId: null, spec,
+    // "How should visitors explore it?" — applied once the atlas can take it (applyWantedMode)
+    wantMode: b.mode === 'explore' || b.mode === 'insight' ? b.mode : undefined,
   });
   if (session) reg.bindInstance(session.email, slug);
 
@@ -1506,6 +1508,8 @@ setJobDoneHook((job) => {
     });
     // the freshly built atlas gets its list photos made in the background
     setImmediate(() => { const fresh = reg.getInstance(job.slug); if (fresh) queueSmallPhotos(fresh); });
+    // a mode chosen while building, if the atlas can already take it
+    setImmediate(() => { applyWantedMode(job.slug); });
   } else {
     // a rebuild failed — the build only swaps on success, so the old dataset
     // is untouched (and still live if it was); the record goes back with it
@@ -2131,26 +2135,38 @@ async function postMode(req, res) {
   }
 
   const want = typeof b.name === 'string' ? b.name : '';
-  if (!MODE_NAMES.includes(want)) return res.status(400).json({ error: 'Choose Standard, Event, Explore or Insight.' });
-  if (want === now) return res.json({ ok: true, already: true, ...modeAnswer(local) });
+  const r = await switchMode(inst, want, req, { file, local, now });
+  // the owner has chosen here: a choice made while building is no longer waited on
+  if (r.status === 200 && inst.wantMode) reg.updateInstance(inst.slug, { wantMode: undefined });
+  res.status(r.status).json(r.body);
+  if (r.after) setImmediate(r.after);
+}
+
+/* Switching how visitors explore an atlas, for the Owner menu (postMode) and
+   for a choice made while building (applyWantedMode). `payer` is the owner's
+   request, or { payer: <account> } when the server acts on their behalf.
+   Answers { status, body, after }: `after` is work to start once answered. */
+async function switchMode(inst, want, payer, { file, local, now }) {
+  if (!MODE_NAMES.includes(want)) return { status: 400, body: { error: 'Choose Standard, Event, Explore or Insight.' } };
+  if (want === now) return { status: 200, body: { ok: true, already: true, ...modeAnswer(local) } };
   const kept = { ...keptOf(local) };
   if (want === 'event' && !(kept.event && typeof kept.event === 'object')) {
-    return res.status(409).json({ error: EVENT_NOT_SET_UP, needsSetUp: true });
+    return { status: 409, body: { error: EVENT_NOT_SET_UP, needsSetUp: true } };
   }
   let next = null;
   if (want === 'explore') {
     if (kept.explore && typeof kept.explore === 'object') next = kept.explore;
     else {
-      next = await defaultExplore(inst, local, req);
+      next = await defaultExplore(inst, local, payer);
       /* the names may have taken a few seconds: the newest copy is the one
          written, and only if the mode in use and the kept ones are as they were */
       const fresh = readOverlay(inst);
       if (!fresh.local || modeNow(fresh.local) !== now || JSON.stringify(keptOf(fresh.local)) !== JSON.stringify(keptOf(local))) {
-        return res.status(409).json({ error: 'The atlas changed while Explore was being set up. Try again.' });
+        return { status: 409, body: { error: 'The atlas changed while Explore was being set up. Try again.' } };
       }
       file = fresh.file; local = fresh.local;
     }
-    if (!next) return res.status(409).json({ error: 'Explore needs places of your own on the atlas. Add your data first.' });
+    if (!next) return { status: 409, body: { error: 'Explore needs places of your own on the atlas. Add your data first.' } };
   } else if (want === 'event') next = kept.event;
   /* Insight: the settings kept from last time, else every question shown
      but those about people; never without a question to show */
@@ -2158,7 +2174,7 @@ async function postMode(req, res) {
   if (want === 'insight') {
     const was = kept.insight && typeof kept.insight === 'object' ? kept.insight : null;
     insightSrc = insightSource(inst, local, was && was.layer);
-    if (!insightSrc) return res.status(409).json({ error: INSIGHT.NO_QUESTIONS, needsQuestions: true });
+    if (!insightSrc) return { status: 409, body: { error: INSIGHT.NO_QUESTIONS, needsQuestions: true } };
     next = was ? { ...was, layer: insightSrc.layer.id } : INSIGHT.defaultInsight(insightSrc.layer);
     clearPendingOf(next);
     if (!NEVER_READ.has(inst.slug) && insightNeedsSummary(next, insightSrc)) markPending(next);
@@ -2174,10 +2190,10 @@ async function postMode(req, res) {
   if (want !== 'standard') delete kept[want];
   if (next) local.mode = { ...next, name: want }; else delete local.mode;
   if (Object.keys(kept).length) local.modeKept = kept; else delete local.modeKept;
-  if (!writeOverlay(file, local)) return res.status(500).json({ error: 'Could not save your choice. Nothing changed — try again.' });
-  res.json({ ok: true, from: now, ...modeAnswer(local) });
+    if (!writeOverlay(file, local)) return { status: 500, body: { error: 'Could not save your choice. Nothing changed — try again.' } };
   // the summary is written after the answer: the page shows "being written" and the questions meanwhile
-  if (want === 'insight' && local.mode && local.mode.summaryPending) setImmediate(() => { runInsightSummary(inst.slug, req); });
+  const after = want === 'insight' && local.mode && local.mode.summaryPending ? () => { runInsightSummary(inst.slug, payer); } : null;
+  return { status: 200, body: { ok: true, from: now, ...modeAnswer(local) }, after };
 }
 
 /* "Made for" — whose atlas this is, set by the LOKA team (the super admin) when
@@ -2186,6 +2202,35 @@ async function postMode(req, res) {
    leave it alone. An empty string clears it, and the viewer treats an overlay
    value of "" as "no 'Made for'" even when manifest.json carries one from the
    server (atlas.js mergeLocalOverlay). Never for the deoria-bioregion atlas. */
+/* A mode chosen while building (the wizard's "How should visitors explore it?",
+   kept as inst.wantMode) is applied as soon as the atlas can take it: Explore
+   once its own places are in, Insight once LOKA has read them. Tried after a
+   build and after every change of places; a "not yet" (409) waits for the next
+   one, anything else gives up quietly. The owner choosing under Owner ▾ ends
+   the wait (postMode). */
+const WANT_RUNNING = new Set();
+async function applyWantedMode(slug) {
+  const inst = reg.getInstance(slug);
+  if (!inst || !inst.wantMode || WANT_RUNNING.has(slug)) return;
+  if (inst.status === 'building' || inst.status === 'pending-approval') return;
+  if (searchText.isNeverTouched(slug)) return;
+  WANT_RUNNING.add(slug);
+  try {
+    const { file, local } = readOverlay(inst);
+    if (!local) return;   // no places of its own yet
+    const now = modeNow(local);
+    const r = await switchMode(inst, inst.wantMode, { payer: inst.ownerAccount || undefined }, { file, local, now });
+    if (r.status === 409) return;   // not yet: places, or the questions, still to come
+    if (r.status !== 200) console.warn('[atlas] ' + slug + ' — the mode chosen while building could not be applied: ' + (r.body && r.body.error));
+    reg.updateInstance(slug, { wantMode: undefined });
+    if (r.after) setImmediate(r.after);
+  } catch (e) {
+    console.warn('[atlas] ' + slug + ' — applying the mode chosen while building: ' + (e && e.message));
+  } finally {
+    WANT_RUNNING.delete(slug);
+  }
+}
+
 router.post('/instances/:slug/made-for', (req, res) => {
   const inst = reg.getInstance(String(req.params.slug));
   if (!inst) return res.status(404).json({ error: 'not found' });
@@ -6673,6 +6718,8 @@ function commitLayer({ importId, dataset }, who, opts) {
     }
     // places were added or replaced: the list's small photos may need remaking
     setImmediate(() => { const ds = reg.getInstance(session.dataset); if (ds) queueSmallPhotos(ds); });
+    // and a mode chosen while building may now be possible
+    setImmediate(() => { applyWantedMode(session.dataset); });
     return { ok: true, layerId: layerId || pointsLayerId, pointsLayerId, dataset: session.dataset };
   } catch (e) {
     if (e && e.status) throw e;

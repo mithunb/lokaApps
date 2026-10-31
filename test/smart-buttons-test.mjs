@@ -203,7 +203,7 @@ check('the hook: after a reading\'s own commit, never holding it up',
   /if \(opts && opts\.fromReading\) \{\s*const ds = session\.dataset;\s*setImmediate\(\(\) => \{\s*reworkSmartButtons\(ds, id\)\.catch/.test(server), true);
 check('the rework checks again after the names, then writes the overlay whole',
   /const \{ file, local \} = readOverlay\(inst\);\s*if \(buttonNames\.shouldRework\(dataset, local, layerId, NEVER_READ\) !== true\) return 'changed meanwhile';/.test(server) && /if \(!writeOverlay\(file, local\)\) return 'not written';/.test(server), true);
-check('a new Explore re-reads the overlay after naming, before writing', /next = await defaultExplore\(inst, local, req\);\s*\/\*[^]*?\*\/\s*const fresh = readOverlay\(inst\);/.test(server), true);
+check('a new Explore re-reads the overlay after naming, before writing', /next = await defaultExplore\(inst, local, payer\);\s*\/\*[^]*?\*\/\s*const fresh = readOverlay\(inst\);/.test(server), true);
 check('a new Explore tries the analysis first, then the categories', /async function defaultExplore\(inst, local, req\) \{\s*if \(!NEVER_READ\.has\(inst\.slug\)\) \{[^]*?const smart = await smartExplore/.test(server), true);
 
 /* ---------------- the page ---------------- */

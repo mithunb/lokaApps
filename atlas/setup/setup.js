@@ -2017,6 +2017,8 @@
           shapeIDs: S.chosen.map(function (c) { return c.id; }),
         },
         layers: layers,
+        // how visitors explore it: the server applies it once the atlas can take it
+        mode: (document.querySelector('#f-mode input[name="mode"]:checked') || {}).value || "standard",
       },
     }).then(function (r) {
       S.slug = r.slug; S.jobId = r.jobId;

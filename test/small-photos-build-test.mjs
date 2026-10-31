@@ -51,7 +51,7 @@ for (const bad of [path.join(tmp, 'deoria-bioregion'), path.join(tmp, 'Deoria-Bi
 
 console.log('\n  the server wiring');
 check('the job-done hook queues small photos on a successful build', /job\.status === 'done'[\s\S]{0,400}queueSmallPhotos\(fresh\)/.test(api), true);
-check('commitLayer queues small photos after a successful write', /queueSmallPhotos\(ds\)[\s\S]{0,40}return \{ ok: true, layerId/.test(api), true);
+check('commitLayer queues small photos after a successful write', /queueSmallPhotos\(ds\)[\s\S]{0,200}return \{ ok: true, layerId/.test(api), true);
 check('one run per atlas at a time (a second request marks "run again")', /if \(st && st\.running\) \{ st\.again = true; return; \}/.test(api), true);
 check('never deoria (queueSmallPhotos checks isNeverTouched)', /function queueSmallPhotos\(inst\) \{\s*if \(!inst \|\| searchText\.isNeverTouched\(inst\.slug\)\) return;/.test(api), true);
 check('trouble goes to console.warn, never thrown at a caller', /catch \(e\) \{\s*console\.warn\('\[small-photos\] '/.test(api), true);

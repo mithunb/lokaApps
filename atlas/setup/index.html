@@ -380,6 +380,12 @@
     .q-opt:hover { border-color:var(--color-leaf); }
     .q-opt:has(input:checked) { border-color:var(--color-leaf); background:var(--color-leaf-tint); }
     .q-opt input { margin:.3rem 0 0; accent-color:var(--color-leaf); }
+    /* how visitors explore: the four ways, under the name and organisation */
+    .mode-pick { margin-top:1.25rem; }
+    .mode-q { font-weight:600; margin:0 0 .5rem; padding:0; }
+    .mode-pick .q-what span { color:var(--color-text-secondary); font-size:var(--t-meta); }
+    .q-opt.mode-off { cursor:default; opacity:.6; }
+    .q-opt.mode-off:hover { border-color:var(--color-border); }
     .q-num { flex:0 0 auto; width:1.5rem; height:1.5rem; border-radius:50%; display:inline-flex;
       align-items:center; justify-content:center; font-size:var(--t-meta); font-weight:700;
       background:var(--color-text-primary); color:var(--color-surface); font-variant-numeric:tabular-nums; }
@@ -679,6 +685,21 @@
                questions fewer before the map exists, and both are easier to
                answer looking at it. -->
         </div>
+        <!-- How visitors explore it (Mithun, 31 Oct 2026): chosen while building,
+             applied once the atlas can take it — Explore when your places are in,
+             Insight once LOKA has read them. The same four as Owner ▾. -->
+        <fieldset class="q-opts mode-pick" id="f-mode">
+          <legend class="mode-q">How should visitors explore it?</legend>
+          <label class="q-opt"><input type="radio" name="mode" value="standard" checked>
+            <span class="q-what"><b>Standard</b><span>The map with its layers, and questions about what the places show.</span></span></label>
+          <label class="q-opt"><input type="radio" name="mode" value="explore">
+            <span class="q-what"><b>Explore</b><span>For visitors finding their way around: up to four buttons, and a list of what is around here. Needs places of your own.</span></span></label>
+          <label class="q-opt"><input type="radio" name="mode" value="insight">
+            <span class="q-what"><b>Insight</b><span>For people reading patterns: the questions LOKA asks of your places, with a short summary on top. It turns on once LOKA has read your places.</span></span></label>
+          <label class="q-opt mode-off"><input type="radio" name="mode" value="event" disabled>
+            <span class="q-what"><b>Event</b><span>A festival guide with each venue's programme. Not here yet — LOKA sets it up for you.</span></span></label>
+          <p class="hint">You can change this any time under Owner ▾ → How visitors explore.</p>
+        </fieldset>
         <div class="btnrow">
           <button class="btn quiet" data-go="3">← Back</button>
           <button class="btn" id="build-go">Build my atlas →</button>
