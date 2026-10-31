@@ -545,3 +545,19 @@ makes.
 
 Not planned, on purpose: dark mode; the site's heading font on titles;
 per-site hand rules; any visitor-facing control.
+
+---
+
+## 13. Mithun's answers (31 Oct 2026)
+
+These override the proposals above where they differ.
+
+- **D1 — Wording.** The Settings row reads: "Provide a website for visual style and design reference."
+- **D2 — Who may save.** Owner **and editors** (like title and logo today), not owner only.
+- **D3 — Credit line.** On by default in About this atlas; the owner can turn it off.
+- **D4 — Pictures.** The atlas creator and the website owner may be the same organisation. Allow **logos, the tab icon, and background images or motifs** (patterns). During the import, show each picture found and say plainly which can be used and which should not (e.g. partner logos, photos of people, stock images), so the creator chooses with that in view. This widens §4–5: background images/motifs become phase 1 candidates, each with its own "can use / should not use" verdict and reason.
+- **D5 — JavaScript-only sites.** Say so plainly now; add the headless browser reader later.
+- **D6 — Fonts not on Google Fonts.** Keep LOKA's font and say so.
+- **D7 — Tab icon.** Let the creator **upload an icon while building the atlas** (the wizard), and use that as the tab icon. A website's icon may be offered as a suggestion for that upload; it is not taken silently.
+- **D8 — http sites.** Allowed (read only).
+- **D9 — Undo.** One step back.
