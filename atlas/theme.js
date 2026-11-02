@@ -13,6 +13,9 @@
  *     corners: "square" | "soft",
  *     logoMaxWidth: 60..220                                       // px
  *   }
+ * A theme read from a website (look-map.js) also carries `version`, `source`,
+ * `chosen` and `credit`. They are for the owner's tools and the credits line;
+ * resolve() reads only the keys above and leaves the rest alone.
  *
  * What a theme can never do, whatever it says:
  *   - make the page dark. LOKA has no dark mode; a background that is not
@@ -188,6 +191,12 @@
     return out;
   }
 
+  // every variable apply() can set, so clear() can take exactly those away
+  var ALL_VARS = Object.keys(VARS).map(function (k) { return VARS[k]; }).concat([
+    "--color-leaf-tint", "--color-sindoor-tint", "--color-border", "--color-divider",
+    "--font-display", "--font-body", "--weight-display", "--radius-md", "--radius-lg", "--logo-max-width",
+  ]);
+
   /* In the browser: put the resolved theme on the page. Returns the notes. */
   function apply(theme, doc) {
     doc = doc || (typeof document !== "undefined" ? document : null);
@@ -206,5 +215,19 @@
     return r.notes;
   }
 
-  return { resolve: resolve, apply: apply, contrast: contrast, luminance: luminance, LOKA: LOKA, VARS: VARS, FONT_CSS: FONT_CSS };
+  /* Take a theme off the page again: every variable apply() may have set, the
+     class, and the font link. The page is then LOKA's own, as if no theme had
+     been given. The owner's preview flips between a look and none this way. */
+  function clear(doc) {
+    doc = doc || (typeof document !== "undefined" ? document : null);
+    if (!doc) return;
+    var rootEl = doc.documentElement;
+    ALL_VARS.forEach(function (k) { rootEl.style.removeProperty(k); });
+    rootEl.classList.remove("atlas-themed");
+    var link = doc.querySelector('link[data-atlas-theme-fonts]');
+    if (link && link.parentNode) link.parentNode.removeChild(link);
+  }
+
+  return { resolve: resolve, apply: apply, clear: clear, contrast: contrast, luminance: luminance, over: over, darken: darken, fit: fit,
+    rgb: rgb, hex: hex, LOKA: LOKA, VARS: VARS, FONT_CSS: FONT_CSS, LIGHT_ENOUGH: LIGHT_ENOUGH };
 });

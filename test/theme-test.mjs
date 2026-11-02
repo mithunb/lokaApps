@@ -93,6 +93,23 @@ check('a dark page is refused (no dark mode)', [dark.vars['--color-page'], dark.
 check('so light words meant for it are darkened to read on LOKA’s light page', T.contrast(dark.vars['--color-text-primary'], T.LOKA.page) >= 4.5, true);
 check('a colour that is not a colour is ignored', T.resolve({ colors: { accent: 'red; background:url(x)' } }).vars['--color-leaf'], undefined);
 
+console.log('\n  a look read from a website (phase 1, November 2026)');
+const fromSite = Object.assign({}, emergence.theme, { version: 1, source: { url: 'https://emergencefestival.in/', host: 'emergencefestival.in', readAt: '2026-11-02T03:00:00Z' }, chosen: { accent: '#6B1164' }, credit: true });
+check('a version 1 block with source, chosen and credit resolves exactly as one without', T.resolve(fromSite), T.resolve(emergence.theme));
+const cleared = fakeDoc();
+cleared.documentElement.style.removeProperty = (k) => { delete cleared.props[k]; };
+cleared.documentElement.classList.remove = (c) => cleared.classes.delete(c);
+T.apply(emergence.theme, cleared);
+const linkNode = cleared.appended[0];
+linkNode.parentNode = { removeChild: () => { cleared.appended.length = 0; } };
+cleared.querySelector = (s) => (/data-atlas-theme-fonts/.test(s) ? cleared.appended[0] || null : null);
+T.clear(cleared);
+check('clear() takes every variable off again, the class, and the font link', [Object.keys(cleared.props).length, cleared.classes.size, cleared.appended.length], [0, 0, 0]);
+check('the viewer’s preview frame listens for the owner’s sheet, from this same site only', /if \(e\.origin !== location\.origin \|\| !e\.data \|\| e\.data\.type !== "loka-look-preview"\) return;/.test(viewer) && /if \(!EMBED \|\| !window\.LokaTheme \|\| window\.parent === window\) return;/.test(viewer), true);
+check('…applies a look, or clears it and puts the saved one back', /window\.LokaTheme\.clear\(document\); if \(manifest\.theme\) window\.LokaTheme\.apply\(manifest\.theme, document\);/.test(viewer), true);
+check('…and shows the proposed logo through renderBranding, whose dataUrl() passes a data: URL through untouched', /if \(\/\^data:image\\\/\/\.test\(file\)\) return file;/.test(viewer) && /if \(LOOK_PREVIEW_LOGO\) b\.logo = LOOK_PREVIEW_LOGO;/.test(viewer), true);
+check('theme.js shares its colour maths with the mapper', ['over', 'darken', 'fit', 'rgb', 'hex', 'LIGHT_ENOUGH', 'clear'].every((k) => k in T), true);
+
 console.log('\n  "Powered by LOKA Atlas" is the same on every atlas');
 const badgeRule = (page.match(/\.loka-badge \{ --color-text-primary:[^}]*\}/) || [''])[0];
 check('the badge sets LOKA’s colours back for itself', ['--color-text-primary:#24211D', '--color-text-secondary:#5A5751', '--color-border:rgba(36,33,29,.18)', '--color-leaf:#2A6B41', '--color-leaf-deep:#1F5232'].every((s) => badgeRule.includes(s)), true);

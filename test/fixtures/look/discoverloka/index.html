@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5W3S7EB011"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5W3S7EB011');
+  </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LOKA — Discover, Explore, Engage</title>
+
+  <meta name="description" content="LOKA connects you with stories, experiences, and insights from the world around you. Every landmark, every alley, every tree can be part of a living map — tagged, shared, and discovered by everyone.">
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://discoverloka.org/">
+
+  <!-- Open Graph -->
+  <meta property="og:type"        content="website">
+  <meta property="og:title"       content="LOKA — Discover, Explore, Engage">
+  <meta property="og:description" content="LOKA connects you with stories, experiences, and insights from the world around you.">
+  <meta property="og:image"       content="https://discoverloka.org/images/favicon.jpg">
+  <meta property="og:image:width" content="400">
+  <meta property="og:image:height" content="400">
+  <meta property="og:url"         content="https://discoverloka.org/">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card"        content="summary">
+  <meta name="twitter:title"       content="LOKA — Discover, Explore, Engage">
+  <meta name="twitter:description" content="LOKA connects you with stories, experiences, and insights from the world around you.">
+  <meta name="twitter:image"       content="https://discoverloka.org/images/favicon.jpg">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/jpeg" href="images/favicon.jpg">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Figtree:wght@700;800&display=swap" rel="stylesheet">
+
+  <!-- Preload hero image -->
+  <link rel="preload" as="image" href="loka_files/local_find.png">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="assets/css/tokens.css">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
+</head>
+
+<body>
+
+<!-- ============================================================
+     NAV
+     ============================================================ -->
+
+<nav class="nav" id="nav" role="navigation" aria-label="Main navigation">
+  <div class="nav__inner">
+
+    <!-- Logo -->
+    <a class="nav__logo" href="/" aria-label="LOKA home">
+      <img class="nav__logo-img"
+           src="loka_files/c3e192e7-f7ca-443e-9852-6ecf27ab1139"
+           alt="LOKA"
+           width="122" height="30">
+    </a>
+
+    <!-- Desktop links -->
+    <ul class="nav__links" role="list">
+      <li><a class="nav__link" href="#features">Features</a></li>
+      <li><a class="nav__link" href="#usecases">Who it's for</a></li>
+      <li><a class="nav__link" href="#enterprise">Enterprise</a></li>
+      <li><a class="nav__link" href="about.html">About</a></li>
+    </ul>
+
+    <!-- Desktop store buttons -->
+    <div class="nav__cta">
+      <div class="nav__store-badges">
+        <a href="https://play.google.com/store/apps/details?id=com.find_ar.app"
+           target="_blank" rel="noopener" aria-label="Get LOKA on Google Play">
+          <img src="images/badge-google-play.png" alt="Get it on Google Play" class="nav__badge-img">
+        </a>
+        <a href="https://apps.apple.com/in/app/loka-discover-local/id6758565297"
+           target="_blank" rel="noopener" aria-label="Download LOKA on the App Store">
+          <img src="images/badge-app-store.svg" alt="Download on the App Store" class="nav__badge-img">
+        </a>
+      </div>
+    </div>
+
+    <!-- Burger (mobile) -->
+    <button class="nav__burger" id="nav-burger"
+            aria-label="Open menu" aria-expanded="false"
+            aria-controls="nav-mobile">
+      <span class="nav__burger-line"></span>
+      <span class="nav__burger-line"></span>
+      <span class="nav__burger-line"></span>
+    </button>
+
+  </div>
+</nav>
+
+<!-- Mobile menu overlay -->
+<div class="nav__mobile-menu" id="nav-mobile" role="dialog" aria-modal="true" aria-label="Navigation">
+  <a class="nav__mobile-link" href="#features">Features</a>
+  <a class="nav__mobile-link" href="#usecases">Who it's for</a>
+  <a class="nav__mobile-link" href="#enterprise">Enterprise</a>
+  <a class="nav__mobile-link" href="about.html">About</a>
+  <div class="nav__store-badges" style="margin-top:1.5rem;">
+    <a href="https://play.google.com/store/apps/details?id=com.find_ar.app"
+       target="_blank" rel="noopener" aria-label="Get LOKA on Google Play">
+      <img src="images/badge-google-play.png" alt="Get it on Google Play" class="nav__badge-img">
+    </a>
+    <a href="https://apps.apple.com/in/app/loka-discover-local/id6758565297"
+       target="_blank" rel="noopener" aria-label="Download LOKA on the App Store">
+      <img src="images/badge-app-store.svg" alt="Download on the App Store" class="nav__badge-img">
+    </a>
+  </div>
+</div>
+
+
+<!-- ============================================================
+     HERO
+     ============================================================ -->
+
+<section class="hero" aria-label="Introduction">
+  <canvas id="hero-canvas" aria-hidden="true"></canvas>
+
+  <div class="container">
+    <div class="hero__inner">
+
+      <!-- Text -->
+      <div class="hero__text">
+        <p class="hero__eyebrow">Local Open Knowledge Access</p>
+
+        <h1 class="hero__headline">
+          Discover the world<br>
+          <em>around you.</em>
+        </h1>
+
+        <p class="hero__subhead">
+          LOKA connects you with the stories, people, and places hiding in plain sight — geo-tagged, shared, and alive.
+        </p>
+
+        <div class="hero__cta-group">
+          <div class="store-badges">
+            <a href="https://play.google.com/store/apps/details?id=com.find_ar.app"
+               target="_blank" rel="noopener" aria-label="Get LOKA on Google Play">
+              <img src="images/badge-google-play.png" alt="Get it on Google Play" class="badge-img">
+            </a>
+            <a href="https://apps.apple.com/in/app/loka-discover-local/id6758565297"
+               target="_blank" rel="noopener" aria-label="Download LOKA on the App Store">
+              <img src="images/badge-app-store.svg" alt="Download on the App Store" class="badge-img">
+            </a>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Visual -->
+      <div class="hero__visual" aria-hidden="true">
+        <!-- AR rings -->
+        <div class="phone-rings">
+          <div class="phone-ring"></div>
+          <div class="phone-ring"></div>
+          <div class="phone-ring"></div>
+        </div>
+
+        <!-- Phone mockup -->
+        <div class="phone phone--large">
+          <div class="phone__notch"></div>
+          <div class="phone__screen">
+            <img class="phone__screenshot"
+                 src="loka_files/local_find.png"
+                 alt="LOKA app showing local places and geo-tagged content"
+                 width="300" height="650">
+          </div>
+        </div>
+
+        <!-- Floating pins -->
+        <div class="map-pin hero__pin-1">
+          <div class="map-pin__head"></div>
+          <div class="map-pin__stem"></div>
+        </div>
+        <div class="map-pin map-pin--amber hero__pin-2">
+          <div class="map-pin__head"></div>
+          <div class="map-pin__stem"></div>
+        </div>
+        <div class="map-pin hero__pin-3">
+          <div class="map-pin__head"></div>
+          <div class="map-pin__stem"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     FEATURES — BENTO GRID
+     ============================================================ -->
+
+<section class="features section" id="features">
+  <div class="container">
+
+    <div class="section-header reveal">
+      <p class="eyebrow">Features</p>
+      <h2>Everything you need to<br>explore, share, and discover.</h2>
+    </div>
+
+    <div class="features-list">
+
+      <!-- Feature 1: Explore -->
+      <div class="feature-row reveal">
+        <div class="feature-row__text">
+          <span class="feature-row__label">Explore</span>
+          <h3 class="feature-row__title">Experience-driven exploration</h3>
+          <p class="feature-row__desc">
+            Not just finding places — <em>engaging</em> with them. Discover cultural stories, hidden gems, and nature trails layered onto the world around you.
+          </p>
+        </div>
+        <div class="feature-row__visual">
+          <div class="feature-row__frame">
+            <img src="loka_files/discover.png"
+                 alt="LOKA explore screen showing local places and activity feed"
+                 loading="lazy">
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature 2: Tag Detail / Local Find (reversed) -->
+      <div class="feature-row feature-row--reverse reveal">
+        <div class="feature-row__text">
+          <span class="feature-row__label">Discover</span>
+          <h3 class="feature-row__title">Every place has a story</h3>
+          <p class="feature-row__desc">
+            Tap any tag to reveal what people have shared — photos, notes, context. From street food to local markets, LOKA surfaces the richness hiding in plain sight.
+          </p>
+        </div>
+        <div class="feature-row__visual">
+          <div class="feature-row__frame">
+            <img src="loka_files/local_find.png"
+                 alt="LOKA tag detail showing local vendor with community notes"
+                 loading="lazy">
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature 3: Map -->
+      <div class="feature-row reveal">
+        <div class="feature-row__text">
+          <span class="feature-row__label">Map</span>
+          <h3 class="feature-row__title">See your world as a living map</h3>
+          <p class="feature-row__desc">
+            Browse a real-time map of geo-tagged places near you — each pin a community contribution. Filter by type, recency, or topic to find exactly what you're looking for.
+          </p>
+        </div>
+        <div class="feature-row__visual">
+          <div class="feature-row__frame">
+            <img src="loka_files/map.png"
+                 alt="LOKA map view with geo-tagged pins"
+                 loading="lazy">
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature 4: Contribute (reversed) -->
+      <div class="feature-row feature-row--reverse reveal">
+        <div class="feature-row__text">
+          <span class="feature-row__label">Contribute</span>
+          <h3 class="feature-row__title">Tag it, share it, build it together</h3>
+          <p class="feature-row__desc">
+            Found something interesting? Take a picture, mark it on the map, and describe the place. Every tag you add becomes part of a living, shared knowledge base.
+          </p>
+        </div>
+        <div class="feature-row__visual">
+          <div class="feature-row__frame">
+            <img src="loka_files/add_tag.png"
+                 alt="LOKA add tag flow — click a picture and mark the location"
+                 loading="lazy">
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     WHO IS LOKA FOR? — PERSONA TILES
+     ============================================================ -->
+
+<section class="usecases section" id="usecases">
+  <div class="container">
+
+    <div class="section-header section-header--center reveal">
+      <p class="eyebrow">Who it's for</p>
+      <h2>Made for everyone curious<br><em>about their world.</em></h2>
+      <p>Whether you're a curious wanderer or a committed changemaker, LOKA meets you where you are.</p>
+    </div>
+
+    <div class="persona-grid reveal-stagger">
+
+      <div class="persona-tile">
+        <div class="persona-tile__icon" aria-hidden="true">
+          <!-- Footsteps / explorer icon -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+        </div>
+        <h3 class="persona-tile__name">Everyday Explorers</h3>
+        <p class="persona-tile__desc">Discover hidden gems, cultural stories, and nature trails right in your backyard.</p>
+      </div>
+
+      <div class="persona-tile">
+        <div class="persona-tile__icon" aria-hidden="true">
+          <!-- Museum / institution icon -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="22" x2="21" y2="22"/>
+            <line x1="6" y1="18" x2="6" y2="11"/>
+            <line x1="10" y1="18" x2="10" y2="11"/>
+            <line x1="14" y1="18" x2="14" y2="11"/>
+            <line x1="18" y1="18" x2="18" y2="11"/>
+            <polygon points="12 2 20 7 4 7"/>
+          </svg>
+        </div>
+        <h3 class="persona-tile__name">Institutions &amp; Businesses</h3>
+        <p class="persona-tile__desc">Enrich public spaces with augmented storytelling — museums, parks, and heritage sites come alive.</p>
+      </div>
+
+      <div class="persona-tile">
+        <div class="persona-tile__icon" aria-hidden="true">
+          <!-- Shop / local sellers icon -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <path d="M16 10a4 4 0 0 1-8 0"/>
+          </svg>
+        </div>
+        <h3 class="persona-tile__name">Local Sellers &amp; Makers</h3>
+        <p class="persona-tile__desc">Put your community-driven business on the map and connect with nearby customers.</p>
+      </div>
+
+      <div class="persona-tile">
+        <div class="persona-tile__icon" aria-hidden="true">
+          <!-- Leaf / environment icon -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 8C8 10 5.9 16.17 3.82 21a1 1 0 0 0 .18 1.12C4.9 23 6 22 6 22s3.66-4.34 9-6.34c0 0-2 4.27-4.49 6.34"/>
+            <path d="M21 3l-3 3M21 3v6M21 3h-6"/>
+          </svg>
+        </div>
+        <h3 class="persona-tile__name">Environmental Guardians</h3>
+        <p class="persona-tile__desc">Map lakes, trees, biodiversity, and green corridors. Stay informed, stay involved.</p>
+      </div>
+
+      <div class="persona-tile">
+        <div class="persona-tile__icon" aria-hidden="true">
+          <!-- Book / education icon -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+          </svg>
+        </div>
+        <h3 class="persona-tile__name">Educators &amp; Students</h3>
+        <p class="persona-tile__desc">Use LOKA as a tool for field studies, GIS mapping, and learning beyond the classroom.</p>
+      </div>
+
+      <div class="persona-tile">
+        <div class="persona-tile__icon" aria-hidden="true">
+          <!-- Flag / civic icon -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+            <line x1="4" y1="22" x2="4" y2="15"/>
+          </svg>
+        </div>
+        <h3 class="persona-tile__name">Civic Participants</h3>
+        <p class="persona-tile__desc">Spot and report local issues — from broken roads to public hazards — and be part of the solution.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     ENTERPRISE
+     ============================================================ -->
+
+<section class="enterprise section" id="enterprise">
+  <div class="container">
+
+    <div class="enterprise__grid">
+
+      <!-- Content -->
+      <div class="enterprise__content reveal">
+        <div>
+          <p class="eyebrow">For Organisations</p>
+          <h2>LOKA for your<br><em>Business Enterprise</em></h2>
+        </div>
+
+        <p class="enterprise__intro">
+          The technology powering LOKA is a modular, AI-driven platform for <strong>location-specific data creation, categorisation, and discovery</strong> — built for scale, adaptability, and contextual depth.
+        </p>
+
+        <div class="usecase-list reveal-stagger">
+
+          <div class="usecase-card">
+            <h4 class="usecase-card__title">Facility Mapping &amp; Digital Twins</h4>
+            <p class="usecase-card__desc">Map manufacturing units, campuses, or warehouse zones as layered, interactive spaces with markers, instructions, safety notes, and more.</p>
+            <p class="usecase-card__example"><strong>Use case:</strong> A factory floor mapped with AR markers for equipment safety zones, maintenance logs, and real-time instructions.</p>
+          </div>
+
+          <div class="usecase-card">
+            <h4 class="usecase-card__title">AR-Powered Training Tools</h4>
+            <p class="usecase-card__desc">Use LOKA's AR engine to create on-site training overlays — visual guides, SOPs, or safety walkthroughs that appear contextually in real space.</p>
+            <p class="usecase-card__example"><strong>Use case:</strong> New staff navigate a retail outlet or service centre while receiving AR-based onboarding.</p>
+          </div>
+
+          <div class="usecase-card">
+            <h4 class="usecase-card__title">Internal Navigation &amp; Micro-Mapping</h4>
+            <p class="usecase-card__desc">Support employee movement across large campuses or complex environments with indoor/outdoor micro-maps, tagged checkpoints, and visual aids.</p>
+            <p class="usecase-card__example"><strong>Use case:</strong> A hospital using tagged zones for orientation, emergencies, or equipment tracking.</p>
+          </div>
+
+          <div class="usecase-card">
+            <h4 class="usecase-card__title">Collaboration &amp; Knowledge Sharing</h4>
+            <p class="usecase-card__desc">Empower teams to collaboratively tag and update spatial knowledge — replacing static manuals or maps with a living, visual database.</p>
+            <p class="usecase-card__example"><strong>Use case:</strong> A construction firm enables engineers to annotate a site with phase-wise updates accessible via AR.</p>
+          </div>
+
+        </div>
+
+        <div class="enterprise__contact">
+          <a class="btn btn--signal"
+             href="mailto:business@discoverloka.org">
+            Write to us
+            <svg class="btn__arrow" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 8h10M9 4l4 4-4 4"/>
+            </svg>
+          </a>
+          <span class="hero__cta-note">business@discoverloka.org</span>
+        </div>
+      </div>
+
+      <!-- Visual -->
+      <div class="enterprise__visual" aria-hidden="true">
+        <div class="enterprise__glow"></div>
+        <div class="phone phone--flat phone--back">
+          <div class="phone__notch"></div>
+          <div class="phone__screen">
+            <img class="phone__screenshot"
+                 src="loka_files/wellbeing.png"
+                 alt="LOKA enterprise view"
+                 loading="lazy">
+          </div>
+        </div>
+        <div class="phone phone--flat phone--front">
+          <div class="phone__notch"></div>
+          <div class="phone__screen">
+            <img class="phone__screenshot"
+                 src="loka_files/map.png"
+                 alt="LOKA map view"
+                 loading="lazy">
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     CTA SECTION
+     ============================================================ -->
+
+<section class="cta-section section">
+  <div class="cta-section__bg" aria-hidden="true"></div>
+  <div class="container">
+    <div class="cta-section__inner reveal">
+
+      <div>
+        <p class="eyebrow" style="justify-content:center;margin-bottom:var(--space-6);">Ready to explore?</p>
+        <h2 class="cta-section__headline">
+          See your world<br><em>differently.</em>
+        </h2>
+      </div>
+
+      <p class="cta-section__sub">
+        Download LOKA and start discovering the richness hiding in plain sight — right where you are.
+      </p>
+
+      <div class="store-badges" style="justify-content:center;">
+        <a href="https://play.google.com/store/apps/details?id=com.find_ar.app"
+           target="_blank" rel="noopener" aria-label="Get LOKA on Google Play">
+          <img src="images/badge-google-play.png" alt="Get it on Google Play" class="badge-img">
+        </a>
+        <a href="https://apps.apple.com/in/app/loka-discover-local/id6758565297"
+           target="_blank" rel="noopener" aria-label="Download LOKA on the App Store">
+          <img src="images/badge-app-store.svg" alt="Download on the App Store" class="badge-img">
+        </a>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     FOOTER
+     ============================================================ -->
+
+<footer class="footer" role="contentinfo">
+  <div class="footer__inner">
+
+    <div class="footer__top">
+
+      <!-- Brand -->
+      <div>
+        <img class="footer__logo"
+             src="loka_files/c3e192e7-f7ca-443e-9852-6ecf27ab1139"
+             alt="LOKA"
+             width="88" height="22">
+        <p class="footer__brand-tagline">
+          Local Open Knowledge Access — a living map of the world, built by everyone.
+        </p>
+      </div>
+
+      <!-- Company links -->
+      <div>
+        <p class="footer__col-title">Company</p>
+        <a class="footer__link" href="about.html">About LOKA</a>
+        <a class="footer__link" href="mailto:info@loka.place">info@loka.place</a>
+      </div>
+
+      <!-- Legal links -->
+      <div>
+        <p class="footer__col-title">Legal</p>
+        <a class="footer__link" href="privacy.html">Privacy Policy</a>
+        <a class="footer__link" href="terms.html">Terms of Service</a>
+        <a class="footer__link" href="support.html">Support</a>
+      </div>
+
+      <!-- Built by -->
+      <div>
+        <p class="footer__col-title">Built by</p>
+        <a class="footer__link" href="https://socratus.org" target="_blank" rel="noopener">Socratus.org</a>
+        <p class="footer__link" style="cursor:default;">Socratus Collective Wisdom Corporation</p>
+      </div>
+
+    </div>
+
+    <div class="footer__bottom">
+      <p class="footer__copyright">© 2025 LOKA. All rights reserved.</p>
+      <nav class="footer__legal-links" aria-label="Legal">
+        <a class="footer__legal-link" href="privacy.html">Privacy</a>
+        <a class="footer__legal-link" href="terms.html">Terms</a>
+        <a class="footer__legal-link" href="support.html">Support</a>
+      </nav>
+    </div>
+
+  </div>
+</footer>
+
+
+<!-- ============================================================
+     SCRIPTS
+     ============================================================ -->
+
+<script src="assets/js/nav.js"></script>
+<script src="assets/js/animations.js"></script>
+<script src="assets/js/hero-canvas.js"></script>
+
+</body>
+</html>

@@ -666,9 +666,9 @@
 
   /* How visitors explore, See it as a visitor, Explore's Buttons tab: their
      own file (owner-modes.js), fetched like this one, with what it needs. */
-  var MODES_KIT = null;
+  var MODES_KIT = null, LOOK_KIT = null;
   function loadModesKit() {
-    var me = document.querySelector('script[src*="owner.js"]'), js = document.createElement("script");
+    var me = document.querySelector('script[src*="owner.js"]'), js = document.createElement("script"), look = document.createElement("script");
     var v = /[?&]v=[0-9A-Za-z._-]+/.exec((me && me.getAttribute("src")) || "");
     js.src = "./owner-modes.js" + (v ? "?" + v[0].slice(1) : "");
     js.onload = function () {
@@ -677,7 +677,9 @@
         closeFold: function () { if (FOLD) closeFold(true); } });
       if (MODES_KIT) augmentPanel();
     };
-    document.head.appendChild(js);
+    // the look from a website (Settings' row and sheet): its own file too
+    look.onload = function () { if (window.LokaOwnerLook) LOOK_KIT = window.LokaOwnerLook.mount({ api: api, errMsg: errMsg, esc: esc, toast: toast, openDialog: openDialog, closeDialog: closeDialog, inst: INST, slug: SLUG, preview: preview, version: v ? "?" + v[0].slice(1) : "" }); };
+    look.src = "./owner-look.js" + (v ? "?" + v[0].slice(1) : ""); document.head.appendChild(js); document.head.appendChild(look);
   }
   // the mode the page is drawing, which the owner's tabs follow
   function modeDrawn() {
@@ -2548,6 +2550,10 @@
       "</div>" +
       '<label class="own-fld">Organisation website <span class="own-note">optional, https</span>' +
         '<input type="text" id="own-site" placeholder="https://example.org" value="' + esc(b.orgUrl || "") + '" /></label>' +
+      /* "Provide a website for visual style and design reference": its colours
+         and logo on this atlas. Drawn by owner-look.js (this file is at its
+         size ceiling, test/fold-test.mjs), into this slot. */
+      '<div id="own-look"></div>' +
 
       (owner ? '<h3 class="own-set-h">Who can edit it</h3>' +
       '<p class="own-set-p">Invite the people who need to work on this atlas. They can add and style ' +
@@ -2612,10 +2618,8 @@
     logoToolsP = new Promise(function (ok, no) {
       // the same version stamp this file was fetched with, so a deploy that
       // bumps one bumps the other
-      var mine = document.querySelector('script[src*="owner.js"]');
-      var v = (mine && (mine.src.match(/[?&]v=([^&]+)/) || [])[1]) || "dev";
-      var s = document.createElement("script");
-      s.src = "./logo-tools.js?v=" + v;
+      var mine = document.querySelector('script[src*="owner.js"]'), v = (mine && (mine.src.match(/[?&]v=([^&]+)/) || [])[1]) || "dev";
+      var s = document.createElement("script"); s.src = "./logo-tools.js?v=" + v;
       s.onload = function () { window.LokaLogoTools ? ok(window.LokaLogoTools) : no(new Error("logo tools did not load")); };
       s.onerror = function () { logoToolsP = null; no(new Error("logo tools did not load")); };
       document.head.appendChild(s);
@@ -2979,7 +2983,7 @@
       var rs = scrim.querySelector("#own-region-save");
       if (rs) rs.onclick = function () { rebuildRegion(scrim, this); };
       paintInvites(scrim);
-      wireLogo(scrim);
+      wireLogo(scrim); if (LOOK_KIT) LOOK_KIT.settings(scrim);
       ["#own-title", "#own-desc", "#own-org", "#own-site"].forEach(function (sel) {
         scrim.querySelector(sel).addEventListener("input", function () {
           scrim.__warned = false;

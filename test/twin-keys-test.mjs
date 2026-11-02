@@ -27,6 +27,8 @@ const rules = fs.readFileSync(ROOT + '/atlas/reading-rules.js', 'utf8');
 const script = fs.readFileSync(ROOT + '/deploy/queue-question-readings.mjs', 'utf8');
 const design = fs.readFileSync(ROOT + '/DESIGN.md', 'utf8');
 const LokaLabelRules = createRequire(import.meta.url)(path.join(ROOT, 'atlas', 'label-rules.js'));
+// the viewer reads its key colours from map-colours.js (one list, shared with the server)
+const MAP_COLOURS = createRequire(import.meta.url)(path.join(ROOT, 'atlas', 'map-colours.js'));
 
 let pass = 0, fail = 0;
 function check(label, got, want) {
@@ -62,7 +64,7 @@ const body =
     'kindFilterIs', 'filterByKind', 'fitAnswer', 'answerNamesOn', 'unpickAnswer'].map(fn).join('');
 /* The state the lifted functions read: the manifest, the data, the markers,
    the key state, and the search machinery a pressed answer goes through. */
-const make = new Function('LokaLabelRules', 'MANIFEST', 'DATA', 'markersByLayer', 'keyState', 'searchRows',
+const make = new Function('LokaLabelRules', 'MAP_COLOURS', 'MANIFEST', 'DATA', 'markersByLayer', 'keyState', 'searchRows',
   'applyRowVisibility', 'updateSearchCount', 'markLitKinds', 'clearSearch', '$',
   'var KINDFILTER = null, searchWord = "", searchSeq = 0, searchTimer = null, map = null, ANSWER_MAX_ZOOM = 16;\n' +
   'function clearTimeout() {}\n' +
@@ -102,7 +104,7 @@ function world(opts) {
   const keyState = {};
   const counted = [];
   const redrawn = [];
-  const lib = make(LokaLabelRules, MANIFEST, DATA, markersByLayer, keyState,
+  const lib = make(LokaLabelRules, MAP_COLOURS, MANIFEST, DATA, markersByLayer, keyState,
     (L) => markersByLayer[L.id] || [],
     (L) => { redrawn.push(L.id); },
     (shown, total, pts, lead, word, noun) => { counted.push({ shown, total, pts: pts.length, lead, noun }); },

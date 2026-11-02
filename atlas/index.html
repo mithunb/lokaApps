@@ -179,6 +179,7 @@
     .org-credit-logo { height:30px; width:auto; max-width:var(--logo-max-width,160px); object-fit:contain; display:block; margin-bottom:.4rem; }
     .org-credit-name { font-weight:600; }
     .org-credit-line { font-size:var(--t-ui); color:var(--color-text-secondary); margin-bottom:.9rem; }
+    .cr-look { font-size:var(--t-meta); color:var(--color-text-muted); margin:0 0 .6rem; }
     #org-credit:not(:empty) { padding-bottom:.9rem; margin-bottom:.9rem; border-bottom:1px solid var(--color-divider); }
 
     /* ---- map stage ----
@@ -2179,6 +2180,8 @@
           <span id="made-head">Made by</span>
         </h2>
         <div id="org-credit"></div>
+        <!-- a look read from the organisation's website says so here (atlas.js, design D3) -->
+        <p class="cr-look" id="look-credit" hidden></p>
         <p class="cr-lede">A platform built by Socratus.<span id="collab-lede"></span></p>
         <div class="cr-orgs">
           <!-- instance-specific collaborators (from the manifest) render here -->
@@ -2405,6 +2408,7 @@
   <script src="./wait.js?v=dev"></script>
   <script src="./share.js?v=dev"></script>
   <!-- an atlas's own look, when its manifest gives one; must load before atlas.js -->
+  <script src="./map-colours.js?v=dev"></script>
   <script src="./theme.js?v=dev"></script>
   <!-- a festival guide, when an atlas's manifest asks for one (mode "event");
        must load before atlas.js -->

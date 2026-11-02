@@ -77,6 +77,8 @@
   var DATA_V = "";
   function bumpDataVersion() { DATA_V = String(Date.now()); }
   function dataUrl(file, ver) {
+    // a picture handed over as its own bytes (the owner's look preview) needs no address
+    if (/^data:image\//.test(file)) return file;
     var url = BASE + file;
     var q = [];
     if (KEY) q.push("key=" + encodeURIComponent(KEY));
@@ -129,8 +131,10 @@
      the mark's SHAPE says which KEY, and colours repeat freely between keys:
      every key counts from the front of the palette (the committed key keeps
      its committed colours), and the key panel states that cost in words. */
-  var KEY_COLORS = ["#332288", "#999933", "#44AA99", "#AA4499", "#117733", "#882255", "#88CCEE", "#DDCC77"];
-  var KEY_OTHER = "#7a756c";
+  // the colours themselves live in map-colours.js, one list the server reads too
+  var MAP_COLOURS = window.LokaMapColours;
+  var KEY_COLORS = MAP_COLOURS.KEY_COLORS;
+  var KEY_OTHER = MAP_COLOURS.KEY_OTHER;
   var KEY_MAX = 8;
   // how many kinds a column may hold and still be offered as a key — see the
   // note where it is used. Eight are drawn; the ninth and tenth become "other".
@@ -141,11 +145,7 @@
      before the Bazaar palette still draws — to the new value of the same
      name, which is the one place an existing atlas changes colour: a layer
      that asked for "rust" by name, not by hex, asked for the product's red. */
-  var ONE_COLORS = {
-    sindoor: "#C9402B", leaf: "#2A6B41", marigold: "#E9A237", blue: "#3A7FA1",
-    stone: "#A39E94", ink: "#26231F", turmeric: "#B99A1C",
-    rust: "#C9402B", moss: "#2A6B41", ochre: "#E9A237", sienna: "#D2692A", slate: "#3A7FA1",
-  };
+  var ONE_COLORS = MAP_COLOURS.ONE_COLORS;
   var keyState = {};   // layer id -> { active: [column, ...], note: string|null }
   /* Event mode (event-mode.js), or Explore mode (explore-mode.js, built on
      Event mode's pieces): set when the manifest's `mode` says so, and
@@ -589,6 +589,7 @@
     renderBranding(manifest.branding);
     renderCollaborators(manifest);
     wireShare(manifest);
+    listenForLookPreview(manifest);
     // The header now carries this atlas's own words, so the head's "not yet"
     // mark (index.html, .atlas-pending) comes off: the title shows in place.
     document.documentElement.classList.remove("atlas-pending");
@@ -736,6 +737,30 @@
   // the fixed LOKA elements in the page (wordmark, credit strip, CTA) — those are
   // hard-coded in index.html and never driven by manifest content, so an instance
   // can add its own identity but can't remove LOKA's.
+  /* The owner's "look from a website" sheet shows this very atlas in a frame
+     (?embed=1) and flips it between its look now and the proposed one, with
+     no second load. The frame listens for the sheet's word — from the parent
+     page only, and only when it is this same site — and applies or clears
+     the theme (theme.js) and swaps the logo for the proposed picture. */
+  var LOOK_PREVIEW_LOGO = null;   // a data URL while the sheet shows one
+  function listenForLookPreview(manifest) {
+    if (!EMBED || !window.LokaTheme || window.parent === window) return;
+    window.addEventListener("message", function (e) {
+      if (e.origin !== location.origin || !e.data || e.data.type !== "loka-look-preview") return;
+      var m = e.data;
+      try {
+        if (m.theme && typeof m.theme === "object") window.LokaTheme.apply(m.theme, document);
+        else if (m.theme === null) { window.LokaTheme.clear(document); if (manifest.theme) window.LokaTheme.apply(manifest.theme, document); }
+        if ("logoDataUrl" in m) {
+          LOOK_PREVIEW_LOGO = typeof m.logoDataUrl === "string" && /^data:image\//.test(m.logoDataUrl) ? m.logoDataUrl : null;
+          var b = Object.assign({}, manifest.branding || {});
+          if (LOOK_PREVIEW_LOGO) b.logo = LOOK_PREVIEW_LOGO;
+          renderBranding(b);
+        }
+      } catch (err) {}
+    });
+  }
+
   function renderBranding(b) {
     if (!b || (!b.orgName && !b.logo)) return;
     var hero = $("#org-branding");
@@ -791,6 +816,19 @@
       head.textContent = "Made for";
       cred.innerHTML = "";
       cred.appendChild(el("div", "org-credit-name", esc(madeFor)));
+    }
+    /* A look read from a website says so, in About this atlas, unless the
+       owner switched the line off (design D3). The only visitor-facing trace
+       of the feature: plain words, no control. */
+    var look = $("#look-credit"), src = manifest.theme && manifest.theme.source;
+    if (look) {
+      var sayLook = src && typeof src.host === "string" && manifest.theme.credit !== false;
+      look.hidden = !sayLook;
+      if (sayLook) {
+        var when = "";
+        try { when = new Date(src.readAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); } catch (e) { when = ""; }
+        look.textContent = "Colours" + (manifest.branding && manifest.branding.logo ? " and logo" : "") + " from " + src.host + (when && when !== "Invalid Date" ? ", read on " + when : "") + ".";
+      }
     }
     var lede = $("#collab-lede");
     if (lede && manifest.collabLede) lede.textContent = " " + manifest.collabLede;
@@ -1099,12 +1137,7 @@
      nothing. Satellite is never touched; the atlas's own layers are not
      touched either, because they are not in the style until after this runs
      and none of them carry these ids. */
-  var BASE_WARM = {
-    ground: "#F5F1E6", outside: "#EAE6DC", water: "#C8DBE5", waterway: "#3A7FA1",
-    green: "#E9EDDF", wood: "#DCE3CF", landuse: "#EFEAE0", road: "#E2DDD0", roadMajor: "#D6D0C0",
-    roadCasing: "#CFC9B8", building: "#E8E2D6", boundary: "#8C8985", label: "#5A5751", halo: "#F5F1E6",
-    labelStrong: "#24211D",
-  };
+  var BASE_WARM = MAP_COLOURS.BASE_WARM;   // map-colours.js: the one list
   function warmBaseStyle(m) {
     if (!m || !m.getStyle) return;
     var style; try { style = m.getStyle(); } catch (e) { return; }

@@ -222,3 +222,24 @@ What can stay as it is: `atlas/theme.js` (the rules and the guard), the
 viewer's hook, the badge's protection, and the checks in
 `test/theme-test.mjs`. What is still to be built is the finding (steps 1 to
 5), the preview, and a place in Settings.
+
+## Log
+
+- **2 Nov 2026 — phase 1 built, not yet deployed.** The finding, the mapping,
+  the routes, the Settings row and sheet, the preview and the credit line
+  (`docs/design-style-from-website.md` §12, phase 1; Mithun's answers in §13).
+  The general rule, run on a saved copy of emergencefestival.in
+  (`test/fixtures/look/emergence/`, fetched 2 Nov 2026), reproduces the
+  hand-made theme above within a ΔE of 3 on every colour slot (worst:
+  textMuted, 2.06), with square corners, the 180 px wordmark and the header
+  logo; the "presented by" mark and the partner logos are shown and named as
+  not the site's own. Tried live against the site from a local server on a
+  copy of the Bengaluru atlas: read in about a second once warm, saved, undone.
+  Second site, same day: discoverloka.org on a copy of another atlas
+  (`test/fixtures/look/discoverloka/`): moss green accent, cream page, the
+  amber as pale shading (its hue is one of the map's key hues, so the ring
+  keeps LOKA's), the nav logo served from a bare address with no type, read
+  by its first bytes. Mithun (2 Nov): the page hop gets 6 s of the 8; the
+  site's small icon stays a logo candidate (never the tab icon); partner
+  logos stay selectable with their warning, a light one shown on a dark
+  tile. Fonts and the tab icon are phase 2.

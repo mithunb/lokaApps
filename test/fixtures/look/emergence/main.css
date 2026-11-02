@@ -1,0 +1,5285 @@
+/*
+ * Emergence Theme: global foundation.
+ * Colours, type and spacing come from theme.json. This file only adds what
+ * theme.json cannot: gutters, header behaviour, focus, motion, utilities.
+ *
+ * Breakpoints (document in docs/DESIGN-SYSTEM.md):
+ *   mobile  up to 781px | tablet 782px to 1023px | desktop 1024px and up
+ * WordPress switches its own mobile menu and admin bar around 782px and 600px.
+ */
+
+/* ---------- Base ---------- */
+
+html {
+	scroll-behavior: smooth;
+	/* Anchors land below the sticky header (and the admin bar when logged in). */
+	scroll-padding-top: calc(4.5rem + var(--wp-admin--admin-bar--height, 0px));
+}
+
+body {
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+	overflow-x: clip; /* full-bleed art must never cause sideways scrolling */
+}
+
+img,
+svg,
+video {
+	max-width: 100%;
+	height: auto;
+}
+
+/* ---------- Flush layout: no block-gap strips between header, sections and footer ---------- */
+
+body .wp-site-blocks > * + *,
+body .wp-site-blocks .emergence-main > *,
+body .wp-site-blocks .wp-block-post-content > .alignfull,
+.editor-styles-wrapper .is-root-container > .alignfull {
+	margin-block-start: 0;
+	margin-block-end: 0;
+}
+
+/* ---------- Links ---------- */
+
+:where(.wp-site-blocks) a:where(:not(.wp-element-button):not(.wp-block-navigation-item__content)) {
+	text-decoration-thickness: 0.08em;
+	text-underline-offset: 0.2em;
+}
+
+/* ---------- Focus (visible on every background: uses the element's own colour) ---------- */
+
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+	outline: 3px solid currentColor;
+	outline-offset: 4px;
+}
+
+/* ---------- Gutters and default section spacing ----------
+ * Written with :where() so they have zero specificity: any padding chosen in
+ * the editor (or by a later section design) overrides them. */
+
+:where(.wp-block-post-content > .wp-block-group.alignfull) {
+	padding-inline: var(--wp--custom--gutter);
+	padding-block: var(--wp--preset--spacing--50);
+}
+
+:where(.emergence-padded) {
+	padding-inline: var(--wp--custom--gutter);
+	padding-block: var(--wp--preset--spacing--50);
+}
+
+/* Constrained sections: the inner width is chosen in the block's Layout panel. */
+.wp-block-post-content > .wp-block-group.alignfull {
+	box-sizing: border-box;
+}
+
+/* ---------- Header ---------- */
+
+.emergence-header {
+	position: sticky;
+	top: 0;
+	z-index: 100;
+	background: var(--wp--preset--color--white);
+	border-bottom: 2px solid var(--wp--preset--color--black);
+}
+
+@media (min-width: 601px) {
+	.admin-bar .emergence-header {
+		top: var(--wp-admin--admin-bar--height, 32px);
+	}
+}
+
+.emergence-header-inner {
+	box-sizing: border-box;
+	min-height: 4.5rem;
+	padding-inline: var(--wp--custom--gutter);
+	padding-block: 0.75rem;
+	gap: 1.5rem;
+}
+
+.emergence-header .wp-block-site-logo img {
+	display: block;
+	width: clamp(8.5rem, 5rem + 10vw, 11.5rem);
+	height: auto;
+}
+
+/* Navigation: editorial uppercase labels. The current section carries a small underline rule (set by theme.js, aria-current). */
+.emergence-nav .wp-block-navigation__container {
+	gap: clamp(1.25rem, 2.2vw, 2.5rem);
+}
+
+.emergence-nav .wp-block-navigation-item__content {
+	font-size: 0.875rem;
+	font-weight: 500;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+	text-decoration: none;
+	padding-block: 0.6em;
+	background-image: linear-gradient(currentColor, currentColor);
+	background-repeat: no-repeat;
+	background-position: 0 calc(100% - 0.2em);
+	background-size: 0 2px;
+	transition: background-size 0.35s cubic-bezier(0.2, 0.7, 0.1, 1), color 0.25s ease;
+}
+
+.emergence-nav .wp-block-navigation-item__content:hover,
+.emergence-nav .wp-block-navigation-item__content:focus-visible {
+	background-size: 100% 2px;
+}
+
+.emergence-nav .wp-block-navigation__responsive-container:not(.is-menu-open) .wp-block-navigation-item__content[aria-current] {
+	background-size: 100% 2px;
+	color: var(--wp--preset--color--purple);
+}
+
+/* Register: the one distinguished link (add class "emergence-nav-register" to any nav item) */
+.emergence-nav .emergence-nav-register > .wp-block-navigation-item__content {
+	display: inline-flex;
+	align-items: center;
+	min-height: 2.75rem;
+	box-sizing: border-box;
+	background-color: var(--wp--preset--color--primary-green);
+	background-image: none;
+	color: var(--wp--preset--color--black);
+	font-weight: 500;
+	padding: 0.5em 1.4em;
+	transition: background-color 0.2s ease, color 0.2s ease, translate 0.2s ease, box-shadow 0.2s ease;
+}
+
+.emergence-nav .emergence-nav-register > .wp-block-navigation-item__content:hover,
+.emergence-nav .emergence-nav-register > .wp-block-navigation-item__content:focus-visible {
+	background-color: var(--wp--preset--color--purple);
+	color: var(--wp--preset--color--white);
+	translate: -0.125rem -0.125rem;
+	box-shadow: 0.25rem 0.25rem 0 var(--wp--preset--color--black);
+}
+
+/* Phones and tablets (up to 1023px): use the native overlay menu instead of the inline links.
+ * WordPress switches at 600px by default, which wraps the header at tablet width. */
+@media (min-width: 600px) and (max-width: 1023px) {
+	.wp-block-navigation.emergence-nav .wp-block-navigation__responsive-container:not(.is-menu-open) {
+		display: none;
+	}
+
+	.wp-block-navigation.emergence-nav .wp-block-navigation__responsive-container-open {
+		display: flex;
+	}
+}
+
+/* Mobile overlay menu: large Poppins Medium, stacked, generous tap targets */
+.emergence-nav .wp-block-navigation__responsive-container.is-menu-open {
+	padding: var(--wp--custom--gutter);
+}
+
+.wp-block-navigation.emergence-nav .is-menu-open .wp-block-navigation__responsive-container-content,
+.wp-block-navigation.emergence-nav .is-menu-open .wp-block-navigation__container {
+	gap: 0.25rem;
+	align-items: flex-start !important;
+	justify-content: flex-start;
+}
+
+.wp-block-navigation.emergence-nav .is-menu-open .wp-block-navigation__responsive-dialog {
+	width: 100%;
+}
+
+.emergence-nav .is-menu-open .wp-block-navigation-item__content {
+	font-size: var(--wp--preset--font-size--heading);
+	font-weight: 500;
+	line-height: 1.15;
+	letter-spacing: -0.02em;
+	text-transform: none;
+	padding-block: 0.15em;
+}
+
+.emergence-nav .is-menu-open .emergence-nav-register {
+	margin-top: 1rem;
+}
+
+.emergence-nav .is-menu-open .emergence-nav-register > .wp-block-navigation-item__content {
+	font-size: var(--wp--preset--font-size--lead);
+	padding: 0.5em 1em;
+}
+
+/* ---------- Footer ----------
+ * Minimal editorial ending: a heavy rule, the wordmark, one line of who/what, the dates and place.
+ * Structure (footer template part, all native blocks): .emergence-footer > .emergence-footer__inner > Site Logo, tagline, dates, place. */
+
+.emergence-footer {
+	box-sizing: border-box;
+	padding-inline: var(--wp--custom--gutter);
+	padding-block: clamp(2.75rem, 5.5vw, 4.75rem) clamp(2rem, 3.5vw, 2.75rem);
+	border-top: 2px solid var(--wp--preset--color--black);
+	background-color: var(--wp--preset--color--white);
+	color: var(--wp--preset--color--black);
+}
+
+/* v0.15.6: flex, not a grid of four equal tracks. Four equal columns reliably measured even but
+ * still read as uneven, because each zone's own content (a short logo, a two-word tagline, a long
+ * date string, a short place line) fills a different fraction of its track — optical balance comes
+ * from distributing the real leftover space as gaps between intrinsic-width content, not from
+ * forcing unequal content into equal boxes.
+ * v0.15.7: type sized up a step closer to the homepage's own body scale (it was reading small next
+ * to it), and desktop aligns on `baseline` rather than `center` — a real shared typographic
+ * baseline across the four zones instead of an optical center that shifts with each zone's own
+ * line-height. */
+.emergence-footer__inner {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 1.5rem;
+}
+
+.emergence-footer__inner > * {
+	margin: 0;
+}
+
+.emergence-footer .wp-block-site-logo img {
+	display: block;
+	width: clamp(9rem, 6rem + 10vw, 13rem);
+	height: auto;
+}
+
+.emergence-footer__tagline {
+	max-width: 22em;
+	font-size: clamp(1.0625rem, 1rem + 0.3vw, 1.25rem);
+	line-height: 1.4;
+}
+
+.emergence-footer__dates,
+.emergence-footer__place {
+	font-family: var(--wp--preset--font-family--poppins);
+	font-weight: 500;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	line-height: 1.4;
+}
+
+/* The two right-side lines read as separate zones (when vs. where), not a matching pair: dates
+ * carry the full black ink and the bigger of the two sizes, place sits a shade quieter with its
+ * own marker, same distinction the dot already drew, now backed by the type itself. */
+.emergence-footer__dates {
+	font-size: clamp(1rem, 0.93rem + 0.35vw, 1.1875rem);
+	color: var(--wp--preset--color--black);
+}
+
+.emergence-footer__place {
+	display: flex;
+	align-items: center;
+	gap: 0.65em;
+	font-size: clamp(0.9375rem, 0.88rem + 0.3vw, 1.0625rem);
+	letter-spacing: 0.08em;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 68%, transparent);
+}
+
+.emergence-footer__place::before {
+	content: "";
+	flex: none;
+	width: 0.6em;
+	height: 0.6em;
+	border-radius: 50%;
+	background: var(--wp--preset--color--red);
+}
+
+@media (min-width: 782px) {
+	.emergence-footer__inner {
+		flex-direction: row;
+		flex-wrap: wrap;
+		align-items: baseline;
+		justify-content: space-between;
+		column-gap: clamp(1.75rem, 3.5vw, 3.5rem);
+		row-gap: 1.25rem;
+	}
+
+	.emergence-footer .wp-block-site-logo {
+		align-self: center;
+	}
+
+	.emergence-footer__tagline {
+		max-width: 15em;
+	}
+}
+
+/* ---------- Hero shell (only a minimum height; the real design comes later) ---------- */
+
+/* ---------- Hero (poster composition) ----------
+ * Structure (all native blocks, all editable):
+ *   .emergence-hero              Group, the section
+ *     .emergence-hero__art       Group, artwork slot (add an Image inside to replace the placeholder)
+ *     .emergence-hero__title     Heading (h1), the wordmark
+ *     .emergence-hero__intro     Group: subtitle, tagline, Buttons (CTA)
+ *     .emergence-hero__dates     Group: days, month, place
+ * Colours come from variables so the Group styles "Hero: Purple" and
+ * "Hero: Bright green" can swap the whole palette in one click.
+ * Desktop and tablet: 12-column grid, wordmark spans the width and bleeds off the bottom.
+ * Mobile (under 640px): wordmark runs vertically up the left edge, content stacks beside it. */
+
+.emergence-hero {
+	--hero-bg: var(--wp--preset--color--primary-green);
+	--hero-ink: var(--wp--preset--color--black);
+	--hero-word: var(--wp--preset--color--purple);
+	--hero-art: var(--wp--preset--color--secondary-green);
+	--hero-btn-bg: var(--wp--preset--color--purple);
+	--hero-btn-fg: var(--wp--preset--color--white);
+	--hero-btn-hover-bg: var(--wp--preset--color--black);
+	--hero-btn-hover-fg: var(--wp--preset--color--white);
+	--hero-h: calc(100svh - 4.5rem - var(--wp-admin--admin-bar--height, 0px));
+
+	position: relative;
+	isolation: isolate;
+	overflow: clip;
+	container-type: inline-size;
+	display: grid;
+	grid-template-columns: repeat(12, minmax(0, 1fr));
+	grid-template-rows: 1fr auto;
+	column-gap: clamp(0.75rem, 2vw, 2rem);
+	row-gap: clamp(0.75rem, 1.5vw, 1.5rem); /* tightened so the new green floor fits the first screen instead of pushing the hero below the fold */
+	min-height: clamp(30rem, var(--hero-h), 62rem);
+	padding-top: clamp(1.5rem, 3.2vw, 3rem);
+	padding-bottom: 0;
+	background-color: var(--hero-bg);
+	color: var(--hero-ink);
+}
+
+.emergence-hero.is-style-emergence-hero-purple {
+	--hero-bg: var(--wp--preset--color--purple);
+	--hero-ink: var(--wp--preset--color--white);
+	--hero-word: var(--wp--preset--color--secondary-green);
+	--hero-art: var(--wp--preset--color--primary-green);
+	--hero-btn-bg: var(--wp--preset--color--secondary-green);
+	--hero-btn-fg: var(--wp--preset--color--black);
+	--hero-btn-hover-bg: var(--wp--preset--color--white);
+	--hero-btn-hover-fg: var(--wp--preset--color--purple);
+}
+
+.emergence-hero.is-style-emergence-hero-bright {
+	--hero-bg: var(--wp--preset--color--secondary-green);
+	--hero-art: var(--wp--preset--color--primary-green);
+}
+
+.emergence-hero > * {
+	position: relative;
+	z-index: 1;
+	margin: 0;
+}
+
+/* Artwork slot. Placeholder = abstract contour lines (mask, recoloured by --hero-art).
+ * Drop an Image block into the slot and the placeholder disappears. */
+.emergence-hero > .emergence-hero__art {
+	position: absolute;
+	z-index: 0;
+	/* v0.13.0: original placement (top:-8%; right:-10%; width:min(68cqw,110svh); aspect-ratio:1)
+	 * was tuned for the low-opacity placeholder contour. With the real, opaque artwork the same
+	 * square footprint grows tall enough at >=1024px to collide with the date block and sit behind
+	 * the wordmark's final letters. Width and height are decoupled (aspect-ratio:auto) so the box
+	 * is no longer forced square, keeping it height-governed and clear of both the dates and the
+	 * wordmark while staying a visually substantial, intentionally cropped corner anchor. */
+	top: -6%;
+	right: -14%;
+	width: clamp(22rem, 40vw, 32rem);
+	height: clamp(26rem, 38vw, 33rem);
+	aspect-ratio: auto;
+	background-color: var(--hero-art);
+	-webkit-mask: url("../images/hero-contours-placeholder.svg") center / contain no-repeat;
+	mask: url("../images/hero-contours-placeholder.svg") center / contain no-repeat;
+	pointer-events: none;
+}
+
+.emergence-hero > .emergence-hero__art:has(img, svg, video) {
+	background: none;
+	-webkit-mask: none;
+	mask: none;
+	pointer-events: auto;
+}
+
+.emergence-hero__art img,
+.emergence-hero__art video {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.emergence-hero__art .wp-block-image {
+	margin: 0;
+	height: 100%;
+}
+
+/* Wordmark */
+.emergence-hero .emergence-hero__title {
+	grid-column: 1 / -1;
+	grid-row: 2;
+	align-self: end;
+	margin-bottom: 0;
+	/* The last row of the poster: the box reaches below the baseline far enough that the descender of the g is complete,
+	 * so the wordmark reads as deliberately set, not clipped. Decorative artwork still bleeds; text never does. */
+	padding-bottom: calc(0.18em + clamp(1.25rem, 2.5vw, 2.75rem)); /* + a fluid floor of green under the wordmark so the poster does not run out of room */
+	margin-left: -0.045em; /* optical: cancels the E's left side bearing */
+	font-size: min(calc(100cqw / 5.5), 38svh);
+	line-height: 0.92;
+	letter-spacing: -0.035em;
+	white-space: nowrap;
+	color: var(--hero-word);
+}
+
+/* Intro: subtitle, tagline, CTA (top left) */
+.emergence-hero__intro {
+	grid-column: 1 / span 6;
+	grid-row: 1;
+	align-self: start;
+	display: grid;
+	gap: clamp(1rem, 1.6vw, 1.5rem);
+	justify-items: start;
+}
+
+.emergence-hero__subtitle {
+	margin: 0;
+	font-family: var(--wp--preset--font-family--poppins);
+	font-weight: 400;
+	font-size: clamp(1.375rem, 0.9rem + 1.7cqw, 2.5rem);
+	line-height: 1.1;
+	letter-spacing: -0.02em;
+	text-wrap: balance;
+}
+
+.emergence-hero__tagline {
+	margin: 0;
+	max-width: 24ch;
+	text-wrap: balance;
+	font-size: clamp(1.125rem, 1rem + 0.6cqw, 1.5rem);
+	line-height: 1.35;
+}
+
+.emergence-hero__cta {
+	margin: 0.25rem 0 0;
+}
+
+.emergence-hero__cta .wp-block-button__link {
+	white-space: nowrap;
+	background-color: var(--hero-btn-bg);
+	color: var(--hero-btn-fg);
+	font-size: clamp(0.9375rem, 0.85rem + 0.3cqw, 1.125rem);
+	padding: 1.15em 2.1em;
+}
+
+.emergence-hero__cta .wp-block-button__link:hover,
+.emergence-hero__cta .wp-block-button__link:focus-visible {
+	background-color: var(--hero-btn-hover-bg);
+	color: var(--hero-btn-hover-fg);
+}
+
+.emergence-hero__cta .wp-block-button__link::after,
+.emergence-future__body .wp-block-button__link::after {
+	content: "\2192";
+	content: "\2192" / "";
+	display: inline-block;
+	margin-left: 0.7em;
+	transition: translate 0.2s ease;
+}
+
+.emergence-hero__cta .wp-block-button__link:hover::after,
+.emergence-hero__cta .wp-block-button__link:focus-visible::after,
+.emergence-future__body .wp-block-button__link:hover::after,
+.emergence-future__body .wp-block-button__link:focus-visible::after {
+	translate: 0.25em 0;
+}
+
+/* Presented-by: attribution composition between the tagline and the Register CTA. A grid child of
+ * .emergence-hero__intro, so it inherits that grid's own gap for the rhythm before/after it; the
+ * gap below only governs the label/logo/blurb rhythm inside the block.
+ * v0.15.6: the logo is now the dominant element (≈220–260px desktop) and the blurb is itself the
+ * link (no separate "Visit..." line) — an inline arrow closes the sentence inside the same <a>. */
+/* v0.15.7: gap opened slightly (0.85rem -> 1rem) now that the logo is the group's dominant element —
+ * label/logo/text were reading a touch cramped at that size. The group's own bottom margin is
+ * dropped: spacing into the Register CTA now comes from one source (.emergence-hero__intro's own
+ * grid gap, plus the CTA's small top margin) instead of three stacked values. */
+.emergence-hero__presented {
+	display: grid;
+	gap: 1rem;
+	margin: 0.25rem 0 0;
+	justify-items: start;
+}
+
+.emergence-hero__presented-label {
+	margin: 0;
+	font-family: var(--wp--preset--font-family--poppins);
+	font-weight: 500;
+	font-size: var(--wp--preset--font-size--small);
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	opacity: 0.75;
+}
+
+.emergence-hero__presented-logo.wp-block-image {
+	margin: 0;
+}
+
+.emergence-hero__presented-logo img {
+	display: block;
+	width: clamp(13.75rem, 10rem + 6vw, 16.25rem); /* ≈220–260px desktop: the logo now leads the group */
+	height: auto;
+	max-width: 100%;
+}
+
+.emergence-hero__presented-text {
+	margin: 0;
+	max-width: 42ch; /* tuned for a deliberate ~2-line wrap at the size below, not the old 3–4 line ribbon */
+	font-size: clamp(0.9375rem, 0.85rem + 0.4cqw, 1.0625rem);
+	line-height: 1.5;
+	opacity: 0.88;
+}
+
+.emergence-hero__presented-text a {
+	color: inherit;
+	text-decoration: none;
+	background-image: linear-gradient(currentColor, currentColor);
+	background-position: 0 100%;
+	background-repeat: no-repeat;
+	background-size: 0% 1px;
+	transition: background-size 0.2s ease, opacity 0.15s ease;
+}
+
+.emergence-hero__presented-text a:hover,
+.emergence-hero__presented-text a:focus-visible {
+	opacity: 1;
+	background-size: 100% 1px;
+}
+
+.emergence-hero__presented-text a:focus-visible {
+	outline: 2px solid currentColor;
+	outline-offset: 0.2rem;
+	border-radius: 2px;
+}
+
+.emergence-hero__presented-arrow {
+	display: inline-block;
+	opacity: 0.7;
+	transition: translate 0.2s ease, opacity 0.15s ease;
+}
+
+/* URGENT MOBILE RESPONSIVENESS PATCH, Fix 1: this span used to hold a bare Unicode ↗ (U+2197).
+ * Body copy here renders in the Lora webfont (Latin subset only, no Arrows-block glyph), so iOS
+ * Safari fell through to Apple Color Emoji for the character - a coloured, backgrounded glyph,
+ * not the monochrome arrow every other arrow in this theme (e.g. .em-sch__title a::after) renders
+ * as plain CSS content text. Replaced with an inline SVG so rendering never depends on font
+ * fallback: stroke="currentColor" ties it to the link's own text colour on every device. */
+.emergence-hero__presented-arrow svg {
+	display: inline-block;
+	vertical-align: -0.05em;
+}
+
+.emergence-hero__presented-text a:hover .emergence-hero__presented-arrow,
+.emergence-hero__presented-text a:focus-visible .emergence-hero__presented-arrow {
+	translate: 0.15em -0.1em;
+	opacity: 1;
+}
+
+/* Dates and place as graphic information (bottom right of the upper area) */
+.emergence-hero__dates {
+	grid-column: 8 / -1;
+	grid-row: 1;
+	align-self: end;
+	display: grid;
+	gap: 1rem;
+}
+
+.emergence-hero__days {
+	margin: 0;
+	font-family: var(--wp--preset--font-family--poppins);
+	font-weight: 500;
+	font-size: clamp(3.5rem, min(10.5cqw, 17svh), 9.5rem);
+	line-height: 0.9;
+	letter-spacing: -0.04em;
+}
+
+.emergence-hero__month,
+.emergence-hero__place {
+	margin: 0;
+	font-family: var(--wp--preset--font-family--poppins);
+	font-weight: 500;
+	font-size: var(--wp--preset--font-size--small);
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	line-height: 1.3;
+}
+
+.emergence-hero__month {
+	padding-top: 0.9rem;
+	border-top: 1px solid currentColor;
+}
+
+.emergence-hero__place {
+	display: flex;
+	align-items: center;
+	gap: 0.7em;
+	margin-top: -0.4rem;
+}
+
+/* Small red map-pin dot, brand accent */
+.emergence-hero__place::before {
+	content: "";
+	flex: none;
+	width: 0.7em;
+	height: 0.7em;
+	border-radius: 50%;
+	background: var(--wp--preset--color--red);
+}
+
+/* Tablet (640 to 1023px): same poster, scaled type, dates sit closer */
+@media (min-width: 640px) and (max-width: 1023px) {
+	.emergence-hero__intro {
+		grid-column: 1 / span 7;
+	}
+
+	.emergence-hero__dates {
+		grid-column: 8 / -1;
+	}
+
+	.emergence-hero__days {
+		font-size: clamp(4rem, 14cqw, 7.5rem);
+	}
+
+	.emergence-hero__tagline {
+		max-width: 24ch;
+	}
+
+	.emergence-hero > .emergence-hero__art {
+		/* v0.13.0: 92cqw (tuned for the placeholder) put real artwork pixels behind the dates at
+		 * this range's own dates/intro column layout. Same decoupled width/height treatment as
+		 * the base rule above, scaled down for this narrower band. */
+		top: -5%;
+		right: -18%;
+		width: clamp(18rem, 34vw, 26rem);
+		height: clamp(22rem, 32vw, 27rem);
+		aspect-ratio: auto;
+	}
+}
+
+/* Mobile (under 640px): its own composition.
+ * Wordmark runs vertically up the left edge; dates on top, intro at the bottom. */
+@media (max-width: 639px) {
+	.emergence-hero {
+		grid-template-columns: auto minmax(0, 1fr);
+		/* WORDMARK FIX v0.17.13: row 2 was "1fr", stretching to fill whatever leftover space
+		   --hero-h's 100svh-based min-height left in the grid - i.e. the wordmark's box was sized
+		   off the BROWSER VIEWPORT, not off the dates/intro content next to it. iOS Safari's dynamic
+		   toolbar (and any device whose svh doesn't match this formula's assumptions) made that
+		   leftover space drift from the real content height, so the wordmark box and the actual
+		   glyphs it sized itself against went out of sync. "auto" makes both rows size purely to
+		   their own content (dates, then intro), so the wordmark's spanned grid area is now always
+		   exactly dates-top-to-Register-bottom, regardless of viewport height. */
+		grid-template-rows: auto auto;
+		column-gap: clamp(1.25rem, 6.5vw, 1.75rem);
+		row-gap: 1.5rem;
+		min-height: clamp(30rem, var(--hero-h), 46rem);
+		padding-top: 1.25rem;
+		padding-bottom: 1.25rem;
+	}
+
+	.emergence-hero .emergence-hero__title {
+		grid-column: 1;
+		grid-row: 1 / span 2;
+		align-self: stretch;
+		/* WORDMARK FIX v0.17.13: the old font-size formula derived the glyph size from --hero-h
+		   (100svh), then relied on the stretched box happening to equal that same height - two
+		   numbers computed from unrelated sources that only matched by coincidence on some
+		   viewports. The box is now fixed-content-height (see grid-template-rows above); the glyphs
+		   only need to be CLOSE to that height, because flex centring below splits any small
+		   remainder evenly above and below instead of dumping it all at one edge the way block-start
+		   alignment did. font-size is a plain constant (no svh, no vh) tuned against the actual
+		   rendered dates-top-to-Register-bottom span (measured ~704-724px across 320-430px widths);
+		   8.09rem keeps the glyph run a few px under that at every width, so it never overlaps the
+		   date or the button, and the leftover few px lands as an even sliver top and bottom. */
+		display: flex;
+		flex-direction: row;
+		justify-content: center;
+		writing-mode: vertical-rl;
+		rotate: 180deg;
+		font-size: 8.09rem;
+		line-height: 0.9;
+		margin: 0;
+		padding: 0;
+	}
+
+	.emergence-hero__dates {
+		grid-column: 2;
+		grid-row: 1;
+		align-self: start;
+		gap: 0.75rem;
+	}
+
+	.emergence-hero__days {
+		font-size: clamp(3.25rem, 27cqw, 6.5rem);
+	}
+
+	.emergence-hero__intro {
+		grid-column: 2;
+		grid-row: 2;
+		align-self: end;
+	}
+
+	.emergence-hero__subtitle {
+		font-size: 1.5rem;
+	}
+
+	.emergence-hero__tagline {
+		font-size: 1.0625rem;
+		max-width: none;
+	}
+
+	.emergence-hero__presented {
+		gap: 0.75rem;
+	}
+
+	.emergence-hero__presented-logo img {
+		width: clamp(7rem, 32vw, 9rem);
+		height: auto;
+	}
+
+	.emergence-hero__presented-text {
+		max-width: none;
+		font-size: 0.875rem;
+	}
+
+	.emergence-hero > .emergence-hero__art {
+		/* v0.13.0: 130cqw (tuned for the placeholder) spanned nearly the full width at these
+		 * widths, putting real artwork pixels behind both the vertical wordmark and the dates
+		 * block at once. Repositioned into the natural gap between the dates block and the intro
+		 * copy (a product of row1 auto / row2 1fr in this grid), decoupled width/height so it
+		 * stays clear of both text columns at every width down to 320px while remaining a clear,
+		 * deliberate outer-right anchor rather than a reduced copy of the desktop treatment. */
+		top: 41%;
+		right: -15%;
+		width: 50cqw;
+		height: 9.5rem;
+		aspect-ratio: auto;
+	}
+}
+
+/* Entry motion: front end only, transform and opacity only, well under a second. It needs html.has-js (set by a one-line inline script in the head),
+ * so without JavaScript the hero is simply there. Order: intro and CTA, the dates one after another, the wordmark rises out of its own baseline
+ * (a clip wipe from the bottom), the contours settle. Nothing scales, bounces or waits. */
+@media (prefers-reduced-motion: no-preference) {
+	.has-js .wp-site-blocks .emergence-hero__intro {
+		animation: em-fade 0.5s ease-out backwards;
+	}
+
+	.has-js .wp-site-blocks .emergence-hero__dates > * {
+		animation: em-fade 0.5s ease-out backwards;
+	}
+
+	.has-js .wp-site-blocks .emergence-hero__dates > :nth-child(1) { animation-delay: 0.1s; }
+	.has-js .wp-site-blocks .emergence-hero__dates > :nth-child(2) { animation-delay: 0.2s; }
+	.has-js .wp-site-blocks .emergence-hero__dates > :nth-child(3) { animation-delay: 0.3s; }
+
+	.has-js .wp-site-blocks .emergence-hero__title {
+		animation: em-word 0.65s cubic-bezier(0.2, 0.7, 0.1, 1) 0.2s backwards;
+	}
+
+	.has-js .wp-site-blocks .emergence-hero__art {
+		animation: em-settle 0.6s ease-out 0.3s backwards;
+	}
+
+	@media (max-width: 639px) {
+		.has-js .wp-site-blocks .emergence-hero__title {
+			animation-name: em-word-v;
+		}
+	}
+}
+
+@keyframes em-word {
+	from { opacity: 0; transform: translateY(0.1em); clip-path: inset(100% 0 0 0); }
+	to { opacity: 1; transform: none; clip-path: inset(-0.05em); }
+}
+
+/* Mobile wordmark is set vertically and rotated: the wipe runs along it, from the bottom of the screen upward. */
+@keyframes em-word-v {
+	from { opacity: 0; clip-path: inset(0 0 100% 0); }
+	to { opacity: 1; clip-path: inset(-0.05em); }
+}
+
+@keyframes em-fade {
+	from { opacity: 0; transform: translateY(0.75rem); }
+	to { opacity: 1; transform: none; }
+}
+
+@keyframes em-settle {
+	from { opacity: 0; transform: translateY(1rem); }
+	to { opacity: 1; transform: none; }
+}
+
+/* ---------- Buttons ---------- */
+
+.wp-block-button.is-style-emergence-accent .wp-block-button__link {
+	background-color: var(--wp--preset--color--primary-green);
+	color: var(--wp--preset--color--black);
+}
+
+.wp-block-button.is-style-emergence-accent .wp-block-button__link:hover {
+	background-color: var(--wp--preset--color--purple);
+	color: var(--wp--preset--color--white);
+}
+
+.wp-element-button {
+	transition: background-color 0.2s ease, color 0.2s ease, translate 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* One CTA microinteraction for every button: a few pixels of lift, a hard offset shadow, no layout shift. */
+.wp-element-button:hover,
+.wp-element-button:focus-visible {
+	translate: -0.125rem -0.125rem;
+	box-shadow: 0.25rem 0.25rem 0 var(--cta-shadow, var(--wp--preset--color--purple));
+}
+
+.emergence-hero__cta .wp-block-button__link {
+	--cta-shadow: var(--hero-btn-bg);
+}
+
+/* ---------- About (editorial) ----------
+ * Structure (native blocks): .emergence-about Group > artwork slot Group, h2 title, lead paragraph, body paragraph.
+ * White field by default; Group styles "Tone: Purple" and "Tone: Green" swap the palette.
+ * Desktop: oversized Poppins title top left; Lora lead and body offset right; artwork bottom left, cropped.
+ * Tablet: staggered two-step column. Mobile: stacked, body indented behind a purple rule, artwork behind. */
+
+.emergence-about {
+	--about-bg: var(--wp--preset--color--white);
+	--about-ink: var(--wp--preset--color--black);
+	--about-title: var(--wp--preset--color--purple);
+	--about-art: var(--wp--preset--color--primary-green);
+
+	position: relative;
+	isolation: isolate;
+	overflow: clip;
+	container-type: inline-size;
+	display: grid;
+	grid-template-columns: repeat(12, minmax(0, 1fr));
+	column-gap: clamp(0.75rem, 2vw, 2rem);
+	row-gap: clamp(2.25rem, 5vw, 5rem);
+	padding-block: clamp(4.5rem, 10vw, 11rem);
+	background-color: var(--about-bg);
+	color: var(--about-ink);
+}
+
+.emergence-about.is-style-emergence-tone-purple {
+	--about-bg: var(--wp--preset--color--purple);
+	--about-ink: var(--wp--preset--color--white);
+	--about-title: var(--wp--preset--color--secondary-green);
+	--about-art: var(--wp--preset--color--primary-green);
+}
+
+.emergence-about.is-style-emergence-tone-green {
+	--about-bg: var(--wp--preset--color--primary-green);
+	--about-art: var(--wp--preset--color--secondary-green);
+}
+
+.emergence-about > * {
+	position: relative;
+	z-index: 1;
+	margin: 0;
+}
+
+/* Faint second contour: an About decoration in the bottom-right corner. It leaves through the right edge and its lower shape resolves
+ * inside the section (About clips it on all sides, so it can never be chopped by the boundary or reach a Theme tile). Purely decorative, no layout height. */
+.emergence-about::after {
+	content: "";
+	position: absolute;
+	z-index: 0;
+	right: -9%;
+	bottom: clamp(0.75rem, 2vw, 2rem);
+	width: clamp(8rem, 18cqw, 20rem);
+	aspect-ratio: 1;
+	background-color: var(--about-art);
+	opacity: 0.35;
+	-webkit-mask: url("../images/hero-contours-placeholder.svg") center / contain no-repeat;
+	mask: url("../images/hero-contours-placeholder.svg") center / contain no-repeat;
+	pointer-events: none;
+}
+@media (max-width: 1023px) {
+	.emergence-about::after {
+		right: calc(clamp(8rem, 18cqw, 20rem) * -0.5);
+	}
+}
+
+.emergence-about > .emergence-about__art {
+	position: absolute;
+	z-index: 0;
+	left: -14%;
+	bottom: -22%;
+	width: min(58cqw, 90svh);
+	aspect-ratio: 1;
+	background-color: var(--about-art);
+	-webkit-mask: url("../images/hero-contours-placeholder.svg") center / contain no-repeat;
+	mask: url("../images/hero-contours-placeholder.svg") center / contain no-repeat;
+	pointer-events: none;
+}
+
+.emergence-about > .emergence-about__art:has(img, svg, video) {
+	background: none;
+	-webkit-mask: none;
+	mask: none;
+	pointer-events: auto;
+}
+
+.emergence-about__art img,
+.emergence-about__art video {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.emergence-about__art .wp-block-image {
+	margin: 0;
+	height: 100%;
+}
+
+.emergence-about .emergence-about__title {
+	grid-column: 1 / span 10;
+	grid-row: 1;
+	font-size: clamp(3.25rem, 10.5cqw, 11rem);
+	line-height: 1;
+	padding-bottom: 0.06em;
+	letter-spacing: -0.04em;
+	text-wrap: balance;
+	color: var(--about-title);
+}
+
+.emergence-about__lead {
+	grid-column: 6 / -1;
+	grid-row: 2;
+	max-width: 26em;
+	padding-top: 1.25rem;
+	border-top: 1px solid currentColor;
+	font-size: clamp(1.375rem, 0.9rem + 1.6cqw, 2.5rem);
+	line-height: 1.25;
+	letter-spacing: -0.01em;
+	text-wrap: pretty;
+}
+
+.emergence-about__body {
+	grid-column: 8 / -1;
+	grid-row: 3;
+	max-width: 34em;
+	font-size: clamp(1.0625rem, 1rem + 0.3cqw, 1.25rem);
+	line-height: 1.7;
+	text-wrap: pretty;
+}
+
+/* Tablet: staggered steps */
+@media (min-width: 640px) and (max-width: 1023px) {
+	.emergence-about .emergence-about__title {
+		grid-column: 1 / -1;
+		font-size: clamp(3.5rem, 14cqw, 7.5rem);
+	}
+
+	.emergence-about__lead {
+		grid-column: 3 / -1;
+		font-size: clamp(1.5rem, 1rem + 2.4cqw, 2.25rem);
+	}
+
+	.emergence-about__body {
+		grid-column: 5 / -1;
+	}
+
+	.emergence-about > .emergence-about__art {
+		left: -34%;
+		bottom: -14%;
+		width: 64cqw;
+	}
+}
+
+/* Mobile: stacked; body indented behind a purple rule; artwork sits behind, cropped by the right edge.
+ * v0.15.7: bottom padding was 16rem, reserved for .emergence-about__art's mobile footprint — but that
+ * artwork (along with Hero/Future/Map's) is currently hidden site-wide by the TEMP display:none pass
+ * below (search "client-supplied decorative motifs hidden"), so the reserved room had no visual
+ * payload left and read as a large accidental gap before Themes. Trimmed to a normal closing value;
+ * if the motif is ever re-enabled, this will need revisiting alongside that change. */
+@media (max-width: 639px) {
+	.emergence-about {
+		row-gap: 2rem;
+		padding-block: 4.5rem 3rem;
+	}
+
+	.emergence-about .emergence-about__title {
+		grid-column: 1 / -1;
+		font-size: clamp(3rem, 19.5cqw, 5rem);
+		line-height: 1;
+	}
+
+	.emergence-about__lead {
+		grid-column: 1 / -1;
+		padding-top: 1rem;
+		font-size: 1.5rem;
+		line-height: 1.28;
+	}
+
+	.emergence-about__body {
+		grid-column: 3 / -1;
+		padding-left: 1rem;
+		border-left: 3px solid var(--about-title);
+		font-size: 1.0625rem;
+		line-height: 1.65;
+	}
+
+	.emergence-about > .emergence-about__art {
+		left: -30%;
+		right: auto;
+		top: auto;
+		bottom: -26cqw;
+		width: 105cqw;
+		--art-o: 0.6;
+		opacity: var(--art-o);
+	}
+}
+
+/* Contour continuity: the About artwork drifts a few pixels while it passes (CSS view timeline, transform only).
+ * Browsers without view timelines simply show the static layout. Text reveals use the shared system at the end of this file. */
+@media (prefers-reduced-motion: no-preference) {
+	@supports (animation-timeline: view()) {
+		.wp-site-blocks .emergence-about__art {
+			animation: em-drift linear both;
+			animation-timeline: view();
+			animation-range: entry 0% exit 100%;
+		}
+	}
+}
+
+@keyframes em-drift {
+	from { transform: translateY(3%); }
+	to { transform: translateY(-3%); }
+}
+
+/* ---------- Themes: editorial tile composition ----------
+ * Structure (native blocks): .emergence-themes Group > h2 title, .emergence-tiles Group > .emergence-tile Groups
+ * (each tile: .emergence-tile__num eyebrow, h3 .emergence-tile__title, .emergence-tile__text).
+ * Tile system is reusable: any Group with class "emergence-tile" inside an ".emergence-tiles" Group.
+ * Colour = Group block style (Tile: Outline / Purple / Primary green / Secondary green / Red accent).
+ * Placement follows child order (a 5-step rhythm), so tiles can be reordered, duplicated, added or removed.
+ * Colour: the native Background colour control (palette only). No background = outline tile. Text colour is set automatically per background.
+ * Size: Group Styles panel, "Tile: Standard / Wide / Tall / Feature". No style ("Default") = automatic size by position (the 5-step rhythm).
+ * Legacy classes (is-style-emergence-tile-purple etc., em-tile-wide etc.) still render but are no longer offered in the editor. */
+
+.emergence-themes {
+	position: relative;
+	isolation: isolate;
+	overflow-x: clip;
+	container-type: inline-size;
+	/* v0.15.5: bottom trimmed on its own (top keeps the full rhythm under the Hero) — Themes and
+	 * Partners share the same white field with no rule between them, so their combined padding was
+	 * reading as one oversized, unintentional gap rather than a deliberate transition. */
+	padding-block: clamp(3.5rem, 9vw, 9rem) clamp(2rem, 4vw, 3.5rem);
+	background-color: var(--wp--preset--color--white);
+	color: var(--wp--preset--color--black);
+}
+
+.emergence-themes > * {
+	margin: 0;
+}
+
+.emergence-themes .emergence-themes__title {
+	max-width: 12em;
+	margin-bottom: clamp(2.5rem, 6vw, 6rem);
+	font-size: clamp(2.75rem, 8.4cqw, 8.5rem);
+	line-height: 0.95;
+	letter-spacing: -0.04em;
+	text-wrap: balance;
+	color: var(--wp--preset--color--purple);
+}
+
+/* Tile grid: 12 columns, a soft row unit, tight gaps so the tiles read as one composition */
+.emergence-tiles,
+.emergence-tiles > .block-editor-inner-blocks > .block-editor-block-list__layout {
+	--tile-gap: clamp(0.75rem, 1.6vw, 1.5rem);
+
+	display: grid;
+	grid-template-columns: repeat(12, minmax(0, 1fr));
+	grid-auto-rows: minmax(8rem, auto);
+	gap: var(--tile-gap);
+	margin: 0;
+}
+
+.emergence-tile {
+	--tile-bg: var(--wp--preset--color--white);
+	--tile-ink: var(--wp--preset--color--black);
+	--tile-line: var(--wp--preset--color--black);
+	--tile-num: var(--wp--preset--color--red);
+	--tile-shadow: var(--wp--preset--color--primary-green);
+
+	container: tile / inline-size;
+	position: relative;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+	margin: 0;
+	padding: clamp(1.25rem, 5cqw, 2rem);
+	min-width: 0;
+	border: 2px solid var(--tile-line);
+	background-color: var(--tile-bg);
+	color: var(--tile-ink);
+	transition: translate 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Native background colour (has-*-background-color). No background selected = outline tile (defaults above).
+ * Ink, number colour and hover shadow are chosen per approved background so contrast is always sufficient. */
+.emergence-tile.has-background {
+	border-color: transparent;
+}
+
+.emergence-tile.has-purple-background-color,
+.emergence-tile.has-black-background-color {
+	--tile-ink: var(--wp--preset--color--white);
+	--tile-num: var(--wp--preset--color--secondary-green);
+	--tile-shadow: var(--wp--preset--color--secondary-green);
+}
+
+.emergence-tile.has-black-background-color {
+	--tile-shadow: var(--wp--preset--color--primary-green);
+}
+
+.emergence-tile.has-primary-green-background-color,
+.emergence-tile.has-secondary-green-background-color {
+	--tile-ink: var(--wp--preset--color--black);
+	--tile-num: var(--wp--preset--color--black);
+	--tile-shadow: var(--wp--preset--color--purple);
+}
+
+.emergence-tile.has-red-background-color {
+	--tile-ink: var(--wp--preset--color--black);
+	--tile-num: var(--wp--preset--color--black);
+	--tile-shadow: var(--wp--preset--color--black);
+}
+
+/* Stream colour (Batch 08F.1): City Governance and Leadership's tile background. Same treatment
+ * as the other dark/saturated tile (purple): white ink, mint number + hover shadow. */
+.emergence-tile.has-blue-background-color {
+	--tile-ink: var(--wp--preset--color--white);
+	--tile-num: var(--wp--preset--color--secondary-green);
+	--tile-shadow: var(--wp--preset--color--secondary-green);
+}
+
+/* White background = the outline treatment */
+.emergence-tile.has-white-background-color {
+	border-color: var(--tile-line);
+}
+
+/* Keep tile padding when WordPress adds its own padding to Groups that have a background */
+.wp-block-group.emergence-tile.emergence-tile {
+	padding: clamp(1.25rem, 5cqw, 2rem);
+}
+
+/* Legacy colour classes (v0.5.0/0.5.1 content); not offered in the editor any more */
+.emergence-tile[class*="is-style-emergence-tile-purple"] {
+	--tile-bg: var(--wp--preset--color--purple);
+	--tile-ink: var(--wp--preset--color--white);
+	--tile-line: var(--wp--preset--color--purple);
+	--tile-num: var(--wp--preset--color--secondary-green);
+	--tile-shadow: var(--wp--preset--color--secondary-green);
+}
+
+.emergence-tile[class*="is-style-emergence-tile-green"] {
+	--tile-bg: var(--wp--preset--color--primary-green);
+	--tile-ink: var(--wp--preset--color--black);
+	--tile-line: var(--wp--preset--color--primary-green);
+	--tile-num: var(--wp--preset--color--black);
+	--tile-shadow: var(--wp--preset--color--purple);
+}
+
+.emergence-tile[class*="is-style-emergence-tile-mint"] {
+	--tile-bg: var(--wp--preset--color--secondary-green);
+	--tile-ink: var(--wp--preset--color--black);
+	--tile-line: var(--wp--preset--color--secondary-green);
+	--tile-num: var(--wp--preset--color--black);
+	--tile-shadow: var(--wp--preset--color--purple);
+}
+
+.emergence-tile[class*="is-style-emergence-tile-red"] {
+	--tile-bg: var(--wp--preset--color--red);
+	--tile-ink: var(--wp--preset--color--black);
+	--tile-line: var(--wp--preset--color--red);
+	--tile-num: var(--wp--preset--color--black);
+	--tile-shadow: var(--wp--preset--color--black);
+}
+
+.emergence-tile > * {
+	margin: 0;
+	color: inherit;
+}
+
+/* Eyebrow number: small Poppins, hairline rule that grows on hover/focus */
+.emergence-tile .emergence-tile__num {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	font-family: var(--wp--preset--font-family--poppins, "Poppins", sans-serif);
+	font-size: 0.875rem;
+	font-weight: 500;
+	letter-spacing: 0.08em;
+	line-height: 1;
+	color: var(--tile-num);
+}
+
+.emergence-tile .emergence-tile__num::after {
+	content: "";
+	width: 3rem;
+	height: 2px;
+	background-color: currentColor;
+	transform: scaleX(0.5);
+	transform-origin: left center;
+	transition: transform 0.22s ease;
+}
+
+.emergence-tile .emergence-tile__title {
+	margin-top: auto;
+	font-size: clamp(1.5rem, 8.5cqw, 2.75rem);
+	line-height: 1.02;
+	letter-spacing: -0.03em;
+	text-wrap: balance;
+	overflow-wrap: break-word;
+}
+
+.emergence-tile .emergence-tile__text {
+	max-width: 30em;
+	font-size: 1rem;
+	line-height: 1.55;
+	text-wrap: pretty;
+}
+
+/* Optional link inside a tile: the whole tile becomes the target, focus shows on the tile */
+.emergence-tile a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.emergence-tile a::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+}
+
+.emergence-tile:has(a)::after {
+	content: "\2192" / "";
+	position: absolute;
+	right: clamp(1.25rem, 5cqw, 2rem);
+	top: clamp(1.1rem, 4.6cqw, 1.9rem);
+	font-family: var(--wp--preset--font-family--poppins, "Poppins", sans-serif);
+	font-size: 1.5rem;
+	line-height: 1;
+	opacity: 0.6;
+	transition: translate 0.2s ease, opacity 0.2s ease;
+}
+
+.emergence-tile a:focus-visible {
+	outline: none;
+}
+
+/* One interaction language for tiles: on hover and keyboard focus the tile moves a few pixels, the hard offset shadow
+ * shifts, the number rule grows and the title nudges right. Linked tiles also show a small arrow. Nothing here is the only way
+ * to see information, and nothing changes layout (translate and shadow only). */
+.emergence-tile .emergence-tile__title {
+	transition: translate 0.22s ease;
+}
+
+@media (hover: hover) {
+	.emergence-tile:hover {
+		translate: -0.1875rem -0.1875rem;
+		box-shadow: 0.375rem 0.375rem 0 var(--tile-shadow);
+	}
+
+	.emergence-tile:hover .emergence-tile__num::after {
+		transform: none;
+	}
+
+	.emergence-tile:hover .emergence-tile__title {
+		translate: 0.1875rem 0;
+	}
+}
+
+.emergence-tile:has(a:focus-visible) {
+	translate: -0.1875rem -0.1875rem;
+	box-shadow: 0.375rem 0.375rem 0 var(--tile-shadow);
+	outline: 3px solid var(--tile-ink);
+	outline-offset: 4px;
+}
+
+.emergence-tile:has(a:focus-visible) .emergence-tile__num::after,
+.emergence-tile:has(a:hover) .emergence-tile__num::after {
+	transform: none;
+}
+
+.emergence-tile:has(a:focus-visible) .emergence-tile__title {
+	translate: 0.1875rem 0;
+}
+
+.emergence-tile:has(a:hover)::after,
+.emergence-tile:has(a:focus-visible)::after {
+	translate: 0.25rem -0.25rem;
+	opacity: 1;
+}
+
+/* Wide tiles: title left, copy right (applied to any tile given the "Tile: Wide" style, or the em-tile-wide legacy class) */
+@media (min-width: 1024px) {
+	.emergence-tile:is(.em-tile-wide, .is-style-emergence-tile-wide) {
+		display: grid;
+		grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+		grid-template-rows: auto 1fr;
+		column-gap: clamp(1.5rem, 5cqw, 4rem);
+	}
+
+	.emergence-tile:is(.em-tile-wide, .is-style-emergence-tile-wide) .emergence-tile__num {
+		grid-column: 1 / -1;
+	}
+
+	.emergence-tile:is(.em-tile-wide, .is-style-emergence-tile-wide) .emergence-tile__title {
+		grid-column: 1;
+		align-self: end;
+		font-size: clamp(2rem, 5.4cqw, 3.5rem);
+	}
+
+	.emergence-tile:is(.em-tile-wide, .is-style-emergence-tile-wide) .emergence-tile__text {
+		grid-column: 2;
+		align-self: end;
+	}
+}
+
+/* Desktop composition: ONE three-column grid, by child order (tiles can still be reordered, duplicated or removed).
+ *   col 1        col 2                col 3
+ *   [ 1 ]        [ 2 ]                [ 4 ]        row 1
+ *   [ 1 ]        [ 3 ]                [ 4 ]        row 2   (1 and 4 span exactly rows 1 and 2, so all outer edges align)
+ * Four tiles exactly fill this grid, so there is no trailing row and no phantom spacing beneath it.
+ * Every gutter is --tile-gap and every tile has the same 2px border box, so the geometry is derived from the grid, not tuned by eye.
+ * v0.15.7: child order was corrected (DOM now reads 01/02/03/04 for mobile/keyboard/screen-reader order) without
+ * moving any tile visually, so placement here is remapped 3<->4 to land each tile in its same desktop position. */
+@media (min-width: 1024px) {
+	.emergence-tiles,
+	.emergence-tiles > .block-editor-inner-blocks > .block-editor-block-list__layout {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-template-rows: repeat(2, minmax(13rem, auto));
+		grid-auto-rows: minmax(13rem, auto);
+	}
+
+	.emergence-tile:nth-child(1) { grid-column: 1; grid-row: 1 / span 2; }
+	.emergence-tile:nth-child(2) { grid-column: 2; grid-row: 1; }
+	.emergence-tile:nth-child(3) { grid-column: 2; grid-row: 2; }
+	.emergence-tile:nth-child(4) { grid-column: 3; grid-row: 1 / span 2; }
+
+	.emergence-tile:nth-child(1) .emergence-tile__title,
+	.emergence-tile:nth-child(4) .emergence-tile__title {
+		font-size: clamp(2.25rem, 12cqw, 4.25rem);
+	}
+
+	/* Only the four expected tiles use explicit placement; any extra tile flows underneath */
+	.emergence-tile:nth-child(n + 5) {
+		grid-column: span 1;
+		grid-row: auto;
+	}
+
+	.emergence-tile.is-style-emergence-tile-standard { grid-column: span 1; grid-row: span 1; }
+	.emergence-tile:is(.em-tile-wide, .is-style-emergence-tile-wide) { grid-column: span 2; grid-row: span 1; }
+	.emergence-tile:is(.em-tile-tall, .is-style-emergence-tile-tall) { grid-row: span 2; }
+	.emergence-tile:is(.em-tile-feature, .is-style-emergence-tile-feature) { grid-column: span 2; grid-row: span 2; }
+}
+
+/* Tablet: the same composition turned into two columns. A wide first tile, then 2 and 3 stacked beside 4
+ * (which spans both). Rows stretch, so the bottoms of 2/3 and 4 meet exactly; one gap everywhere. Four tiles
+ * fill this composition completely, so there is no trailing wide row and no phantom spacing beneath it.
+ * v0.15.7: remapped 3<->4 to match the corrected DOM order while keeping this same visual layout. Rows are
+ * now explicit line numbers rather than "auto"/"span 2": sparse grid auto-placement advances a shared
+ * cursor in DOM order, so with the spanning tile now fourth in the DOM (not third) "auto" placement
+ * pushed it one row lower than tiles 2/3 instead of aligning beside them. Explicit lines sidestep that
+ * cursor entirely and are correct regardless of DOM order. */
+@media (min-width: 640px) and (max-width: 1023px) {
+	.emergence-tiles,
+	.emergence-tiles > .block-editor-inner-blocks > .block-editor-block-list__layout {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		grid-auto-rows: auto;
+		align-items: stretch;
+	}
+
+	.emergence-tile { min-height: 12rem; }
+
+	.emergence-tile:nth-child(1) { grid-column: 1 / -1; grid-row: 1; min-height: 18rem; }
+	.emergence-tile:nth-child(2) { grid-column: 1; grid-row: 2; }
+	.emergence-tile:nth-child(3) { grid-column: 1; grid-row: 3; }
+	.emergence-tile:nth-child(4) { grid-column: 2; grid-row: 2 / span 2; }
+
+	.emergence-tile:nth-child(1) {
+		display: grid;
+		grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+		grid-template-rows: auto 1fr;
+		column-gap: 2.5rem;
+	}
+
+	.emergence-tile:nth-child(1) .emergence-tile__num { grid-column: 1 / -1; }
+
+	.emergence-tile:nth-child(1) .emergence-tile__title {
+		grid-column: 1;
+		align-self: end;
+		font-size: clamp(2.25rem, 8cqw, 4rem);
+	}
+
+	.emergence-tile:nth-child(1) .emergence-tile__text {
+		grid-column: 2;
+		align-self: end;
+	}
+
+	.emergence-tile:nth-child(4) .emergence-tile__title { font-size: clamp(2rem, 7cqw, 3rem); }
+	.emergence-tile:nth-child(n + 5) { grid-column: span 1; grid-row: auto; }
+	.emergence-tile:is(.em-tile-wide, .is-style-emergence-tile-wide),
+	.emergence-tile:is(.em-tile-feature, .is-style-emergence-tile-feature) { grid-column: 1 / -1; }
+	.emergence-tile.is-style-emergence-tile-standard { grid-column: span 1; grid-row: auto; }
+	.emergence-tile:is(.em-tile-tall, .is-style-emergence-tile-tall) { min-height: 24rem; }
+}
+
+/* Mobile: one column, but a stepped composition on ONE rule: full-width tiles alternate with tiles inset by the same 12%
+ * from the left or the right; the vertical gap is always the same; heights differ by content role. Four tiles complete
+ * the step (full, inset-start, inset-end, inset-start) with no trailing full-width tile and no phantom spacing after it. */
+@media (max-width: 639px) {
+	.emergence-tiles,
+	.emergence-tiles > .block-editor-inner-blocks > .block-editor-block-list__layout {
+		grid-template-columns: minmax(0, 1fr);
+		grid-auto-rows: auto;
+		gap: 0.75rem;
+	}
+
+	.emergence-tile { grid-column: 1; grid-row: auto; min-height: 11rem; }
+	.emergence-tile:is(.em-tile-tall, .is-style-emergence-tile-tall) { min-height: 22rem; }
+	.emergence-tile:is(.em-tile-feature, .is-style-emergence-tile-feature) { min-height: 21rem; }
+	.emergence-tile:nth-child(1) { min-height: 21rem; }
+	.emergence-tile:nth-child(2) { margin-inline-start: 12%; }
+	.emergence-tile:nth-child(3) { margin-inline-end: 12%; min-height: 15rem; }
+	.emergence-tile:nth-child(4) { margin-inline-start: 12%; }
+
+	.emergence-tile .emergence-tile__title {
+		font-size: clamp(1.75rem, 9cqw, 2.5rem);
+	}
+
+	.emergence-tile:nth-child(1) .emergence-tile__title {
+		font-size: clamp(2.5rem, 13.5cqw, 3.5rem);
+	}
+}
+
+/* ---------- Partners: quiet editorial logo field ----------
+ * Structure (native blocks): .emergence-partners Group > h2 title, .emergence-partners__logos Group > .emergence-partner Groups.
+ * First cell = the Emergence Site Logo (leads from the left, brand rule). Second cell = lead partner (larger). Others follow.
+ * Placeholder = a paragraph ".emergence-partner__ph" (auto-hidden as soon as an Image block is added to the cell).
+ * Real logos are never recoloured. Background: native Background colour (palette) or Tone styles. Logos Group style "Logos: Even grid". */
+
+.emergence-partners {
+	--p-ink: var(--wp--preset--color--black);
+	--p-line: var(--wp--preset--color--black);
+	--p-title: var(--wp--preset--color--purple);
+	--p-accent: var(--wp--preset--color--purple);
+
+	position: relative;
+	overflow-x: clip;
+	container-type: inline-size;
+	/* v0.15.5: top trimmed to close the gap with Themes above (bottom keeps its full rhythm before Schedule) */
+	padding-block: clamp(1.75rem, 4vw, 3.25rem) clamp(4rem, 9vw, 9rem);
+	background-color: var(--wp--preset--color--white);
+	color: var(--p-ink);
+}
+
+.emergence-partners.has-purple-background-color,
+.emergence-partners.is-style-emergence-tone-purple {
+	--p-ink: var(--wp--preset--color--white);
+	--p-line: var(--wp--preset--color--white);
+	--p-title: var(--wp--preset--color--secondary-green);
+	--p-accent: var(--wp--preset--color--secondary-green);
+}
+
+.emergence-partners.is-style-emergence-tone-purple {
+	background-color: var(--wp--preset--color--purple);
+}
+
+.emergence-partners.has-primary-green-background-color,
+.emergence-partners.has-secondary-green-background-color,
+.emergence-partners.has-red-background-color,
+.emergence-partners.is-style-emergence-tone-green {
+	--p-title: var(--wp--preset--color--black);
+	--p-accent: var(--wp--preset--color--purple);
+}
+
+.emergence-partners.is-style-emergence-tone-green {
+	background-color: var(--wp--preset--color--primary-green);
+}
+
+.emergence-partners.has-black-background-color {
+	--p-ink: var(--wp--preset--color--white);
+	--p-line: var(--wp--preset--color--white);
+	--p-title: var(--wp--preset--color--secondary-green);
+	--p-accent: var(--wp--preset--color--secondary-green);
+}
+
+.emergence-partners > * {
+	margin: 0;
+}
+
+.emergence-partners .emergence-partners__title {
+	margin-bottom: clamp(2rem, 5vw, 5rem);
+	font-size: clamp(2.75rem, 7cqw, 6.5rem);
+	line-height: 0.95;
+	letter-spacing: -0.04em;
+	color: var(--p-title);
+}
+
+/* Two editorial bands (Knowledge & Culture, Venue) rather than one undifferentiated logo wall.
+   Each band reuses the exact same .emergence-partner cell/grid system below — only a quiet
+   eyebrow heading and a rule separate them, so adding/removing a band never needs new grid code. */
+.emergence-partners__band + .emergence-partners__band {
+	margin-top: clamp(3rem, 7vw, 6rem);
+	padding-top: clamp(2rem, 5vw, 3.5rem);
+	border-top: 1px solid color-mix(in srgb, var(--p-line) 25%, transparent);
+}
+
+.emergence-partners__band-title {
+	margin: 0 0 clamp(1.25rem, 3vw, 2rem);
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: var(--wp--preset--font-size--small, 0.9375rem);
+	font-weight: 600;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--p-accent);
+}
+
+/* Seven equal cells. Desktop: a centred flow of four per row (so 7 reads 4 + 3, the second row optically centred).
+ * Tablet and mobile switch to grids below. Any number of logos still works. */
+.emergence-partners__logos,
+.emergence-partners__logos > .block-editor-inner-blocks > .block-editor-block-list__layout {
+	/* Batch 08F.1: tightened row/column rhythm (was clamp(1.5rem,3vw,3rem) / clamp(0.75rem,2vw,2rem))
+	 * so the larger logos below read as a denser, less whitespace-heavy field. */
+	--pgap: clamp(0.625rem, 1.6vw, 1.5rem);
+
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: clamp(1rem, 2.25vw, 2rem) var(--pgap);
+	margin: 0;
+}
+
+.emergence-partner {
+	position: relative;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	flex: 0 0 calc((100% - 3 * var(--pgap, 2rem)) / 4);
+	gap: 0.5rem;
+	min-width: 0;
+	/* Batch 08F.1: shorter cell (was clamp(8rem,12cqw,10.5rem)) now that the logo itself is
+	 * allowed to grow - less reserved whitespace per cell, same four-across rhythm. */
+	min-height: clamp(6.5rem, 9.5cqw, 8.75rem);
+	margin: 0;
+	padding-block: 1.125rem 1rem;
+	border-top: 1px solid var(--p-line);
+	border-top-color: color-mix(in srgb, var(--p-line) 40%, transparent);
+	transition: border-color 0.2s ease;
+}
+
+/* The Emergence logo is not a partner. Older page content that still has that first cell simply does not show it. */
+.emergence-partner--brand {
+	display: none;
+}
+
+.emergence-partner > * {
+	margin: 0;
+}
+
+/* Logos: never stretched or recoloured, always inside a safe area */
+.emergence-partner .wp-block-image,
+.emergence-partner .wp-block-site-logo {
+	display: flex;
+	align-items: center;
+	margin: 0;
+}
+
+/* Logos sit centred in an equal cell and are limited by BOTH width and height, so wide, square and tall logos carry a similar
+ * optical weight (a wide logo is held by width, a square or tall one by height). Never stretched, never recoloured. */
+.emergence-partner .wp-block-image,
+.emergence-partner .wp-block-site-logo {
+	justify-content: center;
+}
+
+.emergence-partner .wp-block-image img,
+.emergence-partner .wp-block-site-logo img {
+	display: block;
+	width: auto;
+	/* Batch 08F.1: logos visibly larger (was min(78%,13rem) / clamp(3.25rem,5.5cqw,4.75rem)).
+	 * Still held by both width and height so wide, square and tall logos keep a similar optical
+	 * weight; never stretched, never recoloured, never cropped - aspect ratio is untouched. */
+	max-width: min(88%, 15.5rem);
+	height: auto;
+	max-height: clamp(4rem, 7.25cqw, 6rem);
+	object-fit: contain;
+	filter: none;
+	transition: translate 0.2s ease;
+}
+
+/* 0.17.24: a band holding a single logo (Waste Management) is centred on tablet and mobile too, instead of
+ * sitting in the left half of the 6-/2-column grid. No other band has exactly one logo, so nothing else moves. */
+.emergence-partners__logos > .emergence-partner:only-child {
+	grid-column: 1 / -1;
+}
+
+/* 0.17.24: opt-in modifier for a tall/portrait logo whose caption must stay legible (Ayya, 1085x1280).
+ * Same rules as every logo (never stretched or cropped, held by width AND height); only the height cap is larger. */
+.emergence-partner--portrait .wp-block-image img {
+	max-width: min(88%, 12rem);
+	max-height: clamp(9rem, 17cqw, 12.5rem);
+}
+
+/* Temporary placeholder: neutral, dashed, clearly not a logo */
+.emergence-partner .emergence-partner__ph {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	justify-content: center;
+	min-height: 4.5rem;
+	border: 1px dashed currentColor;
+	font-family: var(--wp--preset--font-family--poppins, "Poppins", sans-serif);
+	font-size: 0.8125rem;
+	font-weight: 500;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	opacity: 0.6;
+}
+
+.emergence-partner:has(img, svg, video) .emergence-partner__ph {
+	display: none;
+}
+
+/* Links on logos: the top rule thickens and the small arrow steps out; the logo lifts a couple of pixels. Focus gets the same, plus an outline. */
+.emergence-partner a {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: inherit;
+	text-decoration: none;
+}
+
+.emergence-partner:has(a)::after {
+	content: "\2197";
+	content: "\2197" / "";
+	position: absolute;
+	top: 0.9rem;
+	right: 0;
+	font-family: var(--wp--preset--font-family--poppins, "Poppins", sans-serif);
+	font-size: 1rem;
+	line-height: 1;
+	opacity: 0.5;
+	transition: translate 0.2s ease, opacity 0.2s ease;
+}
+
+.emergence-partner a:focus-visible {
+	outline: 3px solid var(--p-accent);
+	outline-offset: 6px;
+}
+
+@media (hover: hover) {
+	.emergence-partner:has(a:hover) {
+		border-top-color: var(--p-accent);
+	}
+
+	.emergence-partner a:hover img {
+		translate: 0 -0.1875rem;
+	}
+
+	.emergence-partner:has(a:hover)::after {
+		translate: 0.125rem -0.125rem;
+		opacity: 1;
+	}
+}
+
+.emergence-partner:has(a:focus-visible) {
+	border-top-color: var(--p-accent);
+}
+
+.emergence-partner:has(a:focus-visible)::after {
+	translate: 0.125rem -0.125rem;
+	opacity: 1;
+}
+
+/* Tablet: a grid of three (six half-columns) so seven logos read 3 + 2 + 2, the short rows centred */
+@media (min-width: 640px) and (max-width: 1023px) {
+	.emergence-partners__logos,
+	.emergence-partners__logos > .block-editor-inner-blocks > .block-editor-block-list__layout {
+		display: grid;
+		grid-template-columns: repeat(6, minmax(0, 1fr));
+		column-gap: var(--pgap);
+	}
+
+	.emergence-partner { flex: none; grid-column: span 2; }
+
+	.emergence-partners__logos:is(:has(> .emergence-partner:nth-child(7):last-child), :has(> .emergence-partner--brand):has(> .emergence-partner:nth-child(8):last-child)) > .emergence-partner:is(:nth-last-child(4), :nth-last-child(2)) {
+		grid-column: 2 / span 2;
+	}
+}
+
+/* Mobile: two columns; with seven logos the last one is centred on its own row, on purpose */
+@media (max-width: 639px) {
+	.emergence-partners__logos,
+	.emergence-partners__logos > .block-editor-inner-blocks > .block-editor-block-list__layout {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		column-gap: 0.75rem;
+		row-gap: 1rem;
+	}
+
+	.emergence-partner { flex: none; min-height: 6.5rem; padding-block: 1rem 0.875rem; }
+	.emergence-partner .emergence-partner__ph { min-height: 4.5rem; }
+
+	.emergence-partners__logos:is(:has(> .emergence-partner:nth-child(7):last-child), :has(> .emergence-partner--brand):has(> .emergence-partner:nth-child(8):last-child)) > .emergence-partner:last-child {
+		grid-column: 1 / -1;
+		justify-self: center;
+		width: calc(50% - 0.375rem);
+	}
+}
+
+/* ---------- Schedule (Home) ----------
+ * Section = ordinary Gutenberg Group ".emergence-schedule" > h2 title, p intro, Shortcode block [emergence_schedule].
+ * The timetable ".em-sch" is server-rendered by emergence-core from Sessions (never typed into the page).
+ * Desktop: one row per start time, one column per venue used that day. Tablet/mobile: stacked list per day.
+ * Day selector (tabs) is added by emergence-core/assets/schedule.js only when 2+ dates exist; without JS every day shows.
+ * Background: native Background colour (palette) or Tone styles, same as Partners. */
+
+.emergence-schedule {
+	--s-ink: var(--wp--preset--color--black);
+	--s-title: var(--wp--preset--color--purple);
+	--s-accent: var(--wp--preset--color--purple);
+	--s-on-accent: var(--wp--preset--color--white);
+
+	position: relative;
+	overflow-x: clip;
+	container-type: inline-size;
+	padding-block: clamp(3rem, 7vw, 7rem) clamp(4rem, 9vw, 9rem);
+	padding-inline: var(--wp--custom--gutter);
+	border-top: 1px solid color-mix(in srgb, var(--s-ink) 16%, transparent);
+	background-color: var(--wp--preset--color--white);
+	color: var(--s-ink);
+}
+
+.emergence-schedule.has-purple-background-color,
+.emergence-schedule.is-style-emergence-tone-purple,
+.emergence-schedule.has-black-background-color {
+	--s-ink: var(--wp--preset--color--white);
+	--s-title: var(--wp--preset--color--secondary-green);
+	--s-accent: var(--wp--preset--color--secondary-green);
+	--s-on-accent: var(--wp--preset--color--black);
+}
+
+.emergence-schedule.is-style-emergence-tone-purple {
+	background-color: var(--wp--preset--color--purple);
+}
+
+.emergence-schedule.has-primary-green-background-color,
+.emergence-schedule.has-secondary-green-background-color,
+.emergence-schedule.has-red-background-color,
+.emergence-schedule.is-style-emergence-tone-green {
+	--s-title: var(--wp--preset--color--black);
+}
+
+.emergence-schedule.is-style-emergence-tone-green {
+	background-color: var(--wp--preset--color--primary-green);
+}
+
+.emergence-schedule > * {
+	margin-block: 0;
+}
+
+.emergence-schedule .emergence-schedule__title {
+	margin-bottom: clamp(1rem, 2vw, 1.75rem);
+	font-size: clamp(2.75rem, 7cqw, 6.5rem);
+	line-height: 0.95;
+	letter-spacing: -0.04em;
+	color: var(--s-title);
+}
+
+.emergence-schedule .emergence-schedule__intro {
+	max-width: 36rem;
+	margin-bottom: clamp(2.5rem, 5vw, 4.5rem);
+}
+
+.em-sch {
+	--em-line: color-mix(in srgb, var(--s-ink, #060606) 28%, transparent);
+	--em-soft: color-mix(in srgb, var(--s-ink, #060606) 78%, transparent);
+	--em-time-col: 6.5rem;
+	--em-gap: clamp(1rem, 2vw, 2rem);
+}
+
+.em-sch .screen-reader-text {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+:where(.em-sch) p {
+	margin: 0;
+}
+
+/* Day selector (JS only) */
+.em-sch__tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	margin-bottom: clamp(2rem, 4vw, 3.5rem);
+}
+
+.em-sch__tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.6em;
+	/* TAB SYMMETRY FIX: was 3rem/0.5rem, taller than the Venue/Stream pills below it (2.5rem and
+	   2.75rem/0.4rem) - the three control rows read as misaligned instead of one consistent set.
+	   Unified to 2.75rem/0.4rem, matching .em-sch__filter-tab and .em-sch__filter--venue below. */
+	min-height: 2.75rem;
+	padding: 0.4rem 1.25rem;
+	border: 2px solid currentColor;
+	border-radius: 0;
+	background: transparent;
+	color: inherit;
+	font: 500 var(--wp--preset--font-size--small) / 1.2 var(--wp--preset--font-family--poppins);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	cursor: pointer;
+}
+
+.em-sch__tab[aria-selected="true"] {
+	background: var(--s-accent);
+	border-color: var(--s-accent);
+	color: var(--s-on-accent);
+}
+
+.em-sch__tab[aria-selected="true"]::before {
+	content: "";
+	width: 0.55em;
+	height: 0.55em;
+	background: currentColor;
+}
+
+/* Controls row: day tabs (JS-inserted) sit above the Venue / Stream filter groups. The two filter
+   groups may sit side by side on a wide desktop (Venue is visually primary, Stream quieter) or
+   each gets its own horizontally swipeable rail at narrower widths. Either group can be absent
+   (single venue, no mapped streams) without leaving a gap. */
+.em-sch__controls {
+	display: flex;
+	flex-direction: column;
+	gap: 0.85rem;
+	margin-bottom: clamp(2rem, 4vw, 3.5rem);
+}
+
+.em-sch__controls .em-sch__tabs {
+	margin-bottom: 0.35rem;
+}
+
+.em-sch__filter {
+	max-width: 100%;
+	min-width: 0;
+}
+
+.em-sch__filter-rail {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	max-width: 100%;
+}
+
+.em-sch__filter-tab {
+	display: inline-flex;
+	align-items: center;
+	flex: none;
+	/* TAB SYMMETRY FIX: bumped 2.5rem -> 2.75rem so Stream pills match Date and Venue exactly
+	   (see .em-sch__tab above) - all three control rows now share one consistent pill height. */
+	min-height: 2.75rem;
+	padding: 0.4rem 1rem;
+	border: 2px solid currentColor;
+	border-radius: 0;
+	background: transparent;
+	color: inherit;
+	font: 500 calc(var(--wp--preset--font-size--small) * 0.92) / 1.2 var(--wp--preset--font-family--poppins);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	cursor: pointer;
+	opacity: 0.72;
+	transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+
+/* Venue is the visually primary filter (quieter than the date tabs, but a touch more present
+   than Stream); Stream stays the quietest control in the row. */
+.em-sch__filter--venue .em-sch__filter-tab {
+	/* min-height dropped: now identical to the shared 2.75rem base above, so height differentiation
+	   is gone - the opacity bump alone still keeps Venue the visually primary filter. */
+	opacity: 0.85;
+}
+
+.em-sch__filter-tab.is-active {
+	background: var(--s-accent);
+	border-color: var(--s-accent);
+	color: var(--s-on-accent);
+	opacity: 1;
+}
+
+.em-sch__filter-tab:focus-visible {
+	outline: 3px solid var(--s-ink, #060606);
+	outline-offset: 2px;
+}
+
+@media (hover: hover) {
+	.em-sch__filter-tab:not(.is-active):hover {
+		opacity: 1;
+		border-color: var(--s-accent);
+	}
+}
+
+/* Date (row 1), Venue (row 2) and Stream (row 3) always stack in .em-sch__controls's base
+   column layout, sharing the same left edge, at every width - this previously switched to a
+   side-by-side row at >=1280px with Stream pushed to the right via margin-left:auto, which is
+   what broke the shared left edge with Venue (Batch 08F.2C). */
+
+/* Stream dot + label accent on a session card (Batch 08F.1): a restrained coloured marker plus
+   the Stream name in text - colour is never the only indicator. Neutral/unmapped sessions simply
+   have no .em-sch__stream element. */
+.em-sch__stream {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin-bottom: 0.6rem;
+	font: 500 calc(var(--wp--preset--font-size--small) * 0.92) / 1.2 var(--wp--preset--font-family--poppins);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--em-soft, currentColor);
+}
+
+.em-sch__stream-dot {
+	flex: none;
+	width: 0.6rem;
+	height: 0.6rem;
+	border-radius: 50%;
+	background: var(--em-stream-color, currentColor);
+}
+
+/* Venue filter: a session (or, if every session in it was filtered out, the whole time row) is
+   removed from layout entirely — never just visually faded — so remaining sessions reflow clean.
+   Higher specificity than the plain .em-sch__session / .em-sch__row rules below (which set their
+   own `display` at tablet/desktop widths) so this reliably wins regardless of source order. */
+.em-sch__session.is-venue-hidden,
+.em-sch__row.is-venue-hidden {
+	display: none;
+}
+
+.em-sch__day[hidden] {
+	display: none;
+}
+
+.em-sch__day + .em-sch__day {
+	margin-top: clamp(3.5rem, 8vw, 7rem);
+}
+
+.em-sch.is-enhanced .em-sch__day + .em-sch__day {
+	margin-top: 0;
+}
+
+/* Date heading */
+.em-sch__date {
+	display: flex;
+	align-items: flex-end;
+	gap: 1rem;
+	margin: 0 0 clamp(1.5rem, 3vw, 2.5rem);
+	font-weight: 500;
+	line-height: 1;
+}
+
+.em-sch__daynum {
+	font-size: clamp(4.5rem, 12cqw, 9rem);
+	letter-spacing: -0.05em;
+	line-height: 0.8;
+	color: var(--s-accent);
+}
+
+.em-sch__daytext {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	padding-bottom: 0.15rem;
+	font-size: clamp(1.125rem, 2.2cqw, 1.75rem);
+	letter-spacing: -0.01em;
+}
+
+.em-sch__daytext span + span {
+	font-size: 0.6em;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--em-soft);
+}
+
+/* Session (base = mobile) */
+.em-sch__slot {
+	display: none;
+}
+
+.em-sch__row {
+	border-top: 2px solid var(--s-ink);
+}
+
+.em-sch__session {
+	padding-block: 1.25rem 1.5rem;
+}
+
+/* Mobile: sessions in the same time row stack vertically with a hairline between them. */
+.em-sch__sessions > .em-sch__session + .em-sch__session {
+	border-top: 1px solid var(--em-line);
+}
+
+.em-sch__time {
+	margin-bottom: 0.6rem;
+	font: 500 clamp(1.5rem, 6vw, 2rem) / 1 var(--wp--preset--font-family--poppins);
+	letter-spacing: -0.03em;
+	font-variant-numeric: tabular-nums;
+}
+
+/* All-day sessions: a tracked uppercase label instead of a clock time (never an invented 00:00). */
+.em-sch__time.em-sch__time--allday {
+	margin-bottom: 0.6rem;
+	font: 500 var(--wp--preset--font-size--small) / 1.2 var(--wp--preset--font-family--poppins);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--s-accent);
+}
+
+.em-sch .em-sch__title {
+	color: inherit;
+	margin: 0 0 0.6rem;
+	font-size: clamp(1.25rem, 1.05rem + 1vw, 1.75rem);
+	line-height: 1.15;
+	letter-spacing: -0.02em;
+	text-wrap: balance;
+	overflow-wrap: break-word;
+}
+
+.em-sch__venue {
+	margin-bottom: 0.4rem;
+	font: 500 var(--wp--preset--font-size--small) / 1.3 var(--wp--preset--font-family--poppins);
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--s-accent);
+}
+
+.em-sch__speakers {
+	margin-bottom: 0.5rem;
+	font-size: var(--wp--preset--font-size--body);
+	line-height: 1.4;
+	font-style: italic;
+}
+
+.em-sch__meta {
+	margin-bottom: 0.9rem;
+	font: 400 var(--wp--preset--font-size--small) / 1.4 var(--wp--preset--font-family--poppins);
+	letter-spacing: 0.03em;
+	color: var(--em-soft);
+}
+
+.em-sch__reg {
+	margin-top: 0.9rem;
+}
+
+.em-sch__cta,
+.em-sch__state {
+	display: inline-block;
+	padding: 0.6rem 1.1rem;
+	font: 500 var(--wp--preset--font-size--small) / 1.2 var(--wp--preset--font-family--poppins);
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	text-decoration: none;
+}
+
+.em-sch__cta {
+	background: var(--s-accent);
+	color: var(--s-on-accent);
+}
+
+.em-sch__cta.is-inert {
+	cursor: default;
+}
+
+a.em-sch__cta:hover {
+	text-decoration: underline;
+}
+
+/* Focus ring uses the section text colour (the fills are light on a light page, so currentColor would vanish). */
+.em-sch__tab:focus-visible,
+.em-sch__cta:focus-visible {
+	outline-color: var(--s-ink, #060606);
+}
+
+.em-sch__reg--full .em-sch__state {
+	border: 2px solid currentColor;
+}
+
+.em-sch__reg--closed .em-sch__state {
+	border: 2px dashed currentColor;
+	color: var(--em-soft);
+}
+
+/* Empty state: same editorial grid as the sections around it. Title left, note offset to the right on desktop. */
+.em-sch--empty {
+	padding-block: clamp(2.5rem, 6vw, 5rem);
+	border-block: 2px solid var(--s-ink, #060606);
+}
+
+.em-sch__empty-title {
+	margin-bottom: 1rem;
+	font: 500 clamp(2rem, 5cqw, 4rem) / 1 var(--wp--preset--font-family--poppins);
+	letter-spacing: -0.035em;
+	color: var(--s-accent, var(--wp--preset--color--purple));
+}
+
+.em-sch__empty-text {
+	max-width: 30rem;
+	font-size: var(--wp--preset--font-size--body);
+}
+
+/* Per-day venue-filter empty state: only ever shown (by schedule.js) when a genuine day + venue
+   combination has zero sessions — never a static placeholder. */
+.em-sch__day-empty {
+	margin-top: 1.5rem;
+	padding: 1.25rem 1.5rem;
+	border: 1px dashed var(--em-line, currentColor);
+	font: 500 var(--wp--preset--font-size--small) / 1.4 var(--wp--preset--font-family--poppins);
+	color: var(--em-soft, currentColor);
+}
+
+@media (min-width: 1024px) {
+	.em-sch--empty {
+		display: grid;
+		grid-template-columns: repeat(12, minmax(0, 1fr));
+		column-gap: clamp(0.75rem, 2vw, 2rem);
+		align-items: baseline;
+	}
+
+	.em-sch--empty .em-sch__empty-title { grid-column: 1 / span 6; margin: 0; }
+	.em-sch--empty .em-sch__empty-text { grid-column: 7 / -1; margin: 0; }
+}
+
+/* Populated schedule: restrained motion. The row rule extends, the title nudges, the day marker pops in. */
+.em-sch__tab {
+	transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.em-sch__tab[aria-selected="true"]::before {
+	animation: em-mark 0.25s ease-out both;
+}
+
+@keyframes em-mark {
+	from { transform: scale(0); }
+	to { transform: none; }
+}
+
+.em-sch__row {
+	position: relative;
+}
+
+.em-sch__row::before {
+	content: "";
+	position: absolute;
+	top: -2px;
+	left: 0;
+	width: 100%;
+	height: 2px;
+	background: var(--s-accent);
+	transform: scaleX(0);
+	transform-origin: left center;
+	transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.1, 1);
+}
+
+.em-sch__row:hover::before,
+.em-sch__row:focus-within::before {
+	transform: none;
+}
+
+.em-sch .em-sch__title {
+	transition: translate 0.22s ease;
+}
+
+.em-sch__row:hover .em-sch__title,
+.em-sch__row:focus-within .em-sch__title {
+	translate: 0.25rem 0;
+}
+
+a.em-sch__cta:not(.is-inert)::after {
+	content: "\2192";
+	content: "\2192" / "";
+	display: inline-block;
+	margin-left: 0.6em;
+	transition: translate 0.2s ease;
+}
+
+a.em-sch__cta:not(.is-inert):hover::after,
+a.em-sch__cta:not(.is-inert):focus-visible::after {
+	translate: 0.25em 0;
+}
+
+/* Schedule title links (v0.16.1): the browser's persistent underline read as clutter once titles
+ * became links, so it is off by default and only returns on hover/focus - confined to the text
+ * itself since text-decoration never extends past the inline box. A small arrow replaces it as
+ * the resting affordance; being inline content it wraps to the last line of a multiline title
+ * instead of needing separate position tracking. Scoped to .em-sch__title a only. */
+.em-sch__title a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.em-sch__title a::after {
+	content: "\2197";
+	content: "\2197" / "";
+	display: inline-block;
+	margin-left: 0.3em;
+	font-size: 0.7em;
+	vertical-align: 0.1em;
+	opacity: 0.55;
+	transition: translate 0.2s ease, opacity 0.2s ease;
+}
+
+.em-sch__title a:hover,
+.em-sch__title a:focus-visible {
+	text-decoration: underline;
+	text-underline-offset: 0.2em;
+}
+
+.em-sch__title a:hover::after,
+.em-sch__title a:focus-visible::after {
+	translate: 0.15em -0.15em;
+	opacity: 1;
+}
+
+@media (max-width: 639px) {
+	.em-sch__tabs {
+		gap: 0.5rem;
+	}
+
+	.em-sch__tab {
+		gap: 0.4em;
+		padding-inline: 0.6rem;
+		letter-spacing: 0.02em;
+	}
+
+	.em-sch__controls {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	/* Each filter group becomes its own horizontally swipeable rail: one line, no wrapping pile,
+	   and the scrolling is contained to the rail itself so the page never gains horizontal
+	   overflow. URGENT MOBILE RESPONSIVENESS PATCH, Fix 2: the edge-fade mask-image this comment
+	   used to describe faded the pills themselves out towards transparent at both ends, reading
+	   as an unwanted purple/white gradient on the selected pill and a washed-out edge on inactive
+	   ones. Removed outright - pills now stay fully solid/opaque to both rail edges; the rail
+	   itself still scrolls cleanly, contained, with no page-level horizontal overflow.
+	   TAB ALIGNMENT FIX v0.17.13: that same padding-inline/margin-inline net-zero pair, combined
+	   with scroll-snap-type below, made Chromium/WebKit rest this rail's initial scroll position
+	   PAST the leading 0.25rem padding (measured scrollLeft:4px on load, with zero user scroll) -
+	   consuming the padding instead of leaving it as a flush, scrolled-to-start inset. The Venue
+	   and Stream rails' first pill rendered 4px left of .em-sch__tabs' first pill as a result (the
+	   date row has no such pair, so it never had anything to scroll past). Dropped the pair
+	   outright, same reasoning as the mask-image above: it served no visible purpose once the fade
+	   was removed, and without it the rail's own edge is the pills' resting position - identical to
+	   .em-sch__tabs, confirmed by matching rendered left-edge px at every tested width. */
+	.em-sch__filter-rail {
+		flex-wrap: nowrap;
+		overflow-x: auto;
+		overflow-y: hidden;
+		scrollbar-width: none;
+		scroll-snap-type: x proximity;
+	}
+
+	.em-sch__filter-rail::-webkit-scrollbar {
+		display: none;
+	}
+
+	.em-sch__filter-tab {
+		flex: none;
+		scroll-snap-align: start;
+		padding-inline: 0.75rem;
+		letter-spacing: 0.02em;
+	}
+}
+
+/* Tablet: list with the time in its own column */
+@media (min-width: 640px) {
+	/* Time-beside-body only when a session has the row to itself: once it shares the row with
+	   another active session (see .em-sch__sessions below), that column is already narrow, so
+	   the session instead stacks time above body, same as mobile. */
+	.em-sch__sessions:has(> .em-sch__session:only-child) > .em-sch__session {
+		display: grid;
+		grid-template-columns: 12rem minmax(0, 1fr);
+		column-gap: var(--em-gap);
+	}
+
+	.em-sch__time {
+		margin: 0.2rem 0 0;
+		font-size: 1.5rem;
+	}
+
+	.em-sch__body {
+		max-width: 40rem;
+	}
+
+	/* Only the sessions actually on at this time get a column; none is reserved for a venue
+	   with nothing on then. auto-fit gives one session the full row, two an even split, three
+	   a balanced three-up, and wraps further sessions to another row instead of shrinking. */
+	.em-sch__sessions {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
+		column-gap: var(--em-gap);
+		row-gap: var(--em-gap);
+	}
+
+	/* Same grid min-width:auto guard as elsewhere: lets a long word wrap inside its column
+	   instead of overflowing it. */
+	.em-sch__sessions > .em-sch__session {
+		min-width: 0;
+	}
+
+	.em-sch__sessions > .em-sch__session + .em-sch__session {
+		border-top: 0;
+		border-left: 1px solid var(--em-line);
+		padding-left: var(--em-gap);
+	}
+}
+
+/* Desktop timetable: a fixed time rail on the left, and — on the right — only the sessions
+ * actually on at that time, sharing the row's full width evenly (see .em-sch__sessions above).
+ * There is no shared venue-header row any more: each session names its own venue. */
+@media (min-width: 1024px) {
+	.em-sch__row {
+		display: grid;
+		grid-template-columns: var(--em-time-col) minmax(0, 1fr);
+		column-gap: var(--em-gap);
+		border-top: 1px solid var(--em-line);
+	}
+
+	/* All-day sits in its own row before clock-time rows; a heavier rule closes that group off. */
+	.em-sch__row--allday + .em-sch__row {
+		border-top-width: 2px;
+		border-top-color: var(--s-ink);
+	}
+
+	.em-sch__slot {
+		display: block;
+		padding-top: 1.35rem;
+		font: 500 1.5rem / 1 var(--wp--preset--font-family--poppins);
+		letter-spacing: -0.03em;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.em-sch__slot.em-sch__slot--allday {
+		font: 500 var(--wp--preset--font-size--small) / 1.3 var(--wp--preset--font-family--poppins);
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		font-variant-numeric: normal;
+	}
+
+	.em-sch__session {
+		display: block;
+	}
+
+	.em-sch__time {
+		margin-bottom: 0.5rem;
+		font: 400 var(--wp--preset--font-size--small) / 1.2 var(--wp--preset--font-family--poppins);
+		letter-spacing: 0.03em;
+		color: var(--em-soft);
+	}
+
+	/* A single session gets the full row's width; capped so its title still reads as a
+	   comfortable editorial line rather than stretching edge to edge. */
+	.em-sch__body {
+		max-width: 34rem;
+	}
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.em-sch__tab {
+		transition: background-color 0.15s ease, color 0.15s ease;
+	}
+}
+
+/* ---------- Venue index (inside Schedule, after the programme) ----------
+ * Shortcode [emergence_venue_index], server-rendered by emergence-core from published Sessions
+ * (never a manual list): one group per festival day, listing only the venues actually used that
+ * day, in Venue display order. "Venues" itself is an ordinary editable Heading block placed next
+ * to the shortcode in the page content (see .emergence-venues__title below) — never hardcoded.
+ * Editorial index: oversized day numerals, a fine rule, then venue names. No cards, icon boxes,
+ * map pins or accordions. Inherits --s-ink / --s-title / --s-accent from the Schedule section. */
+
+.emergence-venues__title {
+	margin: clamp(4.5rem, 9vw, 7rem) 0 0;
+	padding-top: clamp(2rem, 4vw, 3rem);
+	border-top: 2px solid var(--s-ink, var(--wp--preset--color--black));
+	font-size: clamp(2.75rem, 7cqw, 6.5rem);
+	line-height: 0.95;
+	font-weight: 500;
+	letter-spacing: -0.04em;
+	color: var(--s-title, var(--wp--preset--color--purple));
+}
+
+.em-vidx {
+	--vi-line: color-mix(in srgb, var(--s-ink, #060606) 24%, transparent);
+	--vi-soft: color-mix(in srgb, var(--s-ink, #060606) 78%, transparent);
+
+	display: flex;
+	flex-direction: column;
+	gap: clamp(2.5rem, 6vw, 3.5rem);
+	margin-top: clamp(2rem, 4vw, 3rem);
+}
+
+.em-vidx__date {
+	display: flex;
+	align-items: baseline;
+	gap: 0.6rem;
+	margin: 0 0 1rem;
+	font-weight: 500;
+	line-height: 1;
+}
+
+.em-vidx__daynum {
+	font-family: var(--wp--preset--font-family--poppins);
+	font-size: clamp(3rem, 9cqw, 5.5rem);
+	letter-spacing: -0.04em;
+	color: var(--s-accent, var(--wp--preset--color--purple));
+}
+
+.em-vidx__month {
+	font: 500 var(--wp--preset--font-size--small) / 1.2 var(--wp--preset--font-family--poppins);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--vi-soft);
+}
+
+.em-vidx__rule {
+	border-top: 1px solid var(--vi-line);
+	margin-bottom: 1.25rem;
+}
+
+.em-vidx__venues {
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+}
+
+.em-vidx__venue {
+	margin: 0;
+	font-size: clamp(1.05rem, 1.6cqw, 1.25rem);
+	line-height: 1.35;
+	letter-spacing: -0.01em;
+}
+
+@media (min-width: 900px) {
+	.em-vidx {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		column-gap: clamp(2rem, 4vw, 3.5rem);
+		row-gap: 0;
+	}
+
+	.em-vidx__daynum {
+		font-size: clamp(4rem, 6.5cqw, 6.5rem);
+	}
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.em-vidx__rule.em-rl {
+		--rl-c: var(--vi-line);
+	}
+}
+
+/* ---------- Tentative notice (editorial, editable Paragraph block) ----------
+ * Apply the "emergence-tentative-note" class to an ordinary Gutenberg Paragraph block from the
+ * editor's Advanced panel. The copy itself stays regular editable page content — never hardcoded
+ * here. A small quiet marker and rule, not a warning box or coloured alert. */
+
+.emergence-tentative-note {
+	position: relative;
+	max-width: 34rem;
+	margin-block: 1.5rem;
+	padding-left: 1.15em;
+	font-family: var(--wp--preset--font-family--poppins);
+	font-size: var(--wp--preset--font-size--small);
+	line-height: 1.5;
+	letter-spacing: 0.02em;
+	color: color-mix(in srgb, currentColor 68%, transparent);
+}
+
+.emergence-tentative-note::before {
+	content: "";
+	position: absolute;
+	top: 0.6em;
+	left: 0;
+	width: 0.6em;
+	height: 1px;
+	background: currentColor;
+}
+
+/* ---------- Map (Home) ----------
+ * Structure (native blocks): section Group .emergence-map > Group .emergence-map__field > Group .emergence-map__art (artwork slot) + Group .emergence-map__copy (eyebrow, note, h2 title).
+ * Artwork slot: empty until the client adds an Image block into .emergence-map__art. The CSS placeholder (grid, contours, label) is drawn on the slot and disappears automatically once an image is present.
+ * The placeholder is abstract and NOT a map of Panjim. Default field = Purple; native Background colour (palette) restyles ink and lines. */
+
+/* Batch 08F.4: the field's default flipped from a coloured "poster" (purple bg, white ink,
+   oversized overlaid title) to a seamless white/off-white editorial panel built around the
+   client's own artwork, which has a white background. Border-top matches the same quiet
+   divider Schedule uses, so Schedule -> Map still reads as an intentional section change even
+   though both are now light. The has-X-background-color overrides below are unchanged and still
+   apply correctly if an editor ever explicitly picks one of those colours for this block. */
+.emergence-map {
+	--m-ink: var(--wp--preset--color--black);
+	--m-line: var(--wp--preset--color--purple);
+	--m-title: var(--wp--preset--color--purple);
+	--m-accent: var(--wp--preset--color--purple);
+
+	position: relative;
+	padding: 0;
+	background-color: var(--wp--preset--color--white);
+	border-top: 1px solid color-mix(in srgb, var(--m-ink) 16%, transparent);
+	color: var(--m-ink);
+}
+
+.emergence-map.has-primary-green-background-color,
+.emergence-map.has-secondary-green-background-color,
+.emergence-map.has-red-background-color,
+.emergence-map.has-white-background-color {
+	--m-ink: var(--wp--preset--color--black);
+	--m-line: var(--wp--preset--color--black);
+	--m-title: var(--wp--preset--color--purple);
+	--m-accent: var(--wp--preset--color--purple);
+}
+
+.emergence-map.has-black-background-color {
+	--m-ink: var(--wp--preset--color--white);
+}
+
+.emergence-map > * {
+	margin: 0;
+}
+
+.emergence-map__field {
+	position: relative;
+	overflow: hidden;
+	container-type: inline-size;
+	min-height: clamp(36rem, 92svh, 58rem);
+	display: flex;
+	flex-direction: column;
+}
+
+/* Artwork slot fills the field edge to edge */
+.emergence-map__art {
+	position: absolute;
+	inset: 0;
+	margin: 0;
+}
+
+.emergence-map__art img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.emergence-map__art .wp-block-image {
+	position: absolute;
+	inset: 0;
+	margin: 0;
+}
+
+/* Placeholder: survey grid + cropped contours (decorative pseudo-elements, not announced) */
+.emergence-map__art::before,
+.emergence-map__art::after {
+	content: "";
+	position: absolute;
+	pointer-events: none;
+}
+
+.emergence-map__art::before {
+	inset: 0;
+	background-image:
+		linear-gradient(to right, var(--m-line) 1px, transparent 1px),
+		linear-gradient(to bottom, var(--m-line) 1px, transparent 1px);
+	background-size: clamp(4rem, 8cqw, 8rem) clamp(4rem, 8cqw, 8rem);
+	background-position: -1px -1px;
+	opacity: 0.22;
+	-webkit-mask: linear-gradient(100deg, transparent 5%, #000 55%);
+	mask: linear-gradient(100deg, transparent 5%, #000 55%);
+}
+
+.emergence-map__art::after {
+	right: -12%;
+	top: -18%;
+	width: 88%;
+	aspect-ratio: 1;
+	background-color: var(--m-line);
+	opacity: 0.55;
+	transform: rotate(90deg) scale(1.15);
+	-webkit-mask: url("../images/hero-contours-placeholder.svg") center / contain no-repeat;
+	mask: url("../images/hero-contours-placeholder.svg") center / contain no-repeat;
+}
+
+.emergence-map__art:has(.wp-block-image)::before,
+.emergence-map__art:has(.wp-block-image)::after,
+.emergence-map__art:has(.wp-block-image) .emergence-map__ph {
+	display: none;
+}
+
+.emergence-map__ph {
+	z-index: 1;
+	position: absolute;
+	right: max(var(--wp--custom--gutter), calc((100% - 84rem) / 2));
+	top: 45%;
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	margin: 0;
+	padding: 0.5rem 0.9rem;
+	border: 1px solid var(--m-ink);
+	background: var(--wp--preset--color--purple);
+	font: 500 var(--wp--preset--font-size--small) / 1.2 var(--wp--preset--font-family--poppins);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--m-ink);
+}
+
+.emergence-map.has-primary-green-background-color .emergence-map__ph,
+.emergence-map.has-secondary-green-background-color .emergence-map__ph,
+.emergence-map.has-red-background-color .emergence-map__ph,
+.emergence-map.has-white-background-color .emergence-map__ph {
+	background: var(--wp--preset--color--white);
+}
+
+.emergence-map__ph::before {
+	content: "";
+	flex: none;
+	width: 0.55rem;
+	height: 0.55rem;
+	border-radius: 50%;
+	background: var(--wp--preset--color--red);
+}
+
+/* Batch 08F.4: the overlaid "Panjim" title and "Festival map" eyebrow were built for the
+ * abstract-placeholder poster treatment (oversized title cropped at the field's bottom edge).
+ * Now that the client's own artwork is the visual centrepiece, both are retired non-destructively
+ * (hidden, not deleted - the blocks stay in the editor, fully reversible).
+ * Batch 08F.4A: the remaining helper caption ("Panjim, Goa - six festival venues...") is retired
+ * the same way, with no replacement copy - the whole .emergence-map__copy wrapper (eyebrow, note
+ * and title together, plus its own padding and the note's divider line) is hidden, so the map
+ * section ends cleanly right after the artwork/venue list, no leftover blank strip. */
+.emergence-map__eyebrow,
+.emergence-map .emergence-map__title,
+.emergence-map__copy {
+	display: none;
+}
+
+.emergence-map__note {
+	margin: 0;
+	max-width: 34rem;
+	padding-top: 0.75rem;
+	border-top: 1px solid var(--m-line);
+	font: 500 var(--wp--preset--font-size--small) / 1.4 var(--wp--preset--font-family--poppins);
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--m-accent);
+}
+
+@media (max-width: 781px) {
+	.emergence-map__field {
+		min-height: clamp(34rem, 88svh, 44rem);
+	}
+
+	.emergence-map__note {
+		max-width: 16rem;
+	}
+
+	.emergence-map__art::before {
+		background-size: 3.5rem 3.5rem;
+	}
+
+	.emergence-map__art::after {
+		right: -45%;
+		top: 8%;
+		width: 150%;
+	}
+
+	.emergence-map__ph {
+		top: auto;
+		bottom: 38%;
+		left: var(--wp--custom--gutter);
+		right: auto;
+	}
+}
+
+/* ---------- Map artwork + hotspots (Batch 08F.1) ----------
+ * .emergence-map__art--live replaces the empty placeholder treatment with the client's
+ * illustrated map: the decorative survey-grid/contour pseudo-elements and the "coming soon" pill
+ * are switched off, and .emergence-map__artwork is given the artwork's own intrinsic aspect ratio
+ * so it is centred and never cropped inside the full-bleed field (the same visual slot, the same
+ * "major visual moment" the empty state reserved) - which also keeps the six hotspot buttons,
+ * positioned in percentages of this same box, pinned exactly to the artwork underneath them at
+ * every width. Mobile switches to a pannable strip - see the breakpoint below. */
+.emergence-map__art--live::before,
+.emergence-map__art--live::after {
+	display: none;
+}
+
+.emergence-map__art--live .emergence-map__ph {
+	display: none;
+}
+
+.emergence-map__artwork {
+	position: absolute;
+	inset: 0;
+	margin: auto;
+	max-width: 100%;
+	max-height: 100%;
+}
+
+.emergence-map__artwork picture,
+.emergence-map__artwork img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+/* Batch 08F.4: the field is sized to the artwork's own aspect ratio instead of a tall
+ * viewport-relative min-height, so there is no letterboxing gutter beside or above/below the
+ * illustration to colour - the panel is exactly as tall as the image needs, generously wide,
+ * never stretched or cropped. Scoped to --live only (the empty-placeholder poster treatment is
+ * untouched).
+ * URGENT MOBILE RESPONSIVENESS PATCH, Fix 3: this used to be gated to tablet width and up; below
+ * 782px a separate ruleset (further down) instead fixed the artwork to a tall clamp()'d height
+ * and let it overflow sideways into an auto-scrolling strip, so only part of the illustration was
+ * ever visible on a phone without panning. Unwrapped to apply at every width - mobile now scales
+ * the whole illustration down to fit the container, exactly like tablet/desktop, with nothing
+ * cropped and no forced minimum canvas width. The six hotspots are positioned in percentages of
+ * this same box, so they stay correctly attached to the artwork at every width without any
+ * separate recalculation. */
+.emergence-map__field:has(.emergence-map__art--live) {
+	min-height: 0;
+}
+
+.emergence-map__art--live {
+	position: relative;
+	inset: auto;
+	/* v0.17.21 (Map V2): height now follows the artwork. */
+	aspect-ratio: auto;
+	width: 100%;
+}
+
+.emergence-map__art--live .emergence-map__artwork {
+	position: relative;
+	inset: auto;
+	margin: 0;
+	width: 100%;
+	/* v0.17.21 (Map V2): cropped artwork 13168x9009 (also set inline on the Page 10 markup). */
+	aspect-ratio: 13168 / 9009;
+	height: auto;
+	max-width: none;
+	max-height: none;
+}
+
+.emergence-map__hotspots {
+	position: absolute;
+	inset: 0;
+}
+
+.emergence-map__hotspot {
+	position: absolute;
+	z-index: 2;
+	display: block;
+	min-width: 2.75rem;
+	min-height: 2.75rem;
+	padding: 0;
+	border: none;
+	background: none;
+	color: var(--wp--preset--color--white);
+	cursor: pointer;
+	/* v0.17.21 (Map V2): circular 44px hit area so neighbouring pins on 320px screens never share a tap zone. */
+	border-radius: 50%;
+	translate: -50% -50%;
+	opacity: 0;
+	transform: scale(0.4);
+}
+
+/* Batch 08F.4: the artwork already prints its own six numbered markers, so the interactive
+ * layer is now a small location pin - not a second numbered dot duplicating it - anchored
+ * at the hotspot's existing coordinate. The digit stays in the markup for structure but is
+ * visually suppressed (font-size: 0); aria-hidden was already set on this span, and the button's
+ * own aria-label carries the venue name, so nothing is lost for assistive tech.
+ *
+ * FINAL MAP PIN POLISH: brand red replaces purple (var(--wp--preset--color--red), the theme.json
+ * token for #FC3103), the pin is sized down slightly (16px desktop vs the previous 18px, same
+ * ~0.889 ratio carried through the clamp's floor and cqw-rate so it keeps scaling smoothly with
+ * the artwork), and a small white centre dot (::after below) gives it the familiar Apple/Google
+ * Maps silhouette instead of a flat colour teardrop. Centering is still the tip-anchor margin (the
+ * rotated shape's rounded head sits away from its own tip, so top/left:50% alone would centre the
+ * bounding box, not the point that should land on the hotspot's coordinate): for a dynamic size S,
+ * margin-top: S * -1.2071 and margin-left: S / -2 keep the tip fixed at the anchor regardless of
+ * S. A subtle infinite pulse (em-hotspot-pulse below) is layered in as a premium click affordance;
+ * prefers-reduced-motion turns it off further down. */
+.emergence-map__hotspot-dot {
+	--em-dot-size: clamp(0.4375rem, 1.12cqw, 1.8rem); /* v0.17.21: ceiling raised so the pin keeps scaling with the full-width artwork up to 2560px */
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: var(--em-dot-size);
+	height: var(--em-dot-size);
+	margin-top: calc(var(--em-dot-size) * -1.2071);
+	margin-left: calc(var(--em-dot-size) / -2);
+	border-radius: 50% 50% 50% 0;
+	background: var(--wp--preset--color--red);
+	box-shadow: 0 0 0 1.25px color-mix(in srgb, var(--wp--preset--color--black) 60%, transparent);
+	font-size: 0;
+	transform: translate(var(--em-pin-dx, 0cqw), var(--em-pin-dy, 0cqw)) rotate(-45deg);
+	transition: transform 0.18s ease, box-shadow 0.18s ease, width 0.18s ease, height 0.18s ease;
+	animation: em-hotspot-pulse 2.6s ease-in-out infinite;
+}
+
+/* Small white centre dot, the detail that reads as "map pin" rather than "coloured teardrop".
+ * Sized as a percentage of the pin itself so it scales in lockstep at every width; centred in the
+ * pin's own box rather than hand-tuned, since it's small enough that the sharp tip corner doesn't
+ * visibly throw off its centring. */
+.emergence-map__hotspot-dot::after {
+	content: "";
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 38%;
+	height: 38%;
+	border-radius: 50%;
+	background: var(--wp--preset--color--white);
+	transform: translate(-50%, -50%);
+}
+
+/* MARKER PLACEMENT FIX: per-venue directional offsets (down / diagonal / left, different
+ * magnitudes) are retired - every pin now sits immediately to the RIGHT of its printed circle,
+ * one uniform rule for all six, which is both simpler and the actual fix for the reported bug.
+ * Root cause of "pin 2 in the river", 1 and 3 drifting: .emergence-map__field has no max-width,
+ * so on a wide/ultrawide desktop viewport the field (and therefore 1cqw) keeps growing past the
+ * ~1425px desktop width the old px-derived cqw offsets were calibrated against - a 3.51cqw offset
+ * is ~50px at 1425px field width but ~67px+ at 1920px, compounding further on wider screens, which
+ * is why the straight-down offsets drifted into unrelated artwork the further the field grew past
+ * calibration width. Fixed with clamp()'s own ceiling instead of a bare cqw value: --em-pin-dx
+ * scales with the artwork down to mobile exactly as before, but stops growing once the field
+ * passes ~1430px wide, holding a fixed ~2.1cqw-equivalent gap at every desktop width from there up
+ * however wide the monitor. dy stays 0 for every venue - a pure rightward push, so it never
+ * approaches whatever art is above or below a given circle. Keyed by the hotspot's existing
+ * data-venue-name selector group, so no markup changes.
+ * PIN ALIGNMENT FIX (post-0.6.14 copy batch): three of the six selector values below had gone
+ * stale against the Homepage's own data-venue-name attributes after the Doolally / Sunaparanta
+ * Goa Centre for the Arts / Vivanta Goa, Panaji venue-title corrections, so this rule's
+ * --em-pin-dx offset silently stopped matching those three hotspots (no CSS error - an attribute
+ * selector just no longer matched) and their pins fell back to the dx:0/dy:0 default, landing at
+ * the raw hotspot anchor instead of the calibrated offset beside the printed circle. Updated to
+ * the three venues' current data-venue-name values only; "Central Library", "IPSCDL" and "Kala
+ * Academy" were never renamed and are unchanged here. No coordinates, artwork, or marker numbers
+ * touched - this rule only ever adjusts the pin's own offset from its already-correct anchor. */
+/* v0.17.21 (Map V2): the per-venue selector group is retired; one default on the pin itself now
+ * serves every hotspot (any number of venues, any data-venue-name). */
+.emergence-map__hotspot-dot {
+	--em-pin-dx: clamp(0.5rem, 2.1cqw, 4.5rem); /* v0.17.21: ceiling raised with the artwork (no 1600px cap) so the pin stays just right of the printed circle */
+	--em-pin-dy: 0cqw;
+}
+
+.emergence-map__hotspot-label {
+	position: absolute;
+	left: 100%;
+	top: 50%;
+	z-index: 3;
+	display: flex;
+	align-items: center;
+	max-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	padding-block: 0.4rem;
+	font: 500 var(--wp--preset--font-size--small) / 1.2 var(--wp--preset--font-family--poppins);
+	letter-spacing: 0.02em;
+	background: color-mix(in srgb, var(--wp--preset--color--black) 78%, transparent);
+	opacity: 0;
+	translate: 0 -50%;
+	transition: max-width 0.22s ease, opacity 0.18s ease, padding-inline 0.22s ease;
+}
+
+/* Flip to the other side when there isn't room to the right (schedule.js measures available
+ * space against .emergence-map__field and toggles this class - fixes the Goa State Central
+ * Library card clipping near the field edge, generally, for any hotspot near either edge). */
+.emergence-map__hotspot.em-flip-left .emergence-map__hotspot-label {
+	left: auto;
+	right: 100%;
+}
+
+.emergence-map__hotspot-cta {
+	margin-left: 0.5em;
+	opacity: 0.75;
+}
+
+/* Batch FINAL: 18rem (288px) was sized for a short venue name; it clipped the CTA on the two
+ * longest labels ("Goa State Central Library", "Sunaparanta Goa Centre for the Arts" - both
+ * exceed it once the arrow + "View sessions" is appended), cut off by this rule's own
+ * overflow:hidden, independently of the left/right edge-flip below. 26rem comfortably covers the
+ * longest real label with room to spare; it only raises the CAP; min-width is still content-driven
+ * so the four shorter labels render exactly as before, pixel for pixel. */
+.emergence-map__hotspot:hover .emergence-map__hotspot-label,
+.emergence-map__hotspot:focus-visible .emergence-map__hotspot-label,
+.emergence-map__hotspot.is-active .emergence-map__hotspot-label {
+	max-width: 26rem;
+	padding-inline: 0.75rem;
+	opacity: 1;
+}
+
+.emergence-map__hotspot:hover .emergence-map__hotspot-dot,
+.emergence-map__hotspot:focus-visible .emergence-map__hotspot-dot,
+.emergence-map__hotspot.is-active .emergence-map__hotspot-dot {
+	/* Pause the infinite pulse here so its keyframe-driven box-shadow (which otherwise overrides
+	 * a static declaration regardless of specificity) can't fight this static hover/focus ring. */
+	animation: none;
+	transform: translate(var(--em-pin-dx, 0cqw), var(--em-pin-dy, 0cqw)) rotate(-45deg) scale(1.18);
+	box-shadow: 0 0 0 1.25px color-mix(in srgb, var(--wp--preset--color--black) 60%, transparent),
+		0 0 0 4px color-mix(in srgb, var(--wp--preset--color--red) 45%, transparent);
+}
+
+.emergence-map__hotspot:focus-visible {
+	outline: none;
+}
+
+/* First-viewport entrance only: a sequential halo reveal that runs once and finishes completely
+ * (nothing here pulses forever). Gated by schedule.js adding .is-revealed the first time the
+ * hotspot layer enters the viewport. */
+@media (prefers-reduced-motion: no-preference) {
+	.emergence-map__hotspots.is-revealed .emergence-map__hotspot {
+		animation: em-hotspot-in 0.5s cubic-bezier(0.2, 0.7, 0.1, 1) both;
+	}
+
+	.emergence-map__hotspots.is-revealed .emergence-map__hotspot:nth-of-type(1) { animation-delay: 0.05s; }
+	.emergence-map__hotspots.is-revealed .emergence-map__hotspot:nth-of-type(2) { animation-delay: 0.18s; }
+	.emergence-map__hotspots.is-revealed .emergence-map__hotspot:nth-of-type(3) { animation-delay: 0.31s; }
+	.emergence-map__hotspots.is-revealed .emergence-map__hotspot:nth-of-type(4) { animation-delay: 0.44s; }
+	.emergence-map__hotspots.is-revealed .emergence-map__hotspot:nth-of-type(5) { animation-delay: 0.57s; }
+	.emergence-map__hotspots.is-revealed .emergence-map__hotspot:nth-of-type(6) { animation-delay: 0.7s; }
+	.emergence-map__hotspots.is-revealed .emergence-map__hotspot:nth-of-type(7) { animation-delay: 0.83s; }
+
+	/* Chain the one-shot entrance halo straight into the infinite pulse, timed so the pulse's own
+	 * instance starts the instant the halo's 0.7s (plus its own stagger delay) finishes - no
+	 * overlap, so the two never compete for the same box-shadow at the same moment. */
+	.emergence-map__hotspots.is-revealed .emergence-map__hotspot-dot {
+		animation: em-hotspot-halo 0.7s ease-out calc(0.35s + var(--em-halo-delay, 0s)) both,
+			em-hotspot-pulse 2.6s ease-in-out calc(1.05s + var(--em-halo-delay, 0s)) infinite;
+	}
+}
+
+@keyframes em-hotspot-in {
+	from { opacity: 0; transform: scale(0.4); }
+	to { opacity: 1; transform: none; }
+}
+
+/* The pin's own thin dark outline is kept as a constant first layer throughout (Batch 08F.4),
+ * so the entrance halo - now an outer second layer - never erases it once the animation ends. */
+@keyframes em-hotspot-halo {
+	0% { box-shadow: 0 0 0 1.25px color-mix(in srgb, var(--wp--preset--color--black) 60%, transparent), 0 0 0 0 color-mix(in srgb, var(--wp--preset--color--red) 55%, transparent); }
+	70% { box-shadow: 0 0 0 1.25px color-mix(in srgb, var(--wp--preset--color--black) 60%, transparent), 0 0 0 1.1rem color-mix(in srgb, var(--wp--preset--color--red) 0%, transparent); }
+	100% { box-shadow: 0 0 0 1.25px color-mix(in srgb, var(--wp--preset--color--black) 60%, transparent), 0 0 0 0 color-mix(in srgb, var(--wp--preset--color--red) 0%, transparent); }
+}
+
+/* Subtle premium click affordance: a slow, low-amplitude, low-opacity breathing ring - distinct
+ * from the one-shot entrance halo above. Low amplitude (0.4rem max spread) and low opacity (35%
+ * max) keep it from reading as a loud animation. */
+@keyframes em-hotspot-pulse {
+	0%, 100% { box-shadow: 0 0 0 1.25px color-mix(in srgb, var(--wp--preset--color--black) 60%, transparent), 0 0 0 0 color-mix(in srgb, var(--wp--preset--color--red) 35%, transparent); }
+	50% { box-shadow: 0 0 0 1.25px color-mix(in srgb, var(--wp--preset--color--black) 60%, transparent), 0 0 0 0.4rem color-mix(in srgb, var(--wp--preset--color--red) 0%, transparent); }
+}
+
+/* No motion preference: every hotspot is simply present, fully visible, no animation at all.
+ * This also covers the pin's own infinite pulse (both the base and is-revealed instances above),
+ * per requirement 6 - reduced motion disables it entirely rather than slowing it down. */
+@media (prefers-reduced-motion: reduce) {
+	.emergence-map__hotspot {
+		opacity: 1;
+		transform: none;
+	}
+
+	.emergence-map__hotspot-dot {
+		animation: none;
+	}
+}
+
+.emergence-map__venue-list {
+	display: none;
+}
+
+@media (max-width: 781px) {
+	/* URGENT MOBILE RESPONSIVENESS PATCH, Fix 3: this block used to fix the artwork to a tall
+	 * clamp(34rem, 88svh, 44rem) height and let its width run wide off-screen as an
+	 * auto-scrolling strip, plus render a compact two-column venue-list grid (six grey numbered
+	 * pills) beneath it as the mobile substitute for the hover/focus preview card. Both are
+	 * removed outright: the artwork sizing rule just above (now unscoped from min-width: 782px)
+	 * already scales the whole illustration proportionally to fit the container at any width, so
+	 * mobile no longer needs a pannable strip or a separate pill-based way to reach each venue -
+	 * the same six hotspot buttons remain visible, tappable and fully accessible (aria-label,
+	 * keyboard focus, click -> goToScheduleForVenue()) directly on the now fully-visible map.
+	 * .emergence-map__venue-list's own base rule (display: none) is left to apply unmodified, so
+	 * nothing renders in its place - no markup or JS changes needed, since the venue list was
+	 * always a redundant duplicate of the hotspot buttons' own navigation and accessibility.
+	 * The hover/focus preview card stays off on touch widths (unchanged from before this patch);
+	 * only the forced pannable-strip sizing and the visible pill grid are removed. */
+	.emergence-map__hotspot-label {
+		display: none;
+	}
+}
+
+/* ---------- Future (Home, closing statement) ----------
+ * Structure (native blocks): section Group .emergence-future > Group .emergence-future__art (artwork slot, empty), h2 .emergence-future__title, Group .emergence-future__body (paragraphs + Buttons).
+ * Default field = Primary Green (bookends the Hero, resolves the purple Map). Contours (inverted from the Map) are CSS on the empty art slot; adding an Image inside it replaces them.
+ * Native Background colour restyles ink and title. */
+
+.emergence-future {
+	--f-ink: var(--wp--preset--color--black);
+	--f-title: var(--wp--preset--color--purple);
+	--f-line: var(--wp--preset--color--purple);
+
+	position: relative;
+	overflow: hidden;
+	container-type: inline-size;
+	padding-block: clamp(4rem, 9vw, 9rem) clamp(4rem, 8vw, 8rem);
+	padding-inline: max(var(--wp--custom--gutter), calc((100% - 84rem) / 2));
+	background-color: var(--wp--preset--color--primary-green);
+	color: var(--f-ink);
+}
+
+.emergence-future.has-purple-background-color,
+.emergence-future.has-black-background-color {
+	--f-ink: var(--wp--preset--color--white);
+	--f-title: var(--wp--preset--color--secondary-green);
+	--f-line: var(--wp--preset--color--secondary-green);
+}
+
+.emergence-future.has-white-background-color,
+.emergence-future.has-secondary-green-background-color {
+	--f-title: var(--wp--preset--color--purple);
+}
+
+.emergence-future > * {
+	position: relative;
+	z-index: 1;
+	margin: 0;
+}
+
+.emergence-future > .emergence-future__art {
+	position: absolute;
+	z-index: 0;
+	/* v0.13.0: original values (right:-16%; bottom:-46%; width:min(72cqw,62rem)) were tuned for
+	 * the low-opacity placeholder contour. With a real, opaque image the same footprint sits
+	 * directly behind the body copy and CTA. At >=1024px the body grid splits into two columns
+	 * (see .emergence-future__body below) putting paragraph two and the CTA in a right column
+	 * close to this bottom-right anchor, so this rule (effective >=1024px once the <=1023px rule
+	 * below takes over) is sized and offset to clear that right column at every width in its
+	 * range while staying a visible, intentionally cropped bottom-right anchor. */
+	right: -8%;
+	bottom: -15%;
+	width: clamp(14rem, 20vw, 22rem);
+	height: clamp(18rem, 24vw, 26rem);
+	aspect-ratio: auto;
+	margin: 0;
+	pointer-events: none;
+}
+
+/* v0.13.0: <=1023px uses a single-column body (or the 25%-indented paragraph two below 1024px),
+ * leaving much less clear width to the right of the text than the >=1024px two-column layout.
+ * One smaller, more tightly-anchored size clears paragraph two/CTA at every width from 320 to
+ * 1023 without a further breakpoint, and lines up with the >=1024px rule at the 1023/1024 edge
+ * where the layout itself changes (single- to two-column), so the size step there tracks a real
+ * layout change rather than an arbitrary jump. This rule must set its own height: the base rule
+ * above sets height as a separate clamp() (not derived from aspect-ratio), so leaving height
+ * unset here let it fall through to the desktop clamp (min 18rem) at every width down to 320px
+ * -- a container roughly twice as tall as intended, reaching up behind paragraph two. Setting
+ * height to the same clamp() as width keeps the art square and confines it to its own zone. */
+@media (max-width: 1023px) {
+	.emergence-future > .emergence-future__art {
+		right: -4%;
+		bottom: -6%;
+		width: clamp(9rem, 15vw, 13rem);
+		height: clamp(9rem, 15vw, 13rem);
+		aspect-ratio: auto;
+	}
+}
+
+.emergence-future__art::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background-color: var(--f-line);
+	opacity: 0.3;
+	-webkit-mask: url("../images/hero-contours-placeholder.svg") center / contain no-repeat;
+	mask: url("../images/hero-contours-placeholder.svg") center / contain no-repeat;
+}
+
+.emergence-future__art:has(img, svg, video)::before {
+	display: none;
+}
+
+.emergence-future__art img {
+	display: block;
+	width: 100%;
+	height: auto;
+}
+
+.emergence-future .emergence-future__title {
+	max-width: 11.5em;
+	margin-bottom: clamp(3rem, 7vw, 7rem);
+	font-size: clamp(2.75rem, 8.2cqw, 9rem);
+	line-height: 0.98;
+	letter-spacing: -0.045em;
+	text-wrap: balance;
+	color: var(--f-title);
+}
+
+.emergence-future__body {
+	display: grid;
+	grid-template-columns: repeat(12, minmax(0, 1fr));
+	column-gap: clamp(0.75rem, 2vw, 2rem);
+	row-gap: 1.5rem;
+	align-items: start;
+}
+
+.emergence-future__body > * {
+	grid-column: 1 / -1;
+	margin: 0;
+}
+
+.emergence-future__body > p {
+	max-width: 34rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--f-ink);
+	font-size: var(--wp--preset--font-size--body);
+	line-height: 1.55;
+}
+
+@media (min-width: 1024px) {
+	.emergence-future__body > p:nth-child(1) {
+		grid-column: 1 / span 5;
+	}
+
+	.emergence-future__body > p:nth-child(2) {
+		grid-column: 7 / span 5;
+		margin-top: 4rem;
+	}
+
+	.emergence-future__body > .wp-block-buttons {
+		grid-column: 7 / span 5;
+		margin-top: 0.5rem;
+	}
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+	.emergence-future__body > p:nth-child(2) {
+		margin-left: 25%;
+	}
+
+	.emergence-future__body > .wp-block-buttons {
+		margin-left: 25%;
+	}
+}
+
+@media (max-width: 639px) {
+	.emergence-future .emergence-future__title {
+		font-size: clamp(2.5rem, 12.5cqw, 4.5rem);
+		margin-bottom: 2.5rem;
+	}
+}
+
+/* ---------- Contact (Home, premium compact editorial band before the footer) ----------
+ * Structure (native blocks, unchanged): section Group .emergence-contact > h2 .emergence-contact__title (eyebrow),
+ * p .emergence-contact__email (mailto link). Full-bleed purple band: small uppercase secondary-green eyebrow,
+ * a short restrained rule, then a prominent white email. No cards, icons, gradients or animation.
+ * v0.15.6: left-aligned editorial composition (was centred) with a dramatically larger, tighter-tracked
+ * email — the one typographic move that was still missing to make this read as a closing statement
+ * rather than a standard contact widget. */
+.emergence-contact {
+	padding-block: clamp(2.5rem, 6vw, 4rem);
+	padding-inline: max(var(--wp--custom--gutter), calc((100% - 84rem) / 2));
+	background-color: var(--wp--preset--color--purple);
+	color: var(--wp--preset--color--white);
+	text-align: left;
+}
+
+.emergence-contact > * {
+	margin: 0;
+}
+
+.emergence-contact .emergence-contact__title {
+	font-family: var(--wp--preset--font-family--poppins);
+	font-size: var(--wp--preset--font-size--small);
+	font-weight: 600;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--wp--preset--color--secondary-green);
+	position: relative;
+	padding-bottom: 1.1rem;
+	margin-bottom: 1.1rem;
+}
+
+.emergence-contact .emergence-contact__title::after {
+	content: "";
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	width: 2.5rem;
+	height: 1px;
+	background-color: color-mix(in srgb, var(--wp--preset--color--white) 30%, transparent);
+}
+
+.emergence-contact__email {
+	font-family: var(--wp--preset--font-family--poppins);
+	font-size: clamp(2rem, 3.8vw, 3.75rem);
+	font-weight: 600;
+	letter-spacing: -0.03em;
+	line-height: 1.1;
+	word-break: break-word;
+}
+
+/* Mobile wrap fix (Oct 2026): force the break (if any) right after "emergence@" via the
+ * markup's single <wbr>, and keep "transitionsresearch.org" from ever breaking internally
+ * so it can never land on its own orphaned third line. */
+.emergence-contact__email-domain {
+	white-space: nowrap;
+}
+
+.emergence-contact__email a {
+	display: inline-block;
+	color: var(--wp--preset--color--white);
+	text-decoration: none;
+	border-bottom: 1px solid color-mix(in srgb, var(--wp--preset--color--white) 0%, transparent);
+	padding-bottom: 0.08em;
+	transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.emergence-contact__email a:hover,
+.emergence-contact__email a:focus-visible {
+	color: var(--wp--preset--color--secondary-green);
+	border-bottom-color: var(--wp--preset--color--secondary-green);
+}
+
+.emergence-contact__email a:focus-visible {
+	outline: 2px solid var(--wp--preset--color--secondary-green);
+	outline-offset: 0.25rem;
+	border-radius: 2px;
+}
+
+@media (max-width: 639px) {
+	.emergence-contact {
+		padding-block: clamp(2.25rem, 9vw, 3rem);
+	}
+
+	.emergence-contact__email {
+		font-size: clamp(1.625rem, 8vw, 2.125rem);
+	}
+}
+
+/* ---------- Registration (v0.10.1): Register page + Forminator skin. Theme CSS only. ---------- */
+.emergence-register {
+	padding-block: clamp(3rem, 8cqw, 7rem);
+	padding-inline: max(var(--wp--custom--gutter), calc((100% - 84rem) / 2));
+	color: var(--wp--preset--color--black);
+}
+.emergence-register {
+	max-width: none;
+}
+.emergence-register > h1 {
+	margin: 0 0 1rem;
+	color: var(--wp--preset--color--purple);
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-weight: 500;
+	font-size: clamp(3rem, 9vw, 7rem);
+	line-height: 1;
+	letter-spacing: -0.02em;
+}
+.emergence-register > p {
+	max-width: 40rem;
+	margin: 0 0 clamp(2rem, 5vw, 4rem);
+	font-family: var(--wp--preset--font-family--lora, Lora, serif);
+	font-size: 1.125rem;
+	line-height: 1.6;
+}
+
+/* Back to schedule (v0.15.0): emergence_registration_shortcode() prints the link and the new
+ * intro paragraph after the page's own static heading/paragraph; both are reordered/swapped
+ * here with CSS only, so the page content never needs editing. Reversible: delete this block
+ * and the page reverts to its plain heading + generic paragraph. */
+.emergence-register {
+	display: flex;
+	flex-direction: column;
+}
+.emergence-register > .em-reg__top-back {
+	order: -1;
+	align-self: flex-start;
+	display: inline-block;
+	width: fit-content;
+	margin: 0 0 1.5rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.8125rem;
+	font-weight: 500;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--wp--preset--color--purple);
+	text-decoration: none;
+	border-bottom: 1px solid transparent;
+}
+.emergence-register > .em-reg__top-back:hover {
+	border-bottom-color: currentColor;
+}
+/* When the shortcode's own intro paragraph is present (a valid, open session), hide the
+ * page's generic static paragraph instead of the other way round. */
+.emergence-register:has(> .em-reg__intro) > p:not(.em-reg__intro) {
+	display: none;
+}
+.em-reg {
+	display: grid;
+	gap: 2rem;
+	border-top: 2px solid var(--wp--preset--color--black);
+	padding-top: 2rem;
+}
+@media (min-width: 1024px) {
+	.em-reg:not(.em-reg--notice) {
+		grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+		gap: clamp(2rem, 5vw, 5rem);
+	}
+	.em-reg__summary {
+		align-self: start;
+		position: sticky;
+		top: 2rem;
+	}
+}
+.em-reg__eyebrow {
+	margin: 0 0 0.75rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.8125rem;
+	font-weight: 500;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--wp--preset--color--purple);
+}
+.em-reg__title {
+	margin: 0 0 1.25rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-weight: 500;
+	font-size: clamp(1.75rem, 3.4vw, 2.75rem);
+	line-height: 1.1;
+	color: var(--wp--preset--color--black);
+	overflow-wrap: break-word;
+}
+
+/* Session description preview (v0.16.1): compact, plain-text, pulled live from the Session's own
+ * content - kept visually secondary to the title/facts so it never overwhelms the form. */
+.em-reg__preview {
+	margin: 0 0 1.25rem;
+	max-width: 34rem;
+	font-family: var(--wp--preset--font-family--lora, Lora, serif);
+	font-size: 1rem;
+	line-height: 1.65;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 85%, transparent);
+}
+.em-reg__preview-link {
+	margin: 0 0 1.5rem;
+}
+.em-reg__preview-link a {
+	display: inline-block;
+	width: fit-content;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.8125rem;
+	font-weight: 500;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--wp--preset--color--purple);
+	text-decoration: none;
+	border-bottom: 1px solid transparent;
+}
+.em-reg__preview-link a:hover {
+	border-bottom-color: currentColor;
+}
+.em-reg__preview-link a::after {
+	content: "\2197";
+	content: "\2197" / "";
+	display: inline-block;
+	margin-left: 0.3em;
+	transition: translate 0.2s ease;
+}
+.em-reg__preview-link a:hover::after {
+	translate: 0.12em -0.12em;
+}
+
+.em-reg__text {
+	margin: 0 0 1.25rem;
+	font-family: var(--wp--preset--font-family--lora, Lora, serif);
+	font-size: 1.0625rem;
+	line-height: 1.6;
+	max-width: 36rem;
+}
+.em-reg__facts {
+	margin: 0;
+	display: grid;
+	gap: 0;
+}
+.em-reg__facts > div {
+	display: grid;
+	grid-template-columns: 5.5rem minmax(0, 1fr);
+	gap: 1rem;
+	padding: 0.75rem 0;
+	border-top: 1px solid color-mix(in srgb, var(--wp--preset--color--black) 28%, transparent);
+}
+.em-reg__facts dt {
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.75rem;
+	font-weight: 500;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+}
+.em-reg__facts dd {
+	margin: 0;
+	font-family: var(--wp--preset--font-family--lora, Lora, serif);
+	font-size: 1.0625rem;
+	overflow-wrap: anywhere;
+}
+.em-reg__back {
+	display: inline-block;
+	padding: 0.85rem 1.5rem;
+	border: 2px solid var(--wp--preset--color--black);
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-weight: 500;
+	color: var(--wp--preset--color--black);
+	text-decoration: none;
+}
+.em-reg__back:hover {
+	background: var(--wp--preset--color--black);
+	color: var(--wp--preset--color--white);
+}
+.em-reg :where(a, button, input, select, textarea):focus-visible,
+.emergence-register :where(a):focus-visible {
+	outline: 3px solid var(--wp--preset--color--purple);
+	outline-offset: 3px;
+}
+
+/* Forminator skin (the :is(#id, form) trick borrows ID specificity to beat the per-form CSS Forminator prints with an #forminator-module-N selector, without hardcoding a form ID). */
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) {
+	font-family: var(--wp--preset--font-family--lora, Lora, serif);
+	color: var(--wp--preset--color--black);
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-row {
+	margin-bottom: 1.5rem;
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-row.forminator-hidden {
+	margin: 0;
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-label {
+	display: block;
+	margin: 0 0 0.5rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.9375rem;
+	font-weight: 500;
+	color: var(--wp--preset--color--black);
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-required {
+	color: var(--wp--preset--color--red);
+	font-weight: 600;
+	margin-left: 0.15em;
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-input,
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-textarea,
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-select2 + .select2 .select2-selection {
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 3.25rem;
+	padding: 0.75rem 1rem;
+	border: 2px solid var(--wp--preset--color--black);
+	border-radius: 0;
+	background: var(--wp--preset--color--white);
+	box-shadow: none;
+	font-family: var(--wp--preset--font-family--lora, Lora, serif);
+	font-size: 1.0625rem;
+	color: var(--wp--preset--color--black);
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-input:hover {
+	border-color: var(--wp--preset--color--purple);
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-input:focus,
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-input:focus-visible {
+	border-color: var(--wp--preset--color--purple);
+	outline: 3px solid var(--wp--preset--color--purple);
+	outline-offset: 2px;
+	box-shadow: none;
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-has_error .forminator-input {
+	border-color: var(--wp--preset--color--red);
+	border-width: 3px;
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-error-message {
+	display: block;
+	margin: 0.5rem 0 0;
+	padding: 0.5rem 0.75rem;
+	border-left: 4px solid var(--wp--preset--color--red);
+	background: transparent;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--wp--preset--color--black);
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-error-message::before {
+	content: "Error: ";
+	font-weight: 600;
+	color: var(--wp--preset--color--red);
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-checkbox__wrapper {
+	display: flex;
+	gap: 0.75rem;
+	align-items: flex-start;
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-checkbox {
+	min-width: 1.75rem;
+	min-height: 1.75rem;
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-checkbox .forminator-checkbox-box {
+	width: 1.75rem;
+	height: 1.75rem;
+	border: 2px solid var(--wp--preset--color--black);
+	border-radius: 0;
+	background: var(--wp--preset--color--white);
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-checkbox input:checked + .forminator-checkbox-box {
+	background: var(--wp--preset--color--purple);
+	border-color: var(--wp--preset--color--purple);
+	color: var(--wp--preset--color--white);
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-checkbox input:focus-visible + .forminator-checkbox-box {
+	outline: 3px solid var(--wp--preset--color--purple);
+	outline-offset: 3px;
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-checkbox__label,
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-checkbox__label p {
+	font-family: var(--wp--preset--font-family--lora, Lora, serif);
+	font-size: 1rem;
+	line-height: 1.5;
+	color: var(--wp--preset--color--black);
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-button-submit {
+	box-sizing: border-box;
+	min-height: 3.5rem;
+	padding: 0.9rem 2.5rem;
+	border: 2px solid var(--wp--preset--color--black);
+	border-radius: 0;
+	background: var(--wp--preset--color--primary-green);
+	box-shadow: 6px 6px 0 var(--wp--preset--color--black);
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 1.0625rem;
+	font-weight: 500;
+	color: var(--wp--preset--color--black);
+	cursor: pointer;
+	transition: transform 0.15s, box-shadow 0.15s;
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-button-submit:hover {
+	background: var(--wp--preset--color--secondary-green);
+	transform: translate(3px, 3px);
+	box-shadow: 3px 3px 0 var(--wp--preset--color--black);
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-button-submit:focus-visible {
+	outline: 3px solid var(--wp--preset--color--purple);
+	outline-offset: 4px;
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-response-message {
+	margin: 0 0 1.5rem;
+	padding: 1rem 1.25rem;
+	border: 2px solid var(--wp--preset--color--black);
+	border-radius: 0;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 1rem;
+	font-weight: 500;
+	color: var(--wp--preset--color--black);
+	background: var(--wp--preset--color--white);
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-response-message.forminator-success {
+	border-color: var(--wp--preset--color--primary-green);
+	border-left-width: 10px;
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-response-message.forminator-error {
+	border-color: var(--wp--preset--color--red);
+	border-left-width: 10px;
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .iti,
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-field {
+	max-width: 100%;
+}
+@media (max-width: 639px) {
+	.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-button-submit {
+		width: 100%;
+	}
+	.em-reg__facts > div {
+		grid-template-columns: 1fr;
+		gap: 0.25rem;
+	}
+}
+
+/* Forminator prints per-form CSS with !important on a few control properties (ID selector), so these borrow ID specificity too. */
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-checkbox .forminator-checkbox-box {
+	flex: 0 0 1.75rem !important;
+	width: 1.75rem !important;
+	height: 1.75rem !important;
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-input:focus,
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-input:focus-visible,
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-checkbox input:focus + .forminator-checkbox-box,
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-checkbox input:focus-visible + .forminator-checkbox-box {
+	outline: 3px solid var(--wp--preset--color--purple) !important;
+	outline-offset: 3px !important;
+}
+
+/* ---------- Scroll motion (one language, driven by assets/js/theme.js) ----------
+ * The script adds the pending classes only to elements still below the fold (so they only exist once JavaScript has run), then .is-in as they arrive,
+ * and removes everything again afterwards. Without JS, or with reduced motion, nothing is ever hidden.
+ *   .em-rv      headings and blocks: fade and rise (distance shrinks on tablet and phone)
+ *   .em-rl      an editorial rule draws left to right (its border is swapped for a scaled line, then swapped back)
+ *   .em-art     decorative contours settle: fade and drift a few pixels
+ *   .em-rv--f   the closing statement: the whole heading rises out of a clip as one block (any number of lines), body and CTA follow */
+@media (prefers-reduced-motion: no-preference) {
+	:root {
+		--em-dist: 1.25rem;
+		--em-dist-s: 0.75rem;
+		--em-dur: 0.75s;
+	}
+
+	@media (max-width: 1023px) {
+		:root {
+			--em-dist: 1rem;
+			--em-dist-s: 0.625rem;
+		}
+	}
+
+	@media (max-width: 639px) {
+		:root {
+			--em-dist: 0.75rem;
+			--em-dist-s: 0.5rem;
+			--em-dur: 0.6s;
+		}
+	}
+
+	.em-rv {
+		opacity: 0;
+		transform: translateY(var(--em-dist));
+		transition: opacity var(--em-dur) ease-out var(--em-d, 0s), transform var(--em-dur) cubic-bezier(0.2, 0.7, 0.1, 1) var(--em-d, 0s);
+	}
+
+	.em-rv--s {
+		transform: translateY(var(--em-dist-s));
+	}
+
+	.em-rv.is-in {
+		opacity: 1;
+		transform: none;
+	}
+
+	/* Closing statement: same vocabulary, a little more ceremony (one block, so it does not depend on how the heading wraps). */
+	.em-rv.em-rv--f {
+		transform: none;
+		transition: none;
+	}
+
+	.em-rv.em-rv--f.is-in {
+		animation: em-arrive 1.05s cubic-bezier(0.2, 0.7, 0.1, 1) var(--em-d, 0s) both;
+	}
+
+	/* Editorial rules */
+	.em-rl {
+		--rl-c: currentColor;
+		--rl-w: 1px;
+		position: relative;
+		border-top-color: transparent;
+	}
+
+	.em-rl::before {
+		content: "";
+		position: absolute;
+		top: calc(var(--rl-w) * -1);
+		left: 0;
+		right: 0;
+		height: var(--rl-w);
+		background: var(--rl-c);
+		transform: scaleX(0);
+		transform-origin: left center;
+		transition: transform 0.9s cubic-bezier(0.2, 0.7, 0.1, 1) var(--em-d, 0s);
+	}
+
+	.em-rl.is-in::before {
+		transform: none;
+	}
+
+	.emergence-partner.em-rl {
+		--rl-c: color-mix(in srgb, var(--p-line) 40%, transparent);
+	}
+
+	.emergence-future__body > p.em-rl {
+		--rl-c: var(--f-ink);
+	}
+
+	.em-sch--empty.em-rl {
+		--rl-c: var(--s-ink, #060606);
+		--rl-w: 2px;
+		border-block-color: transparent;
+	}
+
+	.em-sch--empty.em-rl::after {
+		content: "";
+		position: absolute;
+		bottom: -2px;
+		left: 0;
+		right: 0;
+		height: 2px;
+		background: var(--rl-c);
+		transform: scaleX(0);
+		transform-origin: right center;
+		transition: transform 0.9s cubic-bezier(0.2, 0.7, 0.1, 1) calc(var(--em-d, 0s) + 0.15s);
+	}
+
+	.em-sch--empty.em-rl.is-in::after {
+		transform: none;
+	}
+
+	/* Contours */
+	.em-art.em-art {
+		opacity: 0;
+		translate: 0 1rem;
+		transition: opacity 1s ease-out var(--em-d, 0s), translate 1.1s cubic-bezier(0.2, 0.7, 0.1, 1) var(--em-d, 0s);
+	}
+
+	.em-art.em-art.is-in {
+		opacity: var(--art-o, 1);
+		translate: none;
+	}
+}
+
+@keyframes em-arrive {
+	from { opacity: 0; transform: translateY(1.5rem); clip-path: inset(100% 0 0 0); }
+	to { opacity: 1; transform: none; clip-path: inset(-0.05em -0.05em -0.4em -0.05em); }
+}
+
+/* ---------- Responsive utilities (for mobile-specific art direction later) ---------- */
+
+@media (min-width: 782px) {
+	.em-only-mobile {
+		display: none !important;
+	}
+}
+
+@media (max-width: 781px) {
+	.em-only-desktop {
+		display: none !important;
+	}
+}
+
+/* ---------- Reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+	html {
+		scroll-behavior: auto;
+	}
+
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+
+	/* Hover and focus keep their colour and shadow feedback but stop moving things. */
+	.wp-element-button:hover,
+	.wp-element-button:focus-visible,
+	.emergence-tile:hover,
+	.emergence-tile:has(a:focus-visible),
+	.emergence-tile:hover .emergence-tile__title,
+	.emergence-tile:has(a:focus-visible) .emergence-tile__title,
+	.emergence-nav .emergence-nav-register > .wp-block-navigation-item__content:hover,
+	.emergence-partner a:hover img,
+	.em-sch__row:hover .em-sch__title,
+	.em-sch__row:focus-within .em-sch__title {
+		translate: none;
+	}
+}
+
+/* Touch target: the native menu open/close buttons are 24px by default. Give them a 44px hit area; the open icon stays where it was.
+ * Do not set display here: WordPress and the rules above decide when the menu button is shown. */
+.emergence-header .wp-block-navigation__responsive-container-open,
+.wp-block-navigation__responsive-container-close {
+	box-sizing: border-box;
+	min-width: 2.75rem;
+	min-height: 2.75rem;
+	padding: 0.6875rem;
+}
+
+.emergence-header .wp-block-navigation__responsive-container-open {
+	margin: -0.6875rem;
+}
+
+/* ============================================================================
+ * TEMP: client-supplied decorative motifs hidden pending designer wireframe (theme 0.15.0).
+ * The client's ecology/mangrove artwork in Hero, About and Future, and the Map section's
+ * temporary contour/grid placeholder motif, are not yet approved for the public front end.
+ * Nothing is deleted: every Image block, uploaded media file and the artwork containers
+ * themselves stay exactly as they are in the CMS, fully editable. Each container below is
+ * already position:absolute inside its section (a decorative overlay, not a flow/grid
+ * participant), so hiding it reserves no empty layout space, creates no overflow and does
+ * not affect section height, click targets or motion/layout calculations elsewhere.
+ * Reversible: delete this block to restore all of it. Do not add rules above this point
+ * for this purpose; keep every future change to this pass in this one place. */
+.emergence-hero__art,
+.emergence-about__art,
+.emergence-future__art,
+.emergence-map__art:not(.emergence-map__art--live) {
+	display: none !important;
+}
+/* About's second decorative contour is its own section-level ::after (not part of
+ * .emergence-about__art), so it needs its own line to disable it. */
+.emergence-about::after {
+	display: none !important;
+}
+
+/* ---------- Registration frontend batch 05 (theme 0.15.8) ---------- */
+
+/* Task 1 correction: Phone and City were set to Forminator's conditional "Hide" action with
+ * zero rules attached, which never evaluates true, so Forminator keeps rendering them. Rather
+ * than delete the fields (would erase historical submission values) a CSS class was added to
+ * each field's own "Additional CSS Classes" option (Phone {phone-1}, City {text-4}) in the
+ * Forminator builder; this is the only line that acts on it. Non-destructive and reversible:
+ * remove this rule, or the class on either field, to restore them to view. Submission
+ * validation is untouched (both fields are optional), and the fields still post with the
+ * form and still reach the Google Sheets integration. */
+.em-reg .emergence-field-archived {
+	display: none !important;
+}
+
+/* Tighten the gap above the dividing rule: the intro paragraph's own trailing space and the
+ * panel's default block-gap margin were both applying, doubling the whitespace the brief
+ * flagged. The rule itself (border-top on .em-reg) is unchanged. */
+.em-reg__intro {
+	margin: 0 0 1.5rem;
+}
+.em-reg {
+	margin-top: 0;
+}
+
+/* Strengthen the session summary's hierarchy: a firmer eyebrow, a thin rule closing the
+ * title before the facts list, and a quieter label colour on each fact so the values (not
+ * the labels) read first. */
+.em-reg__eyebrow {
+	font-weight: 600;
+	letter-spacing: 0.16em;
+}
+.em-reg__title {
+	padding-bottom: 1.25rem;
+	border-bottom: 2px solid var(--wp--preset--color--black);
+	text-wrap: balance;
+}
+.em-reg__facts dt {
+	color: color-mix(in srgb, var(--wp--preset--color--black) 55%, transparent);
+	letter-spacing: 0.14em;
+}
+.em-reg__facts dd {
+	font-weight: 500;
+}
+
+/* Reason of interest: a proper multiline field, not a stretched single-line input. */
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-textarea {
+	min-height: 9rem;
+	line-height: 1.6;
+	resize: vertical;
+}
+
+/* Disclaimer (the HTML field carrying Rushalee's registration note): a deliberate editorial
+ * treatment distinct from a form field, set off with a rule rather than a boxed/card look. */
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-field-html {
+	margin: 0.25rem 0 2rem;
+	padding-left: 1.25rem;
+	border-left: 3px solid var(--wp--preset--color--purple);
+}
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-field-html p {
+	margin: 0;
+	font-family: var(--wp--preset--font-family--lora, Lora, serif);
+	font-style: italic;
+	font-size: 0.9375rem;
+	line-height: 1.6;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 78%, transparent);
+}
+
+.em-reg .forminator-ui.forminator-custom-form[data-design]:is(#emergence-form, form) .forminator-button-submit {
+	letter-spacing: 0.02em;
+	transition: transform 0.15s, box-shadow 0.15s, background-color 0.15s;
+}
+
+/* Task 3: branded registration success modal. Opens only from the JS success handler in
+ * theme.js, which listens for Forminator's own "forminator:form:submit:success" event (the
+ * plugin's confirmation that the server accepted the submission) — never from a click. If
+ * JavaScript is unavailable, this markup is never created and Forminator's own inline
+ * response message (styled above) remains the fallback. */
+html.em-modal-open,
+html.em-modal-open body {
+	overflow: hidden;
+}
+.em-modal {
+	position: fixed;
+	inset: 0;
+	z-index: 1000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: clamp(1rem, 4vw, 4rem);
+}
+.em-modal[aria-hidden="true"] {
+	display: none;
+}
+.em-modal__scrim {
+	position: absolute;
+	inset: 0;
+	background: color-mix(in srgb, var(--wp--preset--color--black) 82%, transparent);
+}
+.em-modal__panel {
+	position: relative;
+	box-sizing: border-box;
+	width: min(34rem, 100%);
+	margin-inline: auto;
+	padding: clamp(2rem, 5vw, 3.5rem);
+	background: var(--wp--preset--color--white);
+	border: 3px solid var(--wp--preset--color--black);
+	box-shadow: 10px 10px 0 var(--wp--preset--color--purple);
+}
+.em-modal__close {
+	position: absolute;
+	top: clamp(0.75rem, 2vw, 1.25rem);
+	right: clamp(0.75rem, 2vw, 1.25rem);
+	width: 2.25rem;
+	height: 2.25rem;
+	border: none;
+	background: none;
+	font-size: 1.75rem;
+	line-height: 1;
+	color: var(--wp--preset--color--black);
+	cursor: pointer;
+}
+.em-modal__close:hover,
+.em-modal__close:focus-visible {
+	color: var(--wp--preset--color--purple);
+}
+.em-modal__eyebrow {
+	margin: 0 0 1rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.8125rem;
+	font-weight: 600;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	color: var(--wp--preset--color--purple);
+	border-bottom: 2px solid var(--wp--preset--color--primary-green);
+	padding-bottom: 1rem;
+	display: inline-block;
+}
+.em-modal__title {
+	margin: 0 0 1.25rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-weight: 500;
+	font-size: clamp(2.25rem, 5.5vw, 3.5rem);
+	line-height: 1.02;
+	letter-spacing: -0.02em;
+	color: var(--wp--preset--color--black);
+}
+.em-modal__body {
+	margin: 0 0 1.5rem;
+	max-width: 30rem;
+	font-family: var(--wp--preset--font-family--lora, Lora, serif);
+	font-size: 1.0625rem;
+	line-height: 1.6;
+	color: var(--wp--preset--color--black);
+}
+.em-modal__status {
+	display: inline-block;
+	margin: 0 0 2rem;
+	padding: 0.4rem 0.9rem;
+	border: 2px solid var(--wp--preset--color--black);
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+}
+.em-modal__cta {
+	display: block;
+	width: fit-content;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 1.0625rem;
+	font-weight: 500;
+	color: var(--wp--preset--color--black);
+	text-decoration: none;
+	border-bottom: 2px solid var(--wp--preset--color--black);
+	padding-bottom: 0.2rem;
+}
+.em-modal__cta:hover,
+.em-modal__cta:focus-visible {
+	color: var(--wp--preset--color--purple);
+	border-bottom-color: var(--wp--preset--color--purple);
+}
+.em-modal :where(a, button):focus-visible {
+	outline: 3px solid var(--wp--preset--color--purple);
+	outline-offset: 3px;
+}
+@media (prefers-reduced-motion: no-preference) {
+	.em-modal__panel {
+		animation: em-modal-in 0.2s ease-out;
+	}
+	@keyframes em-modal-in {
+		from { opacity: 0; transform: translateY(0.75rem); }
+		to { opacity: 1; transform: translateY(0); }
+	}
+}
+@media (max-width: 639px) {
+	.em-modal {
+		padding: 1rem;
+		align-items: center;
+	}
+	.em-modal__panel {
+		width: 100%;
+		padding: 2rem 1.5rem;
+		box-shadow: 6px 6px 0 var(--wp--preset--color--purple);
+	}
+	.em-modal__title {
+		font-size: clamp(2rem, 9vw, 2.5rem);
+	}
+}
+/* END TEMP motif hiding ===================================================== */
+
+/* ---------- Individual Session page (v0.16.0): templates/single-emergence_session.html,
+ * [emergence_session] (emergence-core/includes/session-page.php). Theme CSS only - one reusable
+ * editorial template for all Sessions, never per-ID markup. Extends the same tokens/conventions
+ * as Registration (.em-reg, above): Poppins for labels/titles, Lora for long-form reading,
+ * color-mix() tints, clamp() fluid type. No rounded corners, no gradients, no stock icons. ---------- */
+.emergence-session-page {
+	padding-block: clamp(3rem, 8cqw, 7rem) clamp(4rem, 10cqw, 8rem);
+	padding-inline: max(var(--wp--custom--gutter), calc((100% - 84rem) / 2));
+	color: var(--wp--preset--color--black);
+}
+.emergence-session-page {
+	max-width: none;
+}
+
+.em-session {
+	container-type: inline-size;
+}
+
+.em-session__back {
+	display: inline-block;
+	/* v0.16.1 fix: at >=1024px this becomes a grid item (grid-column: 1/-1 below), and a grid
+	 * item's inline-block is blockified to stretch across the whole grid area by default - which
+	 * stretched the border-bottom hover underline the full width of the hero. width: fit-content
+	 * keeps the box (and its underline) sized to the text in every context. */
+	width: fit-content;
+	margin: 0 0 clamp(2rem, 5vw, 3.5rem);
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.8125rem;
+	font-weight: 500;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--wp--preset--color--purple);
+	text-decoration: none;
+	border-bottom: 1px solid transparent;
+}
+.em-session__back:hover {
+	border-bottom-color: currentColor;
+}
+
+.em-session__hero {
+	padding-bottom: clamp(2.5rem, 6vw, 4.5rem);
+	border-bottom: 2px solid var(--wp--preset--color--black);
+}
+
+.em-session__eyebrow {
+	margin: 0 0 1rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.8125rem;
+	font-weight: 500;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--wp--preset--color--purple);
+}
+
+.em-session__title {
+	margin: 0 0 clamp(2rem, 5vw, 3rem);
+	/* v0.16.2: was max-width: 60rem - narrower than .emergence-session-page's own 84rem content
+	 * width, so the heading wrapped well inside the hero's full-width rule below it. Removed so
+	 * the heading (grid-column: 1/-1 at >=1024px, full measure below it) fills the same editorial
+	 * width as that rule; clamp()'s vw-based font-size and text-wrap: balance are unaffected. */
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-weight: 500;
+	font-size: clamp(2.5rem, 2rem + 4vw, 5.5rem);
+	line-height: 0.98;
+	letter-spacing: -0.03em;
+	color: var(--wp--preset--color--black);
+	text-wrap: balance;
+	overflow-wrap: break-word;
+}
+
+.em-session__facts {
+	/* v0.17.19: was a flex-wrap row of content-sized items, so each field started wherever the
+	 * previous one's text ended (Time / Venue / In collaboration with drifted with text length).
+	 * Now a fixed two-column grid: Date over Venue (left), Time over In collaboration with (right);
+	 * minmax(0, 1fr) keeps both column starts identical whatever the content, and long values wrap
+	 * inside their own column. Same 0.75rem / 2.5rem gaps as before. Single column at <=480px. */
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.75rem 2.5rem;
+	margin: 0 0 clamp(1.75rem, 4vw, 2.5rem);
+}
+.em-session__facts > div {
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+	min-width: 0;
+}
+.em-session__facts dt {
+	margin: 0;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.75rem;
+	font-weight: 500;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 62%, transparent);
+}
+.em-session__facts dd {
+	margin: 0;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 1.125rem;
+	font-weight: 500;
+	letter-spacing: -0.01em;
+	overflow-wrap: anywhere;
+}
+
+.em-session__reg {
+	margin: 0;
+}
+.em-session__cta,
+.em-session__reg-state {
+	display: inline-block;
+	box-sizing: border-box;
+	padding: 0.9rem 1.75rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-weight: 500;
+	font-size: 0.9375rem;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+.em-session__cta {
+	background: var(--wp--preset--color--purple);
+	color: var(--wp--preset--color--white);
+	text-decoration: none;
+	transition: background-color 0.15s ease;
+}
+.em-session__cta:hover {
+	background: var(--wp--preset--color--black);
+}
+.em-session__reg--full .em-session__reg-state {
+	border: 2px solid currentColor;
+}
+.em-session__reg--closed .em-session__reg-state {
+	border: 2px dashed currentColor;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 62%, transparent);
+}
+
+.em-session__body {
+	padding-top: clamp(2.5rem, 6vw, 4.5rem);
+}
+
+.em-session__description {
+	/* v0.16.1 polish: 42rem ran slightly past the ~75-character editorial measure at the top of
+	 * this font-size's clamp(); 40rem keeps lines comfortable for Lora at every fluid size. */
+	max-width: 40rem;
+	font-family: var(--wp--preset--font-family--lora, Lora, serif);
+	font-size: clamp(1.0625rem, 1rem + 0.3vw, 1.25rem);
+	line-height: 1.75;
+}
+.em-session__description > * + * {
+	margin-top: 1.6em;
+}
+.em-session__description p {
+	margin: 0;
+}
+/* v0.17.20: the rule above (0,1,1) out-specified `> * + *` (0,1,0), so consecutive paragraphs got
+ * no gap. Restore a 1rem gap between adjacent paragraphs only; headings and lists keep the 1.6em
+ * sibling gap, and nothing is added below the last paragraph. */
+.em-session__description p + p {
+	margin-top: 1rem;
+}
+
+.em-session__description-pending {
+	max-width: 36rem;
+	margin: 0;
+	font-family: var(--wp--preset--font-family--lora, Lora, serif);
+	font-size: 1.0625rem;
+	font-style: italic;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 60%, transparent);
+}
+
+.em-session :where(a, button):focus-visible {
+	outline: 3px solid var(--wp--preset--color--purple);
+	outline-offset: 3px;
+}
+
+@media (min-width: 1024px) {
+	.em-session__hero {
+		display: grid;
+		grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+		column-gap: clamp(2rem, 5vw, 5rem);
+		align-items: start;
+	}
+	.em-session__back,
+	.em-session__eyebrow,
+	.em-session__title {
+		grid-column: 1 / -1;
+	}
+	.em-session__facts {
+		grid-column: 1 / span 1;
+		margin-bottom: 0;
+		align-self: end;
+	}
+	.em-session__reg {
+		grid-column: 2 / span 1;
+		justify-self: start;
+		align-self: end;
+	}
+}
+
+@media (max-width: 480px) {
+	.em-session__facts {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.em-session__cta,
+	.em-session__reg-state {
+		/* v0.16.3 fix: width: 100% here was being added to this rule's own horizontal
+		 * padding (1.75rem each side) and the .em-session__reg--full/--closed 2px border,
+		 * because neither this selector nor any ancestor ever set box-sizing. Content-box
+		 * (the default) treats width as content-only, so the rendered box pushed ~34-36px
+		 * past its container on top of the intended full-width measure. box-sizing: border-box
+		 * is now set on the shared .em-session__cta, .em-session__reg-state rule above, so
+		 * width: 100% here already includes padding and border and the box stays inside
+		 * .em-session__reg. */
+		width: 100%;
+		text-align: center;
+	}
+}
+/* END Individual Session page ================================================ */
+
+/* ============================================================================
+ * Staff Registration Dashboard (theme 0.16.4, batch 07B)
+ * Markup from emergence-core/includes/staff-portal-render.php ([emergence_staff_portal] on
+ * the /staff/ page, templates/page-staff.html - no public header/footer on this page).
+ * Restrained editorial polish: sharp corners (radius 0, matches the Register form), Poppins
+ * for interface/labels, Lora for applicant copy, purple/black/white with green/mint reserved
+ * for small accents, same focus-outline and input language as .em-reg.
+ * ============================================================================ */
+
+.em-staff-shell {
+	background: var(--wp--preset--color--white);
+}
+
+.em-staff {
+	box-sizing: border-box;
+	font-family: var(--wp--preset--font-family--lora, Lora, serif);
+	color: var(--wp--preset--color--black);
+}
+.em-staff *,
+.em-staff *::before,
+.em-staff *::after {
+	box-sizing: border-box;
+}
+.em-staff :where(a, button, input, select, textarea):focus-visible {
+	outline: 3px solid var(--wp--preset--color--purple);
+	outline-offset: 2px;
+}
+
+/* ---------- Login / not-authorised ---------- */
+
+.em-staff--login {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 100vh;
+	padding: clamp(1.25rem, 5vw, 3rem);
+	background: linear-gradient(165deg, var(--wp--preset--color--purple) 0%, var(--wp--preset--color--black) 100%);
+}
+.em-staff__login-card {
+	width: 100%;
+	max-width: 26rem;
+	padding: clamp(2rem, 5vw, 3rem);
+	background: var(--wp--preset--color--white);
+	border-top: 6px solid var(--wp--preset--color--primary-green);
+}
+.em-staff__login-eyebrow {
+	margin: 0 0 0.25rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.8125rem;
+	font-weight: 500;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--wp--preset--color--purple);
+}
+.em-staff__login-title {
+	margin: 0 0 0.5rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-weight: 500;
+	font-size: clamp(1.625rem, 1.4rem + 1vw, 2.25rem);
+	line-height: 1.1;
+	color: var(--wp--preset--color--black);
+}
+.em-staff__login-sub {
+	margin: 0 0 1.75rem;
+	font-size: 1rem;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 70%, transparent);
+}
+.em-staff__login-error {
+	margin: 0 0 1.5rem;
+	padding: 0.65rem 0.9rem;
+	border-left: 4px solid var(--wp--preset--color--red);
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.875rem;
+	font-weight: 500;
+}
+.em-staff__login-form {
+	display: flex;
+	flex-direction: column;
+	gap: 1.25rem;
+}
+.em-staff__field {
+	display: block;
+}
+.em-staff__field span {
+	display: block;
+	margin: 0 0 0.5rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--wp--preset--color--black);
+}
+.em-staff__field input {
+	width: 100%;
+	min-height: 3.25rem;
+	padding: 0.75rem 1rem;
+	border: 2px solid var(--wp--preset--color--black);
+	border-radius: 0;
+	background: var(--wp--preset--color--white);
+	font-family: var(--wp--preset--font-family--lora, Lora, serif);
+	font-size: 1.0625rem;
+	color: var(--wp--preset--color--black);
+}
+.em-staff__field input:hover {
+	border-color: var(--wp--preset--color--purple);
+}
+.em-staff__field input:focus,
+.em-staff__field input:focus-visible {
+	border-color: var(--wp--preset--color--purple);
+	outline: 3px solid var(--wp--preset--color--purple);
+	outline-offset: 2px;
+}
+.em-staff__cta {
+	display: inline-block;
+	box-sizing: border-box;
+	width: 100%;
+	margin-top: 0.25rem;
+	padding: 0.9rem 1.75rem;
+	border: 0;
+	background: var(--wp--preset--color--purple);
+	color: var(--wp--preset--color--white);
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-weight: 500;
+	font-size: 0.9375rem;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	text-align: center;
+	cursor: pointer;
+	transition: background-color 0.15s ease;
+}
+.em-staff__cta:hover {
+	background: var(--wp--preset--color--black);
+}
+.em-staff__login-lost {
+	display: inline-block;
+	margin-top: 1.5rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.875rem;
+	color: var(--wp--preset--color--purple);
+}
+.em-staff__logout {
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--wp--preset--color--purple);
+	text-decoration: none;
+	border-bottom: 1px solid currentColor;
+}
+.em-staff--login .em-staff__logout {
+	display: inline-block;
+	margin-top: 1.5rem;
+}
+
+/* ---------- App shell ---------- */
+
+.em-staff--app {
+	max-width: 76rem;
+	margin: 0 auto;
+	padding: clamp(1.25rem, 4vw, 2.5rem) clamp(1.25rem, 4vw, 2.5rem) clamp(3rem, 6vw, 5rem);
+}
+.em-staff__header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	flex-wrap: wrap;
+	padding-bottom: 1.25rem;
+	border-bottom: 2px solid var(--wp--preset--color--black);
+}
+.em-staff__brand {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+}
+/* Official Emergence wordmark, same asset used on the attendee pass and approval email —
+   never redrawn or recoloured. Height-constrained and compact so the header stays a single
+   restrained row, never an oversized hero, down to the smallest phone widths. */
+.em-staff__brand-logo {
+	display: block;
+	height: clamp(1.375rem, 1.1rem + 1vw, 1.75rem);
+	width: auto;
+}
+.em-staff__brand-sub {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.2rem 0.5rem;
+	border: 1px solid color-mix(in srgb, var(--wp--preset--color--black) 35%, transparent);
+	font-size: 0.6875rem;
+	font-weight: 600;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 60%, transparent);
+}
+.em-staff__who {
+	display: flex;
+	align-items: center;
+	gap: 1.25rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.875rem;
+}
+.em-staff__who-name {
+	color: color-mix(in srgb, var(--wp--preset--color--black) 70%, transparent);
+}
+.em-staff__headline {
+	margin: clamp(1.5rem, 4vw, 2.5rem) 0 1.5rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-weight: 500;
+	font-size: clamp(1.75rem, 1.4rem + 1.6vw, 2.75rem);
+}
+.em-staff__notice {
+	margin: 0 0 1.5rem;
+	padding: 0.9rem 1.1rem;
+	border-left: 4px solid var(--wp--preset--color--red);
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.9375rem;
+}
+
+/* Batch 08C.3C, Task 1: administrator-only operational status. Deliberately plain/compact (a
+   quiet strip, not another KPI tile row) - this is for an Administrator confirming the machinery
+   is ready, not a thing Rushalee/ordinary staff ever see. Reuses the same green/red vocabulary as
+   .em-staff__status above rather than inventing a third colour language. */
+.em-staff__system-status {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem 1.5rem;
+	margin: 0 0 1.5rem;
+	padding: 0.75rem 1rem;
+	border: 1px solid color-mix(in srgb, var(--wp--preset--color--black) 15%, transparent);
+	background: color-mix(in srgb, var(--wp--preset--color--black) 3%, transparent);
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.8125rem;
+}
+.em-staff__system-status-row {
+	display: flex;
+	align-items: baseline;
+	gap: 0.4rem;
+	white-space: nowrap;
+}
+.em-staff__system-status-label {
+	color: color-mix(in srgb, var(--wp--preset--color--black) 60%, transparent);
+}
+.em-staff__system-status-value {
+	font-weight: 500;
+}
+.em-staff__system-status-ok {
+	color: color-mix(in srgb, var(--wp--preset--color--primary-green) 65%, var(--wp--preset--color--black));
+}
+.em-staff__system-status-attn {
+	color: var(--wp--preset--color--red);
+}
+
+/* ---------- Count tiles ---------- */
+
+.em-staff__counts {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 1px;
+	margin-bottom: clamp(2rem, 4vw, 3rem);
+	background: var(--wp--preset--color--black);
+	border: 1px solid var(--wp--preset--color--black);
+}
+.em-staff__count {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	padding: 1.25rem 1.1rem;
+	background: var(--wp--preset--color--white);
+}
+.em-staff__count-n {
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-weight: 500;
+	font-size: clamp(1.75rem, 1.4rem + 1.2vw, 2.5rem);
+	line-height: 1;
+}
+.em-staff__count-label {
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.8125rem;
+	font-weight: 500;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 55%, transparent);
+}
+.em-staff__count--pending .em-staff__count-n {
+	color: var(--wp--preset--color--purple);
+}
+.em-staff__count--approved .em-staff__count-n {
+	color: color-mix(in srgb, var(--wp--preset--color--primary-green) 70%, var(--wp--preset--color--black));
+}
+.em-staff__count--rejected .em-staff__count-n {
+	color: var(--wp--preset--color--red);
+}
+
+/* ---------- Filters ---------- */
+
+.em-staff__filters {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: end;
+	gap: 1rem;
+	margin-bottom: 1.5rem;
+	padding-bottom: 1.5rem;
+	border-bottom: 1px solid color-mix(in srgb, var(--wp--preset--color--black) 20%, transparent);
+}
+.em-staff__filters label {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.8125rem;
+	font-weight: 500;
+}
+.em-staff__filters select,
+.em-staff__filters input[type="search"] {
+	min-height: 2.75rem;
+	padding: 0.5rem 0.75rem;
+	border: 2px solid var(--wp--preset--color--black);
+	border-radius: 0;
+	background: var(--wp--preset--color--white);
+	font-family: var(--wp--preset--font-family--lora, Lora, serif);
+	font-size: 0.9375rem;
+	color: var(--wp--preset--color--black);
+}
+.em-staff__filters select:focus,
+.em-staff__filters input:focus {
+	border-color: var(--wp--preset--color--purple);
+}
+.em-staff__search {
+	flex: 1 1 14rem;
+}
+.em-staff__search input {
+	width: 100%;
+}
+.em-staff__filter-apply {
+	min-height: 2.75rem;
+	padding: 0 1.5rem;
+	border: 0;
+	background: var(--wp--preset--color--black);
+	color: var(--wp--preset--color--white);
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-weight: 500;
+	font-size: 0.8125rem;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	cursor: pointer;
+}
+.em-staff__filter-apply:hover {
+	background: var(--wp--preset--color--purple);
+}
+.em-staff__filter-clear {
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.8125rem;
+	color: var(--wp--preset--color--purple);
+	align-self: center;
+}
+.em-staff__queue-count {
+	margin: 0 0 1rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.8125rem;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 55%, transparent);
+}
+.em-staff__empty {
+	padding: 2.5rem 0;
+	font-family: var(--wp--preset--font-family--lora, Lora, serif);
+	font-style: italic;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 60%, transparent);
+	text-align: center;
+}
+
+/* ---------- Queue table (reflows to stacked rows under 768px) ---------- */
+
+.em-staff__table {
+	width: 100%;
+	border-collapse: collapse;
+}
+.em-staff__table thead th {
+	padding: 0 0 0.75rem;
+	border-bottom: 2px solid var(--wp--preset--color--black);
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.75rem;
+	font-weight: 500;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	text-align: left;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 55%, transparent);
+}
+.em-staff__table td {
+	padding: 1rem 0.75rem 1rem 0;
+	border-bottom: 1px solid color-mix(in srgb, var(--wp--preset--color--black) 15%, transparent);
+	vertical-align: top;
+	font-size: 0.9375rem;
+	/* A long unbroken string (a long applicant name, and especially an email address) has no
+	 * natural break point, so without this it overflows the cell/card instead of wrapping -
+	 * confirmed causing horizontal page overflow at 430/390/320px in harness QA. */
+	overflow-wrap: anywhere;
+}
+.em-staff__row:hover td {
+	background: color-mix(in srgb, var(--wp--preset--color--primary-green) 6%, transparent);
+}
+.em-staff__row--test {
+	opacity: 0.72;
+}
+.em-staff__row-name {
+	display: block;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-weight: 500;
+}
+.em-staff__row-email {
+	display: block;
+	font-size: 0.8125rem;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 60%, transparent);
+}
+.em-staff__tag {
+	display: inline-block;
+	margin-left: 0.4rem;
+	padding: 0.1rem 0.4rem;
+	border: 1px solid currentColor;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.6875rem;
+	font-weight: 500;
+	letter-spacing: 0.06em;
+	vertical-align: middle;
+}
+.em-staff__tag--test {
+	color: var(--wp--preset--color--red);
+}
+.em-staff__status {
+	display: inline-block;
+	padding: 0.3rem 0.65rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.75rem;
+	font-weight: 500;
+	letter-spacing: 0.04em;
+	white-space: nowrap;
+}
+.em-staff__status--pending {
+	background: color-mix(in srgb, var(--wp--preset--color--purple) 12%, transparent);
+	color: var(--wp--preset--color--purple);
+}
+.em-staff__status--approved {
+	background: color-mix(in srgb, var(--wp--preset--color--primary-green) 18%, transparent);
+	color: color-mix(in srgb, var(--wp--preset--color--primary-green) 65%, var(--wp--preset--color--black));
+}
+.em-staff__status--rejected {
+	background: color-mix(in srgb, var(--wp--preset--color--red) 12%, transparent);
+	color: var(--wp--preset--color--red);
+}
+/* Batch 08C.2: email delivery status reuses the same pill, status--sent/--sending share the
+   approved/pending treatment above rather than inventing new colours for an equivalent meaning. */
+.em-staff__status--sent {
+	background: color-mix(in srgb, var(--wp--preset--color--primary-green) 18%, transparent);
+	color: color-mix(in srgb, var(--wp--preset--color--primary-green) 65%, var(--wp--preset--color--black));
+}
+.em-staff__status--sending {
+	background: color-mix(in srgb, var(--wp--preset--color--purple) 12%, transparent);
+	color: var(--wp--preset--color--purple);
+}
+.em-staff__status--failed,
+.em-staff__status--blocked {
+	background: color-mix(in srgb, var(--wp--preset--color--red) 12%, transparent);
+	color: var(--wp--preset--color--red);
+}
+.em-staff__status--not_sent {
+	background: color-mix(in srgb, var(--wp--preset--color--black) 8%, transparent);
+	color: color-mix(in srgb, var(--wp--preset--color--black) 60%, transparent);
+}
+.em-staff__view {
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.8125rem;
+	font-weight: 500;
+	color: var(--wp--preset--color--purple);
+	white-space: nowrap;
+}
+
+.em-staff__pagination {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	margin-top: 2rem;
+}
+.em-staff__page {
+	min-width: 2.25rem;
+	padding: 0.4rem 0.6rem;
+	border: 1px solid var(--wp--preset--color--black);
+	text-align: center;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.8125rem;
+	color: var(--wp--preset--color--black);
+}
+.em-staff__page--current {
+	background: var(--wp--preset--color--black);
+	color: var(--wp--preset--color--white);
+}
+
+/* ---------- Applicant detail ---------- */
+
+.em-staff__back {
+	display: inline-block;
+	margin-bottom: 1.5rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--wp--preset--color--purple);
+}
+.em-staff__detail {
+	display: grid;
+	grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+	gap: clamp(2rem, 5vw, 4rem);
+	align-items: start;
+}
+.em-staff__detail-eyebrow {
+	margin: 0 0 0.35rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.8125rem;
+	font-weight: 500;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--wp--preset--color--purple);
+}
+.em-staff__detail-name {
+	margin: 0 0 1rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-weight: 500;
+	font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2.25rem);
+}
+.em-staff__detail-facts {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1.25rem 1.5rem;
+	margin: 1.5rem 0;
+	padding-top: 1.5rem;
+	border-top: 1px solid color-mix(in srgb, var(--wp--preset--color--black) 20%, transparent);
+}
+.em-staff__detail-facts dt {
+	margin: 0 0 0.2rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.75rem;
+	font-weight: 500;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 55%, transparent);
+}
+.em-staff__detail-facts dd {
+	margin: 0;
+	font-size: 0.9375rem;
+	word-break: break-word;
+}
+.em-staff__detail-subhead {
+	margin: 0 0 0.75rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.9375rem;
+	font-weight: 500;
+}
+.em-staff__detail-reason {
+	margin: 0;
+	padding: 1rem 1.25rem;
+	border-left: 3px solid var(--wp--preset--color--primary-green);
+	background: color-mix(in srgb, var(--wp--preset--color--primary-green) 5%, transparent);
+	font-size: 1rem;
+	line-height: 1.7;
+}
+.em-staff__detail-side {
+	padding: clamp(1.5rem, 3vw, 2rem);
+	background: color-mix(in srgb, var(--wp--preset--color--black) 3%, transparent);
+	border: 1px solid color-mix(in srgb, var(--wp--preset--color--black) 15%, transparent);
+}
+.em-staff__timeline {
+	margin: 0 0 1.75rem;
+	padding: 0;
+	list-style: none;
+	border-left: 2px solid color-mix(in srgb, var(--wp--preset--color--black) 20%, transparent);
+}
+.em-staff__timeline-item {
+	position: relative;
+	padding: 0 0 1.25rem 1.5rem;
+	font-size: 0.9375rem;
+}
+.em-staff__timeline-item:last-child {
+	padding-bottom: 0;
+}
+.em-staff__timeline-dot {
+	position: absolute;
+	left: -0.4375rem;
+	top: 0.2rem;
+	width: 0.75rem;
+	height: 0.75rem;
+	background: var(--wp--preset--color--white);
+	border: 2px solid var(--wp--preset--color--black);
+	border-radius: 50%;
+}
+.em-staff__timeline-item--done .em-staff__timeline-dot {
+	background: var(--wp--preset--color--primary-green);
+	border-color: var(--wp--preset--color--primary-green);
+}
+.em-staff__timeline-item--active .em-staff__timeline-dot {
+	background: var(--wp--preset--color--purple);
+	border-color: var(--wp--preset--color--purple);
+}
+.em-staff__timeline-item time {
+	display: block;
+	font-size: 0.8125rem;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 55%, transparent);
+}
+/* UI-only spacing fix: wraps the Resend form (when shown) and the .em-staff__actions row so
+ * they are no longer stuck together, using the same flex+gap technique .em-staff__actions
+ * already uses for Approve/Reject below - no button-specific margins. Markup: staff-portal-
+ * render.php, emergence_staff_render_detail(). */
+.em-staff__action-group {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+.em-staff__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+}
+.em-staff__action {
+	flex: 1 1 8rem;
+	min-height: 2.75rem;
+	padding: 0 1rem;
+	border: 2px solid var(--wp--preset--color--black);
+	background: transparent;
+	color: var(--wp--preset--color--black);
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-weight: 500;
+	font-size: 0.8125rem;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	cursor: not-allowed;
+	opacity: 0.45;
+	transition: background-color 0.15s ease, color 0.15s ease;
+}
+/* Batch 08D.1: a real affordance for a button that is genuinely enabled - needed now that both
+   the Approve button (the staging QA override, Hotfix 08C.3D-H1) and the new Check In button
+   below can render enabled while the disabled attribute's absence was previously the only signal.
+   The `disabled` HTML attribute stays the single source of truth this reads; nothing here affects
+   it. */
+.em-staff__action:not(:disabled) {
+	cursor: pointer;
+	opacity: 1;
+}
+.em-staff__action:not(:disabled):hover {
+	background: var(--wp--preset--color--black);
+	color: var(--wp--preset--color--white);
+}
+.em-staff__actions-note {
+	flex-basis: 100%;
+	margin: 0.25rem 0 0;
+	font-size: 0.8125rem;
+	font-style: italic;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 55%, transparent);
+}
+
+/* ---------- Responsive: 1024 / 768 / 430 / 390 / 320 ---------- */
+
+@media (max-width: 1024px) {
+	.em-staff__counts {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.em-staff__detail {
+		grid-template-columns: 1fr;
+	}
+}
+
+@media (max-width: 768px) {
+	.em-staff__table thead {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+	.em-staff__table,
+	.em-staff__table tbody,
+	.em-staff__table tr,
+	.em-staff__table td {
+		display: block;
+		width: 100%;
+	}
+	.em-staff__row {
+		margin-bottom: 1rem;
+		padding: 1rem;
+		border: 1px solid color-mix(in srgb, var(--wp--preset--color--black) 20%, transparent);
+	}
+	.em-staff__table td {
+		padding: 0.35rem 0;
+		border-bottom: 0;
+	}
+	.em-staff__table td[data-label]:not([data-label=""])::before {
+		content: attr(data-label);
+		display: block;
+		margin-bottom: 0.15rem;
+		font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+		font-size: 0.6875rem;
+		font-weight: 500;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: color-mix(in srgb, var(--wp--preset--color--black) 50%, transparent);
+	}
+	.em-staff__detail-facts {
+		grid-template-columns: 1fr;
+	}
+}
+
+@media (max-width: 430px) {
+	.em-staff__counts {
+		grid-template-columns: 1fr 1fr;
+	}
+	.em-staff__filters {
+		flex-direction: column;
+		align-items: stretch;
+	}
+	.em-staff__filters label {
+		width: 100%;
+	}
+	.em-staff__filter-apply {
+		width: 100%;
+	}
+	.em-staff__login-card {
+		border-top-width: 4px;
+	}
+}
+
+@media (max-width: 320px) {
+	.em-staff--app {
+		padding-left: 1rem;
+		padding-right: 1rem;
+	}
+	.em-staff__count {
+		padding: 1rem 0.75rem;
+	}
+}
+
+.em-staff__pass-link {
+	margin: 0 0 1.25rem;
+}
+.em-staff__pass-link a {
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-weight: 500;
+	color: var(--wp--preset--color--purple);
+}
+/* END Staff Registration Dashboard ================================================ */
+
+/* START Digital Pass (Batch 08C.1) ================================================
+   Staff-restricted printable pass, rendered inside the Staff Registration Dashboard's own
+   shell (".em-staff--app") at ?emergence_verify=<reference>. Same brand language as the rest
+   of the dashboard: Poppins/Lora, flat sharp-cornered cards, 2px black borders, the site's
+   signature offset box-shadow. Responsive from 320px; see the @media print block at the end
+   for the isolated, chrome-free printed layout. */
+.em-pass {
+	box-sizing: border-box;
+	max-width: 26rem;
+	margin: 0 auto 2rem;
+}
+.em-pass * {
+	box-sizing: border-box;
+}
+.em-pass__status {
+	margin: 0 0 1rem;
+	padding: 0.6rem 1rem;
+	background: var(--wp--preset--color--primary-green);
+	color: var(--wp--preset--color--black);
+	border: 2px solid var(--wp--preset--color--black);
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.8125rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	text-align: center;
+}
+.em-pass__card {
+	background: var(--wp--preset--color--white);
+	border: 2px solid var(--wp--preset--color--black);
+	box-shadow: 0.35rem 0.35rem 0 var(--wp--preset--color--black);
+	padding: clamp(1.25rem, 4vw, 2rem);
+}
+.em-pass__header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	padding-bottom: 1rem;
+	margin-bottom: 1.25rem;
+	border-bottom: 2px solid var(--wp--preset--color--black);
+}
+.em-pass__logo {
+	height: 2rem;
+	width: auto;
+	display: block;
+}
+.em-pass__year {
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--wp--preset--color--purple);
+}
+.em-pass__name {
+	margin: 0 0 0.25rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: clamp(1.375rem, 4vw, 1.75rem);
+	font-weight: 600;
+	color: var(--wp--preset--color--black);
+}
+.em-pass__session {
+	margin: 0 0 1.25rem;
+	font-family: var(--wp--preset--font-family--lora, Lora, serif);
+	font-style: italic;
+	font-size: 1.0625rem;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 78%, transparent);
+}
+.em-pass__facts {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 0.85rem;
+	margin: 0 0 1.5rem;
+	padding: 1rem 0;
+	border-top: 1px solid color-mix(in srgb, var(--wp--preset--color--black) 20%, transparent);
+	border-bottom: 1px solid color-mix(in srgb, var(--wp--preset--color--black) 20%, transparent);
+}
+.em-pass__facts dt {
+	margin: 0 0 0.15rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.6875rem;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 55%, transparent);
+}
+.em-pass__facts dd {
+	margin: 0;
+	font-size: 0.9375rem;
+	color: var(--wp--preset--color--black);
+}
+.em-pass__qr {
+	text-align: center;
+	padding: 1rem 0 0.25rem;
+}
+.em-pass__qr svg {
+	width: min(180px, 100%);
+	height: auto;
+}
+.em-pass__qr-fallback {
+	font-size: 0.875rem;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 70%, transparent);
+}
+.em-pass__ref {
+	margin: 0.5rem 0 0;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.75rem;
+	letter-spacing: 0.05em;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 55%, transparent);
+}
+.em-pass__instructions {
+	margin: 1.25rem 0 0;
+	padding-top: 1rem;
+	border-top: 1px solid color-mix(in srgb, var(--wp--preset--color--black) 20%, transparent);
+	font-size: 0.8125rem;
+	text-align: center;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 70%, transparent);
+}
+.em-pass__print {
+	margin: 1rem 0 0;
+	text-align: center;
+}
+.em-pass__print-link {
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-weight: 500;
+	color: var(--wp--preset--color--purple);
+}
+
+@media (max-width: 320px) {
+	.em-pass__header {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.5rem;
+	}
+}
+
+@media print {
+	.em-staff__back,
+	.em-staff__detail-side,
+	.em-staff__detail-main,
+	.em-staff__header,
+	.em-staff__notice,
+	.em-pass__print {
+		display: none !important;
+	}
+	body * {
+		visibility: hidden;
+	}
+	.em-pass,
+	.em-pass * {
+		visibility: visible;
+	}
+	.em-pass {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		max-width: none;
+		margin: 0;
+		padding: 1.5rem;
+	}
+	.em-pass__card {
+		box-shadow: none;
+	}
+}
+/* END Digital Pass ================================================================= */
+
+/* START Check-in (Batch 08D.1) ================================================
+   Staff-only check-in status + control, appended after the shared .em-pass markup on the staff
+   verification view only (includes/staff-portal-render.php emergence_staff_render_checkin_panel(),
+   called from includes/pass.php emergence_staff_render_pass_view()) - never part of .em-pass
+   itself, so it can never appear on the public attendee pass page. Same brand language and the
+   same 320/390/768/desktop responsiveness as the rest of the staff dashboard; hidden entirely when
+   printing a pass (it is staff-operational UI, not part of the printed admission pass). */
+.em-pass-checkin {
+	box-sizing: border-box;
+	max-width: 26rem;
+	margin: 0 auto 2rem;
+	padding: 1.25rem clamp(1.25rem, 4vw, 1.5rem);
+	background: var(--wp--preset--color--white);
+	border: 2px solid var(--wp--preset--color--black);
+}
+.em-pass-checkin__status {
+	margin: 0 0 0.75rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.8125rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+.em-pass-checkin__status--pending {
+	color: color-mix(in srgb, var(--wp--preset--color--black) 70%, transparent);
+}
+.em-pass-checkin__status--done {
+	color: var(--wp--preset--color--primary-green);
+}
+.em-pass-checkin__meta {
+	margin: 0;
+	font-size: 0.9375rem;
+	color: var(--wp--preset--color--black);
+}
+.em-pass-checkin .em-staff__action-form {
+	margin-top: 0.5rem;
+}
+.em-staff__action--checkin:not(:disabled) {
+	border-color: var(--wp--preset--color--purple);
+	color: var(--wp--preset--color--purple);
+}
+.em-staff__action--checkin:not(:disabled):hover {
+	background: var(--wp--preset--color--purple);
+	border-color: var(--wp--preset--color--purple);
+	color: var(--wp--preset--color--white);
+}
+@media print {
+	.em-pass-checkin {
+		display: none !important;
+	}
+}
+/* END Check-in ====================================================================== */
+
+/* ---------- Public attendee pass page (Batch 08C.2) - standalone document, no site header/footer;
+   see includes/pass.php emergence_pass_render_attendee_shell(). Reuses .em-pass as-is. ---------- */
+.em-pass-page {
+	margin: 0;
+	min-height: 100vh;
+	background: color-mix(in srgb, var(--wp--preset--color--black) 4%, var(--wp--preset--color--white));
+	font-family: var(--wp--preset--font-family--lora, Lora, serif);
+	color: var(--wp--preset--color--black);
+}
+.em-pass-page__main {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: flex-start;
+	padding: clamp(1.25rem, 5vw, 3rem) 1rem;
+}
+.em-pass-page__notice {
+	max-width: 26rem;
+	margin: 2rem auto;
+	padding: 1.25rem 1.5rem;
+	border: 2px solid var(--wp--preset--color--black);
+	background: var(--wp--preset--color--white);
+	font-size: 0.9375rem;
+}
+.em-pass-page__caveat {
+	max-width: 26rem;
+	margin: 0 auto;
+	padding: 0 0.5rem;
+	font-family: var(--wp--preset--font-family--poppins, Poppins, sans-serif);
+	font-size: 0.75rem;
+	line-height: 1.6;
+	text-align: center;
+	color: color-mix(in srgb, var(--wp--preset--color--black) 55%, transparent);
+}
+@media print {
+	.em-pass-page {
+		background: none;
+	}
+	.em-pass-page__caveat {
+		display: none;
+	}
+}
+/* END Public attendee pass page ===================================================== */

@@ -26,6 +26,7 @@ import * as insightSummary from '../lib/atlas/insight-summary.js';
 import * as placeNames from '../lib/atlas/place-names.js';
 import * as searchText from '../lib/atlas/search-text.js';
 import { makeSmallPhotos } from '../../deploy/make-small-photos.mjs';
+import * as lookRead from '../lib/atlas/look-read.js';
 import {
   enqueueBuild, getJob, setJobDoneHook, setStrandedBuildHook, DATASETS_ROOT, PRIVATE_ROOT,
 } from '../lib/atlas/jobs.js';
@@ -44,6 +45,10 @@ const REPO_ROOT = path.join(__dirname, '..', '..');
    the fourth one's column on every place and the map called a key "Pattern 4". */
 const requireScript = createRequire(import.meta.url);
 const RULES = requireScript(path.join(REPO_ROOT, 'atlas', 'reading-rules.js'));
+// an atlas's look (theme.js) and the rule that makes one from a website's
+// colours (look-map.js): the files the browser runs too, so one rule
+const THEME = requireScript(path.join(REPO_ROOT, 'atlas', 'theme.js'));
+const LOOK_MAP = requireScript(path.join(REPO_ROOT, 'atlas', 'look-map.js'));
 const CATALOG_FILE = path.join(REPO_ROOT, 'atlas', 'setup', 'catalog.json');
 const GEOCACHE_DIR = path.join(reg.DATA_DIR, 'geocache');
 
@@ -2261,6 +2266,33 @@ router.get('/instances/:slug/small-photos', (req, res) => {
   res.json({ running: !!st.running, done: st.done || 0, total: st.total || 0, made: st.made || 0, failed: st.failed || 0, finishedAt: st.finishedAt || null });
 });
 
+/* The one way a logo reaches the disk: a PNG under 200 KB (validLogo), as
+   branding-logo.png in the atlas's own folder. Settings' Save and a look read
+   from a website both come through here, so there is one rule. */
+function logoPath(inst, previous) { return path.join(datasetDirFor(inst), previous ? 'branding-logo.previous.png' : 'branding-logo.png'); }
+function saveLogoFile(inst, dataUrl) {
+  const valid = validLogo(dataUrl);
+  if (!valid) return { error: 'logo must be a PNG under 200 KB', status: 400 };
+  try { fs.writeFileSync(logoPath(inst), Buffer.from(valid.split(',')[1], 'base64')); }
+  catch { return { error: 'could not save the logo', status: 500 }; }
+  return { ok: true };
+}
+function removeLogoFile(inst) {
+  try { fs.rmSync(logoPath(inst), { force: true }); } catch { /* ignore */ }
+}
+/* A logo changed by hand in Identity after a look brought one: the look's
+   Undo must then leave the logo alone (it would put back a file the owner
+   has since replaced), so the kept copy goes and Undo is told it touches the
+   theme only. */
+function forgetLookLogo(inst) {
+  try { fs.rmSync(logoPath(inst, true), { force: true }); } catch { /* ignore */ }
+  const { file, local } = readOverlay(inst);
+  if (local && local.themePrevious && typeof local.themePrevious === 'object' && local.themePrevious.logoChanged) {
+    local.themePrevious.logoChanged = false;
+    writeOverlay(file, local);
+  }
+}
+
 // Fast edit — text, branding, logo and public/private — with no rebuild.
 router.post('/instances/:slug/details', (req, res) => {
   const inst = reg.getInstance(String(req.params.slug));
@@ -2297,18 +2329,15 @@ router.post('/instances/:slug/details', (req, res) => {
   };
 
   // logo add / replace / remove (written straight into the current dataset dir)
-  const curDir = datasetDirFor(inst);
   if (bb.removeLogo) {
-    try { fs.rmSync(path.join(curDir, 'branding-logo.png'), { force: true }); } catch { /* ignore */ }
+    removeLogoFile(inst);
     branding.hasLogo = false;
   } else if (bb.logoData) {
-    const valid = validLogo(bb.logoData);
-    if (!valid) return res.status(400).json({ error: 'logo must be a PNG under 200 KB' });
-    try {
-      fs.writeFileSync(path.join(curDir, 'branding-logo.png'), Buffer.from(valid.split(',')[1], 'base64'));
-      branding.hasLogo = true;
-    } catch { return res.status(500).json({ error: 'could not save the logo' }); }
+    const saved = saveLogoFile(inst, bb.logoData);
+    if (saved.error) return res.status(saved.status).json({ error: saved.error });
+    branding.hasLogo = true;
   }
+  if (bb.removeLogo || bb.logoData) forgetLookLogo(inst);
 
   /* Who can see it. 'private' moves the whole dataset folder out of the web
      root into PRIVATE_ROOT, where only GET /datasets/:slug/:file can reach it
@@ -2354,6 +2383,194 @@ router.post('/instances/:slug/details', (req, res) => {
   rewriteManifest(updated);
   if (has('placeName')) writePlaceName(updated);
   res.json({ ok: true, visibility: updated.visibility, status: updated.status, viewKey: viewKey || undefined });
+});
+
+/* ================= a look read from a website =================
+   docs/design-style-from-website.md. The owner or an editor (D2: the same
+   people who may change the title and logo) gives a website address; the
+   server reads the site (look-read.js), maps its colours onto the atlas's
+   slots (look-map.js) and answers with a proposal. Nothing is written until
+   Save, which re-checks the block (never the browser's word for it), keeps
+   the look that was there as themePrevious for one step of Undo (D9), and
+   saves the logo through the same function Settings uses. The theme lives in
+   manifest.local.json, the file a rebuild leaves alone. */
+function lookGate(req, res, write) {
+  const inst = reg.getInstance(String(req.params.slug));
+  if (!inst) { res.status(404).json({ error: 'not found' }); return null; }
+  if (!callerCanEdit(req, inst)) { res.status(403).json({ error: 'not allowed' }); return null; }
+  if (write && searchText.isNeverTouched(inst.slug)) { res.status(403).json({ error: 'not allowed' }); return null; }
+  if (inst.status === 'building' || inst.status === 'pending-approval') {
+    res.status(409).json({ error: 'Wait for the atlas to finish building, then try again.' }); return null;
+  }
+  return inst;
+}
+/* The theme block as the server will keep it: known keys only, colours that
+   are colours, a light page (the guard's word, THEME.resolve, is final), and
+   what the guard darkens written back so the saved look needs no change at
+   run time. Returns { theme } or { error }. */
+function cleanLookTheme(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { error: 'No look was given.' };
+  const t = { version: 1, colors: {} };
+  const HEX = /^#[0-9a-fA-F]{6}$/;
+  const colors = raw.colors && typeof raw.colors === 'object' ? raw.colors : {};
+  for (const k of LOOK_MAP.SLOTS) if (typeof colors[k] === 'string' && HEX.test(colors[k])) t.colors[k] = colors[k].toUpperCase();
+  if (!Object.keys(t.colors).length) return { error: 'The look has no colours in it.' };
+  if (raw.corners === 'square' || raw.corners === 'soft') t.corners = raw.corners;
+  const lw = Number(raw.logoMaxWidth);
+  if (lw >= 60 && lw <= 220) t.logoMaxWidth = Math.round(lw);
+  if (raw.source && typeof raw.source === 'object') {
+    const src = {};
+    for (const k of ['url', 'host', 'readAt']) if (typeof raw.source[k] === 'string') src[k] = raw.source[k].slice(0, 300);
+    if (src.host && !/^[a-z0-9.-]+$/i.test(src.host)) delete src.host;
+    if (src.url && !/^https?:\/\//i.test(src.url)) delete src.url;
+    if (src.host) t.source = src;
+  }
+  if (raw.chosen && typeof raw.chosen === 'object') {
+    const ch = {};
+    for (const k of LOOK_MAP.SLOTS) if (typeof raw.chosen[k] === 'string' && HEX.test(raw.chosen[k])) ch[k] = raw.chosen[k].toUpperCase();
+    if (Object.keys(ch).length) t.chosen = ch;
+  }
+  t.credit = raw.credit !== false;   // D3: the credit line is on unless switched off
+  const r = THEME.resolve(t);
+  if (r.notes.some((n) => /too dark for a page/.test(n))) return { error: 'That page colour is too dark. LOKA has no dark mode, so a look needs a light page.' };
+  for (const k of LOOK_MAP.SLOTS) { const v = r.vars[THEME.VARS[k]]; if (t.colors[k] && v) t.colors[k] = v; }
+  return { theme: t };
+}
+function lookAnswer(inst, local) {
+  const b = inst.branding || {};
+  return {
+    theme: local && local.theme && typeof local.theme === 'object' ? local.theme : null,
+    canUndo: !!(local && local.themePrevious && typeof local.themePrevious === 'object'),
+    hasLogo: !!b.hasLogo,
+    site: b.orgUrl || '',
+  };
+}
+
+router.get('/instances/:slug/look', (req, res) => {
+  const inst = lookGate(req, res, false);
+  if (!inst) return;
+  res.json(lookAnswer(inst, readOverlay(inst).local));
+});
+
+// Read a website: answers a proposal, writes nothing.
+router.post('/instances/:slug/look/read', async (req, res) => {
+  const inst = lookGate(req, res, true);
+  if (!inst) return;
+  const typed = String((req.body && req.body.url) || '').trim();
+  if (!typed) return res.status(400).json({ error: lookRead.WORDS.unreachable });
+  const session = auth.sessionFromReq(req);
+  // a second press while one read is running gets the running one's answer
+  const running = lookRead.runningRead(inst.slug);
+  if (running) { const r = await running; return res.status(r.error ? 422 : 200).json(r.error ? { error: lookRead.WORDS[r.error] } : r); }
+  const allowed = lookRead.readAllowed(inst.slug, session && session.email);
+  if (!allowed.ok) return res.status(429).json({ error: lookRead.WORDS[allowed.error] });
+  const t0 = Date.now();
+  const p = await lookRead.markRunning(inst.slug, lookRead.readSite(typed).catch((e) => ({ error: 'unreachable', reason: 'threw:' + (e && e.message) })));
+  // logged with the host and the outcome, never with page content
+  let host = ''; try { host = new URL(/^[a-z]+:/i.test(typed) ? typed : 'https://' + typed).hostname; } catch { host = '?'; }
+  console.info('[look] ' + inst.slug + ' ' + host + ' ' + (Date.now() - t0) + 'ms ' + (p.error ? 'failed: ' + (p.reason || p.error) : 'ok ' + (p.stats ? p.stats.bytes + 'B ' + p.stats.sheets + ' sheets ' + p.stats.images + ' pictures' : '')));
+  if (p.error) return res.status(422).json({ error: lookRead.WORDS[p.error] || lookRead.WORDS.unreachable, reason: p.error });
+  res.json(p);
+});
+
+// Save a look: the theme block, and the logo when asked (D4: logos only).
+router.post('/instances/:slug/look', (req, res) => {
+  const inst = lookGate(req, res, true);
+  if (!inst) return;
+  const b = req.body || {};
+  const cleaned = cleanLookTheme(b.theme);
+  if (cleaned.error) return res.status(400).json({ error: cleaned.error });
+  const { file, local: existing } = readOverlay(inst);
+  const local = existing || { layers: [] };
+  const curB = inst.branding || {};
+  const useLogo = !!b.useLogo && typeof b.logoData === 'string';
+  const logoChanged = useLogo;
+  if (useLogo && !validLogo(b.logoData)) return res.status(400).json({ error: 'The logo must be a PNG under 200 KB.' });
+  const previous = { theme: local.theme && typeof local.theme === 'object' ? local.theme : null, themePrevious: local.themePrevious };
+  local.themePrevious = { theme: previous.theme, logoWas: !!curB.hasLogo, logoChanged, savedAt: new Date().toISOString() };
+  local.theme = cleaned.theme;
+  // the overlay first: if it cannot be written, "nothing changed" is true
+  if (!writeOverlay(file, local)) return res.status(500).json({ error: 'Could not save. Nothing changed — try again.' });
+  if (useLogo) {
+    // the logo that was there goes aside for one step of Undo
+    const hadFile = curB.hasLogo && fs.existsSync(logoPath(inst));
+    try { if (hadFile) fs.renameSync(logoPath(inst), logoPath(inst, true)); } catch { /* best effort */ }
+    const saved = saveLogoFile(inst, b.logoData);
+    if (saved.error) {
+      // put everything back as it was, so the answer is true
+      try { if (hadFile) fs.renameSync(logoPath(inst, true), logoPath(inst)); } catch { /* best effort */ }
+      local.theme = previous.theme || undefined; if (local.theme === undefined) delete local.theme;
+      local.themePrevious = previous.themePrevious;
+      writeOverlay(file, local);
+      return res.status(saved.status).json({ error: saved.error + ' Nothing changed — try again.' });
+    }
+  }
+  if (logoChanged) {
+    const session = auth.sessionFromReq(req);
+    const branding = { ...curB, hasLogo: true, logoRights: { by: (session && session.email) || 'token', at: new Date().toISOString(), from: cleaned.theme.source ? cleaned.theme.source.host : '' } };
+    rewriteManifest(reg.updateInstance(inst.slug, { branding }));
+  }
+  res.json({ ok: true, ...lookAnswer(reg.getInstance(inst.slug), local) });
+});
+
+// One step back (D9): the theme and themePrevious change places, and the
+// logo files with them when the look brought a logo. Pressing it again is redo.
+router.post('/instances/:slug/look/undo', (req, res) => {
+  const inst = lookGate(req, res, true);
+  if (!inst) return;
+  const { file, local } = readOverlay(inst);
+  const prev = local && local.themePrevious;
+  if (!prev || typeof prev !== 'object') return res.status(409).json({ error: 'There is nothing to undo.' });
+  const curB = inst.branding || {};
+  const now = local.theme && typeof local.theme === 'object' ? local.theme : null;
+  let hasLogo = !!curB.hasLogo;
+  if (prev.logoChanged) {
+    const cur = logoPath(inst), old = logoPath(inst, true), tmp = cur + '.swap';
+    try {
+      const haveCur = fs.existsSync(cur), haveOld = fs.existsSync(old);
+      if (prev.logoWas) {
+        // there was a logo before the look: it comes back, the look's goes aside
+        if (haveCur && haveOld) { fs.renameSync(cur, tmp); fs.renameSync(old, cur); fs.renameSync(tmp, old); }
+        else if (haveOld) fs.renameSync(old, cur);
+        hasLogo = true;
+      } else {
+        // there was none: the look's goes aside (over any older copy), leaving none
+        if (haveCur) { fs.rmSync(old, { force: true }); fs.renameSync(cur, old); }
+        hasLogo = false;
+      }
+    } catch { return res.status(500).json({ error: 'Could not put the logo back. Nothing changed — try again.' }); }
+  }
+  local.theme = prev.theme || undefined;
+  if (local.theme === undefined) delete local.theme;
+  local.themePrevious = { theme: now, logoWas: !!curB.hasLogo, logoChanged: !!prev.logoChanged, savedAt: new Date().toISOString() };
+  if (!writeOverlay(file, local)) return res.status(500).json({ error: 'Could not save. Nothing changed — try again.' });
+  let fresh = inst;
+  if (hasLogo !== !!curB.hasLogo) { fresh = reg.updateInstance(inst.slug, { branding: { ...curB, hasLogo } }); rewriteManifest(fresh); }
+  res.json({ ok: true, ...lookAnswer(fresh, local) });
+});
+
+// Back to LOKA's look: the theme goes (one step of Undo brings it back); the
+// logo stays — it is the owner's logo field, removed in Identity if they want.
+router.delete('/instances/:slug/look', (req, res) => {
+  const inst = lookGate(req, res, true);
+  if (!inst) return;
+  const { file, local } = readOverlay(inst);
+  if (!local || !local.theme) return res.json({ ok: true, ...lookAnswer(inst, local) });
+  local.themePrevious = { theme: local.theme, logoWas: !!(inst.branding && inst.branding.hasLogo), logoChanged: false, savedAt: new Date().toISOString() };
+  delete local.theme;
+  if (!writeOverlay(file, local)) return res.status(500).json({ error: 'Could not save. Nothing changed — try again.' });
+  res.json({ ok: true, ...lookAnswer(inst, local) });
+});
+
+// D3: "say where the look comes from" in About this atlas — on unless switched off
+router.post('/instances/:slug/look/credit', (req, res) => {
+  const inst = lookGate(req, res, true);
+  if (!inst) return;
+  const { file, local } = readOverlay(inst);
+  if (!local || !local.theme || typeof local.theme !== 'object') return res.status(409).json({ error: 'This atlas has no look from a website.' });
+  local.theme.credit = !(req.body && req.body.on === false);
+  if (!writeOverlay(file, local)) return res.status(500).json({ error: 'Could not save. Nothing changed — try again.' });
+  res.json({ ok: true, ...lookAnswer(inst, local) });
 });
 
 /* A new private link. The old one stops working the moment this answers —

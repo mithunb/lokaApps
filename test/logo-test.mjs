@@ -108,7 +108,12 @@ check('a 200 KB logo, written out as text, fits in the request the server reads'
   Number(limit) * 1024 * 1024 > Math.ceil(200 * 1024 / 3) * 4 + 50 * 1024, true);
 check('the page can run the piece as a browser would (window.LokaLogoTools)',
   (() => { const w = {}; new Function('window', tools)(w); return Object.keys(w.LokaLogoTools).sort(); })(),
-  ['ACCEPT', 'LOGO_BYTES', 'LOGO_MAX', 'LOGO_MIN', 'UNREADABLE', 'dataUrlBytes', 'drawLogo', 'logoFromFile', 'logoSize', 'looksLikeImage', 'svgWithSize']);
+  ['ACCEPT', 'LOGO_BYTES', 'LOGO_MAX', 'LOGO_MIN', 'UNREADABLE', 'dataUrlBytes', 'drawLogo', 'drawnBox', 'logoFromDataUrl', 'logoFromFile', 'logoSize', 'logoTone', 'looksLikeImage', 'pixelTone', 'svgWithSize']);
+
+console.log('\n  a logo from the owner\u2019s website (look-from-website, phase 1)');
+check('empty see-through edges are trimmed before the redraw, so a wide wordmark sits flush', /function drawnBox\(g, w, h\)/.test(tools) && /var box = drawnBox\(fg, size\.w, size\.h\);/.test(tools) && /g\.drawImage\(src, sx, sy, sw, sh, 0, 0, size\.w, size\.h\);/.test(tools), true);
+check('a picture that arrived as its own bytes goes through the same redraw as a file (an SVG is rasterised, never put into the page)', /function logoFromDataUrl\(dataUrl, cb\)/.test(tools) && /logoFromFile\(file, cb\);/.test(tools), true);
+check('the owner\u2019s sheet runs the site\u2019s picture through it', /T\.logoFromDataUrl\(l\.dataUrl, function \(e, png\)/.test(fs.readFileSync(ROOT + '/atlas/owner-look.js', 'utf8')), true);
 
 console.log('\n  how big the browser draws it');
 const grab = (name) => {
@@ -126,6 +131,14 @@ check('a drawing (SVG) is drawn as large as allowed', logoSize(24, 12, 512, true
 check('a picture with no size gets a square', logoSize(0, 0, 512, false), { w: 512, h: 512 });
 const buf = png(64, 64, false);
 check('the browser measures a PNG the way the server does', dataUrlBytes(asUrl(buf)), buf.length);
+
+// the tone of a drawn picture, from its pixels (pure: a flat RGBA array)
+const { pixelTone } = new Function(grab('pixelTone') + '; return { pixelTone };')();
+const px = (list) => Uint8ClampedArray.from(list.flat());
+check('a white-on-see-through logo is light, so the sheet shows it on a dark tile', pixelTone(px([[255, 255, 255, 255], [250, 250, 250, 255], [0, 0, 0, 0], [0, 0, 0, 0]]), 2, 2).light, true);
+check('a dark logo is not', pixelTone(px([[20, 20, 20, 255], [107, 17, 100, 255], [0, 0, 0, 0], [0, 0, 0, 0]]), 2, 2).light, false);
+check('a picture with nothing drawn is empty, so it is not offered', [pixelTone(px([[255, 255, 255, 0], [0, 0, 0, 3], [0, 0, 0, 0], [0, 0, 0, 0]]), 2, 2).empty, pixelTone(px([[1, 1, 1, 255], [1, 1, 1, 255], [1, 1, 1, 255], [1, 1, 1, 255]]), 2, 2).empty], [true, false]);
+check('the sheet reads every candidate’s tone before offering it', /T\.logoTone\(png, function \(e2, tone\)/.test(fs.readFileSync(ROOT + '/atlas/owner-look.js', 'utf8')) && /tone\.empty\) \{ dropLogo\(scrim, rows, i\)/.test(fs.readFileSync(ROOT + '/atlas/owner-look.js', 'utf8')) && /tone\.light\) \{ rows\[i\]\.pic\.classList\.add\("own-look-logo-dark"\)/.test(fs.readFileSync(ROOT + '/atlas/owner-look.js', 'utf8')), true);
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -1,0 +1,160 @@
+/* ============================================================
+   LOKA Design Tokens
+   Design direction: "Living Map" — layered, earthy, alive
+   ============================================================ */
+
+:root {
+
+  /* --- Colors: Terrain + Signal palette (Light theme) --- */
+
+  /* Page backgrounds */
+  --color-bg:           #F7F6F2;   /* Warm off-white — primary page background */
+  --color-bg-alt:       #EDEAE3;   /* Slightly darker — alternate sections */
+  --color-surface:      #FFFFFF;   /* Cards & raised surfaces */
+
+  /* Dark anchor (footer, dark accents) */
+  --color-earth-deep:   #0E1A13;
+  --color-earth-mid:    #152019;
+  --color-earth-light:  #1C2E20;
+
+  /* Brand greens */
+  --color-moss:         #1A7048;   /* Primary CTA fill */
+  --color-canopy:       #145C3A;   /* Hover */
+  --color-fern:         #4A8B5F;   /* Tertiary */
+
+  /* Signal — forest green on light background */
+  --color-signal:       #1A7048;   /* Used for text, borders, icons on light bg */
+  --color-signal-mint:  #7BFFC4;   /* Mint — small highlights, tags, pills only */
+  --color-signal-dim:   rgba(26, 112, 72, 0.08);
+  --color-signal-glow:  rgba(26, 112, 72, 0.12);
+
+  /* Warm accent */
+  --color-amber:        #C97A06;   /* Pins, alerts — adjusted for light bg */
+  --color-amber-dim:    rgba(201, 122, 6, 0.10);
+
+  /* Surfaces & glass (on light bg = subtle shadows) */
+  --color-fog:          rgba(0, 0, 0, 0.025);
+  --color-fog-hover:    rgba(0, 0, 0, 0.05);
+  --color-glass-border: rgba(0, 0, 0, 0.08);
+  --color-glass-border-hover: rgba(0, 0, 0, 0.14);
+
+  /* Text */
+  --color-text-primary:   #111B13;  /* Near-black with green hue */
+  --color-text-secondary: #4D6050;  /* Medium forest */
+  --color-text-muted:     #7A8E7A;  /* Dimmed green-grey */
+  --color-text-inverse:   #F0EDE6;  /* On dark surfaces */
+
+  /* Divider */
+  --color-divider: rgba(0, 0, 0, 0.07);
+
+  /* --- Typography --- */
+
+  --font-display: 'Figtree', sans-serif;
+  --font-body:    'DM Sans', system-ui, -apple-system, sans-serif;
+
+  /* Scale (fluid, clamp-based) */
+  --text-xs:   0.75rem;    /* 12px */
+  --text-sm:   0.875rem;   /* 14px */
+  --text-base: 1rem;       /* 16px */
+  --text-lg:   1.125rem;   /* 18px */
+  --text-xl:   1.25rem;    /* 20px */
+  --text-2xl:  1.5rem;     /* 24px */
+  --text-3xl:  2rem;       /* 32px */
+  --text-4xl:  clamp(2rem, 4vw, 2.75rem);
+  --text-5xl:  clamp(2.5rem, 5.5vw, 3.75rem);
+  --text-hero: clamp(3rem, 7.5vw, 6rem);
+
+  /* Line heights */
+  --leading-tight:  1.1;
+  --leading-snug:   1.25;
+  --leading-normal: 1.6;
+  --leading-relaxed: 1.75;
+
+  /* Letter spacing */
+  --tracking-tight:  0em;
+  --tracking-normal:  0;
+  --tracking-wide:    0.06em;
+  --tracking-widest:  0.14em;
+
+  /* Font weights */
+  --weight-regular: 400;
+  --weight-medium:  500;
+  --weight-semibold: 600;
+  --weight-bold:    700;
+
+  /* --- Spacing --- */
+
+  --space-1:  0.25rem;   /*  4px */
+  --space-2:  0.5rem;    /*  8px */
+  --space-3:  0.75rem;   /* 12px */
+  --space-4:  1rem;      /* 16px */
+  --space-5:  1.25rem;   /* 20px */
+  --space-6:  1.5rem;    /* 24px */
+  --space-8:  2rem;      /* 32px */
+  --space-10: 2.5rem;    /* 40px */
+  --space-12: 3rem;      /* 48px */
+  --space-16: 4rem;      /* 64px */
+  --space-20: 5rem;      /* 80px */
+  --space-24: 6rem;      /* 96px */
+  --space-32: 8rem;      /* 128px */
+
+  /* Section padding */
+  --section-py: clamp(4rem, 8vw, 7rem);
+
+  /* --- Layout --- */
+
+  --container-max:  1280px;
+  --container-mid:  960px;
+  --container-sm:   680px;
+  --container-px:   clamp(1.25rem, 4vw, 2.5rem);
+
+  /* --- Border radius --- */
+
+  --radius-sm:   0.5rem;    /*  8px */
+  --radius-md:   0.875rem;  /* 14px */
+  --radius-lg:   1.25rem;   /* 20px */
+  --radius-xl:   1.75rem;   /* 28px */
+  --radius-2xl:  2.5rem;    /* 40px */
+  --radius-full: 9999px;
+
+  /* --- Shadows --- */
+
+  --shadow-sm:
+    0 1px 3px rgba(0,0,0,0.06),
+    0 1px 2px rgba(0,0,0,0.04);
+
+  --shadow-md:
+    0 4px 16px rgba(0,0,0,0.08),
+    0 2px 6px rgba(0,0,0,0.04);
+
+  --shadow-lg:
+    0 20px 60px rgba(0,0,0,0.12),
+    0 8px 24px rgba(0,0,0,0.06);
+
+  --shadow-phone:
+    0 32px 80px rgba(0,0,0,0.18),
+    0 0 0 1.5px rgba(0,0,0,0.10);
+
+  --shadow-signal-glow:
+    0 0 40px rgba(26, 112, 72, 0.10),
+    0 0 80px rgba(26, 112, 72, 0.05);
+
+  /* --- Transitions --- */
+
+  --ease-out:     cubic-bezier(0.0, 0.0, 0.2, 1);
+  --ease-in-out:  cubic-bezier(0.4, 0.0, 0.2, 1);
+  --ease-spring:  cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --duration-fast:   150ms;
+  --duration-base:   250ms;
+  --duration-slow:   400ms;
+  --duration-slower: 600ms;
+
+  /* --- Z-index scale --- */
+
+  --z-base:    0;
+  --z-raised:  10;
+  --z-overlay: 100;
+  --z-nav:     200;
+  --z-modal:   300;
+}

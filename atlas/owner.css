@@ -662,6 +662,54 @@
 .own-logo-name:empty::before { content:"Your organisation"; color:var(--color-text-muted); font-weight:400; letter-spacing:0; text-transform:none; }
 .own-logo-acts { gap:.75rem; }
 
+/* ---------- a look from the organisation's website (owner-look.js) ----------
+   Square-cornered tiles, the name below, the site's own use beside; the
+   Now / With switch is two plain buttons, one pressed. Nothing pill-shaped. */
+.own-look-box { display:flex; flex-direction:column; gap:.5rem; padding:.6rem .7rem;
+  border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface-alt); }
+.own-look-now { font-size:var(--t-meta); color:var(--color-text-secondary); }
+.own-look-acts { gap:.75rem; }
+.own-look-credit, .own-look-tick { display:flex; align-items:flex-start; gap:.5rem; font-size:var(--t-meta);
+  color:var(--color-text-secondary); font-weight:400; margin:.35rem 0; }
+.own-look-credit input, .own-look-tick input { margin-top:.2em; flex:none; }
+.own-look-sheet { width:min(40rem,100%); }
+.own-look-partial { color:var(--color-sindoor-deep); }
+.own-look-tiles { display:grid; grid-template-columns:repeat(auto-fill, minmax(8.5rem, 1fr)); gap:.6rem; }   /* two across on a phone */
+.own-look-tile { display:flex; flex-direction:column; gap:.3rem; min-width:0; }
+.own-look-swatch { display:block; width:100%; height:2.6rem; border:1px solid var(--color-border); border-radius:0;
+  cursor:pointer; padding:0; }
+.own-look-swatch:focus-visible { outline:2px solid var(--color-leaf); outline-offset:2px; }
+.own-look-swatch-s { width:1.6rem; height:1.6rem; }
+.own-look-tile-words { display:flex; flex-direction:column; font-size:var(--t-meta); color:var(--color-text-secondary); }
+.own-look-tile-words b { color:var(--color-text-primary); }
+.own-look-pick { display:flex; flex-wrap:wrap; align-items:center; gap:.3rem; padding:.3rem 0; }
+.own-look-lines { margin:.5rem 0 0; padding-left:1.1rem; font-size:var(--t-meta); color:var(--color-text-secondary); }
+.own-look-lines li { margin:.15rem 0; }
+.own-look-logos { display:flex; flex-direction:column; gap:.4rem; }
+.own-look-logo { display:flex; align-items:center; gap:.65rem; padding:.45rem .55rem; border:1px solid var(--color-border);
+  border-radius:var(--radius-md); background:var(--color-surface); cursor:pointer; font-weight:400; }
+.own-look-logo input { flex:none; margin:0; }
+.own-look-logo-pic { display:flex; align-items:center; justify-content:center; flex:none; width:7.5rem; height:3rem;
+  padding:.25rem .4rem; border:1px solid var(--color-divider); border-radius:0; }
+.own-look-logo-pic img { max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; }
+/* a light logo (white on see-through) is shown on a dark tile, or it would be invisible */
+.own-look-logo-pic.own-look-logo-dark { background:#24211D; }
+.own-look-logo-words { display:flex; flex-direction:column; min-width:0; font-size:var(--t-meta); color:var(--color-text-secondary); }
+.own-look-logo-words b { color:var(--color-text-primary); }
+.own-look-logo-no .own-look-logo-words span { color:var(--color-sindoor-deep); }
+.own-look-left { margin:.5rem 0; font-size:var(--t-meta); color:var(--color-text-secondary); }
+.own-look-left summary { cursor:pointer; color:var(--color-text-primary); }
+.own-look-left ul { margin:.3rem 0 0; padding-left:1.1rem; }
+.own-look-switch { display:flex; gap:0; margin-bottom:.5rem; }
+.own-look-sw { font:inherit; font-size:var(--t-meta); font-weight:600; padding:.35rem .7rem; cursor:pointer;
+  border:1px solid var(--color-leaf); border-radius:0; background:transparent; color:var(--color-leaf); }
+.own-look-sw + .own-look-sw { border-left:0; }
+.own-look-sw[aria-pressed="true"] { background:var(--color-leaf); color:#fff; }
+.own-look-frame { position:relative; border:1px solid var(--color-border); border-radius:0; background:var(--color-surface-alt);
+  min-height:4rem; }
+.own-look-frame iframe { display:block; width:100%; height:24rem; border:0; background:#fff; }
+.own-look-frame .wait-line { margin:1.2rem; }
+
 
 /* ---------- the first look (October 2026, release 2) ----------
    Once, on the atlas the wizard just built: a card docked where the place

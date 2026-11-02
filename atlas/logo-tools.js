@@ -56,14 +56,76 @@
     return { text: new XMLSerializer().serializeToString(doc), w: sz.w, h: sz.h };
   }
 
+  /* The rows and columns at the edges that are fully see-through, so a wide
+     wordmark sits flush beside the name instead of floating in its own
+     margin. Returns the box of what is drawn, or null when nothing is. */
+  function drawnBox(g, w, h) {
+    var d;
+    try { d = g.getImageData(0, 0, w, h).data; } catch (e) { return null; }   // a tainted canvas cannot be read
+    var top = h, left = w, right = -1, bottom = -1;
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        if (d[(y * w + x) * 4 + 3] > 8) {
+          if (y < top) top = y;
+          if (y > bottom) bottom = y;
+          if (x < left) left = x;
+          if (x > right) right = x;
+        }
+      }
+    }
+    if (right < 0) return null;
+    return { x: left, y: top, w: right - left + 1, h: bottom - top + 1 };
+  }
+
+  /* How light what is drawn is, from the pixels: the mean luminance of every
+     pixel that is not see-through, 0 (black) to 1 (white), and whether anything
+     is drawn at all. A white-on-transparent logo (a partner's mark made for a
+     dark band) is invisible on a light tile; the owner's sheet shows such a
+     logo on a dark tile, and offers nothing for an empty picture. */
+  function pixelTone(d, w, h) {
+    var n = 0, sum = 0;
+    for (var i = 0; i < w * h; i++) {
+      var a = d[i * 4 + 3];
+      if (a <= 8) continue;
+      n++;
+      sum += (0.2126 * d[i * 4] + 0.7152 * d[i * 4 + 1] + 0.0722 * d[i * 4 + 2]) / 255;
+    }
+    return { drawn: n, meanLum: n ? sum / n : 0, light: n > 0 && sum / n > 0.72, empty: n < 4 };
+  }
+  // the tone of a picture given as a data URL → cb(null, { drawn, meanLum, light, empty })
+  function logoTone(dataUrl, cb) {
+    var img = new Image();
+    img.onload = function () {
+      var w = Math.max(1, Math.min(256, img.naturalWidth || 1)), h = Math.max(1, Math.min(256, img.naturalHeight || 1));
+      var c = document.createElement("canvas"); c.width = w; c.height = h;
+      var g = c.getContext("2d");
+      g.drawImage(img, 0, 0, w, h);
+      var d; try { d = g.getImageData(0, 0, w, h).data; } catch (e) { return cb(LOGO_UNREADABLE); }
+      cb(null, pixelTone(d, w, h));
+    };
+    img.onerror = function () { cb(LOGO_UNREADABLE); };
+    img.src = dataUrl;
+  }
+
   function drawLogo(img, w, h) {
     var size = logoSize(w, h, LOGO_MAX, false);
+    // first, the picture at its size, to find and trim its empty edges
+    var first = document.createElement("canvas");
+    first.width = size.w; first.height = size.h;
+    var fg = first.getContext("2d");
+    fg.drawImage(img, 0, 0, size.w, size.h);
+    var box = drawnBox(fg, size.w, size.h);
+    var src = img, sx = 0, sy = 0, sw = w, sh = h;
+    if (box && (box.w < size.w || box.h < size.h) && box.w >= 1 && box.h >= 1) {
+      src = first; sx = box.x; sy = box.y; sw = box.w; sh = box.h;
+      size = logoSize(box.w, box.h, LOGO_MAX, false);
+    }
     for (var tries = 0; tries < 12; tries++) {
       var c = document.createElement("canvas");
       c.width = size.w; c.height = size.h;
       var g = c.getContext("2d");
       g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
-      g.drawImage(img, 0, 0, size.w, size.h);        // a clear canvas keeps see-through parts
+      g.drawImage(src, sx, sy, sw, sh, 0, 0, size.w, size.h);   // a clear canvas keeps see-through parts
       var url = c.toDataURL("image/png");
       if (!/^data:image\/png;base64,/.test(url)) return null;
       if (dataUrlBytes(url) <= LOGO_BYTES) return url;
@@ -109,10 +171,33 @@
     }
   }
 
+  /* A picture that arrived as its own bytes (a logo the server found on the
+     owner's website) goes through exactly the same redraw as a file the
+     owner picked: it is drawn to a canvas, which is also how a hostile image
+     is defanged — an SVG is rasterised, never put into the page. */
+  function logoFromDataUrl(dataUrl, cb) {
+    var m = /^data:(image\/[a-z+.-]+);base64,([A-Za-z0-9+/=]+)$/i.exec(String(dataUrl || ""));
+    if (!m) return cb(LOGO_UNREADABLE);
+    var type = m[1].toLowerCase(), bytes;
+    try { bytes = Uint8Array.from(atob(m[2]), function (ch) { return ch.charCodeAt(0); }); } catch (e) { return cb(LOGO_UNREADABLE); }
+    var file = new File([bytes], "logo." + (type === "image/svg+xml" ? "svg" : type === "image/x-icon" ? "ico" : type.split("/")[1]), { type: type === "image/x-icon" ? "image/png" : type });
+    if (type === "image/x-icon") {   // the browser can draw an .ico; looksLikeImage only knows the usual four
+      var img = new Image();
+      img.onload = function () {
+        var out = null; try { out = drawLogo(img, img.naturalWidth, img.naturalHeight); } catch (e) { out = null; }
+        cb(out ? null : LOGO_UNREADABLE, out || undefined);
+      };
+      img.onerror = function () { cb(LOGO_UNREADABLE); };
+      img.src = dataUrl;
+      return;
+    }
+    logoFromFile(file, cb);
+  }
+
   window.LokaLogoTools = {
     LOGO_MAX: LOGO_MAX, LOGO_BYTES: LOGO_BYTES, LOGO_MIN: LOGO_MIN, UNREADABLE: LOGO_UNREADABLE,
     ACCEPT: "image/png,image/jpeg,image/webp,image/svg+xml,.png,.jpg,.jpeg,.webp,.svg",
-    logoSize: logoSize, dataUrlBytes: dataUrlBytes, svgWithSize: svgWithSize,
-    drawLogo: drawLogo, logoFromFile: logoFromFile, looksLikeImage: looksLikeImage,
+    logoSize: logoSize, dataUrlBytes: dataUrlBytes, svgWithSize: svgWithSize, drawnBox: drawnBox, pixelTone: pixelTone, logoTone: logoTone,
+    drawLogo: drawLogo, logoFromFile: logoFromFile, logoFromDataUrl: logoFromDataUrl, looksLikeImage: looksLikeImage,
   };
 })();
