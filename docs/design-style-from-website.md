@@ -561,3 +561,55 @@ These override the proposals above where they differ.
 - **D7 — Tab icon.** Let the creator **upload an icon while building the atlas** (the wizard), and use that as the tab icon. A website's icon may be offered as a suggestion for that upload; it is not taken silently.
 - **D8 — http sites.** Allowed (read only).
 - **D9 — Undo.** One step back.
+
+---
+
+## 14. Phase 2 design: words in the site’s font, and a tab icon chosen while building (4 Nov 2026; answered, see below)
+
+Mock-ups (scratchpad, not in the repo): `fonts.html` and `icon.html`, screenshots at phone and desktop width.
+
+### 14.1 Words in the site's font
+
+**What changes for the creator.** The look sheet gets a "Words" part under Logo. It names the font the site uses and shows the same two lines twice: once in LOKA's Karla ("Now") and once in the site's font ("With the site's …"). There is no new switch: the font goes with "Use this look", and Undo or "Back to LOKA's look" takes it away, like the colours. Three short lines under it say what does not change:
+- Titles stay in LOKA's Lora (Emergence decision, §13 and memory).
+- Names on the map stay as they are. Map letters come from the map's own glyph server, not from the page fonts.
+- Hindi, Kannada and other scripts use a matching font when the site's font has none. The stack is the site's face, then Karla, then the phone's or computer's own font for that script (Latin first; the atlas loads no Noto faces today, so this is the same fallback every atlas already uses).
+
+**Which font is taken** (§3.3 rules, unchanged): the body face from the `body`/`html` rule, else the most-used family. Generic and system names are skipped. A family is used only if it is in LOKA's committed list of Google Fonts families (`api/lib/atlas/google-fonts.json`). It is always loaded from fonts.googleapis.com with a URL we build, never from the site.
+
+**When the font is not taken, say so in one sentence and keep Karla:**
+| the site's font | what the sheet says |
+|---|---|
+| not a free font (not in the Google Fonts list, e.g. Gotham) | "The site writes its words in Gotham. It isn't a free font, so we can't use it here. Your words stay in LOKA's Karla." (D6) |
+| made for headlines (Google's category *display* or *handwriting*, e.g. Pacifico) | "… a font made for big headlines. It is hard to read in lists and small print, so your words stay in LOKA's Karla." |
+| only the computer's own fonts (Arial, system-ui …) | "The site uses whatever font each computer has, so there is nothing to take. Your words stay in LOKA's Karla." |
+| the site draws itself in the browser (D5) | the existing "we could only read part of it" line; fonts named in its stylesheets are still used |
+
+**Weights.** We load 400 and 600, or 700 if there is no 600. A family with no bold is treated like a headline font and kept out. The wait for the font is folded into the preview's existing "Opening the preview…" line, so there is no new wait.
+
+**Stored.** `theme.fonts = { text, cssUrl }` (already allowed by `theme.js`'s `FONT_CSS`), so the viewer needs no change beyond what phase 1 applies. The checks: the four refusals, the built URL, titles never set, and Undo removing the font link.
+
+### 14.2 Tab icon, chosen while building (D7)
+
+**Where.** Wizard step 3 "Name it", under Atlas name and organisation, above "How should visitors explore it?" It is one line marked optional: a small square, "Choose a picture", and a drawing of a browser tab with the atlas name, so "tab icon" needs no explaining. The tab drawing updates as the name is typed and when a picture is chosen.
+
+**Accepts.** PNG, JPG, WebP or SVG, any size up to the logo's existing limit. In the browser, the picture is trimmed of empty edges, made square (padded, never cropped) and saved at 192 × 192. Under 32 px it warns that the icon will look blurred, but lets it be used. A wait line, "Getting your picture ready…", shows while this runs.
+
+**With no picture:** the tab keeps LOKA's icon, as every atlas does today. Nothing is guessed from the logo or the name.
+
+**Afterwards.** The same field sits in Owner ▾ → Settings next to the logo, to change or take off the icon. Owner and editors can change it, as with the logo (D2). It is saved as `branding-icon.png` and `branding.icon`, and the viewer sets `<link rel="icon">`. It is carried across rebuilds like the logo: add it to jobs.js CONTRIBUTED.
+
+**And a website's look.** If the site has a square icon of at least 64 px, the look sheet offers it with one unticked box: "Use the site's icon as this atlas's tab icon." It is never taken silently (D7). Undo covers it like the logo.
+
+### 14.3 Questions for Mithun
+
+- **P1. The font control.** (a) No switch: the font goes with the look, and Undo takes it away. *Recommended: simplest, the preview shows it first.* (b) A tick, "Use the site's font for words", ticked to start with.
+- **P2. Headline fonts.** (a) Keep them out and say why. *Recommended.* (b) Allow them with a warning.
+- **P3. The tab icon in the wizard.** The wizard dropped the logo in release 2 to keep questions short. (a) Show it as one optional line, as in the mock-up. *Recommended.* (b) Fold it behind "Add a tab icon (optional)". (c) Settings only, with the wizard saying "add one later" (goes against D7).
+- **P4. When there is no icon but there is a logo.** (a) Keep LOKA's icon. *Recommended: nothing taken silently.* (b) Offer "Make one from your logo" in Settings.
+
+### Mithun's answers (4 Nov 2026)
+- **P1:** (a) no switch — the font comes with "Use this look"; Undo takes it away.
+- **P2:** (b) headline fonts are **allowed, with a warning** (not kept out). The sheet says in one plain sentence that the site's font is made for headlines and may be hard to read in long text; the owner can still use the look.
+- **P3:** (a) one optional line in the wizard's "Name it" step.
+- **P4:** not asked separately; the P3 option he chose says a logo alone never becomes the tab icon (LOKA's icon stays).
