@@ -53,11 +53,19 @@ const keyOf = (dataset, layerId) => dataset + '|' + layerId;
    layer turns every column but the coordinates into words and writes a blank
    for a column a place does not have — neither of which is a change anybody
    made to their data. */
-export function signatureOf(rows, isAnswerColumn) {
+/* Columns the server writes onto places by itself, after they arrive: not a
+   change anybody made to their data. The small photos are made in the
+   background after every change of places (make-small-photos.mjs), and when
+   they landed while the places were being read, the reading saw "changed",
+   threw its work away and read the whole layer again (4 Nov 2026). */
+export const MADE_BY_THE_SERVER = new Set(['photo_small']);
+
+export function signatureOf(rows, isAnswerColumn, opts) {
   const answer = isAnswerColumn || ((k) => /^pattern_/.test(k));
+  const skip = opts && opts.legacy ? new Set() : MADE_BY_THE_SERVER;
   const h = crypto.createHash('sha1');
   for (const r of rows || []) {
-    const keys = Object.keys(r || {}).filter((k) => k !== '_category' && !answer(k)).sort();
+    const keys = Object.keys(r || {}).filter((k) => k !== '_category' && !answer(k) && !skip.has(k)).sort();
     const parts = [];
     for (const k of keys) {
       const v = r[k];
@@ -79,10 +87,18 @@ export function signatureOf(rows, isAnswerColumn) {
    order the asker happened to gather them. A layer with no twin is one half,
    and its file fingerprint is simply its own. Every record on the list, the
    kept answers beside it and the one-off script all use this one. */
-export function fileSignatureOf(halves, isAnswerColumn) {
+export function fileSignatureOf(halves, isAnswerColumn, opts) {
   const ordered = (halves || []).slice()
     .sort((a, b) => String((a.layer || {}).id || '').localeCompare(String((b.layer || {}).id || '')));
-  return signatureOf(ordered.flatMap((h) => h.rows || []), isAnswerColumn);
+  return signatureOf(ordered.flatMap((h) => h.rows || []), isAnswerColumn, opts);
+}
+/* Does a fingerprint kept on the list still describe these places? A record
+   written before the small photos were left out (MADE_BY_THE_SERVER) holds
+   the older form, so that form is accepted too: otherwise every atlas with
+   small photos would look changed once, and be read (and charged) again. */
+export function sameFile(kept, halves, isAnswerColumn) {
+  if (!kept || !halves) return false;
+  return kept === fileSignatureOf(halves, isAnswerColumn) || kept === fileSignatureOf(halves, isAnswerColumn, { legacy: true });
 }
 
 export function createQueue({ file } = {}) {

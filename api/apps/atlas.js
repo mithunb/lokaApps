@@ -18,7 +18,7 @@ import * as auth from '../lib/atlas/auth.js';
 import { sendMail } from '../lib/mailer.js';
 import { noteTrouble, noteOk, setTroubleNotifier, openTroubles } from '../lib/atlas/trouble.js';
 import * as owed from '../lib/atlas/owed.js';
-import { queue as QUESTIONS, createQueue, fileSignatureOf, NEVER_READ, payerOf } from '../lib/atlas/questions-queue.js';
+import { queue as QUESTIONS, createQueue, fileSignatureOf, sameFile, NEVER_READ, payerOf } from '../lib/atlas/questions-queue.js';
 import * as shortLabels from '../lib/atlas/short-labels.js';
 import * as keyNouns from '../lib/atlas/key-nouns.js';
 import * as buttonNames from '../lib/atlas/button-names.js';
@@ -5275,6 +5275,12 @@ function fileSigOf(dataset, layerId) {
   const halves = layer ? fileHalves(m, layer) : null;
   return halves ? fileSignatureOf(halves, RULES.isAnswerColumn) : null;
 }
+// a kept fingerprint, in its present or its older form, against the layer's places now (sameFile)
+function stillSameFile(dataset, layerId, kept) {
+  const m = imports.readManifest(dataset);
+  const layer = m && imports.mergedLayers(m).find((L) => L.id === layerId);
+  return sameFile(kept, layer ? fileHalves(m, layer) : null, RULES.isAnswerColumn);
+}
 
 /* A layer's own shapes, for a reading's write to carry.
 
@@ -5336,7 +5342,7 @@ async function restoreAnswers(dataset, layerId) {
   // the same file, both halves (fileSigOf): a split file whose other half
   // changed is read again, not patched up from one half's old answers
   const sig = fileSigOf(dataset, layerId);
-  if (!sig || kept.sig !== sig || (kept.answers || []).length !== got.rows.length) return false;
+  if (!sig || (kept.sig !== sig && !stillSameFile(dataset, layerId, kept.sig)) || (kept.answers || []).length !== got.rows.length) return false;
   const out = RULES.withoutAnswers(got.rows).map((r, i) => Object.assign(r, kept.answers[i]));
   const shapes = shapesFor(got.layer, dataset);
   const ing = await ingestLayer({
@@ -5405,7 +5411,7 @@ function considerReading(dataset, layerId, opts) {
     return 'written by a reading';
   }
   const had = QUESTIONS.get(dataset, layerId);
-  if (had && had.sig === sig) {
+  if (had && (had.sig === sig || stillSameFile(dataset, layerId, had.sig))) {
     if (hasQuestions || layer.patternsNone) return 'already read';
     /* The same places, put back without their answers (a repair, the same file
        again). Their answers are copied back on; nothing is read. Only if that
@@ -5800,7 +5806,7 @@ async function tellTheOwner(o, subject, lines) {
 function noteRetry(dataset, layerId, patch, sig) {
   if (QUESTIONS.isBusy(dataset, layerId)) return;
   const had = QUESTIONS.get(dataset, layerId);
-  if (sig && had && had.sig && had.sig !== sig) return;
+  if (sig && had && had.sig && had.sig !== sig && !stillSameFile(dataset, layerId, had.sig)) return;
   QUESTIONS.remember(dataset, layerId, Object.assign({ unreachable: false }, patch, { endedAt: Date.now() }));
 }
 

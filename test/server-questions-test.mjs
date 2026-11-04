@@ -14,7 +14,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
    list itself is exercised for real here, on a file in a throwaway folder; the
    parts that live inside the 6,000-line router are read from its source. No
    network, no model. */
-import { createQueue, signatureOf, NEVER_READ } from '../api/lib/atlas/questions-queue.js';
+import { createQueue, signatureOf, fileSignatureOf, sameFile, NEVER_READ } from '../api/lib/atlas/questions-queue.js';
 const RULES = createRequire(import.meta.url)(ROOT + '/atlas/reading-rules.js');
 
 let pass = 0, fail = 0;
@@ -47,10 +47,22 @@ const answered = RULES.shapeReading(rows, [{ question: 'Q?', counts: [{ name: 'x
 check('writing the answers on does not make it a new version', signatureOf(answered, RULES.isAnswerColumn), sig);
 check('nor does saving numbers as words', signatureOf(rows.map((r) => Object.assign({}, r, { pop: String(r.pop) })), RULES.isAnswerColumn), sig);
 check('nor a blank column a place never had', signatureOf(rows.map((r) => Object.assign({}, r, { extra: '' })), RULES.isAnswerColumn), sig);
+// the small photos are made by the server after places arrive (4 Nov 2026: they landed mid-reading and the whole layer was read again)
+const withPhotos = rows.map((r, n) => Object.assign({}, r, { photo_small: 'small-' + n + '.jpg' }));
+check('nor the small photos the server makes after the places arrive', signatureOf(withPhotos, RULES.isAnswerColumn), sig);
+check('…but a real change still is', signatureOf(rows.map((r, n) => Object.assign({}, r, n ? {} : { name: 'Somewhere else' })), RULES.isAnswerColumn) === sig, false);
+const halvesNow = [{ layer: { id: 'a' }, rows: withPhotos }];
+const oldForm = fileSignatureOf(halvesNow, RULES.isAnswerColumn, { legacy: true });
+check('a fingerprint kept in the older form (photos counted) still matches the same places, so nothing is read again', [oldForm === fileSignatureOf(halvesNow, RULES.isAnswerColumn), sameFile(oldForm, halvesNow, RULES.isAnswerColumn)], [false, true]);
+check('…and a kept fingerprint of different places does not', sameFile(signatureOf(rows.slice(1), RULES.isAnswerColumn), halvesNow, RULES.isAnswerColumn), false);
 check('a changed row is a new version',
   signatureOf([rows[0], Object.assign({}, rows[1], { description: 'old market square' })], RULES.isAnswerColumn) === sig, false);
 check('a row added is a new version', signatureOf(rows.concat([{ name: 'C' }]), RULES.isAnswerColumn) === sig, false);
 
+{
+  const srv = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'api', 'apps', 'atlas.js'), 'utf8');
+  check('the server accepts a kept fingerprint in either form: on commit, on restoring answers, and on a retry', [/if \(had && \(had\.sig === sig \|\| stillSameFile\(dataset, layerId, had\.sig\)\)\)/.test(srv), /kept\.sig !== sig && !stillSameFile\(dataset, layerId, kept\.sig\)/.test(srv), /had\.sig !== sig && !stillSameFile\(dataset, layerId, had\.sig\)/.test(srv)], [true, true, true]);
+}
 console.log('\n  queued once per version, read once, one at a time');
 {
   const q = createQueue({ file: freshFile() });

@@ -228,7 +228,7 @@ check('a change to the outlines half offers the FILE through its pins, under the
   /if \(RULES\.readByItsTwin\(layer, layers\)\) \{\s*return QUESTIONS\.offer\(\{ dataset, layerId: layer\.sameFileAs, sig, payer \}\)/.test(server) &&
   /const sig = fileSigOf\(dataset, layerId\);/.test(server), true);
 check('one file has one fingerprint, the same from either half: both halves\' rows in a fixed order',
-  /export function fileSignatureOf\(halves, isAnswerColumn\)/.test(fs.readFileSync(ROOT + '/api/lib/atlas/questions-queue.js', 'utf8')) &&
+  /export function fileSignatureOf\(halves, isAnswerColumn, opts\)/.test(fs.readFileSync(ROOT + '/api/lib/atlas/questions-queue.js', 'utf8')) &&
   /const sigAtStart = fileSignatureOf\(halves, RULES\.isAnswerColumn\);/.test(server) &&
   /now = again \? fileSignatureOf\(again, RULES\.isAnswerColumn\) : null;/.test(server), true);
 check('and it is the one the record, the kept answers and the retry compare against',
