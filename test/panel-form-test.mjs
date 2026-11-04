@@ -93,6 +93,7 @@ console.log('\n  an atlas has no sign in row (Mithun, 27 Oct 2026); a signed-in 
 check('sign in, all atlases and all apps are not drawn on an atlas',
   /\.atlas-full \.nav \.links a\[href="\.\/"\], \.atlas-full \.nav \.links a\[href="\.\.\/"\], \.atlas-full #nav-signin \{ display:none !important; \}/.test(html), true);
 check('and on a phone sign out is a 48px row in the ☰ menu', /html \.nav \.nav-menu \.links a, html \.nav \.nav-menu \.links button, html \.nav \.nav-menu #nav-user \{\s*display:block; width:100%; margin:0; padding:14px \.25rem; line-height:20px; min-height:0; box-sizing:border-box;/.test(html), true);
+check('a long address is shortened there', /\.atlas-full #nav-user \{ max-width:14rem; overflow:hidden; text-overflow:ellipsis; \}/.test(html), true);
 check('only one script measures the sheet', /function sheetH\(\)/.test(html), false);
 
 /* the red top edge went (25 Oct 2026): a hairline all round, 6px corners, a deeper lift */
@@ -106,8 +107,8 @@ check('a resize re-frames while nobody has moved the map',
 check('and a person\'s own pan or zoom is left alone', /if \(e && e\.originalEvent\) userMoved = true;/.test(js), true);
 
 console.log('\n  the header is one row between a phone and a wide screen');
-check('in the middle sizes only "Get the LOKA app" and sign out stay among the links',
-  /@media \(min-width:721px\) and \(max-width:1100px\)\{\s*\.atlas-full \.nav \.links > :not\(#nav-signin\):not\(#nav-signout\):not\(\.nav-app\) \{ display:none; \}/.test(html), true);
+check('in the middle sizes only "Get the LOKA app", who is signed in and sign out stay among the links',
+  /@media \(min-width:721px\) and \(max-width:1100px\)\{\s*\.atlas-full \.nav \.links > :not\(#nav-signin\):not\(#nav-signout\):not\(#nav-user\):not\(\.nav-app\) \{ display:none; \}/.test(html), true);
 /* search left the header for the map's own toolbar (see header-and-keys-test),
    so nothing in the header has to shrink: the row never wraps and the title
    shortens with "…" instead */
