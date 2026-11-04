@@ -619,7 +619,10 @@
     empty.hidden = S.chosen.length > 0 || S.worldwide;
     if (S.worldwide) {
       empty.hidden = false;
-      empty.textContent = "Worldwide — your data is not in one country, so no places are needed.";
+      // a LOKA space with no file and no region: the atlas opens on the space's places
+      empty.textContent = LOKA.space && !GEO.file
+        ? "Worldwide — " + (LOKA.areaNote || "the atlas opens on the places from " + LOKA.space.name + ".") + " Search above to pin it to a region instead."
+        : "Worldwide — your data is not in one country, so no places are needed.";
     } else if (!S.chosen.length) {
       empty.textContent = "No places yet. Search above to add one.";
     }
@@ -643,7 +646,9 @@
     // file decided that, the message under the drop zone has already said so
     if (S.worldwide) {
       v.hidden = !!GEO.file;
-      v.textContent = "Your atlas will cover the whole world and open on your own places.";
+      v.textContent = LOKA.space && !GEO.file
+        ? "Your atlas will cover the whole world and open on the places from " + LOKA.space.name + "."
+        : "Your atlas will cover the whole world and open on your own places.";
       return;
     }
     if (!S.chosen.length) { v.hidden = true; return; }
@@ -1078,6 +1083,212 @@
     });
   })();
 
+  /* ---- 2c · a LOKA space, instead of a file or beside one (4 Nov 2026) ----
+     One of the spaces LOKA lists for the person, asked of the server
+     (GET auth/loka), which keeps that list from when their LOKA account was
+     linked — so "bring it up to date" is sending a new code. Not linked yet:
+     the same emailed code as Settings, here. Picking a space is enough: the
+     choice rides with the build (lokaSpace), the server checks it against the
+     same list and connects it once the atlas is built, and its places come in
+     as Settings' Connect would bring them. No region is needed then — the
+     atlas covers the world and opens on those places — unless one is searched
+     for above, which pins it. */
+  // addedIds: the places the space's positions put on the list (they leave with it, as a file's do);
+  // area: those places in words; areaNote: why there is no area; finding: the server is still looking
+  var LOKA = { space: null, me: null, relink: false, find: "", addedIds: [], area: "", areaNote: "", finding: false, seq: 0 };
+  function lokaWhen(iso) {
+    var t = Date.parse(iso);
+    return isNaN(t) ? "a while ago" : new Date(t).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+  function lokaCount(n) { return n === 1 ? "1 place" : n.toLocaleString() + " places"; }
+  // LOKA's "public" is open to everyone; anything else (private, public_read, whatever comes later)
+  // needs LOKA's one extra step before the server can read its places
+  function lokaOpen(s) { return s.type === "public"; }
+  function lokaKind(s) { return s.type === "public" ? "Public" : s.type === "private" ? "Private" : "Not fully public"; }
+  function lokaErr(host, e) {
+    var p = host.querySelector(".lokapick-err");
+    if (p) p.textContent = e ? errMsg(e) : "";
+  }
+
+  $("#loka-open").onclick = function () {
+    var body = $("#loka-body"), open = body.hidden;
+    body.hidden = !open;
+    this.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open && !LOKA.me) lokaLoad();
+  };
+  function lokaLoad() {
+    var body = $("#loka-body");
+    body.innerHTML = '<p class="lokapick-note" aria-live="polite"></p>';
+    var stop = LokaWait.start(body.firstChild, "Looking at your LOKA account…", { delay: 0 });
+    api("auth/loka").then(function (me) { LOKA.me = me; }).catch(function (e) { LOKA.me = { failed: e }; })
+      .then(function () { stop(); paintLoka(); });
+  }
+
+  function paintLoka() {
+    var host = $("#loka-body"), me = LOKA.me;
+    if (!host || !me) return;
+    host.innerHTML = "";
+    if (me.failed) {
+      host.innerHTML = '<p class="lokapick-err">' + esc(errMsg(me.failed)) + '</p><p><button class="lokapick-link" type="button" id="loka-again">Try again</button></p>';
+      host.querySelector("#loka-again").onclick = lokaLoad;
+      return;
+    }
+    if (!me.setUp) { host.innerHTML = '<p class="lokapick-note">LOKA hasn’t been set up on this server yet, so places can’t come in from a space.</p>'; return; }
+    if (LOKA.space) return paintLokaPicked(host);
+    if (!me.link || LOKA.relink) return paintLokaLink(host);
+    paintLokaList(host);
+  }
+
+  // the chosen space, and the way to change one's mind
+  function paintLokaPicked(host) {
+    var s = LOKA.space;
+    host.innerHTML = '<p><b>' + esc(s.name) + '</b> <span class="lokapick-note">· ' + esc(lokaCount(s.tagsCount)) + ' · ' + esc(lokaKind(s)) + '</span></p>' +
+      '<p class="lokapick-note">Its places come in once the atlas is built, and stay up to date when you press Update now.' +
+      (lokaOpen(s) ? "" : " " + (s.type === "private" ? "Private spaces" : "Spaces that aren’t fully public") + " need one extra step by LOKA before their places can come in.") + '</p>' +
+      // where its places are: the area found from them, or why there is none; the chips below are the way to change it
+      (LOKA.finding ? '<p class="lokapick-note" aria-live="polite">' + LokaWait.html("Finding where its places are…") + "</p>"
+        : LOKA.area ? '<p>Area: <b>' + esc(LOKA.area) + '</b> <span class="lokapick-note">· from where the space’s places are. Take any out below, or search to add more.</span></p>'
+        : LOKA.areaNote ? '<p class="lokapick-note">' + esc(LOKA.areaNote) + "</p>" : "") +
+      '<p><button class="lokapick-link" type="button" id="loka-off">Take it off</button> <span class="lokapick-note">· the list comes back, to pick another</span></p>';
+    host.querySelector("#loka-off").onclick = function () { lokaPick(null); };
+  }
+
+  // the same link as Settings: a code to the LOKA email, typed here
+  function paintLokaLink(host) {
+    var me = LOKA.me, email = (me.link && me.link.lokaEmail) || me.email || "";
+    host.innerHTML = '<p><b>' + (me.link ? "Send a new code" : "Link your LOKA account") + '</b> <span class="lokapick-note">· a code goes to the email you sign in to LOKA with' +
+        (me.link ? ", and your list of spaces is brought up to date" : "") + '</span></p>' +
+      '<div class="lokapick-row"><input type="email" id="loka-email" aria-label="The email you sign in to LOKA with" value="' + esc(email) + '" autocomplete="email" />' +
+        '<button class="btn secondary small" type="button" id="loka-send">Send code</button></div>' +
+      '<div class="lokapick-row" id="loka-codebox" hidden><input type="text" id="loka-code" aria-label="The code from the email" placeholder="Code from the email" inputmode="numeric" autocomplete="one-time-code" />' +
+        '<button class="btn secondary small" type="button" id="loka-confirm">Confirm</button></div>' +
+      '<p class="lokapick-note" id="loka-said" aria-live="polite"></p><p class="lokapick-err" role="alert"></p>' +
+      (me.link ? '<p><button class="lokapick-link" type="button" id="loka-keep">Keep the list I have</button></p>' : "");
+    var send = host.querySelector("#loka-send"), confirm = host.querySelector("#loka-confirm"), said = host.querySelector("#loka-said");
+    send.onclick = function () {
+      lokaErr(host, null);
+      var stop = LokaWait.start(send, "Sending a code…");
+      api("auth/loka/send-code", { method: "POST", body: { email: host.querySelector("#loka-email").value.trim() } }).then(function (r) {
+        said.textContent = r.said + " Type it here.";
+        host.querySelector("#loka-codebox").hidden = false;
+        host.querySelector("#loka-code").focus();
+      }).catch(function (e) { lokaErr(host, e); }).then(stop);
+    };
+    confirm.onclick = function () {
+      lokaErr(host, null);
+      var stop = LokaWait.start(confirm, "Checking the code with LOKA…");
+      api("auth/loka/confirm", { method: "POST", body: { email: host.querySelector("#loka-email").value.trim(), code: host.querySelector("#loka-code").value.trim() } })
+        .then(function () { LOKA.relink = false; LOKA.find = ""; lokaLoad(); }).catch(function (e) { lokaErr(host, e); stop(); });
+    };
+    host.querySelector("#loka-code").addEventListener("keydown", function (e) { if (e.key === "Enter") confirm.click(); });
+    var keep = host.querySelector("#loka-keep");
+    if (keep) keep.onclick = function () { LOKA.relink = false; paintLoka(); };
+  }
+
+  // the spaces LOKA listed: a row each, searchable past eight, none with no places
+  function paintLokaList(host) {
+    var link = LOKA.me.link, all = link.spaces || [];
+    host.innerHTML = '<p><span class="lokapick-note">Linked to LOKA as ' + esc(link.lokaEmail) + '. Your list is from ' + esc(lokaWhen(link.spacesAt)) +
+        '. To bring it up to date, <button class="lokapick-link" type="button" id="loka-relink">send a new code</button>.</span></p>' +
+      (all.length > 8 ? '<div class="lokapick-row"><input type="search" id="loka-find" aria-label="Find a space by name" placeholder="Find a space by name" autocomplete="off" /></div>' : "") +
+      '<ul class="lokasp-list" id="loka-list" aria-label="Your LOKA spaces"></ul>' +
+      '<p class="lokapick-note" id="loka-none" hidden></p>' +
+      '<p class="lokapick-note">Can’t find your space? Spaces you belong to show here. For another, build the atlas and use Request access under Owner ▾ → Settings.</p>';
+    host.querySelector("#loka-relink").onclick = function () { LOKA.relink = true; paintLoka(); };
+    var find = host.querySelector("#loka-find");
+    if (find) { find.value = LOKA.find; find.oninput = function () { LOKA.find = find.value; drawRows(); }; }
+    function drawRows() {
+      var list = host.querySelector("#loka-list"), none = host.querySelector("#loka-none");
+      var q = LOKA.find.trim().toLowerCase();
+      var shown = all.filter(function (s) { return !q || s.name.toLowerCase().indexOf(q) >= 0; });
+      list.innerHTML = "";
+      shown.forEach(function (s) {
+        var li = document.createElement("li");
+        var b = document.createElement("button");
+        b.type = "button"; b.className = "lokasp";
+        b.setAttribute("aria-pressed", "false");
+        var pic;
+        if (s.thumbnailUrl) {
+          pic = document.createElement("img");
+          pic.src = s.thumbnailUrl; pic.alt = ""; pic.loading = "lazy";
+          pic.onerror = function () { var blank = document.createElement("span"); blank.className = "lokasp-pic"; pic.replaceWith(blank); };
+        } else pic = document.createElement("span");
+        pic.className = "lokasp-pic";
+        b.appendChild(pic);
+        var what = document.createElement("span");
+        what.className = "lokasp-what";
+        // a space with no places is shown, so the list is whole, but cannot be picked
+        var line = (s.tagsCount ? lokaCount(s.tagsCount) : "No places yet") + " · " + lokaKind(s) + (s.role ? " · " + s.role : "");
+        what.innerHTML = "<b>" + esc(s.name) + "</b><span>" + esc(line) + "</span>";
+        b.appendChild(what);
+        if (!s.tagsCount) b.disabled = true;
+        else b.onclick = function () { lokaPick(s); };
+        li.appendChild(b);
+        list.appendChild(li);
+      });
+      none.hidden = shown.length > 0;
+      none.textContent = all.length ? "No space by that name in your list." : "LOKA lists no spaces for this account yet.";
+    }
+    drawRows();
+  }
+
+  function lokaPick(s) {
+    // the places an earlier pick found leave with it, as a file's do; anything typed by hand stays
+    if (LOKA.addedIds.length) {
+      S.chosen = S.chosen.filter(function (c) { return LOKA.addedIds.indexOf(c.id) < 0; });
+      if (!GEO.file) GEO.infer = null;
+    }
+    LOKA.space = s; LOKA.addedIds = []; LOKA.area = ""; LOKA.areaNote = ""; LOKA.finding = false; LOKA.seq++;
+    if (!s && S.worldwide && !GEO.file) S.worldwide = false;
+    msg(2, "");
+    paintLoka();
+    paintChips();
+    // nothing searched and no file: the area comes from where the space's places are (Mithun, 4 Nov 2026)
+    if (s && !S.chosen.length && !GEO.file) lokaFindArea(s);
+  }
+
+  /* The space's positions, put to the same region-finding a dropped file's
+     coordinates go through, on the server (POST auth/loka/region): the
+     districts that hold nearly all of them, else the state, else the country;
+     the world when they span countries or have no position. What comes back
+     fills the same chips a typed answer fills, so the person can take any out
+     or search to add more. LOKA unreadable: the usual "where is it?" stands. */
+  function lokaFindArea(s) {
+    var seq = LOKA.seq;
+    LOKA.finding = true;
+    paintLoka();
+    // the country chosen above is a hint: used when the places are in it, else told from them
+    api("auth/loka/region", { method: "POST", body: { spaceId: s.id, iso3: S.iso3 } }).then(function (d) {
+      if (seq !== LOKA.seq) return;   // picked another, or took it off, meanwhile
+      LOKA.finding = false;
+      lokaUseArea(d);
+    }).catch(function (e) {
+      if (seq !== LOKA.seq) return;
+      LOKA.finding = false;
+      LOKA.areaNote = "Where its places are couldn’t be worked out: " + errMsg(e) + " Search for the place above instead.";
+      S.worldwide = false;
+      paintLoka(); paintChips();
+    });
+  }
+  function lokaUseArea(d) {
+    var units = (d && d.units) || [];
+    if (!d || d.worldwide || !units.length) {
+      S.worldwide = true;
+      LOKA.areaNote = !d || !d.places ? "Its places have no positions yet, so the atlas covers the whole world and opens on them when they do."
+        : d.worldwide ? "Its places span more than one country, so the atlas covers the whole world and opens on them."
+        : "Its places don’t fall in a region we know, so the atlas covers the whole world and opens on them.";
+    } else {
+      S.worldwide = false;
+      if (d.iso3 && S.iso3 !== d.iso3) { S.iso3 = d.iso3; if ($("#country")) $("#country").value = d.iso3; S.catalog = null; S.picked = {}; }
+      var had = S.chosen.map(function (c) { return c.id; });
+      units.forEach(function (u) { add({ id: u.id, name: u.name, level: d.level, bbox: u.bbox }, u.name); });
+      LOKA.addedIds = S.chosen.map(function (c) { return c.id; }).filter(function (id) { return had.indexOf(id) < 0; });
+      GEO.infer = d;   // the found screen draws the units from it
+      LOKA.area = placeList(units.map(function (u) { return u.name; }));
+    }
+    paintLoka(); paintChips();
+  }
+
   /* ---- 2c · what we found: the region confirmed, the file checked against it ----
      One screen for two things that were two. Release 1 had a "your data" step
      after the place, only when a file came along, where the file went to the
@@ -1139,14 +1350,20 @@
       lede.textContent = "Read from " + GEO.file.name + (GEO.part ? " (" + GEO.part + ")" : "") + ". " +
         (S.worldwide ? "Your file is checked here, before anything is built."
                      : "Your file is checked against these places here, before anything is built.");
+    } else if (LOKA.space && LOKA.addedIds.length) {
+      lede.textContent = "Where the places from " + LOKA.space.name + " are. Add or take out any of them on the Where step.";
+    } else if (LOKA.space && !S.chosen.length) {
+      lede.textContent = "Your places come from LOKA. Search for a place on the Where step if you want open data of somewhere.";
     } else {
       lede.textContent = "The places you chose. Add or take out any of them on the Where step.";
     }
     var rows = GEO.canonical ? (FOUND.settled ? FOUND.rows : ((d && d.rows) || GEO.rows || 0)) : 0;
     var placed = FOUND.settled ? FOUND.placed : (d && d.matchedRows) || 0;
     if (S.worldwide) {
-      var world = "Your data is not in one country, so the atlas will cover the whole world and " +
-        "open on your own places. Base layers built from open data need a region, so there will be very few to choose from.";
+      var world = (LOKA.space && !GEO.canonical
+          ? "Places from " + LOKA.space.name + " come in once the atlas is built, and the map opens on them. "
+          : "Your data is not in one country, so the atlas will cover the whole world and open on your own places. ") +
+        "Base layers built from open data need a region, so there will be very few to choose from.";
       if (GEO.canonical && FOUND.settled) {
         /* The check has answered, so the headline is its number — the same
            words the regional path uses, because the question is the same:
@@ -1463,6 +1680,10 @@
   };
 
   $("#next-2").onclick = function () {
+    // the space's area is still being looked for: a moment
+    if (LOKA.finding) { msg(2, "Still finding where the space’s places are — a moment.", "wait"); return; }
+    // a LOKA space and nothing else: enough — the atlas opens on its places
+    if (!S.chosen.length && !S.worldwide && LOKA.space) { S.worldwide = true; paintChips(); }
     if (!S.chosen.length && !S.worldwide) {
       msg(2, "An atlas needs at least one place. Search above to add one.");
       $("#place").focus();
@@ -2084,6 +2305,8 @@
         layers: layers,
         // how visitors explore it: the server applies it once the atlas can take it
         mode: (document.querySelector('#f-mode input[name="mode"]:checked') || {}).value || "standard",
+        // a LOKA space chosen on the Where step: connected once the atlas is built (left out when none)
+        lokaSpace: LOKA.space ? { spaceId: LOKA.space.id, spaceName: LOKA.space.name } : undefined,
       },
     }).then(function (r) {
       S.slug = r.slug; S.jobId = r.jobId;
@@ -2269,7 +2492,10 @@
       });
       return;
     }
-    $("#prog-msg").textContent = "Opening your atlas…";
+    // the server is connecting the LOKA space now; the Settings line says how it went
+    $("#prog-msg").textContent = LOKA.space
+      ? "The places from " + LOKA.space.name + " are on their way — opening your atlas…"
+      : "Opening your atlas…";
     location.href = go;
   }
 

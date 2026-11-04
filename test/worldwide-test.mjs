@@ -79,7 +79,7 @@ console.log('\n  and nobody is asked about it');
 check('the server asks how much of the data is even in that country',
   /async function shareInsideCountry\(iso3, points\)/.test(server), true);
 check('and answers worldwide when most of it is not',
-  /if \(inside < 0\.5\) \{\n\s*return res\.json\(\{ iso3, mode: 'points', worldwide: true,/.test(server), true);
+  /if \(inside < 0\.5\) \{\n\s*return \{ status: 200, body: \{ iso3, mode: 'points', worldwide: true,/.test(server), true);
 check('the same question is asked of names',
   /if \(mode === 'names' && \(r\.outsideRows \|\| 0\) > \(r\.matchedRows \|\| 0\)\)/.test(server), true);
 check('the wizard acts on it without asking anything', /if \(d && d\.worldwide\) \{ goWorldwide\(d, file, rows\); return; \}/.test(setup), true);

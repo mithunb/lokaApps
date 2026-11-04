@@ -103,3 +103,7 @@ Server state: the API key (X-LOKA-API-Key, keys `loka_sk_…`, made with `python
 
 ### Who may connect a space (Mithun, 4 Nov 2026 — replaces "spaces they created")
 **Anyone who has been added as a member of the space, or of the organisation that owns it, may make an atlas of it.** Checked with the person's own LOKA sign-in (email code, from Atlas): GET /spaces/<id> → orgId; GET /users/me → orgIds (needs 1c3bf95 deployed); GET /users/<me>/spaces → their space memberships. Allowed if the space is in their memberships or its orgId is in their orgIds. Everyone else: Request access → super admin. No ownerId field is needed.
+
+### Choosing a space while building (Mithun, 4 Nov 2026, reverses "spaces list: not now")
+The build wizard shows a **list of spaces** to pick from: everything for the super admin (private too), and for anyone else the spaces they are a member of and their organisations' spaces (public ones offered with Request access). Needs the LOKA server's spaces list (asked of the loka-server session, for Mithun's confirmation there). Today's way stays meanwhile: build, then Settings → Connect to a LOKA space.
+- **The 15 spaces whose owner is in neither the space nor its organisation** (all in the "LOKA" organisation): Mithun, 4 Nov — "created by the super admin and belong to LOKA". They are LOKA's own spaces; the super admin connects them. Whether their owner_id users should see them under "my spaces" is put to Mithun in the loka-server session.

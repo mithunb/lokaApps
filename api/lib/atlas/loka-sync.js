@@ -12,7 +12,9 @@
        (POST /auth/refresh); LOKA hands back a renewed refresh key every time,
        and the newest one lives in loka-key.json, a file only the server can
        read, so the 90-day window keeps sliding.
-   Neither secret is ever logged, returned, or put in an error message. */
+   Neither secret is ever logged, returned, or put in an error message.
+   A person's own LOKA sign-in (linking their account, below) is a third
+   token that lives only inside one call and is never kept at all. */
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -55,7 +57,8 @@ function savedRefreshToken() {
 function saveRefreshToken(token) {
   const file = keyFile();
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = file + '.tmp';
+  // a name of its own per write: two renewals at once must not rename each other's half-written file
+  const tmp = file + '.' + process.pid + '-' + Math.random().toString(36).slice(2, 8) + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify({ refreshToken: token, savedAt: new Date().toISOString() }), { mode: 0o600 });
   fs.chmodSync(tmp, 0o600);
   fs.renameSync(tmp, file);
@@ -86,9 +89,129 @@ async function signInHeaders() {
   return { Authorization: 'Bearer ' + j.token };
 }
 
+/* ---------- a person's own LOKA account ---------- */
+
+/* An owner proves who they are to LOKA by an emailed code, from Atlas: LOKA
+   sends the code (sendCode), the person types it, and linkByCode swaps it for
+   a LOKA token that lives only inside that one call — it asks LOKA who the
+   person is (/users/me) and which spaces they are a member of, and is then
+   dropped. What comes back is kept on the Atlas account (registry.js): the
+   LOKA user id, email, organisations and space memberships. Never the token. */
+
+// one small JSON call to LOKA; a network fault is the same plain sentence everywhere
+async function lokaJson(p, { method = 'GET', headers = {}, body } = {}) {
+  let r;
+  try {
+    r = await fetch(base() + p, { method, signal: AbortSignal.timeout(30000),
+      headers: Object.assign({}, headers, body ? { 'Content-Type': 'application/json' } : {}),
+      body: body ? JSON.stringify(body) : undefined });
+  } catch { throw fail('LOKA couldn’t be reached. Try again in a moment.'); }
+  if (r.status === 429) throw busy(r);
+  let j = null;
+  try { j = await r.json(); } catch { /* an answer without a body: the status says enough */ }
+  return { status: r.status, j: j && typeof j === 'object' ? j : {} };
+}
+
+/* The same sentence whether or not LOKA knows the email: this route must not
+   be a way to find out who has a LOKA account. Only LOKA being down is said. */
+export const CODE_SENT = 'If that email has a LOKA account, a code is on its way. It can take a minute.';
+export async function sendCode(email) {
+  const { status } = await lokaJson('/auth/send-otp', { method: 'POST', body: { email } });
+  if (status !== 200 && status !== 400 && status !== 404) throw fail('LOKA couldn’t send a code just now. Try again in a moment.');
+  return CODE_SENT;
+}
+
+const strs = (v) => (Array.isArray(v) ? v : []).map((x) => String(x == null ? '' : x)).filter(Boolean);
+
+/* The spaces a LOKA user is a member of, as the little the atlas needs. */
+async function memberships(token, userId) {
+  const { status, j } = await lokaJson('/users/' + encodeURIComponent(userId) + '/spaces', { headers: { Authorization: 'Bearer ' + token } });
+  if (status !== 200) throw fail('LOKA signed you in but couldn’t list your spaces. Try again in a moment.');
+  return (Array.isArray(j.spaces) ? j.spaces : []).filter((s) => s && s.id).map((s) => ({
+    id: String(s.id), orgId: s.orgId == null ? '' : String(s.orgId), name: String(s.name || '').slice(0, 80),
+    type: String(s.type || ''), role: String(s.role || '') }));
+}
+
+/* Every space LOKA shows this person (GET /spaces/mine, live 4 Nov 2026): the
+   ones they are in, their organisations', and for a platform admin all of
+   them. Kept as a snapshot for the build wizard's list — name, how many
+   places, public or private, a small picture — and as the rule's third arm
+   (mayConnect). An older LOKA without the route gives an empty list. */
+async function mySpaces(token) {
+  const { status, j } = await lokaJson('/spaces/mine', { headers: { Authorization: 'Bearer ' + token } });
+  if (status === 404) return [];
+  if (status !== 200) throw fail('LOKA signed you in but couldn’t list your spaces. Try again in a moment.');
+  return (Array.isArray(j.spaces) ? j.spaces : []).filter((s) => s && s.id).map((s) => ({
+    id: String(s.id), name: String(s.name || '').slice(0, 80), type: String(s.type || ''),
+    role: s.role == null ? '' : String(s.role), ownerId: s.ownerId == null ? '' : String(s.ownerId),
+    orgId: s.orgId == null ? '' : String(s.orgId), tagsCount: Math.max(0, Number(s.tagsCount) || 0),
+    // the picture's address only, and only one that is a web address (never `thumbnail`, which may be the picture itself)
+    thumbnailUrl: /^https?:\/\//.test(String(s.thumbnailUrl || '')) ? String(s.thumbnailUrl).slice(0, 500) : '',
+    updatedAt: String(s.updatedAt || '') }));
+}
+
+/* Who this person is, from LOKA's own answer and nothing else. */
+export async function linkByCode(email, code) {
+  const got = await lokaJson('/auth/verify-otp', { method: 'POST', body: { email, otp: code } });
+  // one sentence for a wrong code and for an email LOKA does not know, for the same reason as above
+  if (got.status === 400 || got.status === 401 || got.status === 404) throw fail('That code didn’t work. Check it, or send a new one.');
+  if (got.status !== 200 || typeof got.j.token !== 'string' || !got.j.token) throw fail('LOKA couldn’t check that code just now. Try again in a moment.');
+  const token = got.j.token;
+  const me = await lokaJson('/users/me', { headers: { Authorization: 'Bearer ' + token } });
+  if (me.status !== 200 || !me.j.userId) throw fail('LOKA signed you in but couldn’t say who you are. Try again in a moment.');
+  const lokaUserId = String(me.j.userId);
+  const at = new Date().toISOString();
+  return {
+    lokaUserId,
+    /* LOKA's own email for the person; an older LOKA that does not say it yet
+       leaves the one the code was sent to, which LOKA itself just confirmed */
+    lokaEmail: String(me.j.email || email),
+    orgIds: strs(me.j.orgIds),
+    memberSpaces: await memberships(token, lokaUserId),
+    // the list is as old as the link: bringing it up to date means linking again
+    spaces: await mySpaces(token),
+    spacesAt: at,
+    linkedAt: at,
+  };
+}
+
+/* The space itself, asked with the server's own sign-in: its organisation and
+   name. Null when LOKA won't show it (a private space the sync account is not
+   in) or has no such space. */
+export async function spaceInfo(spaceId) {
+  const { status, j } = await lokaJson('/spaces/' + encodeURIComponent(spaceId), { headers: await signInHeaders() });
+  if (status === 403 || status === 404) return null;
+  if (status !== 200 || !j.space) throw fail('LOKA couldn’t be reached. Try again in a moment.');
+  const s = j.space;
+  return { id: String(s.id || spaceId), orgId: s.orgId == null ? '' : String(s.orgId), name: String(s.name || '').slice(0, 80), type: String(s.type || '') };
+}
+
+/* Whether a linked account may connect a space: any space LOKA itself listed
+   for them when they linked (the snapshot: a member's, one they made, their
+   organisation's, or every space for a platform admin — whatever the role,
+   none included), a member of the space, or of the organisation that owns it
+   (space may be null when LOKA would not show it). All of the rule is here. */
+export function mayConnect(link, spaceId, space) {
+  if (!link) return false;
+  if ((link.spaces || []).some((s) => s.id === spaceId)) return true;
+  if ((link.memberSpaces || []).some((s) => s.id === spaceId)) return true;
+  return !!(space && space.orgId && (link.orgIds || []).indexOf(space.orgId) >= 0);
+}
+/* A space from the snapshot, as the wizard shows it: name, places, public or
+   private, the picture, and the person's relation to it in plain words. */
+export function spaceCard(s) {
+  const role = s.role === 'Owner' ? 'You made this' : s.role === 'Org' ? 'Your organisation’s' : s.role ? 'Member' : '';
+  return { id: s.id, name: s.name, type: s.type, tagsCount: s.tagsCount, thumbnailUrl: s.thumbnailUrl || '', role };
+}
+
 /* ---------- downloading ---------- */
 
 export const SPACE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// a space id typed on its own, or found inside a pasted loka.place link
+export function spaceIdFrom(text) {
+  const m = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.exec(String(text || ''));
+  return m ? m[0].toLowerCase() : '';
+}
 
 /* One whole space, as LOKA's own places (not yet rows). Fails, and so changes
    nothing, unless the list ends with its closing line and says it is whole. */

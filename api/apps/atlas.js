@@ -588,79 +588,86 @@ router.post('/geo/infer', async (req, res) => {
   if (names.length && !columns.length) columns.push({ col: '', names });
   if (!points.length && !columns.length) return res.status(400).json({ error: 'points or names required' });
   try {
-    // no country given: coordinates can resolve it; bare place names cannot
-    if (!/^[A-Z]{3}$/.test(iso3)) {
-      if (!points.length) {
-        return res.status(400).json({ error: 'couldn’t tell the country from place names alone — choose it', needsCountry: true });
-      }
-      iso3 = await resolveCountryFromPoints(points);
-      if (!iso3) {
-        return res.status(400).json({ error: 'couldn’t tell the country from this data — choose it', needsCountry: true });
-      }
-    }
-    let avail;
-    try { avail = JSON.parse(fs.readFileSync(path.join(GEOCACHE_DIR, `${iso3}-levels.json`), 'utf8')).levels; }
-    catch { avail = [1, 2, 3, 4]; }
-    /* Does this data belong to the country it was filed under at all?
-
-       Answered here, from the data, because nobody should have to be asked. A
-       set of sightings across four countries is not a person failing to pick
-       the right one — it is an atlas with no country, and the wizard can be
-       told that rather than made to ask. */
-    if (points.length) {
-      const inside = await shareInsideCountry(iso3, points);
-      if (inside < 0.5) {
-        return res.json({ iso3, mode: 'points', worldwide: true,
-                          shareInside: Number(inside.toFixed(2)),
-                          rows: points.length, matchedRows: 0, units: [], level: null,
-                          bbox: null, coverage: 0, parents: [], ancestors: [] });
-      }
-    }
-    let r = null, mode = null, chosen = null;
-    if (points.length) { r = await inferRegionFromPoints(iso3, points, avail); mode = 'points'; }
-    else {
-      chosen = await pickNameColumn(iso3, columns, avail);
-      r = await inferRegionFromNames(iso3, chosen.names, avail);
-      mode = 'names';
-    }
-    // which column was read is part of the answer: when nothing is found, it is
-    // the one thing that explains why
-    const column = chosen ? chosen.col : '';
-    if (!r || !r.units.length) {
-      return res.json({ iso3, mode, column, level: null, units: [], bbox: null, coverage: 0,
-                        rows: (r && r.rows) || points.length || (chosen && chosen.names.length) || 0,
-                        matchedRows: 0,
-                        unreadRows: (r && r.unreadRows) || 0,
-                        countryRows: (r && r.countryRows) || 0,
-                        outsideRows: (r && r.outsideRows) || 0,
-                        outsideNames: (r && r.outsideNames) || [],
-                        parents: [], ancestors: [] });
-    }
-    /* The same question asked of names. More rows naming somewhere else than
-       places inside here means the data is not of this country either. */
-    if (mode === 'names' && (r.outsideRows || 0) > (r.matchedRows || 0)) {
-      return res.json({ iso3, mode, column, worldwide: true,
-                        outsideNames: r.outsideNames || [],
-                        rows: r.rows, matchedRows: 0, units: [], level: null,
-                        bbox: null, coverage: 0, parents: [], ancestors: [] });
-    }
-    const parents = await parentUnitsOf(iso3, r.level, r.units);
-    const ancestors = await ancestorChainOf(iso3, r.level, r.units);
-    // geometry rides along for the confirmation map, but a huge covering set
-    // (data spread across dozens of units) would bloat the response — drop it then
-    const units = r.units.length <= 60 ? r.units : r.units.map(({ geometry, ...u }) => u);
-    res.json({ iso3, mode, column, level: r.level, units, bbox: r.bbox,
-               coverage: Number(r.coverage.toFixed(3)),
-               rows: r.rows, matchedRows: r.matchedRows, unreadRows: r.unreadRows,
-               sharedRows: r.sharedRows || 0,
-               countryRows: r.countryRows || 0,
-               outsideRows: r.outsideRows || 0, outsideNames: r.outsideNames || [],
-               parents, ancestors });
+    const r = await inferRegion({ iso3, points, columns });
+    res.status(r.status).json(r.body);
   } catch (e) {
     console.warn('[atlas] geo/infer failed:', e.message);
     res.status(502).json({ error: 'inference failed: ' + e.message });
   }
 });
+
+/* The answer itself, for the route above and for a LOKA space's places
+   (/auth/loka/region): { status, body }. */
+async function inferRegion({ iso3, points, columns }) {
+  // no country given: coordinates can resolve it; bare place names cannot
+  if (!/^[A-Z]{3}$/.test(iso3)) {
+    if (!points.length) {
+      return { status: 400, body: { error: 'couldn’t tell the country from place names alone — choose it', needsCountry: true } };
+    }
+    iso3 = await resolveCountryFromPoints(points);
+    if (!iso3) {
+      return { status: 400, body: { error: 'couldn’t tell the country from this data — choose it', needsCountry: true } };
+    }
+  }
+  let avail;
+  try { avail = JSON.parse(fs.readFileSync(path.join(GEOCACHE_DIR, `${iso3}-levels.json`), 'utf8')).levels; }
+  catch { avail = [1, 2, 3, 4]; }
+  /* Does this data belong to the country it was filed under at all?
+
+     Answered here, from the data, because nobody should have to be asked. A
+     set of sightings across four countries is not a person failing to pick
+     the right one — it is an atlas with no country, and the wizard can be
+     told that rather than made to ask. */
+  if (points.length) {
+    const inside = await shareInsideCountry(iso3, points);
+    if (inside < 0.5) {
+      return { status: 200, body: { iso3, mode: 'points', worldwide: true,
+                        shareInside: Number(inside.toFixed(2)),
+                        rows: points.length, matchedRows: 0, units: [], level: null,
+                        bbox: null, coverage: 0, parents: [], ancestors: [] } };
+    }
+  }
+  let r = null, mode = null, chosen = null;
+  if (points.length) { r = await inferRegionFromPoints(iso3, points, avail); mode = 'points'; }
+  else {
+    chosen = await pickNameColumn(iso3, columns, avail);
+    r = await inferRegionFromNames(iso3, chosen.names, avail);
+    mode = 'names';
+  }
+  // which column was read is part of the answer: when nothing is found, it is
+  // the one thing that explains why
+  const column = chosen ? chosen.col : '';
+  if (!r || !r.units.length) {
+    return { status: 200, body: { iso3, mode, column, level: null, units: [], bbox: null, coverage: 0,
+                      rows: (r && r.rows) || points.length || (chosen && chosen.names.length) || 0,
+                      matchedRows: 0,
+                      unreadRows: (r && r.unreadRows) || 0,
+                      countryRows: (r && r.countryRows) || 0,
+                      outsideRows: (r && r.outsideRows) || 0,
+                      outsideNames: (r && r.outsideNames) || [],
+                      parents: [], ancestors: [] } };
+  }
+  /* The same question asked of names. More rows naming somewhere else than
+     places inside here means the data is not of this country either. */
+  if (mode === 'names' && (r.outsideRows || 0) > (r.matchedRows || 0)) {
+    return { status: 200, body: { iso3, mode, column, worldwide: true,
+                      outsideNames: r.outsideNames || [],
+                      rows: r.rows, matchedRows: 0, units: [], level: null,
+                      bbox: null, coverage: 0, parents: [], ancestors: [] } };
+  }
+  const parents = await parentUnitsOf(iso3, r.level, r.units);
+  const ancestors = await ancestorChainOf(iso3, r.level, r.units);
+  // geometry rides along for the confirmation map, but a huge covering set
+  // (data spread across dozens of units) would bloat the response — drop it then
+  const units = r.units.length <= 60 ? r.units : r.units.map(({ geometry, ...u }) => u);
+  return { status: 200, body: { iso3, mode, column, level: r.level, units, bbox: r.bbox,
+             coverage: Number(r.coverage.toFixed(3)),
+             rows: r.rows, matchedRows: r.matchedRows, unreadRows: r.unreadRows,
+             sharedRows: r.sharedRows || 0,
+             countryRows: r.countryRows || 0,
+             outsideRows: r.outsideRows || 0, outsideNames: r.outsideNames || [],
+             parents, ancestors } };
+}
 
 /* ============ data-first: infer the region from the uploaded data ============ */
 
@@ -1300,6 +1307,33 @@ router.post('/instances', async (req, res) => {
     return res.status(400).json({ error: 'this build needs a quick approval from the LOKA team — add a contact email so we can reach you', needsEmail: true });
   }
 
+  /* "Bring places from a LOKA space", chosen in the wizard: checked here
+     against the person's own LOKA link (the snapshot LOKA gave them; the
+     operator may take any space), kept as wantLoka, and connected once the
+     atlas is built (applyWantedLoka) — the same link as Settings makes. */
+  let wantLoka;
+  if (b.lokaSpace && typeof b.lokaSpace === 'object') {
+    const spaceId = lokaSync.spaceIdFrom(b.lokaSpace.spaceId);
+    if (!spaceId) return res.status(400).json({ error: 'That doesn’t look like a LOKA space.' });
+    if (!lokaSync.isSetUp()) return res.status(503).json({ error: 'LOKA hasn’t been set up on this server yet.' });
+    const sup = lokaSuper(req);
+    const link = session ? reg.lokaLinkOf(session.email) : null;
+    // the wizard's list is the snapshot: a space not on it was never offered, and is not taken (the operator may take any)
+    const known = link ? (link.spaces || []).find((s) => s.id === spaceId) || null : null;
+    if (!sup) {
+      if (!link) return res.status(403).json({ error: LOKA_LINK_FIRST });
+      if (!known) return res.status(403).json({ error: LOKA_NOT_LISTED });
+    }
+    if (known && !known.tagsCount) return res.status(400).json({ error: 'That space has no places yet.' });
+    // the name is LOKA's, never the browser's: the snapshot's, else (the operator, unlinked) asked of LOKA
+    let spaceName = known ? known.name : '';
+    if (!spaceName) {
+      try { const info = await lokaSync.spaceInfo(spaceId); spaceName = (info && info.name) || ''; }
+      catch { /* LOKA away: a plain name, and the first update says what it says */ }
+    }
+    wantLoka = { spaceId, spaceName: spaceName || 'LOKA space', by: session ? session.email : '', sup };
+  }
+
   const editToken = reg.newToken();
   const viewKey = visibility === 'private' ? reg.newToken() : null;
 
@@ -1326,6 +1360,7 @@ router.post('/instances', async (req, res) => {
     jobId: null, spec,
     // "How should visitors explore it?" — applied once the atlas can take it (applyWantedMode)
     wantMode: b.mode === 'explore' || b.mode === 'insight' ? b.mode : undefined,
+    wantLoka,
   });
   if (session) reg.bindInstance(session.email, slug);
 
@@ -1486,14 +1521,15 @@ function rebuildFailedPatch(inst, message) {
   const prior = inst.rebuildPrior;
   const keepPublished = !!inst.rebuildKeepPublished;
   if (!prior) {
+    // a LOKA space chosen while building goes with the build that failed (wantLoka)
     return keepPublished
-      ? { status: 'published', failReason: message, rebuildKeepPublished: undefined }
-      : { status: 'failed', failReason: message };
+      ? { status: 'published', failReason: message, rebuildKeepPublished: undefined, wantLoka: undefined }
+      : { status: 'failed', failReason: message, wantLoka: undefined };
   }
   return {
     // the files on disk are the old build, which was built (or live) — say so
     status: keepPublished ? 'published' : (prior.status === 'published' ? 'published' : (prior.status || 'built')),
-    failReason: message, rebuildKeepPublished: undefined, rebuildPrior: undefined,
+    failReason: message, rebuildKeepPublished: undefined, rebuildPrior: undefined, wantLoka: undefined,
     region: prior.region, regionLabel: prior.regionLabel, layers: prior.layers,
     ...(prior.tier ? { tier: prior.tier } : {}),
   };
@@ -1512,6 +1548,7 @@ setJobDoneHook((job) => {
   const inst = reg.getInstance(job.slug);
   if (!inst) return;
   const keepPublished = inst.rebuildKeepPublished; // set when rebuilding an already-published atlas
+  const firstBuild = !inst.builtAt;   // a LOKA space chosen while building is for a new atlas, never a rebuild
   if (job.status === 'done') {
     reg.updateInstance(job.slug, {
       status: keepPublished ? 'published' : 'built',
@@ -1520,6 +1557,8 @@ setJobDoneHook((job) => {
     });
     // the freshly built atlas gets its list photos made in the background
     setImmediate(() => { const fresh = reg.getInstance(job.slug); if (fresh) queueSmallPhotos(fresh); });
+    // a LOKA space chosen while building: connected now, its places on their way
+    setImmediate(() => { applyWantedLoka(job.slug, firstBuild); });
     // a mode chosen while building, if the atlas can already take it
     setImmediate(() => { applyWantedMode(job.slug); });
     // a tab icon set in Settings or from a look: the fresh manifest is told of it again
@@ -6084,24 +6123,90 @@ function lokaBusy(inst, res) {
   return false;
 }
 
+/* Who may connect an atlas to a space. The operator: any space. An owner: a
+   space their own LOKA account is in, or whose organisation they are in, once
+   they have linked that account (the routes under /auth/loka, below) — or one
+   the operator has approved for them on this atlas (Request access). Editors
+   only press Update now. The rule itself is lokaSync.mayConnect. */
+const LOKA_REFUSED = 'Your LOKA account isn’t listed as a member of this space or its organisation. If you made this space, ask for access and we’ll approve it.';
+const LOKA_LINK_FIRST = 'Link your LOKA account first, then connect a space of yours.';
+// the wizard offers only the spaces LOKA listed for the person (the snapshot on their link)
+const LOKA_NOT_LISTED = 'That space isn’t on your LOKA list. Build the atlas without it, then ask for access under Owner ▾ → Settings.';
+// how many spaces a link has: the list LOKA gave (the wizard's), else the older memberships
+const lokaSpaceCount = (link) => (link.spaces && link.spaces.length ? link.spaces.length : (link.memberSpaces || []).length);
+/* The signed-in account, when it is itself an owner of this atlas. Only the
+   session counts here — not the edit token, not the operator's token — because
+   what follows uses that account's own LOKA link, so the person whose link it
+   is and the person whose right it is must be one and the same. */
+function lokaOwnerSession(req, inst) {
+  const who = auth.sessionFromReq(req);
+  if (!who) return null;
+  const owns = (inst.ownerAccount && who.email === inst.ownerAccount) || auth.isStandingOwner(who.email) || reg.collaboratorRole(inst, who.email) === 'owner';
+  return owns ? who : null;
+}
+// what the Settings line needs to know about the person looking (owners and the operator; never a token caller)
+function lokaMine(req, inst) {
+  const who = auth.sessionFromReq(req);
+  if (!who) return null;
+  const link = reg.lokaLinkOf(who.email);
+  const asked = reg.lokaRequests({ slug: inst.slug, by: who.email }).sort((a, b) => (a.at < b.at ? 1 : -1))[0] || null;
+  return { email: who.email, canLink: !searchText.isNeverTouched(inst.slug),
+    link: link ? { lokaEmail: link.lokaEmail, linkedAt: link.linkedAt, spaces: lokaSpaceCount(link) } : null,
+    request: asked ? { spaceId: asked.spaceId, spaceName: asked.spaceName, state: asked.state } : null,
+    // why a space chosen while building was not connected (applyWantedLoka); cleared by a connect
+    note: inst.lokaNote || '' };
+}
+
+/* Codes, tries and requests are counted per hour, per account and per email
+   they are aimed at; a map forgets what is older than an hour as it is touched. */
+const lokaCodeRate = new Map(), lokaTryRate = new Map(), lokaAskRate = new Map();   // key -> [timestamps]
+function lokaOverRate(map, key, max) {
+  const now = Date.now();
+  for (const [k, ts] of map) { const live = ts.filter((t) => now - t < 3600 * 1000); if (live.length) map.set(k, live); else map.delete(k); }
+  const hits = map.get(key) || [];
+  if (hits.length >= max) return true;
+  hits.push(now);
+  map.set(key, hits);
+  return false;
+}
+
 router.get('/instances/:slug/loka-sync', (req, res) => {
   const inst = lokaGate(req, res);
   if (!inst) return;
   if (!callerCanEdit(req, inst)) return res.status(403).json({ error: 'not allowed' });
   const s = lokaStateOf(inst);
-  res.json({ connected: !!s, spaceName: s ? s.spaceName : '', running: LOKA_RUNNING.has(inst.slug),
-    lastUpdate: s ? s.lastUpdate || null : null, canStop: callerRole(req, inst) === 'owner' || lokaSuper(req), canConnect: lokaSuper(req) && !searchText.isNeverTouched(inst.slug) });
+  const sup = lokaSuper(req), owner = callerRole(req, inst) === 'owner';
+  const mine = lokaOwnerSession(req, inst) || sup ? lokaMine(req, inst) : null;
+  res.json(Object.assign({ connected: !!s, spaceName: s ? s.spaceName : '', running: LOKA_RUNNING.has(inst.slug),
+    lastUpdate: s ? s.lastUpdate || null : null, canStop: owner || sup,
+    canConnect: (sup || !!(mine && mine.link)) && !searchText.isNeverTouched(inst.slug) }, mine || {}));
 });
 
 router.post('/instances/:slug/loka-sync', async (req, res) => {
   const inst = lokaGate(req, res, { write: true });
   if (!inst) return;
-  if (!lokaSuper(req)) return res.status(403).json({ error: 'not allowed' });
+  const sup = lokaSuper(req), who = lokaOwnerSession(req, inst);
+  if (!sup && !who) return res.status(403).json({ error: 'not allowed' });
+  const link = sup ? null : reg.lokaLinkOf(who.email);
+  if (!sup && !link) return res.status(403).json({ error: LOKA_LINK_FIRST });
   if (lokaBusy(inst, res)) return;
   if (!lokaSync.isSetUp()) return res.status(503).json({ error: 'LOKA hasn’t been set up on this server yet.' });
   const b = req.body || {};
-  const spaceId = String(b.spaceId || '').trim();
-  if (!lokaSync.SPACE_ID.test(spaceId)) return res.status(400).json({ error: 'That doesn’t look like a LOKA space id.' });
+  const spaceId = lokaSync.spaceIdFrom(b.spaceId);
+  if (!spaceId) return res.status(400).json({ error: 'That doesn’t look like a LOKA space id.' });
+  let knownName = '';
+  if (!sup) {
+    const member = link.memberSpaces.find((s) => s.id === spaceId);
+    const approved = reg.lokaRequests({ slug: inst.slug, spaceId, by: who.email, state: 'approved' }).length > 0;
+    let space = null;
+    // the space's organisation is asked of LOKA only when membership alone does not settle it
+    if (!member && !approved) {
+      try { space = await lokaSync.spaceInfo(spaceId); }
+      catch (e) { return res.status(502).json({ error: e instanceof lokaSync.LokaError ? e.message : 'LOKA couldn’t be reached. Try again in a moment.' }); }
+    }
+    if (!approved && !lokaSync.mayConnect(link, spaceId, space)) return res.status(403).json({ error: LOKA_REFUSED, canRequest: true });
+    knownName = (member && member.name) || (space && space.name) || '';
+  }
   const layerId = b.layerId ? String(b.layerId) : '';
   if (layerId && !imports.mergedLayers(imports.readManifest(inst.slug)).some((L) => L.id === layerId)) {
     return res.status(404).json({ error: 'There is no layer here called ' + layerId + '.' });
@@ -6118,21 +6223,62 @@ router.post('/instances/:slug/loka-sync', async (req, res) => {
   }
   LOKA_RUNNING.add(inst.slug);
   let tags;
+  // the space is downloaded before the link is made, so a space LOKA will not share leaves nothing linked
   try { tags = (await lokaSync.downloadSpace(spaceId)).tags; }
   catch (e) {
     LOKA_RUNNING.delete(inst.slug);
     return res.status(502).json({ error: e instanceof lokaSync.LokaError ? e.message : 'LOKA couldn’t be reached. Your atlas is unchanged.' });
   }
+  if (!connectLoka(inst, { spaceId, spaceName: String(b.spaceName || '').trim().slice(0, 80) || knownName, layerId }, sup ? 'the operator' : 'its owner', tags)) {
+    LOKA_RUNNING.delete(inst.slug);
+    return res.status(500).json({ error: 'The link could not be saved.' });
+  }
+  res.json({ started: true });
+});
+
+/* The link itself, and the first update after it: for Settings (above, with
+   the space already downloaded) and for a space chosen in the build wizard
+   (applyWantedLoka, which downloads inside the update). False when the link
+   could not be written. */
+function connectLoka(inst, { spaceId, spaceName, layerId }, by, tags) {
   const { file, local } = readOverlay(inst);
   const next = local || {};
   // manifest.local.json reaches every visitor: only what is fine to show goes in it (no email of who connected)
-  next.lokaSync = { spaceId, spaceName: String(b.spaceName || '').trim().slice(0, 80) || 'LOKA space', layerId,
+  next.lokaSync = { spaceId, spaceName: String(spaceName || '').slice(0, 80) || 'LOKA space', layerId: layerId || '',
     connectedAt: new Date().toISOString(), lastUpdate: null };
-  console.log('[loka-sync] ' + inst.slug + ' connected to a LOKA space by the operator');
-  if (!writeOverlay(file, next)) { LOKA_RUNNING.delete(inst.slug); return res.status(500).json({ error: 'The link could not be saved.' }); }
+  if (!writeOverlay(file, next)) return false;
+  if (inst.lokaNote) reg.updateInstance(inst.slug, { lokaNote: undefined });   // connected after all
+  console.log('[loka-sync] ' + inst.slug + ' connected to a LOKA space by ' + by);
   startLokaUpdate(inst.slug, tags);
-  res.json({ started: true });
-});
+  return true;
+}
+
+/* A space chosen in the wizard (POST /instances, kept as inst.wantLoka) is
+   connected as soon as the atlas is first built, and its first update
+   started. The atlas stands whether or not that works: a failed update is the
+   plain sentence on the Settings line beside Update now; a space that could
+   not be connected at all leaves its reason there too (inst.lokaNote, shown
+   until a connect). The right to the space is checked again now, against the
+   link as it is: unlinked meanwhile means not connected. Only the first
+   build, never a rebuild; never on deoria-bioregion. */
+function applyWantedLoka(slug, firstBuild) {
+  const inst = reg.getInstance(slug);
+  if (!inst || !inst.wantLoka || inst.status === 'building' || inst.status === 'pending-approval') return;
+  const want = inst.wantLoka;
+  reg.updateInstance(slug, { wantLoka: undefined });
+  if (!firstBuild || lokaStateOf(inst) || LOKA_RUNNING.has(slug)) return;
+  const note = (why) => { reg.updateInstance(slug, { lokaNote: why }); };
+  if (searchText.isNeverTouched(slug)) return note('This atlas can’t be connected to LOKA.');
+  if (!want.sup) {
+    const link = want.by ? reg.lokaLinkOf(want.by) : null;
+    if (!link) return note('The LOKA space chosen while building wasn’t connected: your LOKA account is no longer linked. Link it here, then connect the space.');
+    if (!lokaSync.mayConnect(link, want.spaceId, null)) return note('The LOKA space chosen while building wasn’t connected: your LOKA account no longer lists it. Ask for access here.');
+  }
+  // LOKA not set up on the server any more: the link is made and the first update says so, beside Update now
+  if (!connectLoka(inst, { spaceId: want.spaceId, spaceName: want.spaceName, layerId: '' }, 'its builder')) {
+    note('The LOKA space chosen while building could not be linked. Connect it here.');
+  }
+}
 
 router.delete('/instances/:slug/loka-sync', (req, res) => {
   const inst = lokaGate(req, res);
@@ -6153,6 +6299,154 @@ router.post('/instances/:slug/loka-sync/update', (req, res) => {
   if (!lokaSync.isSetUp()) return res.status(503).json({ error: 'LOKA hasn’t been set up on this server yet.' });
   startLokaUpdate(inst.slug);
   res.json({ started: true });
+});
+
+/* An owner who may not connect a space asks the operator for it: one open
+   request per atlas, space and person, answered on the operator's page. */
+router.post('/instances/:slug/loka-sync/request', (req, res) => {
+  const inst = lokaGate(req, res, { write: true });
+  if (!inst) return;
+  const who = lokaOwnerSession(req, inst);
+  if (!who) return res.status(403).json({ error: 'not allowed' });
+  if (lokaSuper(req)) return res.status(400).json({ error: 'You can connect any space yourself.' });
+  if (!reg.lokaLinkOf(who.email)) return res.status(403).json({ error: LOKA_LINK_FIRST });
+  const b = req.body || {};
+  const spaceId = lokaSync.spaceIdFrom(b.spaceId);
+  if (!spaceId) return res.status(400).json({ error: 'That doesn’t look like a LOKA space id.' });
+  // ten asks an hour, and twenty waiting at once: enough for anyone, not enough to flood the operator
+  if (reg.lokaRequests({ by: who.email, state: 'pending' }).length >= 20) return res.status(429).json({ error: 'You already have 20 requests waiting. Wait for those to be answered first.' });
+  if (lokaOverRate(lokaAskRate, who.email, 10)) return res.status(429).json({ error: 'That’s enough requests for now. Try again in an hour.' });
+  const { request: r, created } = reg.askLokaAccess({ slug: inst.slug, spaceId, spaceName: String(b.spaceName || '').trim(), by: who.email });
+  // one line to the operator for a new request, none for asking again; the request stands whether or not the mail goes
+  if (created) sendMail({ to: ADMIN_EMAIL, subject: 'LOKA Atlas: a request to connect a LOKA space',
+    text: who.email + ' asks to connect the atlas “' + (inst.title || inst.slug) + '” to the LOKA space ' + spaceId +
+      (r.spaceName ? ' (' + r.spaceName + ')' : '') + '.\n\nApprove or decline it on the operator’s page: https://loka.place/apps/atlas/admin/\n' }).catch(() => {});
+  res.json({ ok: true, state: r.state });
+});
+
+/* ---------- a person's own LOKA account ----------
+
+   Linked by an emailed code: LOKA sends it (send-code), the person types it
+   (confirm), and the server swaps it for who LOKA says they are — a token
+   that lives only inside that one call and is never kept, logged or sent on.
+   The bodies of these routes are never logged. Five codes and ten tries an
+   hour, counted for the account asking and again for the email aimed at (so
+   neither one account nor one address can be worked on from many sides);
+   LOKA keeps its own limits too. Whether LOKA knows an email is never said. */
+router.post('/auth/loka/send-code', async (req, res) => {
+  const session = auth.sessionFromReq(req);
+  if (!session) return res.status(401).json({ error: 'not signed in' });
+  const email = reg.normEmail((req.body && req.body.email) || session.email);
+  if (!reg.validEmail(email)) return res.status(400).json({ error: 'valid email required' });
+  if (lokaOverRate(lokaCodeRate, 'account:' + session.email, 5) || lokaOverRate(lokaCodeRate, 'email:' + email, 5)) {
+    return res.status(429).json({ error: 'That’s enough codes for now. Try again in an hour.' });
+  }
+  let said;
+  try { said = await lokaSync.sendCode(email); }
+  catch (e) { return res.status(502).json({ error: e instanceof lokaSync.LokaError ? e.message : 'LOKA couldn’t be reached. Try again in a moment.' }); }
+  res.json({ ok: true, email, said });
+});
+router.post('/auth/loka/confirm', async (req, res) => {
+  const session = auth.sessionFromReq(req);
+  if (!session) return res.status(401).json({ error: 'not signed in' });
+  const email = reg.normEmail((req.body && req.body.email) || session.email);
+  const code = String((req.body && req.body.code) || '').trim();
+  if (!reg.validEmail(email) || !/^\d{4,8}$/.test(code)) return res.status(400).json({ error: 'the email and the code from it are both needed' });
+  if (lokaOverRate(lokaTryRate, 'account:' + session.email, 10) || lokaOverRate(lokaTryRate, 'email:' + email, 10)) {
+    return res.status(429).json({ error: 'Too many tries. Send a new code in an hour.' });
+  }
+  let link;
+  // who the person is comes from LOKA's answer alone; nothing in this body names them
+  try { link = await lokaSync.linkByCode(email, code); }
+  catch (e) { return res.status(e instanceof lokaSync.LokaError ? 400 : 502).json({ error: e instanceof lokaSync.LokaError ? e.message : 'LOKA couldn’t be reached. Try again in a moment.' }); }
+  reg.setLokaLink(session.email, link);
+  console.log('[loka-sync] an account linked its LOKA sign-in (' + link.memberSpaces.length + ' spaces)');
+  res.json({ ok: true, lokaEmail: link.lokaEmail, spaces: lokaSpaceCount(link) });
+});
+router.delete('/auth/loka', (req, res) => {
+  const session = auth.sessionFromReq(req);
+  if (!session) return res.status(401).json({ error: 'not signed in' });
+  reg.clearLokaLink(session.email);
+  res.json({ ok: true });
+});
+/* What the build wizard shows under "Bring places from a LOKA space": whether
+   the account is linked, and if so the spaces LOKA listed for it when it was
+   (as old as the link; a new code brings the list up to date). */
+router.get('/auth/loka', (req, res) => {
+  const session = auth.sessionFromReq(req);
+  if (!session) return res.status(401).json({ error: 'not signed in' });
+  const link = reg.lokaLinkOf(session.email);
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ email: session.email, setUp: lokaSync.isSetUp(),
+    link: link ? { lokaEmail: link.lokaEmail, linkedAt: link.linkedAt, spacesAt: link.spacesAt || link.linkedAt, spaces: (link.spaces || []).map(lokaSync.spaceCard) } : null });
+});
+/* Where a space's places are, for the wizard's Where step (Mithun, 4 Nov 2026:
+   the area comes from the places, not the world): the space is downloaded
+   with the server's own sign-in and its positions put to the same
+   region-finding a dropped file's coordinates go through (inferRegion) —
+   districts that hold nearly all of them, else the state, else the country;
+   the world only when they span countries or have no position. Only a space
+   on the person's own list (the operator: any). A space LOKA will not share
+   with the server is the plain sentence, and the wizard asks "where" as usual. */
+const lokaRegionRate = new Map();
+router.post('/auth/loka/region', async (req, res) => {
+  const session = auth.sessionFromReq(req);
+  if (!session) return res.status(401).json({ error: 'not signed in' });
+  const spaceId = lokaSync.spaceIdFrom(req.body && req.body.spaceId);
+  if (!spaceId) return res.status(400).json({ error: 'That doesn’t look like a LOKA space.' });
+  const link = reg.lokaLinkOf(session.email);
+  const known = link ? (link.spaces || []).find((s) => s.id === spaceId) || null : null;
+  if (!known && !lokaSuper(req)) return res.status(403).json({ error: LOKA_NOT_LISTED });
+  if (!lokaSync.isSetUp()) return res.status(503).json({ error: 'LOKA hasn’t been set up on this server yet.' });
+  // a whole space each time: twenty an hour is plenty of picking
+  if (lokaOverRate(lokaRegionRate, session.email, 20)) return res.status(429).json({ error: 'That’s enough for now. Try again in an hour.' });
+  let tags;
+  try { tags = (await lokaSync.downloadSpace(spaceId)).tags; }
+  catch (e) { return res.status(502).json({ error: e instanceof lokaSync.LokaError ? e.message : 'LOKA couldn’t be reached. Try again in a moment.' }); }
+  const points = lokaSync.toRows(tags, '').rows.map((r) => [r.longitude, r.latitude]);
+  const head = { spaceName: (known && known.name) || '', places: points.length };
+  const world = () => res.json(Object.assign(head, { worldwide: true, units: [], level: null, rows: points.length, matchedRows: 0 }));
+  if (!points.length) return world();
+  try {
+    // the country chosen on the wizard, when the places are in it; else told from the positions
+    const hint = String((req.body && req.body.iso3) || '').toUpperCase();
+    const iso3 = /^[A-Z]{3}$/.test(hint) && (await shareInsideCountry(hint, points)) >= 0.5 ? hint : '';
+    const r = await inferRegion({ iso3, points, columns: [] });
+    if (r.status !== 200) return world();   // no country could be told from the positions
+    res.json(Object.assign(head, r.body));
+  } catch (e) {
+    console.warn('[loka-sync] the region of a space — ' + (e && e.message));
+    res.status(502).json({ error: 'Where the space’s places are couldn’t be worked out just now. Search for the place instead.' });
+  }
+});
+
+/* The operator's list of requests to connect a space, and the answer to one. */
+function lokaRequestRow(r) {
+  const inst = reg.getInstance(r.slug);
+  return { id: r.id, slug: r.slug, title: (inst && inst.title) || r.slug, spaceId: r.spaceId, spaceName: r.spaceName, by: r.by, at: r.at, state: r.state, decidedAt: r.decidedAt };
+}
+router.get('/admin/loka-requests', (req, res) => {
+  if (!auth.isAdmin(req) && !auth.isAdminSession(req)) {
+    const signedIn = !!auth.sessionFromReq(req);
+    return res.status(signedIn ? 403 : 401).json({ error: 'operator only', needsAuth: !signedIn });
+  }
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ requests: reg.lokaRequests().filter((r) => reg.getInstance(r.slug)).sort((a, b) => (a.at < b.at ? 1 : -1)).map(lokaRequestRow) });
+});
+router.post('/admin/loka-requests/:id', async (req, res) => {
+  if (!auth.isAdmin(req) && !auth.isAdminSession(req)) return res.status(404).json({ error: 'not found' });
+  const state = String((req.body && req.body.state) || '');
+  const r = reg.decideLokaAccess(String(req.params.id), state);
+  if (!r) return res.status(400).json({ error: 'No such request, or the answer must be approved or declined.' });
+  /* A private space is one the server's own sign-in cannot download until
+     someone adds that account to the space in LOKA, as a Viewer. Said here,
+     plainly, and never done by the server itself. */
+  let note = '';
+  if (state === 'approved' && lokaSync.isSetUp()) {
+    try { if (!(await lokaSync.spaceInfo(r.spaceId))) note = 'This space is private, or LOKA doesn’t show it to this server. For the update to work, add the sync account to the space in LOKA as a Viewer.'; }
+    catch { note = 'LOKA couldn’t be reached to check the space. If it is private, add the sync account to it in LOKA as a Viewer.'; }
+  }
+  res.json({ ok: true, request: lokaRequestRow(r), note });
 });
 
 /* The operator's way to start a reading by hand. The reading otherwise begins

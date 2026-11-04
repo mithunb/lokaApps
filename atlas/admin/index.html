@@ -168,6 +168,16 @@
 
     .hint { font-size:var(--t-meta); color:var(--color-text-muted); margin:.8rem 0 0; }
 
+    /* ---------- requests to connect a LOKA space: a short list, one line each ---------- */
+    .asks { margin-top:2rem; }
+    .asks h2 { font-size:var(--t-section); }
+    .ask { display:flex; flex-wrap:wrap; align-items:center; gap:.4rem 1rem; padding:.6rem 0;
+      border-bottom:1px solid var(--color-divider); font-size:var(--t-ui); }
+    .ask .who { flex:1 1 22rem; min-width:0; }
+    .ask .acts { display:flex; gap:.4rem; }
+    .ask .btn { min-height:2.25rem; padding:.3rem .8rem; }
+    .ask .note { flex-basis:100%; font-size:var(--t-meta); color:var(--color-text-secondary); }
+
     /* ---------- the gate (same treatment as the editor and add-data) ---------- */
     .gate { max-width:34rem; margin:10vh auto; padding:0 1rem; text-align:center; }
     .gate h2 { font-size:var(--t-section); line-height:1.25; margin-bottom:.4rem; }
@@ -221,6 +231,16 @@
       </table>
     </div>
     <p class="hint" id="empty" hidden></p>
+
+    <!-- Owners who may not connect a LOKA space themselves ask here
+         (GET /admin/loka-requests); a yes lets that owner connect that one
+         space to that one atlas. A private space needs one more step in LOKA,
+         said in plain words under the row once it is approved. -->
+    <section class="asks" id="asks" hidden aria-labelledby="asks-h">
+      <h2 id="asks-h">Requests to connect a LOKA space</h2>
+      <p class="hint">An owner whose LOKA account is in neither the space nor its organisation asks here. A yes lets them connect that space to that atlas.</p>
+      <div id="asks-rows"></div>
+    </section>
   </main>
 
   <script>
@@ -400,6 +420,38 @@
       return '<span class="tot' + (cls ? " " + cls : "") + '"><b>' + esc(n) + "</b> " + esc(label) + "</span>";
     }
 
+    /* ================= requests to connect a LOKA space ================= */
+
+    function askHtml(r) {
+      var open = r.state === "pending";
+      return '<div class="ask" data-id="' + esc(r.id) + '">' +
+        '<span class="who"><b>' + esc(r.by) + "</b> asks to connect <b>" + esc(r.title) + "</b> to " +
+          (r.spaceName ? esc(r.spaceName) + ' <span class="mono muted">' + esc(r.spaceId) + "</span>" : '<span class="mono">' + esc(r.spaceId) + "</span>") +
+          '<span class="t-sub">' + esc(fmtDate(Date.parse(r.at))) + (open ? "" : " · " + esc(r.state)) + "</span></span>" +
+        (open ? '<span class="acts"><button class="btn secondary" type="button" data-say="approved">Approve</button>' +
+          '<button class="btn quiet" type="button" data-say="declined">Decline</button></span>' : "") +
+        '<span class="note" hidden></span></div>';
+    }
+    function paintAsks(rows) {
+      $("#asks").hidden = !rows.length;
+      $("#asks-rows").innerHTML = rows.map(askHtml).join("");
+      $$("#asks-rows button[data-say]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var row = this.closest(".ask"), note = row.querySelector(".note"), state = this.dataset.say;
+          row.querySelectorAll("button").forEach(function (x) { x.disabled = true; });
+          note.hidden = false; note.textContent = state === "approved" ? "Checking the space with LOKA…" : "Declining…";
+          api("admin/loka-requests/" + encodeURIComponent(row.dataset.id), { method: "POST", body: { state: state } }).then(function (r) {
+            row.querySelector(".acts").remove();
+            row.querySelector(".t-sub").textContent += " · " + state;
+            note.textContent = r.note || (state === "approved" ? "Approved. They can connect it from the atlas’s Settings now." : "Declined.");
+          }).catch(function (e) {
+            row.querySelectorAll("button").forEach(function (x) { x.disabled = false; });
+            note.textContent = errMsg(e);
+          });
+        });
+      });
+    }
+
     /* ================= boot: the API decides who sees this ================= */
 
     api("auth/me").catch(function () { return null; }).then(function (me) {
@@ -418,6 +470,7 @@
       $$("th[data-key] > button").forEach(function (b) {
         b.addEventListener("click", function () { setSort(this.parentNode.dataset.key); });
       });
+      api("admin/loka-requests").then(function (a) { paintAsks((a && a.requests) || []); }).catch(function () {});
     }).catch(function (e) {
       if (e && (e._status === 401 || e.needsAuth)) {
         gate("Sign in first",

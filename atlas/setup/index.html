@@ -364,6 +364,39 @@
       background:none; border:1px solid var(--color-border); border-radius:var(--radius-md);
       color:var(--color-text-muted,#6E6A63); }
     .filecard-kill:hover { border-color:var(--color-sindoor,#C9402B); color:var(--color-sindoor-deep,#9E3220); }
+    /* a LOKA space, under the file drop: one more way to say where the places
+       come from. Opens into a box: the link by code, or the list of spaces as
+       rows with a small picture. Nothing pill-shaped; one column on a phone. */
+    .lokapick { margin-top:.6rem; }
+    .lokapick-open { font:inherit; width:100%; text-align:left; cursor:pointer; padding:.7rem .85rem;
+      display:flex; flex-direction:column; gap:.15rem; border:1px dashed var(--color-border);
+      border-radius:var(--radius-lg); background:var(--color-surface-alt,#F0EDE4); color:var(--color-text-secondary); }
+    .lokapick-open b { color:var(--color-text-primary); font-weight:600; }
+    .lokapick-open span { font-size:var(--t-meta); color:var(--color-text-muted); }
+    .lokapick-open:hover, .lokapick-open[aria-expanded="true"] { border-color:var(--color-leaf); background:var(--color-leaf-tint); }
+    .lokapick-body { margin-top:.6rem; padding:.6rem .75rem; border:1px solid var(--color-border);
+      border-radius:var(--radius-md); background:var(--color-surface); font-size:var(--t-ui); }
+    .lokapick-body p { margin:.35rem 0; }
+    .lokapick-row { display:flex; gap:.5rem; margin:.4rem 0; flex-wrap:wrap; }
+    .lokapick-row input { flex:1 1 10rem; min-width:0; font:inherit; font-size:var(--t-control); padding:.55rem .65rem;
+      border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface); min-height:2.75rem; }
+    .lokapick-row .btn { flex:0 0 auto; }
+    .lokapick-link { font:inherit; font-size:inherit; background:none; border:0; padding:0; cursor:pointer;
+      color:var(--color-leaf-deep); text-decoration:underline; text-underline-offset:.2em; }
+    .lokapick-note { font-size:var(--t-meta); color:var(--color-text-muted); }
+    .lokapick-err { font-size:var(--t-meta); color:var(--color-sindoor-deep); }
+    .lokasp-list { list-style:none; margin:.5rem 0 0; padding:0; max-height:22rem; overflow:auto; border-top:1px solid var(--color-divider); }
+    .lokasp { font:inherit; width:100%; text-align:left; cursor:pointer; display:flex; align-items:center; gap:.7rem;
+      padding:.5rem .4rem; border:0; border-bottom:1px solid var(--color-divider); background:none; color:var(--color-text-primary); }
+    .lokasp:hover { background:var(--color-leaf-tint); }
+    .lokasp[aria-pressed="true"] { background:var(--color-leaf-tint); box-shadow:inset 3px 0 0 var(--color-leaf); }
+    .lokasp:disabled, .lokasp:disabled:hover { cursor:not-allowed; opacity:.55; background:none; }
+    .lokasp:focus-visible { outline:2px solid var(--color-leaf); outline-offset:-2px; }
+    .lokasp-pic { flex:0 0 auto; width:2.5rem; height:2.5rem; border-radius:var(--radius-md);
+      background:var(--color-surface-alt,#F0EDE4); object-fit:cover; display:block; }
+    .lokasp-what { display:flex; flex-direction:column; gap:.05rem; min-width:0; }
+    .lokasp-what b { font-weight:600; overflow-wrap:anywhere; }
+    .lokasp-what span { font-size:var(--t-meta); color:var(--color-text-secondary); }
     /* ---- release 3: which place did you mean? ----
        One question at a time: the places with that name as a list you can
        read top to bottom, the suggested one first and marked, and beside it a
@@ -569,6 +602,17 @@
                 your region &mdash; never the whole file. Your data goes on the atlas at the end.</span>
             </label>
             <div id="geo-file-card"></div>
+            <!-- or a LOKA space (4 Nov 2026): one of the spaces LOKA lists for
+                 the person, picked here. Its places come in once the atlas is
+                 built, through the same link Settings makes. setup.js draws
+                 what goes inside: the link by emailed code, then the list. -->
+            <div class="lokapick" id="loka-pick">
+              <button class="lokapick-open" type="button" id="loka-open" aria-expanded="false" aria-controls="loka-body">
+                <b>Bring places from a LOKA space</b>
+                <span>Pick one of your spaces; its places come in once the atlas is built.</span>
+              </button>
+              <div class="lokapick-body" id="loka-body" hidden></div>
+            </div>
           </div>
         </div>
         <div class="chips" id="chips"></div>

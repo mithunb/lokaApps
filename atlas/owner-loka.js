@@ -4,9 +4,12 @@
  * holds — api, errMsg, esc, slug — through mount(ctx) and calls settings(scrim)
  * as Settings opens. Connected: a line saying which LOKA space, when it was
  * last updated, and "Update now"; while it runs, a calm wait line asked after
- * every 3 seconds; after, what came in in plain words. Not connected: nothing,
- * except for the operator, who gets a box for a space id.
- * The routes are in api/apps/atlas.js (/instances/:slug/loka-sync). */
+ * every 3 seconds; after, what came in in plain words. Not connected, for an
+ * owner: first "Link your LOKA account" (a code to their LOKA email, typed
+ * here), then "Linked as …" and a box for a space id or a pasted space link;
+ * a space LOKA says is not theirs gets a plain sentence and "Request access".
+ * The operator connects any space; an editor sees nothing until it is connected.
+ * The routes are in api/apps/atlas.js (/instances/:slug/loka-sync, /auth/loka). */
 (function () {
   "use strict";
 
@@ -43,35 +46,93 @@
     if (!u) return "not updated yet";
     return (u.error ? "last tried " : "updated ") + ago(u.at);
   }
+  // where a request to connect a space stands, for the person who asked
+  function asked(r) {
+    if (!r) return "";
+    var space = r.spaceName || "that space";
+    if (r.state === "pending") return "You asked for access to " + space + ". It is waiting for a yes from LOKA Atlas; you can connect it once that comes.";
+    if (r.state === "approved") return "Access to " + space + " was approved. Connect it above.";
+    return "Your request for " + space + " was declined.";
+  }
+
+  /* The owner's own LOKA account: the box for the email and the code, or the
+     line saying it is linked. The operator gets it too, for their own account. */
+  function linkHtml(s) {
+    if (s.link) {
+      return '<div class="own-fld"><span>Linked to LOKA as ' + esc(s.link.lokaEmail) +
+        ' <span class="own-note">a member of ' + count(s.link.spaces, "space", "spaces") + "</span>" +
+        ' · <button class="own-linkish" type="button" id="own-loka-unlink">Unlink</button></span></div>';
+    }
+    return '<div class="own-fld"><span>Link your LOKA account <span class="own-note">a code goes to the email you sign in to LOKA with; then you can connect a space of yours</span></span>' +
+      '<div class="own-inv-add"><input type="email" id="own-loka-email" aria-label="The email you sign in to LOKA with" value="' + esc(s.email || "") + '" autocomplete="email" />' +
+      '<button class="share-btn" type="button" id="own-loka-send">Send code</button></div>' +
+      '<div class="own-inv-add" id="own-loka-codebox" hidden><input type="text" id="own-loka-code" aria-label="The code from the email" placeholder="Code from the email" inputmode="numeric" autocomplete="one-time-code" />' +
+      '<button class="share-btn" type="button" id="own-loka-confirm">Confirm</button></div></div>';
+  }
 
   function draw(host, s) {
     clearTimeout(timer);
-    if (!s || (!s.connected && !s.canConnect)) { host.innerHTML = ""; return; }
-    var h;
+    if (!s || (!s.connected && !s.canConnect && !s.canLink)) { host.innerHTML = ""; return; }
+    var h = "";
     if (!s.connected) {
-      h = '<div class="own-fld"><span>Connect to a LOKA space <span class="own-note">its places come into this atlas and stay up to date when you press Update now</span></span>' +
-        '<div class="own-inv-add"><input type="text" id="own-loka-id" aria-label="LOKA space id" placeholder="Space id" autocomplete="off" />' +
-        '<input type="text" id="own-loka-name" aria-label="Name of the space" placeholder="Name (optional)" autocomplete="off" />' +
-        '<button class="share-btn" type="button" id="own-loka-go">Connect</button></div>';
+      if (s.canLink) h += linkHtml(s);
+      if (s.canConnect) {
+        h += '<div class="own-fld"><span>Connect to a LOKA space <span class="own-note">its places come into this atlas and stay up to date when you press Update now</span></span>' +
+          '<div class="own-inv-add"><input type="text" id="own-loka-id" aria-label="LOKA space id or link" placeholder="Space id or link" autocomplete="off" />' +
+          '<input type="text" id="own-loka-name" aria-label="Name of the space" placeholder="Name (optional)" autocomplete="off" />' +
+          '<button class="share-btn" type="button" id="own-loka-go">Connect</button></div>' +
+          (s.request ? '<p class="own-note">' + esc(asked(s.request)) + "</p>" : "") + "</div>";
+      }
+      // a space chosen while building that could not be connected: why, until one is
+      h += '<p class="own-note" role="status" id="own-loka-say">' + (s.note ? esc(s.note) : "") + "</p>";
     } else {
       h = '<div class="own-fld"><span>Kept up to date from LOKA · ' + esc(s.spaceName) + ' · ' + esc(when(s.lastUpdate)) + "</span>" +
         '<div class="own-row"><button class="share-btn" type="button" id="own-loka-now"' + (s.running ? " disabled" : "") + ">Update now</button>" +
         (s.canStop ? '<button class="own-linkish" type="button" id="own-loka-off">Stop updating</button>' : "") + "</div>" +
         '<p class="own-note" role="status" id="own-loka-say">' +
-          (s.running ? waitLine(WAIT) : esc(said(s.lastUpdate))) + "</p>";
+          (s.running ? waitLine(WAIT) : esc(said(s.lastUpdate))) + "</p></div>";
     }
-    if (!s.connected) h += '<p class="own-note" role="status" id="own-loka-say"></p>';
-    host.innerHTML = h + '<span class="own-err" id="own-loka-err" role="alert"></span></div>';
+    host.innerHTML = h + '<span class="own-err" id="own-loka-err" role="alert"></span>';
     var err = host.querySelector("#own-loka-err");
     var go = host.querySelector("#own-loka-go"), now = host.querySelector("#own-loka-now"), off = host.querySelector("#own-loka-off");
+    var send = host.querySelector("#own-loka-send"), confirm = host.querySelector("#own-loka-confirm"), unlink = host.querySelector("#own-loka-unlink");
     var say = host.querySelector("#own-loka-say");
     // the button waits, with a calm line, until the answer comes
     function busy(btn, text) { btn.disabled = true; err.textContent = ""; say.innerHTML = waitLine(text); }
     function fail(btn) { return function (e) { btn.disabled = false; say.textContent = ""; err.textContent = errMsg(e); }; }
+    function spaceBody() { return { spaceId: host.querySelector("#own-loka-id").value.trim(), spaceName: host.querySelector("#own-loka-name").value.trim() }; }
+    if (send) send.onclick = function () {
+      var email = host.querySelector("#own-loka-email").value.trim();
+      busy(send, "Sending a code…");
+      api("auth/loka/send-code", { method: "POST", body: { email: email } }).then(function (r) {
+        send.disabled = false;
+        say.textContent = r.said + " Type it here.";
+        host.querySelector("#own-loka-codebox").hidden = false;
+        host.querySelector("#own-loka-code").focus();
+      }).catch(fail(send));
+    };
+    if (confirm) confirm.onclick = function () {
+      busy(confirm, "Checking the code with LOKA…");
+      api("auth/loka/confirm", { method: "POST", body: { email: host.querySelector("#own-loka-email").value.trim(), code: host.querySelector("#own-loka-code").value.trim() } })
+        .then(function () { refresh(host); }).catch(fail(confirm));
+    };
+    if (unlink) unlink.onclick = function () {
+      busy(unlink, "Unlinking…");
+      api("auth/loka", { method: "DELETE" }).then(function () { refresh(host); }).catch(fail(unlink));
+    };
     if (go) go.onclick = function () {
       busy(go, "Checking the space…");
-      api(url(), { method: "POST", body: { spaceId: host.querySelector("#own-loka-id").value.trim(), spaceName: host.querySelector("#own-loka-name").value.trim() } })
-        .then(function () { refresh(host); }).catch(fail(go));
+      api(url(), { method: "POST", body: spaceBody() }).then(function () { refresh(host); }).catch(function (e) {
+        if (!e || !e.canRequest) return fail(go)(e);
+        // not theirs, as far as LOKA knows: the sentence, and the way to ask
+        go.disabled = false;
+        say.innerHTML = esc(errMsg(e)) + ' <button class="own-linkish" type="button" id="own-loka-ask">Request access</button>';
+        var ask = host.querySelector("#own-loka-ask");
+        ask.onclick = function () {
+          busy(ask, "Asking…");
+          api(url() + "/request", { method: "POST", body: spaceBody() }).then(function () { refresh(host); }).catch(fail(ask));
+        };
+      });
     };
     if (now) now.onclick = function () {
       busy(now, WAIT);

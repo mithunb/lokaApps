@@ -19,7 +19,7 @@ const RESERVED = new Set([
   'deoria-bioregion',
 ]);
 
-let db = { instances: {}, accounts: {}, drafts: {} };
+let db = { instances: {}, accounts: {}, drafts: {}, lokaRequests: {} };
 
 function load() {
   try {
@@ -29,6 +29,7 @@ function load() {
       instances: obj.instances || {},
       accounts: obj.accounts || {},
       drafts: obj.drafts || {},
+      lokaRequests: obj.lokaRequests || {},
     };
     console.log(`[atlas] registry: ${Object.keys(db.instances).length} instances, ${Object.keys(db.accounts).length} accounts`);
     // only ever after a successful read: a failed one leaves db empty, and
@@ -131,6 +132,7 @@ export function deleteInstance(slug) {
   // linked to, so deleting the instance alone left the slug in several
   // people's "Your atlases" — an entry they can see and never open.
   dropLinksTo(slug);
+  for (const r of Object.values(db.lokaRequests)) if (r.slug === slug) delete db.lokaRequests[r.id];
   persist();
 }
 // Every account reference to one slug, gone. Returns the emails it touched.
@@ -281,6 +283,67 @@ export function acceptInvites(email) {
   if (n) persist();
   return n;
 }
+/* ---------- the account's own LOKA sign-in ----------
+
+   What LOKA said about the person when they linked their account from Atlas
+   (api/lib/atlas/loka-sync.js linkByCode): their LOKA user id and email, the
+   organisations they are in, the spaces they are a member of, and every space
+   LOKA lists for them (the snapshot the build wizard picks from, as old as
+   the link). It is what lets an owner connect an atlas to a space of theirs.
+   Kept on the account, not on any atlas, and never any LOKA token. Linking
+   again replaces it. */
+export function setLokaLink(email, link) {
+  const acc = upsertAccount(email);
+  acc.lokaLink = {
+    lokaUserId: String(link.lokaUserId), lokaEmail: String(link.lokaEmail || ''),
+    orgIds: (link.orgIds || []).map(String), memberSpaces: (link.memberSpaces || []).map((s) => ({
+      id: String(s.id), orgId: String(s.orgId || ''), name: String(s.name || ''), type: String(s.type || ''), role: String(s.role || '') })),
+    spaces: (link.spaces || []).map((s) => ({
+      id: String(s.id), name: String(s.name || ''), type: String(s.type || ''), role: String(s.role || ''), ownerId: String(s.ownerId || ''),
+      orgId: String(s.orgId || ''), tagsCount: Number(s.tagsCount) || 0, updatedAt: String(s.updatedAt || ''),
+      // a web address or nothing: it goes into an <img> on the wizard
+      thumbnailUrl: /^https?:\/\//.test(String(s.thumbnailUrl || '')) ? String(s.thumbnailUrl).slice(0, 500) : '' })),
+    spacesAt: link.spacesAt || link.linkedAt || new Date().toISOString(),
+    linkedAt: link.linkedAt || new Date().toISOString(),
+  };
+  persist();
+  return acc.lokaLink;
+}
+export function clearLokaLink(email) {
+  const acc = db.accounts[normEmail(email)];
+  if (acc && acc.lokaLink) { delete acc.lokaLink; persist(); }
+}
+export function lokaLinkOf(email) {
+  const acc = db.accounts[normEmail(email)];
+  return acc && acc.lokaLink ? acc.lokaLink : null;
+}
+
+/* ---------- asking to connect a space one may not ----------
+
+   An owner whose LOKA account is in neither a space nor its organisation asks
+   the operator for that one space on that one atlas. One open request per
+   (atlas, space, person); the operator approves or declines it. */
+// { request, created }: created is false when the same open request already stood
+export function askLokaAccess({ slug, spaceId, spaceName, by }) {
+  const who = normEmail(by);
+  const open = Object.values(db.lokaRequests).find((r) => r.slug === slug && r.spaceId === spaceId && r.by === who && r.state === 'pending');
+  if (open) return { request: open, created: false };
+  const id = crypto.randomBytes(8).toString('hex');
+  db.lokaRequests[id] = { id, slug, spaceId, spaceName: String(spaceName || '').slice(0, 80), by: who, at: new Date().toISOString(), state: 'pending', decidedAt: null };
+  persist();
+  return { request: db.lokaRequests[id], created: true };
+}
+export function lokaRequests(where = {}) {
+  return Object.values(db.lokaRequests).filter((r) => Object.keys(where).every((k) => r[k] === where[k]));
+}
+export function decideLokaAccess(id, state) {
+  const r = db.lokaRequests[id];
+  if (!r || (state !== 'approved' && state !== 'declined')) return null;
+  r.state = state; r.decidedAt = new Date().toISOString();
+  persist();
+  return r;
+}
+
 export function normEmail(email) {
   return String(email || '').trim().toLowerCase();
 }

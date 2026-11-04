@@ -167,7 +167,7 @@ check('ties keep the one whose heading read best', /if \(!best \|\| rate > best\
 check('one column needs no screening at all', /if \(columns\.length < 2\) return \{ col: columns\[0\]\.col/.test(server), true);
 check('a page still sending one unnamed column works',
   /if \(names\.length && !columns\.length\) columns\.push\(\{ col: '', names \}\);/.test(server), true);
-check('and the answer says which column was read', /res\.json\(\{ iso3, mode, column, level: r\.level/.test(server), true);
+check('and the answer says which column was read', /return \{ status: 200, body: \{ iso3, mode, column, level: r\.level/.test(server), true);
 
 console.log('\n  and the page says so, whether or not it found anything');
 check('when nothing is found, it names the column it read',
