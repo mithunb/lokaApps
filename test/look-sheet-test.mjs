@@ -93,6 +93,8 @@ check('logo-tools is loaded at the same version stamp when needed', /s\.src = "\
 
 console.log('\n  the visitor’s one trace: the credit line');
 check('index.html has the line, hidden until a look says where it is from', /<p class="cr-look" id="look-credit" hidden><\/p>/.test(page), true);
+check('the sheet says it reads colours, logo and font', /We read the site’s colours, logo and font\./.test(look) && /its colours, logo and font, on this atlas/.test(look), true);
+check('the font sample uses the atlas’s own description, else a line true of every atlas — never festival words', /var line = cut \|\| "Every place on this map was tagged in the LOKA app\."/.test(look) && !/Talks and walks|14 sessions/.test(look), true);
 check('the credit names the logo only when the look brought it (a logo from the wizard or Settings is the owner’s own)', /if \(src\.logo === true && manifest\.branding && manifest\.branding\.logo\) brought\.push\("logo"\);/.test(viewer), true);
 check('atlas.js fills it from theme.source unless credit is off, in plain words: colours, logo and font', /look\.hidden = !sayLook;/.test(viewer) && /manifest\.theme\.credit !== false/.test(viewer) && /var brought = \["Colours"\];/.test(viewer) && /brought\.push\("logo"\)/.test(viewer) && /brought\.push\("font"\)/.test(viewer) && /look\.textContent = what \+ " from " \+ src\.host/.test(viewer), true);
 check('nothing else new for visitors: no control, no switch, and the badge rule is as it was', /loka-look/.test(page.split('<body')[1] || ''), false);

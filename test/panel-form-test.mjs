@@ -92,7 +92,7 @@ check('Enter saves, Escape puts back what was there',
 console.log('\n  sign in is back on atlases (Mithun, 4 Nov 2026; out from 27 Oct); a signed-in owner keeps sign out');
 check('all atlases and all apps are not drawn on an atlas; sign in is',
   /\.atlas-full \.nav \.links a\[href="\.\/"\], \.atlas-full \.nav \.links a\[href="\.\.\/"\] \{ display:none !important; \}/.test(html) && !/\.atlas-full #nav-signin \{ display:none/.test(html), true);
-check('a quiet sign in is back, last in the menu, and comes straight back to the atlas (Mithun, 4 Nov 2026)', /<a id="nav-signin" href="\.\/setup\/\?signin=1">sign in<\/a>\s*<button id="nav-signout"/.test(html) && /if \(DATASET\) signin\.href = "\.\/setup\/\?back=" \+ encodeURIComponent\(DATASET\);/.test(fs.readFileSync(new URL('../atlas/atlas.js', import.meta.url), 'utf8')), true);
+check('a quiet sign in is back, last in the menu, and comes straight back to the atlas (Mithun, 4 Nov 2026)', /<a id="nav-signin" href="\.\/setup\/\?signin=1" hidden>sign in<\/a>\s*<button id="nav-signout"/.test(html) && /if \(DATASET\) signin\.href = "\.\/setup\/\?back=" \+ encodeURIComponent\(DATASET\);/.test(fs.readFileSync(new URL('../atlas/atlas.js', import.meta.url), 'utf8')), true);
 check('and on a phone sign out is a 48px row in the ☰ menu', /html \.nav \.nav-menu \.links a, html \.nav \.nav-menu \.links button, html \.nav \.nav-menu #nav-user \{\s*display:block; width:100%; margin:0; padding:14px \.25rem; line-height:20px; min-height:0; box-sizing:border-box;/.test(html), true);
 check('a long address is shortened there', /\.atlas-full #nav-user \{ max-width:14rem; overflow:hidden; text-overflow:ellipsis; \}/.test(html), true);
 check('only one script measures the sheet', /function sheetH\(\)/.test(html), false);

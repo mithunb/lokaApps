@@ -34,7 +34,7 @@
     if (!host) return;
     host.innerHTML =
       '<div class="own-fld own-look-fld"><span>Provide a website for visual style and design reference. ' +
-        '<span class="own-note">its colours and logo, on this atlas</span></span>' +
+        '<span class="own-note">its colours, logo and font, on this atlas</span></span>' +
         '<div class="own-look-box">' +
           '<div class="own-look-now" id="own-look-now"></div>' +
           '<div class="own-row own-look-acts">' +
@@ -206,7 +206,7 @@
   function sheetHTML() {
     return '<div class="own-sheet own-look-sheet" role="dialog" aria-modal="true" aria-label="Use my website’s look">' +
       "<h2>Use my website’s look</h2>" +
-      '<p class="own-set-p">We read the site’s colours and logo. Nothing is changed until you press <b>Use this look</b>.</p>' +
+      '<p class="own-set-p">We read the site’s colours, logo and font. Nothing is changed until you press <b>Use this look</b>.</p>' +
       '<label class="own-fld">Your website’s address' +
         '<input type="text" id="look-url" placeholder="https://example.org" autocomplete="off" spellcheck="false" value="' + esc(STATE.site || (INST.branding && INST.branding.orgUrl) || "") + '" /></label>' +
       '<div class="own-row">' +
@@ -462,7 +462,9 @@
     if (!fonts || !fonts.text) return;
     fontLink(fonts.cssUrl);
     var title = (INST && INST.title) || "Your atlas";
-    var line = "Talks and walks all weekend. 14 sessions on Saturday.", scripts = "बेंगलुरु · ಬೆಂಗಳೂರು";
+    // the atlas's own description when it has one (cut at a word), else a line true of every atlas
+    var own = String((INST && INST.subtitle) || "").trim(), cut = own.length > 90 ? own.slice(0, 90).replace(/\s+\S*$/, "") + "…" : own;
+    var line = cut || "Every place on this map was tagged in the LOKA app.", scripts = "बेंगलुरु · ಬೆಂಗಳೂರು";
     var spec = el("div", "own-look-spec");
     [["Now · LOKA’s Karla", ""], ["With the site’s " + fonts.text, fonts.text]].forEach(function (c, i) {
       var card = el("div", "own-look-spec-card" + (i ? " own-look-spec-on" : ""));

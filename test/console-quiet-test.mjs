@@ -80,7 +80,7 @@ check('the wizard turns the new answer back into its gate',
 check('and so does the data bench',
   /api\("auth\/me"\)\.then\(function \(me\) \{[\s\S]{0,260}?if \(!me \|\| !me\.email\) throw new Error\("not signed in"\);/.test(bench), true);
 check('the viewer already read the answer rather than the status',
-  /if \(!me \|\| !me\.email\) return; \/\/ stays: "sign in" link/.test(viewer), true);
+  /if \(!me \|\| !me\.email\) \{ signin\.hidden = false; return; \}/.test(viewer), true);
 check('and the admin page already caught it',
   /api\("auth\/me"\)\.catch\(function \(\) \{ return null; \}\)/.test(admin), true);
 

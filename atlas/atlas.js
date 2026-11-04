@@ -165,13 +165,14 @@
     fetch("./api/auth/me", { credentials: "same-origin" })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (me) {
-        if (!me || !me.email) return; // stays: "sign in" link
+        // "sign in" waits hidden until LOKA knows, so a signed-in owner never sees it flash
+        if (!me || !me.email) { signin.hidden = false; return; }
         user.textContent = me.email;
         user.hidden = false;
         signin.hidden = true;
         signout.hidden = false;
       })
-      .catch(function () {});
+      .catch(function () { signin.hidden = false; });
     signout.onclick = function () {
       fetch("./api/auth/logout", { method: "POST", credentials: "same-origin" })
         .catch(function () {})
