@@ -705,7 +705,10 @@
     function onKey(e) { if (e.key === "Escape") { e.preventDefault(); shut(); btn.focus(); } }
     btn.onclick = function () {
       if (!panel.hidden) { shut(); return; }
-      panel.hidden = false;
+      /* it hangs from the button's right; when the header pushes the button
+         far left (a long name and the signed-in email, 721–1100px), it moves
+         right just enough to stay on the screen (Mithun, 4 Nov 2026) */
+      panel.style.right = ""; panel.hidden = false; var left = panel.getBoundingClientRect().left; if (left < 8) panel.style.right = (left - 8) + "px";
       btn.setAttribute("aria-expanded", "true");
       document.addEventListener("click", away, true);
       document.addEventListener("keydown", onKey, true);

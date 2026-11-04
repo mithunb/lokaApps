@@ -30,6 +30,7 @@ check('Share and the links sit together at the right', /\.atlas-full \.hero-acti
 check('nothing is moved into the header any more', /head-tools/.test(html) || /head-tools/.test(js), false);
 check('between 721 and 1100px only "Get the LOKA app", who is signed in and sign out stay among the links',
   /@media \(min-width:721px\) and \(max-width:1100px\)\{\s*\.atlas-full \.nav \.links > :not\(#nav-signin\):not\(#nav-signout\):not\(#nav-user\):not\(\.nav-app\) \{ display:none; \}/.test(html), true);
+check('the Owner menu moves right just enough to stay on the screen when the header pushes its button left (Mithun, 4 Nov 2026)', /panel\.style\.right = ""; panel\.hidden = false; var left = panel\.getBoundingClientRect\(\)\.left; if \(left < 8\) panel\.style\.right = \(left - 8\) \+ "px";/.test(fs.readFileSync(ROOT + '/atlas/owner.js', 'utf8')), true);
 check('and Share is its icon there — Share alone, not every button', /\.atlas-full #share-btn span \{ display:none; \}/.test(html), true);
 check('the header sits above the map\'s floating pieces, so a menu hanging from it is never under the search box',
   /\.atlas-full header\.site \{ z-index:10; \}/.test(html), true);
