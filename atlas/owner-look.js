@@ -564,7 +564,12 @@
   function mount(ctx) {
     api = ctx.api; errMsg = ctx.errMsg; esc = ctx.esc; toast = ctx.toast; openDialog = ctx.openDialog; closeDialog = ctx.closeDialog;
     INST = ctx.inst; SLUG = ctx.slug; preview = ctx.preview; VERSION = ctx.version || "";
-    return { settings: settings };
+    /* The LOKA row in Settings is its own small file, fetched with this one. */
+    var loka = null, lk = document.createElement("script");
+    lk.src = "./owner-loka.js" + VERSION;
+    lk.onload = function () { if (window.LokaOwnerLoka) loka = window.LokaOwnerLoka.mount(ctx); };
+    document.head.appendChild(lk);
+    return { settings: function (scrim) { settings(scrim); if (loka) loka.settings(scrim); } };
   }
   window.LokaOwnerLook = { mount: mount };
 })();

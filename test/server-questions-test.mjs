@@ -171,7 +171,7 @@ check('the same tests the browser made, by the shared rule: places that wear a m
   /if \(!rows\.length \|\| !RULES\.worthReading\(layer, rows\)\) return 'no words';/.test(server), true);
 check('nothing is gated on "marker" by hand any more', /layer\.type !== 'marker'\) return 'not points'/.test(server), false);
 check('a layer already read in a browser is noted and left untouched',
-  /if \(!had && \(hasQuestions \|\| layer\.patternsNone\)\) \{\n\s*QUESTIONS\.remember\(dataset, layerId, \{ sig, state: layer\.patternsNone \? 'none' : 'done', reason: '', adopted: true \}\);/.test(server), true);
+  /if \(!had && \(hasQuestions \|\| layer\.patternsNone\) && !rows\.some\(\(r\) => r && r\.pattern_unread\)\) \{\n\s*QUESTIONS\.remember\(dataset, layerId, \{ sig, state: layer\.patternsNone \? 'none' : 'done', reason: '', adopted: true \}\);/.test(server), true);
 check('the list starts with the server', /QUESTIONS\.start\(readingJob, \{ recheck: \(d, l\) => considerReading\(d, l\) \}\);/.test(server), true);
 check('nothing found is written onto the layer, as the browser used to',
   /patternsNone: true,\n\s*schema: RULES\.schemaFor\(out\),/.test(server), true);

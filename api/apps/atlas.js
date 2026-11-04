@@ -27,6 +27,7 @@ import * as placeNames from '../lib/atlas/place-names.js';
 import * as searchText from '../lib/atlas/search-text.js';
 import { makeSmallPhotos } from '../../deploy/make-small-photos.mjs';
 import * as lookRead from '../lib/atlas/look-read.js';
+import * as lokaSync from '../lib/atlas/loka-sync.js';
 import {
   enqueueBuild, getJob, setJobDoneHook, setStrandedBuildHook, DATASETS_ROOT, PRIVATE_ROOT,
 } from '../lib/atlas/jobs.js';
@@ -4980,6 +4981,15 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
      started from the outlines must answer those, not invent a new set. */
   const settled = halves.map((h) => questionsOn(h.layer, rows)).find((s) => s.length) || [];
   const asked = afresh ? [] : (settled.length ? settled : (opts.keep || []));
+  /* Places a sync brought in or changed carry pattern_unread (loka-sync); the
+     reading's own write clears it. When some places are marked and the rest
+     already have their answers, only the marked ones are read, on the questions
+     already settled, and the old answers are carried across. A layer with no
+     marked place, or only marked places, is read whole, as it always was. */
+  const todo = !afresh && settled.length ? rows.map((r, i) => (r && r.pattern_unread ? i : -1)).filter((i) => i >= 0) : [];
+  const onlyNew = todo.length > 0 && todo.length < rows.length;
+  const readRows = onlyNew ? todo.map((i) => rows[i]) : rows;
+  if (onlyNew) console.log('[questions] ' + dataset + '/' + layerId + ' — reading only the ' + todo.length + ' new or changed places; the other ' + (rows.length - todo.length) + ' keep their answers');
   const inst = reg.getInstance(dataset);
   // the version of the FILE this reading is about — both halves of a split
   // file — so it can tell if either half moves under it
@@ -5005,8 +5015,8 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
   /* What the record said of each column last time, so a column this reading
      does not look at keeps the line it was given when it was looked at. */
   const previousColumns = ((QUESTIONS.get(dataset, layerId) || {}).columns) || [];
-  const ask = (missed) => FAKE_READING ? fakeReading(rows, fields, asked, caller(), planned, nameCol, previousColumns) : enrich.enrichRows({
-    rows, fields, title: (inst && inst.title) || dataset,
+  const ask = (missed) => FAKE_READING ? fakeReading(readRows, fields, asked, caller(), planned, nameCol, previousColumns) : enrich.enrichRows({
+    rows: readRows, fields, title: (inst && inst.title) || dataset,
     mode: 'questions',
     keepQuestions: asked,
     seedSet: keptCatSet(dataset),
@@ -5110,6 +5120,12 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
              note: out.note || '', reason: out.reason || '', withText: out.withText,
              sig: sigAtStart, calls: spentBy(callers), columns: out.columns || [] };
   }
+  if (onlyNew) {
+    const labels = (halves.find((h) => questionsOn(h.layer, rows).length) || halves[0]).layer.keyLabels || {};
+    const merged = lokaSync.mergeNewReading(rows, todo, labels, asked, out);
+    if (!merged) return { wrote: false, verdict: 'unmatched', calls: spentBy(callers) };
+    out = merged;
+  }
   /* Somebody put new places on this layer — or on the other half of its file —
      while it was being read. Writing now would lay these answers over the old
      places and throw their change away, so nothing is written; the newer
@@ -5132,7 +5148,7 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
     reading: out.reading || '', facts: out.facts || [],
   });
   return {
-    wrote: true, verdict: 'questions', places: rows.length, sig: sigAtStart, calls: spentBy(callers),
+    wrote: true, verdict: 'questions', places: rows.length, rowsRead: readRows.length, sig: sigAtStart, calls: spentBy(callers),
     columns: out.columns || [],
     questions: out.questions.map((q) => ({
       question: q.question,
@@ -5402,7 +5418,8 @@ function considerReading(dataset, layerId, opts) {
     }
     return 'already read';
   }
-  if (!had && (hasQuestions || layer.patternsNone)) {
+  // (a place a sync marked as still unread is not "read before": it is offered, and read alone)
+  if (!had && (hasQuestions || layer.patternsNone) && !rows.some((r) => r && r.pattern_unread)) {
     QUESTIONS.remember(dataset, layerId, { sig, state: layer.patternsNone ? 'none' : 'done', reason: '', adopted: true });
     keepAnswers(dataset, layer, rows, sig);
     return 'read before';
@@ -5735,6 +5752,11 @@ async function endReading(dataset, layerId, out) {
     }
     return { state: 'none', reason: why, columns: out.columns || [] };
   }
+  // a reading of only the new places whose answers did not line up with the questions: nothing was written
+  if (out.verdict === 'unmatched') {
+    console.warn('[questions] ' + where + ' — the new places’ answers did not match the questions, so nothing was written');
+    return { state: 'failed', reason: 'the new places’ answers did not match the questions; nothing was written' };
+  }
   console.warn('[questions] ' + where + ' — no questions could be found (' + out.verdict + ')');
   return { state: 'failed', reason: ('no questions could be found (' + out.verdict + ')').slice(0, 160) };
 }
@@ -5935,6 +5957,197 @@ export function startBackgroundWork() {
   const waiting = owed.all().length;
   if (waiting) console.log('[owed] ' + waiting + ' reading' + (waiting === 1 ? '' : 's') + ' still owed');
 }
+
+/* ---------- keeping a layer up to date from a LOKA space ---------- */
+
+/* The link lives in the atlas's own overlay (manifest.local.json, which a
+   rebuild leaves alone): lokaSync { spaceId, spaceName, layerId, connectedBy,
+   connectedAt, lastUpdate }. The LOKA side and the row arithmetic are in
+   api/lib/atlas/loka-sync.js; this is the routes and the write. Never on
+   deoria-bioregion, never while an atlas is building, one update at a time. */
+const LOKA_RUNNING = new Set();
+const lokaStateOf = (inst) => {
+  const s = readOverlay(inst).local;
+  return s && s.lokaSync && typeof s.lokaSync === 'object' ? s.lokaSync : null;
+};
+// a fresh read each time, so nothing else's change to the overlay is lost
+function lokaNote(inst, patch) {
+  const { file, local } = readOverlay(inst);
+  if (!local || !local.lokaSync) return;   // disconnected meanwhile
+  Object.assign(local.lokaSync, patch);
+  writeOverlay(file, local);
+}
+const lokaSuper = (req) => auth.isAdmin(req) || auth.isAdminSession(req);
+
+async function applyLoka(slug, tags) {
+  const inst = reg.getInstance(slug);
+  const sync = lokaStateOf(inst);
+  if (!sync) throw new lokaSync.LokaError('This atlas is no longer connected to LOKA.');
+  const { rows, skipped } = lokaSync.toRows(tags, sync.spaceName);
+  const m = imports.readManifest(slug);
+  const layer = sync.layerId ? imports.mergedLayers(m).find((L) => L.id === sync.layerId) : null;
+  if (sync.layerId && !layer) throw new lokaSync.LokaError('The layer kept up to date from LOKA is no longer on this atlas.');
+  const got = layer ? layerAndRows(slug, layer.id) : null;
+  const old = got ? got.rows : [];
+  if (old.some((r) => !r.tag_id)) throw new lokaSync.LokaError('That layer’s places don’t all come from LOKA, so it can’t be kept up to date from there. Your atlas is unchanged.');
+  /* A complete download (downloadSpace answers only for one) that lists no places
+     at all empties the layer, as any other removal would. Places that arrived
+     with no usable position are not "no places": that is refused. */
+  if (!rows.length && tags.length) throw new lokaSync.LokaError('LOKA sent no places with a position, so nothing was changed.');
+  if (!rows.length && !old.length) throw new lokaSync.LokaError('That space has no places yet.');
+  if (!rows.length) {
+    const dir = path.join(reg.DATA_DIR, 'backups', 'loka-sync-' + slug + '-' + new Date().toISOString().replace(/[:.]/g, '-'));
+    fs.mkdirSync(dir, { recursive: true });
+    for (const f of [layer.source, 'manifest.local.json']) fs.copyFileSync(path.join(m.dir, f), path.join(dir, f));
+    imports.removeLayer(slug, layer.id);
+    try { QUESTIONS.forget(slug, layer.id); } catch { /* nothing kept */ }
+    lokaNote(reg.getInstance(slug), { layerId: '' });   // the next update makes the layer afresh
+    return { at: new Date().toISOString(), added: 0, changed: 0, removed: old.length, skipped, emptied: true, error: '' };
+  }
+  const laid = lokaSync.lay(old, rows, { asking: !!layer && questionsOn(layer, old).length > 0 });
+  const note = { at: new Date().toISOString(), added: laid.added, changed: laid.changed, removed: laid.removed, skipped, error: '' };
+  if (layer && !laid.added && !laid.changed && !laid.removed) return note;
+  if (layer) {
+    const dir = path.join(reg.DATA_DIR, 'backups', 'loka-sync-' + slug + '-' + new Date().toISOString().replace(/[:.]/g, '-'));
+    fs.mkdirSync(dir, { recursive: true });
+    for (const f of [layer.source, 'manifest.local.json']) fs.copyFileSync(path.join(m.dir, f), path.join(dir, f));
+  }
+  const n = laid.rows.length;
+  const ing = await ingestLayer({
+    dataset: slug, replaceLayerId: layer ? layer.id : undefined, filename: layer ? (layer.label || layer.id) : sync.spaceName,
+    schema: RULES.schemaFor(laid.rows), rows: laid.rows,
+    geoms: laid.rows.map((r) => ({ type: 'Point', coordinates: [Number(r.longitude), Number(r.latitude)] })),
+    geomIdx: laid.rows.map((_, i) => i),
+    keyLabels: layer ? layer.keyLabels : undefined, keyKinds: layer ? layer.keyKinds : undefined,
+    keyColumns: layer ? layer.keyColumns : undefined, keyNouns: layer ? layer.keyNouns : undefined,
+    reading: layer && layer.reading ? layer.reading : undefined,
+    facts: layer && (layer.facts || []).length ? layer.facts : undefined,
+    meta: { sourceName: layer ? layer.source : 'LOKA', rowCount: n, geometry: { class: 'point', count: n, vertices: n } },
+  }, 'server');
+  if (!ing || !ing.importId) throw new lokaSync.LokaError('The places could not be prepared. Your atlas is unchanged.');
+  // an ordinary commit, not a reading's: the places changed, so the reading is offered for them
+  /* Nothing to read: no place needs answers (a like moved, a place went, a photo
+     changed). The new version is then noted as already read, the way a reading's
+     own write is, instead of offering the whole layer. A layer with no questions
+     yet, or with marked places, is offered as usual (the marked ones only). */
+  const kept = !!layer && questionsOn(layer, old).length > 0 && !laid.rows.some((r) => r[lokaSync.UNREAD]);
+  const done = commitLayer({ importId: ing.importId, dataset: slug }, 'server', kept ? { fromReading: true } : undefined);
+  if (!layer) lokaNote(reg.getInstance(slug), { layerId: done.layerId });
+  return note;
+}
+
+function startLokaUpdate(slug, tags) {
+  LOKA_RUNNING.add(slug);
+  setImmediate(async () => {
+    let note;
+    try {
+      const inst = reg.getInstance(slug);
+      const sync = inst && lokaStateOf(inst);
+      if (!sync) return;
+      const got = tags || (await lokaSync.downloadSpace(sync.spaceId)).tags;
+      const now = reg.getInstance(slug);
+      if (!now || now.status === 'building') throw new lokaSync.LokaError('The atlas is being rebuilt. Your atlas is unchanged.');
+      note = await applyLoka(slug, got);
+    } catch (e) {
+      const plain = e instanceof lokaSync.LokaError;
+      if (!plain) console.warn('[loka-sync] ' + slug + ' — ' + (e && e.message));
+      note = { at: new Date().toISOString(), added: 0, changed: 0, removed: 0, skipped: 0,
+        error: plain ? e.message : 'Something went wrong while bringing in places. Your atlas is unchanged.' };
+    } finally {
+      LOKA_RUNNING.delete(slug);
+    }
+    const inst = reg.getInstance(slug);
+    if (inst && note) lokaNote(inst, { lastUpdate: note });
+  });
+}
+
+// the atlas a LOKA route is about, or an answer already sent
+function lokaGate(req, res, { write } = {}) {
+  const inst = reg.getInstance(String(req.params.slug));
+  if (!inst) { res.status(404).json({ error: 'not found' }); return null; }
+  if (write && searchText.isNeverTouched(inst.slug)) { res.status(403).json({ error: 'not allowed' }); return null; }
+  return inst;
+}
+function lokaBusy(inst, res) {
+  if (inst.status === 'building' || inst.status === 'pending-approval') {
+    res.status(409).json({ error: 'Wait for the atlas to finish building, then try again.' }); return true;
+  }
+  if (LOKA_RUNNING.has(inst.slug)) {
+    res.status(409).json({ error: 'Places are already being brought in from LOKA.' }); return true;
+  }
+  return false;
+}
+
+router.get('/instances/:slug/loka-sync', (req, res) => {
+  const inst = lokaGate(req, res);
+  if (!inst) return;
+  if (!callerCanEdit(req, inst)) return res.status(403).json({ error: 'not allowed' });
+  const s = lokaStateOf(inst);
+  res.json({ connected: !!s, spaceName: s ? s.spaceName : '', running: LOKA_RUNNING.has(inst.slug),
+    lastUpdate: s ? s.lastUpdate || null : null, canStop: callerRole(req, inst) === 'owner' || lokaSuper(req), canConnect: lokaSuper(req) && !searchText.isNeverTouched(inst.slug) });
+});
+
+router.post('/instances/:slug/loka-sync', async (req, res) => {
+  const inst = lokaGate(req, res, { write: true });
+  if (!inst) return;
+  if (!lokaSuper(req)) return res.status(403).json({ error: 'not allowed' });
+  if (lokaBusy(inst, res)) return;
+  if (!lokaSync.isSetUp()) return res.status(503).json({ error: 'LOKA hasn’t been set up on this server yet.' });
+  const b = req.body || {};
+  const spaceId = String(b.spaceId || '').trim();
+  if (!lokaSync.SPACE_ID.test(spaceId)) return res.status(400).json({ error: 'That doesn’t look like a LOKA space id.' });
+  const layerId = b.layerId ? String(b.layerId) : '';
+  if (layerId && !imports.mergedLayers(imports.readManifest(inst.slug)).some((L) => L.id === layerId)) {
+    return res.status(404).json({ error: 'There is no layer here called ' + layerId + '.' });
+  }
+  if (layerId) {
+    const mine = layerAndRows(inst.slug, layerId);
+    if (!mine || !mine.rows.length || mine.rows.some((r) => !r.tag_id)) {
+      return res.status(400).json({ error: 'That layer’s places don’t come from LOKA, so it can’t be kept up to date from there.' });
+    }
+    // one half of a file put on as outlines and points: replacing one half would strand the other
+    if (mine.layer.sameFileAs || imports.mergedLayers(imports.readManifest(inst.slug)).some((L) => L.sameFileAs === layerId)) {
+      return res.status(400).json({ error: 'That layer shares its file with another layer here, so it can’t be kept up to date from LOKA on its own.' });
+    }
+  }
+  LOKA_RUNNING.add(inst.slug);
+  let tags;
+  try { tags = (await lokaSync.downloadSpace(spaceId)).tags; }
+  catch (e) {
+    LOKA_RUNNING.delete(inst.slug);
+    return res.status(502).json({ error: e instanceof lokaSync.LokaError ? e.message : 'LOKA couldn’t be reached. Your atlas is unchanged.' });
+  }
+  const { file, local } = readOverlay(inst);
+  const next = local || {};
+  // manifest.local.json reaches every visitor: only what is fine to show goes in it (no email of who connected)
+  next.lokaSync = { spaceId, spaceName: String(b.spaceName || '').trim().slice(0, 80) || 'LOKA space', layerId,
+    connectedAt: new Date().toISOString(), lastUpdate: null };
+  console.log('[loka-sync] ' + inst.slug + ' connected to a LOKA space by the operator');
+  if (!writeOverlay(file, next)) { LOKA_RUNNING.delete(inst.slug); return res.status(500).json({ error: 'The link could not be saved.' }); }
+  startLokaUpdate(inst.slug, tags);
+  res.json({ started: true });
+});
+
+router.delete('/instances/:slug/loka-sync', (req, res) => {
+  const inst = lokaGate(req, res);
+  if (!inst) return;
+  if (callerRole(req, inst) !== 'owner' && !lokaSuper(req)) return res.status(403).json({ error: 'not allowed' });
+  if (LOKA_RUNNING.has(inst.slug)) return res.status(409).json({ error: 'Places are being brought in from LOKA. Try again in a moment.' });
+  const { file, local } = readOverlay(inst);
+  if (local && local.lokaSync) { delete local.lokaSync; writeOverlay(file, local); }
+  res.json({ ok: true });
+});
+
+router.post('/instances/:slug/loka-sync/update', (req, res) => {
+  const inst = lokaGate(req, res, { write: true });
+  if (!inst) return;
+  if (!callerCanEdit(req, inst)) return res.status(403).json({ error: 'not allowed' });
+  if (!lokaStateOf(inst)) return res.status(400).json({ error: 'This atlas is not connected to LOKA.' });
+  if (lokaBusy(inst, res)) return;
+  if (!lokaSync.isSetUp()) return res.status(503).json({ error: 'LOKA hasn’t been set up on this server yet.' });
+  startLokaUpdate(inst.slug);
+  res.json({ started: true });
+});
 
 /* The operator's way to start a reading by hand. The reading otherwise begins
    on its own when a layer is added (considerReading), once per version of its
