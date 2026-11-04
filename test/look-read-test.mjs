@@ -265,7 +265,10 @@ console.log('\n  the Emergence festival (WordPress) — the regression that prov
   check('the red darkened for words, as the guard did by hand in October', p.theme.colors.highlightDeep, '#CF2802');
   check('the festival green as the pale shading, like the hand-made #E8F7EC', LM.deltaE(p.theme.colors.surfaceAlt, '#E8F7EC') < 3, true);
   check('square corners, a wide logo', [p.theme.corners, p.theme.logoMaxWidth], ['square', 180]);
-  check('no fonts in phase 1 (titles stay in LOKA’s Lora regardless)', p.theme.fonts, undefined);
+  check('the site’s font (phase 2): Poppins, named by the theme on everything the body holds, though WordPress’s global styles set the body itself in Lora', [p.font.name, p.font.status, p.theme.fonts], ['Poppins', 'ok', { text: 'Poppins', cssUrl: 'https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap' }]);
+  check('…said in plain words', p.font.words, 'The site writes its words in Poppins. Your atlas can too.');
+  check('titles take no face: the block names the words’ font only', p.theme.fonts.display, undefined);
+  check('the site’s icon is offered for the tab (300 × 300, square, over 64 px), never taken silently (D7)', [p.icon.width, p.icon.height, p.icon.from], [300, 300, 'the site’s icon']);
   check('the header logo: 800 × 120, the site’s own', [p.logo.width, p.logo.height, p.logo.verdict, p.logo.from], [800, 120, 'own', 'the site’s header']);
   check('the “presented by” mark and a partner’s logo are shown and named as not the site’s own (D4)', p.logos.filter((l) => l.verdict === 'partner').length, 2);
   check('…with plain words', p.logos.find((l) => l.verdict === 'partner').words, 'Looks like a partner’s or sponsor’s logo — not yours to use here.');
@@ -299,6 +302,8 @@ console.log('\n  discoverloka.org (a hand-built site with CSS tokens) — the se
   check('the nav logo, served from a bare address with no content type, is taken by its first bytes: 525 × 130, the site’s own', [p.logo.width, p.logo.height, p.logo.verdict], [525, 130, 'own']);
   check('the store badges in the nav are not logo candidates; the icon is the only other', p.logos.map((l) => l.from), ['the site’s header', 'the site’s icon']);
   check('a Google Fonts stylesheet is asked for like any other and simply yields no colours', log.some((u) => /fonts\.googleapis\.com/.test(u)) && p.stats.sheets === 4, true);
+  check('the site’s font (phase 2): DM Sans from the body’s --font-body token; the address is built here, never copied from the site’s link', [p.font.name, p.theme.fonts.cssUrl], ['DM Sans', 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600&display=swap']);
+  check('the favicon is 399 × 400, not square: no icon is offered', p.icon, null);
   check('not a JavaScript-only page; nothing darkened', [p.partial, p.lines], [false, []]);
 }
 
@@ -395,6 +400,35 @@ const words = 'Welcome to our organisation. We work on rivers, soils and the peo
   const p = await R.readSite('js.example', { fetch: siteFetch(files), now: clock });
   check('a colour a script would have set is not seen: the fallback in var() is', [p.theme.colors.accent, p.found.colours.some((c) => c.hex === '#FF0000')], ['#1E5AA8', false]);
   check('a style="" on a div is not read; on an h1 it is', [p.found.colours.some((c) => c.hex === '#00FF00'), p.found.colours.some((c) => c.hex === '#1E5AA8' && c.roles.includes('heading'))], [false, true]);
+}
+
+console.log('\n  the site’s font (phase 2, §3.3 and §14.1; Mithun’s answers of 4 Nov 2026)');
+{
+  const F = (css, linked) => R.fontsFrom([css], linked || [], []);
+  check('the body’s family, from Google’s list: 400 and 600, from fonts.googleapis.com, &display=swap', F('body{font-family:"Open Sans",Arial,sans-serif}').theme, { text: 'Open Sans', cssUrl: 'https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600&display=swap' });
+  check('700 when there is no 600 (Lora has 600; a face with 400 and 700 only takes 700)', R.fontFor('Lora').weights, [400, 600]);
+  check('the family’s spelling is Google’s, whatever the site’s case', R.fontFor('dm sans').theme.text, 'DM Sans');
+  check('the address always passes theme.js’s own rule for a font address', T.FONT_CSS.test(R.fontFor('DM Sans').theme.cssUrl), true);
+  check('a font that is not free (Gotham): kept out, said in one sentence, words stay in Karla (D6)', F('body{font-family:Gotham,Arial,sans-serif}'), { name: 'Gotham', status: 'not-free', words: 'The site writes its words in Gotham. It isn’t a free font, so we can’t use it here. Your words stay in LOKA’s Karla.', theme: null });
+  check('a plain text face with no bold (Abel) is not called a headline font: allowed, told its bold looks like the rest', [F('body{font-family:Abel,sans-serif}').status, F('body{font-family:Abel,sans-serif}').words], ['no-bold', 'The site writes its words in Abel. It has no bold, so words meant to stand out will look like the rest. You can still use it.']);
+  check('a font name is capped, however long the site makes it', String(F('body{font-family:"' + 'Z'.repeat(5000) + '",sans-serif}').name || '').length <= 80, true);
+  check('a headline face (Pacifico, handwriting): allowed, with a warning (Mithun, P2)', [F('body{font-family:Pacifico,cursive}').status, F('body{font-family:Pacifico,cursive}').theme.text, F('body{font-family:Pacifico,cursive}').words], ['headline', 'Pacifico', 'The site writes its words in Pacifico, a font made for big headlines. It may be hard to read in long text, but you can still use it.']);
+  check('…and a family with no bold at all is read the same way', R.fontFor('Pacifico').weights, [400]);
+  check('only the computer’s own fonts (Arial): nothing to take', F('body{font-family:Arial,Helvetica,sans-serif}'), { name: null, status: 'system', words: 'The site uses whatever font each computer has, so there is nothing to take. Your words stay in LOKA’s Karla.', theme: null });
+  check('the system stack (-apple-system … Roboto): Roboto there is the phone’s, not a choice', F('body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}').status, 'system');
+  check('…but Roboto the site asks Google for is its choice', F('body{font-family:-apple-system,Roboto,sans-serif}', ['https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap']).name, 'Roboto');
+  check('a family named in a Google Fonts @import is the site’s own too', F('@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400&display=swap"); body{font-family:Inter,Arial,sans-serif}').name, 'Inter');
+  check('generic names are passed over', F('body{font-family:system-ui,sans-serif}').status, 'system');
+  check('no font-family anywhere: say so', F('p{color:red}').status, 'none');
+  check('the `font` shorthand is read past the size', F('body{font:400 16px/1.5 "DM Sans", sans-serif}').name, 'DM Sans');
+  check('a var() is read through the site’s own names', F(':root{--f:"Karla",sans-serif} body{font-family:var(--f)}').name, 'Karla');
+  check('no body rule: the family the most rules name; headings do not speak for the words', F('.a{font-family:Inter}.b{font-family:Inter}h1{font-family:Lora}h2{font-family:Lora}.c{font-family:Lora}').name, 'Inter');
+  check('a body rule counts for eight: it beats a few scattered rules, not a theme that names another face on everything', [F('body{font-family:Karla}.a{font-family:Inter}.b{font-family:Inter}').name, F('body{font-family:Lora}' + '.x{font-family:Poppins}'.repeat(12)).name], ['Karla', 'Poppins']);
+  check('the body’s weight is taken when it is 400–600, else 400', [F('body{font-family:Karla;font-weight:500}').weight, F('body{font-family:Karla;font-weight:300}').weight, F('body{font-family:Karla;font-weight:bold}').weight], [500, 400, 400]);
+  check('a dark-mode rule does not speak', F('@media (prefers-color-scheme: dark){body{font-family:Inter}} body{font-family:Karla}').name, 'Karla');
+  const list = JSON.parse(fs.readFileSync(ROOT + '/api/lib/atlas/google-fonts.json', 'utf8'));
+  check('the committed list (deploy/refresh-google-fonts.mjs): over 1500 families, each a kind and its weights', [Object.keys(list.families).length > 1500, list.families.Poppins[0], list.families.Poppins.includes(600), typeof list.refreshed], [true, 'sans', true, 'string']);
+  check('a name not in the list is nothing: no guessing at the closest face (D6)', R.fontFor('Gotham'), null);
 }
 
 console.log('\n  hostile sizes stay quick');

@@ -587,6 +587,7 @@
       } catch (e) {}
     }
     renderBranding(manifest.branding);
+    renderTabIcon(manifest.branding);
     renderCollaborators(manifest);
     wireShare(manifest);
     listenForLookPreview(manifest);
@@ -761,6 +762,20 @@
     });
   }
 
+  /* The page's tab icon: the atlas's own (branding.icon, chosen while
+     building or under Settings) when it has one; with none the tab shows
+     LOKA's, as every atlas did before. The logo is never used for this. */
+  function renderTabIcon(b) {
+    var old = document.querySelector('link[rel="icon"][data-atlas-icon]');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    if (!b || !b.icon || !/^[a-z0-9.-]+\.png$/i.test(b.icon)) return;
+    var link = el("link");
+    link.rel = "icon"; link.type = "image/png"; link.sizes = "192x192";
+    link.href = dataUrl(b.icon);
+    link.setAttribute("data-atlas-icon", "");
+    document.head.appendChild(link);
+  }
+
   function renderBranding(b) {
     if (!b || (!b.orgName && !b.logo)) return;
     var hero = $("#org-branding");
@@ -827,7 +842,12 @@
       if (sayLook) {
         var when = "";
         try { when = new Date(src.readAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); } catch (e) { when = ""; }
-        look.textContent = "Colours" + (manifest.branding && manifest.branding.logo ? " and logo" : "") + " from " + src.host + (when && when !== "Invalid Date" ? ", read on " + when : "") + ".";
+        // "Colours, logo and font from …": what the look brought, in plain words
+        var brought = ["Colours"];
+        if (src.logo === true && manifest.branding && manifest.branding.logo) brought.push("logo");
+        if (manifest.theme.fonts && manifest.theme.fonts.text) brought.push("font");
+        var what = brought.length > 1 ? brought.slice(0, -1).join(", ") + " and " + brought[brought.length - 1] : brought[0];
+        look.textContent = what + " from " + src.host + (when && when !== "Invalid Date" ? ", read on " + when : "") + ".";
       }
     }
     var lede = $("#collab-lede");

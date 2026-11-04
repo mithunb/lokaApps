@@ -194,10 +194,95 @@
     logoFromFile(file, cb);
   }
 
+  /* The page's tab icon (docs/design-style-from-website.md §14.2): any
+     picture, trimmed of its empty edges, made square by padding (never
+     cropped) and drawn at ICON_SIZE × ICON_SIZE as a PNG. A picture whose
+     drawn part is under ICON_SMALL pixels will look blurred in a tab; the
+     caller is told (`small`) and may still use it. Same 200 KB rule. */
+  var ICON_SIZE = 192, ICON_SMALL = 32;
+  var ICON_UNREADABLE = "That file isn’t a picture we can read. Try a PNG, JPG, WebP or SVG.";
+  function drawIcon(img, w, h) {
+    var size = logoSize(w, h, LOGO_MAX, true);
+    var first = document.createElement("canvas");
+    first.width = size.w; first.height = size.h;
+    var fg = first.getContext("2d");
+    fg.drawImage(img, 0, 0, size.w, size.h);
+    var box = drawnBox(fg, size.w, size.h) || { x: 0, y: 0, w: size.w, h: size.h };
+    // what was drawn, in the picture's own pixels: under 32 it will look blurred
+    var scale = w > 0 ? w / size.w : 1;
+    var drawnW = Math.round(box.w * scale), drawnH = Math.round(box.h * scale);
+    var side = Math.max(box.w, box.h);
+    var c = document.createElement("canvas");
+    c.width = ICON_SIZE; c.height = ICON_SIZE;
+    var g = c.getContext("2d");
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
+    var dw = Math.max(1, Math.round(box.w / side * ICON_SIZE)), dh = Math.max(1, Math.round(box.h / side * ICON_SIZE));
+    g.drawImage(first, box.x, box.y, box.w, box.h, Math.round((ICON_SIZE - dw) / 2), Math.round((ICON_SIZE - dh) / 2), dw, dh);
+    var url = c.toDataURL("image/png");
+    if (!/^data:image\/png;base64,/.test(url) || dataUrlBytes(url) > LOGO_BYTES) return null;
+    return { url: url, small: Math.max(drawnW, drawnH) < ICON_SMALL ? { w: drawnW, h: drawnH } : null };
+  }
+  // file → cb(err) or cb(null, pngDataUrl, { small: { w, h } | null })
+  function iconFromFile(file, cb) {
+    if (!file) return;
+    if (!looksLikeImage(file)) return cb(ICON_UNREADABLE);
+    if (file.size > 25 * 1024 * 1024) return cb("That picture is too big to use. Try a smaller copy.");
+    function fromUrl(src, w, h, done) {
+      var img = new Image();
+      img.onload = function () {
+        var out = null, err = null;
+        try { out = drawIcon(img, w || img.naturalWidth, h || img.naturalHeight); }
+        catch (e) { err = ICON_UNREADABLE; }
+        done();
+        if (err) return cb(err);
+        if (!out) return cb("That picture has too much detail to fit. Try a simpler one.");
+        cb(null, out.url, { small: out.small });
+      };
+      img.onerror = function () { done(); cb(ICON_UNREADABLE); };
+      img.src = src;
+    }
+    if (isSvgFile(file)) {
+      var rd = new FileReader();
+      rd.onload = function () {
+        var fixed = null;
+        try { fixed = svgWithSize(String(rd.result || "")); } catch (e) { fixed = null; }
+        if (!fixed) return cb(ICON_UNREADABLE);
+        var u = URL.createObjectURL(new Blob([fixed.text], { type: "image/svg+xml" }));
+        fromUrl(u, fixed.w, fixed.h, function () { URL.revokeObjectURL(u); });
+      };
+      rd.onerror = function () { cb(ICON_UNREADABLE); };
+      rd.readAsText(file);
+    } else {
+      var u = URL.createObjectURL(file);
+      fromUrl(u, 0, 0, function () { URL.revokeObjectURL(u); });
+    }
+  }
+  // a picture given as its own bytes (the site's icon, found by the server) → the same redraw
+  function iconFromDataUrl(dataUrl, cb) {
+    var m = /^data:(image\/[a-z+.-]+);base64,([A-Za-z0-9+/=]+)$/i.exec(String(dataUrl || ""));
+    if (!m) return cb(ICON_UNREADABLE);
+    var type = m[1].toLowerCase(), bytes;
+    try { bytes = Uint8Array.from(atob(m[2]), function (ch) { return ch.charCodeAt(0); }); } catch (e) { return cb(ICON_UNREADABLE); }
+    if (type === "image/x-icon") {
+      var img = new Image();
+      img.onload = function () {
+        var out = null; try { out = drawIcon(img, img.naturalWidth, img.naturalHeight); } catch (e) { out = null; }
+        if (!out) return cb(ICON_UNREADABLE);
+        cb(null, out.url, { small: out.small });
+      };
+      img.onerror = function () { cb(ICON_UNREADABLE); };
+      img.src = dataUrl;
+      return;
+    }
+    iconFromFile(new File([bytes], "icon." + (type === "image/svg+xml" ? "svg" : type.split("/")[1]), { type: type }), cb);
+  }
+
   window.LokaLogoTools = {
     LOGO_MAX: LOGO_MAX, LOGO_BYTES: LOGO_BYTES, LOGO_MIN: LOGO_MIN, UNREADABLE: LOGO_UNREADABLE,
+    ICON_SIZE: ICON_SIZE, ICON_SMALL: ICON_SMALL,
     ACCEPT: "image/png,image/jpeg,image/webp,image/svg+xml,.png,.jpg,.jpeg,.webp,.svg",
     logoSize: logoSize, dataUrlBytes: dataUrlBytes, svgWithSize: svgWithSize, drawnBox: drawnBox, pixelTone: pixelTone, logoTone: logoTone,
     drawLogo: drawLogo, logoFromFile: logoFromFile, logoFromDataUrl: logoFromDataUrl, looksLikeImage: looksLikeImage,
+    drawIcon: drawIcon, iconFromFile: iconFromFile, iconFromDataUrl: iconFromDataUrl,
   };
 })();

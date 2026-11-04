@@ -24,6 +24,9 @@
     slug: "", jobId: "",
     // the logo is not asked for here any more (release 2): it lives in the
     // atlas's own Settings, with the description
+    // …and came back (Mithun, 4 Nov 2026), as one optional line: a PNG made
+    // in the browser, or "". Styling from a website stays after the build.
+    logo: "",
   };
 
   function api(path, opts) {
@@ -355,6 +358,68 @@
       }
     });
   });
+
+  /* ---- the logo (step "Name it") ----
+     One optional line: Choose a picture, and the picture as it will show.
+     logo-tools.js (loaded when first needed, as Settings does) redraws it as
+     a PNG, which is also how an SVG is made safe; it rides with the build as
+     branding.logoData and the builder writes it beside the map. */
+  var logoToolsP = null;
+  function logoTools() {
+    if (window.LokaLogoTools) return Promise.resolve(window.LokaLogoTools);
+    if (logoToolsP) return logoToolsP;
+    logoToolsP = new Promise(function (ok, no) {
+      var mine = document.querySelector('script[src*="setup.js"]'), v = (mine && (mine.src.match(/[?&]v=([^&]+)/) || [])[1]) || "dev";
+      var s = document.createElement("script"); s.src = "../logo-tools.js?v=" + v;
+      s.onload = function () { window.LokaLogoTools ? ok(window.LokaLogoTools) : no(new Error("picture tools did not load")); };
+      s.onerror = function () { logoToolsP = null; no(new Error("picture tools did not load")); };
+      document.head.appendChild(s);
+    });
+    return logoToolsP;
+  }
+  function paintLogo(dark) {
+    var has = !!S.logo, pic = $("#f-logo-pic");
+    pic.classList.toggle("has", has);
+    pic.classList.toggle("dark", has && !!dark);
+    // an SVG ignores the hidden attribute in some browsers; style it away
+    pic.querySelector("svg").style.display = has ? "none" : "";
+    var img = pic.querySelector("img");
+    if (has) { if (!img) { img = document.createElement("img"); img.alt = "Your logo"; pic.insertBefore(img, pic.firstChild); } img.src = S.logo; }
+    else if (img) img.remove();
+    $("#f-logo-add").hidden = has;
+    $("#f-logo-change").hidden = !has;
+    $("#f-logo-remove").hidden = !has;
+    $("#f-logo-note").hidden = has;
+    $("#f-logo-done").hidden = !has;
+  }
+  (function wireLogo() {
+    var input = $("#f-logo-file"), err = $("#f-logo-err"), waitEl = $("#f-logo-wait");
+    if (!input) return;
+    var pick = function () { input.click(); };
+    $("#f-logo-add").onclick = pick;
+    $("#f-logo-change").onclick = pick;
+    $("#f-logo-remove").onclick = function () { S.logo = ""; err.hidden = true; paintLogo(); $("#f-logo-add").focus(); };
+    input.addEventListener("change", function () {
+      var f = input.files && input.files[0];
+      input.value = "";                                  // the same file again still counts
+      if (!f) return;
+      err.hidden = true;
+      var stop = LokaWait.start(waitEl, "Getting your logo ready…", { delay: 0 });
+      logoTools().then(function (T) {
+        T.logoFromFile(f, function (e, png) {
+          if (e) { stop(); err.textContent = e; err.hidden = false; return; }   // a failed pick keeps what was there
+          // a light logo is shown on a dark tile, as the atlas shows it
+          T.logoTone(png, function (e2, tone) {
+            stop();
+            if (tone && tone.empty) { err.textContent = "That picture looks empty. Choose another."; err.hidden = false; return; }
+            S.logo = png;
+            paintLogo(tone && tone.light);
+          });
+        });
+      }).catch(function () { stop(); err.textContent = "The picture tools didn’t load — reload the page and try again."; err.hidden = false; });
+    });
+    paintLogo();
+  })();
 
   /* ---- 2 · geography: a text box, not a drill-down ---- */
 
@@ -2010,7 +2075,7 @@
       body: {
         title: $("#f-title").value.trim(),
         org: $("#f-org").value.trim(),
-        branding: { orgName: $("#f-org").value.trim() },
+        branding: Object.assign({ orgName: $("#f-org").value.trim() }, S.logo ? { logoData: S.logo } : {}),
         region: S.worldwide ? { worldwide: true } : {
           iso3: S.iso3,
           level: S.level,

@@ -139,11 +139,12 @@ check('no description field in the flow', /id="f-desc"/.test(page) || /f-desc/.t
 check('and no subtitle in the build request', /subtitle:/.test(setup), false);
 // release 2: the logo left the wizard for Settings (see logo-test.mjs)
 check('no logo fold on the Name screen any more', /id="logo-fold"/.test(s1) || /id="logo-file"/.test(page), false);
-check('and the build request carries only the organisation name', /branding: \{ orgName: \$\("#f-org"\)\.value\.trim\(\) \},/.test(setup) && !/logoData/.test(setup), true);
+// 4 Nov 2026: the logo came back as one optional line (look-icon-test.mjs); no tab icon, no website styling
+check('and the build request carries the organisation name and, when chosen, the logo — never a tab icon', /branding: Object\.assign\(\{ orgName: \$\("#f-org"\)\.value\.trim\(\) \}, S\.logo \? \{ logoData: S\.logo \} : \{\}\),/.test(setup) && !/iconData/.test(setup), true);
 check('Build is on this screen', /<button class="btn" id="build-go">Build my atlas →<\/button>/.test(s1), true);
 check('and checks the name before anything leaves', /\$\("#build-go"\)\.onclick = function \(\) \{\n\s*var btn = this;\n\s*if \(!nameIsComplete\(\)\) return;/.test(setup), true);
 check('it says who can see it (truthfully: a new atlas is private) and where the logo and description went',
-  /It starts private — only you can open it; share it or open it to everyone under\s+Owner ▾\. Add a logo and description later, under Owner ▾ → Settings\./.test(s1), true);
+  /It starts private — only you can open it; share it or open it to everyone under\s+Owner ▾\. Add a description later, under Owner ▾ → Settings\./.test(s1), true);
 const { plainFileName } = new Function(fnFrom(setup, 'plainFileName') + '; return { plainFileName };')();
 check('a file name is made plain', plainFileName('village_survey-2026.csv'), 'Village survey 2026');
 check('a dotted one too', plainFileName('wards.final.v2.xlsx'), 'Wards final v2');

@@ -382,6 +382,20 @@
     .q-opt input { margin:.3rem 0 0; accent-color:var(--color-leaf); }
     /* how visitors explore: the four ways, under the name and organisation */
     .mode-pick { margin-top:1.25rem; }
+    /* the logo: one optional line under the names (Mithun, 4 Nov 2026) */
+    .ti { margin-top:1.1rem; border-top:1px solid var(--color-divider); padding-top:1rem;
+      display:grid; grid-template-columns:auto 1fr; gap:.4rem 1rem; align-items:start; }
+    .ti-q { grid-column:1/-1; font-weight:600; font-size:var(--t-ui); color:var(--color-text-secondary); margin:0; }
+    .ti-q span { font-weight:400; color:var(--color-text-muted); font-size:var(--t-meta); }
+    .ti-pic { width:96px; height:56px; border:1px dashed var(--color-border); border-radius:var(--radius-md);
+      display:grid; place-items:center; background:var(--color-page); color:var(--color-leaf); overflow:hidden; }
+    .ti-pic svg { width:28px; height:28px; }
+    .ti-pic img { max-width:88px; max-height:48px; width:auto; height:auto; border-radius:0; }
+    .ti-pic.has { border-style:solid; }
+    .ti-pic.dark { background:#24211D; }
+    .ti-acts { display:flex; flex-direction:column; gap:.35rem; align-items:flex-start; min-width:0; }
+    .ti-acts .hint, .ti-acts .fielderr { margin:0; }
+    .ti-row { display:flex; gap:.8rem; align-items:center; flex-wrap:wrap; }
     .mode-q { font-weight:600; margin:0 0 .5rem; padding:0; }
     .mode-pick .q-what span { color:var(--color-text-secondary); font-size:var(--t-meta); }
     .q-opt.mode-off { cursor:default; opacity:.6; }
@@ -685,6 +699,25 @@
                questions fewer before the map exists, and both are easier to
                answer looking at it. -->
         </div>
+        <!-- The logo (Mithun, 4 Nov 2026): one optional line. Styling from a
+             website comes after the build, in the Owner menu; the logo can be
+             chosen here. Made by logo-tools.js, as in Settings. -->
+        <div class="ti" id="f-logo">
+          <p class="ti-q">Logo <span>· optional</span></p>
+          <input type="file" id="f-logo-file" hidden accept="image/png,image/jpeg,image/webp,image/svg+xml,.png,.jpg,.jpeg,.webp,.svg" />
+          <div class="ti-pic" id="f-logo-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m21 16-5-5-8 8"/></svg></div>
+          <div class="ti-acts">
+            <div class="ti-row">
+              <button class="btn secondary small" type="button" id="f-logo-add">Choose a picture</button>
+              <button class="btn secondary small" type="button" id="f-logo-change" hidden>Choose another</button>
+              <button class="btn quiet small" type="button" id="f-logo-remove" hidden>Take it off</button>
+              <span class="hint" id="f-logo-wait" aria-live="polite"></span>
+            </div>
+            <p class="hint" id="f-logo-note">PNG, JPG, WebP or SVG. It shows above your atlas’s name. You can add or change it later under Owner ▾ → Settings.</p>
+            <p class="hint" id="f-logo-done" hidden>Ready. It will show above your atlas’s name; change it any time under Owner ▾ → Settings.</p>
+            <p class="fielderr" id="f-logo-err" hidden></p>
+          </div>
+        </div>
         <!-- How visitors explore it (Mithun, 31 Oct 2026): chosen while building,
              applied once the atlas can take it — Explore when your places are in,
              Insight once LOKA has read them. The same four as Owner ▾. -->
@@ -704,7 +737,7 @@
           <button class="btn quiet" data-go="3">← Back</button>
           <button class="btn" id="build-go">Build my atlas →</button>
           <span class="hint">It starts private — only you can open it; share it or open it to everyone under
-            Owner ▾. Add a logo and description later, under Owner ▾ → Settings.</span>
+            Owner ▾. Add a description later, under Owner ▾ → Settings.</span>
         </div>
         <div id="msg-1"></div>
       </section>

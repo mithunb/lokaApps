@@ -134,8 +134,8 @@ check('the route reads org and branding.orgName, and defaults the one to the oth
   /orgName: hasB\('orgName'\) \? \(cap\(bb\.orgName, 60\) \|\| org\) : \(curB\.orgName \|\| org\),/.test(server), true);
 check('the header draws the organisation name and logo from the manifest, which the route rewrites',
   /function renderBranding\(b\)/.test(viewer) && /rewriteManifest\(updated\);/.test(server) && /if \(b\.hasLogo\) bset\.logo = 'branding-logo\.png';/.test(server), true);
-check('the wizard’s Name screen has no logo fold and says where it went',
-  !/logo-fold/.test(page) && /Add a logo and description\s+later, under Owner ▾ → Settings\./.test(page), true);
+check('the wizard’s Name screen has no logo fold and says where the description went',
+  !/logo-fold/.test(page) && /Add a description later, under Owner ▾ → Settings\./.test(page), true);
 check('the Owner menu line still promises the logo', /Title, logo, about<\/span>/.test(owner), true);
 
 console.log('\n  the docs say what the code does');

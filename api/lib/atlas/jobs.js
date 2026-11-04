@@ -281,6 +281,9 @@ export const CONTRIBUTED = [
   /^search\.local\.json$/,
   /^search-[a-z0-9-]+\.vec$/,
   /^branding-logo\.png$/,        // re-emitted from the spec, but harmless to keep
+  /^branding-logo\.previous\.png$/,   // the logo a look replaced, so Undo still works after a rebuild
+  /^branding-icon\.png$/,        // the page's tab icon (the wizard, Settings, or a look)
+  /^branding-icon\.previous\.png$/,
   /^around\.geojson$/,           // event mode's nearby places (deploy/apply-event-mode.mjs)
   /^small-[A-Za-z0-9-]+\.jpg$/,  // the lists' small photos (deploy/make-small-photos.mjs)
   /^small-photos\.json$/,        // …and where each one came from

@@ -64,11 +64,24 @@ check('a JavaScript-only site is said plainly (D5)', /That site draws itself in 
 check('the preview is this very atlas in a frame (?embed=1, with the key of a private atlas), with Now / With the site’s look', /f\.src = "\.\/\?dataset=" \+ encodeURIComponent\(SLUG\) \+ "&embed=1" \+ \(key\(\) \? "&key=" \+ encodeURIComponent\(key\(\)\) : ""\);/.test(look) && /id="look-sw-now" aria-pressed="false">Now</.test(look) && /id="look-sw-with" aria-pressed="true">With the site’s look</.test(look), true);
 check('the frame is told by message, to this origin only', /f\.contentWindow\.postMessage\(msg, location\.origin\)/.test(look) && /type: "loka-look-preview"/.test(look), true);
 check('the frame shows the wait mark until it has loaded', /LokaWait\.html\("Opening the preview…"\)/.test(look), true);
-check('Use this look saves the block, the logo as the browser made it (logo-tools), and the credit choice', /body: \{ theme: theme, useLogo: useLogo, logoData: useLogo \? P\.logoPng : undefined \}/.test(look) && /Object\.assign\(\{\}, P\.theme, \{ credit: P\.credit \}\)/.test(look), true);
+check('Use this look saves the block, the logo as the browser made it (logo-tools), the credit choice, and the icon when ticked', /body: \{ theme: theme, useLogo: useLogo, logoData: useLogo \? P\.logoPng : undefined, useIcon: useIcon, iconData: useIcon \? P\.iconPng : undefined \}/.test(look) && /Object\.assign\(\{\}, P\.theme, \{ credit: P\.credit \}\)/.test(look), true);
 check('…with the wait mark on the button', /LokaWait\.start\(btn, "Saving the look…"\)/.test(look), true);
 check('and afterwards the sheet closes, Settings says so, and the page repaints', /closeDialog\(scrim\);\n\s*paint\(settingsScrim\);\n\s*repaint\(settingsScrim\);/.test(look), true);
 check('Not now closes the sheet with nothing changed', /id="look-not" data-close>Not now</.test(look), true);
-check('no fonts and no tab icon in phase 1 (D6, D7)', /fonts|favicon|rel="icon"/.test(look), false);
+
+console.log('\n  words in the site’s font (phase 2, §14.1; P1 and P2 answered 4 Nov 2026)');
+check('a Words part under Logo, with the sentence the server wrote (which font, or why not)', /<h3 class="own-set-h">Words<\/h3>/.test(look) && /font\.words/.test(look), true);
+check('the same two lines twice: Now in LOKA’s Karla, With the site’s font; the atlas’s own title as the first line', /"Now · LOKA’s Karla"/.test(look) && /"With the site’s " \+ fonts\.text/.test(look) && /\(INST && INST\.title\) \|\| "Your atlas"/.test(look), true);
+check('the font is loaded for the sheet from fonts.googleapis.com only, by theme.js’s own rule', /window\.LokaTheme\.FONT_CSS\.test\(cssUrl \|\| ""\)/.test(look), true);
+check('no switch (P1): the font goes with the look — it is carried through every re-map and saved with the block', /r\.theme\.fonts = P\.proposal\.theme\.fonts/.test(look) && !/id="look-font-use"/.test(look), true);
+check('a headline face, or one with no bold, is said with a warning, not kept out (P2)', /font\.status === "headline" \|\| font\.status === "no-bold" \? " own-look-warn"/.test(look), true);
+check('the three lines on what does not change: titles, map names, other scripts', /Titles stay in LOKA’s Lora, as on every atlas\./.test(look) && /Names on the map stay as they are — the map draws its own letters\./.test(look) && /other scripts use a matching font when " \+ fonts\.text \+ " has none\./.test(look), true);
+check('the specimen cards are square-cornered; one under the other on a phone', /\.own-look-spec-card \{[^}]*border-radius:0;/.test(css) && /@media \(max-width:560px\) \{ \.own-look-spec \{ grid-template-columns:1fr; \} \}/.test(css), true);
+
+console.log('\n  the site’s icon as the tab icon (phase 2, §14.2, D7)');
+check('offered with one unticked box, never taken silently', /Use the site’s icon as this atlas’s tab icon\./.test(look) && /box\.type = "checkbox"; box\.id = "look-icon-use";/.test(look) && !/look-icon-use[^;]*checked = true/.test(look), true);
+check('…and only when the server found a square icon of 64 px or more', /l\.verdict === 'icon' && l\.width === l\.height && l\.width >= 64/.test(fs.readFileSync(ROOT + '/api/lib/atlas/look-read.js', 'utf8')), true);
+check('redrawn at 192 × 192 by logo-tools before it is saved', /T\.iconFromDataUrl\(ic\.dataUrl/.test(look), true);
 
 console.log('\n  words and shapes');
 const banned = /\b(theme|palette|token|hex|contrast ratio|WCAG|scrape|scraped|fetch|fetched|render|rendered)\b/i;
@@ -80,7 +93,8 @@ check('logo-tools is loaded at the same version stamp when needed', /s\.src = "\
 
 console.log('\n  the visitor’s one trace: the credit line');
 check('index.html has the line, hidden until a look says where it is from', /<p class="cr-look" id="look-credit" hidden><\/p>/.test(page), true);
-check('atlas.js fills it from theme.source unless credit is off, in plain words', /look\.hidden = !sayLook;/.test(viewer) && /manifest\.theme\.credit !== false/.test(viewer) && /"Colours" \+ \(manifest\.branding && manifest\.branding\.logo \? " and logo" : ""\) \+ " from " \+ src\.host/.test(viewer), true);
+check('the credit names the logo only when the look brought it (a logo from the wizard or Settings is the owner’s own)', /if \(src\.logo === true && manifest\.branding && manifest\.branding\.logo\) brought\.push\("logo"\);/.test(viewer), true);
+check('atlas.js fills it from theme.source unless credit is off, in plain words: colours, logo and font', /look\.hidden = !sayLook;/.test(viewer) && /manifest\.theme\.credit !== false/.test(viewer) && /var brought = \["Colours"\];/.test(viewer) && /brought\.push\("logo"\)/.test(viewer) && /brought\.push\("font"\)/.test(viewer) && /look\.textContent = what \+ " from " \+ src\.host/.test(viewer), true);
 check('nothing else new for visitors: no control, no switch, and the badge rule is as it was', /loka-look/.test(page.split('<body')[1] || ''), false);
 check('the badge still sets LOKA’s colours back for itself', /\.loka-badge \{ --color-text-primary:#24211D/.test(page), true);
 

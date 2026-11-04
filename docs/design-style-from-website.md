@@ -613,3 +613,9 @@ Mock-ups (scratchpad, not in the repo): `fonts.html` and `icon.html`, screenshot
 - **P2:** (b) headline fonts are **allowed, with a warning** (not kept out). The sheet says in one plain sentence that the site's font is made for headlines and may be hard to read in long text; the owner can still use the look.
 - **P3:** (a) one optional line in the wizard's "Name it" step.
 - **P4:** not asked separately; the P3 option he chose says a logo alone never becomes the tab icon (LOKA's icon stays).
+
+### Reversal (Mithun, 4 Nov 2026, later the same day)
+"Styling should be provided after the Atlas is built — it shouldn't extend the primary wizard." Asked what that covers: **all of website-based styling** stays after the build (Owner menu), and **the logo may be uploaded in the primary wizard**. So:
+- The wizard has no tab-icon line. Its "Name it" step has one optional line, **Logo**, made in the browser by logo-tools.js (as Settings does) and sent as `branding.logoData`; a logo that fails the server's check is refused in plain words, not dropped.
+- The tab icon is set after the build only: Owner ▾ → Settings, or a website's look (offered unticked).
+- Fonts with no bold are no longer called headline fonts: allowed, with their own sentence ("It has no bold…").

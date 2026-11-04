@@ -698,6 +698,37 @@
 .own-look-logo-words b { color:var(--color-text-primary); }
 .own-look-logo-no .own-look-logo-words span { color:var(--color-sindoor-deep); }
 .own-look-left { margin:.5rem 0; font-size:var(--t-meta); color:var(--color-text-secondary); }
+/* words in the site's font (phase 2): the same two lines in LOKA's Karla and
+   in the site's face, side by side; one under the other on a phone */
+.own-look-said b { color:var(--color-text-primary); }
+.own-look-warn { color:var(--color-sindoor-deep); }
+.own-look-spec { display:grid; grid-template-columns:1fr 1fr; gap:.6rem; }
+@media (max-width:560px) { .own-look-spec { grid-template-columns:1fr; } }
+.own-look-spec-card { border:1px solid var(--color-border); border-radius:0; padding:.65rem .75rem; background:var(--color-page); min-width:0; }
+.own-look-spec-on { border-color:var(--color-leaf); background:var(--color-leaf-tint); }
+.own-look-spec-tag { font-size:var(--t-label); font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--color-text-muted); }
+.own-look-spec-on .own-look-spec-tag { color:var(--color-leaf-deep); }
+.own-look-spec-title { font-family:var(--font-display); font-weight:700; font-size:1.05rem; line-height:1.25; margin:.3rem 0 .15rem; }
+.own-look-spec-body { font-size:.92rem; line-height:1.45; margin:0; color:var(--color-text-primary); }
+.own-look-spec-hi { font-size:.92rem; margin:.25rem 0 0; color:var(--color-text-secondary); }
+.own-look-keep { margin:.5rem 0 0; padding-left:1.1rem; font-size:var(--t-meta); color:var(--color-text-secondary); }
+.own-look-keep li { margin:.1rem 0; }
+/* the site's icon offered as the tab icon: one row, one tick */
+.own-look-iconrow { display:flex; gap:.7rem; align-items:flex-start; border:1px solid var(--color-border); border-radius:var(--radius-md); padding:.5rem .65rem; }
+.own-look-iconpic { width:32px; height:32px; flex:none; border-radius:0; object-fit:contain; }
+.own-look-iconrow .own-look-tick { margin:0; }
+
+/* ---------- the tab icon in Settings (owner-look.js draws it beside the logo) ---------- */
+.own-icon { display:flex; flex-direction:column; gap:.5rem; padding:.6rem .7rem;
+  border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface-alt); }
+.own-icon-now img { display:block; width:32px; height:32px; border-radius:0; }
+.own-icon-acts { gap:.75rem; align-items:center; }
+/* a drawing of a browser tab, so "tab icon" needs no explaining */
+.own-tab { display:flex; align-items:center; gap:.45rem; max-width:17rem; padding:.4rem .7rem; background:#E9E6DF;
+  border-radius:8px 8px 0 0; font:13px system-ui, sans-serif; color:#24211D; min-width:0; }
+.own-tab img, .own-tab svg { width:16px; height:16px; flex:none; border-radius:2px; color:var(--color-leaf); }
+.own-tab span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.own-tab span:empty::before { content:"Your atlas"; color:var(--color-text-muted); }
 .own-look-left summary { cursor:pointer; color:var(--color-text-primary); }
 .own-look-left ul { margin:.3rem 0 0; padding-left:1.1rem; }
 .own-look-switch { display:flex; gap:0; margin-bottom:.5rem; }

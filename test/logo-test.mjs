@@ -82,10 +82,11 @@ check('no logo at all is simply no logo', validLogo(undefined), null);
 
 console.log('\n  Settings asks for the logo and sends it');
 // release 2 (October 2026): the logo left the wizard for Owner ▾ → Settings
-check('the wizard no longer asks for a logo',
-  /id="logo-file"/.test(page) || /logoData/.test(setup) || /S\.logo\b/.test(setup), false);
-check('and its Name screen says where the logo went',
-  /Add a logo and description\s+later, under Owner ▾ → Settings\./.test(page), true);
+// 4 Nov 2026: the logo is back in the wizard as one optional line (look-icon-test.mjs)
+check('the wizard asks for a logo only as one optional line, not the old fold',
+  !/id="logo-file"/.test(page) && /id="f-logo-file"/.test(page) && /S\.logo \? \{ logoData: S\.logo \} : \{\}/.test(setup), true);
+check('and its Name screen says where the description and the logo can be changed',
+  /Add a description later, under Owner ▾ → Settings\./.test(page) && /change it any time under Owner ▾ → Settings\./.test(page), true);
 check('Settings has a logo field beside the organisation name',
   /id="own-org"/.test(owner) && /id="own-logo-file"/.test(owner) && /id="own-logo-add"/.test(owner), true);
 const accept = (owner.match(/var LOGO_ACCEPT = "([^"]+)"/) || [, ''])[1];
@@ -108,7 +109,7 @@ check('a 200 KB logo, written out as text, fits in the request the server reads'
   Number(limit) * 1024 * 1024 > Math.ceil(200 * 1024 / 3) * 4 + 50 * 1024, true);
 check('the page can run the piece as a browser would (window.LokaLogoTools)',
   (() => { const w = {}; new Function('window', tools)(w); return Object.keys(w.LokaLogoTools).sort(); })(),
-  ['ACCEPT', 'LOGO_BYTES', 'LOGO_MAX', 'LOGO_MIN', 'UNREADABLE', 'dataUrlBytes', 'drawLogo', 'drawnBox', 'logoFromDataUrl', 'logoFromFile', 'logoSize', 'logoTone', 'looksLikeImage', 'pixelTone', 'svgWithSize']);
+  ['ACCEPT', 'ICON_SIZE', 'ICON_SMALL', 'LOGO_BYTES', 'LOGO_MAX', 'LOGO_MIN', 'UNREADABLE', 'dataUrlBytes', 'drawIcon', 'drawLogo', 'drawnBox', 'iconFromDataUrl', 'iconFromFile', 'logoFromDataUrl', 'logoFromFile', 'logoSize', 'logoTone', 'looksLikeImage', 'pixelTone', 'svgWithSize']);   // the tab icon (phase 2 of the look, 4 Nov 2026) is made by the same file
 
 console.log('\n  a logo from the owner\u2019s website (look-from-website, phase 1)');
 check('empty see-through edges are trimmed before the redraw, so a wide wordmark sits flush', /function drawnBox\(g, w, h\)/.test(tools) && /var box = drawnBox\(fg, size\.w, size\.h\);/.test(tools) && /g\.drawImage\(src, sx, sy, sw, sh, 0, 0, size\.w, size\.h\);/.test(tools), true);

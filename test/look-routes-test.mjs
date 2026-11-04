@@ -121,7 +121,7 @@ try {
 
   check('GET /look: a stranger is refused', (await call('GET', P + '/look', { cookie: other })).status, 403);
   check('…nobody at all too', (await call('GET', P + '/look')).status, 403);
-  check('an editor may look (D2)', (await call('GET', P + '/look', { cookie: editor })).j, { theme: null, canUndo: false, hasLogo: false, site: '' });
+  check('an editor may look (D2)', (await call('GET', P + '/look', { cookie: editor })).j, { theme: null, canUndo: false, hasLogo: false, hasIcon: false, site: '' });
 
   let r = await call('POST', P + '/look/read', { cookie: owner, body: { url: 'localhost' } });
   check('a read of localhost is refused with the plain sentence, before any connection', [r.status, r.j.error], [422, 'We couldn’t reach that address. Check it and try again.']);
@@ -141,7 +141,7 @@ try {
   check('the colours as given (already readable)', t.colors.accent, '#6B1164');
   check('the source rides along for the credit line, which is on by default (D3)', [t.source.host, t.credit], ['emergencefestival.in', true]);
   check('a previous look is kept for Undo: none before', overlay().themePrevious, { ...overlay().themePrevious, theme: null, logoWas: false, logoChanged: false });
-  check('the answer says what Settings needs', r.j, { ok: true, theme: t, canUndo: true, hasLogo: false, site: '' });
+  check('the answer says what Settings needs', r.j, { ok: true, theme: t, canUndo: true, hasLogo: false, hasIcon: false, site: '' });
 
   r = await call('POST', P + '/look', { cookie: owner, body: { theme: { colors: { page: '#111111', accent: '#6B1164' } } } });
   check('a dark page is refused', [r.status, r.j.error], [400, 'That page colour is too dark. LOKA has no dark mode, so a look needs a light page.']);
@@ -165,6 +165,7 @@ try {
   check('the registry marks the logo and who said they may use it', [(await registry()).branding.hasLogo, (await registry()).branding.logoRights.by, (await registry()).branding.logoRights.from], [true, OWNER, 'emergencefestival.in']);
   check('the public manifest points at the logo', JSON.parse(fs.readFileSync(path.join(DIR, 'manifest.json'), 'utf8')).branding.logo, 'branding-logo.png');
   check('themePrevious knows the logo changed', [overlay().themePrevious.logoChanged, overlay().themePrevious.logoWas], [true, true]);
+  check('the saved look remembers its logo came from the site, so the credit may name it', overlay().theme.source.logo, true);
 
   r = await call('POST', P + '/look/undo', { cookie: editor });
   check('Undo (an editor may): the previous look is back, and the hand-uploaded logo with it', [r.status, overlay().theme.colors.accent, fs.readFileSync(path.join(DIR, 'branding-logo.png'))[16], (await registry()).branding.hasLogo], [200, accentBefore, 1, true]);
@@ -195,12 +196,47 @@ try {
   // a logo changed by hand in Identity after a look brought one: Undo leaves the logo alone
   await call('POST', P + '/details', { cookie: owner, body: { title: 'Look check', org: 'Look', branding: { orgName: 'Look', logoData: png(7) } } });
   check('(a hand-uploaded logo replaces the look’s; the look’s kept copy goes with it)', [fs.readFileSync(path.join(DIR, 'branding-logo.png'))[16], hasFile('branding-logo.previous.png'), overlay().themePrevious.logoChanged], [7, false, false]);
+  check('…and the credit stops naming the logo: it is the owner’s own now', overlay().theme.source.logo, false);
   r = await call('POST', P + '/look/undo', { cookie: owner });
   check('Undo now changes the theme only; the hand-uploaded logo stays', [r.status, fs.readFileSync(path.join(DIR, 'branding-logo.png'))[16], r.j.hasLogo], [200, 7, true]);
   await call('POST', P + '/look', { cookie: owner, body: { theme: LOOK, useLogo: true, logoData: png(8) } });
   await call('POST', P + '/details', { cookie: owner, body: { title: 'Look check', org: 'Look', branding: { orgName: 'Look', removeLogo: true } } });
   r = await call('POST', P + '/look/undo', { cookie: owner });
   check('…and the same after the owner removes the logo by hand', [overlay().themePrevious.logoChanged, hasFile('branding-logo.png'), r.j.hasLogo], [false, false, false]);
+
+  // phase 2: the site's font is saved with the look, its address built by the server
+  r = await call('POST', P + '/look', { cookie: owner, body: { theme: { ...LOOK, fonts: { text: 'poppins', cssUrl: 'https://evil.example/x.css' } } } });
+  check('the font: a Google Fonts family in LOKA’s list is kept, spelt as Google spells it; the address is built here, never the browser’s', [r.status, overlay().theme.fonts], [200, { text: 'Poppins', cssUrl: 'https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap' }]);
+  r = await call('POST', P + '/look', { cookie: owner, body: { theme: { ...LOOK, fonts: { text: 'Gotham' } } } });
+  check('a family not in the list is dropped: the look is saved without a font (D6)', [r.status, overlay().theme.fonts], [200, undefined]);
+  r = await call('POST', P + '/look', { cookie: owner, body: { theme: { ...LOOK, fonts: { text: 'Pacifico' } } } });
+  check('a headline face is allowed (P2)', overlay().theme.fonts.text, 'Pacifico');
+  r = await call('POST', P + '/look/undo', { cookie: owner });
+  check('Undo takes the font with the look', overlay().theme.fonts, undefined);
+
+  // phase 2: the site's icon as the tab icon, when ticked; Undo covers it like the logo
+  await call('POST', P + '/details', { cookie: owner, body: { title: 'Look check', org: 'Look', branding: { orgName: 'Look', removeLogo: true, removeIcon: true } } });
+  r = await call('POST', P + '/look', { cookie: owner, body: { theme: LOOK, useIcon: true, iconData: png(21) } });
+  check('a look with the site’s icon: saved as branding-icon.png, the record and the public manifest know', [r.status, r.j.hasIcon, hasFile('branding-icon.png'), (await registry()).branding.hasIcon, JSON.parse(fs.readFileSync(path.join(DIR, 'manifest.json'), 'utf8')).branding.icon], [200, true, true, true, 'branding-icon.png']);
+  check('themePrevious knows the icon changed and that there was none', [overlay().themePrevious.iconChanged, overlay().themePrevious.iconWas], [true, false]);
+  r = await call('POST', P + '/look/undo', { cookie: owner });
+  check('Undo takes the icon away again, since there was none before', [r.j.hasIcon, hasFile('branding-icon.png'), (await registry()).branding.hasIcon, JSON.parse(fs.readFileSync(path.join(DIR, 'manifest.json'), 'utf8')).branding.icon], [false, false, false, undefined]);
+  r = await call('POST', P + '/look/undo', { cookie: owner });
+  check('…and redo brings it back', [r.j.hasIcon, fs.readFileSync(path.join(DIR, 'branding-icon.png'))[16]], [true, 21]);
+  r = await call('POST', P + '/look', { cookie: owner, body: { theme: LOOK, useIcon: true, iconData: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=' } });
+  check('an icon that is not the PNG the browser made is refused', [r.status, r.j.error], [400, 'The tab icon must be a PNG under 200 KB.']);
+  // a hand-picked icon in Settings, then a look's icon over it, then Undo
+  await call('POST', P + '/details', { cookie: owner, body: { branding: { iconData: png(22) } } });
+  check('Settings: an icon picked by hand, with nothing else in the body (the fields are preserved)', [fs.readFileSync(path.join(DIR, 'branding-icon.png'))[16], (await registry()).branding.hasIcon, (await registry()).title, overlay().themePrevious.iconChanged], [22, true, 'Look check', false]);
+  r = await call('POST', P + '/look', { cookie: owner, body: { theme: LOOK, useIcon: true, iconData: png(23) } });
+  check('a look’s icon over it: the hand-picked one goes aside', [fs.readFileSync(path.join(DIR, 'branding-icon.png'))[16], fs.readFileSync(path.join(DIR, 'branding-icon.previous.png'))[16]], [23, 22]);
+  r = await call('POST', P + '/look/undo', { cookie: owner });
+  check('Undo: the hand-picked icon is back', [r.j.hasIcon, fs.readFileSync(path.join(DIR, 'branding-icon.png'))[16]], [true, 22]);
+  await call('POST', P + '/look/undo', { cookie: owner });
+  await call('POST', P + '/details', { cookie: owner, body: { branding: { removeIcon: true } } });
+  check('Take it off in Settings: the file goes, and a look’s kept copy with it, so Undo leaves the icon alone', [hasFile('branding-icon.png'), hasFile('branding-icon.previous.png'), (await registry()).branding.hasIcon, overlay().themePrevious.iconChanged], [false, false, false, false]);
+  r = await call('POST', P + '/look/undo', { cookie: owner });
+  check('…as it does', [r.status, hasFile('branding-icon.png'), r.j.hasIcon], [200, false, false]);
 
   // the overlay is written before the logo: when it cannot be, nothing has changed
   await call('POST', P + '/details', { cookie: owner, body: { title: 'Look check', org: 'Look', branding: { orgName: 'Look', logoData: png(9) } } });

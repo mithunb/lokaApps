@@ -1174,6 +1174,12 @@ router.post('/instances', async (req, res) => {
     footerLine: cap(b.branding && b.branding.footerLine, 160),
     logoData: validLogo(b.branding && b.branding.logoData),
   };
+  /* A logo chosen in the wizard (Mithun, 4 Nov 2026: the logo yes, styling
+     only after the build). One the browser made badly is refused in words,
+     not dropped, so nobody gets an atlas without the logo they chose. */
+  if (b.branding && b.branding.logoData && !branding.logoData) {
+    return res.status(400).json({ error: 'The logo could not be used. Choose it again, or leave it out and add it later under Owner ▾ → Settings.' });
+  }
 
   // region
   const r = b.region || {};
@@ -1515,6 +1521,8 @@ setJobDoneHook((job) => {
     setImmediate(() => { const fresh = reg.getInstance(job.slug); if (fresh) queueSmallPhotos(fresh); });
     // a mode chosen while building, if the atlas can already take it
     setImmediate(() => { applyWantedMode(job.slug); });
+    // a tab icon set in Settings or from a look: the fresh manifest is told of it again
+    setImmediate(() => { try { iconAfterBuild(job); } catch (e) { console.warn('[atlas] ' + job.slug + ' — the tab icon after a build: ' + (e && e.message)); } });
   } else {
     // a rebuild failed — the build only swaps on success, so the old dataset
     // is untouched (and still live if it was); the record goes back with it
@@ -1756,6 +1764,7 @@ function rewriteManifest(inst) {
   if (b.orgUrl) bset.orgUrl = b.orgUrl;
   if (b.footerLine) bset.footerLine = b.footerLine;
   if (b.hasLogo) bset.logo = 'branding-logo.png';
+  if (b.hasIcon) bset.icon = 'branding-icon.png';   // the page's tab icon (atlas.js sets <link rel="icon">)
   if (Object.keys(bset).length) m.branding = bset; else delete m.branding;
   try {
     const tmp = mf + '.tmp';
@@ -2266,31 +2275,57 @@ router.get('/instances/:slug/small-photos', (req, res) => {
   res.json({ running: !!st.running, done: st.done || 0, total: st.total || 0, made: st.made || 0, failed: st.failed || 0, finishedAt: st.finishedAt || null });
 });
 
-/* The one way a logo reaches the disk: a PNG under 200 KB (validLogo), as
-   branding-logo.png in the atlas's own folder. Settings' Save and a look read
-   from a website both come through here, so there is one rule. */
-function logoPath(inst, previous) { return path.join(datasetDirFor(inst), previous ? 'branding-logo.previous.png' : 'branding-logo.png'); }
-function saveLogoFile(inst, dataUrl) {
+/* The one way a logo or a tab icon reaches the disk: a PNG under 200 KB
+   (validLogo), as branding-logo.png or branding-icon.png in the atlas's own
+   folder. Settings' Save, the wizard's build and a look read from a website
+   all come through here, so there is one rule. A rebuild carries both files
+   (jobs.js CONTRIBUTED). */
+const BRAND_FILES = { logo: 'branding-logo', icon: 'branding-icon' };
+const BRAND_WORDS = { logo: 'logo', icon: 'tab icon' };
+function brandPath(inst, kind, previous) { return path.join(datasetDirFor(inst), BRAND_FILES[kind] + (previous ? '.previous' : '') + '.png'); }
+function logoPath(inst, previous) { return brandPath(inst, 'logo', previous); }
+function saveBrandFile(inst, kind, dataUrl) {
   const valid = validLogo(dataUrl);
-  if (!valid) return { error: 'logo must be a PNG under 200 KB', status: 400 };
-  try { fs.writeFileSync(logoPath(inst), Buffer.from(valid.split(',')[1], 'base64')); }
-  catch { return { error: 'could not save the logo', status: 500 }; }
+  if (!valid) return { error: BRAND_WORDS[kind] + ' must be a PNG under 200 KB', status: 400 };
+  try { fs.writeFileSync(brandPath(inst, kind), Buffer.from(valid.split(',')[1], 'base64')); }
+  catch { return { error: 'could not save the ' + BRAND_WORDS[kind], status: 500 }; }
   return { ok: true };
 }
-function removeLogoFile(inst) {
-  try { fs.rmSync(logoPath(inst), { force: true }); } catch { /* ignore */ }
+function saveLogoFile(inst, dataUrl) { return saveBrandFile(inst, 'logo', dataUrl); }
+function removeBrandFile(inst, kind) {
+  try { fs.rmSync(brandPath(inst, kind), { force: true }); } catch { /* ignore */ }
 }
-/* A logo changed by hand in Identity after a look brought one: the look's
-   Undo must then leave the logo alone (it would put back a file the owner
-   has since replaced), so the kept copy goes and Undo is told it touches the
-   theme only. */
-function forgetLookLogo(inst) {
-  try { fs.rmSync(logoPath(inst, true), { force: true }); } catch { /* ignore */ }
+/* A logo (or tab icon) changed by hand in Identity after a look brought one:
+   the look's Undo must then leave that file alone (it would put back a file
+   the owner has since replaced), so the kept copy goes and Undo is told it
+   touches the theme only. */
+function forgetLookFile(inst, kind) {
+  try { fs.rmSync(brandPath(inst, kind, true), { force: true }); } catch { /* ignore */ }
   const { file, local } = readOverlay(inst);
-  if (local && local.themePrevious && typeof local.themePrevious === 'object' && local.themePrevious.logoChanged) {
-    local.themePrevious.logoChanged = false;
-    writeOverlay(file, local);
+  const key = kind + 'Changed';
+  let changed = false;
+  if (local && local.themePrevious && typeof local.themePrevious === 'object' && local.themePrevious[key]) {
+    local.themePrevious[key] = false;
+    changed = true;
   }
+  // the logo is the owner's own now, so the credit stops naming it
+  if (kind === 'logo' && local && local.theme && local.theme.source && local.theme.source.logo) {
+    local.theme.source.logo = false;
+    changed = true;
+  }
+  if (changed) writeOverlay(file, local);
+}
+/* After a build: the tab icon is set after the atlas exists (Settings, or a
+   look), never in the wizard (Mithun, 4 Nov 2026). A rebuild carries the
+   file (jobs.js CONTRIBUTED) but the built manifest knows nothing of it, so
+   it is rewritten from the record; a record whose file has gone is told so. */
+function iconAfterBuild(job) {
+  const inst = reg.getInstance(job.slug);
+  if (!inst) return;
+  const hasIcon = !!(inst.branding && inst.branding.hasIcon) && fs.existsSync(brandPath(inst, 'icon'));
+  const fresh = hasIcon !== !!(inst.branding && inst.branding.hasIcon)
+    ? reg.updateInstance(inst.slug, { branding: { ...(inst.branding || {}), hasIcon } }) : inst;
+  if (hasIcon) rewriteManifest(fresh);
 }
 
 // Fast edit — text, branding, logo and public/private — with no rebuild.
@@ -2315,6 +2350,7 @@ router.post('/instances/:slug/details', (req, res) => {
     orgUrl: hasB('orgUrl') ? (/^https:\/\/[^\s]+$/.test(bb.orgUrl || '') ? String(bb.orgUrl).slice(0, 200) : '') : (curB.orgUrl || ''),
     footerLine: hasB('footerLine') ? cap(bb.footerLine, 160) : (curB.footerLine || ''),
     hasLogo: !!curB.hasLogo,
+    hasIcon: !!curB.hasIcon,
   };
 
   const patch = {
@@ -2330,14 +2366,24 @@ router.post('/instances/:slug/details', (req, res) => {
 
   // logo add / replace / remove (written straight into the current dataset dir)
   if (bb.removeLogo) {
-    removeLogoFile(inst);
+    removeBrandFile(inst, 'logo');
     branding.hasLogo = false;
   } else if (bb.logoData) {
     const saved = saveLogoFile(inst, bb.logoData);
     if (saved.error) return res.status(saved.status).json({ error: saved.error });
     branding.hasLogo = true;
   }
-  if (bb.removeLogo || bb.logoData) forgetLookLogo(inst);
+  if (bb.removeLogo || bb.logoData) forgetLookFile(inst, 'logo');
+  // the tab icon, the same way (§14.2: changeable later under Settings)
+  if (bb.removeIcon) {
+    removeBrandFile(inst, 'icon');
+    branding.hasIcon = false;
+  } else if (bb.iconData) {
+    const saved = saveBrandFile(inst, 'icon', bb.iconData);
+    if (saved.error) return res.status(saved.status).json({ error: saved.error });
+    branding.hasIcon = true;
+  }
+  if (bb.removeIcon || bb.iconData) forgetLookFile(inst, 'icon');
 
   /* Who can see it. 'private' moves the whole dataset folder out of the web
      root into PRIVATE_ROOT, where only GET /datasets/:slug/:file can reach it
@@ -2431,6 +2477,12 @@ function cleanLookTheme(raw) {
     if (Object.keys(ch).length) t.chosen = ch;
   }
   t.credit = raw.credit !== false;   // D3: the credit line is on unless switched off
+  // the site's font (§14.1): a family in LOKA's Google Fonts list, its address
+  // built here from the name — never the browser's word for where a font is
+  if (raw.fonts && typeof raw.fonts === 'object' && typeof raw.fonts.text === 'string') {
+    const f = lookRead.fontFor(raw.fonts.text);
+    if (f) t.fonts = f.theme;
+  }
   const r = THEME.resolve(t);
   if (r.notes.some((n) => /too dark for a page/.test(n))) return { error: 'That page colour is too dark. LOKA has no dark mode, so a look needs a light page.' };
   for (const k of LOOK_MAP.SLOTS) { const v = r.vars[THEME.VARS[k]]; if (t.colors[k] && v) t.colors[k] = v; }
@@ -2442,6 +2494,7 @@ function lookAnswer(inst, local) {
     theme: local && local.theme && typeof local.theme === 'object' ? local.theme : null,
     canUndo: !!(local && local.themePrevious && typeof local.themePrevious === 'object'),
     hasLogo: !!b.hasLogo,
+    hasIcon: !!b.hasIcon,
     site: b.orgUrl || '',
   };
 }
@@ -2484,34 +2537,68 @@ router.post('/instances/:slug/look', (req, res) => {
   const local = existing || { layers: [] };
   const curB = inst.branding || {};
   const useLogo = !!b.useLogo && typeof b.logoData === 'string';
-  const logoChanged = useLogo;
+  const useIcon = !!b.useIcon && typeof b.iconData === 'string';   // the site's icon as the tab icon (§14.2), ticked by the owner
   if (useLogo && !validLogo(b.logoData)) return res.status(400).json({ error: 'The logo must be a PNG under 200 KB.' });
+  if (useIcon && !validLogo(b.iconData)) return res.status(400).json({ error: 'The tab icon must be a PNG under 200 KB.' });
   const previous = { theme: local.theme && typeof local.theme === 'object' ? local.theme : null, themePrevious: local.themePrevious };
-  local.themePrevious = { theme: previous.theme, logoWas: !!curB.hasLogo, logoChanged, savedAt: new Date().toISOString() };
+  local.themePrevious = { theme: previous.theme, logoWas: !!curB.hasLogo, logoChanged: useLogo, iconWas: !!curB.hasIcon, iconChanged: useIcon, savedAt: new Date().toISOString() };
+  // the credit in About names the logo only when it came from this site
+  if (cleaned.theme.source) cleaned.theme.source.logo = useLogo;
   local.theme = cleaned.theme;
   // the overlay first: if it cannot be written, "nothing changed" is true
   if (!writeOverlay(file, local)) return res.status(500).json({ error: 'Could not save. Nothing changed — try again.' });
+  /* The files, logo then icon: the one that was there goes aside for one
+     step of Undo, then the new one is written. If a write fails, everything
+     is put back as it was, so the answer is true. */
+  const put = [];
+  const undoPut = (saved) => {
+    for (const p of put.reverse()) {
+      try { fs.rmSync(brandPath(inst, p.kind), { force: true }); if (p.hadFile) fs.renameSync(brandPath(inst, p.kind, true), brandPath(inst, p.kind)); } catch { /* best effort */ }
+    }
+    local.theme = previous.theme || undefined; if (local.theme === undefined) delete local.theme;
+    local.themePrevious = previous.themePrevious;
+    writeOverlay(file, local);
+    return res.status(saved.status).json({ error: saved.error + ' Nothing changed — try again.' });
+  };
   if (useLogo) {
-    // the logo that was there goes aside for one step of Undo
     const hadFile = curB.hasLogo && fs.existsSync(logoPath(inst));
     try { if (hadFile) fs.renameSync(logoPath(inst), logoPath(inst, true)); } catch { /* best effort */ }
+    put.push({ kind: 'logo', hadFile });
     const saved = saveLogoFile(inst, b.logoData);
-    if (saved.error) {
-      // put everything back as it was, so the answer is true
-      try { if (hadFile) fs.renameSync(logoPath(inst, true), logoPath(inst)); } catch { /* best effort */ }
-      local.theme = previous.theme || undefined; if (local.theme === undefined) delete local.theme;
-      local.themePrevious = previous.themePrevious;
-      writeOverlay(file, local);
-      return res.status(saved.status).json({ error: saved.error + ' Nothing changed — try again.' });
-    }
+    if (saved.error) return undoPut(saved);
   }
-  if (logoChanged) {
+  if (useIcon) {
+    const hadFile = curB.hasIcon && fs.existsSync(brandPath(inst, 'icon'));
+    try { if (hadFile) fs.renameSync(brandPath(inst, 'icon'), brandPath(inst, 'icon', true)); } catch { /* best effort */ }
+    put.push({ kind: 'icon', hadFile });
+    const saved = saveBrandFile(inst, 'icon', b.iconData);
+    if (saved.error) return undoPut(saved);
+  }
+  if (useLogo || useIcon) {
     const session = auth.sessionFromReq(req);
-    const branding = { ...curB, hasLogo: true, logoRights: { by: (session && session.email) || 'token', at: new Date().toISOString(), from: cleaned.theme.source ? cleaned.theme.source.host : '' } };
+    const branding = { ...curB,
+      ...(useLogo ? { hasLogo: true, logoRights: { by: (session && session.email) || 'token', at: new Date().toISOString(), from: cleaned.theme.source ? cleaned.theme.source.host : '' } } : {}),
+      ...(useIcon ? { hasIcon: true } : {}) };
     rewriteManifest(reg.updateInstance(inst.slug, { branding }));
   }
   res.json({ ok: true, ...lookAnswer(reg.getInstance(inst.slug), local) });
 });
+
+/* One step back for a logo or tab icon the look brought (Undo): the file and
+   its kept copy change places; where there was none before, the look's goes
+   aside, leaving none. Returns whether the atlas has one afterwards. Throws
+   when a rename fails, so the caller can say nothing changed. */
+function swapBrandFileBack(inst, kind, was) {
+  const cur = brandPath(inst, kind), old = brandPath(inst, kind, true), tmp = cur + '.swap';
+  const haveCur = fs.existsSync(cur), haveOld = fs.existsSync(old);
+  if (was) {
+    if (haveCur && haveOld) { fs.renameSync(cur, tmp); fs.renameSync(old, cur); fs.renameSync(tmp, old); }
+    else if (haveOld) fs.renameSync(old, cur);
+    return true;
+  }
+  if (haveCur) { fs.rmSync(old, { force: true }); fs.renameSync(cur, old); }
+  return false;
+}
 
 // One step back (D9): the theme and themePrevious change places, and the
 // logo files with them when the look brought a logo. Pressing it again is redo.
@@ -2523,29 +2610,17 @@ router.post('/instances/:slug/look/undo', (req, res) => {
   if (!prev || typeof prev !== 'object') return res.status(409).json({ error: 'There is nothing to undo.' });
   const curB = inst.branding || {};
   const now = local.theme && typeof local.theme === 'object' ? local.theme : null;
-  let hasLogo = !!curB.hasLogo;
-  if (prev.logoChanged) {
-    const cur = logoPath(inst), old = logoPath(inst, true), tmp = cur + '.swap';
-    try {
-      const haveCur = fs.existsSync(cur), haveOld = fs.existsSync(old);
-      if (prev.logoWas) {
-        // there was a logo before the look: it comes back, the look's goes aside
-        if (haveCur && haveOld) { fs.renameSync(cur, tmp); fs.renameSync(old, cur); fs.renameSync(tmp, old); }
-        else if (haveOld) fs.renameSync(old, cur);
-        hasLogo = true;
-      } else {
-        // there was none: the look's goes aside (over any older copy), leaving none
-        if (haveCur) { fs.rmSync(old, { force: true }); fs.renameSync(cur, old); }
-        hasLogo = false;
-      }
-    } catch { return res.status(500).json({ error: 'Could not put the logo back. Nothing changed — try again.' }); }
-  }
+  let hasLogo = !!curB.hasLogo, hasIcon = !!curB.hasIcon;
+  try {
+    if (prev.logoChanged) hasLogo = swapBrandFileBack(inst, 'logo', !!prev.logoWas);
+    if (prev.iconChanged) hasIcon = swapBrandFileBack(inst, 'icon', !!prev.iconWas);
+  } catch { return res.status(500).json({ error: 'Could not put the logo back. Nothing changed — try again.' }); }
   local.theme = prev.theme || undefined;
   if (local.theme === undefined) delete local.theme;
-  local.themePrevious = { theme: now, logoWas: !!curB.hasLogo, logoChanged: !!prev.logoChanged, savedAt: new Date().toISOString() };
+  local.themePrevious = { theme: now, logoWas: !!curB.hasLogo, logoChanged: !!prev.logoChanged, iconWas: !!curB.hasIcon, iconChanged: !!prev.iconChanged, savedAt: new Date().toISOString() };
   if (!writeOverlay(file, local)) return res.status(500).json({ error: 'Could not save. Nothing changed — try again.' });
   let fresh = inst;
-  if (hasLogo !== !!curB.hasLogo) { fresh = reg.updateInstance(inst.slug, { branding: { ...curB, hasLogo } }); rewriteManifest(fresh); }
+  if (hasLogo !== !!curB.hasLogo || hasIcon !== !!curB.hasIcon) { fresh = reg.updateInstance(inst.slug, { branding: { ...curB, hasLogo, hasIcon } }); rewriteManifest(fresh); }
   res.json({ ok: true, ...lookAnswer(fresh, local) });
 });
 
@@ -2556,7 +2631,7 @@ router.delete('/instances/:slug/look', (req, res) => {
   if (!inst) return;
   const { file, local } = readOverlay(inst);
   if (!local || !local.theme) return res.json({ ok: true, ...lookAnswer(inst, local) });
-  local.themePrevious = { theme: local.theme, logoWas: !!(inst.branding && inst.branding.hasLogo), logoChanged: false, savedAt: new Date().toISOString() };
+  local.themePrevious = { theme: local.theme, logoWas: !!(inst.branding && inst.branding.hasLogo), logoChanged: false, iconWas: !!(inst.branding && inst.branding.hasIcon), iconChanged: false, savedAt: new Date().toISOString() };
   delete local.theme;
   if (!writeOverlay(file, local)) return res.status(500).json({ error: 'Could not save. Nothing changed — try again.' });
   res.json({ ok: true, ...lookAnswer(inst, local) });

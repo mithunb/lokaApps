@@ -632,6 +632,144 @@ function usedForOf(c) {
   return two.length === 2 ? two[0] + ' and ' + two[1] : (two[0] || 'here and there');
 }
 
+/* ---------- fonts (§3.3, §14.1) ----------
+   The site's body face: the font-family on body/html, else the family the
+   most rules name. Generic names and the computer's own faces are skipped. A
+   family is used only if it is in LOKA's committed list of Google Fonts
+   (google-fonts.json, deploy/refresh-google-fonts.mjs), and then always
+   loaded from fonts.googleapis.com with an address built here — never from
+   the site. A headline face is allowed with a warning (Mithun, 4 Nov 2026). */
+const GOOGLE_FONTS = requireScript(path.join(__dirname, 'google-fonts.json')).families;
+const FONT_BY_LOWER = new Map(Object.keys(GOOGLE_FONTS).map((n) => [n.toLowerCase(), n]));
+const GENERIC_FACE = /^(serif|sans-serif|monospace|cursive|fantasy|system-ui|ui-(sans-serif|serif|monospace|rounded)|emoji|math|fangsong|inherit|initial|unset|revert|none)$/i;
+const SYSTEM_FACE = /^(-apple-system|blinkmacsystemfont|segoe ui|segoe ui emoji|segoe ui symbol|arial|helvetica|helvetica neue|verdana|tahoma|georgia|times|times new roman|courier|courier new|trebuchet ms|gill sans|optima|avenir|avenir next|san francisco|sf pro( text| display)?|apple color emoji|noto color emoji|cantarell|ubuntu|oxygen|oxygen-sans|fira sans|droid sans|liberation sans|dejavu sans|calibri|cambria|lucida grande|lucida sans|lucida sans unicode|palatino|book antiqua|garamond|baskerville|impact|menlo|monaco|consolas)$/i;
+export const FONT_WORDS = {
+  ok: (n) => 'The site writes its words in ' + n + '. Your atlas can too.',
+  headline: (n) => 'The site writes its words in ' + n + ', a font made for big headlines. It may be hard to read in long text, but you can still use it.',
+  'no-bold': (n) => 'The site writes its words in ' + n + '. It has no bold, so words meant to stand out will look like the rest. You can still use it.',
+  'not-free': (n) => 'The site writes its words in ' + n + '. It isn’t a free font, so we can’t use it here. Your words stay in LOKA’s Karla.',
+  system: () => 'The site uses whatever font each computer has, so there is nothing to take. Your words stay in LOKA’s Karla.',
+  none: () => 'We couldn’t tell which font the site writes in. Your words stay in LOKA’s Karla.',
+};
+// one family name as CSS writes it → as Google lists it, or null
+function familyName(s) {
+  const n = String(s || '').slice(0, 200).trim().replace(/^["']|["']$/g, '').replace(/\s+/g, ' ').trim().slice(0, 80);
+  return n || null;
+}
+// a font-family value → the family names in order (quotes minded, var() resolved one level)
+function familyStack(value, vars) {
+  let v = String(value || '').trim();
+  const m = /^var\(\s*(--[a-z0-9_-]+)\s*(?:,\s*([\s\S]*))?\)$/i.exec(v);
+  if (m) v = vars[m[1].toLowerCase()] != null ? vars[m[1].toLowerCase()] : (m[2] || '');
+  const out = []; let cur = '', q = null;
+  for (const ch of v) {
+    if (q) { if (ch === q) q = null; cur += ch; }
+    else if (ch === '"' || ch === "'") { q = ch; cur += ch; }
+    else if (ch === ',') { out.push(cur); cur = ''; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out.map(familyName).filter(Boolean);
+}
+// the `font` shorthand: what follows the size (and line height) is the family stack
+function familyOfShorthand(value) {
+  const m = /\d[\d.]*(?:px|r?em|%|pt|vw|vh)(?:\s*\/\s*[\d.]+(?:px|r?em|%|)?)?\s+([\s\S]+)$/i.exec(String(value));
+  return m ? m[1] : null;
+}
+/* The family a stack names as its own: the first that is neither generic nor
+   one of the computer's faces. A family after a computer's face (…, "Segoe
+   UI", Roboto, sans-serif) is part of that stack, not the site's choice,
+   unless the site serves it. Returns { name } or { system: true } or null. */
+function ownFamily(stack, served) {
+  let sawSystem = false, any = false;
+  for (const n of stack) {
+    any = true;
+    if (GENERIC_FACE.test(n)) continue;
+    const isServed = served.has(n.toLowerCase());
+    if (SYSTEM_FACE.test(n) && !isServed) { sawSystem = true; continue; }
+    if (sawSystem && !isServed) continue;
+    return { name: n };
+  }
+  return any ? { system: true } : null;   // generics alone are the computer's own faces too
+}
+/* What Google's list says of a family: { name, kind, weights } or null. */
+export function googleFamily(name) {
+  const key = FONT_BY_LOWER.get(String(name || '').toLowerCase());
+  if (!key) return null;
+  const row = GOOGLE_FONTS[key];
+  return { name: key, kind: row[0], weights: row.slice(1) };
+}
+/* The theme's fonts block for a family, or null when it cannot be loaded:
+   400 and 600, or 700 when there is no 600; a family with no bold at all is
+   allowed, and the owner is told its bold words will look like the rest. The address is built here so it always matches
+   theme.js's FONT_CSS. */
+export function fontFor(name) {
+  const g = googleFamily(name);
+  if (!g) return null;
+  const bold = g.weights.includes(600) ? 600 : g.weights.includes(700) ? 700 : null;
+  const weights = bold ? [400, bold] : [400];
+  const headline = g.kind === 'display' || g.kind === 'handwriting';
+  const cssUrl = 'https://fonts.googleapis.com/css2?family=' + g.name.replace(/ /g, '+') + ':wght@' + weights.join(';') + '&display=swap';
+  return { theme: { text: g.name, cssUrl }, status: headline ? 'headline' : !bold ? 'no-bold' : 'ok', weights };
+}
+/* The site's body face from its CSS → { name, status, words, theme } where
+   status is ok | headline | no-bold | not-free | system | none and theme is
+   the block to save (ok, headline and no-bold). `linked` are the stylesheet addresses the
+   page named, read for Google Fonts families the site asks for itself. */
+export function fontsFrom(cssTexts, linked, inlineStyled) {
+  const rules = [], fontFaces = [], imports = [];
+  for (const c of cssTexts) { const p = parseCSS(c); rules.push(...p.rules); fontFaces.push(...p.fontFaces); imports.push(...p.imports); }
+  for (const s of inlineStyled || []) rules.push(...parseCSS(s.css).rules);
+  const light = rules.filter((r) => !r.dark);
+  const vars = {};
+  for (const r of light) for (const d of r.decls) if (d.prop.startsWith('--')) vars[d.prop] = d.value;
+  // families the site serves itself, or asks Google for: known to be its own choice
+  const served = new Set();
+  for (const ff of fontFaces) for (const d of ff) if (d.prop === 'font-family') familyStack(d.value, vars).forEach((n) => served.add(n.toLowerCase()));
+  const googleLinks = (linked || []).concat(imports.map((i) => (i.match(/url\(\s*["']?([^"')]+)/i) || i.match(/["']([^"']+)["']/) || [])[1] || ''));
+  for (const u of googleLinks) {
+    if (!/^https?:\/\/fonts\.googleapis\.com\//i.test(u)) continue;
+    for (const m of String(u).matchAll(/family=([^&:|]+)/g)) served.add(decodeURIComponent(m[1].replace(/\+/g, ' ')).toLowerCase());
+  }
+  const bodyish = (sel) => sel.split(',').some((s) => /^\s*(body|html|:root)\s*$/.test(lastCompound(s)) && !STATE.test(s));
+  /* Weighted as the colours are (§3.1): a body rule counts eight, any other
+     rule one, a heading rule nothing — a title face is not the body face.
+     So a body rule alone wins, but not against a theme that names another
+     family on everything the body holds (WordPress sets the body in its
+     global styles and the theme then overrides every element). */
+  let bodyWeight = null;
+  const counts = new Map();
+  for (const r of light) {
+    const isBody = bodyish(r.selector);
+    const w = isBody ? 8 : classify(r.selector).kind === 'heading' ? 0 : 1;
+    for (const d of r.decls) {
+      let fam = null;
+      if (d.prop === 'font-family') fam = d.value;
+      else if (d.prop === 'font') fam = familyOfShorthand(d.value);
+      if (fam) {
+        const stack = familyStack(fam, vars);
+        if (!stack.length) continue;
+        const own = ownFamily(stack, served);
+        if (own) { const k = own.name ? own.name.toLowerCase() : '(system)'; const c = counts.get(k) || { n: 0, own }; c.n += w; counts.set(k, c); }
+      }
+      if (isBody && d.prop === 'font-weight') {
+        let w = d.value.trim().toLowerCase();
+        const m = /^var\(\s*(--[a-z0-9_-]+)\s*(?:,\s*([^)]*))?\)$/i.exec(w);
+        if (m) w = (vars[m[1].toLowerCase()] != null ? vars[m[1].toLowerCase()] : (m[2] || '')).trim().toLowerCase();
+        bodyWeight = w === 'normal' ? 400 : w === 'bold' ? 700 : num(w);
+      }
+    }
+  }
+  const top = [...counts.values()].filter((c) => c.n > 0).sort((a, b) => b.n - a.n)[0];
+  const own = top ? top.own : null;
+  if (!own) return { name: null, status: 'none', words: FONT_WORDS.none(), theme: null };
+  if (own.system) return { name: null, status: 'system', words: FONT_WORDS.system(), theme: null };
+  const f = fontFor(own.name);
+  if (!f) return { name: own.name, status: 'not-free', words: FONT_WORDS['not-free'](own.name), theme: null };
+  const weight = bodyWeight >= 400 && bodyWeight <= 600 ? bodyWeight : 400;
+  return { name: f.theme.text, status: f.status, words: FONT_WORDS[f.status](f.theme.text), theme: f.theme, weight, weights: f.weights };
+}
+
 /* ---------- image sizes from the first bytes ---------- */
 export function imageSize(buf, type) {
   if (!buf || buf.length < 8) return null;
@@ -785,6 +923,7 @@ export async function readSite(typed, deps) {
     }
   }
   const found = coloursFrom(cssTexts, ex.meta, ex.inlineStyled);
+  const font = fontsFrom(cssTexts, ex.linked, ex.inlineStyled);
 
   // the pictures that pass (§3.2): readable, big enough, not a sprite or a dot
   const passing = images.filter((im) => im.size && im.size.w >= 48 && im.size.h >= 48 && im.size.w / im.size.h <= 10 && im.size.h / im.size.w <= 10);
@@ -800,6 +939,10 @@ export async function readSite(typed, deps) {
   const mapped = LM.map({ colours: found.colours, page: found.page, text: found.text, corners: found.corners, logo: own ? { width: own.width, height: own.height } : null });
   const source = { url: r.url, host: finalHost, readAt: new Date(D.now()).toISOString() };
   mapped.theme.source = source;
+  // the site's font goes with the look (P1: no switch); the sheet says which, or why not
+  if (font.theme) mapped.theme.fonts = font.theme;
+  // the site's own icon, when square and big enough for a tab (§14.2): offered, never taken silently (D7)
+  const icon = logos.find((l) => l.verdict === 'icon' && l.width === l.height && l.width >= 64) || null;
   return {
     source,
     theme: mapped.theme,
@@ -807,6 +950,8 @@ export async function readSite(typed, deps) {
     from: mapped.from,
     logo: own,
     logos,
+    font: { name: font.name, status: font.status, words: font.words },
+    icon,
     lines: mapped.lines,
     leftOut: mapped.leftOut,
     partial,

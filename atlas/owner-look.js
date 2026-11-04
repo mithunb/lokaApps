@@ -17,7 +17,7 @@
   "use strict";
 
   var api, errMsg, esc, toast, openDialog, closeDialog, INST, SLUG, preview;
-  var STATE = { theme: null, canUndo: false, hasLogo: false, site: "" };
+  var STATE = { theme: null, canUndo: false, hasLogo: false, hasIcon: false, site: "" };
   var NAMES = { page: "page", text: "words", accent: "links and buttons", highlight: "chosen place", surfaceAlt: "shading" };
   var SHOWN = ["page", "text", "accent", "highlight", "surfaceAlt"];
 
@@ -57,11 +57,92 @@
         .catch(function (e) { box.checked = !box.checked; $("#own-look-err", scrim).textContent = errMsg(e); });
     };
     paint(scrim);
-    api("instances/" + encodeURIComponent(SLUG) + "/look").then(function (r) { took(r); paint(scrim); }).catch(function () {});
+    iconField(scrim);
+    api("instances/" + encodeURIComponent(SLUG) + "/look").then(function (r) { took(r); paint(scrim); syncIconBlock(scrim); }).catch(function () {});
+  }
+
+  /* ---------------- the tab icon in Settings (§14.2) ----------------
+     The same field as the wizard's "Name it" step, beside the logo: the icon
+     now (or LOKA's), Choose a picture / Change / Take it off, and a drawing
+     of a browser tab. Drawn here, not in owner.js, which is at its size
+     ceiling. A picture is made square and small (logo-tools) and saved at
+     once through /details — nothing else in Settings changes with it. */
+  var ICON_ACCEPT = "image/png,image/jpeg,image/webp,image/svg+xml,.png,.jpg,.jpeg,.webp,.svg";
+  var TAB_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>';
+  function iconField(scrim) {
+    var host = scrim.querySelector("#own-icon");
+    if (!host) return;
+    STATE.hasIcon = !!(INST && INST.branding && INST.branding.hasIcon);
+    host.innerHTML =
+      '<div class="own-fld own-icon-fld"><span>Tab icon <span class="own-note">optional · the small picture on the browser tab</span></span>' +
+        '<input type="file" id="own-icon-file" hidden accept="' + ICON_ACCEPT + '" />' +
+        '<div class="own-icon">' +
+          '<div class="own-icon-now" id="own-icon-now" hidden><img id="own-icon-img" alt="" /></div>' +
+          '<div class="own-row own-icon-acts">' +
+            '<button class="share-btn" type="button" id="own-icon-add">Choose a picture</button>' +
+            '<button class="share-btn" type="button" id="own-icon-change" hidden>Change</button>' +
+            '<button class="own-linkish" type="button" id="own-icon-remove" hidden>Take it off</button>' +
+            '<span class="own-note" id="own-icon-wait" aria-live="polite"></span>' +
+          "</div>" +
+          '<span class="own-note" id="own-icon-note">A square picture works best: PNG, JPG, WebP or SVG. Without one, the tab shows LOKA’s icon.</span>' +
+          '<div class="own-tab" id="own-icon-tab">' + TAB_SVG + "<span></span></div>" +
+        "</div>" +
+        '<span class="own-err" id="own-icon-err" role="alert"></span>' +
+      "</div>";
+    var input = $("#own-icon-file", scrim), err = $("#own-icon-err", scrim), waitEl = $("#own-icon-wait", scrim);
+    var pick = function () { input.click(); };
+    $("#own-icon-add", scrim).onclick = pick;
+    $("#own-icon-change", scrim).onclick = pick;
+    $("#own-icon-remove", scrim).onclick = function () { saveIcon(scrim, { removeIcon: true }, "The tab icon is off"); };
+    input.addEventListener("change", function () {
+      var f = input.files && input.files[0];
+      input.value = "";
+      if (!f) return;
+      err.textContent = "";
+      var stop = LokaWait.start(waitEl, "Getting your picture ready…", { delay: 0 });
+      tools().then(function (T) {
+        T.iconFromFile(f, function (e, png, info) {
+          stop();
+          if (e) { err.textContent = e; return; }
+          var small = info && info.small;
+          saveIcon(scrim, { iconData: png }, "Tab icon set", small ? "That picture is very small (" + small.w + " × " + small.h + "), so it may look blurred on the tab." : "");
+        });
+      }).catch(function () { stop(); err.textContent = "The picture tools didn’t load — reload the page and try again."; });
+    });
+    paintTab(scrim);
+    syncIconBlock(scrim);
+  }
+  function saveIcon(scrim, branding, said, warn) {
+    var err = $("#own-icon-err", scrim);
+    api("instances/" + encodeURIComponent(SLUG) + "/details", { method: "POST", body: { branding: branding } })
+      .then(function () {
+        STATE.hasIcon = !!branding.iconData;
+        if (INST && INST.branding) INST.branding.hasIcon = STATE.hasIcon;
+        if (window.LokaAtlas && window.LokaAtlas.dataChanged) window.LokaAtlas.dataChanged();
+        syncIconBlock(scrim);
+        toast(said);
+        err.textContent = warn || "";
+      })
+      .catch(function (e) { err.textContent = errMsg(e); });
+  }
+  // the tab drawing: the atlas's name beside its icon, or LOKA's mark
+  function paintTab(scrim) {
+    var tab = $("#own-icon-tab", scrim);
+    if (!tab) return;
+    tab.querySelector("span").textContent = (INST && INST.title) || "";
+    var img = tab.querySelector("img"), svg = tab.querySelector("svg");
+    if (STATE.hasIcon) {
+      if (!img) { img = document.createElement("img"); img.alt = ""; tab.insertBefore(img, tab.firstChild); }
+      img.src = $("#own-icon-img", scrim).src;
+      if (svg) svg.style.display = "none";   // an SVG ignores the hidden attribute in some browsers
+    } else {
+      if (img) img.remove();
+      if (svg) svg.style.display = "";
+    }
   }
   function took(r) {
     if (!r || typeof r !== "object") return;
-    STATE.theme = r.theme || null; STATE.canUndo = !!r.canUndo; STATE.hasLogo = !!r.hasLogo; STATE.site = r.site || STATE.site;
+    STATE.theme = r.theme || null; STATE.canUndo = !!r.canUndo; STATE.hasLogo = !!r.hasLogo; STATE.hasIcon = !!r.hasIcon; STATE.site = r.site || STATE.site;
   }
   function paint(scrim) {
     var now = $("#own-look-now", scrim);
@@ -90,8 +171,9 @@
     if (window.LokaTheme) window.LokaTheme.clear(document);
     if (window.LokaAtlas && window.LokaAtlas.dataChanged) window.LokaAtlas.dataChanged();
     preview(SLUG);
-    if (INST && INST.branding) INST.branding.hasLogo = STATE.hasLogo;
+    if (INST && INST.branding) { INST.branding.hasLogo = STATE.hasLogo; INST.branding.hasIcon = STATE.hasIcon; }
     syncLogoBlock(scrim);
+    syncIconBlock(scrim);
   }
   /* The Logo block above this row (owner.js) shows what Save would leave;
      after a look brings or takes a logo it is shown as it now is, so the
@@ -106,6 +188,18 @@
     else img.removeAttribute("src");
     ["#own-logo-add", "#own-logo-note"].forEach(function (id) { var e = $(id, scrim); if (e) e.hidden = STATE.hasLogo; });
     ["#own-logo-change", "#own-logo-remove"].forEach(function (id) { var e = $(id, scrim); if (e) e.hidden = !STATE.hasLogo; });
+  }
+  // the Tab icon block (owner.js) too, after a look brings or takes the icon
+  function syncIconBlock(scrim) {
+    if (!scrim) return;
+    var now = $("#own-icon-now", scrim), img = $("#own-icon-img", scrim);
+    if (!now || !img) return;
+    now.hidden = !STATE.hasIcon;
+    if (STATE.hasIcon && window.LokaAtlas) img.src = window.LokaAtlas.fileUrl("branding-icon.png") + (/\?/.test(window.LokaAtlas.fileUrl("branding-icon.png")) ? "&" : "?") + "t=" + Date.now();
+    else img.removeAttribute("src");
+    ["#own-icon-add", "#own-icon-note"].forEach(function (id) { var e = $(id, scrim); if (e) e.hidden = STATE.hasIcon; });
+    ["#own-icon-change", "#own-icon-remove"].forEach(function (id) { var e = $(id, scrim); if (e) e.hidden = !STATE.hasIcon; });
+    paintTab(scrim);
   }
 
   /* ---------------- the sheet ---------------- */
@@ -150,12 +244,12 @@
   }
 
   /* ---------------- the proposal ---------------- */
-  var P = null;   // { proposal, chosen, logoPick, logoPng, credit, rights }
+  var P = null;   // { proposal, chosen, logoPick, logoPng, iconPick, iconPng, credit, rights }
   function showProposal(scrim, settingsScrim, proposal) {
     // the site's own logo is picked to start with (found by its picture: the
     // answer's `logo` is a copy of the list's entry, not the same object)
     var own = proposal.logo ? (proposal.logos || []).map(function (l) { return l.dataUrl; }).indexOf(proposal.logo.dataUrl) : -1;
-    P = { proposal: proposal, chosen: {}, logoPick: own, logoPng: null, credit: true, rights: false, theme: proposal.theme, from: proposal.from, lines: proposal.lines, leftOut: proposal.leftOut };
+    P = { proposal: proposal, chosen: {}, logoPick: own, logoPng: null, iconPick: false, iconPng: null, credit: true, rights: false, theme: proposal.theme, from: proposal.from, lines: proposal.lines, leftOut: proposal.leftOut };
     var host = $("#look-found", scrim);
     host.hidden = false;
     host.innerHTML =
@@ -168,6 +262,9 @@
       '<div class="own-look-logos" id="look-logos"></div>' +
       '<label class="own-look-tick" id="look-rights-row"><input type="checkbox" id="look-rights" /> This is my organisation’s own site and logo, and I may use them here.</label>' +
       '<label class="own-look-tick"><input type="checkbox" id="look-credit" checked /> Say in About this atlas where the look comes from</label>' +
+      '<h3 class="own-set-h">Words</h3>' +
+      '<div id="look-words"></div>' +
+      '<div id="look-icon" hidden></div>' +
       '<details class="own-look-left" id="look-left"><summary>What we left out</summary><ul></ul></details>' +
       '<h3 class="own-set-h">How it looks</h3>' +
       '<div class="own-look-switch" role="group" aria-label="Preview">' +
@@ -183,6 +280,8 @@
       "</div>";
     paintTiles(scrim);
     paintLogos(scrim);
+    paintWords(scrim);
+    paintIcon(scrim);
     var left = $("#look-left ul", scrim);
     (P.leftOut || []).forEach(function (s) { left.appendChild(el("li", null, esc(s))); });
     $("#look-left", scrim).hidden = !(P.leftOut && P.leftOut.length);
@@ -256,6 +355,7 @@
     var f = P.proposal.found, logo = P.logoPick >= 0 ? P.proposal.logos[P.logoPick] : null;
     var r = window.LokaLookMap.map({ colours: f.colours, page: f.page, text: f.text, corners: f.corners, logo: logo ? { width: logo.width, height: logo.height } : null, chosen: P.chosen });
     r.theme.source = P.proposal.source;
+    if (P.proposal.theme.fonts) r.theme.fonts = P.proposal.theme.fonts;   // the site's font goes with the look (P1)
     if (Object.keys(P.chosen).length) r.theme.chosen = Object.assign({}, P.chosen);
     P.theme = r.theme; P.from = r.from; P.lines = r.lines; P.leftOut = r.leftOut;
     paintTiles(scrim);
@@ -345,6 +445,77 @@
     use.title = use.disabled ? "Tick the line about the logo first, or choose “No logo from the site”." : "";
   }
 
+  /* ---------------- words: the site's font (§14.1) ----------------
+     One sentence says which font the site writes in, or why it cannot be
+     used (not free, only the computer's own; a headline face comes with a
+     warning but may be used). When it can, the same two lines are shown
+     twice: in LOKA's Karla and in the site's font, loaded from Google Fonts
+     for this sheet exactly as the atlas will load it. No switch: the font
+     goes with "Use this look", and Undo takes it away. */
+  function paintWords(scrim) {
+    var host = $("#look-words", scrim);
+    host.innerHTML = "";
+    var font = P.proposal.font || {}, fonts = P.proposal.theme.fonts || null;
+    var said = el("p", "own-set-p own-look-said" + (font.status === "headline" || font.status === "no-bold" ? " own-look-warn" : ""));
+    said.innerHTML = font.name ? esc(font.words).replace(esc(font.name), "<b>" + esc(font.name) + "</b>") : esc(font.words || "");
+    host.appendChild(said);
+    if (!fonts || !fonts.text) return;
+    fontLink(fonts.cssUrl);
+    var title = (INST && INST.title) || "Your atlas";
+    var line = "Talks and walks all weekend. 14 sessions on Saturday.", scripts = "बेंगलुरु · ಬೆಂಗಳೂರು";
+    var spec = el("div", "own-look-spec");
+    [["Now · LOKA’s Karla", ""], ["With the site’s " + fonts.text, fonts.text]].forEach(function (c, i) {
+      var card = el("div", "own-look-spec-card" + (i ? " own-look-spec-on" : ""));
+      card.appendChild(el("span", "own-look-spec-tag", esc(c[0])));
+      card.appendChild(el("p", "own-look-spec-title", esc(title)));
+      var body = el("p", "own-look-spec-body", esc(line)), hi = el("p", "own-look-spec-hi", esc(scripts));
+      if (c[1]) { body.style.fontFamily = '"' + c[1] + '","Karla",sans-serif'; hi.style.fontFamily = body.style.fontFamily; }
+      card.appendChild(body); card.appendChild(hi);
+      spec.appendChild(card);
+    });
+    host.appendChild(spec);
+    var keep = el("ul", "own-look-keep");
+    ["Titles stay in LOKA’s Lora, as on every atlas.", "Names on the map stay as they are — the map draws its own letters.",
+      "Hindi, Kannada and other scripts use a matching font when " + fonts.text + " has none."].forEach(function (s) { keep.appendChild(el("li", null, esc(s))); });
+    host.appendChild(keep);
+  }
+  // the font stylesheet for this sheet, from fonts.googleapis.com only (the one rule theme.js keeps), once
+  function fontLink(cssUrl) {
+    if (!window.LokaTheme || !window.LokaTheme.FONT_CSS.test(cssUrl || "")) return;
+    if (document.querySelector('link[data-look-font="' + cssUrl + '"]')) return;
+    var link = document.createElement("link");
+    link.rel = "stylesheet"; link.href = cssUrl; link.setAttribute("data-look-font", cssUrl);
+    document.head.appendChild(link);
+  }
+
+  /* ---------------- the site's icon as the tab icon (§14.2, D7) ----------------
+     Offered with one unticked box when the site has a square icon of 64 px or
+     more; never taken silently. It is redrawn here (logo-tools, 192 × 192) as
+     a picture the owner picks would be. */
+  function paintIcon(scrim) {
+    var host = $("#look-icon", scrim), ic = P.proposal.icon;
+    host.innerHTML = "";
+    host.hidden = !ic;
+    P.iconPick = false; P.iconPng = null;
+    if (!ic) return;
+    host.appendChild(el("h3", "own-set-h", "Tab icon"));
+    var row = el("div", "own-look-iconrow");
+    var pic = el("img", "own-look-iconpic"); pic.alt = ""; pic.src = ic.dataUrl;
+    var lab = el("label", "own-look-tick");
+    var box = el("input"); box.type = "checkbox"; box.id = "look-icon-use";
+    lab.appendChild(box);
+    lab.appendChild(el("span", null, "Use the site’s icon as this atlas’s tab icon.<br><span class=\"own-note\">Left unticked, the tab keeps the icon you have now.</span>"));
+    row.appendChild(pic); row.appendChild(lab);
+    host.appendChild(row);
+    box.onchange = function () { P.iconPick = box.checked; };
+    tools().then(function (T) {
+      T.iconFromDataUrl(ic.dataUrl, function (e, png) {
+        if (e) { host.hidden = true; P.iconPick = false; return; }   // a picture that cannot be drawn is not offered
+        P.iconPng = png;
+      });
+    }).catch(function () {});
+  }
+
   /* ---------------- the preview ---------------- */
   function openFrame(scrim) {
     var f = $("#look-frame", scrim), waitEl = $("#look-frame-wait", scrim);
@@ -371,9 +542,11 @@
     err.textContent = "";
     var useLogo = P.logoPick >= 0 && !!P.logoPng;
     if (P.logoPick >= 0 && !P.logoPng) { err.textContent = "The logo is still being prepared — one moment."; return; }
+    var useIcon = P.iconPick && !!P.iconPng;
+    if (P.iconPick && !P.iconPng) { err.textContent = "The tab icon is still being prepared — one moment."; return; }
     var theme = Object.assign({}, P.theme, { credit: P.credit });
     var stop = LokaWait.start(btn, "Saving the look…");
-    api("instances/" + encodeURIComponent(SLUG) + "/look", { method: "POST", body: { theme: theme, useLogo: useLogo, logoData: useLogo ? P.logoPng : undefined } })
+    api("instances/" + encodeURIComponent(SLUG) + "/look", { method: "POST", body: { theme: theme, useLogo: useLogo, logoData: useLogo ? P.logoPng : undefined, useIcon: useIcon, iconData: useIcon ? P.iconPng : undefined } })
       .then(function (r) {
         took(r);
         closeDialog(scrim);

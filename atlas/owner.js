@@ -2547,7 +2547,7 @@
           '<span class="own-note" id="own-logo-note">A PNG, JPG, WEBP or SVG file. We resize it.</span>' +
         "</div>" +
         '<span class="own-err" id="own-logo-err" role="alert"></span>' +
-      "</div>" +
+      "</div>" + '<div id="own-icon"></div>' +   /* the tab icon, drawn by owner-look.js (this file's size ceiling) */
       '<label class="own-fld">Organisation website <span class="own-note">optional, https</span>' +
         '<input type="text" id="own-site" placeholder="https://example.org" value="' + esc(b.orgUrl || "") + '" /></label>' +
       /* "Provide a website for visual style and design reference": its colours
