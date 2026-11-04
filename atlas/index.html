@@ -127,7 +127,9 @@
     /* on an atlas the menu promotes the LOKA app and the Atlas; the way to every atlas is in
        About, and signing in is the setup page's (the owner's tools follow the session) */
     html:not(.atlas-full) .nav .links .nav-app,
-    .atlas-full .nav .links a[href="./"], .atlas-full .nav .links a[href="../"], .atlas-full #nav-signin { display:none !important; }
+    .atlas-full .nav .links a[href="./"], .atlas-full .nav .links a[href="../"] { display:none !important; }
+    /* a quiet "sign in" came back, last in the menu, so a signed-out owner can
+       tell where they stand (Mithun, 4 Nov 2026) */
     .nav .links { display:flex; gap:1.25rem; align-items:center; flex-wrap:wrap; }
     .nav .links a, .nav .links button { color:var(--color-text-secondary); font-size:var(--t-ui);
       background:none; border:none; font-family:inherit; cursor:pointer; padding:0; }

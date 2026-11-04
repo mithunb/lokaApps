@@ -160,6 +160,8 @@
     if (EMBED) return;
     var user = $("#nav-user"), signin = $("#nav-signin"), signout = $("#nav-signout");
     if (!user || !signin || !signout) return;
+    // from an atlas, signing in comes straight back to it (setup.js ?back=)
+    if (DATASET) signin.href = "./setup/?back=" + encodeURIComponent(DATASET);
     fetch("./api/auth/me", { credentials: "same-origin" })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (me) {
