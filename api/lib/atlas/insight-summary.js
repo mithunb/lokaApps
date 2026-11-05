@@ -382,6 +382,7 @@ const LQ = '\u201c', RQ = '\u201d', DASH = '\u2014';
 const ADVICE = /\b(should|shouldn\u2019t|must|mustn\u2019t|ought to|requires?|needs? to|has to|have to|it is important|we need|let us|let\u2019s)\b/i;
 // "Somebody...", "Another person...": one voice at a time, which is the list we are trying not to write
 const ONE_BY_ONE = /^(somebody|someone|another person|a person|one person|a visitor|an observer|a walker|another)\b/i;
+const CONTRAST = /\b(while|whereas|but|yet|though|although)\b/i;
 function onePerSentence(sentences, already) {
   return (already || []).concat(sentences || []).filter((s) => ONE_BY_ONE.test(s.text)).length;
 }
@@ -411,7 +412,7 @@ export function storyPromptFor(digest) {
     '',
     'How to write it:',
     '- Say it of the people together: "People wonder...", "Others worry that...", "A few lines keep coming back to..." (without saying how many). "One person" is fine once, for a quote that stands alone.',
-    '- Do not open the paragraph with "Another". Do not begin sentence after sentence with Somebody, Someone, Another person, A person.',
+    '- Do not open the paragraph with "Another" or "Others" — begin with "People". Use "while", "but" or "whereas" only in a sentence that holds a tension pair. Do not begin sentence after sentence with Somebody, Someone, Another person, A person.',
     '- Name what the feeling is about, in the words the quotes use.',
     '- Your own voice gives no advice and no instruction: no "should", "must", "needs to", "requires", "it is important". Those words are fine inside a quote, never in your sentence.',
     (labels.length ? '- Do not borrow the questions\u2019 filing words ' + DASH + ' ' + labels.slice(0, 8).map((x) => LQ + x + RQ).join(', ') + ' and the like ' + DASH + ' unless a quote you cite uses those very words.' : '- Do not write in filing words.'),
@@ -475,6 +476,10 @@ export function checkStory(digest, answer, already) {
        code offered them as a tension: different feelings about one thing. */
     const groups = ids.map((id) => IM.groupOfQuote(digest.groups, id)).filter(Boolean);
     const keys = groups.map((g) => g.id).filter((k, n, a) => a.indexOf(k) === n);
+    /* "while", "whereas", "but": a contrast. It stands only where the code
+       offered a tension — otherwise it strings two unrelated voices together
+       ("A fruit seller reads..., while another spot is very pleasant"). */
+    if (CONTRAST.test(text) && keys.length < 2) return no('it sets two things side by side that the code did not offer as a contrast');
     if (keys.length > 1) {
       const paired = (digest.tensions || []).some((t) => keys.length === 2 && t.groups.indexOf(keys[0]) >= 0 && t.groups.indexOf(keys[1]) >= 0);
       if (!paired) return no('it mixes quotes from groups the code did not put together (' + keys.join(' + ') + ')');
@@ -486,11 +491,12 @@ export function checkStory(digest, answer, already) {
     /* No enumeration: a paragraph of "Somebody... Another person... A
        person..." is a list of feelings, which is what Mithun asked us to stop
        (6 Nov 2026). The first such sentence stands; the next is dropped. */
+    // "Others..." or "Another..." cannot open a paragraph: there is nobody before them yet
+    if (!sentences.length && !(already || []).length && /^(another|others|other people)\b/i.test(text)) {
+      return no('a paragraph cannot open with ' + LQ + text.split(/\s+/)[0] + RQ);
+    }
     const opener = ONE_BY_ONE.exec(text);
     if (opener) {
-      if (!sentences.length && !(already || []).length && /^another\b/i.test(text)) {
-        return no('a paragraph cannot open with ' + LQ + 'Another' + RQ);
-      }
       if (onePerSentence(sentences, already) >= 1) return no('it starts like the one before it, and the story is not a list of feelings');
     }
     /* LOKA's filing words are not anybody's own ("highlighting both

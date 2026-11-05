@@ -601,7 +601,8 @@
         var quotes = [head].concat(mates.map(function (m) { return m.c; }));
         groups.push({ id: "g" + (++n), feeling: head.feeling.key, feels: head.feeling.label,
           about: mates.length ? mates[0].shared : (topics[0] || ""),
-          quotes: quotes.map(function (q) { return q.id; }), alone: quotes.length < GROUP_MIN });
+          quotes: quotes.map(function (q) { return q.id; }), alone: quotes.length < GROUP_MIN,
+          words: thingWords(quotes.map(function (q) { return q.text || ""; }).join(" ")) });
       }
     });
     /* A group that carries a feeling comes before one that merely describes,
@@ -621,12 +622,29 @@
   }
   /* Two groups that feel differently about the same thing: a sentence may
      hold them together ("...while others..."). */
+  /* The things a group's quotes name: words of four letters or more that are
+     not glue. Two groups are about "the same thing" only when they share one
+     of these — a shared answer label ("Natural feature") is far too wide: it
+     let "relief under the trees, while someone wonders about an ant's
+     burrow" stand as a contrast (Gemini run, 5 Nov 2026). */
+  var GLUE = /^(this|that|these|those|there|their|them|they|have|with|from|were|been|being|will|would|could|should|what|when|where|which|while|about|very|just|also|into|onto|over|under|here|some|more|most|much|many|only|than|then|like|such|each|every|other|another|your|ours|mine|does|done|doing|make|made|look|looks|feel|feels|felt|place|places|thing|things|area|spot|near|around|because|instead|still|even|again|ever)$/;
+  function thingWords(text) {
+    var out = [];
+    String(text || "").toLowerCase().replace(/[^a-z\u00c0-\u024f\s]/g, " ").split(/\s+/).forEach(function (w) {
+      if (w.length < 4 || GLUE.test(w)) return;
+      var stem = w.replace(/ies$/, "y").replace(/(s|x|ch|sh)es$/, "$1").replace(/([^s])s$/, "$1");
+      if (out.indexOf(stem) < 0) out.push(stem);
+    });
+    return out;
+  }
   function tensionsOf(groups) {
     var out = [];
     (groups || []).forEach(function (a, i) {
       (groups || []).forEach(function (b, j) {
         if (j <= i || out.length >= 2) return;
         if (a.feeling === b.feeling || !a.about || a.about !== b.about) return;
+        var common = (a.words || []).filter(function (w) { return (b.words || []).indexOf(w) >= 0; });
+        if (!common.length) return;
         out.push({ about: a.about, groups: [a.id, b.id], feels: [a.feels, b.feels] });
       });
     });
@@ -1653,7 +1671,7 @@
     QUOTE_MIN: QUOTE_MIN, QUOTE_MAX: QUOTE_MAX,
     STORY_PLACES: STORY_PLACES, STORY_WORDS: STORY_WORDS, STORY_CANDIDATES: STORY_CANDIDATES,
     quoteScore: quoteScore, isPointed: isPointed, POINTED_MIN: POINTED_MIN,
-    feelingOf: feelingOf, groupQuotes: groupQuotes, tensionsOf: tensionsOf, groupOfQuote: groupOfQuote,
+    feelingOf: feelingOf, groupQuotes: groupQuotes, tensionsOf: tensionsOf, thingWords: thingWords, groupOfQuote: groupOfQuote,
     GROUP_MIN: GROUP_MIN, GROUP_MAX: GROUP_MAX, MAX_GROUPS: MAX_GROUPS, STORY_VOICES_MIN: STORY_VOICES_MIN,
     MIN_STORY: MIN_STORY, MAX_STORY: MAX_STORY,
     STORY_CITES_MIN: STORY_CITES_MIN, STORY_CITES_MAX: STORY_CITES_MAX,

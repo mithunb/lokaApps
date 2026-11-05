@@ -123,7 +123,7 @@ const plain2 = digest.groups.filter((x) => x.feeling === 'describing')[1];
 const good = () => ({
   sentences: [
     { text: 'People are fond of the gardens, the shade and the benches in them.', quotes: delight.quotes.slice(0, 2) },
-    { text: 'Others write plainly about the shrines, kept clean by hand.', quotes: plain2.quotes.slice(0, 2) },
+    { text: 'People also write plainly about the shrines, kept clean by hand.', quotes: plain2.quotes.slice(0, 2) },
     { text: 'One person asks who built a shrine, and when.', quotes: wonder.quotes.slice(0, 1) },
   ],
 });
@@ -247,7 +247,7 @@ check('a quote said to name a person takes the sentences resting on it with it',
   (() => { const r = SUM.applyStoryProofread(digest, ok0.sentences, { sentences: ok0.sentences.map((s, i) => ({ index: i, shows: true, why: '' })),
     quotes: [{ index: 0, namesPerson: true, why: 'it names somebody' }, { index: 1, namesPerson: false, why: '' }] });
     return [r.sentences.map((s) => s.text.slice(0, 10)), r.dropped.map((d) => d.what)]; })(),
-  [['Others wri', 'One person'], ['quote', 'sentence']]);
+  [['People als', 'One person'], ['quote', 'sentence']]);
 check('an answer with no verdict in it is no proofread at all',
   SUM.applyStoryProofread(digest, ok0.sentences, { sentences: [], quotes: [] }).skipped, 'no usable answer');
 check('the proofread is shown each sentence beside the very quotes it cites, and asks one strict question',
@@ -343,6 +343,16 @@ check('the summary version and its fingerprint have not moved', [SUM.SUMMARY_VER
   const s5 = [{ quotes: ['q0', 'q1', 'q2'] }, { quotes: ['q3', 'q4'] }, { quotes: ['q5'] }, { quotes: ['q6', 'q7'] }, { quotes: ['q8'] }];
   check('five sentences, five quotes: one for each sentence, in citation order', SUM.evidenceFor(d, s5).map((q) => q.id), ['q0', 'q3', 'q5', 'q6', 'q8']);
   check('room left over goes to further citations, still in citation order', SUM.evidenceFor(d, s5.slice(0, 2)).map((q) => q.id), ['q0', 'q1', 'q2', 'q3', 'q4']);
+}
+
+{ // 5 Nov 2026 Gemini run: a tension needs a shared thing, not only a shared wide label
+  const IMX = SUM.IM;
+  const ga = { id: 'a', feeling: 'delight', about: 'Natural feature', words: IMX.thingWords('The tree canopy gives relief from the traffic') };
+  const gb = { id: 'b', feeling: 'wonder', about: 'Natural feature', words: IMX.thingWords('Wonder how deep this Ant Mansion is?') };
+  const gc = { id: 'c', feeling: 'worry', about: 'Natural feature', words: IMX.thingWords('They cut the trees along the canopy road') };
+  check('two feelings under one wide label but about different things are no tension', IMX.tensionsOf([ga, gb]).length, 0);
+  check('two feelings about the same trees are a tension', IMX.tensionsOf([ga, gc]).length, 1);
+  check('the shared thing ignores glue words and plurals', IMX.thingWords('The trees and a tree near this place'), ['tree']);
 }
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
