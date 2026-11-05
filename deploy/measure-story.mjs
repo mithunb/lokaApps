@@ -180,25 +180,10 @@ async function realCall(model, prompt, schema) {
 }
 /* The stand-in: a plain answer built from the digest, so every check can be
    walked through with no model at all. Not a mock-up anybody should read. */
-function stubAnswer(digest) {
-  const gs = (digest.groups || []).slice(0, 3);
-  return {
-    sentences: gs.map((g, i) => ({
-      text: (i === 0 ? 'People here keep coming back to what is in front of them.'
-        : i === 1 ? 'Others write as though the place itself were speaking.'
-          : 'The rest turn to what they walk past and what it is for.'),
-      quotes: g.quotes.slice(0, IM.STORY_CITES_MAX),
-    })),
-  };
-}
+/* No model at all (--stub): the same stand-in the server uses with
+   ATLAS_FAKE_READING, so the mock-up and the tests see one answer. */
 function stubCall(digest, prompt, o) {
-  if (o && o.proofread) {
-    const parts = String(prompt).split('\n');
-    const read = (label) => { try { return JSON.parse(parts[parts.indexOf(label) + 1]); } catch { return []; } };
-    return { sentences: read('Sentences and the quotes they cite:').map((s) => ({ index: s.index, shows: true, why: '' })),
-      quotes: read('Quotes, in order:').map((q) => ({ index: q.index, namesPerson: false, why: '' })) };
-  }
-  return stubAnswer(digest);
+  return o && o.proofread ? SUM.standInStoryProofread(prompt) : SUM.standInStory(digest);
 }
 
 /* A model somewhere else answers: each call is written out as a prompt, and
@@ -222,17 +207,10 @@ function askDirCall(dir, name) {
 
 /* ---------- the mock page ---------- */
 const MOCK_CSS = [
-  // proposed, not yet in the product: the story and the two quotes under it
-  '.in-sum .in-story{margin:.35rem 0 0;font-size:.95rem;line-height:1.55;color:var(--color-text-primary,#24211D)}',
-  '.in-quotes{margin:.9rem 0 .2rem;border-top:1px solid var(--color-divider,rgba(36,33,29,.10))}',
-  '.in-fq{margin:.75rem 0 0;padding:0 0 0 .7rem;border-left:2px solid var(--color-leaf,#2A6B41);opacity:.95}',
-  '.in-fq q{font-family:var(--font-display,Georgia,serif);font-style:italic;font-size:.92rem;line-height:1.45;color:var(--color-text-secondary,#5A5751);quotes:"\\201C" "\\201D"}',
-  '.in-fq .in-who{display:block;margin-top:.15rem}',
-  '.in-fq .in-who button{background:none;border:none;padding:.15rem 0;margin:0;font:inherit;font-size:var(--t-meta,.8rem);font-weight:700;color:var(--color-leaf-deep,#1F5232);text-decoration:underline;text-underline-offset:2px;cursor:pointer;text-align:left}',
-  '.in-warn{margin:.6rem 0 0;font-size:var(--t-meta,.8rem);color:var(--color-text-secondary,#5A5751);background:var(--color-marigold-tint,rgba(233,162,55,.16));border-radius:var(--radius-md,.25rem);padding:.45rem .6rem}',
-  '@media (max-width:720px){.in-sum .in-story{font-size:.92rem}.in-fq q{font-size:.88rem}}',
   // the page has no script, so the short tab label the viewer swaps in on a phone is done here in CSS
   '@media (max-width:480px){.in-tabs .in-tab .in-tl{display:none}.in-tabs .in-tab .in-ts{display:inline}}',
+  // the mock-up shows the quality warning; the card itself does not
+  '.in-warn{margin:.6rem 0 0;font-size:var(--t-meta,.8rem);color:var(--color-text-secondary,#5A5751);background:var(--color-marigold-tint,rgba(233,162,55,.16));border-radius:var(--radius-md,.25rem);padding:.45rem .6rem}',
 ].join('\n');
 
 const PAGE_CSS = [
@@ -256,25 +234,20 @@ function mockHTML({ title, result, byWho }) {
     '<button type="button" class="in-tab" role="tab"><span class="in-tl">Explore Insights</span><span class="in-ts">Insights</span></button>' +
     '<button type="button" class="in-tab on" role="tab" aria-selected="true"><span class="in-tl">What the places say</span><span class="in-ts">Summary</span></button></div>';
   const warn = r.quality && r.quality.warning ? '<p class="in-warn">' + esc(r.quality.warning) + '.</p>' : '';
+  /* The card itself, drawn by the product's own code (insight-mode.js
+     storyCardHTML), so the mock-up can never drift from what ships. */
   const story = r.story || { sentences: [], quotes: [] };
-  const quotes = story.quotes.map((q) => '<blockquote class="in-fq"><q>' + esc(q.text) + '</q>' +
-    '<span class="in-who"><button type="button">' + (q.name ? 'See “' + esc(q.name) + '” on the map' : 'Show this place on the map') + '</button></span></blockquote>').join('');
-  const own = story.ownWords && story.quotes.length;
-  const body = story.sentences.length || own
-    ? '<section class="in-sum" aria-label="What the places say">' +
-      (own ? '<p class="in-story"><b>In their own words</b></p>'
-        : '<p class="in-story">' + story.sentences.map((s) => esc(s.text)).join(' ') + '</p>') +
-      warn + '<div class="in-quotes">' + quotes + '</div>' +
-      '<div class="in-by">' + (own ? 'Too few notes here to say anything over them, so these are the words themselves, as people wrote them.'
-        : 'Written by AI from what people wrote about these places, when the atlas was last updated. The quotes under it are the evidence; the counts are in the questions.') + '</div></section>' +
-      '<button type="button" class="in-tolink">See the questions these places answer</button>'
+  const card = IM.storyCardHTML(story.sentences.length || story.quotes.length
+    ? { sentences: story.sentences, quotes: story.quotes.map((q, i) => ({ ...q, at: i })), ownWords: !!story.ownWords } : null);
+  const body = card
+    ? warn + card + '<button type="button" class="in-tolink">See the questions these places answer</button>'
     : '<p class="in-hint">Nothing would be shown: ' + esc(r.by) + '.</p>';
   return ['<!doctype html><html lang="en"><head><meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width,initial-scale=1">',
     '<title>' + esc(title) + ' — what the places say (mock-up)</title>',
     '<style>' + PAGE_CSS + '\n' + IM.CSS + '\n' + MOCK_CSS + '</style></head><body>',
     '<div class="mock-note"><b>Mock-up, ' + esc(new Date().toISOString().slice(0, 10)) + '.</b> ' + esc(title) +
-      '. Not live anywhere: this is what the proposed “What the places say” would show. The story and the choice of quotes are by <b>' + esc(byWho) +
+      '. The card is the product\u2019s own, drawn by its own code; the story and the choice of quotes are by <b>' + esc(byWho) +
       '</b>; every rule and every quote checked by the product’s own code.</div>',
     '<div class="mock-wrap"><div class="atlas-panel"><div class="panel-head in-tabbed">' + tabs + '</div>',
     '<div class="in-panel">' + body + '</div></div></div></body></html>'].join('\n');

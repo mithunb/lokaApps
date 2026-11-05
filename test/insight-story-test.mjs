@@ -21,6 +21,7 @@
  *     nothing about is dropped, and with no proofread at all nothing is shown.
  */
 import path from 'node:path';
+import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
@@ -316,6 +317,88 @@ const MS = await import(ROOT + '/deploy/measure-story.mjs');
 check('the mock-up writes nowhere but --out: the name it builds file names from cannot walk a path',
   [MS.safeName('../../etc/passwd'), MS.parseArgs(['--file=/tmp/x.json', '--name=../../etc/passwd']).name, MS.refused('Deoria-Bioregion')],
   ['etc-passwd', 'etc-passwd', true]);
+
+console.log('\n  the visitor card');
+{
+  const mode = { summaryOn: true, story: SUM.storyKept(whole) };
+  const shown = IM.storyToShow(mode, layer, features);
+  const card = IM.storyCardHTML(shown);
+  check('the paragraph, then the quotes it rests on, then the small print — and no tagger anywhere',
+    [shown.ownWords, shown.sentences.length, shown.quotes.length === whole.story.quotes.length,
+      card.indexOf('in-story') < card.indexOf('in-quotes'),
+      /Written by AI from what people wrote about these places\. The counts are in the questions\./.test(card),
+      /Pratham|u-1/.test(card)],
+    [false, 3, true, true, true, false]);
+  check('each quote is a button to its place, by the row the question lists use, and names the place in plain words (a name that is a person\u2019s, a credit or a category is no name: "Show this place")',
+    [(card.match(/data-in="place" data-i="\d+"/g) || []).length, /See “Place /.test(card),
+      IM.storyCardHTML({ sentences: [], quotes: [{ id: 'x', text: 'a line somebody wrote', name: '', at: 0 }], ownWords: true }).includes('Show this place on the map'),
+      IM.storyToShow({ summaryOn: true, story: { sig: 'x', ownWords: true, sentences: [],
+        quotes: [{ id: 'g1', text: features[0].properties.description, name: 'Pratham' },
+          { id: 'g2', text: features[1].properties.description, name: 'Pratham' }] } },
+      layer, features).quotes.map((q) => q.name)],
+    [shown.quotes.length, true, true, ['Place g1', 'Place g2']]);
+  const gone = (id) => features.filter((f) => f.properties.tag_id !== id);
+  const edited = (id) => features.map((f) => (f.properties.tag_id === id
+    ? { ...f, properties: { ...f.properties, description: 'Somebody has rewritten this line since.' } } : f));
+  const first = whole.story.quotes[0].id;
+  check('a quote whose place the owner has hidden is not shown; nor is one whose words have changed since',
+    [IM.storyToShow(mode, layer, gone(first)).quotes.some((q) => q.id === first),
+      IM.storyToShow(mode, layer, edited(first)).quotes.some((q) => q.id === first)], [false, false]);
+  check('…and the sentence left with no quote of its own goes with it',
+    IM.storyToShow(mode, layer, gone(first)).sentences.every((x) => (x.quotes || []).some((id) => IM.storyToShow(mode, layer, gone(first)).quotes.some((q) => q.id === id))), true);
+  const keep2 = features.filter((f) => whole.story.quotes.slice(0, 2).some((q) => q.id === f.properties.tag_id));
+  check('under two sentences or under two quotes left: their own words, from what still holds',
+    (() => { const s2 = IM.storyToShow(mode, layer, keep2); return [s2.ownWords, s2.sentences.length, s2.quotes.length]; })(), [true, 0, 2]);
+  check('under two quotes left: nothing at all, and the tab hides',
+    [IM.storyToShow(mode, layer, keep2.slice(0, 1)), IM.storyCardHTML(null), IM.panelTabs(mode, ['pattern_1'], null, null)], [null, '', []]);
+  const own = { summaryOn: true, story: SUM.storyKept(thin) };
+  check('their own words: the heading, the quotes, and small print that claims nothing',
+    (() => { const c = IM.storyCardHTML(IM.storyToShow(own, layer, features)); return [/<b>In their own words<\/b>/.test(c),
+      whole.story.sentences.some((x) => c.indexOf(x.text) >= 0), /What people wrote about these places\./.test(c), /Written by AI/.test(c)]; })(),
+    [true, false, true, false]);
+  check('a story that says nothing hides the tab, and switching it off hides it too',
+    [IM.storyToShow({ summaryOn: true, story: { sig: 'x', sentences: [], quotes: [] } }, layer, features),
+      IM.storyToShow({ summaryOn: false, story: mode.story }, layer, features),
+      IM.panelTabs({ summaryOn: true, story: { sig: 'x', sentences: [], quotes: [] } }, ['pattern_1'], null, null)], [null, null, []]);
+  /* An older atlas keeps its summary until a story with something in it
+     stands in its place: a run that found nothing must not empty the card. */
+  const legacy = { sentences: [{ text: 'a', questions: ['pattern_1'] }, { text: 'b', questions: ['pattern_1'] }] };
+  check('an atlas written before the story shows its summary, and goes on showing it after a run that found nothing',
+    [IM.panelTabs({ summaryOn: true, summary: legacy }, ['pattern_1'], null, null).length,
+      IM.panelTabs({ summaryOn: true, story: { sig: 'x', sentences: [], quotes: [] }, summary: legacy }, ['pattern_1'], null, null).length,
+      IM.panelTabs({ summaryOn: true, story: { sig: 'x', sentences: [], quotes: [] } }, ['pattern_1'], null, null).length], [2, 2, 0]);
+  /* Mithun, 5 Nov 2026: a question switched off takes its quotes with it —
+     even when its column is the longest thing the place says. */
+  const hidden = { id: 'tags', popup: { title: 'name' },
+    keyLabels: { pattern_1: 'What kind of place is it?', pattern_3: 'What did somebody notice?' },
+    keyColumns: { pattern_3: ['noticed'] } };
+  const noticed = [0, 1].map((i) => ({ type: 'Feature', properties: { tag_id: 'n' + i, name: 'Place n' + i,
+    description: 'A garden by the gate, number ' + i + '.',
+    noticed: 'The water in the tank is dirty and nobody has cleaned it for months, and the children still play there ' + i + '.',
+    pattern_1: 'Garden', pattern_3: 'Water' } }));
+  const noticedStory = { sig: 'x', sentences: [], ownWords: true,
+    quotes: noticed.map((f) => ({ id: f.properties.tag_id, text: f.properties.noticed, name: '' })) };
+  const seeN = (cols) => IM.storyToShow({ summaryOn: true, story: noticedStory }, hidden, noticed, cols);
+  check('a quote from a question the owner has since switched off is not shown, though its column is the longest the place says',
+    [(seeN(['pattern_1']) || {}).quotes, seeN(['pattern_1', 'pattern_3']).quotes.length, IM.quoteSourcesOf(hidden, noticed[0].properties, 'pattern_1')[0].slice(0, 9)],
+    [undefined, 2, 'The water']);
+  check('…and a quote from the place’s own line, which no question is read from, stands whatever is on show',
+    (() => { const own = { sig: 'x', sentences: [], ownWords: true,
+      quotes: noticed.map((f) => ({ id: f.properties.tag_id, text: f.properties.description, name: '' })) };
+      return [IM.storyToShow({ summaryOn: true, story: own }, hidden, noticed, ['pattern_1']).quotes.length,
+        IM.storyToShow({ summaryOn: true, story: own }, hidden, noticed, []).quotes.length]; })(), [2, 2]);
+  check('which questions show is no part of the story’s fingerprint, so switching one off never asks the model again',
+    SUM.storySig(IM.storyDigest(layer, features)) === SUM.storySig(IM.storyDigest(layer, features, { shownCols: null })), true);
+  const noModel = await SUM.writeStory({ layer, features, Type, model: 'a stand-in', call: null });
+  const refused = await SUM.writeStory({ layer, features, Type, model: 'a stand-in', call: async () => { throw new Error('the model refused (503)'); } });
+  const noProofread = await SUM.writeStory({ layer, features, Type, model: 'a stand-in',
+    call: async (m, pr, sc, o) => { if (o && o.proofread) throw new Error('the model refused (503)'); return good(); } });
+  check('a run the model could not be had for says so; one the checks threw out does not',
+    [!!noModel.failed, refused.failed.slice(0, 9), /^the proofread could not be had/.test(noProofread.failed), thin.failed, whole.failed],
+    [true, 'no answer', true, '', '']);
+  check('what the server keeps always carries the fingerprint, so a run that found nothing is not run again',
+    (() => { const k = SUM.storyKept({ sig: 'abc', story: null }); return [k.sig, k.sentences, k.quotes, k.ownWords, typeof k.at]; })(), ['abc', [], [], false, 'number']);
+}
 
 console.log('\n  the shipped summary is untouched');
 const tables = IM.summaryTables(layer, features);

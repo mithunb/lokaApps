@@ -197,8 +197,8 @@ check('the visitor sees only sentences about questions on show', IM.visibleSente
 check('…and none when under two remain', IM.visibleSentences({ sentences: [good1, good2] }, ['pattern_3']), []);
 check('a sentence naming no question is never shown', IM.visibleSentences({ sentences: [good1, good2, { text: 'x 9', questions: [] }] }, ['pattern_3', 'pattern_4']).length, 2);
 check('a sentence naming any hidden question is hidden', IM.visibleSentences({ sentences: [good1, good2, { text: 'x 5', questions: ['pattern_3', 'pattern_2'] }] }, ['pattern_3', 'pattern_4']).length, 2);
-check('"being written" for over two minutes is stuck, not pending; no time is not pending',
-  [IM.isPending({ summaryPending: true, summaryPendingAt: Date.now() - 1000 }), IM.isPending({ summaryPending: true, summaryPendingAt: Date.now() - 121000 }), IM.isPending({ summaryPending: true })], [true, false, false]);
+check('"being written" for over seven minutes is stuck, not pending; no time is not pending (the story is four Pro calls, not four flash ones)',
+  [IM.isPending({ summaryPending: true, summaryPendingAt: Date.now() - 1000 }), IM.isPending({ summaryPending: true, summaryPendingAt: Date.now() - 1000 - IM.PENDING_STALE_MS }), IM.isPending({ summaryPending: true }), IM.PENDING_STALE_MS], [true, false, false, 7 * 60 * 1000]);
 
 console.log('\n  the panel\'s tabs: What the places say · Questions, or no tabs at all');
 const keys = (t) => t.map((x) => x.key);
@@ -339,8 +339,8 @@ console.log('\n  the summary: proofread once more, by the same model, each sente
     cA.state().prompts[1].includes('Sentence 2 (“' + pct.text + '”): it has a percentage, a link or markup.'), true);
   check('the write, its retry, the proofread and the re-write fit the caller\'s four calls; one proofread', [cA.state().n, cA.state().proofs, pcA.by, pcA.summary.sentences.length], [4, 1, 'model', 2]);
   check('…and a re-write that fails too: no summary, still four calls', [cB.state().n, pcB.summary, pcB.by], [4, null, 'nothing usable']);
-  check('the server\'s summary caller allows four; its stand-in answers the proofread',
-    /return aiCaller\(payer \|\| 'server', 4, stub\);/.test(server) && /if \(o && o\.proofread\) return insightSummary\.standInProofread\(prompt\);/.test(server), true);
+  check('the server\'s story caller allows four; its stand-in answers the proofread',
+    /return aiCaller\(payer \|\| 'server', 4, stub\);/.test(server) && /if \(o && o\.proofread\) return insightSummary\.standInStoryProofread\(prompt\);/.test(server), true);
 }
 {
   const P = SUM.promptFor(T);
@@ -404,27 +404,61 @@ const PORT = 8900 + Math.floor(Math.random() * 90);
 const BASEURL = `http://127.0.0.1:${PORT}`;
 const TAG = Math.random().toString(36).slice(2, 7);
 const PUBSLUG = 'insight-check-' + TAG, PRIVSLUG = 'insight-private-' + TAG, BARESLUG = 'insight-bare-' + TAG;
+const SAYSLUG = 'insight-say-' + TAG, OLDSLUG = 'insight-old-' + TAG, OLDBARESLUG = 'insight-oldbare-' + TAG;
+// what an atlas written before the story carries: a summary, and no story at all
+const OLDSUM = { sig: 'from-before', at: 1, sentences: [{ text: 'Of the 26 places that say what kind of place they are, 20 say Garden.', questions: ['pattern_1'] },
+  { text: 'Of the 26 places that say what kind of place they are, 6 say Shrine.', questions: ['pattern_1'] }] };
+const OLDMODE = (fx) => ({ ...IM.defaultInsight(fx.layer), layer: 'tags', summary: OLDSUM });
+/* An atlas whose places have words of their own, so the whole of "What the
+   places say" runs: the digest, the stand-in's paragraph, the proofread,
+   the quotes under it. Every place carries a tagger (pattern_5, read from
+   created_by), who must appear nowhere in the story or on the card. */
+const SAYFX = (() => {
+  const layer = { id: 'tags', popup: { title: 'name' }, keyNouns: { pattern_1: 'kind of place', pattern_2: 'what it is made of' },
+    keyLabels: { pattern_1: 'What kind of place is it?', pattern_2: 'What is it made of?', pattern_5: 'Who created this place?' },
+    keyColumns: { pattern_5: ['created_by'] } };
+  const corner = ['by the gate', 'behind the library', 'near the water tank', 'at the bus stand', 'under the flyover', 'beside the school'];
+  let n = 0;
+  const place = (id, p1, p2, description) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [77.59 + (n++) / 1000, 12.97] },
+    properties: { tag_id: id, name: 'Place ' + id, description, pattern_1: p1, pattern_1_why: '', pattern_2: p2, pattern_2_why: '',
+      pattern_5: 'Pratham', created_by: 'Pratham' } });
+  const features = [];
+  for (let i = 1; i <= 6; i++) features.push(place('g' + i, 'Garden', 'Natural elements', 'A quiet garden ' + corner[i - 1] + ' where the old rain tree still stands.'));
+  for (let i = 1; i <= 4; i++) features.push(place('s' + i, 'Shrine', 'Stone or masonry', 'A small stone shrine ' + corner[i - 1] + ', but somebody still keeps it clean.'));
+  features.push(place('d1', 'Garden', 'Natural elements', 'I love this garden and the shade here is wonderful on a hot day.'));
+  features.push(place('d2', 'Garden', 'Natural elements', 'A lovely corner, peaceful and green, and the benches are a treat.'));
+  features.push(place('w1', 'Garden', 'Natural elements', 'The trees here have been cut down for a building site and the shade is gone.'));
+  features.push(place('w2', 'Garden', 'Natural elements', 'Rubbish is dumped by the wall and the water in the tank is dirty.'));
+  features.push(place('q1', 'Shrine', 'Stone or masonry', 'Does anyone know who built this shrine, and when?'));
+  return { layer, features };
+})();
 const DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'loka-insight-check-'));
 const PUB = path.join(ROOT, 'atlas', 'datasets', PUBSLUG);
 const PRIV = path.join(DATA, 'private-datasets', PRIVSLUG);
 const BARE = path.join(DATA, 'private-datasets', BARESLUG);
+const SAY = path.join(DATA, 'private-datasets', SAYSLUG);
+const OLD = path.join(DATA, 'private-datasets', OLDSLUG);
+const OLDBARE = path.join(DATA, 'private-datasets', OLDBARESLUG);
 const OWNER = 'owner@example.test', EDITOR = 'editor@example.test', OTHER = 'other@example.test';
-function seed(dir, fx, withQuestions) {
+function seed(dir, fx, withQuestions, mode) {
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({ title: 'Insight check', basemaps: [{ id: 'plain', label: 'Plain', default: true, type: 'raster', tiles: [] }], layers: [], groups: [] }));
   const L = { id: 'tags', label: 'Tags', group: 'userdata', type: 'marker', userLayer: true, source: 'user-tags.geojson' };
   if (withQuestions) Object.assign(L, { keyLabels: fx.layer.keyLabels, keyKinds: fx.layer.keyKinds, keyColumns: fx.layer.keyColumns, keyNouns: fx.layer.keyNouns });
-  fs.writeFileSync(path.join(dir, 'manifest.local.json'), JSON.stringify({ layers: [L] }));
+  fs.writeFileSync(path.join(dir, 'manifest.local.json'), JSON.stringify(mode ? { layers: [L], mode } : { layers: [L] }));
   fs.writeFileSync(path.join(dir, 'user-tags.geojson'), JSON.stringify({ type: 'FeatureCollection', features: fx.features }));
 }
 seed(PUB, BLR, true);
 seed(PRIV, CUB, true);
 seed(BARE, CUB, false);
+seed(SAY, SAYFX, true);
+seed(OLD, SAYFX, true, OLDMODE(SAYFX));
+seed(OLDBARE, BLR, true, OLDMODE(BLR));
 const rec = (slug, vis) => ({ slug, title: 'Insight check', visibility: vis, status: 'built', ownerAccount: OWNER, email: OWNER, tier: 'india', layers: [],
   tokenHash: 'x', viewKeyHash: null, createdAt: 1, collaborators: [{ email: EDITOR, role: 'editor' }] });
 fs.writeFileSync(path.join(DATA, 'registry.json'), JSON.stringify({
-  instances: { [PUBSLUG]: rec(PUBSLUG, 'public'), [PRIVSLUG]: rec(PRIVSLUG, 'private'), [BARESLUG]: rec(BARESLUG, 'private') },
-  accounts: { [OWNER]: { email: OWNER, instances: [PUBSLUG, PRIVSLUG, BARESLUG], verifiedAt: 1 }, [EDITOR]: { email: EDITOR, instances: [], verifiedAt: 1 }, [OTHER]: { email: OTHER, instances: [], verifiedAt: 1 } },
+  instances: { [PUBSLUG]: rec(PUBSLUG, 'public'), [PRIVSLUG]: rec(PRIVSLUG, 'private'), [BARESLUG]: rec(BARESLUG, 'private'), [SAYSLUG]: rec(SAYSLUG, 'private'), [OLDSLUG]: rec(OLDSLUG, 'private'), [OLDBARESLUG]: rec(OLDBARESLUG, 'private') },
+  accounts: { [OWNER]: { email: OWNER, instances: [PUBSLUG, PRIVSLUG, BARESLUG, SAYSLUG, OLDSLUG, OLDBARESLUG], verifiedAt: 1 }, [EDITOR]: { email: EDITOR, instances: [], verifiedAt: 1 }, [OTHER]: { email: OTHER, instances: [], verifiedAt: 1 } },
   drafts: {},
 }));
 let child = null, out = '';
@@ -433,9 +467,9 @@ function cleanup() {
   for (const d of [PUB, DATA]) { try { fs.rmSync(d, { recursive: true, force: true }); } catch {} }
 }
 process.on('exit', cleanup);
-async function startServer() {
+async function startServer(extra) {
   child = spawn(process.execPath, [path.join(ROOT, 'api', 'server.js')], {
-    env: { ...process.env, LOKA_PORT: String(PORT), LOKA_DATA_DIR: DATA, LOKA_DEV_STATIC: '1', MAIL_TRANSPORT: 'log', GEMINI_API_KEY: '', ATLAS_FAKE_READING: '1', NODE_ENV: 'test', ATLAS_OWNER_EMAILS: 'nobody@example.test' },
+    env: { ...process.env, LOKA_PORT: String(PORT), LOKA_DATA_DIR: DATA, LOKA_DEV_STATIC: '1', MAIL_TRANSPORT: 'log', GEMINI_API_KEY: '', ATLAS_FAKE_READING: '1', NODE_ENV: 'test', ATLAS_OWNER_EMAILS: 'nobody@example.test', ...(extra || {}) },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout.on('data', (d) => { out += d; });
@@ -468,7 +502,9 @@ async function call(method, p, { cookie, body } = {}) {
   return { status: r.status, j };
 }
 const fileOf = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'manifest.local.json'), 'utf8'));
-const written = (slug) => (out.match(new RegExp('\\[insight\\] ' + slug + ' — summary: model', 'g')) || []).length;
+// runs of the story job, and the ones a model actually wrote
+const ran = (slug) => (out.match(new RegExp('\\[insight\\] ' + slug + ' — story: ', 'g')) || []).length;
+const written = (slug) => (out.match(new RegExp('\\[insight\\] ' + slug + ' — story: model', 'g')) || []).length;
 async function settled(dir) {
   const t0 = Date.now();
   while (Date.now() - t0 < 10000) {
@@ -499,23 +535,30 @@ try {
     check('switched: Insight, every question shown but people ones, the summary being written', [sw.status, sw.j.name, sw.j.mode.summaryOn, sw.j.mode.summaryPending, sw.j.mode.shown],
       [200, 'insight', true, true, IM.defaultInsight(fx.layer).shown]);
     let f = await settled(dir);
-    check('the summary is written after the answer: at least two sentences, the stand-in\'s, each through the cell check', [!!f.mode.summary, f.mode.summary && f.mode.summary.sentences.length >= 2,
-      f.mode.summary && JSON.stringify(f.mode.summary.sentences) === JSON.stringify(IM.checkSentences(SUM.standInAnswer(IM.summaryTables(fx.layer, fx.features)).sentences, IM.summaryTables(fx.layer, fx.features)))], [true, true, true]);
-    check('one model call', written(slug), 1);
+    /* These two fixtures carry no words of anybody's own (they were scrubbed
+       to hold no tagger and no free text), so the story has nothing to quote.
+       What matters here is the plumbing: the fingerprint is kept even then, so
+       the job is not run again on every update, and the older summary is gone. */
+    check('the story is written after the answer; with nothing worth quoting it still keeps its fingerprint',
+      [!!f.mode.story, f.mode.story.sentences.length, f.mode.story.quotes.length, !!f.mode.story.sig, f.mode.summary],
+      [true, 0, 0, true, null]);
+    check('one run, and no model asked: these places have no words of their own', [ran(slug), written(slug)], [1, 0]);
     if (label === 'public') {
       const peep = await call('POST', M(slug), { cookie: ownerC, body: { insight: { shown: { pattern_5: true } } } });
       check('the owner trying to show the people question is refused, and nothing changes', [peep.status, peep.j.error, fileOf(dir)], [400, IM.PEOPLE_REFUSED, f]);
-      check('…nor is a people answer anywhere in the summary', /Person [A-D]|Other users/.test(JSON.stringify(f.mode.summary)), false);
+      check('\u2026nor is a people answer anywhere in the story', /Person [A-D]|Other users/.test(JSON.stringify(f.mode.story)), false);
     }
     const ord = IM.settingsOf(fx.layer, f.mode).order.slice().reverse();
     const set = await call('POST', M(slug), { cookie: ownerC, body: { insight: { order: ord, shown: { pattern_1: false } } } });
     f = fileOf(dir);
-    check('order and switches saved; the summary kept (no call)', [set.status, f.mode.order, f.mode.shown.pattern_1, written(slug), !!f.mode.summary], [200, ord, false, 1, true]);
+    // switching a question off is not worth four calls to a Pro model: the card drops that question's quotes instead
+    check('order and switches saved; the story kept, and no run at all',
+      [set.status, f.mode.order, f.mode.shown.pattern_1, ran(slug), f.mode.summaryPending], [200, ord, false, 1, undefined]);
     const off = await call('POST', M(slug), { cookie: ownerC, body: { insight: { summaryOn: false } } });
-    check('the summary switched off', [off.status, fileOf(dir).mode.summaryOn], [200, false]);
-    check('…and Write it again is refused while it is off', (await call('POST', M(slug), { cookie: ownerC, body: { rewriteSummary: true } })).status, 409);
+    check('what the places say switched off', [off.status, fileOf(dir).mode.summaryOn], [200, false]);
+    check('\u2026and Write it again is refused while it is off', (await call('POST', M(slug), { cookie: ownerC, body: { rewriteSummary: true } })).status, 409);
     await call('POST', M(slug), { cookie: ownerC, body: { insight: { summaryOn: true } } });
-    check('back on, with the same answers: no call', [written(slug), fileOf(dir).mode.summaryPending], [1, undefined]);
+    check('back on, with the same places: still no run', [ran(slug), fileOf(dir).mode.summaryPending], [1, undefined]);
     const before = fileOf(dir);
     await call('POST', M(slug), { cookie: ownerC, body: { name: 'standard' } });
     f = fileOf(dir);
@@ -523,9 +566,37 @@ try {
     await call('POST', M(slug), { cookie: ownerC, body: { name: 'explore' } });
     await call('POST', M(slug), { cookie: ownerC, body: { name: 'insight' } });
     f = fileOf(dir);
-    check('to Explore and back to Insight: the same settings and summary, no call', [f.mode, written(slug), f.modeKept && 'insight' in f.modeKept], [before.mode, 1, false]);
+    check('to Explore and back to Insight: the same settings and the same story, no run', [f.mode, ran(slug), f.modeKept && 'insight' in f.modeKept], [before.mode, 1, false]);
     const again = await call('POST', M(slug), { cookie: ownerC, body: { rewriteSummary: true } });
-    check('Write it again: one more call, the answer carries the summary', [again.status, again.j.by, written(slug), !!again.j.mode.summary, again.j.mode.summaryPending], [200, 'model', 2, true, undefined]);
+    check('Write it again: one more run, and the answer carries the story', [again.status, again.j.by, ran(slug), !!again.j.mode.story, again.j.mode.summaryPending],
+      [200, 'no place has words worth quoting', 2, true, undefined]);
+  }
+  console.log('\n  an atlas whose places have words of their own: the whole story');
+  {
+    const sw = await call('POST', M(SAYSLUG), { cookie: ownerC, body: { name: 'insight' } });
+    check('switched to Insight, the story being written', [sw.status, sw.j.mode.summaryPending], [200, true]);
+    const f = await settled(SAY);
+    const st = f.mode.story;
+    check('the story is kept whole: a paragraph, the quotes it rests on, its fingerprint, and the older summary gone',
+      [st.sentences.length >= 2, st.quotes.length >= 2, st.ownWords, !!st.sig, typeof st.at, 'summary' in f.mode],
+      [true, true, false, true, 'number', false]);
+    check('every quote shown is one place\u2019s own words, word for word, and is cited by a sentence that stands',
+      [st.quotes.every((q) => SAYFX.features.some((x) => x.properties.tag_id === q.id && x.properties.description.indexOf(q.text) >= 0)),
+        st.quotes.every((q) => st.sentences.some((x) => x.quotes.indexOf(q.id) >= 0))], [true, true]);
+    check('the model wrote it: the write and its proofread, each named in the log, on the two models the config names',
+      [written(SAYSLUG), /\[insight\] .* \u2014 write on /.test(out), /\[insight\] .* \u2014 proofread on /.test(out)], [1, true, true]);
+    check('no tagger anywhere in what was kept', /Pratham/.test(JSON.stringify(f.mode)), false);
+    /* The card a visitor sees, from the very overlay the server wrote. */
+    const shown = IM.storyToShow(f.mode, SAYFX.layer, SAYFX.features);
+    const card = IM.storyCardHTML(shown);
+    check('the card shows the paragraph, then the quotes, each a button to its place, then the small print',
+      [card.indexOf('in-story') < card.indexOf('in-quotes'), card.indexOf(st.sentences[0].text) >= 0,
+        (card.match(/data-in="place" data-i="\d+"/g) || []).length, /See \u201cPlace /.test(card),
+        /Written by AI from what people wrote about these places\. The counts are in the questions\./.test(card),
+        /Pratham/.test(card)],
+      [true, true, shown.quotes.length, true, true, false]);
+    check('the tab is there for a visitor, named in plain words', IM.panelTabs(f.mode, ['pattern_1', 'pattern_2'], null, shown).map((t) => t.key + ':' + t.label),
+      ['q:Explore Insights', 'sum:What the places say']);
   }
   check('a private atlas is written where it lives, never in the public folder', fs.existsSync(path.join(ROOT, 'atlas', 'datasets', PRIVSLUG)), false);
   console.log('\n  an atlas not yet read');
@@ -533,6 +604,48 @@ try {
   const bare = await call('POST', M(BARESLUG), { cookie: ownerC, body: { name: 'insight' } });
   check('switching is refused in the sentence the dialog shows', [bare.status, bare.j.error, bare.j.needsQuestions], [409, IM.NO_QUESTIONS, true]);
   check('a name not among the four is refused, naming them', (await call('POST', M(BARESLUG), { cookie: ownerC, body: { name: 'field' } })).j.error, 'Choose Standard, Event, Explore or Insight.');
+
+  /* ---- the model cannot be had at all ----
+     The same server again with no model and no stand-in, which is what an
+     outage looks like from here. Nothing may be written over what stands, and
+     nothing may be stamped with this fingerprint, or it would never be tried
+     again (Mithun, 5 Nov 2026). */
+  console.log('\n  the model cannot be had');
+  const sayBefore = fileOf(SAY).mode.story;
+  child.kill('SIGKILL');
+  await new Promise((r) => setTimeout(r, 400));
+  out = '';
+  await startServer({ ATLAS_FAKE_READING: '' });
+  const ownerC2 = await signIn(OWNER);
+  const tryAgain = async (slug, dir) => {
+    const j = await call('POST', M(slug), { cookie: ownerC2, body: { rewriteSummary: true } });
+    return [j, await settled(dir)];
+  };
+  {
+    const [j, f] = await tryAgain(SAYSLUG, SAY);
+    check('an atlas with a story: the one that stands is left exactly as it was, and the owner is told why',
+      [j.status, f.mode.story, f.mode.storyFailed.why, typeof f.mode.storyFailed.at, f.mode.summaryPending],
+      [200, sayBefore, 'the writer could not be reached', 'number', undefined]);
+    check('…and the model’s own words never reach the overlay, which is public',
+      /503|overloaded|refused|Error|no model|no answer/.test(JSON.stringify(f.mode.storyFailed)), false);
+  }
+  {
+    const [j, f] = await tryAgain(OLDSLUG, OLD);
+    check('an atlas written before the story: its summary stands, nothing is stamped, so the next update tries again',
+      [j.status, 'story' in f.mode, f.mode.summary, f.mode.storyFailed.why],
+      [200, false, OLDSUM, 'the writer could not be reached']);
+    check('…and the tab still shows that summary to a visitor',
+      IM.panelTabs(f.mode, IM.shownStats(SAYFX.layer, SAYFX.features, f.mode).map((st) => st.col), null,
+        IM.storyToShow(f.mode, SAYFX.layer, SAYFX.features)).map((t) => t.key), ['q', 'sum']);
+  }
+  {
+    // a run that honestly finds nothing is no failure: it is stamped, and the older summary stays until a story stands
+    const [j, f] = await tryAgain(OLDBARESLUG, OLDBARE);
+    check('a run that found nothing to say: stamped so it is not asked again, the summary kept, and no failure recorded',
+      [j.j.by, !!f.mode.story.sig, f.mode.story.sentences.length, f.mode.summary, 'storyFailed' in f.mode],
+      ['no place has words worth quoting', true, 0, OLDSUM, false]);
+    check('…and its tab still shows the summary', IM.panelTabs(f.mode, ['pattern_1'], null, null).map((t) => t.key), ['q', 'sum']);
+  }
 } catch (e) {
   fail++;
   console.log('  FAIL the route checks stopped: ' + (e && e.message) + '\n' + out.slice(-1500));

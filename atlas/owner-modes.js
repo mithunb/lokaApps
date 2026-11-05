@@ -583,16 +583,20 @@
     var s = IM().settingsOf(L, mode), busy = INS.saving || INS.writing;
     var writing = INS.writing || IM().isPending(mode);
     var h = '<div class="own-bbody own-ibody">';
-    h += '<div class="own-icard"><div class="own-irow"><div class="own-ik"><b id="own-isum-k">Summary</b>' +
-      "<small>A few sentences in plain words, written by AI from the answers each time the atlas is updated. Visitors see it first, under \u201cWhat the places say\u201d.</small></div>" +
+    h += '<div class="own-icard"><div class="own-irow"><div class="own-ik"><b id="own-isum-k">What the places say</b>' +
+      "<small>A short paragraph in plain words about what people are saying about these places \u2014 curious, concerned, enjoying \u2014 written by AI from what they wrote, with the quotes it rests on underneath. Written again each time the atlas is updated.</small></div>" +
       '<button class="own-switch" type="button" role="switch" data-iact="sum" aria-checked="' + s.summaryOn + '" aria-labelledby="own-isum-k"' + (busy ? " disabled" : "") +
       '><span class="own-switch-tr" aria-hidden="true"></span></button></div>';
     if (s.summaryOn) {
       h += '<div class="own-irow own-irow2"><button class="share-btn" type="button" data-iact="rewrite"' + (writing || busy ? " disabled" : "") + ">" +
         (writing ? '<span class="own-mode-spin" aria-hidden="true"></span>Writing…' : "Write it again") + "</button>" +
         '<span class="own-inote" role="status">' + (writing ? "Visitors still see the questions while it is written."
+          : mode.storyFailed ? "LOKA could not reach the writer " + esc(writtenWhen(mode.storyFailed.at)) + ", so what was written before still stands. It will try again on the next update."
+          : mode.story && mode.story.sentences && mode.story.sentences.length ? "Last written " + esc(writtenWhen(mode.story.at)) + ", from what these places say."
+          : mode.story && mode.story.quotes && mode.story.quotes.length ? "Written " + esc(writtenWhen(mode.story.at)) + ": too little was said here to write over it, so visitors see the quotes themselves."
+          : mode.story ? "Nothing for now: too few places here have words of their own. Visitors see the questions."
           : mode.summary ? "Last written " + esc(writtenWhen(mode.summary.at)) + ", from these answers."
-          : "No summary for now: LOKA could not write one from these answers.") + "</span></div>";
+          : "Nothing for now: LOKA could not write it from what these places say.") + "</span></div>";
     }
     h += "</div>";
     h += '<div class="own-icard"><b>Questions visitors see</b><small class="own-is">Switch a question off to hide it; use the arrows to change the order. ' +
@@ -615,7 +619,7 @@
     if (body) body.scrollTop = top;
     if (IM().isPending(mode) && !INS.writing) pollInsight(host);
   }
-  // while the server writes the summary (after a switch, or the summary turned on), ask now and then
+  // while the server writes the story (after a switch, or it is turned on), ask now and then
   function pollInsight(host, again) {
     if (INS.pollT) return;
     if (!again) INS.polls = 0;   // a new wait starts its own count
@@ -624,12 +628,12 @@
       api("instances/" + encodeURIComponent(SLUG) + "/mode").then(function (j) {
         var m = j && j.mode;
         if (!m || m.name !== "insight") return;
-        if (IM().isPending(m) && INS.polls++ < 45) { if (!host.hidden) pollInsight(host, true); return; }
+        if (IM().isPending(m) && INS.polls++ < 110) { if (!host.hidden) pollInsight(host, true); return; }
         if (IM().isPending(m)) { delete m.summaryPending; delete m.summaryPendingAt; }
         takeInsight(m);
-        if (m.summary) toast("Summary written");
+        if (m.story && (m.story.sentences.length || m.story.quotes.length)) toast("What the places say is written");
         drawInsightShelf(host);
-      }).catch(function () { if (INS.polls++ < 45) pollInsight(host, true); });
+      }).catch(function () { if (INS.polls++ < 110) pollInsight(host, true); });
     }, 4000);
   }
   function saveInsight(host, patch, said) {
@@ -656,7 +660,8 @@
     Object.keys(mode).forEach(function (k) { was[k] = mode[k]; });
     var pending = {};
     Object.keys(mode).forEach(function (k) { pending[k] = mode[k]; });
-    pending.summary = null; pending.summaryPending = true; pending.summaryPendingAt = Date.now();
+    pending.summary = null; pending.story = null;
+    pending.summaryPending = true; pending.summaryPendingAt = Date.now();
     takeInsight(pending);   // the page shows "being written", the questions still there
     drawInsightShelf(host);
     api("instances/" + encodeURIComponent(SLUG) + "/mode", { method: "POST", body: { rewriteSummary: true } })
@@ -664,7 +669,8 @@
         INS.writing = false;
         if (j && j.mode) takeInsight(j.mode);
         if (j && j.mode && IM().isPending(j.mode)) { /* another write was under way: the tab waits for it */ }
-        else toast(j && j.mode && j.mode.summary ? "Summary written again" : "LOKA could not write a summary this time. Visitors see the questions.");
+        else toast(j && j.mode && j.mode.story && (j.mode.story.sentences.length || j.mode.story.quotes.length)
+          ? "Written again" : "LOKA could not write it this time. Visitors see the questions.");
         drawInsightShelf(host);
       })
       .catch(function (e) {

@@ -38,6 +38,25 @@ const REFRESH_MS = 24 * 60 * 60 * 1000;
 const READING = ['gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-flash-latest', 'gemini-3.8-flash'];
 const FILING = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-flash-lite-latest', 'gemini-2.5-flash'];
 
+/* "What the places say" — the story. Two names, in one place, because they do
+   two different jobs and are not interchangeable (measured 5-6 Nov 2026 over
+   the Bengaluru and Emergence layers):
+
+   Writing — a Pro model. The flash models wrote lists ("Somebody says…,
+   another says…") where the brief asks for one sentence a feeling, and leaned
+   on the filing words the quotes never use. 2.5-pro is retired, so the name
+   is the moving alias.
+
+   Proofreading — a flash model. Pro marking its own sentences dropped nearly
+   all of them, leaving "In their own words" almost every run; the flash model
+   answers the one strict question a sentence without that.
+
+   Neither is probed the way the reading models are: a name that cannot be
+   reached shows at once in the log, and the card falls back to the quotes
+   themselves rather than showing anything unchecked. */
+const STORY_WRITE = 'gemini-pro-latest';
+const STORY_PROOFREAD = 'gemini-3.5-flash';
+
 function ordered(envName, list) {
   const pinned = process.env[envName];
   // A pinned name goes first but is still called before it is trusted — the
@@ -142,6 +161,10 @@ export function startModelResolver() {
 export function recheckModels() { return refresh(); }
 
 export function getFlashModel() { return flashModel; }
+
+// The story's two models, env-overridable, never at a call site.
+export function getStoryModel() { return process.env.GEMINI_STORY_MODEL || STORY_WRITE; }
+export function getStoryProofreadModel() { return process.env.GEMINI_STORY_PROOFREAD_MODEL || STORY_PROOFREAD; }
 
 // No longer derived. The suffix trick is what invented a retired model.
 export function getFlashLiteModel() { return liteModel; }

@@ -47,8 +47,11 @@
   var PEOPLE_REFUSED = "That question\u2019s answers are the names of the people who tagged the places, so it stays off the visitor page.";
   var NO_QUESTIONS = "Insight needs the questions LOKA asks of the places. They appear once the atlas has been read.";
   var MIN_SENTENCES = 2, MAX_SENTENCES = 5, MAX_SENTENCE = 320;
-  // a summary "being written" for longer than this is taken as stuck: not pending, and a new one may start
-  var PENDING_STALE_MS = 2 * 60 * 1000;
+  /* A story "being written" for longer than this is taken as stuck: not
+     pending, and a new one may start. Seven minutes, because the story is up
+     to four calls to a Pro model with 90 seconds each (it was two minutes
+     while the summary was four quick calls to a flash model). */
+  var PENDING_STALE_MS = 7 * 60 * 1000;
   function isPending(mode, now) {
     return !!(mode && mode.summaryPending && typeof mode.summaryPendingAt === "number" &&
       (now || Date.now()) - mode.summaryPendingAt < PENDING_STALE_MS);
@@ -315,9 +318,10 @@
   }
 
   /* ========= the places' own words ("What the places say" v2, 5 Nov 2026) ======
-     NOT in use on the visitor page yet: a mock-up only (docs/plan-places-say-v2.md).
-     summaryTables above is what the shipped summary still reads, and nothing
-     here touches it.
+     This is what the visitor card shows (Mithun, 5 Nov 2026: "go with 1").
+     summaryTables above is what the older summary reads, and nothing here
+     touches it: an atlas written before the story goes on showing that
+     summary until its story is written.
 
      Mithun, 5 Nov 2026: the second version is a short STORY, not statistics —
      "focus on writing a short summary or story of the places. Stats are less
@@ -984,6 +988,107 @@
     });
     return out.length >= MIN_SENTENCES ? out : [];
   }
+  /* ---------------- "What the places say": the story on the card ----------------
+     The server writes it (insight-summary.js writeStory) and keeps it in
+     mode.story: { sig, sentences: [{ text, quotes:[id] }], quotes: [{ id,
+     text, name }], ownWords, at }. An atlas written before the story has no
+     mode.story at all, and goes on showing mode.summary until its next update.
+
+     Nothing is taken on trust at render time. Every quote is looked up among
+     the places as they stand now: one whose place the owner has hidden (it is
+     no longer in the layer) is dropped, and so is one whose words have been
+     edited since, because the quote must be word for word what the place
+     says. A sentence left with none of its quotes goes too — there is no
+     sentence without its evidence. Under two sentences, or under two quotes
+     left to show, the card falls back to the quotes themselves ("In their own
+     words"); under two of those, nothing is shown and the tab hides. */
+  /* The place's own words as they stand now, as a visitor could read them:
+     the columns the questions ON SHOW are read from, and the place's own
+     free-text columns that no question is read from at all. A column only a
+     switched-off question is read from is left out, so a quote taken from it
+     is no longer shown (Mithun, 5 Nov 2026) — even when it is the longest
+     thing the place says. The same columns are barred as everywhere else: an
+     address, a link, a name, the reading's own pattern_N words, a people
+     column. */
+  function wordsNow(layer, props, cols) {
+    var p = props || {}, keys = ((layer && layer.keyColumns) || {});
+    var all = colsOf(layer), on = cols && cols.length ? cols : all;
+    var claimed = Object.create(null), open = Object.create(null);
+    all.forEach(function (c) {
+      var kc = keys[c];
+      (Array.isArray(kc) ? kc : kc ? [kc] : []).forEach(function (k) {
+        claimed[String(k)] = true;
+        if (on.indexOf(c) >= 0) open[String(k)] = true;
+      });
+    });
+    var out = [], seen = Object.create(null);
+    Object.keys(p).forEach(function (k) {
+      if (NOT_TEXT.test(String(k).toLowerCase()) || /^pattern_\d+(_why)?$/.test(k) || isPeopleColumn(k)) return;
+      if (claimed[k] && !open[k]) return;      // only a question now switched off is read from it
+      if (!looksFree(p[k])) return;
+      var one = foldName(String(p[k]).replace(/\s+/g, " ").trim());
+      if (one && !seen[one]) { seen[one] = true; out.push(one); }
+    });
+    return out.join(" \u0004 ");
+  }
+  function storyToShow(mode, layer, features, shownCols) {
+    var st = mode && mode.story;
+    if (!st || typeof st !== "object" || (mode && mode.summaryOn === false)) return null;
+    var feats = features || [];
+    var cols = shownCols || colsOf(layer);
+    var at = Object.create(null);
+    feats.forEach(function (f, i) { var id = placeIdOf(f, i); if (!(id in at)) at[id] = i; });
+    var held = [];
+    (Array.isArray(st.quotes) ? st.quotes : []).forEach(function (q) {
+      if (!q || typeof q.text !== "string" || !q.text) return;
+      var i = at[q.id];
+      if (i === undefined) return;                       // the place is off the map now
+      var f = feats[i], p = (f && f.properties) || {};
+      if (wordsNow(layer, p, cols).indexOf(foldName(q.text)) < 0) return;   // changed since, or from a question now off
+      /* The name is worked out again from the place as it stands, by the same
+         rule that chose it (placeLabelOf): a name that is a credit line, a
+         category, or anybody's name is no name to show, and "Show this place
+         on the map" stands in its stead. Never placeNameOf here — that would
+         put back the very names the rule keeps out. */
+      held.push({ id: q.id, text: q.text, name: placeLabelOf(layer, f), at: i });
+    });
+    var ownWords = function () {
+      return held.length >= STORY_QUOTES_MIN ? { sentences: [], quotes: held, ownWords: true } : null;
+    };
+    if (st.ownWords) return ownWords();
+    var byId = Object.create(null);
+    held.forEach(function (q) { byId[q.id] = true; });
+    var sents = (Array.isArray(st.sentences) ? st.sentences : []).filter(function (s) {
+      return s && typeof s.text === "string" && (s.quotes || []).some(function (id) { return byId[id]; });
+    });
+    var cited = held.filter(function (q) {
+      return sents.some(function (s) { return (s.quotes || []).indexOf(q.id) >= 0; });
+    });
+    if (sents.length < MIN_STORY || cited.length < STORY_QUOTES_MIN) return ownWords();
+    return { sentences: sents, quotes: cited, ownWords: false };
+  }
+  /* The card itself. The paragraph is the sentences run together, then the
+     quotes that back them, each a button to its place on the map (the same
+     data-in="place" data-i row the question lists use). */
+  function storyCardHTML(shown) {
+    if (!shown) return "";
+    var quotes = shown.quotes.map(function (q) {
+      return '<blockquote class="in-fq"><q>' + escText(q.text) + "</q>" +
+        '<span class="in-who"><button type="button" data-in="place" data-i="' + q.at + '">' +
+        (q.name ? "See “" + escText(q.name) + "” on the map" : "Show this place on the map") +
+        "</button></span></blockquote>";
+    }).join("");
+    return '<section class="in-sum" aria-label="What the places say">' +
+      (shown.ownWords
+        ? '<p class="in-story"><b>In their own words</b></p>'
+        : '<p class="in-story">' + shown.sentences.map(function (s) { return escText(s.text); }).join(" ") + "</p>") +
+      '<div class="in-quotes">' + quotes + "</div>" +
+      '<div class="in-by">' + (shown.ownWords
+        ? "What people wrote about these places."
+        : "Written by AI from what people wrote about these places. The counts are in the questions.") +
+      "</div></section>";
+  }
+
   /* The panel's tabs. With no
      summary to show (turned off, under two sentences on show, or none written
      and none being written) there is no tab row at all, only the questions.
@@ -993,9 +1098,13 @@
      questions first, named "Explore Insights", and the atlas opens on them
      (Mithun, 25 Oct 2026); the owner, who has Settings, keeps the summary
      first and the plainer "Questions". */
-  function panelTabs(mode, shownCols, extra) {
+  /* `story` is what storyToShow answered, which the caller has worked out
+     already (it needs the places). With no story to show, an atlas that still
+     carries the older summary shows that instead. */
+  function panelTabs(mode, shownCols, extra, story) {
     var t = [];
-    var sum = !(mode && mode.summaryOn === false) && (visibleSentences(mode && mode.summary, shownCols).length || isPending(mode));
+    var has = story ? true : !!visibleSentences(mode && mode.summary, shownCols).length;
+    var sum = !(mode && mode.summaryOn === false) && (has || isPending(mode));
     if (extra) {
       if (sum) t.push({ key: "sum", label: "What the places say", short: "Summary" });
       t.push({ key: "q", label: "Questions" });
@@ -1039,6 +1148,15 @@
     // a phone: the head's row is one line taller than the word, so each tab gets a taller target than it shows
     "@media (max-width:720px){.in-tabs{margin-bottom:.2rem}.in-tab::after{content:\"\";position:absolute;left:-.4rem;right:-.4rem;top:-10px;bottom:-6px}}",
     ".in-sum .in-by{margin-top:.55rem;font-size:var(--t-meta,.8rem);color:var(--color-text-muted,#6E6A63)}",
+    // the story, and the quotes under it that it rests on
+    ".in-sum .in-story{margin:.35rem 0 0;font-size:.95rem;line-height:1.55;color:var(--color-text-primary,#24211D)}",
+    ".in-quotes{margin:.9rem 0 .2rem;border-top:1px solid var(--color-divider,rgba(36,33,29,.10))}",
+    ".in-fq{margin:.75rem 0 0;padding:0 0 0 .7rem;border-left:2px solid var(--color-leaf,#2A6B41);opacity:.95}",
+    ".in-fq q{font-family:var(--font-display,Georgia,serif);font-style:italic;font-size:.92rem;line-height:1.45;color:var(--color-text-secondary,#5A5751);quotes:\"\\201C\" \"\\201D\"}",
+    ".in-fq .in-who{display:block;margin-top:.15rem}",
+    ".in-fq .in-who button{background:none;border:none;padding:.15rem 0;margin:0;font:inherit;font-size:var(--t-meta,.8rem);font-weight:700;color:var(--color-leaf-deep,#1F5232);text-decoration:underline;text-underline-offset:2px;cursor:pointer;text-align:left}",
+    ".in-fq .in-who button:focus-visible{outline:2px solid var(--color-leaf,#2A6B41);outline-offset:2px}",
+    "@media (max-width:720px){.in-sum .in-story{font-size:.92rem}.in-fq q{font-size:.88rem}}",
     ".in-writing{display:flex;gap:.7rem;align-items:flex-start}",
     ".in-writing .in-lines{flex:none;width:44px;padding-top:.45rem}",
     ".in-writing .in-lines i{display:block;height:5px;border-radius:3px;background:var(--color-leaf,#2A6B41);opacity:.25;margin-bottom:5px;transform-origin:left;animation:in-grow 2.4s ease-in-out infinite}",
@@ -1139,7 +1257,13 @@
     if (typeof document !== "undefined" && document.addEventListener) {
       document.addEventListener("atlas:card", function (e) { openF = (e && e.detail && e.detail.feature) || null; markOpen(); });
     }
-    var cache = null, pollT = null;
+    var cache = null, sCache, pollT = null;
+    // the questions on show and the story's checked quotes are worked out once per change
+    function forget() { cache = null; sCache = undefined; }
+    function Story() {
+      if (sCache === undefined) sCache = storyToShow(mode, srcLayer, feats(), Q().cols);
+      return sCache;
+    }
 
     function layers(list) {
       srcLayer = list.filter(function (L) { return L.id === mode.layer; })[0] ||
@@ -1277,7 +1401,7 @@
     function tabList() {
       if (!state.ready) return [];
       var x = viewer.extraTab;
-      return panelTabs(mode, Q().cols, x && !(x.hidden && x.hidden()) ? x : null);
+      return panelTabs(mode, Q().cols, x && !(x.hidden && x.hidden()) ? x : null, Story());
     }
     function curTab(list) {
       list = list || tabList();
@@ -1345,6 +1469,11 @@
       return '<button type="button" class="in-tolink" data-in="tab" data-tab="q">' + words + "</button>";
     }
     function summaryHTML() {
+      var shown = Story();
+      if (shown) return storyCardHTML(shown) + toQuestions("See the questions these places answer");
+      /* An atlas whose story has nothing in it yet — none written, or one
+         that found nothing to say — goes on showing the summary it has. The
+         server takes the summary away the moment a story stands in its place. */
       var sents = mode.summaryOn === false ? [] : visibleSentences(mode.summary, Q().cols);
       if (sents.length) {
         return '<section class="in-sum" aria-label="What the places say">' +
@@ -1354,8 +1483,8 @@
       }
       if (isPending(mode)) {
         return '<section class="in-sum" aria-live="polite"><div class="in-stamp">Being written</div><div class="in-writing">' +
-          '<div class="in-lines" aria-hidden="true"><i></i><i></i><i></i></div><p>LOKA is reading the ' + feats().length +
-          " places to write a short summary. This takes about a minute. The questions are ready now.</p></div></section>" +
+          '<div class="in-lines" aria-hidden="true"><i></i><i></i><i></i></div><p>LOKA is reading what people wrote about these ' + feats().length +
+          " places, to say what they are saying. This takes a minute or two. The questions are ready now.</p></div></section>" +
           toQuestions("See the questions");
       }
       return "";
@@ -1559,7 +1688,7 @@
     function pollSummary() {
       if (pollT || typeof fetch === "undefined" || !api.dataUrl) return;
       if (mode.summaryOn === false || !isPending(mode)) return;
-      var tries = 0, MAX_TRIES = 30;   // every 6 seconds, three minutes at most
+      var tries = 0, MAX_TRIES = 70;   // every 6 seconds, seven minutes at most (as PENDING_STALE_MS)
       function stop(giveUp) {
         clearInterval(pollT); pollT = null;
         if (giveUp) { delete mode.summaryPending; delete mode.summaryPendingAt; renderPanel(); }
@@ -1576,7 +1705,9 @@
             if (isPending(m)) return;
             stop(false);
             mode.summary = m.summary || null;
+            if ("story" in m) mode.story = m.story; else delete mode.story;
             delete mode.summaryPending; delete mode.summaryPendingAt;
+            forget();
             renderPanel();
           })
           .catch(function () { if (pollT) stop(true); });
@@ -1589,7 +1720,7 @@
       if (!m || typeof m !== "object") return;
       Object.keys(mode).forEach(function (k) { if (!(k in m)) delete mode[k]; });
       Object.keys(m).forEach(function (k) { mode[k] = m[k]; });
-      cache = null;
+      forget();
       if (!state.ready) return;
       if (state.open && !Q().byCol[state.open]) { state.open = firstOpen(); state.filter = null; state.cmp = null; }
       if (state.filter && (!Q().byCol[state.filter.col] || (state.filter.col2 && !Q().byCol[state.filter.col2]))) state.filter = null;
@@ -1606,7 +1737,7 @@
       buildPanel: buildPanel,
       ready: function () {
         state.ready = true;
-        cache = null;
+        forget();
         if (!state.open) state.open = firstOpen();
         changed(true);
         if (api.onMoveEnd) api.onMoveEnd(function () { renderChips(); });
@@ -1652,7 +1783,7 @@
     numbersIn: numbersIn,
     checkSentences: checkSentences,
     checkSentencesWithReasons: checkSentencesWithReasons,
-    // "What the places say" v2 — the story mock-up's pieces, not yet on the visitor page
+    // "What the places say" — the story the visitor card shows
     storyDigest: storyDigest,
     offeredById: offeredById,
     placeWords: placeWords,
@@ -1678,6 +1809,8 @@
     STORY_QUOTES_MIN: STORY_QUOTES_MIN, STORY_QUOTES_MAX: STORY_QUOTES_MAX,
     CSS: CSS,
     visibleSentences: visibleSentences,
+    storyToShow: storyToShow,
+    storyCardHTML: storyCardHTML,
     panelTabs: panelTabs,
     hasNumberWords: hasNumberWords,
     hasShareWords: hasShareWords,

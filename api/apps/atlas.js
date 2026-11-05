@@ -2247,7 +2247,7 @@ async function reworkSmartButtons(dataset, layerId) {
   return 'reworked';
 }
 
-/* ---------- Insight: the questions, with a short summary on top ----------
+/* ---------- Insight: the questions, with what the places say on top ----------
    The layer whose questions Insight reads: the mode's own, else the first of
    the atlas's layers with a question some place answers that is not about
    people (insight-mode.js canInsight). null when there is none — then
@@ -2261,35 +2261,52 @@ function insightSource(inst, local, layerId) {
   }
   return null;
 }
-/* The model caller for the summary. The stand-in (FAKE_READING) writes from
-   the tables, and passes every sentence at the proofread (the call marked
-   proofread: true), so its summary is its sentences as before. */
-function insightCaller(payer) {
+/* The model caller for the story. The stand-in (FAKE_READING) writes one
+   sentence a group from the digest and vouches for everything at the
+   proofread (the call marked proofread: true), so a test can predict it. */
+function insightCaller(payer, digest) {
   if (!ai && !FAKE_READING) return null;
   const stub = FAKE_READING ? async (model, prompt, schema, o) => {
-    if (o && o.proofread) return insightSummary.standInProofread(prompt);
-    let t = null;
-    try { t = JSON.parse(String(prompt).split('\n').pop()); } catch { t = null; }
-    return insightSummary.standInAnswer(t);
+    if (o && o.proofread) return insightSummary.standInStoryProofread(prompt);
+    return insightSummary.standInStory(digest);
   } : null;
-  // 4: the write, one retry when no sentence passes the cell check, the proofread, one re-write when it leaves under two
+  // 4: the write and its proofread, then one re-write of what was dropped and its proofread
   return aiCaller(payer || 'server', 4, stub);
 }
-/* One summary job per atlas at a time; a pending flag carries when it was
-   set (summaryPendingAt), and one older than two minutes is stuck, not pending. */
+/* One story job per atlas at a time; a pending flag carries when it was set
+   (summaryPendingAt), and one older than seven minutes (insight-mode.js
+   PENDING_STALE_MS, the room four Pro calls need) is stuck, not pending. */
 const INSIGHT_RUNNING = new Set();
 function markPending(mode) { mode.summaryPending = true; mode.summaryPendingAt = Date.now(); return mode; }
 function clearPendingOf(mode) { delete mode.summaryPending; delete mode.summaryPendingAt; return mode; }
-// does the mode need its summary written: on, and none kept for these same answers
+/* What the story is written from: the places and their own words, read
+   against every question LOKA asked of them but the people ones (storyDigest
+   holds that). Which questions the owner shows is deliberately NOT in it
+   (Mithun, 5 Nov 2026): switching one off is not worth four calls to a Pro
+   model. The card drops the quotes that came from a hidden question's column
+   instead (insight-mode.js storyToShow), and the story is written afresh on
+   the next update or "Write it again". */
+function storyDigestOf(src) {
+  return INSIGHT.storyDigest(src.layer, src.feats);
+}
+/* Does the mode need its story written: on, and none kept for these same
+   places and words. STORY_VERSION is in the fingerprint, so every Insight
+   atlas writes its story once after a change of version — on its next update
+   or "Write it again", never all at once at deploy. */
 function insightNeedsSummary(mode, src) {
   if (!mode || mode.summaryOn === false || !src) return false;
-  const sig = insightSummary.summarySig(INSIGHT.summaryTables(src.layer, src.feats));
-  return !(mode.summary && mode.summary.sig === sig);
+  const sig = insightSummary.storySig(storyDigestOf(src));
+  return !(mode.story && mode.story.sig === sig);
 }
-/* Write (or keep) the summary of an atlas in Insight, and store it in the
-   mode. `payer`: the owner's request when they asked, 'server' after a
-   reading. Written only if the atlas is still in Insight; summaryPending is
-   cleared whatever happens. Never throws. */
+/* Write (or keep) the story of an atlas in Insight — "What the places say" —
+   and store it in the mode as `story`. `payer`: the owner's request when they
+   asked, 'server' after a reading. Written only if the atlas is still in
+   Insight; summaryPending is cleared whatever happens. Never throws.
+
+   What is kept always carries the fingerprint, even when the story says
+   nothing, so a run that found nothing is not repeated on every update. The
+   older `summary` is dropped the moment a story stands in its place; until
+   then the card goes on showing it. */
 async function runInsightSummary(slug, payer, opts) {
   if (INSIGHT_RUNNING.has(slug)) return 'already writing';
   INSIGHT_RUNNING.add(slug);
@@ -2314,17 +2331,40 @@ async function runInsightSummary(slug, payer, opts) {
       first.local.mode = markPending({ ...m });
       writeOverlay(first.file, first.local);
     }
-    const r = await insightSummary.writeSummary({ layer: src.layer, features: src.feats, prev: m, call: insightCaller(payer),
-      model: getFlashModel(), Type, force: !!o.force });
+    const digest = storyDigestOf(src);
+    const sig = insightSummary.storySig(digest);
+    if (!o.force && m.story && m.story.sig === sig) { clearPending(); return 'kept'; }
+    const r = await insightSummary.writeStory({ layer: src.layer, features: src.feats, digest, call: insightCaller(payer, digest),
+      model: getStoryModel(), proofreadModel: getStoryProofreadModel(), Type });
     const { file, local } = readOverlay(inst);
     if (!local || modeNow(local) !== 'insight') return 'changed meanwhile';
     const mode = { ...local.mode };
-    if (r.summary) mode.summary = r.summary;
-    else if (!r.keep) mode.summary = null;
+    /* The model could not be had at all (Mithun, 5 Nov 2026). Nothing is
+       written over what stands — the story, or the older summary on an atlas
+       whose story is not written yet — and the fingerprint is NOT stamped, so
+       the next update tries again. The owner is told, in plain words: the
+       overlay is public, so the model's own error never goes in it.
+       A run the checks threw out is no failure: their own words are kept. */
+    if (r.failed) {
+      mode.storyFailed = { why: /proofread/.test(r.failed) ? 'the proofread could not be had' : 'the writer could not be reached', at: Date.now() };
+    } else {
+      const kept = insightSummary.storyKept(r);
+      // a run that honestly found nothing does not take an older summary away
+      if (kept.sentences.length || kept.quotes.length) delete mode.summary;
+      mode.story = kept;
+      delete mode.storyFailed;
+    }
     clearPendingOf(mode);
     local.mode = mode;
     if (!writeOverlay(file, local)) return 'not written';
-    console.log('[insight] ' + slug + ' — summary: ' + r.by + (r.dropped ? ' (' + r.dropped + ' sentence(s) dropped: numbers not in the counts)' : ''));
+    /* The log says what happened and which places were left out, by id and
+       reason — never a word anybody wrote, and never a name. */
+    const out = (r.dropped || []).filter((d) => d.what === 'sentence').length;
+    const now = mode.story || { sentences: [], quotes: [] };
+    console.log('[insight] ' + slug + ' — story: ' + r.by + ' (' + now.sentences.length + ' sentence(s), ' +
+      now.quotes.length + ' quote(s)' + (out ? ', ' + out + ' dropped' : '') + (now.ownWords ? ', their own words' : '') +
+      (mode.storyFailed ? '; what stood before stands, and it is written again on the next update' : '') + ')');
+    (r.calls || []).forEach((c) => console.log('[insight] ' + slug + ' — ' + c.what + ' on ' + c.model + ', ' + c.seconds + 's' + (c.failed ? ': ' + c.failed : '')));
     return r.by;
   } catch (e) {
     console.warn('[insight] ' + slug + ' — ' + (e && e.message));
@@ -2380,7 +2420,7 @@ async function postMode(req, res) {
 
   /* Insight's settings: the summary on or off, which questions show and their
      order (insight-mode.js cleanSettings: a people question can never be
-     shown). Turning the summary on writes it, if none is kept for these answers. */
+     shown). Turning it on writes the story, if none is kept for these places. */
   if (b.name === undefined && b.insight !== undefined) {
     if (now !== 'insight') return res.status(409).json({ error: 'These settings are for Insight. Switch the atlas to Insight first.' });
     const src = insightSource(inst, local, local.mode.layer);
@@ -2398,9 +2438,9 @@ async function postMode(req, res) {
   }
   // "Write it again": the owner's allowance; visitors see the questions meanwhile
   if (b.name === undefined && b.rewriteSummary !== undefined) {
-    if (now !== 'insight') return res.status(409).json({ error: 'The summary is for Insight. Switch the atlas to Insight first.' });
-    if (local.mode.summaryOn === false) return res.status(409).json({ error: 'Turn the summary on first.' });
-    if (NEVER_READ.has(inst.slug)) return res.status(409).json({ error: 'LOKA does not write a summary for this atlas.' });
+    if (now !== 'insight') return res.status(409).json({ error: '\u201cWhat the places say\u201d is for Insight. Switch the atlas to Insight first.' });
+    if (local.mode.summaryOn === false) return res.status(409).json({ error: 'Turn \u201cWhat the places say\u201d on first.' });
+    if (NEVER_READ.has(inst.slug)) return res.status(409).json({ error: 'LOKA does not write what the places say for this atlas.' });
     if (INSIGHT_RUNNING.has(inst.slug)) return res.json({ ok: true, by: 'already writing', ...modeAnswer(local) });
     local.mode = markPending({ ...local.mode });
     writeOverlay(file, local);
@@ -2497,7 +2537,7 @@ async function switchMode(inst, want, payer, { file, local, now }) {
   if (next) local.mode = { ...next, name: want }; else delete local.mode;
   if (Object.keys(kept).length) local.modeKept = kept; else delete local.modeKept;
     if (!writeOverlay(file, local)) return { status: 500, body: { error: 'Could not save your choice. Nothing changed — try again.' } };
-  // the summary is written after the answer: the page shows "being written" and the questions meanwhile
+  // the story is written after the answer: the page shows "being written" and the questions meanwhile
   const after = want === 'insight' && local.mode && local.mode.summaryPending ? () => { runInsightSummary(inst.slug, payer); } : null;
   return { status: 200, body: { ok: true, from: now, ...modeAnswer(local) }, after };
 }
@@ -3367,7 +3407,7 @@ router.get('/datasets/:slug/:file', (req, res) => {
    to the manifest.local.json overlay. Gemini never writes manifest JSON.
 ================================================================== */
 import { GoogleGenAI, Type } from '@google/genai';
-import { getFlashModel, getFlashLiteModel, getEmbedModel, getResolverStatus } from '../lib/models.js';
+import { getFlashModel, getFlashLiteModel, getEmbedModel, getResolverStatus, getStoryModel, getStoryProofreadModel } from '../lib/models.js';
 import { profileColumns, bestNameColumn } from '../lib/tabular.js';
 import { norm, dice, joinByName, AUTO_ACCEPT, spellings, fallbackRequest, applyFallback, splitPointRows } from '../lib/matching.js';
 import { hasDevanagari, skeleton } from '../lib/devanagari.js';
@@ -7788,7 +7828,7 @@ function commitLayer({ importId, dataset }, who, opts) {
         const ds = session.dataset;
         setImmediate(() => {
           reworkSmartButtons(ds, id).catch((e) => console.warn('[buttons] could not rework ' + ds + '/' + id + ' — ' + (e && e.message)));
-          // and an atlas in Insight with its summary on: written again if the answers changed (the server's allowance)
+          // and an atlas in Insight with "What the places say" on: written again if the words changed (the server's allowance)
           try {
             const ins = reg.getInstance(ds);
             if (ins && insightSummary.shouldRewrite(ds, readOverlay(ins).local, NEVER_READ) === true) runInsightSummary(ds, 'server', { markPending: true });

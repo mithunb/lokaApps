@@ -326,11 +326,11 @@ export async function writeSummary({ layer, features, prev, call, model, Type, t
 }
 
 /* ====== "What the places say", version 2: what people are saying ==========
-   A MOCK-UP, not the shipped summary (docs/plan-places-say-v2.md). Nothing
-   above this line changed: SUMMARY_VERSION, writeSummary and the server's
-   call are as they were. These pieces are exported so deploy/measure-story.mjs
-   can run the proposed pipeline on a local layer and show Mithun what it
-   would say.
+   This is what visitors see (Mithun, 5 Nov 2026: "go with 1"). The old
+   writeSummary above it is untouched and still exported: an atlas that has
+   only mode.summary goes on showing it until its story is written, which
+   happens on its next update or "Write it again". deploy/measure-story.mjs
+   runs this same pipeline over a local layer to show what it would say.
 
    Mithun, 5-6 Nov 2026, after seeing the models try to describe the places:
    "Summarize what people are saying using the quotes. Whether they are
@@ -634,16 +634,51 @@ export function storyRewritePromptFor(digest, dropped, kept) {
   ].join('\n');
 }
 
+/* The stand-in's story (no model: ATLAS_FAKE_READING, and the mock-up's
+   --stub). One sentence a group, citing that group's own quotes, so the code's
+   checks all pass and a test can predict what comes out. The matching
+   proofread vouches for everything it is shown and says no quote names
+   anybody. Both live here, so the server and deploy/measure-story.mjs use the
+   very same stand-in. */
+export function standInStory(digest) {
+  return { sentences: ((digest && digest.groups) || []).slice(0, 3).map((g, i) => ({
+    text: i === 0 ? 'People here keep coming back to what is in front of them.'
+      : i === 1 ? 'Others write as though the place itself were speaking.'
+        : 'The rest turn to what they walk past and what it is for.',
+    quotes: g.quotes.slice(0, IM.STORY_CITES_MAX),
+  })) };
+}
+export function standInStoryProofread(prompt) {
+  const parts = String(prompt).split('\n');
+  const read = (label) => { try { return JSON.parse(parts[parts.indexOf(label) + 1]); } catch { return []; } };
+  return { sentences: read('Sentences and the quotes they cite:').map((s) => ({ index: s.index, shows: true, why: '' })),
+    quotes: read('Quotes, in order:').map((q) => ({ index: q.index, namesPerson: false, why: '' })) };
+}
+
+/* What the overlay keeps of a run: the fingerprint always, so a story that
+   says nothing is not written again on the next update, and the sentences and
+   quotes the card shows. `ownWords` marks the quotes-only card. */
+export function storyKept(r) {
+  const s = (r && r.story) || null;
+  return { sig: (r && r.sig) || '', sentences: (s && s.sentences) || [], quotes: (s && s.quotes) || [],
+    ownWords: !!(s && s.ownWords), at: Date.now() };
+}
+
 /* The whole story pipeline over one layer, for the mock-up. Up to four calls:
    the write and its proofread, then one rewrite of what was dropped and its
    proofread. `story` null means nothing would be shown, and `by` says why.
    Never throws on the model's account. */
-export async function writeStory({ layer, features, call, model, proofreadModel, Type, timeoutMs, shownCols, cap }) {
+export async function writeStory({ layer, features, call, model, proofreadModel, Type, timeoutMs, shownCols, cap, digest: given }) {
   timeoutMs = timeoutMs || STORY_TIMEOUT_MS;
-  const digest = IM.storyDigest(layer, features, { shownCols: shownCols || null, cap: cap || 0 });
+  // the caller may have worked the digest out already (the server needs its fingerprint first)
+  const digest = given || IM.storyDigest(layer, features, { shownCols: shownCols || null, cap: cap || 0 });
   const sig = storySig(digest);
   const calls = [];
-  const base = { digest, sig, dropped: [], story: null, calls, quality: digest.quality, at: Date.now() };
+  /* `failed` is set only when the model could not be had at all — no answer,
+     or no proofread. It is NOT set when the checks threw the sentences out:
+     that is the pipeline working, and their own words are the right answer.
+     The caller keeps the last good story when it is set (Mithun, 5 Nov 2026). */
+  const base = { digest, sig, dropped: [], story: null, calls, quality: digest.quality, at: Date.now(), failed: '' };
   if (digest.candidates.length < IM.STORY_QUOTES_MIN) return Object.assign({}, base, { by: 'no place has words worth quoting' });
   /* Few voices: there is nothing to gather, so the card shows the quotes
      themselves and no model writes a word (Mithun, 6 Nov 2026). The code
@@ -662,7 +697,7 @@ export async function writeStory({ layer, features, call, model, proofreadModel,
     return Object.assign({}, base, extra || {}, { story: { sentences: [], quotes, ownWords: true }, by: why });
   };
   if (digest.candidates.length < IM.STORY_VOICES_MIN) return ownWords('few voices: their own words, with nothing written over them');
-  if (!call) return ownWords('no model: their own words');
+  if (!call) return Object.assign(ownWords('no model: their own words'), { failed: 'no model' });
   const ask = async (what, who, prompt, schema, opts) => {
     const started = Date.now();
     try {
@@ -703,7 +738,7 @@ export async function writeStory({ layer, features, call, model, proofreadModel,
   };
 
   const first = await round('write', storyPromptFor(digest), []);
-  if (first.failed) return ownWords(first.failed + '; their own words instead', { dropped });
+  if (first.failed) return ownWords(first.failed + '; their own words instead', { dropped, failed: first.failed });
   let kept = first.sentences;
   // one rewrite, with the reasons: a weak sentence should not cost the whole story
   if (first.dropped.some((d) => d.what === 'sentence') && kept.length < IM.MAX_STORY) {
