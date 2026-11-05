@@ -181,14 +181,14 @@ async function realCall(model, prompt, schema) {
 /* The stand-in: a plain answer built from the digest, so every check can be
    walked through with no model at all. Not a mock-up anybody should read. */
 function stubAnswer(digest) {
-  const c = (digest.candidates || []).slice(0, 4);
-  const cite = (i) => (c[i] ? [c[i].id] : []);
+  const gs = (digest.groups || []).slice(0, 3);
   return {
-    sentences: [
-      { text: 'Somebody here is taken with what they walked past, and says so plainly.', quotes: cite(0) },
-      { text: 'Another is curious about something here and asks it out loud.', quotes: cite(1) },
-      { text: 'Elsewhere the writing turns, as though the place itself were speaking.', quotes: cite(2) },
-    ].filter((s) => s.quotes.length),
+    sentences: gs.map((g, i) => ({
+      text: (i === 0 ? 'People here keep coming back to what is in front of them.'
+        : i === 1 ? 'Others write as though the place itself were speaking.'
+          : 'The rest turn to what they walk past and what it is for.'),
+      quotes: g.quotes.slice(0, IM.STORY_CITES_MAX),
+    })),
   };
 }
 function stubCall(digest, prompt, o) {
@@ -259,11 +259,14 @@ function mockHTML({ title, result, byWho }) {
   const story = r.story || { sentences: [], quotes: [] };
   const quotes = story.quotes.map((q) => '<blockquote class="in-fq"><q>' + esc(q.text) + '</q>' +
     '<span class="in-who"><button type="button">' + (q.name ? 'See “' + esc(q.name) + '” on the map' : 'Show this place on the map') + '</button></span></blockquote>').join('');
-  const body = story.sentences.length
+  const own = story.ownWords && story.quotes.length;
+  const body = story.sentences.length || own
     ? '<section class="in-sum" aria-label="What the places say">' +
-      '<p class="in-story">' + story.sentences.map((s) => esc(s.text)).join(' ') + '</p>' +
+      (own ? '<p class="in-story"><b>In their own words</b></p>'
+        : '<p class="in-story">' + story.sentences.map((s) => esc(s.text)).join(' ') + '</p>') +
       warn + '<div class="in-quotes">' + quotes + '</div>' +
-      '<div class="in-by">Written by AI from what people wrote about these places, when the atlas was last updated. The quotes under it are the evidence; the counts are in the questions.</div></section>' +
+      '<div class="in-by">' + (own ? 'Too few notes here to say anything over them, so these are the words themselves, as people wrote them.'
+        : 'Written by AI from what people wrote about these places, when the atlas was last updated. The quotes under it are the evidence; the counts are in the questions.') + '</div></section>' +
       '<button type="button" class="in-tolink">See the questions these places answer</button>'
     : '<p class="in-hint">Nothing would be shown: ' + esc(r.by) + '.</p>';
   return ['<!doctype html><html lang="en"><head><meta charset="utf-8">',
@@ -286,6 +289,8 @@ function droppedText(name, r) {
   lines.push('Places with words of their own: ' + d.quality.withWords + ' of ' + d.quality.places +
     '; places repeating another’s words: ' + d.quality.repeated + (d.quality.thin ? ' — thin, so the warning shows' : ''));
   lines.push('Places offered to the model: ' + d.offered.length + '; quotes worth citing: ' + (d.candidates || []).length);
+  lines.push('Groups: ' + (d.groups || []).map((g) => g.id + ' ' + g.feeling + (g.about ? ' about ' + g.about : '') + ' \u00d7' + g.quotes.length).join('; '));
+  if ((d.tensions || []).length) lines.push('Tensions: ' + d.tensions.map((t) => t.groups.join(' vs ') + ' about ' + t.about).join('; '));
   lines.push('');
   if (!(r.dropped || []).length) lines.push('Nothing was dropped.');
   (r.dropped || []).forEach((x) => {
@@ -369,7 +374,7 @@ async function main(argv) {
   const proofWith = o.proofreadModel || model;
   console.log('Mocking ' + named + (layer.id ? ' / ' + layer.id : '') + ': ' + features.length + ' places, ' +
     digestOnly.questions.length + ' questions, ' + digestOnly.offered.length + ' places with words of their own, ' +
-    digestOnly.candidates.length + ' quotes worth citing.');
+    digestOnly.candidates.length + ' quotes worth citing, ' + digestOnly.groups.length + ' groups.');
   console.log('  Models: write on ' + model + '; proofread on ' + proofWith + (o.proofreadModel ? '' : ' (the same, no --proofread-model)') + '.');
 
   let r;

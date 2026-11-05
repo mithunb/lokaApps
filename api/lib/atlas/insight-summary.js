@@ -377,6 +377,15 @@ function quotesById(digest) {
   ((digest && digest.candidates) || []).forEach((c) => { by[c.id] = c; });
   return by;
 }
+const LQ = '\u201c', RQ = '\u201d', DASH = '\u2014';
+// the writer's own voice, telling the reader what ought to happen
+const ADVICE = /\b(should|shouldn\u2019t|must|mustn\u2019t|ought to|requires?|needs? to|has to|have to|it is important|we need|let us|let\u2019s)\b/i;
+// "Somebody...", "Another person...": one voice at a time, which is the list we are trying not to write
+const ONE_BY_ONE = /^(somebody|someone|another person|a person|one person|a visitor|an observer|a walker|another)\b/i;
+function onePerSentence(sentences, already) {
+  return (already || []).concat(sentences || []).filter((s) => ONE_BY_ONE.test(s.text)).length;
+}
+
 // a place's own words are compared as a reader sees them: spacing and the kind of quote mark do not count
 function sameWords(a, b) { return IM.foldName(a) === IM.foldName(b); }
 
@@ -384,30 +393,37 @@ function sameWords(a, b) { return IM.foldName(a) === IM.foldName(b); }
    places' own words behind them. No counts anywhere. */
 export function storyPromptFor(digest) {
   const d = digest || {};
-  const places = (d.offered || []).map((o) => ({ id: o.id, words: o.words,
-    answers: (o.answers || []).map((a) => a.question + ': ' + a.answer) }));
+  const by = quotesById(d);
+  const groups = (d.groups || []).map((g) => ({ group: g.id, feeling: g.feels, about: g.about || undefined,
+    alone: g.alone || undefined, quotes: g.quotes.map((id) => ({ id, quote: (by[id] || {}).text || '' })) }));
+  const tensions = (d.tensions || []).map((t) => ({ about: t.about, groups: t.groups, feelings: t.feels }));
   const labels = labelsOf(d);
+  const pairs = (d.groups || []).filter((g) => !g.alone).length;
   return [
-    'Below are things people wrote about places on one map. First the quotes you may use, each with its id; then the places those quotes come from, with everything written about them.',
+    'People wrote notes about places on a map. The code has already sorted the pointed ones into GROUPS: quotes that feel the same way about something in common. Each group has an id, what it feels, and what it is about.',
     '',
-    'Say what these people are SAYING, and how they feel about these places: curious, concerned, enjoying, wistful, proud, amused, annoyed, grateful — and about what. Not what the places are: what the people who wrote about them are getting at.',
+    'Write what these people are saying, gathering each group into ONE sentence. Not a sentence a quote, and never a list of feelings one after another: "People wonder how deep an ant\u2019s burrow goes" is a group spoken as one; "Somebody is curious. Somebody feels concerned. Another person is enjoying" is what this must not read like.',
     '',
-    '1. "sentences": write ' + IM.MAX_STORY + ' short sentences, one paragraph. Each one is checked on its own and a weak one is thrown away, so write ' + IM.MAX_STORY + ' that can each stand alone and still read as one piece of writing.',
-    '2. Every sentence carries "quotes": the ids of the ' + IM.STORY_CITES_MIN + ' to ' + IM.STORY_CITES_MAX + ' quotes it rests on, from the list below and nowhere else. Those quotes are shown under the paragraph as the evidence for it, so cite the ones a reader would want to see.',
+    '1. "sentences": one sentence for each group you use, ' + IM.MIN_STORY + ' to ' + IM.MAX_STORY + ' in all, in an order that reads as one paragraph.',
+    '2. Every sentence carries "quotes": the ids it rests on, ' + IM.STORY_CITES_MIN + ' to ' + IM.STORY_CITES_MAX + ' of them, ALL FROM ONE GROUP. Those quotes are shown underneath as the evidence.',
+    (pairs ? '3. A sentence may rest on a single quote only when its group holds just one (marked "alone"). Where a group holds two or three, gather them.' : '3. Gather what you can; the groups here are small.'),
+    (tensions.length ? '4. Where two groups feel differently about the same thing, one sentence may hold both: "People enjoy X, while others worry that ...". Cite quotes from both groups for it. The pairs are listed under "tensions".' : ''),
     '',
-    'Write it so the quotes bear it out. "Somebody wonders how deep an ant’s burrow goes" beside that quote is right; a feeling no cited quote shows is thrown away. Name the thing the feeling is about, in the words the quotes use.',
-    (labels.length ? 'Do not borrow the questions’ filing words — ' + labels.slice(0, 8).map((x) => '“' + x + '”').join(', ') + ' and the like — unless a quote you cite uses those very words.' : 'Do not write in filing words.'),
-    'Never name a person. Never say who did something — walkers, visitors, residents — unless a cited quote says so; "somebody", "one person", "another" are safe.',
-    'No numbers and no amounts: not a digit, not "most", "many", "a few", "all", "every", "often", and nothing about which is commonest.',
-    'No framing: not “this map shows places where X and Y intertwine”, not “a tapestry of”. One plain thing a sentence, under 25 words, finished.',
-    'Plain text: no markdown, lists, emoji or quotation marks of your own.',
+    'How to write it:',
+    '- Say it of the people together: "People wonder...", "Others worry that...", "A few lines keep coming back to..." (without saying how many). "One person" is fine once, for a quote that stands alone.',
+    '- Do not open the paragraph with "Another". Do not begin sentence after sentence with Somebody, Someone, Another person, A person.',
+    '- Name what the feeling is about, in the words the quotes use.',
+    '- Your own voice gives no advice and no instruction: no "should", "must", "needs to", "requires", "it is important". Those words are fine inside a quote, never in your sentence.',
+    (labels.length ? '- Do not borrow the questions\u2019 filing words ' + DASH + ' ' + labels.slice(0, 8).map((x) => LQ + x + RQ).join(', ') + ' and the like ' + DASH + ' unless a quote you cite uses those very words.' : '- Do not write in filing words.'),
+    '- Never name a person. Never say who did something ' + DASH + ' walkers, visitors, residents ' + DASH + ' unless a cited quote says so.',
+    '- No numbers and no amounts: not a digit, not "most", "many", "a few", "all", "every", "often", and nothing about which is commonest.',
+    '- No framing: not ' + LQ + 'this map shows places where X and Y intertwine' + RQ + '. Under 25 words a sentence, finished, plain text, no markdown or quotation marks of your own.',
     '',
-    'Quotes you may cite:',
-    JSON.stringify((d.candidates || []).map((c) => ({ id: c.id, quote: c.text }))),
-    '',
-    'The places behind them:',
-    JSON.stringify({ questions: (d.questions || []).map((q) => ({ id: q.id, question: q.text, answers: q.answers })), places }),
-  ].join('\n');
+    'Groups:',
+    JSON.stringify(groups),
+    (tensions.length ? 'Tensions (two groups, one thing):' : ''),
+    (tensions.length ? JSON.stringify(tensions) : ''),
+  ].filter((l) => l !== '').join('\n');
 }
 
 export function storySchemaFor(Type) {
@@ -445,12 +461,38 @@ export function checkStory(digest, answer, already) {
     if (/[%<>*#`_\[\]{}|\\]|https?:/i.test(text)) return no('it has a percentage, a link or markup');
     if (/\d/.test(text)) return no('it writes a number, and the story says no numbers at all');
     if (IM.hasAmountWords(text)) return no('it says how many in words');
+    /* The writer's own voice gives no orders (Mithun, 6 Nov 2026, after
+       Divar's "Preserving the area requires raising awareness"): advice is
+       not what anybody said. Inside a quote those words are fine. */
+    if (ADVICE.test(text)) return no('it gives advice, which is the writer talking and not what anybody wrote');
     const given = Array.isArray(s && s.quotes) ? s.quotes.map((x) => (typeof x === 'string' ? x.trim() : '')).filter(Boolean) : [];
     const ids = given.filter((id, i) => given.indexOf(id) === i);
     const strange = ids.filter((id) => !by[id]);
     if (strange.length) return no('it cites a quote it was not given (' + strange[0].slice(0, 80) + ')');
     if (ids.length < IM.STORY_CITES_MIN) return no('it cites no quote to stand on');
     if (ids.length > IM.STORY_CITES_MAX) return no('it cites more than ' + IM.STORY_CITES_MAX + ' quotes');
+    /* One sentence gathers one group. Two groups are allowed only where the
+       code offered them as a tension: different feelings about one thing. */
+    const groups = ids.map((id) => IM.groupOfQuote(digest.groups, id)).filter(Boolean);
+    const keys = groups.map((g) => g.id).filter((k, n, a) => a.indexOf(k) === n);
+    if (keys.length > 1) {
+      const paired = (digest.tensions || []).some((t) => keys.length === 2 && t.groups.indexOf(keys[0]) >= 0 && t.groups.indexOf(keys[1]) >= 0);
+      if (!paired) return no('it mixes quotes from groups the code did not put together (' + keys.join(' + ') + ')');
+    }
+    // where its group holds more than one voice, the sentence speaks for them together
+    if (ids.length === 1 && groups[0] && groups[0].quotes.length > 1) {
+      return no('its group holds more voices saying the same thing, so gather them');
+    }
+    /* No enumeration: a paragraph of "Somebody... Another person... A
+       person..." is a list of feelings, which is what Mithun asked us to stop
+       (6 Nov 2026). The first such sentence stands; the next is dropped. */
+    const opener = ONE_BY_ONE.exec(text);
+    if (opener) {
+      if (!sentences.length && !(already || []).length && /^another\b/i.test(text)) {
+        return no('a paragraph cannot open with ' + LQ + 'Another' + RQ);
+      }
+      if (onePerSentence(sentences, already) >= 1) return no('it starts like the one before it, and the story is not a list of feelings');
+    }
     /* LOKA's filing words are not anybody's own ("highlighting both
        established structures and natural features") — unless a quote the
        sentence cites uses those very words, in which case they are what
@@ -503,7 +545,7 @@ export function storyProofreadPromptFor(digest, sentences) {
     quotes: (s.quotes || []).map((id) => (by[id] || {}).text || '') }));
   return [
     'Below are sentences from a short account of what people are saying about places on a map. Each comes with the quotes it rests on — the words those people wrote.',
-    'For each sentence answer "shows": do these quotes show this feeling about this thing? Mark it false when the feeling is not in the quotes, when the sentence is about something the quotes do not mention, when it says how many, when it names a person, or when it stops part way. There is no benefit of the doubt: if you are not sure the quotes show it, mark it FALSE.',
+    'For each sentence answer "shows": do these quotes show this feeling about this thing? Mark it false when the feeling is not in the quotes, when the sentence is about something the quotes do not mention, when it says how many, when it names a person, when it gives advice, when the grammar is broken ("A observer", a sentence that does not parse), or when it stops part way. There is no benefit of the doubt: if you are not sure the quotes show it, mark it FALSE.',
     'For each quote answer "namesPerson": true when it names a person, a username or a handle, or carries an email, a phone number, a link or a photo credit. A place’s own name, or a god’s, is not a person. When unsure, mark it true.',
     'In "why" put the fault in a few plain words (empty when there is none).',
     'Sentences and the quotes they cite:',
@@ -591,7 +633,17 @@ export async function writeStory({ layer, features, call, model, proofreadModel,
   const sig = storySig(digest);
   const calls = [];
   const base = { digest, sig, dropped: [], story: null, calls, quality: digest.quality, at: Date.now() };
-  if (!digest.candidates.length) return Object.assign({}, base, { by: 'no place has words worth quoting' });
+  if (digest.candidates.length < IM.STORY_QUOTES_MIN) return Object.assign({}, base, { by: 'no place has words worth quoting' });
+  /* Few voices: there is nothing to gather, so the card shows the quotes
+     themselves and no model writes a word (Mithun, 6 Nov 2026). The code
+     picks them, sharpest first, one to a place as always. */
+  if (digest.candidates.length < IM.STORY_VOICES_MIN) {
+    const places = IM.offeredById(digest);
+    const quotes = digest.candidates.slice(0, IM.STORY_VOICES_MIN)
+      .map((c) => ({ id: c.id, text: c.text, name: (places[c.id] || {}).name || '' }));
+    return Object.assign({}, base, { story: { sentences: [], quotes, ownWords: true },
+      by: 'few voices: their own words, with nothing written over them' });
+  }
   if (!call) return Object.assign({}, base, { by: 'no model' });
   const ask = async (what, who, prompt, schema, opts) => {
     const started = Date.now();

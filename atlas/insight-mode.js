@@ -88,7 +88,11 @@
     var t = String(text || "")
       .replace(/\bat all\b/gi, " ")
       .replace(/\ball (?:day|night|year|round|the way|over the)\b/gi, " ")
-      .replace(/\bevery ?day\b/gi, " ");
+      .replace(/\bevery ?day\b/gi, " ")
+      /* Gathering words are not counts (Mithun, 6 Nov 2026): "one person",
+         "one note", "one line" name a single voice, which is how a quote
+         standing on its own is spoken of. */
+      .replace(/\bone (person|note|line|voice|writer|note-?taker)\b/gi, " ");
     return hasNumberWords(t) || hasShareWords(t) || AMOUNT_WORDS.test(t) || RANK_WORDS.test(t);
   }
 
@@ -353,6 +357,10 @@
      least STORY_QUOTES_MIN of them, at most STORY_QUOTES_MAX. */
   var MIN_STORY = 2, MAX_STORY = 5, STORY_CITES_MIN = 1, STORY_CITES_MAX = 3;
   var STORY_QUOTES_MIN = 2, STORY_QUOTES_MAX = 5;
+  /* Under this many pointed quotes there is nothing to gather: the card shows
+     the quotes themselves, under "In their own words", and no model writes a
+     word (Mithun, 6 Nov 2026). */
+  var STORY_VOICES_MIN = 4;
   // a place with fewer than this share of words, or this many repeats, is a thin atlas
   var THIN_WORDS = 0.5, THIN_SAME = 0.3;
 
@@ -541,6 +549,96 @@
   }
   function isPointed(text) { return quoteScore(text) >= POINTED_MIN; }
 
+  /* ---- what a quote is feeling, and what it is about (Mithun, 6 Nov 2026:
+     "Gather feeling across quotes. Do not enumerate feelings one after the
+     other in the sentences.") The code sorts the quotes into groups first, so
+     the model is asked for ONE sentence that gathers a group, not a sentence
+     a quote. A quote's feeling is the one whose cue words it carries most of;
+     nothing recognised leaves it "describing". ---- */
+  var FEELINGS = [
+    { key: "wonder", label: "wondering or curious", re: /\?|\b(wonder|wonders|wondering|curious|anyone know|anybody know|does anyone|what is this|who made|why is|how deep|how old|not sure|i think this|must be)\b/gi },
+    { key: "worry", label: "worried or concerned", re: /\b(worry|worried|concern|concerned|struggle|struggles|deteriorat\w*|cut down|cutting|destroy\w*|degrad\w*|polluted|dirty|garbage|dumped|encroach\w*|threat\w*|danger\w*|dying|drying|disappear\w*|hardly any|unfortunately|sadly|not present|no longer|scarce|affected|effects|underprivileged)\b/gi },
+    { key: "wistful", label: "remembering how it was", re: /\b(used to|once was|earlier|before|remember|remembers|miss|missed|gone now|was having|previously|old days|history of)\b/gi },
+    { key: "annoyed", label: "put out or asking for better", re: /\b(should be paid|not allowed|locked|closed|no seats|not open|rude|noisy|noise|ugly|hate|shame|pity|at least|nobody seems|why do|why don\u2019t|why dont|we should|i wish|wish there|wish they|if only|hope there|hoping for)\b/gi },
+    { key: "delight", label: "enjoying it", re: /\b(beautiful|lovely|love|loves|great|wonderful|pleasant|enjoy\w*|favourite|favorite|glad|happy|peaceful|serene|calm|relief|cooler|cool off|shade|shelter|charming|perfect|amazing|nice|a treat|worth)\b/gi },
+    { key: "pride", label: "proud of what is here", re: /\b(proud|heritage|famous|world famous|landmark|tradition\w*|historic\w*|ancient|oldest|five-hundred|legacy|memorial|archive|inscription\w*|serves as|anchor\w*|witness)\b/gi },
+  ];
+  var PLAIN_FEELING = { key: "describing", label: "simply describing it" };
+  function feelingOf(text) {
+    var t = String(text || ""), best = null;
+    FEELINGS.forEach(function (f) {
+      f.re.lastIndex = 0;
+      var hits = (t.match(f.re) || []).length;
+      if (hits && (!best || hits > best.hits)) best = { key: f.key, label: f.label, hits: hits };
+    });
+    return best ? { key: best.key, label: best.label } : { key: PLAIN_FEELING.key, label: PLAIN_FEELING.label };
+  }
+  // at most this many groups are offered, and this many quotes in one group
+  var MAX_GROUPS = 6, GROUP_MAX = 3, GROUP_MIN = 2, PLAIN_GROUPS = 2;
+  /* The groups: quotes that feel the same way about something in common. A
+     group of two or more is what a sentence should gather; a quote left on
+     its own is offered alone, and a sentence may rest on it only because
+     there was nothing to put it with. */
+  function groupQuotes(candidates) {
+    var left = (candidates || []).slice(), groups = [], n = 0;
+    var byFeeling = {};
+    left.forEach(function (c) {
+      var k = (c.feeling && c.feeling.key) || "describing";
+      (byFeeling[k] = byFeeling[k] || []).push(c);
+    });
+    Object.keys(byFeeling).forEach(function (k) {
+      var list = byFeeling[k].slice();
+      while (list.length) {
+        var head = list.shift();
+        var topics = (head.topics || []).slice();
+        var mates = [], rest = [];
+        list.forEach(function (c) {
+          var shared = (c.topics || []).filter(function (t) { return topics.indexOf(t) >= 0; });
+          if (shared.length && mates.length < GROUP_MAX - 1) mates.push({ c: c, shared: shared[0] });
+          else rest.push(c);
+        });
+        list = rest;
+        var quotes = [head].concat(mates.map(function (m) { return m.c; }));
+        groups.push({ id: "g" + (++n), feeling: head.feeling.key, feels: head.feeling.label,
+          about: mates.length ? mates[0].shared : (topics[0] || ""),
+          quotes: quotes.map(function (q) { return q.id; }), alone: quotes.length < GROUP_MIN });
+      }
+    });
+    /* A group that carries a feeling comes before one that merely describes,
+       and a fuller group before a thinner one. Plain description is held to
+       PLAIN_GROUPS, so the paragraph is about how people feel and not about
+       what things are. */
+    groups.sort(function (a, b) {
+      var fa = a.feeling === "describing" ? 0 : 1, fb = b.feeling === "describing" ? 0 : 1;
+      return (fb - fa) || (b.quotes.length - a.quotes.length);
+    });
+    var plain = 0;
+    return groups.filter(function (g) {
+      if (g.feeling !== "describing") return true;
+      plain += 1;
+      return plain <= PLAIN_GROUPS;
+    }).slice(0, MAX_GROUPS);
+  }
+  /* Two groups that feel differently about the same thing: a sentence may
+     hold them together ("...while others..."). */
+  function tensionsOf(groups) {
+    var out = [];
+    (groups || []).forEach(function (a, i) {
+      (groups || []).forEach(function (b, j) {
+        if (j <= i || out.length >= 2) return;
+        if (a.feeling === b.feeling || !a.about || a.about !== b.about) return;
+        out.push({ about: a.about, groups: [a.id, b.id], feels: [a.feels, b.feels] });
+      });
+    });
+    return out;
+  }
+  // the group a quote belongs to, by its id
+  function groupOfQuote(groups, id) {
+    var found = null;
+    (groups || []).forEach(function (g) { if (!found && g.quotes.indexOf(id) >= 0) found = g; });
+    return found;
+  }
+
   /* The name this place would be shown by, or "" when it has none that can
      be shown: a title that is really a list, one that only repeats the
      place's categories (blr-finds-test titles its places by them), one its
@@ -652,17 +750,22 @@
       var best = null;
       (r.sentences || []).forEach(function (one) {
         var n = quoteScore(one);
-        if (n >= POINTED_MIN && (!best || n > best.score)) best = { id: r.id, text: one, score: n };
+        if (n >= POINTED_MIN && (!best || n > best.score)) {
+          best = { id: r.id, text: one, score: n, feeling: feelingOf(one),
+            topics: (r.answers || []).map(function (a) { return a.answer; }) };
+        }
       });
       if (best) candidates.push(best);
     });
     candidates.sort(function (x, y) { return y.score - x.score; });
     candidates = candidates.slice(0, STORY_CANDIDATES);
+    var groups = groupQuotes(candidates);
+    var tensions = tensionsOf(groups);
 
     return { places: total,
       questions: qs.map(function (st) { return { id: st.col, text: st.question, answers: st.answers.map(function (a) { return a.name; }) }; }),
       offered: places.map(function (r) { return { id: r.id, name: r.name, words: r.words, sentences: r.sentences, answers: r.answers }; }),
-      candidates: candidates,
+      candidates: candidates, groups: groups, tensions: tensions,
       /* The reason a place could not be used names no one: quoteFault says
          which person it saw, and that name is nobody's business outside the
          check itself. */
@@ -1550,6 +1653,8 @@
     QUOTE_MIN: QUOTE_MIN, QUOTE_MAX: QUOTE_MAX,
     STORY_PLACES: STORY_PLACES, STORY_WORDS: STORY_WORDS, STORY_CANDIDATES: STORY_CANDIDATES,
     quoteScore: quoteScore, isPointed: isPointed, POINTED_MIN: POINTED_MIN,
+    feelingOf: feelingOf, groupQuotes: groupQuotes, tensionsOf: tensionsOf, groupOfQuote: groupOfQuote,
+    GROUP_MIN: GROUP_MIN, GROUP_MAX: GROUP_MAX, MAX_GROUPS: MAX_GROUPS, STORY_VOICES_MIN: STORY_VOICES_MIN,
     MIN_STORY: MIN_STORY, MAX_STORY: MAX_STORY,
     STORY_CITES_MIN: STORY_CITES_MIN, STORY_CITES_MAX: STORY_CITES_MAX,
     STORY_QUOTES_MIN: STORY_QUOTES_MIN, STORY_QUOTES_MAX: STORY_QUOTES_MAX,
