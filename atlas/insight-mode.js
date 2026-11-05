@@ -1077,7 +1077,10 @@
     var quotes = shown.quotes.map(function (q) {
       return '<li class="in-fq"><q>' + escText(q.text) + "</q> " +
         '<button type="button" data-in="place" data-i="' + q.at + '">' +
-        (q.name ? "See “" + escText(q.name) + "”" : "Show this place on the map") +
+        // a name that is long, or is only the quote's own first words, says nothing new:
+        // the plain link instead (it ran off the panel on Divar Island, 5 Nov 2026)
+        (q.name && q.name.length <= 40 && String(q.text || "").toLowerCase().indexOf(String(q.name).toLowerCase()) !== 0
+          ? "See “" + escText(q.name) + "”" : "Show this place on the map") +
         "</button></li>";
     }).join("");
     return '<section class="in-sum" aria-label="Story of the place in their own words">' + voiceHead() +
@@ -1139,7 +1142,7 @@
     ".in-quotes{margin:.8rem 0 0;padding:0;list-style:none}",
     ".in-fq{margin:.6rem 0 0;padding:0}",
     ".in-fq q{font-family:var(--font-display,Georgia,serif);font-style:italic;font-size:.92rem;line-height:1.45;color:var(--color-text-secondary,#5A5751);quotes:\"\\201C\" \"\\201D\"}",
-    ".in-fq button{background:none;border:none;padding:0;margin:0;font:inherit;font-size:var(--t-meta,.8rem);font-weight:700;color:var(--color-leaf-deep,#1F5232);text-decoration:underline;text-underline-offset:2px;cursor:pointer;text-align:left;white-space:nowrap}",
+    ".in-fq button{background:none;border:none;padding:0;margin:0;font:inherit;font-size:var(--t-meta,.8rem);font-weight:700;color:var(--color-leaf-deep,#1F5232);text-decoration:underline;text-underline-offset:2px;cursor:pointer;text-align:left;white-space:normal;overflow-wrap:anywhere}",
     ".in-fq button:focus-visible{outline:2px solid var(--color-leaf,#2A6B41);outline-offset:2px}",
     "@media (max-width:720px){.in-sum .in-story{font-size:.92rem}.in-fq q{font-size:.88rem}}",
     ".in-writing{display:flex;gap:.7rem;align-items:flex-start}",
