@@ -352,10 +352,10 @@ console.log('\n  the visitor card');
   check('under two quotes left: nothing at all — no heading, no card, and the questions stand alone',
     [IM.storyToShow(mode, layer, keep2.slice(0, 1)), IM.storyCardHTML(null)], [null, '']);
   const own = { summaryOn: true, story: SUM.storyKept(thin) };
-  check('their own words: the heading, the quotes, and small print that claims nothing',
+  check('their own words: the heading and the quotes, with no small print under them',
     (() => { const c = IM.storyCardHTML(IM.storyToShow(own, layer, features)); return [/Story of the place in their own words/.test(c) && !/<b>In their own words<\/b>/.test(c),
       whole.story.sentences.some((x) => c.indexOf(x.text) >= 0), /What people wrote about these places\./.test(c), /Written by AI/.test(c)]; })(),
-    [true, false, true, false]);
+    [true, false, false, false]);
   check('a story that says nothing shows nothing, and switching it off shows nothing either',
     [IM.storyToShow({ summaryOn: true, story: { sig: 'x', sentences: [], quotes: [] } }, layer, features),
       IM.storyToShow({ summaryOn: false, story: mode.story }, layer, features)], [null, null]);

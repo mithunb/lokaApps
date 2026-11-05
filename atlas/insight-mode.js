@@ -1088,10 +1088,9 @@
         ? ''
         : '<p class="in-story">' + shown.sentences.map(function (s) { return escText(s.text); }).join(" ") + "</p>") +
       '<ul class="in-quotes">' + quotes + "</ul>" +
-      '<div class="in-by">' + (shown.ownWords
-        ? "What people wrote about these places."
-        : "Written by AI from what people wrote about these places. The counts are in the questions.") +
-      "</div></section>";
+      // quotes alone need no small print: the heading already says whose words they are (Mithun, 5 Nov 2026)
+      (shown.ownWords ? "" : '<div class="in-by">Written by AI from what people wrote about these places. The counts are in the questions.</div>') +
+      "</section>";
   }
 
   /* The panel's tabs. One panel now, "Insights": Voices at the
