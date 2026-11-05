@@ -1,6 +1,6 @@
 /* Run me with: node test/run.mjs — or on my own with node.
  *
- * "What the places say", version 2 (atlas/insight-mode.js storyDigest,
+ * "Voices" (atlas/insight-mode.js storyDigest,
  * api/lib/atlas/insight-summary.js writeStory) — 5 November 2026, a MOCK-UP:
  * a short STORY of the places, one paragraph in plain sentences and two
  * quotes in the places' own words, with no numbers in it at all (Mithun:
@@ -349,24 +349,23 @@ console.log('\n  the visitor card');
   const keep2 = features.filter((f) => whole.story.quotes.slice(0, 2).some((q) => q.id === f.properties.tag_id));
   check('under two sentences or under two quotes left: their own words, from what still holds',
     (() => { const s2 = IM.storyToShow(mode, layer, keep2); return [s2.ownWords, s2.sentences.length, s2.quotes.length]; })(), [true, 0, 2]);
-  check('under two quotes left: nothing at all, and the tab hides',
-    [IM.storyToShow(mode, layer, keep2.slice(0, 1)), IM.storyCardHTML(null), IM.panelTabs(mode, ['pattern_1'], null, null)], [null, '', []]);
+  check('under two quotes left: nothing at all — no heading, no card, and the questions stand alone',
+    [IM.storyToShow(mode, layer, keep2.slice(0, 1)), IM.storyCardHTML(null)], [null, '']);
   const own = { summaryOn: true, story: SUM.storyKept(thin) };
   check('their own words: the heading, the quotes, and small print that claims nothing',
     (() => { const c = IM.storyCardHTML(IM.storyToShow(own, layer, features)); return [/<b>In their own words<\/b>/.test(c),
       whole.story.sentences.some((x) => c.indexOf(x.text) >= 0), /What people wrote about these places\./.test(c), /Written by AI/.test(c)]; })(),
     [true, false, true, false]);
-  check('a story that says nothing hides the tab, and switching it off hides it too',
+  check('a story that says nothing shows nothing, and switching it off shows nothing either',
     [IM.storyToShow({ summaryOn: true, story: { sig: 'x', sentences: [], quotes: [] } }, layer, features),
-      IM.storyToShow({ summaryOn: false, story: mode.story }, layer, features),
-      IM.panelTabs({ summaryOn: true, story: { sig: 'x', sentences: [], quotes: [] } }, ['pattern_1'], null, null)], [null, null, []]);
+      IM.storyToShow({ summaryOn: false, story: mode.story }, layer, features)], [null, null]);
   /* An older atlas keeps its summary until a story with something in it
      stands in its place: a run that found nothing must not empty the card. */
   const legacy = { sentences: [{ text: 'a', questions: ['pattern_1'] }, { text: 'b', questions: ['pattern_1'] }] };
-  check('an atlas written before the story shows its summary, and goes on showing it after a run that found nothing',
-    [IM.panelTabs({ summaryOn: true, summary: legacy }, ['pattern_1'], null, null).length,
-      IM.panelTabs({ summaryOn: true, story: { sig: 'x', sentences: [], quotes: [] }, summary: legacy }, ['pattern_1'], null, null).length,
-      IM.panelTabs({ summaryOn: true, story: { sig: 'x', sentences: [], quotes: [] } }, ['pattern_1'], null, null).length], [2, 2, 0]);
+  check('an atlas written before the story shows its summary inside Voices, and goes on showing it after a run that found nothing',
+    [IM.visibleSentences(legacy, ['pattern_1']).length,
+      IM.storyToShow({ summaryOn: true, story: { sig: 'x', sentences: [], quotes: [] }, summary: legacy }, layer, features),
+      /Voices">' \+ voiceHead\(\) \+\s*\n\s*sents\.map/.test(fs.readFileSync(ROOT + '/atlas/insight-mode.js', 'utf8'))], [2, null, true]);
   /* Mithun, 5 Nov 2026: a question switched off takes its quotes with it —
      even when its column is the longest thing the place says. */
   const hidden = { id: 'tags', popup: { title: 'name' },

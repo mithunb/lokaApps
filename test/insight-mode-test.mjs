@@ -2,8 +2,8 @@
  *
  * Insight mode (atlas/insight-mode.js, api/lib/atlas/insight-summary.js),
  * 25 October 2026: the questions LOKA asked of the places, as bar lists that
- * colour the map, with a short summary written by AI from the counts (in its
- * own tab since the same day: What the places say · Questions).
+ * colour the map, with "Voices" above them — one panel, named
+ * Insights, since 5 Nov 2026 (the owner has one tab more, Settings).
  * These checks hold:
  *   - which questions show: never one whose answers are people, even if the
  *     owner tries; the owner's order and switches otherwise;
@@ -200,21 +200,29 @@ check('a sentence naming any hidden question is hidden', IM.visibleSentences({ s
 check('"being written" for over seven minutes is stuck, not pending; no time is not pending (the story is four Pro calls, not four flash ones)',
   [IM.isPending({ summaryPending: true, summaryPendingAt: Date.now() - 1000 }), IM.isPending({ summaryPending: true, summaryPendingAt: Date.now() - 1000 - IM.PENDING_STALE_MS }), IM.isPending({ summaryPending: true }), IM.PENDING_STALE_MS], [true, false, false, 7 * 60 * 1000]);
 
-console.log('\n  the panel\'s tabs: What the places say · Questions, or no tabs at all');
-const keys = (t) => t.map((x) => x.key);
+console.log('\n  one panel, "Insights": Voices on top, the questions below (Mithun, 5 Nov 2026)');
 const sumMode = { summaryOn: true, summary: { sentences: [good1, good2] } };
 const shownBoth = ['pattern_3', 'pattern_4'];
-check('a visitor with a summary to show: two tabs, Explore Insights first', keys(IM.panelTabs(sumMode, shownBoth)), ['q', 'sum']);
-check('…named in plain words, "Summary" where they do not fit', IM.panelTabs(sumMode, shownBoth).map((x) => [x.label, x.short || '']), [['Explore Insights', ''], ['What the places say', 'Summary']]);
+check('a visitor has the one panel and so no tab row at all — summary or no summary, being written or not',
+  [IM.panelTabs(sumMode, shownBoth), IM.panelTabs({ summaryOn: false, summary: sumMode.summary }, shownBoth),
+    IM.panelTabs({ summaryOn: true, summary: null }, shownBoth),
+    IM.panelTabs({ summaryOn: true, summary: null, summaryPending: true, summaryPendingAt: Date.now() }, shownBoth)], [[], [], [], []]);
 const ownerTab = { key: 'settings', label: 'Settings' };
-check('the owner keeps the summary first, then Questions, then Settings', IM.panelTabs(sumMode, shownBoth, ownerTab).map((x) => x.key + ':' + x.label), ['sum:What the places say', 'q:Questions', 'settings:Settings']);
-check('summary turned off: no tab row', IM.panelTabs({ summaryOn: false, summary: sumMode.summary }, shownBoth), []);
-check('under two sentences on show: no tab row', IM.panelTabs(sumMode, ['pattern_3']), []);
-check('none written yet: no tab row', IM.panelTabs({ summaryOn: true, summary: null }, shownBoth), []);
-check('being written: the summary tab stays (it says so)', keys(IM.panelTabs({ summaryOn: true, summary: null, summaryPending: true, summaryPendingAt: Date.now() }, shownBoth)), ['q', 'sum']);
-check('the owner\'s Settings comes third, and stands even with no summary', [keys(IM.panelTabs(sumMode, shownBoth, { key: 'settings' })), keys(IM.panelTabs({ summaryOn: false }, shownBoth, { key: 'settings' }))], [['sum', 'q', 'settings'], ['q', 'settings']]);
-check('the atlas opens on the first tab (Explore Insights for a visitor, the summary for the owner); the Questions tab has no summary card', /state = \{ ready: false, tab: null,/.test(imSrc) && /if \(curTab\(\) === "sum"\) return summaryHTML\(\);/.test(imSrc), true);
-check('the summary tab links to the questions', /See the questions these numbers come from/.test(imSrc) && /data-in="tab" data-tab="q"/.test(imSrc), true);
+check('the owner sees Insights · Settings, and the same with the summary switched off',
+  [IM.panelTabs(sumMode, shownBoth, ownerTab).map((x) => x.key + ':' + x.label),
+    IM.panelTabs({ summaryOn: false }, shownBoth, ownerTab).map((x) => x.key + ':' + x.label)],
+  [['q:Insights', 'settings:Settings'], ['q:Insights', 'settings:Settings']]);
+check('Voices is drawn above the questions in that one panel, and when there is nothing to say it is not drawn at all (no empty heading)',
+  [/var voice = voiceHTML\(\);/.test(imSrc),
+    /var h = voice \+ '<div class="in-sect"><span class="in-stamp">The questions/.test(imSrc),
+    /if \(isPending\(mode\)\)[\s\S]*?\n      return "";\n    }/.test(imSrc)], [true, true, true]);
+check('the second tab and its "see the questions" link are gone, and the old name with them',
+  [/What the places say/.test(imSrc), /in-tolink/.test(imSrc), /data-in="tab"/.test(imSrc), /Voices/.test(imSrc)], [false, false, false, true]);
+const voiceCSS = IM.CSS.split('\n').filter((r) => /^\s*"?\.in-sum|^\s*"?\.in-quotes|^\s*"?\.in-fq/.test(r)).join(' ');
+check('the layout is plain: no box, no background, no left rule, no rule between, no indent',
+  [/border-left|border-top|border-radius|border:\s*1px|background:\s*(?!none)/.test(voiceCSS), /padding-left|padding:\s*[^0;}]/.test(voiceCSS), /list-style:none/.test(voiceCSS)],
+  [false, false, true]);
+check('the atlas opens on that one panel; there is no second tab to open on', /state = \{ ready: false, tab: null,/.test(imSrc) && /curTab\(\) === "sum"/.test(imSrc), false);
 check('the whole summary on a phone too: no cut-off left', /Read the whole summary|summore|sumOpen/.test(imSrc), false);
 check('a sentence is escaped, its numbers bold', IM.sentenceHTML('<b>x</b> & 73 of 1,115'), '&lt;b&gt;x&lt;/b&gt; &amp; <b>73</b> of <b>1,115</b>');
 
@@ -555,7 +563,7 @@ try {
     check('order and switches saved; the story kept, and no run at all',
       [set.status, f.mode.order, f.mode.shown.pattern_1, ran(slug), f.mode.summaryPending], [200, ord, false, 1, undefined]);
     const off = await call('POST', M(slug), { cookie: ownerC, body: { insight: { summaryOn: false } } });
-    check('what the places say switched off', [off.status, fileOf(dir).mode.summaryOn], [200, false]);
+    check('Voices switched off', [off.status, fileOf(dir).mode.summaryOn], [200, false]);
     check('\u2026and Write it again is refused while it is off', (await call('POST', M(slug), { cookie: ownerC, body: { rewriteSummary: true } })).status, 409);
     await call('POST', M(slug), { cookie: ownerC, body: { insight: { summaryOn: true } } });
     check('back on, with the same places: still no run', [ran(slug), fileOf(dir).mode.summaryPending], [1, undefined]);
@@ -595,8 +603,10 @@ try {
         /Written by AI from what people wrote about these places\. The counts are in the questions\./.test(card),
         /Pratham/.test(card)],
       [true, true, shown.quotes.length, true, true, false]);
-    check('the tab is there for a visitor, named in plain words', IM.panelTabs(f.mode, ['pattern_1', 'pattern_2'], null, shown).map((t) => t.key + ':' + t.label),
-      ['q:Explore Insights', 'sum:What the places say']);
+    check('a visitor reads it in the one Insights panel, with no tab row, and the owner has Settings beside it',
+      [IM.panelTabs(f.mode, ['pattern_1', 'pattern_2']), IM.panelTabs(f.mode, ['pattern_1', 'pattern_2'], { key: 'settings', label: 'Settings' }).map((t) => t.key + ':' + t.label),
+        /aria-label="Voices"/.test(card), card.indexOf('Voices') < card.indexOf('in-story')],
+      [[], ['q:Insights', 'settings:Settings'], true, true]);
   }
   check('a private atlas is written where it lives, never in the public folder', fs.existsSync(path.join(ROOT, 'atlas', 'datasets', PRIVSLUG)), false);
   console.log('\n  an atlas not yet read');
@@ -634,9 +644,10 @@ try {
     check('an atlas written before the story: its summary stands, nothing is stamped, so the next update tries again',
       [j.status, 'story' in f.mode, f.mode.summary, f.mode.storyFailed.why],
       [200, false, OLDSUM, 'the writer could not be reached']);
-    check('…and the tab still shows that summary to a visitor',
-      IM.panelTabs(f.mode, IM.shownStats(SAYFX.layer, SAYFX.features, f.mode).map((st) => st.col), null,
-        IM.storyToShow(f.mode, SAYFX.layer, SAYFX.features)).map((t) => t.key), ['q', 'sum']);
+    check('…and Voices still shows that summary to a visitor',
+      [IM.storyToShow(f.mode, SAYFX.layer, SAYFX.features),
+        IM.visibleSentences(f.mode.summary, IM.shownStats(SAYFX.layer, SAYFX.features, f.mode).map((st) => st.col)).length],
+      [null, f.mode.summary.sentences.length]);
   }
   {
     // a run that honestly finds nothing is no failure: it is stamped, and the older summary stays until a story stands
@@ -644,7 +655,7 @@ try {
     check('a run that found nothing to say: stamped so it is not asked again, the summary kept, and no failure recorded',
       [j.j.by, !!f.mode.story.sig, f.mode.story.sentences.length, f.mode.summary, 'storyFailed' in f.mode],
       ['no place has words worth quoting', true, 0, OLDSUM, false]);
-    check('…and its tab still shows the summary', IM.panelTabs(f.mode, ['pattern_1'], null, null).map((t) => t.key), ['q', 'sum']);
+    check('…and Voices still shows the summary', [IM.storyToShow(f.mode, SAYFX.layer, SAYFX.features), IM.visibleSentences(f.mode.summary, ['pattern_1']).length], [null, 2]);
   }
 } catch (e) {
   fail++;

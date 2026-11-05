@@ -7,7 +7,8 @@
  *   - "See it as a visitor", the menu's first line;
  *   - Explore's Buttons tab (owner.js builds the tabs; this draws what is in
  *     them), and Insight's Settings tab (added here to the visitor's own
- *     tabs, What the places say · Questions, which insight-mode.js draws).
+ *     one panel, Insights, with Voices on top, which
+ *     insight-mode.js draws).
  * The rules for buttons are explore-mode.js's, and for Insight's questions
  * insight-mode.js's: the same files the server checks with. */
 (function () {
@@ -139,7 +140,7 @@
           lines.push("To start, LOKA makes up to four buttons from the categories your places use most. You can change them under Buttons.");
         }
         if (to === "insight") {
-          lines.push("LOKA writes a short summary of what the places say. It takes about a minute; visitors see the questions meanwhile. You choose which questions show, and their order, under Settings.");
+          lines.push("LOKA writes Voices — a short paragraph of what people are saying about these places. It takes about a minute; visitors see the questions meanwhile. You choose which questions show, and their order, under Settings.");
         }
         conf.innerHTML = "<p>Switch " + esc(title) + " from " + MODES[cur].t + " to " + MODES[to].t + "?</p><ul>" +
           lines.map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("") + "</ul>";
@@ -583,7 +584,7 @@
     var s = IM().settingsOf(L, mode), busy = INS.saving || INS.writing;
     var writing = INS.writing || IM().isPending(mode);
     var h = '<div class="own-bbody own-ibody">';
-    h += '<div class="own-icard"><div class="own-irow"><div class="own-ik"><b id="own-isum-k">What the places say</b>' +
+    h += '<div class="own-icard"><div class="own-irow"><div class="own-ik"><b id="own-isum-k">Voices</b>' +
       "<small>A short paragraph in plain words about what people are saying about these places \u2014 curious, concerned, enjoying \u2014 written by AI from what they wrote, with the quotes it rests on underneath. Written again each time the atlas is updated.</small></div>" +
       '<button class="own-switch" type="button" role="switch" data-iact="sum" aria-checked="' + s.summaryOn + '" aria-labelledby="own-isum-k"' + (busy ? " disabled" : "") +
       '><span class="own-switch-tr" aria-hidden="true"></span></button></div>';
@@ -631,7 +632,7 @@
         if (IM().isPending(m) && INS.polls++ < 110) { if (!host.hidden) pollInsight(host, true); return; }
         if (IM().isPending(m)) { delete m.summaryPending; delete m.summaryPendingAt; }
         takeInsight(m);
-        if (m.story && (m.story.sentences.length || m.story.quotes.length)) toast("What the places say is written");
+        if (m.story && (m.story.sentences.length || m.story.quotes.length)) toast("Voices are written");
         drawInsightShelf(host);
       }).catch(function () { if (INS.polls++ < 110) pollInsight(host, true); });
     }, 4000);
@@ -681,9 +682,9 @@
         drawInsightShelf(host);
       });
   }
-  /* Insight's tabs are the visitor's own (What the places say · Questions,
-     drawn by insight-mode.js); the owner gets one more, Settings, which puts
-     the panel's list away and shows the settings in its place. Kept on the
+  /* Insight is one panel, Insights (drawn by insight-mode.js: Voice of the
+     Place, then the questions); the owner gets one tab more, Settings, which
+     puts the panel's list away and shows the settings in its place. Kept on the
      viewer itself, so a redrawn viewer has it too; See it as a visitor hides
      it, and the visitor's tabs are what is left. */
   function insightTabs() {

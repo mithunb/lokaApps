@@ -1,8 +1,8 @@
 /* LOKA Atlas — Insight mode: for people reading patterns. The questions LOKA
  * asked of the places, each answered as a bar list that colours the map, and
- * a short summary written by AI from the answer counts, in its own tab
- * (a visitor: "Explore Insights · What the places say", opening on the
- * questions; the owner: "What the places say · Questions · Settings").
+ * "Voices" above them — what people are saying, written by AI
+ * from their own words, with the quotes it rests on. One panel, "Insights"
+ * (a visitor sees no tab row at all; the owner: "Insights · Settings").
  *
  * An atlas is in Insight when the `mode` in its manifest.local.json says so
  * (the owner's "How visitors explore" switch, POST /instances/:slug/mode):
@@ -10,7 +10,7 @@
  *   mode: {
  *     name: "insight",
  *     layer: "<the layer whose questions are read>",
- *     summaryOn: true,                     // the "What the places say" tab
+ *     summaryOn: true,                     // "Voices" on or off
  *     order: ["pattern_3", "pattern_4", …],   // the owner's order
  *     shown: { pattern_1: true, pattern_5: false, … },
  *     summary: { sig, sentences: [{ text, questions: [col…] }], at } | null,
@@ -317,7 +317,7 @@
     return { places: total, questions: questions, pairs: pairs };
   }
 
-  /* ========= the places' own words ("What the places say" v2, 5 Nov 2026) ======
+  /* ========= the places' own words ("Voices", 5 Nov 2026) =========
      This is what the visitor card shows (Mithun, 5 Nov 2026: "go with 1").
      summaryTables above is what the older summary reads, and nothing here
      touches it: an atlas written before the story goes on showing that
@@ -988,7 +988,7 @@
     });
     return out.length >= MIN_SENTENCES ? out : [];
   }
-  /* ---------------- "What the places say": the story on the card ----------------
+  /* ---------------- "Voices": the story on the card ----------------
      The server writes it (insight-summary.js writeStory) and keeps it in
      mode.story: { sig, sentences: [{ text, quotes:[id] }], quotes: [{ id,
      text, name }], ownWords, at }. An atlas written before the story has no
@@ -1001,7 +1001,8 @@
      says. A sentence left with none of its quotes goes too — there is no
      sentence without its evidence. Under two sentences, or under two quotes
      left to show, the card falls back to the quotes themselves ("In their own
-     words"); under two of those, nothing is shown and the tab hides. */
+     words"); under two of those nothing is shown, heading and all, and the
+     questions stand alone. */
   /* The place's own words as they stand now, as a visitor could read them:
      the columns the questions ON SHOW are read from, and the place's own
      free-text columns that no question is read from at all. A column only a
@@ -1070,49 +1071,34 @@
   /* The card itself. The paragraph is the sentences run together, then the
      quotes that back them, each a button to its place on the map (the same
      data-in="place" data-i row the question lists use). */
+  function voiceHead() { return '<div class="in-sect"><span class="in-stamp">Voices</span></div>'; }
   function storyCardHTML(shown) {
     if (!shown) return "";
     var quotes = shown.quotes.map(function (q) {
-      return '<blockquote class="in-fq"><q>' + escText(q.text) + "</q>" +
-        '<span class="in-who"><button type="button" data-in="place" data-i="' + q.at + '">' +
-        (q.name ? "See “" + escText(q.name) + "” on the map" : "Show this place on the map") +
-        "</button></span></blockquote>";
+      return '<li class="in-fq"><q>' + escText(q.text) + "</q> " +
+        '<button type="button" data-in="place" data-i="' + q.at + '">' +
+        (q.name ? "See “" + escText(q.name) + "”" : "Show this place on the map") +
+        "</button></li>";
     }).join("");
-    return '<section class="in-sum" aria-label="What the places say">' +
+    return '<section class="in-sum" aria-label="Voices">' + voiceHead() +
       (shown.ownWords
         ? '<p class="in-story"><b>In their own words</b></p>'
         : '<p class="in-story">' + shown.sentences.map(function (s) { return escText(s.text); }).join(" ") + "</p>") +
-      '<div class="in-quotes">' + quotes + "</div>" +
+      '<ul class="in-quotes">' + quotes + "</ul>" +
       '<div class="in-by">' + (shown.ownWords
         ? "What people wrote about these places."
         : "Written by AI from what people wrote about these places. The counts are in the questions.") +
       "</div></section>";
   }
 
-  /* The panel's tabs. With no
-     summary to show (turned off, under two sentences on show, or none written
-     and none being written) there is no tab row at all, only the questions.
-     `extra` is a tab the owner's tools add (Settings, owner-modes.js); a
-     visitor never has one. Fewer than two tabs: none. */
-  /* A visitor (signed out, or signed in without owning the atlas) sees the
-     questions first, named "Explore Insights", and the atlas opens on them
-     (Mithun, 25 Oct 2026); the owner, who has Settings, keeps the summary
-     first and the plainer "Questions". */
-  /* `story` is what storyToShow answered, which the caller has worked out
-     already (it needs the places). With no story to show, an atlas that still
-     carries the older summary shows that instead. */
-  function panelTabs(mode, shownCols, extra, story) {
-    var t = [];
-    var has = story ? true : !!visibleSentences(mode && mode.summary, shownCols).length;
-    var sum = !(mode && mode.summaryOn === false) && (has || isPending(mode));
-    if (extra) {
-      if (sum) t.push({ key: "sum", label: "What the places say", short: "Summary" });
-      t.push({ key: "q", label: "Questions" });
-      t.push(extra);
-    } else {
-      t.push({ key: "q", label: "Explore Insights" });
-      if (sum) t.push({ key: "sum", label: "What the places say", short: "Summary" });
-    }
+  /* The panel's tabs. One panel now, "Insights": Voices at the
+     top, the questions below it (Mithun, 5 Nov 2026 — there is no second tab
+     to flip to any more). A visitor has that one panel and so no tab row at
+     all; the owner has one more tab, Settings (`extra`, owner-modes.js), so
+     the row shows "Insights · Settings". Fewer than two tabs: none. */
+  function panelTabs(mode, shownCols, extra) {
+    var t = [{ key: "q", label: "Insights" }];
+    if (extra) t.push(extra);
     return t.length > 1 ? t : [];
   }
 
@@ -1131,17 +1117,17 @@
   var CSS = [
     ".in-panel{padding:.15rem 0 1rem;font-size:var(--t-ui,.9rem)}",
     ".in-panel .in-stamp,.in-card .in-stamp{font-size:var(--t-label,.72rem);font-weight:700;letter-spacing:.12em;text-transform:uppercase}",
-    ".in-sum{background:var(--color-page,#FAF8F3);border:1px solid var(--color-divider,rgba(36,33,29,.10));border-left:3px solid var(--color-leaf,#2A6B41);border-radius:var(--radius-md,.25rem);padding:.75rem .85rem .7rem;margin:0 0 1.1rem}",
+    // Voices: plain body text, no box, no rules, no indent (Mithun, 5 Nov 2026)
+    ".in-sum{margin:0 0 1.4rem}",
     ".in-sum .in-stamp{color:var(--color-leaf-deep,#1F5232)}",
     ".in-sum p{margin:.3rem 0 0;font-size:.92rem;line-height:1.5;color:var(--color-text-primary,#24211D)}",
-    ".in-tolink{display:inline-block;background:none;border:none;padding:.2rem 0;margin:0;font:inherit;font-size:var(--t-ui,.9rem);font-weight:700;color:var(--color-leaf-deep,#1F5232);cursor:pointer;text-align:left;text-decoration:underline;text-underline-offset:2px}",
     // the panel's tabs stand where the head's word stood, and look as it did: the chosen one underlined in Sindoor
     ".panel-head.in-tabbed .sheet-who>strong{display:none !important}",
     ".in-tabs{display:flex;gap:.9rem;min-width:0;flex:1 1 auto;overflow:hidden}",
     ".in-tab{flex:none;position:relative;white-space:nowrap;background:none;border:0;border-bottom:2px solid transparent;border-radius:0;margin:0;padding:.15rem .1rem;font:inherit;font-size:var(--t-label,.72rem);font-weight:700;letter-spacing:.12em;text-transform:uppercase;line-height:1.1;color:var(--color-text-muted,#6E6A63);cursor:pointer}",
     ".in-tab:hover{color:var(--color-text-secondary,#5A5751)}",
     ".in-tab.on{color:var(--color-text-primary,#24211D);border-bottom-color:var(--color-sindoor,#C9402B)}",
-    ".in-tab:focus-visible,.in-tolink:focus-visible{outline:2px solid var(--color-leaf,#2A6B41);outline-offset:2px}",
+    ".in-tab:focus-visible{outline:2px solid var(--color-leaf,#2A6B41);outline-offset:2px}",
     ".in-tab .in-ts,.in-tabs.in-short .in-tab .in-tl{display:none}",
     ".in-tabs.in-short .in-tab .in-ts{display:inline}",
     ".atlas-panel.collapsed .in-tab.on{border-bottom-color:transparent}",
@@ -1150,12 +1136,11 @@
     ".in-sum .in-by{margin-top:.55rem;font-size:var(--t-meta,.8rem);color:var(--color-text-muted,#6E6A63)}",
     // the story, and the quotes under it that it rests on
     ".in-sum .in-story{margin:.35rem 0 0;font-size:.95rem;line-height:1.55;color:var(--color-text-primary,#24211D)}",
-    ".in-quotes{margin:.9rem 0 .2rem;border-top:1px solid var(--color-divider,rgba(36,33,29,.10))}",
-    ".in-fq{margin:.75rem 0 0;padding:0 0 0 .7rem;border-left:2px solid var(--color-leaf,#2A6B41);opacity:.95}",
+    ".in-quotes{margin:.8rem 0 0;padding:0;list-style:none}",
+    ".in-fq{margin:.6rem 0 0;padding:0}",
     ".in-fq q{font-family:var(--font-display,Georgia,serif);font-style:italic;font-size:.92rem;line-height:1.45;color:var(--color-text-secondary,#5A5751);quotes:\"\\201C\" \"\\201D\"}",
-    ".in-fq .in-who{display:block;margin-top:.15rem}",
-    ".in-fq .in-who button{background:none;border:none;padding:.15rem 0;margin:0;font:inherit;font-size:var(--t-meta,.8rem);font-weight:700;color:var(--color-leaf-deep,#1F5232);text-decoration:underline;text-underline-offset:2px;cursor:pointer;text-align:left}",
-    ".in-fq .in-who button:focus-visible{outline:2px solid var(--color-leaf,#2A6B41);outline-offset:2px}",
+    ".in-fq button{background:none;border:none;padding:0;margin:0;font:inherit;font-size:var(--t-meta,.8rem);font-weight:700;color:var(--color-leaf-deep,#1F5232);text-decoration:underline;text-underline-offset:2px;cursor:pointer;text-align:left;white-space:nowrap}",
+    ".in-fq button:focus-visible{outline:2px solid var(--color-leaf,#2A6B41);outline-offset:2px}",
     "@media (max-width:720px){.in-sum .in-story{font-size:.92rem}.in-fq q{font-size:.88rem}}",
     ".in-writing{display:flex;gap:.7rem;align-items:flex-start}",
     ".in-writing .in-lines{flex:none;width:44px;padding-top:.45rem}",
@@ -1456,7 +1441,7 @@
           b.setAttribute("aria-selected", String(on));
         });
         head.classList.add("in-tabbed");
-        // "What the places say" gives way to "Summary" only where the tabs do not fit (a phone)
+        // a tab gives way to its short name only where the row does not fit (a phone)
         row.classList.remove("in-short");
         if (row.clientWidth && row.scrollWidth > row.clientWidth + 1) row.classList.add("in-short");
       }
@@ -1465,27 +1450,25 @@
     }
 
     /* ---- the panel ---- */
-    function toQuestions(words) {
-      return '<button type="button" class="in-tolink" data-in="tab" data-tab="q">' + words + "</button>";
-    }
-    function summaryHTML() {
+    /* "Voices": the top of the one Insights panel. Nothing to say
+       — turned off, nothing written, nothing being written — and it is not
+       there at all, heading and all: the questions stand alone. */
+    function voiceHTML() {
       var shown = Story();
-      if (shown) return storyCardHTML(shown) + toQuestions("See the questions these places answer");
+      if (shown) return storyCardHTML(shown);
       /* An atlas whose story has nothing in it yet — none written, or one
          that found nothing to say — goes on showing the summary it has. The
          server takes the summary away the moment a story stands in its place. */
       var sents = mode.summaryOn === false ? [] : visibleSentences(mode.summary, Q().cols);
       if (sents.length) {
-        return '<section class="in-sum" aria-label="What the places say">' +
+        return '<section class="in-sum" aria-label="Voices">' + voiceHead() +
           sents.map(function (s) { return '<p class="in-s">' + sentenceHTML(s.text) + "</p>"; }).join("") +
-          '<div class="in-by">Written by AI from the answers to the questions, when the atlas was last updated. Numbers count places, not people.</div></section>' +
-          toQuestions("See the questions these numbers come from");
+          '<div class="in-by">Written by AI from the answers to the questions, when the atlas was last updated. Numbers count places, not people.</div></section>';
       }
       if (isPending(mode)) {
-        return '<section class="in-sum" aria-live="polite"><div class="in-stamp">Being written</div><div class="in-writing">' +
+        return '<section class="in-sum" aria-live="polite" aria-label="Voices">' + voiceHead() + '<div class="in-writing">' +
           '<div class="in-lines" aria-hidden="true"><i></i><i></i><i></i></div><p>LOKA is reading what people wrote about these ' + feats().length +
-          " places, to say what they are saying. This takes a minute or two. The questions are ready now.</p></div></section>" +
-          toQuestions("See the questions");
+          " places, to say what they are saying. This takes a minute or two. The questions are below.</p></div></section>";
       }
       return "";
     }
@@ -1563,11 +1546,11 @@
     }
     function panelHTML() {
       if (!state.ready) return '<p class="ev-hint">' + (typeof window !== "undefined" && window.LokaWait ? window.LokaWait.html("Loading the places\u2026") : "Loading the places\u2026") + "</p>";
-      if (curTab() === "sum") return summaryHTML();
+      var voice = voiceHTML();
       var list = Q().list;
-      if (!list.length) return '<p class="in-hint">No questions to show yet.</p>';
+      if (!list.length) return voice || '<p class="in-hint">No questions to show yet.</p>';
       var main = list.filter(function (st) { return !st.sparse; }), few = list.filter(function (st) { return st.sparse; });
-      var h = '<div class="in-sect"><span class="in-stamp">The questions</span><span class="in-cov">' + list.length + " asked of every place</span></div>" +
+      var h = voice + '<div class="in-sect"><span class="in-stamp">The questions</span><span class="in-cov">' + list.length + " asked of every place</span></div>" +
         '<p class="in-hint">Open a question to colour the map by its answers. Tap an answer to see only those places.</p>';
       h += main.map(questionHTML).join("");
       if (few.length) h += '<div class="in-sect" style="margin-top:1rem"><span class="in-stamp">Said by only a few places</span></div>' + few.map(questionHTML).join("");
@@ -1584,9 +1567,9 @@
       if (sc) sc.scrollTop = top;
     }
     function sheetHead() {
-      if (!state.ready) return { label: "Patterns", small: "" };
+      if (!state.ready) return { label: "Insights", small: "" };
       var n = feats().filter(function (x) { return matches(x.properties || {}); }).length;
-      return { label: "Patterns", small: n + " " + placesWord(n) };
+      return { label: "Insights", small: n + " " + placesWord(n) };
     }
     function syncHead() {
       if (typeof document === "undefined") return;
@@ -1638,7 +1621,6 @@
       }
       if (d === "clear") { state.filter = null; state.showAll = false; changed(false); return; }
       if (d === "more") { state.showAll = true; renderPanel(); return; }
-      if (d === "tab") { showTab(t.getAttribute("data-tab")); return; }
       if (d === "place") {
         var fe = feats()[+t.getAttribute("data-i")];
         if (fe) api.openPlace(X, fe);
@@ -1669,7 +1651,7 @@
       if (stage) { stage.classList.remove("ev-on"); stage.classList.remove("ex-on"); stage.classList.add("in-on"); }
       var sec = el("section", "ctl-group ev-group in-panel");
       sec.setAttribute("data-group", "insight");
-      sec.setAttribute("data-group-label", "Patterns");
+      sec.setAttribute("data-group-label", "Insights");
       var box = el("div", "in-wrap");
       box.addEventListener("click", onClick);
       box.addEventListener("change", onChange);
@@ -1678,7 +1660,7 @@
       state.box = box;
       renderPanel();
       var back = document.getElementById("sheet-card-back");
-      if (back && back.lastChild && back.lastChild.nodeType === 3) back.lastChild.nodeValue = "Patterns";
+      if (back && back.lastChild && back.lastChild.nodeType === 3) back.lastChild.nodeValue = "Insights";
       if (back) back.setAttribute("aria-label", "Back to the questions");
     }
 
@@ -1783,7 +1765,7 @@
     numbersIn: numbersIn,
     checkSentences: checkSentences,
     checkSentencesWithReasons: checkSentencesWithReasons,
-    // "What the places say" — the story the visitor card shows
+    // "Voices" — the story the visitor card shows
     storyDigest: storyDigest,
     offeredById: offeredById,
     placeWords: placeWords,
