@@ -69,6 +69,28 @@
      they are dropped. */
   var SHARE_WORDS = /\b(most|mostly|almost all|nearly all|virtually all|the bulk|a good part|the larger part|the greater part|the lion\u2019s share|lion's share|majority|minority|predominantly|overwhelmingly|largely|mainly|chiefly|primarily|generally|typically|usually|commonly|few|a few|many|plenty|hardly any|barely any|scarcely any|rarely|seldom|dominated|dominate|dominates|outnumber|outnumbers)\b/i;
   function hasShareWords(text) { return SHARE_WORDS.test(String(text || "")); }
+  /* The story says no amounts at all (Mithun, 5 Nov 2026): the questions
+     below it already show every count, so a sentence of the story may carry
+     no digit, no number word and no word for how many. These are the ones
+     SHARE_WORDS and NUMBER_WORDS do not already catch. "all" and "every" are
+     amounts too; "at all" and "every day" are not. */
+  var AMOUNT_WORDS = /\b(a handful|handfuls|a couple|a number of|a range of|a bunch of|several|numerous|countless|scores of|a lot of|lots of|plenty of|some|much of|all|every|each one|none|nobody|no one|no place|no places|more than|less than|fewer|at least|at most|up to|one of|everywhere|nowhere|is common|are common|common here|commonly|is rare|are rare|rare here|the only|often|sometimes|occasionally|frequently|widespread)\b/i;
+  /* Saying which is biggest is saying how many, without the number (Opus
+     review, 5 Nov 2026, on the mock's "Trees come first here"). SHARE_WORDS
+     already holds mostly, mainly, largely and their kin; these are the rest. */
+  var RANK_WORDS = /\b(comes? first|came first|first and foremost|above all|for the most part|most of|in the main|leads? the way|tops? the list|more than anything|stands? out above|the bulk of|outnumbers? )\b/i;
+  /* A word is an amount only where it counts something. "A common myna", "a
+     rare fig tree", "the sole banyan" say what a thing IS, not how many there
+     are, so the adjectives alone are not enough: it takes the phrase ("is
+     common", "common here"). Likewise "at all", "all day" and "every day" are
+     idioms, not amounts. */
+  function hasAmountWords(text) {
+    var t = String(text || "")
+      .replace(/\bat all\b/gi, " ")
+      .replace(/\ball (?:day|night|year|round|the way|over the)\b/gi, " ")
+      .replace(/\bevery ?day\b/gi, " ");
+    return hasNumberWords(t) || hasShareWords(t) || AMOUNT_WORDS.test(t) || RANK_WORDS.test(t);
+  }
 
   function isOn(manifest) {
     var m = manifest && manifest.mode;
@@ -288,46 +310,38 @@
     return { places: total, questions: questions, pairs: pairs };
   }
 
-  /* ================= the digest ("What the places say" v2, 5 Nov 2026) =========
+  /* ========= the places' own words ("What the places say" v2, 5 Nov 2026) ======
      NOT in use on the visitor page yet: a mock-up only (docs/plan-places-say-v2.md).
-     summaryTables above is what the shipped summary still reads.
+     summaryTables above is what the shipped summary still reads, and nothing
+     here touches it.
 
-     The digest is the tables plus three things the code works out, so the
-     model is left only the writing:
-       - notable: the pair cells where one answer holds most of its row, and
-         the contrasts between two rows of the same pair;
-       - quotes: for the cells worth a finding, a few places' own words, each
-         with its place id — one sentence, picked from the column the question
-         was read from (else the place's longest free-text column), preferring
-         the sentence that holds that place's own evidence words
-         (pattern_N_why). Never a sentence with an email, a phone number, a
-         link, an @handle, a credit line, or anything a people column of that
-         place says;
+     Mithun, 5 Nov 2026: the second version is a short STORY, not statistics —
+     "focus on writing a short summary or story of the places. Stats are less
+     important because the questions cover it." So the digest hands the model
+     the places themselves and no counts at all (storyDigest):
+       - for each place with words of its own: its id, the name it would be
+         shown by, those words, and its answers to the questions on show as
+         plain labels. The words are the place's own description, scrubbed
+         sentence by sentence: never an email, a phone number, a link, an
+         @handle, a credit line, anything a people column of that place says,
+         or words that stand on more than SHARED_MAX places (a LOKA space's
+         name copied onto every place is not a place's own words);
+       - on a big atlas a sample spread across the answers, so the story is
+         not written from one corner of the map;
        - quality: how many places have words at all, and how many repeat
          another place's words.
-     A quote is offered for one cell only, so a finding can never borrow a
-     quote from a place that is not in the group it counts. */
-  var QUOTE_MIN = 25, QUOTE_MAX = 180, QUOTES_PER_CELL = 3, TOP_ANSWERS = 3;
+     A tagger's name is never in it, and a question whose answers are people
+     is never read. */
+  var QUOTE_MIN = 25, QUOTE_MAX = 180;
   // words standing on more places than this are a field the places share, not one place’s own words
   var SHARED_MAX = 2;
-  /* Which pair cells are worth saying (Mithun, 5 Nov 2026: leave the obvious
-     ones out in code, before the model). A cell is one row of a pair — the
-     places answering A to the first question — and one answer B to the
-     second. Three things must hold together:
-       - the row is big enough to mean anything (CMP_PLACES) and the cell
-         holds at least NOTABLE_MIN places;
-       - B holds most of the row (NOTABLE_SHARE);
-       - and B is really more likely here than it is anywhere else: its share
-         of this row must be at least LIFT_MIN times its share of all the
-         places that answer both questions, and at least LIFT_GAP above it.
-     The last one is what drops "nearly every Natural feature is made of
-     Natural elements" when Natural elements is already what most places of
-     any kind say: the cell restates the row, so it tells the reader nothing.
-     Two rows whose share of the same B is CONTRAST_GAP apart are offered as
-     a contrast, with both rows' numbers, so the sentence comparing them can
-     be checked exactly (the "compare" shape below). */
-  var NOTABLE_SHARE = 0.60, NOTABLE_MIN = 3, LIFT_MIN = 1.5, LIFT_GAP = 0.20, CONTRAST_GAP = 0.25, MAX_CONTRASTS = 8;
-  var MIN_FINDINGS = 2, MAX_FINDINGS = 5;
+  // at most this many places are offered to the model, and this many characters of each one's words
+  var STORY_PLACES = 80, STORY_WORDS = 400;
+  /* The story's shape (Mithun, 5 Nov 2026): one short paragraph of 3 to 5
+     sentences, each naming the 2 to 6 places it draws from, and two short
+     quotes from two different places. Under MIN_STORY sentences left after
+     the checks, nothing is shown. */
+  var MIN_STORY = 2, MAX_STORY = 5, STORY_IDS_MIN = 2, STORY_IDS_MAX = 6, STORY_QUOTES = 2;
   // a place with fewer than this share of words, or this many repeats, is a thin atlas
   var THIN_WORDS = 0.5, THIN_SAME = 0.3;
 
@@ -452,152 +466,75 @@
     return out;
   }
   function quoteSourceOf(layer, props, col) { return quoteSourcesOf(layer, props, col)[0] || ""; }
-  /* This place's own words for this question, or "" with the reason it has
-     none: the sentence holding the evidence words the reading kept
-     (pattern_N_why), else the first sentence that is safe to show. */
-  function quoteOf(layer, f, col, opts) {
+  /* One place's own words, scrubbed: the sentences of its description that
+     are safe to show, in order, up to STORY_WORDS characters. "" with the
+     reason when it has none. The sentences are kept apart as well as joined,
+     because a quote is one of them and the code puts its own copy back. */
+  function placeWords(layer, f, col, opts) {
     var p = (f && f.properties) || {};
     var sources = quoteSourcesOf(layer, p, col);
-    if (!sources.length) return { text: "", why: "the place has nothing written about it" };
+    if (!sources.length) return { text: "", sentences: [], why: "the place has nothing written about it" };
     var people = peopleValuesOf(layer, p);
     var shared = opts && typeof opts.shared === "function" ? opts.shared : null;
-    var why = String(p[col + "_why"] || "").replace(/\s+/g, " ").trim();
-    var words = why.split(/[;,/|]+/).map(function (w) { return foldName(w); }).filter(function (w) { return w.length >= 4; });
     var firstFault = "";
     for (var s = 0; s < sources.length; s++) {
       /* Words several places share are a field, not this place's own words
          (a LOKA space's name read as the answer to "what kind of place is
          it?", a pasted boilerplate line). */
       if (shared && shared(sources[s])) { firstFault = firstFault || "those words stand on several places, so they are not this place’s own"; continue; }
-      var ok = [], faults = [];
+      var ok = [], faults = [], len = 0;
       splitSentences(sources[s]).forEach(function (one) {
         var bad = quoteFault(one, people);
-        if (bad) faults.push(bad); else ok.push(one);
+        if (bad) { faults.push(bad); return; }
+        if (ok.length && len + one.length > STORY_WORDS) return;
+        ok.push(one); len += one.length + 1;
       });
       if (!ok.length) { firstFault = firstFault || faults[0] || "nothing that can be quoted"; continue; }
-      for (var i = 0; i < ok.length; i++) {
-        var folded = foldName(ok[i]);
-        for (var j = 0; j < words.length; j++) if (hasWhole(folded, words[j])) return { text: ok[i], why: "", evidence: true };
-      }
-      return { text: ok[0], why: "", evidence: false };
+      return { text: ok.join(" "), sentences: ok, why: "" };
     }
-    return { text: "", why: firstFault || "nothing that can be quoted" };
+    return { text: "", sentences: [], why: firstFault || "nothing that can be quoted" };
   }
-  // the name of a cell, the same on both sides of the model
-  function cellKey(cell) {
-    var c = cell || {};
-    return [c.shape || "single"].concat(c.questions || [], (c.answers || []).map(foldName)).join("|");
-  }
-  /* The quotes offered for one cell: at most three, from the places the cell
-     counts, spread across the layer, the places whose own evidence words were
-     found first. */
-  function quotesForCell(layer, features, cell, hits, opts) {
-    var picked = [], spare = [], step = Math.max(1, Math.floor(hits.length / (QUOTES_PER_CELL * 4)));
-    for (var i = 0; i < hits.length && picked.length < QUOTES_PER_CELL * 4; i += step) {
-      var h = hits[i], q = quoteOf(layer, h.f, cell.questions[0], opts);
-      if (!q.text) continue;
-      (q.evidence ? picked : spare).push({ id: h.id, text: q.text });
-    }
-    var out = picked.slice(0, QUOTES_PER_CELL);
-    for (var k = 0; out.length < QUOTES_PER_CELL && k < spare.length; k++) out.push(spare[k]);
-    return out;
+  /* The name this place would be shown by, or "" when it has none that can
+     be shown: a title that is really a list, one that only repeats the
+     place's categories (blr-finds-test titles its places by them), one its
+     own people columns say, one with a link or a credit in it, or one that is
+     only the first words of the description cut short ("Grooves on a tree
+     bark, from…" on the real Bengaluru layer) — a cut-off line is not a name,
+     and the link says "this place" instead. */
+  function placeLabelOf(layer, f) {
+    var p = (f && f.properties) || {};
+    var nm = placeNameOf(layer, f);
+    if (!nm || nm.length > 90) return "";
+    if (/(…|\.\.\.)$/.test(nm)) return "";
+    if (/[;|]/.test(nm)) return "";
+    if (foldName(nm) === foldName(p.categories || "") || foldName(nm) === foldName(p._category || "")) return "";
+    if (CONTACT.test(nm) || CREDIT.test(nm)) return "";
+    var folded = foldName(nm);
+    var named = peopleValuesOf(layer, p).some(function (v) { return hasWhole(folded, foldName(v)); });
+    return named ? "" : nm;
   }
 
-  /* The whole digest: the tables, what the code found notable, the quotes by
-     cell, and how much the places have to say. Reads only; never a people
-     question, never a tagger's name. */
-  function summaryDigest(layer, features, opts) {
+  /* The story's digest: the places themselves, no counts. For each place with
+     words of its own — its id, the name it would be shown by, those words,
+     and its answers to the questions on show as plain labels. On a big atlas
+     a sample, taken a place at a time from each answer of each question in
+     turn, so the offered places are spread across the answers instead of
+     being the first eighty in the file.
+
+     Reads only; never a people question, never a tagger's name, and never a
+     question the owner has switched off (opts.shownCols). */
+  function storyDigest(layer, features, opts) {
     var feats = features || [], total = feats.length;
-    var tables = summaryTables(layer, features);
+    var only = (opts && opts.shownCols) || null;
+    var cap = (opts && opts.cap) || STORY_PLACES;
     var qs = colsOf(layer).map(function (c) { return stats(layer, features, c); })
-      .filter(function (st) { return !st.people && st.answered > 0; });
-    var only = (opts && opts.shownCols) || null;        // the owner's switches, when they are known
-    var shown = function (col) { return !only || only.indexOf(col) >= 0; };
-    var byCol = {};
-    qs.forEach(function (st) { byCol[st.col] = st; });
+      .filter(function (st) { return !st.people && st.answered > 0 && (!only || only.indexOf(st.col) >= 0); });
 
-    // which places give each answer, kept once
-    var rowsOf = {};
-    qs.forEach(function (st) {
-      st.answers.forEach(function (a) {
-        rowsOf[st.col + "|" + a.key] = feats.map(function (f, i) { return { f: f, id: placeIdOf(f, i) }; })
-          .filter(function (h) { return keyOf(h.f && h.f.properties, st.col) === a.key; });
-      });
-    });
-
-    var notable = [], contrasts = [], cells = [];
-    // the top answers of every question that shows
-    qs.forEach(function (st) {
-      if (!shown(st.col)) return;
-      st.answers.slice(0, TOP_ANSWERS).forEach(function (a) {
-        cells.push({ cell: { shape: "single", questions: [st.col], answers: [a.name], count: a.count, of: st.answered },
-          hits: rowsOf[st.col + "|" + a.key] });
-      });
-    });
-    // the pair cells worth saying, and the contrasts between two rows
-    (tables.pairs || []).forEach(function (p) {
-      var a = byCol[p.questions[0]], b = byCol[p.questions[1]];
-      if (!a || !b || !shown(a.col) || !shown(b.col)) return;
-      var quotesFor = function (row, sp) {
-        var ak = foldName(row.answer), bk = foldName(sp);
-        return (rowsOf[a.col + "|" + ak] || []).filter(function (h) { return foldName(answerOf(h.f.properties, b.col)) === bk; });
-      };
-      // how often each answer to the second question comes up over all the places answering both
-      var overall = {};
-      (p.columns || []).forEach(function (c) { overall[foldName(c.answer)] = { places: c.places, share: p.answerBoth ? c.places / p.answerBoth : 0 }; });
-      p.rows.forEach(function (row) {
-        if (row.places < CMP_PLACES) return;
-        row.split.forEach(function (sp) {
-          var share = sp.places / row.places, base = (overall[foldName(sp.answer)] || { share: 0 }).share;
-          var lift = base > 0 ? share / base : Infinity;
-          if (sp.places < NOTABLE_MIN || share < NOTABLE_SHARE) return;
-          // the obvious cell: B is no more likely here than among the places answering both
-          if (!(lift >= LIFT_MIN && share - base >= LIFT_GAP)) return;
-          var cell = { shape: "pair", questions: [a.col, b.col], answers: [row.answer, sp.answer], count: sp.places, of: row.places };
-          notable.push({ kind: "cell", questions: cell.questions, answers: cell.answers, count: sp.places, of: row.places,
-            // the same answer over every place that answers both, so the difference can be seen and checked
-            overall: { answer: sp.answer, count: (overall[foldName(sp.answer)] || {}).places || 0, of: p.answerBoth },
-            why: sp.answer + " is much more common among " + row.answer + " than it is over all the places answering both" });
-          cells.push({ cell: cell, hits: quotesFor(row, sp.answer) });
-        });
-      });
-      // two rows of the same pair that answer the second question differently
-      (p.columns || []).forEach(function (c) {
-        var shares = p.rows.filter(function (r) { return r.places >= CMP_PLACES; }).map(function (r) {
-          var hit = findAnswer(r.split, c.answer);
-          return { answer: r.answer, places: r.places, count: hit ? hit.places : 0, share: (hit ? hit.places : 0) / r.places };
-        });
-        if (shares.length < 2) return;
-        // the strongest row at one end and the weakest at the other; where two rows are level, the bigger one speaks louder
-        var hi = shares[0], lo = shares[0];
-        shares.forEach(function (x) {
-          if (x.share > hi.share || (x.share === hi.share && x.places > hi.places)) hi = x;
-          if (x.share < lo.share || (x.share === lo.share && x.places > lo.places)) lo = x;
-        });
-        if (hi === lo) return;
-        if (hi.share - lo.share < CONTRAST_GAP) return;
-        contrasts.push({ kind: "contrast", gap: Math.round((hi.share - lo.share) * 100) / 100, questions: [a.col, b.col], answer: c.answer,
-          // both number pairs, so a sentence comparing them can be checked exactly (shape "compare")
-          rows: [{ answer: hi.answer, count: hi.count, of: hi.places }, { answer: lo.answer, count: lo.count, of: lo.places }],
-          why: c.answer + " is far more common among " + hi.answer + " than among " + lo.answer });
-        // the quotes a contrast may draw on come from its stronger row
-        var key = cellKey({ shape: "pair", questions: [a.col, b.col], answers: [hi.answer, c.answer] });
-        if (hi.count && !cells.some(function (x) { return cellKey(x.cell) === key; })) {
-          cells.push({ cell: { shape: "pair", questions: [a.col, b.col], answers: [hi.answer, c.answer], count: hi.count, of: hi.places },
-            hits: quotesFor({ answer: hi.answer }, c.answer) });
-        }
-      });
-    });
-
-    // the sharpest contrasts first, and only a handful: a long list is noise
-    contrasts.sort(function (x, y) { return y.gap - x.gap; });
-    contrasts.slice(0, MAX_CONTRASTS).forEach(function (c) { notable.push(c); });
-
-    /* Words that stand on more than SHARED_MAX places are a field the places
-       have in common, not anybody's own words: never quoted. */
-    var times = {};
+    /* Words standing on more places than SHARED_MAX are a field the places
+       have in common, not anybody's own words. */
+    var times = Object.create(null);
     feats.forEach(function (f) {
-      var seen = {};
+      var seen = Object.create(null);
       qs.forEach(function (st) {
         quoteSourcesOf(layer, (f && f.properties) || {}, st.col).forEach(function (t) {
           var k = foldName(t);
@@ -607,55 +544,77 @@
       });
     });
     var isShared = function (text) { return (times[foldName(text)] || 0) > SHARED_MAX; };
+    var first = (qs[0] || {}).col || "";
 
-    var quotes = [];
-    cells.forEach(function (c) {
-      var list = quotesForCell(layer, feats, c.cell, c.hits || [], { shared: isShared });
-      if (list.length) quotes.push({ cell: cellKey(c.cell), shape: c.cell.shape, questions: c.cell.questions, answers: c.cell.answers,
-        count: c.cell.count, of: c.cell.of, quotes: list });
+    var rows = feats.map(function (f, i) {
+      var p = (f && f.properties) || {};
+      var w = placeWords(layer, f, first, { shared: isShared });
+      var answers = [];
+      qs.forEach(function (st) {
+        var a = answerOf(p, st.col);
+        if (a) answers.push({ question: st.question, answer: a });
+      });
+      return { id: placeIdOf(f, i), name: placeLabelOf(layer, f), words: w.text, sentences: w.sentences,
+        answers: answers, why: w.why, at: i };
     });
+
+    // one bucket per answer of each question, holding the places with words
+    var buckets = [], spare = [];
+    qs.forEach(function (st) {
+      st.answers.forEach(function (a) {
+        var hits = rows.filter(function (r) { return r.words && keyOf((feats[r.at] || {}).properties, st.col) === a.key; });
+        if (hits.length) buckets.push(hits);
+      });
+    });
+    rows.forEach(function (r) { if (r.words && !r.answers.length) spare.push(r); });
+    var taken = Object.create(null), places = [];
+    for (var round = 0; places.length < cap; round++) {
+      var moved = false;
+      for (var b = 0; b < buckets.length && places.length < cap; b++) {
+        var list = buckets[b];
+        if (round >= list.length) continue;
+        moved = true;
+        var r = list[round];
+        if (taken[r.id]) continue;
+        taken[r.id] = true;
+        places.push(r);
+      }
+      if (!moved) break;
+    }
+    for (var k = 0; places.length < cap && k < spare.length; k++) {
+      if (!taken[spare[k].id]) { taken[spare[k].id] = true; places.push(spare[k]); }
+    }
 
     // how much the places have to say at all
-    var words = 0, same = {}, repeats = 0;
-    feats.forEach(function (f, i) {
-      var t = quoteSourceOf(layer, (f && f.properties) || {}, (qs[0] || {}).col || "");
-      if (!t) return;
+    var words = 0, same = Object.create(null), repeats = 0;
+    rows.forEach(function (r) {
+      if (!r.words) return;
       words++;
-      var k = foldName(t).slice(0, 120);
+      var k = foldName(r.words).slice(0, 120);
       if (same[k]) repeats++; else same[k] = true;
     });
-    var quality = { places: total, withWords: words, repeated: repeats,
+    var quality = { places: total, withWords: words, repeated: repeats, offered: places.length,
       thin: total > 0 && (words / total < THIN_WORDS || repeats / total > THIN_SAME) };
     quality.warning = quality.thin ? "Many places have little written about them, so read this with care" : "";
 
-    /* A question the owner has switched off is not in the digest at all, so a
-       finding can never be written on one: its cell is not there to state. */
-    var questions = (tables.questions || []).filter(function (q) { return shown(q.id); });
-    var pairs = (tables.pairs || []).filter(function (p) { return p.questions.every(shown); });
-    return { places: total, questions: questions, pairs: pairs, notable: notable, quotes: quotes, quality: quality };
+    return { places: total,
+      questions: qs.map(function (st) { return { id: st.col, text: st.question, answers: st.answers.map(function (a) { return a.name; }) }; }),
+      offered: places.map(function (r) { return { id: r.id, name: r.name, words: r.words, sentences: r.sentences, answers: r.answers }; }),
+      /* The reason a place could not be used names no one: quoteFault says
+         which person it saw, and that name is nobody's business outside the
+         check itself. */
+      unquotable: rows.filter(function (r) { return !r.words; })
+        .map(function (r) { return { id: r.id, why: String(r.why).replace(/\s*\([^)]*\)\s*$/, "") }; }),
+      quality: quality };
   }
-  /* The findings a visitor sees: those whose every question is still on show
-     (the owner may switch one off after the findings were written). Under
-     two, none — the card is hidden, as the summary's rule. */
-  function visibleFindings(findings, shownCols) {
-    var out = (findings || []).filter(function (f) {
-      var qs = (f && Array.isArray(f.questions)) ? f.questions : [];
-      return f && typeof f.text === "string" && qs.length > 0 && qs.every(function (c) { return shownCols.indexOf(c) >= 0; });
-    });
-    return out.length >= MIN_FINDINGS ? out : [];
-  }
-  // the tables inside a digest, for the cell check
-  function tablesOf(digest) {
-    return { places: digest.places, questions: digest.questions || [], pairs: digest.pairs || [] };
-  }
-  /* The quotes offered for one cell, by its key: [] when none were offered.
-     A comparison draws on its stronger row, which is a pair cell of its own. */
-  function quotesOffered(digest, cell) {
-    var c = cell || {};
-    if (c.shape === "compare") c = { shape: "pair", questions: c.questions, answers: [c.answers[0], c.answers[2]] };
-    var key = cellKey(c), out = [];
-    (digest.quotes || []).forEach(function (q) { if (q.cell === key) out = q.quotes || []; });
-    return out;
+  /* The places offered, by id. The map has no prototype, so a place whose id
+     is "__proto__" or "constructor" is itself and nothing else, and an id the
+     model made up never finds an inherited member to stand in for a place
+     (Opus review, 5 Nov 2026). */
+  function offeredById(digest) {
+    var by = Object.create(null);
+    ((digest && digest.offered) || []).forEach(function (o) { by[o.id] = o; });
+    return by;
   }
 
   // the numbers written in a sentence: "1,234" is 1234
@@ -749,13 +708,6 @@
       return { cell: { shape: "single", questions: [q.id], answers: [a.answer], count: count, of: of } };
     }
     if (qs.length === 2) {
-      /* The compare shape (5 Nov 2026, the findings mock-up): one answer to
-         the second question held up against two rows of the first — "31 of
-         the 36 … but 0 of the 61 …". Both number pairs are checked against
-         the tables, so the comparison is as held as a single cell is. Only
-         an answer that gives count2 and of2 is read this way, so nothing the
-         shipped summary writes changes. */
-      if (toCount(s.count2) !== null && toCount(s.of2) !== null) return compareCell(s, tables, qs, ans, count, of);
       var pair = null;
       (tables.pairs || []).forEach(function (p) {
         if (!pair && p.questions.length === 2 && p.questions.indexOf(qs[0]) >= 0 && p.questions.indexOf(qs[1]) >= 0) pair = p;
@@ -779,34 +731,6 @@
     }
     return { why: "no such cell: a sentence states one question or one pair" };
   }
-  /* Two rows of one pair, both held against the tables: answers are the two
-     rows' answers and then the answer to the second question they are
-     compared on. A row where nobody answers it counts 0, which is the
-     sharpest contrast there is, so it is allowed. */
-  function compareCell(s, tables, qs, ans, count, of) {
-    var count2 = toCount(s.count2), of2 = toCount(s.of2);
-    var pair = null;
-    (tables.pairs || []).forEach(function (p) {
-      if (!pair && p.questions.length === 2 && p.questions[0] === qs[0] && p.questions[1] === qs[1]) pair = p;
-    });
-    if (!pair) return { why: "no such cell: the tables do not compare " + qs[0] + " with " + qs[1] + " in that order" };
-    if (ans.length !== 3) return { why: "no such cell: a comparison needs the two answers compared and the answer they are compared on" };
-    var r1 = findAnswer(pair.rows, ans[0]), r2 = findAnswer(pair.rows, ans[1]);
-    if (!r1) return { why: "no such cell: no row " + ans[0] + " for " + pair.questions[0] };
-    if (!r2) return { why: "no such cell: no row " + ans[1] + " for " + pair.questions[0] };
-    if (foldName(r1.answer) === foldName(r2.answer)) return { why: "no such cell: a comparison needs two different answers" };
-    var onCol = null;
-    (pair.columns || []).forEach(function (c) { if (!onCol && foldName(c.answer) === foldName(ans[2])) onCol = c; });
-    if (!onCol) return { why: "no such cell: no place answers " + ans[2] + " for " + pair.questions[1] };
-    var at = function (row) { var hit = findAnswer(row.split, onCol.answer); return hit ? hit.places : 0; };
-    if (count !== at(r1)) return { why: count + " is not the cell for " + r1.answer + " + " + onCol.answer + "; the table says " + at(r1) };
-    if (of !== r1.places) return { why: of + " is not the group for " + r1.answer + "; the table says " + r1.places };
-    if (count2 !== at(r2)) return { why: count2 + " is not the cell for " + r2.answer + " + " + onCol.answer + "; the table says " + at(r2) };
-    if (of2 !== r2.places) return { why: of2 + " is not the group for " + r2.answer + "; the table says " + r2.places };
-    if (count / of <= count2 / of2) return { why: "the comparison does not hold: " + count + " of " + of + " is not more than " + count2 + " of " + of2 };
-    return { cell: { shape: "compare", questions: pair.questions.slice(), answers: [r1.answer, r2.answer, onCol.answer],
-      count: count, of: of, count2: count2, of2: of2 } };
-  }
   /* The model's sentences, checked one by one: { kept, dropped }. kept holds
      { text, questions, answers, count, of, cell } and is empty when under two
      pass (no summary); dropped holds { index, text, why } for each that
@@ -814,19 +738,11 @@
      from the counts only, so the reasons are safe to log and to show the
      model again. */
   function checkSentencesWithReasons(list, tables) {
-    var r = checkCellsWithReasons(list, tables, MAX_SENTENCES);
-    return { kept: r.kept.length >= MIN_SENTENCES ? r.kept : [], dropped: r.dropped };
-  }
-  /* The same check, one item at a time and with no floor under it: the
-     findings of the mock-up (docs/plan-places-say-v2.md) hold their own floor,
-     and each finding must be known to have passed or failed on its own. */
-  function checkCellsWithReasons(list, tables, max, opts) {
-    var plain = !!(opts && opts.plainAnswers);
     var byId = {};
     (tables.questions || []).forEach(function (q) { byId[q.id] = q; });
     var kept = [], dropped = [];
     (Array.isArray(list) ? list : []).forEach(function (s, i) {
-      if (kept.length >= (max || MAX_SENTENCES)) return;
+      if (kept.length >= MAX_SENTENCES) return;
       var raw = typeof s === "string" ? s : s && typeof s.text === "string" ? s.text : "";
       var drop = function (why) { dropped.push({ index: i, text: String(raw).slice(0, MAX_SENTENCE), why: why }); };
       // the model sometimes tags a sentence with its question's id ("(pattern_2)"): not a number, never shown
@@ -847,54 +763,16 @@
       c.answers.concat(qTexts).forEach(function (n) { bare = cutWhole(bare, foldName(n)); });
       if (hasNumberWords(bare)) return drop("it writes an amount in words");
       var ok = {};
-      var mine = c.shape === "compare" ? [c.count, c.of, c.count2, c.of2] : [c.count, c.of];
-      mine.concat([tables.places]).forEach(function (n) { ok[String(n)] = true; });
+      [c.count, c.of, tables.places].forEach(function (n) { ok[String(n)] = true; });
       qTexts.forEach(function (t) { numbersIn(t).forEach(function (n) { ok[n] = true; }); });
       var nums = numbersIn(bare);
       var stray = nums.filter(function (n) { return !ok[n]; });
       if (stray.length) return drop("number " + stray[0] + " is not in its cell");
-      /* Every number of the cell must stand in the text. The one relaxation
-         is the second row of a comparison when nobody there answers at all:
-         0 may be written "none". It is scoped to that shape alone, because
-         letting any 0 go unwritten lets a swapped unanswered cell through
-         ("40 of the places say nothing" for a cell that says 0 do). */
-      var want = c.shape === "compare" ? [c.count, c.of, c.of2].concat(c.count2 > 0 ? [c.count2] : []) : [c.count, c.of];
-      var missing = want.filter(function (n) { return nums.indexOf(String(n)) < 0; });
-      // a sentence with no number at all rests on its cell and on the proofread (a summary line)
-      var noNumbers = !!(opts && opts.noNumbersNeeded) && !nums.length;
-      if (missing.length && !noNumbers) return drop("number " + missing[0] + " of its cell is not in it");
-      if (plain) {
-        /* Plain words instead of the answer's label (Mithun, 5 Nov 2026):
-           the cell the sentence gives is what the code checks, so the
-           sentence may call Positive or preserved "looked after". It may not
-           name a different answer to either of its own questions — that is
-           what a number on the wrong answer would look like. */
-        var rivals = [];
-        cited.forEach(function (q) {
-          (byId[q].answers || []).forEach(function (a) {
-            if (c.answers.some(function (n) { return foldName(n) === foldName(a.answer); })) return;
-            if (hasWhole(folded, foldName(a.answer))) rivals.push(a.answer);
-          });
-        });
-        if (rivals.length) return drop("it names " + rivals[0] + ", which is not the answer its cell counts");
-        /* Saying it in plain words is allowed; meaning something else is
-           not. So the sentence must come with the answer labels it means,
-           spelt as the tables spell them, and they must be the cell's own
-           (Opus review, 5 Nov 2026: "20 of the 30 places are run down" was
-           passing on the Positive or preserved cell). The proofread then
-           reads the sentence against the label, with no "when unsure, ok". */
-        if (c.answers.length) {
-          var means = Array.isArray(s.meansAnswers) ? s.meansAnswers.filter(function (x) { return typeof x === "string" && x.trim(); }) : null;
-          if (!means) return drop("it does not say which answer it means");
-          var want2 = c.answers.map(foldName).sort(), got = means.map(foldName).sort();
-          if (want2.length !== got.length || want2.some(function (n, k) { return n !== got[k]; })) {
-            return drop("it says it means " + means.join(" + ") + ", but its cell counts " + c.answers.join(" + "));
-          }
-        }
-      } else {
-        var unnamed = c.answers.filter(function (n) { return !hasWhole(folded, foldName(n)); });
-        if (unnamed.length) return drop("it does not name " + unnamed[0]);
-      }
+      // every number of the cell must stand in the text
+      var missing = [c.count, c.of].filter(function (n) { return nums.indexOf(String(n)) < 0; });
+      if (missing.length) return drop("number " + missing[0] + " of its cell is not in it");
+      var unnamed = c.answers.filter(function (n) { return !hasWhole(folded, foldName(n)); });
+      if (unnamed.length) return drop("it does not name " + unnamed[0]);
       /* "nothing at all", "none at all": the idiom is not the sentence saying
          every place (found on the real Bengaluru layer, 5 Nov 2026), so it is
          taken out before the all-of-a-part test. Only the idiom: an "at all"
@@ -904,10 +782,9 @@
       if (/\b(all|every)\b/i.test(bare.replace(IDIOM, " ")) && c.count !== c.of) return drop("it says all but the count is a part (" + c.count + " of " + c.of + ")");
       // the answers in the sentence's own order of questions, spelt as the tables spell them
       var answers = c.flip ? c.answers.slice().reverse() : c.answers.slice();
-      kept.push({ index: i, text: text, questions: cited, answers: answers, count: c.count, of: c.of, cell: c });
-      if (c.shape === "compare") { kept[kept.length - 1].count2 = c.count2; kept[kept.length - 1].of2 = c.of2; }
+      kept.push({ text: text, questions: cited, answers: answers, count: c.count, of: c.of, cell: c });
     });
-    return { kept: kept, dropped: dropped };
+    return { kept: kept.length >= MIN_SENTENCES ? kept : [], dropped: dropped };
   }
   /* The sentences that pass, as they are kept and shown: { text, questions }.
      Under two pass: none (no summary). */
@@ -1591,14 +1468,11 @@
     numbersIn: numbersIn,
     checkSentences: checkSentences,
     checkSentencesWithReasons: checkSentencesWithReasons,
-    // "What the places say" v2 — the mock-up's pieces, not yet on the visitor page
-    summaryDigest: summaryDigest,
-    visibleFindings: visibleFindings,
-    checkCellsWithReasons: checkCellsWithReasons,
-    tablesOf: tablesOf,
-    quotesOffered: quotesOffered,
-    cellKey: cellKey,
-    quoteOf: quoteOf,
+    // "What the places say" v2 — the story mock-up's pieces, not yet on the visitor page
+    storyDigest: storyDigest,
+    offeredById: offeredById,
+    placeWords: placeWords,
+    placeLabelOf: placeLabelOf,
     quoteFault: quoteFault,
     quoteSourceOf: quoteSourceOf,
     quoteSourcesOf: quoteSourcesOf,
@@ -1610,15 +1484,16 @@
     placeNameOf: placeNameOf,
     foldName: foldName,
     hasWhole: hasWhole,
-    MIN_FINDINGS: MIN_FINDINGS, MAX_FINDINGS: MAX_FINDINGS,
-    QUOTE_MIN: QUOTE_MIN, QUOTE_MAX: QUOTE_MAX, QUOTES_PER_CELL: QUOTES_PER_CELL,
-    NOTABLE_SHARE: NOTABLE_SHARE, NOTABLE_MIN: NOTABLE_MIN, LIFT_MIN: LIFT_MIN, LIFT_GAP: LIFT_GAP,
-    CONTRAST_GAP: CONTRAST_GAP, MAX_CONTRASTS: MAX_CONTRASTS,
+    QUOTE_MIN: QUOTE_MIN, QUOTE_MAX: QUOTE_MAX,
+    STORY_PLACES: STORY_PLACES, STORY_WORDS: STORY_WORDS,
+    MIN_STORY: MIN_STORY, MAX_STORY: MAX_STORY,
+    STORY_IDS_MIN: STORY_IDS_MIN, STORY_IDS_MAX: STORY_IDS_MAX, STORY_QUOTES: STORY_QUOTES,
     CSS: CSS,
     visibleSentences: visibleSentences,
     panelTabs: panelTabs,
     hasNumberWords: hasNumberWords,
     hasShareWords: hasShareWords,
+    hasAmountWords: hasAmountWords,
     isPending: isPending,
     PENDING_STALE_MS: PENDING_STALE_MS,
     sentenceHTML: sentenceHTML,

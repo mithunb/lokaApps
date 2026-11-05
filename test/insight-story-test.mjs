@@ -1,0 +1,299 @@
+/* Run me with: node test/run.mjs — or on my own with node.
+ *
+ * "What the places say", version 2 (atlas/insight-mode.js storyDigest,
+ * api/lib/atlas/insight-summary.js writeStory) — 5 November 2026, a MOCK-UP:
+ * a short STORY of the places, one paragraph in plain sentences and two
+ * quotes in the places' own words, with no numbers in it at all (Mithun:
+ * "stats are less important because the questions cover it"). Nothing here is
+ * on the visitor page yet; the shipped summary (SUMMARY_VERSION, writeSummary,
+ * checkSentencesWithReasons) is untouched, and the last block holds that.
+ *
+ * These checks hold:
+ *   - the digest: never a people question, never a tagger's name, never a
+ *     credit line, a link, an email or a phone number in the words offered;
+ *     words several places share are nobody's own; the sample is spread
+ *     across the answers and capped;
+ *   - the checks: a digit, a number in words or a word for how many drops the
+ *     sentence; an id the model was not given drops it; under two ids drops
+ *     it; a quote must be the place's own words, re-inserted by the code, and
+ *     two quotes must come from two places;
+ *   - the proofread: a sentence it will not vouch for is dropped, one it says
+ *     nothing about is dropped, and with no proofread at all nothing is shown.
+ */
+import path from 'node:path';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const require = createRequire(import.meta.url);
+const IM = require(ROOT + '/atlas/insight-mode.js');
+const SUM = await import(ROOT + '/api/lib/atlas/insight-summary.js');
+
+let pass = 0, fail = 0;
+function check(label, got, want) {
+  const ok = JSON.stringify(got) === JSON.stringify(want);
+  ok ? pass++ : fail++;
+  console.log((ok ? '  ok   ' : '  FAIL ') + label + (ok ? '' : '\n         got  ' + JSON.stringify(got) + '\n         want ' + JSON.stringify(want)));
+}
+
+/* ---------------- a layer made for these checks ----------------
+   Twenty places. pattern_5's answers are people (its keyColumns name
+   created_by), so it is never read. One place's words are a credit line, one
+   names the tagger who wrote them, one names a "creator" column nothing was
+   read from, one holds an email address, one a phone number. */
+const layer = {
+  id: 'tiny',
+  popup: { title: 'name' },
+  keyLabels: { pattern_1: 'What kind of place is it?', pattern_2: 'What is it made of?', pattern_5: 'Who created this place?' },
+  keyColumns: { pattern_5: ['created_by', 'created_by_user_id'] },
+};
+const place = (id, p1, p2, description, extra) => ({ type: 'Feature', properties: Object.assign({
+  tag_id: id, name: 'Place ' + id, description, pattern_1: p1, pattern_1_why: '', pattern_2: p2, pattern_2_why: '',
+  pattern_5: 'Pratham', created_by: 'Pratham', created_by_user_id: 'u-1' }, extra || {}) });
+const features = [];
+const corner = ['by the gate', 'behind the library', 'near the water tank', 'at the bus stand', 'under the flyover',
+  'beside the school', 'off the main road', 'past the market', 'on the hill', 'where the lane bends'];
+for (let i = 1; i <= 10; i++) features.push(place('g' + i, 'Garden', 'Natural elements', 'A quiet garden ' + corner[i - 1] + ' where the old rain tree still stands.'));
+for (let i = 1; i <= 5; i++) features.push(place('s' + i, 'Shrine', 'Stone or masonry', 'A small stone shrine ' + corner[i - 1] + ', kept clean by the street.'));
+features.push(place('x1', 'Garden', '', 'Photo: J. H. Furneaux, Public domain, via Wikimedia Commons'));
+features.push(place('x2', 'Garden', '', 'Pratham brought the whole class here to count the ants.'));
+features.push(place('x3', 'Garden', '', 'beardcoded cleans this corner of the park every Sunday.', { creator: 'beardcoded' }));
+features.push(place('x4', 'Garden', '', 'Write to hello@example.com before you visit this garden.'));
+features.push(place('x5', 'Garden', '', 'Call +91 98450 12345 and somebody opens the gate for you.'));
+
+const digest = IM.storyDigest(layer, features);
+const all = JSON.stringify(digest);
+const offeredIds = digest.offered.map((o) => o.id);
+
+console.log('\n  the places the model is given');
+check('the people question is not in it, and nor is the tagger', [/pattern_5/.test(all), /Pratham/i.test(all), /u-1/.test(all)], [false, false, false]);
+check('it offers the places that have words of their own, with their answers in plain words',
+  [digest.places, digest.questions.map((q) => q.id), digest.offered.length, digest.offered[0].answers],
+  [20, ['pattern_1', 'pattern_2'], 15, [{ question: 'What kind of place is it?', answer: 'Garden' }, { question: 'What is it made of?', answer: 'Natural elements' }]]);
+check('the model is shown the places and nothing tallied: no counts anywhere',
+  [Object.keys(digest.offered[0]), /"count"/.test(all), /"count"/.test(SUM.storyPromptFor(digest))],
+  [['id', 'name', 'words', 'sentences', 'answers'], false, false]);
+const why = (id) => (digest.unquotable.find((u) => u.id === id) || {}).why;
+check('a credit line is never offered', why('x1'), 'it is a credit line');
+check('a sentence naming the tagger is never offered, and the reason does not name them either',
+  [why('x2'), IM.quoteFault('Pratham brought the whole class here to count the ants.', ['Pratham'])],
+  ['it names a person', 'it names a person (Pratham)']);
+check('…nor one naming a plain "creator" column nothing was read from (the wider people rule)',
+  [why('x3'), IM.isPeopleColumn('creator'), IM.isPeople(layer, 'pattern_1')], ['it names a person', true, false]);
+check('an email or a phone number keeps the words out',
+  [why('x4'), why('x5')], ['it has a link, an email, a phone number or an @handle', 'it has a link, an email, a phone number or an @handle']);
+check('the sample is spread across the answers: the first two offered answer differently',
+  [digest.offered.slice(0, 2).map((o) => o.answers[0].answer), digest.quality.withWords, digest.quality.offered],
+  [['Garden', 'Shrine'], 15, 15]);
+check('…and it is capped, taking from each answer in turn',
+  (() => { const small = IM.storyDigest(layer, features, { cap: 4 }); return [small.offered.length, small.offered.map((o) => o.answers[0].answer)]; })(),
+  [4, ['Garden', 'Shrine', 'Garden', 'Shrine']]);
+check('a line break ends a sentence, and an initial or "St." does not',
+  IM.splitSentences('Rising beside St. John’s Church, named for J. H. Furneaux.\nPhoto: somebody, via Wikimedia Commons'),
+  ['Rising beside St. John’s Church, named for J. H. Furneaux.', 'Photo: somebody, via Wikimedia Commons']);
+
+console.log('\n  words several places share are not anybody’s own words');
+const shareLayer = { id: 'sp', keyLabels: { pattern_1: 'What kind of place is it?' }, keyColumns: { pattern_1: ['spaces'] } };
+const shareF = [];
+for (let i = 1; i <= 6; i++) shareF.push({ type: 'Feature', properties: { tag_id: 'sp' + i, pattern_1: 'Cubbon Park', pattern_1_why: 'Cubbon Park',
+  spaces: 'Cubbon Park - Is this seat taken', description: 'A bench ' + corner[i - 1] + ' that nobody seems to sit on.' } });
+const shareD = IM.storyDigest(shareLayer, shareF);
+check('a space’s name, copied onto every place, is never offered; the place’s own line is',
+  shareD.offered.map((o) => o.words.slice(0, 8)), ['A bench ', 'A bench ', 'A bench ', 'A bench ', 'A bench ', 'A bench ']);
+check('…and when that is all a place has, it says why',
+  IM.placeWords(shareLayer, shareF[0], 'pattern_1', { shared: () => true }).why,
+  'those words stand on several places, so they are not this place’s own');
+check('a keyColumn that is not free text (a space’s name) is no source of words either',
+  IM.quoteSourcesOf({ keyColumns: { pattern_1: ['spaces'] } }, { spaces: 'Cubbon Park - Is this seat taken', description: 'A bench by the gate that nobody seems to sit on.' }, 'pattern_1'),
+  ['A bench by the gate that nobody seems to sit on.']);
+
+/* ---------------- the checks over the model's answer ---------------- */
+const q1 = digest.offered[0], q2 = digest.offered[1];
+const good = () => ({
+  sentences: [
+    { text: 'The places here are quiet corners somebody walks past and wanted to keep.', places: [q1.id, q2.id] },
+    { text: 'Gardens with old trees sit beside small shrines that the street looks after.', places: [q1.id, q2.id, offeredIds[2]] },
+    { text: 'What people wrote about is what a place is for, and who keeps it that way.', places: [q2.id, offeredIds[3]] },
+  ],
+  quotes: [{ id: q1.id, text: q1.sentences[0] }, { id: q2.id, text: q2.sentences[0] }],
+});
+console.log('\n  the checks the code makes');
+const ok0 = SUM.checkStory(digest, good());
+check('a well-made story passes whole, its two quotes kept and re-inserted by the code',
+  [ok0.sentences.length, ok0.dropped.length, ok0.quotes.map((q) => q.text), ok0.quotes.map((q) => q.id)],
+  [3, 0, [q1.sentences[0], q2.sentences[0]], [q1.id, q2.id]]);
+check('every kept quote is that place’s own sentence, with the name that place would be shown by',
+  ok0.quotes.map((q) => [digest.offered.find((o) => o.id === q.id).sentences.includes(q.text), q.name]),
+  [[true, 'Place g1'], [true, 'Place s1']]);
+
+const withNumber = good();
+withNumber.sentences[0] = { text: 'There are 15 gardens and 5 shrines on this map.', places: [q1.id, q2.id] };
+check('a digit drops the sentence', SUM.checkStory(digest, withNumber).dropped.map((d) => d.why),
+  ['it writes a number, and the story says no numbers at all']);
+
+const inWords = good();
+inWords.sentences[0] = { text: 'Ten of the places are gardens with an old rain tree in them.', places: [q1.id, q2.id] };
+check('a number written in words drops it too', SUM.checkStory(digest, inWords).dropped.map((d) => d.why), ['it says how many in words']);
+
+const amounts = ['Most of the places here are gardens.', 'Almost all of them are quiet corners.',
+  'A handful of shrines are kept clean by the street.', 'Every place here has somebody looking after it.',
+  'Some of the places are gardens with old trees.', 'Gardens often sit beside the shrines.'];
+check('and so does any word for how many', amounts.map((t) => IM.hasAmountWords(t)), amounts.map(() => true));
+check('…while plain words about what is there pass',
+  ['The places here are quiet corners somebody walks past.', 'Gardens with old trees sit beside small shrines.',
+    'People wrote about what a place is for, and who keeps it that way.'].map((t) => IM.hasAmountWords(t)), [false, false, false]);
+
+const strange = good();
+strange.sentences[1].places = [q1.id, 'no-such-place'];
+check('an id the model was not given drops the sentence', SUM.checkStory(digest, strange).dropped.map((d) => d.why),
+  ['it names a place it was not given (no-such-place)']);
+
+const lonely = good();
+lonely.sentences[1].places = [q1.id];
+check('a sentence that points at fewer than two places is dropped', SUM.checkStory(digest, lonely).dropped.map((d) => d.why),
+  ['it names fewer than 2 places it draws from']);
+const crowded = good();
+crowded.sentences[1].places = offeredIds.slice(0, 7);
+check('…and one that points at more than six is dropped too', SUM.checkStory(digest, crowded).dropped.map((d) => d.why),
+  ['it names more than 6 places']);
+const twoLeft = SUM.checkStory(digest, lonely);
+check('two sentences left is still a story', twoLeft.sentences.length, 2);
+const oneLeft = good();
+oneLeft.sentences = [oneLeft.sentences[0], { text: 'Half of them are gardens.', places: [q1.id, q2.id] }];
+const r1 = SUM.checkStory(digest, oneLeft);
+check('under two sentences, nothing is shown', [r1.sentences, r1.tooFew], [[], 1]);
+
+console.log('\n  the quotes');
+const edited = good();
+edited.quotes[0] = { id: q1.id, text: q1.sentences[0].replace('quiet', 'lovely quiet') };
+const r2 = SUM.checkStory(digest, edited);
+check('a quote the model edited is dropped — and the story needs both quotes, so none is shown',
+  [r2.sentences.length, r2.quotes.length, r2.tooFewQuotes, r2.dropped.map((d) => d.why)],
+  [3, 0, 1, ['the quote is not this place’s own words, as they were offered', 'the story needs 2 quotes, and fewer passed']]);
+const twice = good();
+twice.quotes[1] = { id: q1.id, text: q1.sentences[0] };
+check('two quotes must come from two places', SUM.checkStory(digest, twice).dropped.map((d) => d.why),
+  ['that place is already quoted', 'the story needs 2 quotes, and fewer passed']);
+const unknown = good();
+unknown.quotes[1] = { id: 'no-such-place', text: 'Something nobody wrote.' };
+const r3 = SUM.checkStory(digest, unknown);
+check('a quote from a place that was never offered is dropped, by its id and never its words',
+  [r3.dropped[0].text, r3.dropped[0].why, JSON.stringify(r3.dropped).includes('Something nobody wrote')],
+  ['no-such-place', 'that place is not one of the places it was given', false]);
+const noId = good();
+noId.quotes[1] = { id: '', text: 'words that must never be logged' };
+const r4 = SUM.checkStory(digest, noId);
+check('a quote with no place id is dropped, and its words are not written down',
+  [r4.dropped[0].text, JSON.stringify(r4.dropped).includes('must never be logged')], ['(a quote with no place id)', false]);
+const spare = good();
+spare.quotes.push({ id: offeredIds[2], text: digest.offered[2].sentences[0] });
+check('only two quotes are shown', [SUM.checkStory(digest, spare).quotes.length, SUM.checkStory(digest, spare).dropped[0].why],
+  [2, 'the story shows 2 quotes, and that many already passed']);
+const outsider = good();
+outsider.quotes = [{ id: offeredIds[6], text: digest.offered[6].sentences[0] }, { id: q1.id, text: q1.sentences[0] }];
+check('a quote from a place the story names comes first',
+  SUM.checkStory(digest, outsider).quotes.map((q) => q.inStory), [true, false]);
+
+const proto = good();
+proto.quotes[1] = { id: '__proto__', text: 'Something nobody wrote.' };
+check('an id borrowed from the language itself is not a place',
+  [SUM.checkStory(digest, proto).dropped[0].why, typeof IM.offeredById(digest).constructor],
+  ['that place is not one of the places it was given', 'undefined']);
+check('…and a place whose own id is "__proto__" is still itself',
+  (() => { const d = IM.storyDigest(layer, [place('__proto__', 'Garden', 'Natural elements', 'A quiet garden by the gate where the old rain tree still stands.'),
+    place('b', 'Shrine', 'Stone or masonry', 'A small stone shrine at the bus stand, kept clean by the street.')]);
+    return [d.offered.length, Object.keys(IM.offeredById(d))]; })(), [2, ['__proto__', 'b']]);
+
+console.log('\n  the proofread');
+const verdicts = (f) => ({ sentences: ok0.sentences.map((s, i) => f(i)), quotes: ok0.quotes.map((q, i) => ({ index: i, namesPerson: false, why: '' })) });
+const read = SUM.applyStoryProofread(ok0, verdicts((i) => ({ index: i, supported: i !== 1, why: i === 1 ? 'the places do not say that' : '' })));
+check('a sentence the places do not bear out is dropped, with its reason',
+  [read.sentences.map((s) => s.text.slice(0, 10)), read.dropped.map((d) => [d.what, d.why])],
+  [['The places', 'What peopl'], [['sentence', 'the places do not say that']]]);
+check('a sentence the proofread says nothing about is dropped too',
+  SUM.applyStoryProofread(ok0, { sentences: [{ index: 0, supported: true, why: '' }], quotes: [{ index: 0, namesPerson: false, why: '' }, { index: 1, namesPerson: false, why: '' }] })
+    .dropped.map((d) => d.why), ['the proofread does not vouch for it', 'the proofread does not vouch for it']);
+check('a quote said to name a person goes; the story stays',
+  (() => { const r = SUM.applyStoryProofread(ok0, { sentences: ok0.sentences.map((s, i) => ({ index: i, supported: true, why: '' })),
+    quotes: [{ index: 0, namesPerson: true, why: 'it names somebody' }, { index: 1, namesPerson: false, why: '' }] });
+    return [r.sentences.length, r.quotes.map((q) => q.id), r.dropped.map((d) => d.what)]; })(),
+  [3, [q2.id], ['quote']]);
+check('an answer with no verdict in it is no proofread at all',
+  SUM.applyStoryProofread(ok0, { sentences: [], quotes: [] }).skipped, 'no usable answer');
+check('the proofread is shown the very places a sentence points at, and asks with no benefit of the doubt',
+  [/no benefit of the doubt/i.test(SUM.storyProofreadPromptFor(digest, ok0.sentences, ok0.quotes)),
+    SUM.storyProofreadPromptFor(digest, ok0.sentences, ok0.quotes).includes(q1.words)], [true, true]);
+
+console.log('\n  an amount word is a word that counts');
+const keepers = ['A common myna sits on the wall by the gate.', 'A rare fig tree grows out of the old wall.',
+  'The sole banyan by the lake gives shade to the stalls.', 'A single track leads down to the water.',
+  'Only a gate stands between the road and the garden.'];
+check('a word that says what a thing is, not how many there are, is no amount',
+  keepers.map((t) => IM.hasAmountWords(t)), keepers.map(() => false));
+const counted = ['Benches are common here.', 'Old wells are rare in this part of town.', 'Some of the places are gardens.',
+  'All the gardens have an old tree in them.'];
+check('…but the same words counting places are', counted.map((t) => IM.hasAmountWords(t)), counted.map(() => true));
+const ranked = ['Trees come first here, then the shrines.', 'Above all, people wrote about trees.',
+  'For the most part the notes are about trees.', 'Most of what people wrote is about trees.',
+  'Gardens dominate what people noticed.', 'Trees lead the way, with shrines behind them.'];
+check('saying which is biggest is saying how many, so it is dropped too',
+  ranked.map((t) => IM.hasAmountWords(t)), ranked.map(() => true));
+
+console.log('\n  the whole pipeline');
+const Type = { OBJECT: 'OBJECT', ARRAY: 'ARRAY', STRING: 'STRING', BOOLEAN: 'BOOLEAN', INTEGER: 'INTEGER', NUMBER: 'NUMBER' };
+const caller = (write, proof) => async (model, prompt, schema, o) => (o && o.proofread ? proof : write);
+const yes = { sentences: [0, 1, 2].map((i) => ({ index: i, supported: true, why: '' })), quotes: [0, 1].map((i) => ({ index: i, namesPerson: false, why: '' })) };
+const whole = await SUM.writeStory({ layer, features, Type, model: 'a stand-in', call: caller(good(), yes) });
+check('a story that passes everything is shown, with the model and the seconds of each call',
+  [whole.by, whole.story.sentences.length, whole.story.quotes.length, whole.calls.map((c) => [c.what, c.model, typeof c.seconds])],
+  ['model', 3, 2, [['write', 'a stand-in', 'number'], ['proofread', 'a stand-in', 'number']]]);
+check('the write and the proofread may run on different models',
+  (await SUM.writeStory({ layer, features, Type, model: 'one', proofreadModel: 'another', call: caller(good(), yes) })).calls.map((c) => c.model), ['one', 'another']);
+const noProof = await SUM.writeStory({ layer, features, Type, model: 'a stand-in',
+  call: async (m, p, s, o) => { if (o && o.proofread) throw new Error('the model refused (503)'); return good(); } });
+check('with no proofread, nothing is shown — never unchecked text',
+  [noProof.story, /^the proofread could not be had \(/.test(noProof.by)], [null, true]);
+const allDropped = await SUM.writeStory({ layer, features, Type, model: 'a stand-in',
+  call: caller(good(), { sentences: [0, 1, 2].map((i) => ({ index: i, supported: i === 0, why: 'no' })), quotes: [] }) });
+check('one sentence vouched for is no story', [allDropped.story, allDropped.by], [null, 'under two sentences were vouched for']);
+const oneQuote = good();
+oneQuote.quotes = [oneQuote.quotes[0]];
+const short = await SUM.writeStory({ layer, features, Type, model: 'a stand-in', call: caller(oneQuote, yes) });
+check('a story with one quote is not shown short', [short.story, short.by], [null, 'under 2 quotes passed the checks']);
+const lostQuote = await SUM.writeStory({ layer, features, Type, model: 'a stand-in',
+  call: caller(good(), { sentences: [0, 1, 2].map((i) => ({ index: i, supported: true, why: '' })),
+    quotes: [{ index: 0, namesPerson: true, why: 'it names somebody' }, { index: 1, namesPerson: false, why: '' }] }) });
+check('…and one the proofread takes a quote from is not shown either', [lostQuote.story, lostQuote.by], [null, 'under 2 quotes passed the checks']);
+check('the story gets longer than the shipped summary to answer in', [SUM.STORY_TIMEOUT_MS, SUM.TIMEOUT_MS], [90000, 25000]);
+const MS = await import(ROOT + '/deploy/measure-story.mjs');
+check('the mock-up writes nowhere but --out: the name it builds file names from cannot walk a path',
+  [MS.safeName('../../etc/passwd'), MS.parseArgs(['--file=/tmp/x.json', '--name=../../etc/passwd']).name, MS.refused('Deoria-Bioregion')],
+  ['etc-passwd', 'etc-passwd', true]);
+check('it keeps a fingerprint of its own, the places’ words and all',
+  [SUM.storySig(digest) === SUM.storySig(IM.storyDigest(layer, features)),
+    SUM.storySig(digest) === SUM.storySig(IM.storyDigest(layer, features, { shownCols: ['pattern_1'] }))], [true, false]);
+
+console.log('\n  the shipped summary is untouched');
+const tables = IM.summaryTables(layer, features);
+const sent = (text, cell) => Object.assign({ text }, cell);
+const stone = { text: 'Of the 20 places that say what kind of place they are, 5 say Shrine.', questions: ['pattern_1'], answers: ['Shrine'], count: 5, of: 20 };
+check('the cell check still hides a lone sentence (the two-sentence floor)',
+  IM.checkSentences([sent('Of the 20 places that say what kind of place they are, 15 say Garden.', { questions: ['pattern_1'], answers: ['Garden'], count: 15, of: 20 })], tables), []);
+check('…and still keeps two', IM.checkSentences([
+  sent('Of the 20 places that say what kind of place they are, 15 say Garden.', { questions: ['pattern_1'], answers: ['Garden'], count: 15, of: 20 }),
+  sent('Of the 20 places that say what kind of place they are, 5 say Shrine.', { questions: ['pattern_1'], answers: ['Shrine'], count: 5, of: 20 })], tables).length, 2);
+check('it still insists the sentence names its answer', IM.checkSentencesWithReasons([
+  sent('Of the 20 places that say what kind of place they are, 5 are small roadside corners.', { questions: ['pattern_1'], answers: ['Shrine'], count: 5, of: 20 }), stone], tables).dropped.map((d) => d.why),
+  ['it does not name Shrine']);
+check('"at all" followed by a number is still the sentence saying all',
+  IM.checkSentencesWithReasons([{ text: 'Garden is at all 15 of the 20 places that say what kind of place they are.', questions: ['pattern_1'], answers: ['Garden'], count: 15, of: 20 }, stone], tables).dropped.map((d) => d.why),
+  ['it says all but the count is a part (15 of 20)']);
+check('…while the idiom still passes', IM.checkSentencesWithReasons([
+  { text: '5 of the 20 places say nothing at all about what they are made of.', questions: ['pattern_2'], answers: [], count: 5, of: 20 }, stone], tables).kept.length, 2);
+check('a cell whose count and group are swapped cannot hide its 0',
+  IM.checkSentencesWithReasons([{ text: '20 of the places say nothing about what kind of place they are.', questions: ['pattern_1'], answers: [], count: 20, of: 0 }, stone], tables).dropped.map((d) => d.why),
+  ['number 0 of its cell is not in it']);
+check('the summary version and its fingerprint have not moved', [SUM.SUMMARY_VERSION, SUM.summarySig(tables) === SUM.summarySig(tables)], [4, true]);
+
+console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
+process.exit(fail ? 1 : 0);

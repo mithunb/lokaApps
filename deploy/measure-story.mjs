@@ -1,19 +1,23 @@
 #!/usr/bin/env node
-/* Mock up "What the places say" version 2 on one atlas: the summary and the
- * findings the proposed pipeline would write, what it dropped and why, and a
- * page that looks like the Insight tab it would fill.
+/* Mock up "What the places say" version 2 on one atlas: the short STORY the
+ * proposed pipeline would write — one paragraph about what the map is and what
+ * people noticed, then two quotes in the places' own words — what it dropped
+ * and why, and a page that looks like the Insight tab it would fill.
  * Reads the places; writes only into the folder you name with --out.
  *
- *   node deploy/measure-findings.mjs --dataset=<slug> --out=DIR
- *   node deploy/measure-findings.mjs --dir=<folder with manifest.local.json> --out=DIR
- *   node deploy/measure-findings.mjs --file=places.json --out=DIR [--stub]
+ *   node deploy/measure-story.mjs --dataset=<slug> --out=DIR
+ *   node deploy/measure-story.mjs --dir=<folder with manifest.local.json> --out=DIR
+ *   node deploy/measure-story.mjs --file=places.json --out=DIR [--stub]
  *   --list          print every atlas on this computer whose places can be read in Insight, and stop
  *   --dataset=SLUG  an atlas under atlas/datasets or api/data/atlas/private-datasets
  *   --dir=PATH      an atlas folder anywhere (a read-only copy, say)
  *   --layer=ID      the layer to read (default: the one the atlas's Insight mode names)
- *   --out=DIR       where the three files go: <name>-findings.json, <name>-dropped.txt,
+ *   --out=DIR       where the three files go: <name>-story.json, <name>-dropped.txt,
  *                   <name>-mock.html
  *   --name=WORD     what to call this mock in the file names (default: the slug)
+ *   --model=NAME    the model for both calls (default: the one the server's summary uses)
+ *   --proofread-model=NAME  a different model for the proofread only
+ *   --places=N      how many places to offer the model (default 80)
  *   --all-questions read every question, not only the ones the owner leaves on
  *   --stub          no model: the stand-in writes a plain answer, so the plumbing
  *                   can be checked without a key
@@ -26,24 +30,26 @@
  * The model is called exactly as the server calls the summary (the same key
  * and the same reading model: GEMINI_API_KEY from the environment or from
  * api/.env as the server reads it, the model from api/lib/models.js
- * getFlashModel, thinking kept low, temperature 0, the JSON schema sent with
- * the prompt — api/apps/atlas.js insightCaller, as deploy/measure-summary.mjs
- * already copies it). Two calls an atlas: the write and the proofread. The
- * calls are this run's own; they are not charged to anybody's hourly
- * allowance on the running server, which lives in that process.
+ * getFlashModel unless --model says otherwise, thinking kept low, temperature
+ * 0, the JSON schema sent with the prompt — api/apps/atlas.js insightCaller,
+ * as deploy/measure-summary.mjs already copies it). Two calls an atlas: the
+ * write and the proofread, and the model and the seconds of each are written
+ * into the json. The calls are this run's own; they are not charged to
+ * anybody's hourly allowance on the running server, which lives in that
+ * process.
  *
  * ON THE SERVER (where the key is), from the repo root:
- *   node deploy/measure-findings.mjs --list
- *   node deploy/measure-findings.mjs --dataset=bengaluru-on-loka \
- *        --out=$HOME/places-say-mock --name=bengaluru
- *   node deploy/measure-findings.mjs --dataset=<the second atlas from --list> \
- *        --out=$HOME/places-say-mock --name=<that atlas>
+ *   node deploy/measure-story.mjs --list
+ *   node deploy/measure-story.mjs --dataset=bengaluru-on-loka \
+ *        --out=$HOME/places-say-mock --name=bengaluru --model=gemini-flash-latest
+ *   node deploy/measure-story.mjs --dataset=<the second atlas from --list> \
+ *        --out=$HOME/places-say-mock --name=<that atlas> --model=gemini-flash-latest
  * Then look at $HOME/places-say-mock/<name>-mock.html. The atlas folders are
  * only read; everything written goes under --out and nowhere else.
  *
  * The deoria-bioregion atlas is never read, in any spelling.
  *
- * The findings carry places' own words, so the files this writes are NOT safe
+ * The story carries places' own words, so the files this writes are NOT safe
  * to paste anywhere public without reading them first. Nothing is written
  * into atlas/ or api/data.
  */
@@ -63,8 +69,14 @@ function readJSON(f) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } ca
 function die(msg) { console.error(msg); process.exit(1); }
 export function refused(named) { return String(named || '').toLowerCase().includes(NEVER); }
 
+// a file name of our own making: letters, digits, - and _, nothing that walks a path
+export function safeName(s) {
+  return String(s || '').replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+}
+
 export function parseArgs(argv) {
-  const o = { dataset: '', dir: '', file: '', layer: '', out: '', name: '', stub: false, askDir: '', askedBy: '', allQuestions: false, list: false, help: false };
+  const o = { dataset: '', dir: '', file: '', layer: '', out: '', name: '', model: '', proofreadModel: '', places: 0,
+    stub: false, askDir: '', askedBy: '', allQuestions: false, list: false, help: false };
   for (const a of argv) {
     if (a === '--help' || a === '-h') o.help = true;
     else if (a === '--list') o.list = true;
@@ -76,6 +88,9 @@ export function parseArgs(argv) {
     else if (a.startsWith('--layer=')) o.layer = a.slice(8);
     else if (a.startsWith('--out=')) o.out = a.slice(6);
     else if (a.startsWith('--name=')) o.name = a.slice(7);
+    else if (a.startsWith('--proofread-model=')) o.proofreadModel = a.slice(18);
+    else if (a.startsWith('--model=')) o.model = a.slice(8);
+    else if (a.startsWith('--places=')) o.places = Number(a.slice(9)) || 0;
     else if (a.startsWith('--ask-dir=')) o.askDir = a.slice(10);
     else if (a.startsWith('--asked-by=')) o.askedBy = a.slice(11);
     else die('unknown option ' + a + ' — see --help');
@@ -83,6 +98,15 @@ export function parseArgs(argv) {
   const named = [o.dataset, o.dir, o.file].filter(Boolean);
   if (named.length > 1) die('name one atlas: --dataset, --dir or --file');
   if (!o.name) o.name = path.basename(o.dataset || o.dir || o.file || 'mock').replace(/\.[a-z]+$/i, '');
+  /* The name goes into file names under --out, and the slug is joined to the
+     dataset folders: letters, digits, - and _ only, so nothing can be written
+     or read outside them (Opus review, 5 Nov 2026). */
+  o.name = safeName(o.name);
+  if (!o.name) die('--name must have a letter or a digit in it');
+  if (o.dataset) {
+    const slug = safeName(o.dataset);
+    if (slug !== o.dataset) die('--dataset is the folder name of an atlas: letters, digits, - and _ only');
+  }
   return o;
 }
 
@@ -157,19 +181,27 @@ async function realCall(model, prompt, schema) {
 /* The stand-in: a plain answer built from the digest, so every check can be
    walked through with no model at all. Not a mock-up anybody should read. */
 function stubAnswer(digest) {
-  const cells = (digest.quotes || []).filter((q) => q.shape === 'single').slice(0, 4);
+  const places = (digest.offered || []).filter((p) => (p.sentences || []).length);
+  const ids = places.slice(0, 4).map((p) => p.id);
   return {
-    summary: [{ text: 'The ' + digest.places + ' places on this map answer a few questions about themselves.' },
-      { text: 'Most of them say something about where they are and what they are for.' }],
-    findings: cells.map((c) => ({ text: 'Of the ' + c.of + ' places that answer this, ' + c.count + ' say ' + c.answers[0] + '.',
-      questions: c.questions, answers: c.answers, count: c.count, of: c.of, quotes: c.quotes.slice(0, 1).map((q) => ({ id: q.id, text: q.text })) })),
+    sentences: [
+      { text: 'People here wrote about the places they walk past, in their own words.', places: ids.slice(0, 2) },
+      { text: 'What they noticed is what a neighbour would notice: what a place is for, and how it feels.', places: ids.slice(0, 3) },
+      { text: 'Read together, the notes are a walk through this part of the map.', places: ids.slice(1, 4) },
+    ].filter((s) => s.places.length >= IM.STORY_IDS_MIN),
+    quotes: places.slice(0, 2).map((p) => ({ id: p.id, text: p.sentences[0] })),
   };
 }
 function stubCall(digest, prompt, o) {
   if (o && o.proofread) {
-    let list = [];
-    try { list = JSON.parse(String(prompt).split('\n').pop()); } catch { list = []; }
-    return { checks: list.map((f) => ({ index: f.index, ok: true, namesPerson: false, why: '' })) };
+    let sentences = [], quotes = [];
+    try {
+      const parts = String(prompt).split('\n');
+      sentences = JSON.parse(parts[parts.indexOf('Sentences:') + 1]);
+      quotes = JSON.parse(parts[parts.length - 1]);
+    } catch { /* leave them empty */ }
+    return { sentences: sentences.map((s) => ({ index: s.index, supported: true, why: '' })),
+      quotes: quotes.map((q) => ({ index: q.index, namesPerson: false, why: '' })) };
   }
   return stubAnswer(digest);
 }
@@ -195,18 +227,15 @@ function askDirCall(dir, name) {
 
 /* ---------- the mock page ---------- */
 const MOCK_CSS = [
-  // proposed, not yet in the product: the findings under the summary
-  '.in-sum .in-s{margin:.3rem 0 0}',
-  '.in-finds{margin:.85rem 0 .2rem;border-top:1px solid var(--color-divider,rgba(36,33,29,.10))}',
-  '.in-find{padding:.7rem 0 .55rem;border-bottom:1px solid var(--color-divider,rgba(36,33,29,.10))}',
-  '.in-find:last-child{border-bottom:none;padding-bottom:.2rem}',
-  '.in-find .in-fs{margin:0;font-size:.95rem;line-height:1.45;color:var(--color-text-primary,#24211D)}',
-  '.in-fq{margin:.5rem 0 0;padding:0 0 0 .7rem;border-left:2px solid var(--color-leaf,#2A6B41);opacity:.95}',
+  // proposed, not yet in the product: the story and the two quotes under it
+  '.in-sum .in-story{margin:.35rem 0 0;font-size:.95rem;line-height:1.55;color:var(--color-text-primary,#24211D)}',
+  '.in-quotes{margin:.9rem 0 .2rem;border-top:1px solid var(--color-divider,rgba(36,33,29,.10))}',
+  '.in-fq{margin:.75rem 0 0;padding:0 0 0 .7rem;border-left:2px solid var(--color-leaf,#2A6B41);opacity:.95}',
   '.in-fq q{font-family:var(--font-display,Georgia,serif);font-style:italic;font-size:.92rem;line-height:1.45;color:var(--color-text-secondary,#5A5751);quotes:"\\201C" "\\201D"}',
   '.in-fq .in-who{display:block;margin-top:.15rem}',
   '.in-fq .in-who button{background:none;border:none;padding:.15rem 0;margin:0;font:inherit;font-size:var(--t-meta,.8rem);font-weight:700;color:var(--color-leaf-deep,#1F5232);text-decoration:underline;text-underline-offset:2px;cursor:pointer;text-align:left}',
   '.in-warn{margin:.6rem 0 0;font-size:var(--t-meta,.8rem);color:var(--color-text-secondary,#5A5751);background:var(--color-marigold-tint,rgba(233,162,55,.16));border-radius:var(--radius-md,.25rem);padding:.45rem .6rem}',
-  '@media (max-width:720px){.in-find .in-fs{font-size:.92rem}.in-fq q{font-size:.88rem}}',
+  '@media (max-width:720px){.in-sum .in-story{font-size:.92rem}.in-fq q{font-size:.88rem}}',
   // the page has no script, so the short tab label the viewer swaps in on a phone is done here in CSS
   '@media (max-width:480px){.in-tabs .in-tab .in-tl{display:none}.in-tabs .in-tab .in-ts{display:inline}}',
 ].join('\n');
@@ -226,53 +255,51 @@ const PAGE_CSS = [
 
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
-function mockHTML({ title, result, byWho, nameOf }) {
+function mockHTML({ title, result, byWho }) {
   const r = result;
   const tabs = '<div class="in-tabs" role="tablist">' +
     '<button type="button" class="in-tab" role="tab"><span class="in-tl">Explore Insights</span><span class="in-ts">Insights</span></button>' +
     '<button type="button" class="in-tab on" role="tab" aria-selected="true"><span class="in-tl">What the places say</span><span class="in-ts">Summary</span></button></div>';
   const warn = r.quality && r.quality.warning ? '<p class="in-warn">' + esc(r.quality.warning) + '.</p>' : '';
-  const findings = (r.findings || []).map((f) => {
-    const quotes = (f.quotes || []).map((q) => '<blockquote class="in-fq"><q>' + esc(q.text) + '</q>' +
-      '<span class="in-who"><button type="button">' + (q.place ? 'See “' + esc(q.place) + '” on the map' : 'Show this place on the map') + '</button></span></blockquote>').join('');
-    // no count line: the sentence already says K of N (Mithun, 5 Nov 2026)
-    return '<div class="in-find"><p class="in-fs">' + IM.sentenceHTML(f.text) + '</p>' + quotes + '</div>';
-  }).join('');
-  const body = r.findings && r.findings.length
+  const story = r.story || { sentences: [], quotes: [] };
+  const quotes = story.quotes.map((q) => '<blockquote class="in-fq"><q>' + esc(q.text) + '</q>' +
+    '<span class="in-who"><button type="button">' + (q.name ? 'See “' + esc(q.name) + '” on the map' : 'Show this place on the map') + '</button></span></blockquote>').join('');
+  const body = story.sentences.length
     ? '<section class="in-sum" aria-label="What the places say">' +
-      (r.summary || []).map((s) => '<p class="in-s">' + IM.sentenceHTML(s.text) + '</p>').join('') +
-      warn + '<div class="in-finds">' + findings + '</div>' +
-      '<div class="in-by">Written by AI from the answers to the questions and the places’ own words, when the atlas was last updated. Numbers count places, not people.</div></section>' +
-      '<button type="button" class="in-tolink">See the questions these numbers come from</button>'
+      '<p class="in-story">' + story.sentences.map((s) => esc(s.text)).join(' ') + '</p>' +
+      warn + '<div class="in-quotes">' + quotes + '</div>' +
+      '<div class="in-by">Written by AI from the places’ own words, when the atlas was last updated. The counts are in the questions.</div></section>' +
+      '<button type="button" class="in-tolink">See the questions these places answer</button>'
     : '<p class="in-hint">Nothing would be shown: ' + esc(r.by) + '.</p>';
   return ['<!doctype html><html lang="en"><head><meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width,initial-scale=1">',
     '<title>' + esc(title) + ' — what the places say (mock-up)</title>',
     '<style>' + PAGE_CSS + '\n' + IM.CSS + '\n' + MOCK_CSS + '</style></head><body>',
     '<div class="mock-note"><b>Mock-up, ' + esc(new Date().toISOString().slice(0, 10)) + '.</b> ' + esc(title) +
-      '. Not live anywhere: this is what the proposed “What the places say” would show. Sentences and quote choices by <b>' + esc(byWho) +
-      '</b>; every number and every quote checked by the product’s own code.</div>',
+      '. Not live anywhere: this is what the proposed “What the places say” would show. The story and the choice of quotes are by <b>' + esc(byWho) +
+      '</b>; every rule and every quote checked by the product’s own code.</div>',
     '<div class="mock-wrap"><div class="atlas-panel"><div class="panel-head in-tabbed">' + tabs + '</div>',
     '<div class="in-panel">' + body + '</div></div></div></body></html>'].join('\n');
 }
 
 function droppedText(name, r) {
+  const d = r.digest;
   const lines = ['What the mock-up dropped — ' + name, ''];
-  lines.push('Result: ' + r.by + (r.proofread ? '; proofread: ' + (r.proofread === 'not run' ? 'not run' : r.proofread || 'ran') : ''));
-  lines.push('Places: ' + r.digest.places + '; questions read: ' + r.digest.questions.map((q) => q.id).join(', '));
-  lines.push('Places with words of their own: ' + r.digest.quality.withWords + ' of ' + r.digest.quality.places +
-    '; places repeating another’s words: ' + r.digest.quality.repeated + (r.digest.quality.thin ? ' — thin, so the warning shows' : ''));
-  lines.push('Cells the code offered quotes for: ' + r.digest.quotes.length + '; quotes offered: ' +
-    r.digest.quotes.reduce((s, q) => s + q.quotes.length, 0));
+  lines.push('Result: ' + r.by);
+  lines.push('Calls: ' + (r.calls || []).map((c) => c.what + ' on ' + c.model + ', ' + c.seconds + 's' + (c.failed ? ' (' + c.failed + ')' : '')).join('; '));
+  lines.push('Places: ' + d.places + '; questions read: ' + d.questions.map((q) => q.id).join(', '));
+  lines.push('Places with words of their own: ' + d.quality.withWords + ' of ' + d.quality.places +
+    '; places repeating another’s words: ' + d.quality.repeated + (d.quality.thin ? ' — thin, so the warning shows' : ''));
+  lines.push('Places offered to the model: ' + d.offered.length);
   lines.push('');
   if (!(r.dropped || []).length) lines.push('Nothing was dropped.');
-  (r.dropped || []).forEach((d) => {
-    lines.push('- [' + d.what + '] ' + String(d.text || '').slice(0, 220) + (d.finding ? '  (from: ' + String(d.finding).slice(0, 90) + ')' : ''));
-    lines.push('    why: ' + d.why);
+  (r.dropped || []).forEach((x) => {
+    lines.push('- [' + x.what + '] ' + String(x.text || '').slice(0, 220));
+    lines.push('    why: ' + x.why);
   });
   lines.push('');
-  lines.push('Places whose words could not be quoted at all (a sample):');
-  (r.unquotable || []).slice(0, 12).forEach((u) => lines.push('- ' + u.id + ': ' + u.why));
+  lines.push('Places whose words could not be used at all (a sample):');
+  (d.unquotable || []).slice(0, 12).forEach((u) => lines.push('- ' + u.id + ': ' + u.why));
   return lines.join('\n') + '\n';
 }
 
@@ -321,32 +348,33 @@ async function main(argv) {
   const src = o.file ? loadFile(o.file) : o.dir ? loadDir(o.dir, o.layer, o.allQuestions) : loadSlug(o.dataset, o.layer, o.allQuestions);
   const { layer, features, shownCols } = src;
 
-  let model = 'stub', byWho = 'the stand-in (no model)';
+  let model = o.model || 'stub', byWho = 'the stand-in (no model)';
   let call = null;
-  const digestOnly = IM.summaryDigest(layer, features, shownCols ? { shownCols } : null);
+  const digestOnly = IM.storyDigest(layer, features, { shownCols: shownCols || null, cap: o.places || 0 });
   if (o.stub) {
     call = async (m, prompt, schema, x) => stubCall(digestOnly, prompt, x);
   } else if (o.askDir) {
     call = askDirCall(o.askDir, o.name);
-    model = o.askedBy || 'a model outside this script';
-    byWho = model;
+    model = o.model || o.askedBy || 'a model outside this script';
+    byWho = o.askedBy || model;
   } else {
     if (!process.env.GEMINI_API_KEY) { try { process.loadEnvFile(path.join(REPO, 'api', '.env')); } catch { /* none */ } }
     if (!process.env.GEMINI_API_KEY) die('no GEMINI_API_KEY in the environment or in api/.env — use --ask-dir=DIR (another model answers) or --stub');
-    const M = await import('../api/lib/models.js');
-    await M.recheckModels();
-    model = M.getFlashModel();
-    byWho = model;
+    if (!o.model) {
+      const M = await import('../api/lib/models.js');
+      await M.recheckModels();
+      model = M.getFlashModel();
+    }
+    byWho = model + (o.proofreadModel ? ' (proofread on ' + o.proofreadModel + ')' : '');
     call = realCall;
   }
 
   console.log('Mocking ' + named + (layer.id ? ' / ' + layer.id : '') + ': ' + features.length + ' places, ' +
-    digestOnly.questions.length + ' questions, ' + digestOnly.quotes.length + ' cells with quotes, on ' + model + '.');
+    digestOnly.questions.length + ' questions, ' + digestOnly.offered.length + ' places with words of their own, on ' + model + '.');
 
-  const started = Date.now();
   let r;
   try {
-    r = await SUM.writeFindings({ layer, features, call, model, Type, shownCols });
+    r = await SUM.writeStory({ layer, features, call, model, proofreadModel: o.proofreadModel || '', Type, shownCols, cap: o.places || 0 });
   } catch (e) {
     if (e instanceof Waiting) { console.log('\nStopped: ' + e.message + '\nWrite the answer there, then run this again.'); process.exit(2); }
     throw e;
@@ -356,47 +384,21 @@ async function main(argv) {
       '\n  write the answer to: ' + waiting.at + '\nThen run this again.');
     process.exit(2);
   }
-  const seconds = ((Date.now() - started) / 1000).toFixed(1);
-
-  // the place behind each quote, for the "open this place" link the plan asks about
-  const byId = new Map();
-  features.forEach((f, i) => byId.set(IM.placeIdOf(f, i), f));
-  /* The name the link would carry. Some atlases title their places by a
-     field that is not a name (blr-finds-test titles them by their
-     categories), so a title with a list separator in it, or one that only
-     repeats the place's categories, is left out and the link says "this
-     place". A name is never shown when the place's people columns say it. */
-  (r.findings || []).forEach((f) => (f.quotes || []).forEach((q) => {
-    const f0 = byId.get(q.id), p = (f0 && f0.properties) || {};
-    let nm = IM.placeNameOf(layer, f0) || '';
-    if (nm && (/[;|]/.test(nm) || IM.foldName(nm) === IM.foldName(p.categories || '') || IM.foldName(nm) === IM.foldName(p._category || ''))) nm = '';
-    if (nm && IM.peopleValuesOf(layer, p).some((v) => IM.hasWhole(IM.foldName(nm), IM.foldName(v)))) nm = '';
-    q.place = nm;
-  }));
-  // the places whose words could not be used at all, as a reason list
-  const unquotable = [];
-  features.forEach((f, i) => {
-    const q = IM.quoteOf(layer, f, (digestOnly.questions[0] || {}).id || '');
-    if (!q.text) unquotable.push({ id: IM.placeIdOf(f, i), why: q.why });
-  });
-  r.unquotable = unquotable;
 
   fs.mkdirSync(o.out, { recursive: true });
   const base = path.join(o.out, o.name);
-  fs.writeFileSync(base + '-findings.json', JSON.stringify({ atlas: o.name, layer: layer.id || '', model, at: new Date().toISOString(),
-    seconds: Number(seconds), by: r.by, sig: r.sig, summary: r.summary, findings: r.findings, quality: r.digest.quality,
-    dropped: r.dropped, digest: r.digest }, null, 1));
+  fs.writeFileSync(base + '-story.json', JSON.stringify({ atlas: o.name, layer: layer.id || '', model, at: new Date().toISOString(),
+    by: r.by, sig: r.sig, calls: r.calls, story: r.story, quality: r.quality, dropped: r.dropped, digest: r.digest }, null, 1));
   fs.writeFileSync(base + '-dropped.txt', droppedText(o.name, r));
   fs.writeFileSync(base + '-mock.html', mockHTML({ title: o.name, result: r, byWho }));
 
-  console.log('  ' + r.by + ' in ' + seconds + 's; summary ' + (r.summary || []).length + ' sentence(s), findings ' +
-    (r.findings || []).length + ', dropped ' + (r.dropped || []).length + ', places with no quotable words ' + unquotable.length);
-  (r.summary || []).forEach((s) => console.log('   ~ ' + s.text));
-  (r.findings || []).forEach((f) => {
-    console.log('   - ' + f.text);
-    (f.quotes || []).forEach((q) => console.log('       “' + q.text + '”  (' + (q.place || q.id) + ')'));
-  });
-  console.log('  Written: ' + base + '-findings.json, ' + base + '-dropped.txt, ' + base + '-mock.html');
+  const secs = (r.calls || []).reduce((s, c) => s + c.seconds, 0).toFixed(1);
+  console.log('  ' + r.by + ' in ' + secs + 's; sentences ' + ((r.story && r.story.sentences.length) || 0) +
+    ', quotes ' + ((r.story && r.story.quotes.length) || 0) + ', dropped ' + (r.dropped || []).length +
+    ', places with no quotable words ' + (r.digest.unquotable || []).length);
+  ((r.story && r.story.sentences) || []).forEach((s) => console.log('   ~ ' + s.text));
+  ((r.story && r.story.quotes) || []).forEach((q) => console.log('       “' + q.text + '”  (' + (q.name || q.id) + ')'));
+  console.log('  Written: ' + base + '-story.json, ' + base + '-dropped.txt, ' + base + '-mock.html');
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
