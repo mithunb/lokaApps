@@ -285,11 +285,13 @@ check('the rewrite is told what was thrown out and why, and is never asked a thi
     again.calls.filter((c) => c.what === 'rewrite').length], [true, 1]);
 const thin = await SUM.writeStory({ layer, features, Type, model: 'a stand-in',
   call: caller({ sentences: [good().sentences[0]] }, yes(1)) });
-check('one sentence, or under two quotes to show, is no story', [thin.story, thin.by], [null, 'under two sentences were vouched for']);
+check('one sentence is no paragraph: their own words are shown instead (Mithun, 5 Nov 2026)',
+  [thin.story && thin.story.ownWords, thin.story && thin.story.sentences.length, thin.story && thin.story.quotes.length >= 2, thin.by],
+  [true, 0, true, 'under two sentences were vouched for; their own words instead']);
 const noProof = await SUM.writeStory({ layer, features, Type, model: 'a stand-in',
   call: async (m, p, s, o) => { if (o && o.proofread) throw new Error('the model refused (503)'); return good(); } });
-check('with no proofread, nothing is shown — never unchecked text',
-  [noProof.story, /^the proofread could not be had \(/.test(noProof.by)], [null, true]);
+check('with no proofread, no written sentence is shown — only their own words, never unchecked text',
+  [noProof.story && noProof.story.ownWords, noProof.story && noProof.story.sentences.length, /^the proofread could not be had \(/.test(noProof.by)], [true, 0, true]);
 const few = [place('f1', 'Garden', 'Natural elements', 'I love this corner and the shade here is wonderful.'),
   place('f2', 'Garden', 'Natural elements', 'Does anyone know who planted these trees?'),
   place('f3', 'Shrine', 'Stone or masonry', 'A small stone shrine by the gate, but somebody still keeps it clean.')];

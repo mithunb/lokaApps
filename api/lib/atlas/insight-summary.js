@@ -648,14 +648,21 @@ export async function writeStory({ layer, features, call, model, proofreadModel,
   /* Few voices: there is nothing to gather, so the card shows the quotes
      themselves and no model writes a word (Mithun, 6 Nov 2026). The code
      picks them, sharpest first, one to a place as always. */
-  if (digest.candidates.length < IM.STORY_VOICES_MIN) {
+  /* Their own words: the sharpest quotes, chosen by the code, nothing written
+     over them. Shown when the voices are few, and also whenever no paragraph
+     could be backed (Mithun, 5 Nov 2026: "show 'in their own words', if
+     nothing is returned") — never an empty card while there are quotes. A
+     quote the proofread said names a person is left out. */
+  const ownWords = (why, extra) => {
     const places = IM.offeredById(digest);
-    const quotes = digest.candidates.slice(0, IM.STORY_VOICES_MIN)
+    const barred = new Set(((extra && extra.dropped) || []).filter((d) => d.what === 'quote').map((d) => d.id || d.text));
+    const quotes = digest.candidates.filter((c) => !barred.has(c.id)).slice(0, IM.STORY_VOICES_MIN)
       .map((c) => ({ id: c.id, text: c.text, name: (places[c.id] || {}).name || '' }));
-    return Object.assign({}, base, { story: { sentences: [], quotes, ownWords: true },
-      by: 'few voices: their own words, with nothing written over them' });
-  }
-  if (!call) return Object.assign({}, base, { by: 'no model' });
+    if (quotes.length < IM.STORY_QUOTES_MIN) return Object.assign({}, base, extra || {}, { by: why });
+    return Object.assign({}, base, extra || {}, { story: { sentences: [], quotes, ownWords: true }, by: why });
+  };
+  if (digest.candidates.length < IM.STORY_VOICES_MIN) return ownWords('few voices: their own words, with nothing written over them');
+  if (!call) return ownWords('no model: their own words');
   const ask = async (what, who, prompt, schema, opts) => {
     const started = Date.now();
     try {
@@ -696,7 +703,7 @@ export async function writeStory({ layer, features, call, model, proofreadModel,
   };
 
   const first = await round('write', storyPromptFor(digest), []);
-  if (first.failed) return Object.assign({}, base, { dropped, by: first.failed });
+  if (first.failed) return ownWords(first.failed + '; their own words instead', { dropped });
   let kept = first.sentences;
   // one rewrite, with the reasons: a weak sentence should not cost the whole story
   if (first.dropped.some((d) => d.what === 'sentence') && kept.length < IM.MAX_STORY) {
@@ -704,11 +711,11 @@ export async function writeStory({ layer, features, call, model, proofreadModel,
     if (!again.failed) kept = kept.concat(again.sentences).slice(0, IM.MAX_STORY);
   }
   if (kept.length < IM.MIN_STORY) {
-    return Object.assign({}, base, { dropped, by: 'under two sentences were vouched for' });
+    return ownWords('under two sentences were vouched for; their own words instead', { dropped });
   }
   const quotes = evidenceFor(digest, kept);
   if (quotes.length < IM.STORY_QUOTES_MIN) {
-    return Object.assign({}, base, { dropped, by: 'under ' + IM.STORY_QUOTES_MIN + ' quotes left to show' });
+    return ownWords('under ' + IM.STORY_QUOTES_MIN + ' quotes left to show; their own words instead', { dropped });
   }
   return Object.assign({}, base, { story: { sentences: kept, quotes }, dropped, by: 'model' });
 }
