@@ -325,33 +325,35 @@ export async function writeSummary({ layer, features, prev, call, model, Type, t
   return Object.assign({ summary: { sig, sentences: plain(final), at: Date.now() }, by: 'model' }, base, rewrite ? { rewrite } : {});
 }
 
-/* ============ "What the places say", version 2: a short STORY =============
-   A MOCK-UP, not the shipped summary (docs/plan-places-say-v2.md, 5 Nov
-   2026). Nothing above this line changed: SUMMARY_VERSION, writeSummary and
-   the server's call are as they were. These pieces are exported so
-   deploy/measure-story.mjs can run the proposed pipeline on a local layer and
-   show Mithun what it would say.
+/* ====== "What the places say", version 2: what people are saying ==========
+   A MOCK-UP, not the shipped summary (docs/plan-places-say-v2.md). Nothing
+   above this line changed: SUMMARY_VERSION, writeSummary and the server's
+   call are as they were. These pieces are exported so deploy/measure-story.mjs
+   can run the proposed pipeline on a local layer and show Mithun what it
+   would say.
 
-   Mithun, 5 Nov 2026: "focus on writing a short summary or story of the
-   places. Stats are less important because the questions cover it." So this
-   version has no counts in it at all. The shape:
+   Mithun, 5-6 Nov 2026, after seeing the models try to describe the places:
+   "Summarize what people are saying using the quotes. Whether they are
+   curious, concerned, enjoying and so on. Mention the quotes at the bottom as
+   evidence." So the story is no longer a description of the places; it is a
+   short account of what the people who wrote about them are saying and how
+   they feel, and each sentence stands on the very quotes it cites.
 
-     one short paragraph, three to five plain sentences about what this map is
-     and what people noticed, then two short quotes in the places' own words,
-     each linking to its place.
+     a paragraph of 3 to 5 plain sentences, each citing the quotes it rests on,
+     then those quotes underneath, in the order they are cited, as the evidence.
 
    The pipeline: the code works out the digest (insight-mode.js storyDigest —
-   the places' own words and their answers, no counts) → the model writes once
-   (the sentences, each with the ids of the places it draws from, and the two
-   quotes it chose) → the code checks (no digit, no number word, no amount
-   word; every id one of the places offered; two to six ids a sentence; a
-   quote's words must be words that place was offered for, and the code puts
-   its own copy back) → the model proofreads once, reading each sentence
-   beside those places' own words and answers, and each quote for a person's
-   name → a sentence nobody vouches for is dropped, and under two left nothing
-   is shown. When the proofread cannot be had, nothing is shown either: the
-   story is never put up unchecked. */
-export const STORY_VERSION = 1;
+   the places' own words, and the pointed sentences worth quoting, scored by
+   IM.quoteScore) → the model writes once, citing 1 to 3 quote ids a sentence
+   → the code checks (no digit, no amount or ranking word, no borrowed filing
+   word unless the cited quotes use it, every id a quote it was offered) → the
+   model proofreads once, seeing each sentence beside the very quotes it cites
+   and answering one question: do these quotes show this feeling about this
+   thing? → what was dropped goes back once with its reasons, and the rewrite
+   is checked and proofread the same way, once. Under two sentences, or under
+   two quotes left to show, nothing is shown; and with no proofread, nothing is
+   shown either. */
+export const STORY_VERSION = 2;
 // the digest carries the places' own words, so the story is given longer than the shipped summary's TIMEOUT_MS
 export const STORY_TIMEOUT_MS = 90000;
 const MAX_STORY_CHARS = 240;
@@ -361,71 +363,7 @@ export function storySig(digest) {
   return crypto.createHash('sha1').update(STORY_VERSION + '\u0004' + JSON.stringify(digest || {})).digest('hex').slice(0, 20);
 }
 
-/* What the model is shown: the places themselves — id, name, their own words
-   and their answers as plain labels — and nothing counted. */
-export function storyPromptFor(digest) {
-  const d = digest || {};
-  const places = (d.offered || []).map((o) => ({ id: o.id, name: o.name || undefined, words: o.words,
-    answers: (o.answers || []).map((a) => a.question + ': ' + a.answer) }));
-  // the answer labels of two words or more: LOKA's filing words, which the story may not borrow
-  const labels = [];
-  (d.questions || []).forEach((q) => (q.answers || []).forEach((a) => { if (String(a).trim().split(/\s+/).length > 1) labels.push(a); }));
-  return [
-    'Below are places on one map, in their own words: what the person who tagged each one wrote about it, and the answers LOKA read from it.',
-    '',
-    'Write a short story of these places for somebody looking at this map for the first time, in the words a neighbour would use.',
-    '',
-    '1. "sentences": write ' + IM.MAX_STORY + ' short sentences, one paragraph, saying what this map is about and what people noticed. Each one is checked on its own and a weak one is thrown away, so write ' + IM.MAX_STORY + ' that can each stand alone and still read as one piece of writing.',
-    '2. "quotes": exactly two, from the "quotes to choose from" at the end: give the place\u2019s "id" and copy its sentence, letter for letter, into "text". Two different places. Those are the sentences worth showing \u2014 somebody asking something, noticing something, saying how a place feels. No other sentence may be quoted. Prefer places your sentences draw on. Never change a quote, not a word, not a comma.',
-    '',
-    'Name concrete things, in the places\u2019 own terms: a rain tree, a stone step, a bench made from a door, egg rice. The reader should be able to picture what is there.',
-    (labels.length ? 'NEVER use the questions\u2019 answer labels as your own wording \u2014 not ' + labels.slice(0, 8).map((x) => '\u201c' + x + '\u201d').join(', ') + ', nor any other label of two words or more. They are LOKA\u2019s filing words, not what anybody wrote, and a sentence carrying one is thrown away. Say what the place is, the way the person who wrote about it would say it.'
-      : 'Never write in filing words: say what the place is, the way the person who wrote about it would say it.'),
-    'Never say who did something \u2014 no people, observers, walkers, visitors, travellers, residents, locals \u2014 unless the place\u2019s own words say so. Write about the places, not about whoever looked at them.',
-    'No framing and no summing up: not \u201cthis map shows places where X and Y intertwine\u201d, not \u201ca blend of\u201d, not \u201ca tapestry of\u201d. One plain thing a sentence.',
-    '',
-    'NO NUMBERS AT ALL. Not a digit, not a number in words, and no word for how many: no "most", "many", "few", "some", "almost all", "a handful", "half", "often", "all", "every". The questions under this story already show every count, so a sentence that tries to say how many is thrown away. Say what is there, not how much of it there is.',
-    '',
-    'EVERY sentence must come with "places": the ids of the 2 to 6 places it draws from, from the list below. They are checked: an id that is not in the list, or fewer than two, and the sentence is thrown away. Each sentence is then read again beside those places’ own words, and anything they do not plainly support is thrown away, however true it sounds. So write about places you can point at.',
-    '',
-    'Also:',
-    '- Never name a person, and never pick a quote that names one, or that carries an email, a phone number, a link or a photo credit.',
-    '- Do not name the atlas, the region or the organisation: this is about the places.',
-    '- Under 25 words a sentence. Finish every sentence.',
-    '- Plain text: no markdown, lists, emoji or quotation marks in your own sentences.',
-    '',
-    JSON.stringify({ questions: (d.questions || []).map((q) => ({ id: q.id, question: q.text, answers: q.answers })), places }),
-    '',
-    'Quotes to choose from (nothing else may be quoted):',
-    JSON.stringify((d.candidates || []).map((c) => ({ id: c.id, text: c.text }))),
-  ].join('\n');
-}
-
-export function storySchemaFor(Type) {
-  return {
-    type: Type.OBJECT,
-    required: ['sentences', 'quotes'],
-    properties: {
-      sentences: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          required: ['text', 'places'],
-          properties: { text: { type: Type.STRING }, places: { type: Type.ARRAY, items: { type: Type.STRING } } },
-        },
-      },
-      quotes: {
-        type: Type.ARRAY,
-        items: { type: Type.OBJECT, required: ['id', 'text'], properties: { id: { type: Type.STRING }, text: { type: Type.STRING } } },
-      },
-    },
-  };
-}
-
-// a place's own words are compared as a reader sees them: spacing and the kind of quote mark do not count
-function sameWords(a, b) { return IM.foldName(a) === IM.foldName(b); }
-
-// the answer labels of two words or more: the filing words a sentence may not borrow
+// the answer labels of two words or more: LOKA's filing words
 function labelsOf(digest) {
   const out = [];
   ((digest && digest.questions) || []).forEach((q) => (q.answers || []).forEach((a) => {
@@ -433,99 +371,145 @@ function labelsOf(digest) {
   }));
   return out;
 }
+// the quotes the model may cite, by id
+function quotesById(digest) {
+  const by = Object.create(null);
+  ((digest && digest.candidates) || []).forEach((c) => { by[c.id] = c; });
+  return by;
+}
+// a place's own words are compared as a reader sees them: spacing and the kind of quote mark do not count
+function sameWords(a, b) { return IM.foldName(a) === IM.foldName(b); }
 
-/* The model's answer, checked by the code: { sentences, quotes, dropped }.
-   Every reason is written from the ids and the rules, never from a place's
-   words, so the whole dropped list is safe to log. */
-export function checkStory(digest, answer) {
-  const by = IM.offeredById(digest);
+/* What the model is shown: the quotes it may cite, each with its id, and the
+   places' own words behind them. No counts anywhere. */
+export function storyPromptFor(digest) {
+  const d = digest || {};
+  const places = (d.offered || []).map((o) => ({ id: o.id, words: o.words,
+    answers: (o.answers || []).map((a) => a.question + ': ' + a.answer) }));
+  const labels = labelsOf(d);
+  return [
+    'Below are things people wrote about places on one map. First the quotes you may use, each with its id; then the places those quotes come from, with everything written about them.',
+    '',
+    'Say what these people are SAYING, and how they feel about these places: curious, concerned, enjoying, wistful, proud, amused, annoyed, grateful — and about what. Not what the places are: what the people who wrote about them are getting at.',
+    '',
+    '1. "sentences": write ' + IM.MAX_STORY + ' short sentences, one paragraph. Each one is checked on its own and a weak one is thrown away, so write ' + IM.MAX_STORY + ' that can each stand alone and still read as one piece of writing.',
+    '2. Every sentence carries "quotes": the ids of the ' + IM.STORY_CITES_MIN + ' to ' + IM.STORY_CITES_MAX + ' quotes it rests on, from the list below and nowhere else. Those quotes are shown under the paragraph as the evidence for it, so cite the ones a reader would want to see.',
+    '',
+    'Write it so the quotes bear it out. "Somebody wonders how deep an ant’s burrow goes" beside that quote is right; a feeling no cited quote shows is thrown away. Name the thing the feeling is about, in the words the quotes use.',
+    (labels.length ? 'Do not borrow the questions’ filing words — ' + labels.slice(0, 8).map((x) => '“' + x + '”').join(', ') + ' and the like — unless a quote you cite uses those very words.' : 'Do not write in filing words.'),
+    'Never name a person. Never say who did something — walkers, visitors, residents — unless a cited quote says so; "somebody", "one person", "another" are safe.',
+    'No numbers and no amounts: not a digit, not "most", "many", "a few", "all", "every", "often", and nothing about which is commonest.',
+    'No framing: not “this map shows places where X and Y intertwine”, not “a tapestry of”. One plain thing a sentence, under 25 words, finished.',
+    'Plain text: no markdown, lists, emoji or quotation marks of your own.',
+    '',
+    'Quotes you may cite:',
+    JSON.stringify((d.candidates || []).map((c) => ({ id: c.id, quote: c.text }))),
+    '',
+    'The places behind them:',
+    JSON.stringify({ questions: (d.questions || []).map((q) => ({ id: q.id, question: q.text, answers: q.answers })), places }),
+  ].join('\n');
+}
+
+export function storySchemaFor(Type) {
+  return {
+    type: Type.OBJECT,
+    required: ['sentences'],
+    properties: {
+      sentences: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          required: ['text', 'quotes'],
+          properties: { text: { type: Type.STRING }, quotes: { type: Type.ARRAY, items: { type: Type.STRING } } },
+        },
+      },
+    },
+  };
+}
+
+/* The sentences the model wrote, checked by the code: { sentences, dropped }.
+   Each kept sentence carries the ids it cites, in its own order. Every reason
+   is written from the ids and the rules, never from a place's words. */
+export function checkStory(digest, answer, already) {
+  const by = quotesById(digest);
+  const labels = labelsOf(digest);
   const dropped = [];
   const sentences = [];
+  const seen = new Set((already || []).map((s) => IM.foldName(s.text)));
   (answer && Array.isArray(answer.sentences) ? answer.sentences : []).forEach((s) => {
-    if (sentences.length >= IM.MAX_STORY) return;
+    if (sentences.length + (already || []).length >= IM.MAX_STORY) return;
     const text = String((s && s.text) || '').replace(/\s*\(?\bpattern_\d+\b\)?/g, '').replace(/\s+/g, ' ').trim();
     const no = (why) => dropped.push({ what: 'sentence', text, why });
     if (!text) return no('it is empty');
     if (text.length > MAX_STORY_CHARS) return no('it is too long');
     if (/[%<>*#`_\[\]{}|\\]|https?:/i.test(text)) return no('it has a percentage, a link or markup');
-    // the story carries no counts: the questions under it already show them (Mithun, 5 Nov 2026)
     if (/\d/.test(text)) return no('it writes a number, and the story says no numbers at all');
     if (IM.hasAmountWords(text)) return no('it says how many in words');
-    /* LOKA's filing words are not anybody's own (Mithun, 6 Nov 2026, on
-       "highlighting both established structures and natural features"): a
-       sentence that borrows an answer label of two words or more is dropped.
-       A one-word label is an ordinary word — Market, Trees — and is left alone. */
-    const folded = IM.foldName(text);
-    const borrowed = labelsOf(digest).find((l) => IM.hasWhole(folded, IM.foldName(l)));
-    if (borrowed) return no('it uses the question’s answer label “' + borrowed + '” as its own words');
-    const given = Array.isArray(s && s.places) ? s.places.map((x) => (typeof x === 'string' ? x.trim() : '')).filter(Boolean) : [];
+    const given = Array.isArray(s && s.quotes) ? s.quotes.map((x) => (typeof x === 'string' ? x.trim() : '')).filter(Boolean) : [];
     const ids = given.filter((id, i) => given.indexOf(id) === i);
     const strange = ids.filter((id) => !by[id]);
-    if (strange.length) return no('it names a place it was not given (' + strange[0].slice(0, 80) + ')');
-    if (ids.length < IM.STORY_IDS_MIN) return no('it names fewer than ' + IM.STORY_IDS_MIN + ' places it draws from');
-    if (ids.length > IM.STORY_IDS_MAX) return no('it names more than ' + IM.STORY_IDS_MAX + ' places');
-    sentences.push({ text, places: ids });
+    if (strange.length) return no('it cites a quote it was not given (' + strange[0].slice(0, 80) + ')');
+    if (ids.length < IM.STORY_CITES_MIN) return no('it cites no quote to stand on');
+    if (ids.length > IM.STORY_CITES_MAX) return no('it cites more than ' + IM.STORY_CITES_MAX + ' quotes');
+    /* LOKA's filing words are not anybody's own ("highlighting both
+       established structures and natural features") — unless a quote the
+       sentence cites uses those very words, in which case they are what
+       somebody wrote (Mithun, 6 Nov 2026). */
+    const folded = IM.foldName(text);
+    const said = ids.map((id) => IM.foldName(by[id].text)).join(' \u0004 ');
+    const borrowed = labels.find((l) => IM.hasWhole(folded, IM.foldName(l)) && !IM.hasWhole(said, IM.foldName(l)));
+    if (borrowed) return no('it uses the question’s filing words “' + borrowed + '”, which no quote it cites says');
+    if (seen.has(IM.foldName(text))) return no('it says again what another sentence says');
+    seen.add(IM.foldName(text));
+    sentences.push({ text, quotes: ids });
   });
-
-  /* The quotes: by id, from the places offered, the words re-inserted by the
-     code. Two different places, and a place the story names comes first. */
-  const named = new Set();
-  sentences.forEach((s) => s.places.forEach((id) => named.add(id)));
-  const seen = new Set(), inStory = [], outside = [];
-  (answer && Array.isArray(answer.quotes) ? answer.quotes : []).forEach((q) => {
-    const id = q && typeof q.id === 'string' ? q.id.trim() : '';
-    // a dropped quote is named by its place id and never by its words
-    const no = (why) => dropped.push({ what: 'quote', text: id || '(a quote with no place id)', why });
-    if (!id) return no('it names no place');
-    const place = by[id];
-    if (!place) return no('that place is not one of the places it was given');
-    if (seen.has(id)) return no('that place is already quoted');
-    const mine = (place.sentences || []).find((one) => sameWords(one, q && q.text));
-    if (!mine) return no('the quote is not this place’s own words, as they were offered');
-    /* Only the pointed sentences may be quoted (Mithun, 6 Nov 2026): a bare
-       label — "table made with waste materials" — says what a thing is and
-       nothing more, and the questions already say that. */
-    if (!(digest.candidates || []).some((c) => c.id === id && sameWords(c.text, mine))) {
-      return no('those words only say what the place is; the story quotes what somebody noticed');
-    }
-    // the code's own copy, read again by the safety rules before it is kept
-    const fault = IM.quoteFault(mine, []);
-    if (fault) return no(fault);
-    seen.add(id);
-    (named.has(id) ? inStory : outside).push({ id, text: mine, name: place.name || '', inStory: named.has(id) });
-  });
-  const all = inStory.concat(outside);
-  const quotes = all.slice(0, IM.STORY_QUOTES);
-  all.slice(IM.STORY_QUOTES).forEach((q) => dropped.push({ what: 'quote', text: q.id, why: 'the story shows ' + IM.STORY_QUOTES + ' quotes, and that many already passed' }));
-  /* The shape is the paragraph AND its quotes (Mithun, 5 Nov 2026), so a
-     story with too few quotes is not shown at all rather than shown short. */
-  const enough = quotes.length >= IM.STORY_QUOTES;
-  if (!enough) quotes.forEach((q) => dropped.push({ what: 'quote', text: q.id, why: 'the story needs ' + IM.STORY_QUOTES + ' quotes, and fewer passed' }));
-  return { sentences: sentences.length >= IM.MIN_STORY ? sentences : [], quotes: enough ? quotes : [], dropped,
-    tooFew: sentences.length > 0 && sentences.length < IM.MIN_STORY ? sentences.length : 0,
-    tooFewQuotes: enough ? 0 : quotes.length };
+  return { sentences, dropped };
 }
 
-/* The proofread: each sentence beside the very places it says it draws from —
-   their own words and their answers — and each quote on its own. No benefit
-   of the doubt: a sentence nobody vouches for is dropped. */
-export function storyProofreadPromptFor(digest, sentences, quotes) {
-  const by = IM.offeredById(digest);
+/* The evidence under the paragraph: the quotes the kept sentences cite, in
+   the order they cite them, each with the code's own copy of the words and
+   the place it belongs to. At most STORY_QUOTES_MAX. */
+export function evidenceFor(digest, sentences) {
+  const by = quotesById(digest);
+  const places = IM.offeredById(digest);
+  // Every sentence keeps one visible quote first (Mithun, 5 Nov 2026: "one per
+  // sentence, up to 5"); the remaining room goes to further citations in order.
+  // Shown in the order the sentences cite them.
+  const cited = [];
+  (sentences || []).forEach((s, si) => (s.quotes || []).forEach((id, qi) => {
+    if (by[id]) cited.push({ id, si, qi });
+  }));
+  const pick = new Set();
+  cited.forEach((c) => {
+    if (pick.size >= IM.STORY_QUOTES_MAX || pick.has(c.id)) return;
+    if (!cited.some((d) => d.si === c.si && pick.has(d.id))) pick.add(c.id);
+  });
+  cited.forEach((c) => { if (pick.size < IM.STORY_QUOTES_MAX) pick.add(c.id); });
+  const out = [], seen = new Set();
+  cited.forEach((c) => {
+    if (!pick.has(c.id) || seen.has(c.id)) return;
+    seen.add(c.id);
+    const place = places[c.id] || {};
+    out.push({ id: c.id, text: by[c.id].text, name: place.name || '' });
+  });
+  return out;
+}
+
+/* The proofread: one question a sentence, beside the very quotes it cites.
+   Easier to judge than a description, and strict — a missing verdict is a no. */
+export function storyProofreadPromptFor(digest, sentences) {
+  const by = quotesById(digest);
   const list = (sentences || []).map((s, i) => ({ index: i, sentence: s.text,
-    places: (s.places || []).map((id) => {
-      const p = by[id] || {};
-      return { words: p.words || '', answers: (p.answers || []).map((a) => a.question + ': ' + a.answer) };
-    }) }));
-  const qs = (quotes || []).map((q, i) => ({ index: i, quote: q.text }));
+    quotes: (s.quotes || []).map((id) => (by[id] || {}).text || '') }));
   return [
-    'Below are sentences from a short story about places on a map. Each comes with the places it was written from: what somebody wrote about each one, and the answers read from it. After them are the quotes shown beside the story.',
-    'For each sentence answer: "supported" — do these places’ own words and answers plainly bear this sentence out? Mark it false when the sentence goes beyond them, when it says how many (the story may not), when it names a person, or when it stops part way. Mark it false too when it says who did something — people, observers, walkers, visitors, residents — and the words beside it do not say so, or when it is filing words rather than what is there. There is no benefit of the doubt: if you are not sure the places bear it out, mark it FALSE.',
-    'For each quote answer: "namesPerson" — true when it names a person, a username or a handle, or carries an email, a phone number, a link or a photo credit such as "Photo: A. Name". A place’s own name, or a god’s, is not a person. When unsure, mark it true.',
+    'Below are sentences from a short account of what people are saying about places on a map. Each comes with the quotes it rests on — the words those people wrote.',
+    'For each sentence answer "shows": do these quotes show this feeling about this thing? Mark it false when the feeling is not in the quotes, when the sentence is about something the quotes do not mention, when it says how many, when it names a person, or when it stops part way. There is no benefit of the doubt: if you are not sure the quotes show it, mark it FALSE.',
+    'For each quote answer "namesPerson": true when it names a person, a username or a handle, or carries an email, a phone number, a link or a photo credit. A place’s own name, or a god’s, is not a person. When unsure, mark it true.',
     'In "why" put the fault in a few plain words (empty when there is none).',
-    'Sentences:',
+    'Sentences and the quotes they cite:',
     JSON.stringify(list),
-    'Quotes:',
-    JSON.stringify(qs),
+    'Quotes, in order:',
+    JSON.stringify(evidenceFor(digest, sentences).map((q, i) => ({ index: i, quote: q.text }))),
   ].join('\n');
 }
 
@@ -536,8 +520,8 @@ export function storyProofreadSchemaFor(Type) {
     properties: {
       sentences: {
         type: Type.ARRAY,
-        items: { type: Type.OBJECT, required: ['index', 'supported', 'why'],
-          properties: { index: { type: Type.INTEGER }, supported: { type: Type.BOOLEAN }, why: { type: Type.STRING } } },
+        items: { type: Type.OBJECT, required: ['index', 'shows', 'why'],
+          properties: { index: { type: Type.INTEGER }, shows: { type: Type.BOOLEAN }, why: { type: Type.STRING } } },
       },
       quotes: {
         type: Type.ARRAY,
@@ -548,51 +532,66 @@ export function storyProofreadSchemaFor(Type) {
   };
 }
 
-/* What the verdicts do: a sentence vouched for stands; one marked false, and
-   one the proofread says nothing about, is dropped. A quote said to name a
-   person goes, and so does one with no verdict. An answer with no verdict in
-   it at all is no proofread: `skipped` says so and the caller shows nothing. */
-export function applyStoryProofread(checked, answer) {
-  const sentences = checked.sentences || [], quotes = checked.quotes || [];
+/* What the verdicts do: a sentence whose quotes are said to show it stands;
+   one marked false, and one the proofread says nothing about, is dropped. A
+   quote said to name a person takes the sentences resting on it with it —
+   there is no story sentence without its evidence. An answer with no verdict
+   in it at all is no proofread: `skipped` says so and the caller shows nothing. */
+export function applyStoryProofread(digest, sentences, answer) {
   const sv = answer && Array.isArray(answer.sentences) ? answer.sentences : Array.isArray(answer) ? answer : [];
   const qv = answer && Array.isArray(answer.quotes) ? answer.quotes : [];
   const said = sv.filter((c) => c && Number.isInteger(c.index) && c.index >= 0 && c.index < sentences.length);
-  if (!said.length) return { sentences: [], quotes: [], dropped: [], skipped: 'no usable answer' };
+  if (!said.length) return { sentences: [], dropped: [], skipped: 'no usable answer' };
   const why = (c) => String((c && c.why) || '').replace(/\s+/g, ' ').trim().slice(0, 200);
   const good = new Map();
-  said.forEach((c) => { if (!good.has(c.index)) good.set(c.index, { ok: c.supported === true, why: why(c) }); });
+  said.forEach((c) => { if (!good.has(c.index)) good.set(c.index, { ok: c.shows === true, why: why(c) }); });
+  const shown = evidenceFor(digest, sentences);
+  const person = new Set();
+  qv.forEach((c) => { if (c && Number.isInteger(c.index) && c.namesPerson === true && shown[c.index]) person.add(shown[c.index].id); });
   const dropped = [];
-  const keptSentences = [];
+  const kept = [];
   sentences.forEach((s, i) => {
     const v = good.get(i);
-    if (v && v.ok) { keptSentences.push(s); return; }
-    dropped.push({ what: 'sentence', text: s.text, why: (v && v.why) || 'the proofread does not vouch for it' });
+    if (!v || !v.ok) { dropped.push({ what: 'sentence', text: s.text, why: (v && v.why) || 'the proofread does not vouch for it' }); return; }
+    const named = (s.quotes || []).find((id) => person.has(id));
+    if (named) {
+      dropped.push({ what: 'quote', text: named, why: 'the proofread says it names a person' });
+      dropped.push({ what: 'sentence', text: s.text, why: 'the quote it rests on names a person' });
+      return;
+    }
+    kept.push(s);
   });
-  const named = new Set();
-  keptSentences.forEach((s) => s.places.forEach((id) => named.add(id)));
-  const person = new Map();
-  qv.forEach((c) => { if (c && Number.isInteger(c.index) && !person.has(c.index)) person.set(c.index, c); });
-  const keptQuotes = [];
-  quotes.forEach((q, i) => {
-    const c = person.get(i);
-    if (!c) { dropped.push({ what: 'quote', text: q.id, why: 'the proofread does not vouch for it' }); return; }
-    if (c.namesPerson === true) { dropped.push({ what: 'quote', text: q.id, why: why(c) || 'it names a person' }); return; }
-    keptQuotes.push(Object.assign({}, q, { inStory: named.has(q.id) }));
-  });
-  return { sentences: keptSentences, quotes: keptQuotes, dropped, skipped: '' };
+  return { sentences: kept, dropped, skipped: '' };
 }
 
-/* The whole story pipeline over one layer, for the mock-up. Two calls: the
-   write and the proofread, each with the model it ran on and how long it
-   took (`calls`). `story` null means nothing would be shown, and `by` says
-   why. Never throws on the model's account. */
+/* What the model is told when its sentences come back dropped: the reasons,
+   once. (The rewrite is checked and proofread like the first draft, and never
+   written again.) */
+export function storyRewritePromptFor(digest, dropped, kept) {
+  const lines = (dropped || []).filter((d) => d.what === 'sentence').slice(0, IM.MAX_STORY)
+    .map((d) => ({ sentence: d.text, why: d.why }));
+  return [
+    storyPromptFor(digest),
+    '',
+    'YOU HAVE WRITTEN THIS ONCE. These sentences were thrown out, with the reason for each. Write ' +
+      (IM.MAX_STORY - (kept || []).length === 1 ? 'one new sentence' : (IM.MAX_STORY - (kept || []).length) + ' new sentences') +
+      ' that do not repeat the fault, citing quotes as before. Do not write these again:',
+    JSON.stringify(lines),
+    (kept || []).length ? 'These stand already, so say something else: ' + JSON.stringify((kept || []).map((s) => s.text)) : '',
+  ].join('\n');
+}
+
+/* The whole story pipeline over one layer, for the mock-up. Up to four calls:
+   the write and its proofread, then one rewrite of what was dropped and its
+   proofread. `story` null means nothing would be shown, and `by` says why.
+   Never throws on the model's account. */
 export async function writeStory({ layer, features, call, model, proofreadModel, Type, timeoutMs, shownCols, cap }) {
   timeoutMs = timeoutMs || STORY_TIMEOUT_MS;
   const digest = IM.storyDigest(layer, features, { shownCols: shownCols || null, cap: cap || 0 });
   const sig = storySig(digest);
   const calls = [];
   const base = { digest, sig, dropped: [], story: null, calls, quality: digest.quality, at: Date.now() };
-  if (!digest.offered.length) return Object.assign({}, base, { by: 'no place has words of its own' });
+  if (!digest.candidates.length) return Object.assign({}, base, { by: 'no place has words worth quoting' });
   if (!call) return Object.assign({}, base, { by: 'no model' });
   const ask = async (what, who, prompt, schema, opts) => {
     const started = Date.now();
@@ -605,37 +604,48 @@ export async function writeStory({ layer, features, call, model, proofreadModel,
       throw e;
     }
   };
-  let answer = null;
-  try {
-    answer = await ask('write', model, storyPromptFor(digest), storySchemaFor(Type), { file: true });
-  } catch (e) {
-    return Object.assign({}, base, { by: 'no answer (' + String((e && e.message) || '').slice(0, 80) + ')' });
+  const dropped = [];
+  const proofWith = proofreadModel || model;
+  /* One round: write (or rewrite) → the code's checks → the proofread.
+     Answers the sentences that came through, or null when the proofread
+     could not be had at all. */
+  const round = async (what, prompt, kept) => {
+    let answer = null;
+    try {
+      answer = await ask(what, model, prompt, storySchemaFor(Type), { file: true });
+    } catch (e) {
+      return { failed: 'no answer (' + String((e && e.message) || '').slice(0, 80) + ')' };
+    }
+    const checked = checkStory(digest, answer, kept);
+    checked.dropped.forEach((d) => dropped.push(d));
+    if (!checked.sentences.length) return { sentences: [], dropped: checked.dropped };
+    let read;
+    try {
+      const verdicts = await ask(what === 'write' ? 'proofread' : 'proofread (rewrite)', proofWith,
+        storyProofreadPromptFor(digest, checked.sentences), storyProofreadSchemaFor(Type), { file: true, proofread: true });
+      read = applyStoryProofread(digest, checked.sentences, verdicts);
+    } catch (e) {
+      return { failed: 'the proofread could not be had (' + String((e && e.message) || 'no answer').slice(0, 80) + ')' };
+    }
+    if (read.skipped) return { failed: 'the proofread could not be had (' + read.skipped + ')' };
+    read.dropped.forEach((d) => dropped.push(d));
+    return { sentences: read.sentences, dropped: checked.dropped.concat(read.dropped) };
+  };
+
+  const first = await round('write', storyPromptFor(digest), []);
+  if (first.failed) return Object.assign({}, base, { dropped, by: first.failed });
+  let kept = first.sentences;
+  // one rewrite, with the reasons: a weak sentence should not cost the whole story
+  if (first.dropped.some((d) => d.what === 'sentence') && kept.length < IM.MAX_STORY) {
+    const again = await round('rewrite', storyRewritePromptFor(digest, first.dropped, kept), kept);
+    if (!again.failed) kept = kept.concat(again.sentences).slice(0, IM.MAX_STORY);
   }
-  const checked = checkStory(digest, answer);
-  const dropped = checked.dropped.slice();
-  if (!checked.sentences.length) {
-    return Object.assign({}, base, { dropped, by: checked.tooFew ? 'under two sentences passed the checks' : 'nothing usable' });
-  }
-  if (!checked.quotes.length) {
-    return Object.assign({}, base, { dropped, by: 'under ' + IM.STORY_QUOTES + ' quotes passed the checks' });
-  }
-  /* The proofread is not optional here: an unchecked story is never shown
-     (Mithun, 5 Nov 2026). */
-  let read = null;
-  try {
-    const verdicts = await ask('proofread', proofreadModel || model,
-      storyProofreadPromptFor(digest, checked.sentences, checked.quotes), storyProofreadSchemaFor(Type), { file: true, proofread: true });
-    read = applyStoryProofread(checked, verdicts);
-  } catch (e) {
-    return Object.assign({}, base, { dropped, by: 'the proofread could not be had (' + String((e && e.message) || 'no answer').slice(0, 80) + ')' });
-  }
-  if (read.skipped) return Object.assign({}, base, { dropped: dropped.concat(read.dropped), by: 'the proofread could not be had (' + read.skipped + ')' });
-  read.dropped.forEach((d) => dropped.push(d));
-  if (read.sentences.length < IM.MIN_STORY) {
+  if (kept.length < IM.MIN_STORY) {
     return Object.assign({}, base, { dropped, by: 'under two sentences were vouched for' });
   }
-  if (read.quotes.length < IM.STORY_QUOTES) {
-    return Object.assign({}, base, { dropped, by: 'under ' + IM.STORY_QUOTES + ' quotes passed the checks' });
+  const quotes = evidenceFor(digest, kept);
+  if (quotes.length < IM.STORY_QUOTES_MIN) {
+    return Object.assign({}, base, { dropped, by: 'under ' + IM.STORY_QUOTES_MIN + ' quotes left to show' });
   }
-  return Object.assign({}, base, { story: { sentences: read.sentences, quotes: read.quotes }, dropped, by: 'model' });
+  return Object.assign({}, base, { story: { sentences: kept, quotes }, dropped, by: 'model' });
 }

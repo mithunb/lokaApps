@@ -337,13 +337,22 @@
   var SHARED_MAX = 2;
   // at most this many places are offered to the model, and this many characters of each one's words
   var STORY_PLACES = 80, STORY_WORDS = 400;
-  // how many pointed sentences are held up to the model as quotes to choose from
-  var STORY_CANDIDATES = 12;
+  /* How many pointed sentences are held up to the model as the evidence it
+     may cite. Twenty, not twelve, so a feeling can be shown from places all
+     over the map (Mithun, 6 Nov 2026). */
+  var STORY_CANDIDATES = 20;
   /* The story's shape (Mithun, 5 Nov 2026): one short paragraph of 3 to 5
      sentences, each naming the 2 to 6 places it draws from, and two short
      quotes from two different places. Under MIN_STORY sentences left after
      the checks, nothing is shown. */
-  var MIN_STORY = 2, MAX_STORY = 5, STORY_IDS_MIN = 2, STORY_IDS_MAX = 6, STORY_QUOTES = 2;
+  /* The shape (Mithun, 5-6 Nov 2026): "Summarize what people are saying using
+     the quotes. Whether they are curious, concerned, enjoying and so on.
+     Mention the quotes at the bottom as evidence." So a sentence cites the
+     quotes it rests on (STORY_CITES_MIN..MAX), and the quotes those kept
+     sentences cite are shown underneath, in the order they are cited: at
+     least STORY_QUOTES_MIN of them, at most STORY_QUOTES_MAX. */
+  var MIN_STORY = 2, MAX_STORY = 5, STORY_CITES_MIN = 1, STORY_CITES_MAX = 3;
+  var STORY_QUOTES_MIN = 2, STORY_QUOTES_MAX = 5;
   // a place with fewer than this share of words, or this many repeats, is a thin atlas
   var THIN_WORDS = 0.5, THIN_SAME = 0.3;
 
@@ -510,7 +519,7 @@
 
      A sentence at POINTED_MIN or above may be quoted; below it, the words
      still feed the story, they are just not held up as a quote. */
-  var FEELING = /\b(beautiful|lovely|pleasant|peaceful|quiet|serene|calm|cool|cooler|shade|shelter|relief|great|wonderful|charming|interesting|strange|odd|sad|sadly|unfortunately|struggle|struggles|neglected|run down|wish|wishes|hope|hopes|wonder|wonders|feels?|seems?|remember|remembers|miss|misses|love|loves|enjoy|enjoys|favourite|favorite|worth|rare treat|no seats|should|must|used to|no longer)\b/i;
+  var FEELING = /\b(beautiful|lovely|pleasant|peaceful|quiet|serene|calm|cool|cooler|shade|shelter|relief|great|wonderful|charming|interesting|strange|odd|sad|sadly|unfortunately|struggle|struggles|neglected|run down|wish|wishes|hope|hopes|wonder|wonders|why|how|feels?|seems?|remember|remembers|miss|misses|love|loves|enjoy|enjoys|favourite|favorite|worth|rare treat|no seats|should|must|used to|no longer|worried|worry|worries|concerned|sorry|afraid|proud|curious|annoyed|angry|grateful|thankful|glad|happy|lucky|shame|pity|please|hate)\b/i;
   var TURN = /\b(but|however|though|although|while|whereas|instead|yet|even so|no longer|used to|now)\b/i;
   var FIRST_PERSON = /\b(i|we|us|our|ours|my|mine|me)\b/i;
   var DOING = /\b(is|are|was|were|has|have|had|can|could|will|would|should|must|does|do|did|goes|go|sits|sit|stands|stand|grows|grow|reads|read|keeps|keep|feels|feel|seems|seem|provides?|serves?|offers?|gives?|makes?|takes?|covers?|brings?|attracts?|conducts?|starts?|opens?|remains?|functions?|traces?|anchors?|holds?|wish|wonder|struggle|struggles|cross|crosses|drink|drinks|cut|cuts|built|build|builds|wrote|writes|came|comes|stays?|runs?|leads?|shows?|says?|needs?|lives?|works?)\b/i;
@@ -520,6 +529,8 @@
     if (!t) return 0;
     var n = 0;
     if (/\?/.test(t)) n += 3;
+    // the marks of somebody feeling something: "??", "!"
+    if (/\?\?|!/.test(t)) n += 1;
     if (FIRST_PERSON.test(t)) n += 2;
     if (FEELING.test(t)) n += 2;
     if (TURN.test(t)) n += 2;
@@ -1540,7 +1551,8 @@
     STORY_PLACES: STORY_PLACES, STORY_WORDS: STORY_WORDS, STORY_CANDIDATES: STORY_CANDIDATES,
     quoteScore: quoteScore, isPointed: isPointed, POINTED_MIN: POINTED_MIN,
     MIN_STORY: MIN_STORY, MAX_STORY: MAX_STORY,
-    STORY_IDS_MIN: STORY_IDS_MIN, STORY_IDS_MAX: STORY_IDS_MAX, STORY_QUOTES: STORY_QUOTES,
+    STORY_CITES_MIN: STORY_CITES_MIN, STORY_CITES_MAX: STORY_CITES_MAX,
+    STORY_QUOTES_MIN: STORY_QUOTES_MIN, STORY_QUOTES_MAX: STORY_QUOTES_MAX,
     CSS: CSS,
     visibleSentences: visibleSentences,
     panelTabs: panelTabs,

@@ -181,27 +181,22 @@ async function realCall(model, prompt, schema) {
 /* The stand-in: a plain answer built from the digest, so every check can be
    walked through with no model at all. Not a mock-up anybody should read. */
 function stubAnswer(digest) {
-  const places = (digest.offered || []).filter((p) => (p.sentences || []).length);
-  const ids = places.slice(0, 4).map((p) => p.id);
+  const c = (digest.candidates || []).slice(0, 4);
+  const cite = (i) => (c[i] ? [c[i].id] : []);
   return {
     sentences: [
-      { text: 'People here wrote about the places they walk past, in their own words.', places: ids.slice(0, 2) },
-      { text: 'What they noticed is what a neighbour would notice: what a place is for, and how it feels.', places: ids.slice(0, 3) },
-      { text: 'Read together, the notes are a walk through this part of the map.', places: ids.slice(1, 4) },
-    ].filter((s) => s.places.length >= IM.STORY_IDS_MIN),
-    quotes: places.slice(0, 2).map((p) => ({ id: p.id, text: p.sentences[0] })),
+      { text: 'Somebody here is taken with what they walked past, and says so plainly.', quotes: cite(0) },
+      { text: 'Another is curious about something here and asks it out loud.', quotes: cite(1) },
+      { text: 'Elsewhere the writing turns, as though the place itself were speaking.', quotes: cite(2) },
+    ].filter((s) => s.quotes.length),
   };
 }
 function stubCall(digest, prompt, o) {
   if (o && o.proofread) {
-    let sentences = [], quotes = [];
-    try {
-      const parts = String(prompt).split('\n');
-      sentences = JSON.parse(parts[parts.indexOf('Sentences:') + 1]);
-      quotes = JSON.parse(parts[parts.length - 1]);
-    } catch { /* leave them empty */ }
-    return { sentences: sentences.map((s) => ({ index: s.index, supported: true, why: '' })),
-      quotes: quotes.map((q) => ({ index: q.index, namesPerson: false, why: '' })) };
+    const parts = String(prompt).split('\n');
+    const read = (label) => { try { return JSON.parse(parts[parts.indexOf(label) + 1]); } catch { return []; } };
+    return { sentences: read('Sentences and the quotes they cite:').map((s) => ({ index: s.index, shows: true, why: '' })),
+      quotes: read('Quotes, in order:').map((q) => ({ index: q.index, namesPerson: false, why: '' })) };
   }
   return stubAnswer(digest);
 }
@@ -268,7 +263,7 @@ function mockHTML({ title, result, byWho }) {
     ? '<section class="in-sum" aria-label="What the places say">' +
       '<p class="in-story">' + story.sentences.map((s) => esc(s.text)).join(' ') + '</p>' +
       warn + '<div class="in-quotes">' + quotes + '</div>' +
-      '<div class="in-by">Written by AI from the places’ own words, when the atlas was last updated. The counts are in the questions.</div></section>' +
+      '<div class="in-by">Written by AI from what people wrote about these places, when the atlas was last updated. The quotes under it are the evidence; the counts are in the questions.</div></section>' +
       '<button type="button" class="in-tolink">See the questions these places answer</button>'
     : '<p class="in-hint">Nothing would be shown: ' + esc(r.by) + '.</p>';
   return ['<!doctype html><html lang="en"><head><meta charset="utf-8">',
@@ -290,7 +285,7 @@ function droppedText(name, r) {
   lines.push('Places: ' + d.places + '; questions read: ' + d.questions.map((q) => q.id).join(', '));
   lines.push('Places with words of their own: ' + d.quality.withWords + ' of ' + d.quality.places +
     '; places repeating another’s words: ' + d.quality.repeated + (d.quality.thin ? ' — thin, so the warning shows' : ''));
-  lines.push('Places offered to the model: ' + d.offered.length + '; quotes worth offering: ' + (d.candidates || []).length);
+  lines.push('Places offered to the model: ' + d.offered.length + '; quotes worth citing: ' + (d.candidates || []).length);
   lines.push('');
   if (!(r.dropped || []).length) lines.push('Nothing was dropped.');
   (r.dropped || []).forEach((x) => {
@@ -374,7 +369,7 @@ async function main(argv) {
   const proofWith = o.proofreadModel || model;
   console.log('Mocking ' + named + (layer.id ? ' / ' + layer.id : '') + ': ' + features.length + ' places, ' +
     digestOnly.questions.length + ' questions, ' + digestOnly.offered.length + ' places with words of their own, ' +
-    digestOnly.candidates.length + ' quotes worth offering.');
+    digestOnly.candidates.length + ' quotes worth citing.');
   console.log('  Models: write on ' + model + '; proofread on ' + proofWith + (o.proofreadModel ? '' : ' (the same, no --proofread-model)') + '.');
 
   let r;
