@@ -483,6 +483,11 @@ export function checkStory(digest, answer, already) {
     if (keys.length > 1) {
       const paired = (digest.tensions || []).some((t) => keys.length === 2 && t.groups.indexOf(keys[0]) >= 0 && t.groups.indexOf(keys[1]) >= 0);
       if (!paired) return no('it mixes quotes from groups the code did not put together (' + keys.join(' + ') + ')');
+      /* and the quotes it actually cites, one side against the other, must
+         name a thing in common — a group's other quotes do not count */
+      const side = (k) => IM.thingWords(ids.filter((id) => (IM.groupOfQuote(digest.groups, id) || {}).id === k).map((id) => by[id].text).join(' '));
+      const a = side(keys[0]), b = side(keys[1]);
+      if (!a.some((w) => b.indexOf(w) >= 0)) return no('its two sides are not about the same thing');
     }
     // where its group holds more than one voice, the sentence speaks for them together
     if (ids.length === 1 && groups[0] && groups[0].quotes.length > 1) {
