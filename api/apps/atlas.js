@@ -50,8 +50,14 @@ const RULES = requireScript(path.join(REPO_ROOT, 'atlas', 'reading-rules.js'));
 // colours (look-map.js): the files the browser runs too, so one rule
 const THEME = requireScript(path.join(REPO_ROOT, 'atlas', 'theme.js'));
 const LOOK_MAP = requireScript(path.join(REPO_ROOT, 'atlas', 'look-map.js'));
-const CATALOG_FILE = path.join(REPO_ROOT, 'atlas', 'setup', 'catalog.json');
+// what waits for the LOKA team's yes: the one rule the wizard runs too (approval-rules.js)
+const APPROVAL = requireScript(path.join(REPO_ROOT, 'atlas', 'approval-rules.js'));
+// ATLAS_CATALOG_FILE: a check's own catalogue (test/approval-waits-test.mjs) — the
+// builder keeps dispatching recipes by id from the repo's, so the ids must match
+const CATALOG_FILE = process.env.ATLAS_CATALOG_FILE || path.join(REPO_ROOT, 'atlas', 'setup', 'catalog.json');
 const GEOCACHE_DIR = path.join(reg.DATA_DIR, 'geocache');
+// where the builder keeps the sources it has downloaded (jobs.js srcCache)
+const SRC_CACHE_DIR = path.join(reg.DATA_DIR, 'srccache');
 
 /* Two area thresholds used to decide everything: approval past 6 square
    degrees, outright refusal past 40. Both are gone. An area cannot tell you
@@ -132,11 +138,16 @@ router.get('/catalog', (req, res) => {
      across it. Asked without a width it answers as it always did, so a caller
      that does not know yet is not lied to. */
   const areaDeg2 = Number(req.query.areaDeg2);
+  /* estSecondsHere is the same figure the build gate adds up (layerSeconds,
+     cache-aware), so "about N minutes to build" and "what waits for a yes"
+     in the wizard are the server's own arithmetic; approvalAboveSeconds is
+     the cap it adds them up against. */
+  const ctx = { tier, iso3 };
   const layers = layersForTier(tier).map((l) => (Number.isFinite(areaDeg2) && areaDeg2 > 0
-    ? { ...l, feasible: feasibleAt(l, areaDeg2), estSecondsHere: layerSeconds(l, areaDeg2) }
+    ? { ...l, feasible: feasibleAt(l, areaDeg2), estSecondsHere: layerSeconds(l, areaDeg2, ctx), sourceCached: sourceCached(l, ctx) }
     : l));
   res.json({ tier, layers, areaDeg2: Number.isFinite(areaDeg2) ? areaDeg2 : undefined,
-             budgetSeconds: BUILD_BUDGET_S });
+             budgetSeconds: BUILD_BUDGET_S, approvalAboveSeconds: BUILD_BUDGET_S });
 });
 
 /* What can actually be built across a region this wide.
@@ -166,11 +177,46 @@ router.get('/catalog', (req, res) => {
 const BUILD_BUDGET_S = 9 * 60;   // JOB_TIMEOUT_MS is ten minutes
 const EST_AT_DEG2 = 2;           // the size estSeconds is quoted for
 
-function layerSeconds(l, areaDeg2) {
-  const base = Number(l && l.estSeconds) || 30;
+/* Whether a layer's source is already saved on this server.
+
+   Most national sources are downloaded once (fetch_cached in
+   api/atlas-builders/common.py) and read from srccache ever after, so the
+   second atlas of rivers costs a fraction of the first — the nine-layer atlas
+   of North Goa that the catalogue priced at 621 seconds was built in 54
+   (5 Nov 2026). The catalogue names the files each recipe keeps (cacheFiles:
+   one list, or one per tier, with {iso3} filled in — the names fetch_cached
+   writes), and a file counts as kept by fetch_cached's own rule: present and
+   not empty. A layer that names no file (terrain, rainfall, imagery read by
+   the box) is never "cached" and keeps its full estimate. */
+function cacheFilesOf(l, ctx) {
+  const cf = l && l.cacheFiles;
+  const list = Array.isArray(cf) ? cf : (cf && typeof cf === 'object' && ctx && ctx.tier ? cf[ctx.tier] : null);
+  if (!Array.isArray(list)) return [];
+  const iso3 = String((ctx && ctx.iso3) || '').toLowerCase();
+  // a plain file name only: never a path, never a placeholder left unfilled
+  return list.map((f) => String(f).replace(/\{iso3\}/g, iso3)).filter((f) => f && !/[{}/\\]/.test(f));
+}
+function sourceCached(l, ctx) {
+  const files = cacheFilesOf(l, ctx);
+  if (!files.length) return false;
+  return files.every((f) => { try { return fs.statSync(path.join(SRC_CACHE_DIR, f)).size > 0; } catch { return false; } });
+}
+/* ctx = { tier, iso3 }: which files to look for. Left out, the estimate is the
+   catalogue's, as if nothing were saved. What a saved source spares is the
+   one-off download (the catalogue's downloadSeconds); the clip that follows
+   is the same work as ever and still grows with the area, so the saving is
+   taken off before the scaling, and never below a few seconds. */
+function layerSeconds(l, areaDeg2, ctx) {
+  const full = Number(l && l.estSeconds) || 30;
+  const saved = l && ctx && sourceCached(l, ctx) ? Number(l.downloadSeconds) || 0 : 0;
+  const base = Math.max(5, full - saved);
   if (!l || l.fixedCost) return base;
   return Math.round(base * Math.max(1, (Number(areaDeg2) || 0) / EST_AT_DEG2));
 }
+/* Feasible is judged on the FULL estimate, saved source or not: a cache can
+   be cleared between the wizard and the build, and a layer offered on the
+   strength of one would then be dropped mid-build. Only the approval gate
+   (approvalFor) is told what is saved. */
 function feasibleAt(l, areaDeg2) {
   return layerSeconds(l, areaDeg2) <= BUILD_BUDGET_S;
 }
@@ -187,8 +233,66 @@ function feasibleLayers(layerIds, allowed, areaDeg2) {
   return { keep, dropped, droppedLabels: dropped.map((id) => (allowed.get(id) || {}).label || id) };
 }
 
+/* The one rule for what waits for the LOKA team — a first build and a rebuild
+   both ask it. Two things wait: a layer the catalogue marks cost 'approval'
+   (a heavy source), and a build that would take longer than the builder is
+   given, BUILD_BUDGET_S — the same cap feasibility uses. Until 5 Nov 2026 the
+   gate stood at half that, so an atlas priced at 621 seconds was parked for a
+   person's yes and then built in 54. ctx.regionLabel, when given, names the
+   region in the reason. */
+function approvalFor(layerIds, allowed, areaDeg2, ctx) {
+  const seconds = (id) => layerSeconds(allowed.get(id), areaDeg2, ctx);
+  const heavyIds = layerIds.filter((id) => (allowed.get(id) || {}).cost === 'approval');
+  const buildSeconds = layerIds.reduce((t, id) => t + seconds(id), 0);
+  const longBuild = buildSeconds > BUILD_BUDGET_S;
+  const reasons = [];
+  if (heavyIds.length) reasons.push(`heavy layers: ${heavyIds.join(', ')}`);
+  if (longBuild) {
+    reasons.push(`a long build: ${ctx && ctx.regionLabel ? ctx.regionLabel + ', ' : ''}about ${Math.round(buildSeconds / 60)} minutes`);
+  }
+  return { needsApproval: reasons.length > 0, heavyIds, buildSeconds, longBuild, reasons };
+}
+
+/* A first build is split: what can be built now (everything that needs no
+   yes and fits under the cap) and what waits. Over the cap, the dearest
+   optional layer waits, then the next, until the rest fits; the boundaries
+   never wait. Each waiting layer carries its label and its reason ('heavy':
+   a layer the team checks first; 'long': the build would run too long), in
+   the shape the mail, the owner's page and the wizard all read. The wizard's
+   sentence beside Build (catalog-rows.js, plan) follows this same order from
+   the server's own figures. */
+function splitForApproval(layerIds, allowed, areaDeg2, ctx) {
+  const items = layerIds.map((id) => {
+    const l = allowed.get(id) || {};
+    return { id, label: l.label || id, seconds: layerSeconds(allowed.get(id), areaDeg2, ctx), heavy: l.cost === 'approval', required: !!l.required };
+  });
+  return APPROVAL.split(items, BUILD_BUDGET_S);
+}
+
+/* A build the LOKA team said yes to is given the time its estimate asks for
+   — the ordinary ten minutes is for builds that fit the budget, and an
+   approved one is over it by definition. Half as much again plus a minute,
+   never less than the usual ten minutes, never more than thirty. */
+function approvedTimeoutMs(estSeconds) {
+  const want = Math.round((Number(estSeconds) || 0) * 1.5) + 60;
+  return Math.min(30 * 60, Math.max(10 * 60, want)) * 1000;
+}
+
+// "Floodplain is waiting for a yes from the LOKA team" — the one sentence for
+// layers that wait, said by the publish refusal and the owner's page alike
+function waitingLine(inst) {
+  const pending = Array.isArray(inst && inst.pendingLayers) ? inst.pendingLayers : [];
+  if (!pending.length) return '';
+  const labels = pending.map((p) => APPROVAL.shortLabel(p.label || p.id));
+  return APPROVAL.list(labels) + (labels.length > 1 ? ' are' : ' is') + ' waiting for a yes from the LOKA team';
+}
+// …and what happens next, for the owner's page (GET /instances/:slug): the wizard's sentence
+function pendingNote(inst) {
+  return waitingLine(inst) ? APPROVAL.waitSentence(inst.pendingLayers).replace(/ Everything else.*$/, '') : undefined;
+}
+
 router.get('/config', (_req, res) => {
-  res.json({ budgetSeconds: BUILD_BUDGET_S, estAtDeg2: EST_AT_DEG2 });
+  res.json({ budgetSeconds: BUILD_BUDGET_S, estAtDeg2: EST_AT_DEG2, approvalAboveSeconds: BUILD_BUDGET_S });
 });
 
 /* ================= geography (geoBoundaries picker data) ================= */
@@ -1253,6 +1357,7 @@ router.post('/instances', async (req, res) => {
   /* Nothing is refused for being wide. What cannot be built across a region
      this size is dropped from the build and named in the answer, so an atlas
      of markers can be as wide as the markers are. */
+  const estCtx = { tier, iso3, regionLabel };
   const fit = feasibleLayers(layerIds, allowed, areaDeg2);
   layerIds = fit.keep;
   if (!layerIds.length && !worldwide) {
@@ -1260,12 +1365,6 @@ router.post('/instances', async (req, res) => {
       error: 'Nothing can be built across a region this wide except boundaries, and they were not asked for.',
       droppedLayers: fit.droppedLabels });
   }
-  /* Approval follows the WORK, not the width. A wide atlas of outlines and
-     pins is a few seconds of building and goes straight through; one that
-     will occupy the builder for minutes is worth an operator hearing about
-     first, at any size. */
-  const buildSeconds = layerIds.reduce((t, id) => t + layerSeconds(allowed.get(id), areaDeg2), 0);
-  const largeRegion = buildSeconds > BUILD_BUDGET_S / 2;
 
   // Slug: derived from the title, never asked for. Uniqueness is the server's
   // job — two atlases may legitimately share a title, so a taken address gets a
@@ -1297,13 +1396,28 @@ router.post('/instances', async (req, res) => {
     if (!slug) return res.status(409).json({ error: 'couldn’t find a free web address for that title — try a different one' });
   }
 
-  // cost gate: heavy layers OR a large region both go through admin approval
-  const approvalLayers = layerIds.filter((id) => allowed.get(id).cost === 'approval');
-  const approvalReasons = [];
-  if (approvalLayers.length) approvalReasons.push(`heavy layers: ${approvalLayers.join(', ')}`);
-  if (largeRegion) approvalReasons.push(`a long build: ${regionLabel}, about ${Math.round(buildSeconds / 60)} minutes`);
-  const needsApproval = approvalReasons.length > 0;
-  if (needsApproval && !reg.validEmail(email)) {
+  /* The gate: approval follows the WORK, not the width (approvalFor — the one
+     rule rebuilds use too). A wide atlas of outlines and pins is a few seconds
+     of building and goes straight through. What needs a yes — a heavy layer,
+     or more than the builder is given in one go — no longer holds the rest
+     up: the atlas is built now without it (splitForApproval), the LOKA team
+     is mailed, and the layers that wait are added by themselves once they say
+     yes (actOnPendingLayers). Only when nothing could be built now does the
+     whole atlas wait, as it always did (Mithun, 5 Nov 2026). The reference
+     atlas is never split. */
+  const verdict = approvalFor(layerIds, allowed, areaDeg2, estCtx);
+  const plan = splitForApproval(layerIds, allowed, areaDeg2, estCtx);
+  const splitBuild = verdict.needsApproval && plan.now.length > 0 && plan.later.length > 0 && !searchText.isNeverTouched(slug);
+  const needsApproval = verdict.needsApproval && !splitBuild;
+  const approvalReasons = verdict.reasons;
+  const nowLayers = splitBuild ? plan.now : layerIds;
+  const pendingLayers = splitBuild ? plan.later : undefined;
+  // only its maker sees an atlas while layers wait — the same rule as Settings' "who can open it"
+  if (splitBuild && visibility === 'public') {
+    return res.status(400).json({ error: 'While ' + APPROVAL.list(pendingLayers.map((p) => APPROVAL.shortLabel(p.label))) +
+      (pendingLayers.length > 1 ? ' wait' : ' waits') + ' for a yes from the LOKA team, the atlas starts private. Build it private, and open it to others once they have answered.' });
+  }
+  if (verdict.needsApproval && !reg.validEmail(email)) {
     return res.status(400).json({ error: 'this build needs a quick approval from the LOKA team — add a contact email so we can reach you', needsEmail: true });
   }
 
@@ -1344,14 +1458,16 @@ router.post('/instances', async (req, res) => {
       simplifiedFile: worldwide ? null : path.join(GEOCACHE_DIR, `${iso3}-ADM${level}.json`),
       fullResUrl: regionDoc ? regionDoc.fullResUrl : null,
     },
-    layers: layerIds,
+    layers: nowLayers,
+    // what the build is priced at, for the time an approved build is given (approvedTimeoutMs)
+    estSeconds: splitBuild ? plan.nowSeconds : verdict.buildSeconds,
   };
 
   reg.createInstance({
     slug, title, subtitle, about, org, email: email || null, branding: { ...branding, logoData: undefined, hasLogo: !!branding.logoData },
     ownerAccount: session ? session.email : null,
     tier, region: { iso3, level, shapeIDs, shapeNames, bbox: [w, s, e, n], areaDeg2, worldwide }, regionLabel,
-    layers: layerIds, visibility,
+    layers: nowLayers, visibility,
     tokenHash: reg.hashToken(editToken),
     viewKeyHash: viewKey ? reg.hashToken(viewKey) : null,
     viewKey: viewKey || null,
@@ -1361,6 +1477,8 @@ router.post('/instances', async (req, res) => {
     // "How should visitors explore it?" — applied once the atlas can take it (applyWantedMode)
     wantMode: b.mode === 'explore' || b.mode === 'insight' ? b.mode : undefined,
     wantLoka,
+    // the layers that wait for the LOKA team's yes while the rest is built ([{id, label, why}])
+    pendingLayers,
   });
   if (session) reg.bindInstance(session.email, slug);
 
@@ -1380,12 +1498,32 @@ router.post('/instances', async (req, res) => {
   } else {
     jobId = enqueueBuild(spec);
     reg.updateInstance(slug, { jobId });
+    if (splitBuild) {
+      /* The rest is building; these links add the waiting layers (through the
+         rebuild path, once the atlas is built) or leave them out. The whole
+         atlas is never held. */
+      const base = siteBase(req);
+      const approve = `${base}/apps/atlas/api/admin/action?token=${auth.makeActionToken(slug, 'approve-layers')}`;
+      const deny = `${base}/apps/atlas/api/admin/action?token=${auth.makeActionToken(slug, 'deny-layers')}`;
+      const whyOf = (p) => (p.why === 'heavy' ? 'a heavy source' : 'the build would run too long with it');
+      await sendMail({
+        to: ADMIN_EMAIL,
+        subject: `[LOKA Atlas] layers waiting: ${title} (${slug})`,
+        text: `“${title}” is being built now without ${pendingLayers.map((p) => p.label).join(', ')} (${approvalReasons.join('; ')}).\n\n` +
+          pendingLayers.map((p) => `  ${p.label} (${p.id}) — ${whyOf(p)}`).join('\n') + '\n\n' +
+          `Org: ${org || '—'}\nContact: ${email}\nRegion: ${regionLabel} (${iso3}, ${areaDeg2.toFixed(1)} deg²)\n` +
+          `Built now: ${nowLayers.join(', ')}\nWaiting: ${pendingLayers.map((p) => p.id).join(', ')}\nVisibility: ${visibility}\n\n` +
+          `Add them:       ${approve}\nLeave them out: ${deny}\n`,
+      });
+    }
   }
 
   res.json({
     slug, jobId, status: needsApproval ? 'pending-approval' : 'building',
     // what the region was too wide to build — never a refusal, always said
     droppedLayers: fit.droppedLabels.length ? fit.droppedLabels : undefined,
+    // what waits for a yes while the rest is built — by name, for the wizard's sentence
+    pendingLayers: pendingLayers ? pendingLayers.map((p) => p.label) : undefined,
     editToken, viewKey: viewKey || undefined,
   });
 });
@@ -1397,11 +1535,15 @@ router.get('/admin/action', async (req, res) => {
   if (!p) return res.status(400).send(page('Link expired', 'This approval link is invalid or has expired.'));
   const inst = reg.getInstance(p.slug);
   if (!inst) return res.status(404).send(page('Not found', 'That atlas no longer exists.'));
+  // layers that wait while the rest of the atlas is built (or already is)
+  if (p.action === 'approve-layers' || p.action === 'deny-layers') {
+    return actOnPendingLayers(req, res, inst, p.action === 'approve-layers');
+  }
   if (inst.status !== 'pending-approval') {
     return res.send(page('Already handled', `“${inst.title}” is already ${inst.status}.`));
   }
   if (p.action === 'approve') {
-    const jobId = enqueueBuild(inst.spec);
+    const jobId = enqueueBuild({ ...inst.spec, timeoutMs: approvedTimeoutMs(inst.spec && inst.spec.estSeconds) });
     reg.updateInstance(p.slug, { status: 'building', jobId });
     if (inst.email) {
       await sendMail({
@@ -1446,6 +1588,110 @@ router.get('/admin/action', async (req, res) => {
   }
   res.send(page('Denied', `“${inst.title}” denied.`));
 });
+
+/* The yes or no for layers that waited while the rest of the atlas was built
+   (pendingLayers, set by POST /instances). Yes: the layers are added through
+   the rebuild path — now, if the atlas is built; otherwise the yes is kept
+   (pendingApproved) and the job-done hook adds them the moment the build is
+   done. No: the atlas keeps what it has, and the owner is told in plain words.
+   Either way the links are good once; a second visit finds nothing waiting. */
+async function actOnPendingLayers(req, res, inst, yes) {
+  const pending = Array.isArray(inst.pendingLayers) ? inst.pendingLayers : [];
+  if (!pending.length) {
+    // a basic build that stopped let its waiting layers go (rebuildFailedPatch): say so, and the way on
+    if (inst.status === 'failed') {
+      return res.send(page('Not built', `The build of “${inst.title}” stopped, so nothing was added. Once it is built again, ` +
+        `its owner can ask for these layers from Owner ▾ → Open data layers.`));
+    }
+    return res.send(page('Already handled', `“${inst.title}” has no layers waiting.`));
+  }
+  const labels = pending.map((p) => p.label || p.id).join(', ');
+  /* Claimed before anything waits: a second press, a double click or a mail
+     scanner's prefetch finds nothing left to do, so one yes starts one
+     rebuild and rebuildPrior describes the right atlas. */
+  if (!yes) {
+    reg.updateInstance(inst.slug, { pendingLayers: undefined, pendingApproved: undefined });
+    if (inst.email) {
+      await sendMail({
+        to: inst.email,
+        subject: `[LOKA Atlas] built without ${labels}: ${inst.title}`,
+        text: `Your atlas “${inst.title}” was built without ${labels} — ${pending.length > 1 ? 'they were' : 'it was'} not approved this time.\n` +
+          `Everything else on it stays as it is. Reply to this email if you'd like to talk it through.`,
+      });
+    }
+    return res.send(page('Left out', `“${inst.title}” keeps its map without ${labels}.`));
+  }
+  if (inst.status !== 'built' && inst.status !== 'published') {
+    // still building (or waiting whole): the yes is kept, and the job-done hook adds them once
+    if (inst.pendingApproved) return res.send(page('Already handled', `${labels} will be added to “${inst.title}” as soon as its build is done.`));
+    reg.updateInstance(inst.slug, { pendingApproved: true });
+    return res.send(page('Approved', `“${inst.title}” is not built yet — ${labels} will be added by itself as soon as its build is done.`));
+  }
+  reg.updateInstance(inst.slug, { pendingLayers: undefined, pendingApproved: undefined });
+  const r = await addPendingLayers(inst, pending);
+  if (r.error) return res.status(409).send(page('Could not add', `${labels} could not be added to “${inst.title}”: ${r.error}`));
+  return res.send(page('Approved', `${labels} being added to “${inst.title}” now.`));
+}
+
+/* Add layers the team said yes to, to a built atlas: the rebuild path, with
+   the gate already passed (approved). The caller has taken them off the
+   record first (the claim above); a rebuild that could not start puts them
+   back. The owner's own layers, logo and words ride across as on any
+   rebuild, and a published atlas stays published. */
+async function addPendingLayers(inst, pending) {
+  const have = Array.isArray(inst.layers) ? inst.layers : [];
+  const layers = have.concat(pending.map((p) => p.id).filter((id) => !have.includes(id)));
+  const plan = await planRebuild(inst, { layers });
+  const fresh = reg.getInstance(inst.slug);
+  if (plan.error || !fresh) {
+    reg.updateInstance(inst.slug, { pendingLayers: pending });
+    return plan.error ? plan : { error: 'the atlas is gone' };
+  }
+  // a build started meanwhile (the owner's own rebuild): the yes is kept, the hook adds them after
+  if (fresh.status === 'building' || fresh.status === 'pending-approval') {
+    reg.updateInstance(inst.slug, { pendingLayers: pending, pendingApproved: true });
+    return { ok: true, later: true };
+  }
+  const out = await startRebuild(fresh, plan, { approved: true });
+  if (inst.email) {
+    const labels = pending.map((p) => p.label || p.id).join(', ');
+    await sendMail({
+      to: inst.email,
+      subject: `[LOKA Atlas] adding ${labels}: ${inst.title}`,
+      text: `${labels} ${pending.length > 1 ? 'were' : 'was'} approved and ${pending.length > 1 ? 'are' : 'is'} being added to your atlas “${inst.title}” now.\n` +
+        `The atlas stays as it is until the new map is ready, and your data stays where it is.`,
+    });
+  }
+  return out;
+}
+
+/* The job-done hook: a yes that arrived while the atlas was still building.
+   Not while LOKA is bringing its places in (applyWantedLoka starts that
+   first update a moment before this runs): a rebuild swaps the folder the
+   update is writing to. Asked again every second until the update is done,
+   once per atlas. */
+const LAYERS_AFTER_LOKA = new Set();
+function addApprovedLayers(slug) {
+  const inst = reg.getInstance(slug);
+  if (!inst || !inst.pendingApproved || !(Array.isArray(inst.pendingLayers) && inst.pendingLayers.length)) return;
+  if (inst.status !== 'built' && inst.status !== 'published') return;
+  if (LOKA_RUNNING.has(slug)) {
+    if (LAYERS_AFTER_LOKA.has(slug)) return;
+    LAYERS_AFTER_LOKA.add(slug);
+    const again = () => {
+      if (LOKA_RUNNING.has(slug)) { setTimeout(again, 1000); return; }
+      LAYERS_AFTER_LOKA.delete(slug);
+      addApprovedLayers(slug);
+    };
+    setTimeout(again, 1000);
+    return;
+  }
+  const pending = inst.pendingLayers;
+  reg.updateInstance(slug, { pendingLayers: undefined, pendingApproved: undefined });
+  addPendingLayers(inst, pending).then((r) => {
+    if (r && r.error) console.warn(`[atlas] ${slug} — the approved layers could not be added: ${r.error}`);
+  }).catch((e) => console.warn(`[atlas] ${slug} — the approved layers could not be added: ${e && e.message}`));
+}
 
 function page(title, body) {
   return `<!doctype html><meta charset="utf-8"><title>${title} — LOKA Atlas</title>` +
@@ -1522,9 +1768,10 @@ function rebuildFailedPatch(inst, message) {
   const keepPublished = !!inst.rebuildKeepPublished;
   if (!prior) {
     // a LOKA space chosen while building goes with the build that failed (wantLoka)
+    // and so do the layers that waited for a yes: there is no atlas to add them to (actOnPendingLayers says so)
     return keepPublished
       ? { status: 'published', failReason: message, rebuildKeepPublished: undefined, wantLoka: undefined }
-      : { status: 'failed', failReason: message, wantLoka: undefined };
+      : { status: 'failed', failReason: message, wantLoka: undefined, pendingLayers: undefined, pendingApproved: undefined };
   }
   return {
     // the files on disk are the old build, which was built (or live) — say so
@@ -1563,6 +1810,9 @@ setJobDoneHook((job) => {
     setImmediate(() => { applyWantedMode(job.slug); });
     // a tab icon set in Settings or from a look: the fresh manifest is told of it again
     setImmediate(() => { try { iconAfterBuild(job); } catch (e) { console.warn('[atlas] ' + job.slug + ' — the tab icon after a build: ' + (e && e.message)); } });
+    // layers the LOKA team said yes to while this build ran: added now, after
+    // the space and the mode above have had their turn (same order as queued)
+    setImmediate(() => { addApprovedLayers(job.slug); });
   } else {
     // a rebuild failed — the build only swaps on success, so the old dataset
     // is untouched (and still live if it was); the record goes back with it
@@ -1638,7 +1888,7 @@ router.get('/instances/:slug', (req, res) => {
        panel shows the link again. Only people who may already read every file
        of the atlas get here, so the key tells them nothing they could not do. */
     const { tokenHash, viewKeyHash, spec, ...rest } = inst;
-    return res.json({ ...rest, canEdit: true, role });
+    return res.json({ ...rest, canEdit: true, role, pendingNote: pendingNote(inst) });
   }
   if (inst.status === 'published' && inst.visibility === 'public') {
     return res.json(reg.publicFields(inst));
@@ -1659,6 +1909,8 @@ router.post('/instances/:slug/publish', (req, res) => {
   }
   if (inst.status === 'published') return res.json({ ok: true, already: true });
   if (inst.status !== 'built') return res.status(409).json({ error: `cannot publish while ${inst.status}` });
+  // only its maker sees an atlas while layers wait for the LOKA team (Mithun, 5 Nov 2026)
+  if (waitingLine(inst)) return res.status(409).json({ error: waitingLine(inst) + ' — it can be listed once they have answered.', pendingLayers: inst.pendingLayers.map((p) => p.label || p.id) });
   // Listing is for atlases anyone may open. A private one is reachable only
   // with its private link, so putting it on the public page would be a lie.
   if (inst.visibility === 'private') {
@@ -2440,6 +2692,10 @@ router.post('/instances/:slug/details', (req, res) => {
     if (inst.status === 'building' || inst.status === 'pending-approval') {
       return res.status(409).json({ error: 'wait for the build to finish before changing who can see this atlas' });
     }
+    // the same rule as listing: only its maker sees an atlas while layers wait
+    if (newVis === 'public' && waitingLine(inst)) {
+      return res.status(409).json({ error: waitingLine(inst) + ' — it can be opened to others once they have answered.', pendingLayers: inst.pendingLayers.map((p) => p.label || p.id) });
+    }
     const fromDir = datasetDirFor(inst);
     const toRoot = newVis === 'private' ? PRIVATE_ROOT : DATASETS_ROOT;
     const toDir = path.join(toRoot, inst.slug);
@@ -2705,6 +2961,11 @@ router.post('/instances/:slug/view-key', (req, res) => {
 // Rebuild — change layers and/or region, then rebuild into the same slug. The
 // build swaps the dataset atomically on success, so a published atlas has no
 // downtime; a published atlas stays published (see the job-done hook).
+//
+// Two halves, so the layers that waited for the LOKA team's yes
+// (addPendingLayers) go down the very same path as a change made from the
+// Owner menu: planRebuild works out the region and the layers and says what
+// cannot be, startRebuild records, gates and starts the build.
 router.post('/instances/:slug/rebuild', async (req, res) => {
   const inst = reg.getInstance(String(req.params.slug));
   if (!inst) return res.status(404).json({ error: 'not found' });
@@ -2712,7 +2973,16 @@ router.post('/instances/:slug/rebuild', async (req, res) => {
   if (inst.status === 'building' || inst.status === 'pending-approval') {
     return res.status(409).json({ error: 'a build is already running for this atlas' });
   }
-  const b = req.body || {};
+  const plan = await planRebuild(inst, req.body || {});
+  if (plan.error) return res.status(plan.status).json({ error: plan.error, ...(plan.extra || {}) });
+  res.json(await startRebuild(inst, plan, { base: siteBase(req) }));
+});
+
+/* What a rebuild would be: the region (sent, or the atlas's own), the layers
+   (sent, or the atlas's own) and what the region is too wide for. Answers
+   { error, status } in the words the route sends, or the facts startRebuild
+   needs. */
+async function planRebuild(inst, b) {
   const r = b.region;
   const cur = inst.region || {};
   const regionSent = !!(r && r.iso3 && Array.isArray(r.shapeIDs) && r.shapeIDs.length);
@@ -2723,21 +2993,24 @@ router.post('/instances/:slug/rebuild', async (req, res) => {
   const useR = regionSent
     ? { iso3: String(r.iso3).toUpperCase(), level: Number(r.level) || 1, shapeIDs: r.shapeIDs.map(String) }
     : { iso3: cur.iso3 || '', level: cur.level, shapeIDs: cur.shapeIDs || [] };
-  if (!worldwide && (!/^[A-Z]{3}$/.test(useR.iso3) || !useR.shapeIDs.length)) return res.status(400).json({ error: 'region is required' });
+  if (!worldwide && (!/^[A-Z]{3}$/.test(useR.iso3) || !useR.shapeIDs.length)) return { error: 'region is required', status: 400 };
   const tooManyNow = worldwide ? '' : tooManyUnits(useR.shapeIDs);
-  if (tooManyNow) return res.status(400).json({ error: tooManyNow, tooManyUnits: useR.shapeIDs.length });
+  if (tooManyNow) return { error: tooManyNow, status: 400, extra: { tooManyUnits: useR.shapeIDs.length } };
 
   let regionDoc = null, picked = [];
   if (!worldwide) {
-    try { regionDoc = await loadAdmin(useR.iso3, useR.level); } catch (e) { return res.status(502).json({ error: 'boundary source unavailable: ' + e.message }); }
+    try { regionDoc = await loadAdmin(useR.iso3, useR.level); } catch (e) { return { error: 'boundary source unavailable: ' + e.message, status: 502 }; }
     picked = regionDoc.features.filter((f) => useR.shapeIDs.includes(f.properties.id));
-    if (!picked.length) return res.status(400).json({ error: 'no matching boundary units' });
+    if (!picked.length) return { error: 'no matching boundary units', status: 400 };
   }
   let w = 180, s = 90, e = -180, n = -90;
   if (worldwide) { w = -180; s = -85; e = 180; n = 85; }
   for (const f of picked) { w = Math.min(w, f.bbox[0]); s = Math.min(s, f.bbox[1]); e = Math.max(e, f.bbox[2]); n = Math.max(n, f.bbox[3]); }
   const bbox = [w, s, e, n];
   const areaDeg2 = (e - w) * (n - s);
+  const shapeNames = picked.map((f) => f.properties.name);
+  const regionLabel = worldwide ? 'Worldwide'
+    : shapeNames.slice(0, 3).join(' · ') + (shapeNames.length > 3 ? ` +${shapeNames.length - 3}` : '');
 
   const tier = tierOf(useR.iso3);
   const allowed = new Map(layersForTier(tier).map((l) => [l.id, l]));
@@ -2746,15 +3019,26 @@ router.post('/instances/:slug/rebuild', async (req, res) => {
   if (!worldwide) {
     for (const l of allowed.values()) if (l.required && !layerIds.includes(l.id)) layerIds.unshift(l.id);
   }
-  if (!layerIds.length && !worldwide) return res.status(400).json({ error: 'pick at least one layer' });
+  if (!layerIds.length && !worldwide) return { error: 'pick at least one layer', status: 400 };
   // the same rule as a first build, and for the same reason
+  const estCtx = { tier, iso3: useR.iso3, regionLabel };
   const fit = feasibleLayers(layerIds, allowed, areaDeg2);
   layerIds = fit.keep;
   if (!layerIds.length && !worldwide) {
-    return res.status(400).json({
+    return {
       error: 'Nothing can be built across a region this wide except boundaries, and they were not asked for.',
-      droppedLayers: fit.droppedLabels });
+      status: 400, extra: { droppedLayers: fit.droppedLabels } };
   }
+  return { regionSent, worldwide, useR, regionDoc, picked, bbox, areaDeg2, shapeNames, regionLabel,
+    tier, allowed, estCtx, priorLayers, layerIds, fit };
+}
+
+/* Record the change, ask the gate, and either start the build or mail the
+   LOKA team. `approved` is for layers they have already said yes to: the
+   gate is not asked again. Answers the body the route sends. */
+async function startRebuild(inst, plan, { base, approved } = {}) {
+  const { regionSent, worldwide, useR, regionDoc, bbox, areaDeg2, shapeNames, regionLabel, tier, allowed, estCtx, priorLayers, layerIds, fit } = plan;
+  const cur = inst.region || {};
 
   /* What this rebuild actually changes, in words a person and the approval
      mail can both use. The Owner menu's "Open data layers" sheet sends only
@@ -2778,16 +3062,11 @@ router.post('/instances/:slug/rebuild', async (req, res) => {
   // A rebuild that crosses into approval territory used to be refused outright
   // with "email us" — a dead end for the case that most needs it: widening an
   // atlas to cover data that turned out to sit outside it. It now enters the same
-  // queue a first build uses. The live atlas keeps serving its existing files
-  // throughout, because a build only swaps them on success.
-  const heavyIds = layerIds.filter((id) => allowed.get(id).cost === 'approval');
-  const heavy = heavyIds.length > 0;
-  const buildSeconds = layerIds.reduce((t, id) => t + layerSeconds(allowed.get(id), areaDeg2), 0);
-  const needsApproval = heavy || buildSeconds > BUILD_BUDGET_S / 2;
-
-  const shapeNames = picked.map((f) => f.properties.name);
-  const regionLabel = worldwide ? 'Worldwide'
-    : shapeNames.slice(0, 3).join(' · ') + (shapeNames.length > 3 ? ` +${shapeNames.length - 3}` : '');
+  // queue a first build uses (approvalFor: the one rule). The live atlas keeps
+  // serving its existing files throughout, because a build only swaps them on
+  // success.
+  const verdict = approvalFor(layerIds, allowed, areaDeg2, estCtx);
+  const needsApproval = !approved && verdict.needsApproval;
 
   // preserve org branding + logo across the rebuild (read the current logo back
   // into the spec so the builder re-emits it)
@@ -2806,6 +3085,7 @@ router.post('/instances/:slug/rebuild', async (req, res) => {
       fullResUrl: regionDoc ? regionDoc.fullResUrl : null,
     },
     layers: layerIds,
+    estSeconds: verdict.buildSeconds,
   };
 
   const wasPublished = inst.status === 'published';
@@ -2825,24 +3105,18 @@ router.post('/instances/:slug/rebuild', async (req, res) => {
   });
 
   if (needsApproval) {
-    const base = siteBase(req);
     const approve = `${base}/apps/atlas/api/admin/action?token=${auth.makeActionToken(inst.slug, 'approve')}`;
     const deny = `${base}/apps/atlas/api/admin/action?token=${auth.makeActionToken(inst.slug, 'deny')}`;
-    const why = [];
-    if (heavy) why.push('heavy layers: ' + heavyIds.join(', '));
-    if (buildSeconds > BUILD_BUDGET_S / 2) {
-      why.push(`a long build: ${regionLabel}, about ${Math.round(buildSeconds / 60)} minutes`);
-    }
     const layersOnly = !regionChanged;
     await sendMail({
       to: ADMIN_EMAIL,
       subject: `[LOKA Atlas] ${layersOnly ? 'layer change' : 'widen request'}: ${inst.title}`,
       text: `"${inst.title}" (${inst.slug}) asks to ${changeLine}.\n\n`
-        + `Reason: ${why.join('; ')}\nCovers: ${regionLabel}\nLayers: ${layerIds.join(', ')}\n\n`
+        + `Reason: ${verdict.reasons.join('; ')}\nCovers: ${regionLabel}\nLayers: ${layerIds.join(', ')}\n\n`
         + `Approve: ${approve}\nDeny:    ${deny}\n\n`
         + `The atlas keeps serving its current map until this is approved.`,
     });
-    return res.json({
+    return {
       droppedLayers: fit.droppedLabels.length ? fit.droppedLabels : undefined,
       ok: true, pendingApproval: true, slug: inst.slug, regionLabel, layers: layerIds, change,
       message: (layersOnly
@@ -2850,14 +3124,15 @@ router.post('/instances/:slug/rebuild', async (req, res) => {
         : 'That covers a lot of ground, so the LOKA team takes a quick look first — ')
         + 'usually within a day. Your atlas carries on exactly as it is until then, and '
         + 'your data stays where it is.',
-    });
+    };
   }
 
-  const jobId = enqueueBuild(spec);
+  // a yes already given is a build the gate would have held: it gets the time its estimate asks for
+  const jobId = enqueueBuild(approved ? { ...spec, timeoutMs: approvedTimeoutMs(spec.estSeconds) } : spec);
   reg.updateInstance(inst.slug, { jobId });
-  res.json({ ok: true, jobId, slug: inst.slug, wasPublished, layers: layerIds, change,
-    droppedLayers: fit.droppedLabels.length ? fit.droppedLabels : undefined });
-});
+  return { ok: true, jobId, slug: inst.slug, wasPublished, layers: layerIds, change,
+    droppedLayers: fit.droppedLabels.length ? fit.droppedLabels : undefined };
+}
 
 router.delete('/instances/:slug', (req, res) => {
   const inst = reg.getInstance(String(req.params.slug));

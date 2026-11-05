@@ -184,9 +184,13 @@ an unpublished atlas is still reachable by direct link while its record stays pr
   cost the same however wide the region is (`fixedCost` in the catalogue) — boundaries, place-name
   labels, named places, buildings, roads — and boundaries is the only compulsory one. **So a map of outlines and your own places can be as wide as it
   needs, including a whole country; anything with terrain, forest cover or land use on it cannot
-  go that wide, and is left out with its name said.** A build waits for the operator's approval
-  when any chosen layer is marked `cost: "approval"` in the catalogue (today only Floodplain) **or**
-  its estimated build is over 270 seconds, whatever its size.
+  go that wide, and is left out with its name said.** A layer waits for the operator's approval
+  when it is marked `cost: "approval"` in the catalogue (today only Floodplain) **or** when the
+  estimated build is over the 9-minute budget, whatever its size — the estimate knows which
+  sources are already saved on the server, so a second atlas of rivers is priced at the clip, not
+  the download. The rest of the atlas is built straight away; the layers that wait are added by
+  themselves once the OK comes, and only its maker and editors can open the atlas until then.
+  Only when nothing could be built now does the whole atlas wait.
 
   Two things follow that are easy to get wrong. A single large state can exceed the ceiling on its
   own — Rajasthan's box is 63 square degrees, Maharashtra's 53 — so "one state" is not a safe

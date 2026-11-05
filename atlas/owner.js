@@ -898,7 +898,13 @@
       note.textContent = "Made by hand — can’t be changed here";
       return;
     }
-    note.hidden = true;
+    /* Layers the LOKA team must say yes to, while the rest of the atlas is
+       already here: named, to owner and editors alike, with what happens
+       next — the server's own sentence (pendingNote, the one the publish
+       refusal uses). Until they answer, only the people who may edit the
+       atlas can open it; the server says so if Listed or Anyone with the
+       link is tried. */
+    note.hidden = !(note.textContent = INST.pendingNote || "");
     act.hidden = false;
     act.disabled = false;
     if (waitingForLayers()) { act.textContent = "Waiting for approval"; return; }

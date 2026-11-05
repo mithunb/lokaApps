@@ -299,6 +299,19 @@
     });
   }
 
+  /* Does the API know this atlas as one still being built? Only its owner and
+     editors are answered at all (checkOwner asks the same route for the same
+     reason); everyone else, and an embed, gets "no". */
+  function stillBuilding() {
+    if (EMBED || !DATASET) return Promise.resolve(false);
+    return fetch("./api/instances/" + encodeURIComponent(DATASET), { credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (inst) {
+        return !!(inst && inst.canEdit && (inst.status === "building" || inst.status === "pending-approval"));
+      })
+      .catch(function () { return false; });
+  }
+
   function draw() {
     showLoading(true);
     return fetchManifest()
@@ -310,9 +323,24 @@
           e.privateAtlas = true;
           throw e;
         }
-        if (!r.ok) throw new Error(r.status === 404
-          ? "There's no atlas at that address — it may have been removed, or it's still being built."
-          : "The atlas data couldn't be loaded (error " + r.status + "). Try again in a moment.");
+        if (!r.ok && r.status !== 404) {
+          throw new Error("The atlas data couldn't be loaded (error " + r.status + "). Try again in a moment.");
+        }
+        if (!r.ok) {
+          /* No files at that address yet. For the person building it, the
+             API knows the atlas and says it is still being built — then this
+             is a wait, not a fault, and the page tries again by itself.
+             A stranger gets the same 404 as for nothing at all (GET
+             ./api/instances answers 404 for an atlas they may not see), so a
+             private atlas is not given away. */
+          return stillBuilding().then(function (yes) {
+            var e = new Error(yes
+              ? "This atlas is still being built — it opens by itself when it's ready."
+              : "There's no atlas at that address — it may have been removed, or it's still being built.");
+            e.stillBuilding = yes;
+            throw e;
+          });
+        }
         // A web-server error page answering 200 would otherwise surface as a raw
         // JSON parse error; say something the reader can act on instead.
         return r.text().then(function (t) {
@@ -333,6 +361,23 @@
         showLoading(false);
         // no atlas to name: the header may say "LOKA Atlas" again
         document.documentElement.classList.remove("atlas-pending");
+        /* Still being built: the calm wait mark and the one sentence, left
+           standing while the page asks again every few seconds — it opens
+           by itself when the files are there. Nothing to press. */
+        if (err && err.stillBuilding) {
+          if (!$(".atlas-error-wait")) {
+            $("#atlas-map").innerHTML =
+              '<div class="atlas-error"><div class="atlas-error-box atlas-error-wait" role="status" aria-live="polite">' +
+                '<h2>Still being built</h2>' +
+                '<p class="wait-line">' + (window.LokaWait ? LokaWait.html(err.message) : esc(err.message)) + '</p>' +
+              '</div></div>';
+            document.title = "Still being built — LOKA Atlas";
+          }
+          // one retry at a time: a dataset switch during the wait must not start a second chain
+          clearTimeout(window.__lokaBuildWait);
+          window.__lokaBuildWait = setTimeout(draw, 5000);
+          return false;
+        }
         /* A small panel that says what happened in words and offers one thing
            to try. The title is the same every time; the line under it is the
            reason, which is the part a reader can act on. */

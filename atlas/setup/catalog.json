@@ -1,5 +1,5 @@
 {
-  "comment": "LOKA Atlas capability catalog — single source of truth for the wizard (display), the API (validation, cost gate) and the Python builder (recipe dispatch). tiers: which region tiers can use a layer ('global' = any country, 'india' = ISO3 IND). cost: 'free' builds run immediately; 'approval' needs an admin OK (large source downloads). Layer stanzas themselves live in the recipes, ported from the proven deoria-bioregion manifest styling.",
+  "comment": "LOKA Atlas capability catalog — single source of truth for the wizard (display), the API (validation, cost gate) and the Python builder (recipe dispatch). tiers: which region tiers can use a layer ('global' = any country, 'india' = ISO3 IND). cost: 'free' builds run immediately; 'approval' needs an admin OK (large source downloads) — the atlas is built without such a layer first, and it is added once the OK comes. estSeconds: the first build, quoted for a region about two square degrees; cacheFiles: the files the recipe keeps under srccache (fetch_cached's names, {iso3} filled in; one list, or one per tier) — when every one is there, downloadSeconds (the one-off download) comes off estSeconds before the area scaling — the clip still grows with the area — so the approval gate (api/apps/atlas.js layerSeconds) is honest about a source already on the server. Feasibility is always judged on the full estSeconds. Layers read by the box (terrain, imagery) keep no file and no download figure. Layer stanzas themselves live in the recipes, ported from the proven deoria-bioregion manifest styling.",
   "tiers": {
     "global": "Baseline — open worldwide sources (geoBoundaries, OSM, ESA WorldCover)",
     "india": "Enhanced — adds LGD boundaries and WRIS/NDEM water & flood layers"
@@ -13,6 +13,8 @@
       "group": "base",
       "recipe": "admin",
       "estSeconds": 30,
+      "downloadSeconds": 20,
+      "cacheFiles": { "india": ["LGD_Districts.geojson"] },
       "cost": "free",
       "fixedCost": true,
       "required": true,
@@ -27,6 +29,8 @@
       "group": "base",
       "recipe": "subadmin",
       "estSeconds": 40,
+      "downloadSeconds": 30,
+      "cacheFiles": ["LGD_Blocks.geojson"],
       "cost": "free",
       "attribution": { "india": "Local Government Directory via Bharatlas, CC0" }
     },
@@ -51,6 +55,8 @@
       "subgroup": "Water",
       "recipe": "rivers_wris",
       "estSeconds": 90,
+      "downloadSeconds": 70,
+      "cacheFiles": ["WRIS_Rivers.parquet", "WRIS_Canals.geojson"],
       "cost": "free",
       "attribution": { "india": "India-WRIS via Bharatlas, CC0" }
     },
@@ -63,6 +69,8 @@
       "subgroup": "Water",
       "recipe": "wetlands_wris",
       "estSeconds": 60,
+      "downloadSeconds": 45,
+      "cacheFiles": ["Bharatmaps_Parivesh_Wetland_Boundaries.parquet"],
       "cost": "free",
       "attribution": { "india": "Bharatmaps/Parivesh via Bharatlas, CC0" }
     },
@@ -75,17 +83,21 @@
       "subgroup": "Water",
       "recipe": "basins_wris",
       "estSeconds": 40,
+      "downloadSeconds": 30,
+      "cacheFiles": ["WRIS_SubBasin.geojson"],
       "cost": "free",
       "attribution": { "india": "India-WRIS via Bharatlas, CC0" }
     },
     {
       "id": "floodplain-ndem",
       "label": "Floodplain (observed inundation)",
-      "info": "Areas flooded at least once 1998–2022, from ISRO's NDEM satellite record. Heavy source data — needs a quick approval.",
+      "info": "Areas flooded at least once 1998–2022, from ISRO's NDEM satellite record. Heavy source data — the LOKA team says yes first; the rest of your atlas is built straight away.",
       "tiers": ["india"],
       "group": "eco",
       "recipe": "floodplain_ndem",
       "estSeconds": 180,
+      "downloadSeconds": 120,
+      "cacheFiles": ["NDEM_All_India_Flood_Innundation_1998_to_2022.parquet"],
       "cost": "approval",
       "estMB": 100,
       "attribution": { "india": "NRSC / ISRO NDEM via Bharatlas, CC0" }
@@ -216,6 +228,8 @@
       "subgroup": "Facilities",
       "recipe": "health_hot",
       "estSeconds": 60,
+      "downloadSeconds": 45,
+      "cacheFiles": ["hot-{iso3}-health_facilities.zip"],
       "cost": "free",
       "attribution": { "global": "OpenStreetMap contributors via HOT / HDX, ODbL" }
     },
@@ -228,6 +242,8 @@
       "subgroup": "Facilities",
       "recipe": "education_hot",
       "estSeconds": 60,
+      "downloadSeconds": 45,
+      "cacheFiles": ["hot-{iso3}-education_facilities.zip"],
       "cost": "free",
       "attribution": { "global": "OpenStreetMap contributors via HOT / HDX, ODbL" }
     },
@@ -239,6 +255,8 @@
       "group": "base",
       "recipe": "constituencies_datameet",
       "estSeconds": 40,
+      "downloadSeconds": 30,
+      "cacheFiles": ["datameet-pc-2019.geojson"],
       "cost": "free",
       "attribution": { "india": "DataMeet community, CC-BY 4.0" }
     },
@@ -251,6 +269,8 @@
       "subgroup": "District indicators (NFHS-5)",
       "recipe": "nfhs_births",
       "estSeconds": 40,
+      "downloadSeconds": 30,
+      "cacheFiles": ["LGD_Districts.geojson"],
       "cost": "free",
       "attribution": { "india": "NFHS-5 (IIPS / MoHFW); district table via jvargh7" }
     },
@@ -263,6 +283,8 @@
       "subgroup": "District indicators (NFHS-5)",
       "recipe": "nfhs_literacy",
       "estSeconds": 40,
+      "downloadSeconds": 30,
+      "cacheFiles": ["LGD_Districts.geojson"],
       "cost": "free",
       "attribution": { "india": "NFHS-5 (IIPS / MoHFW); district table via jvargh7" }
     },
@@ -275,6 +297,8 @@
       "subgroup": "District indicators (NFHS-5)",
       "recipe": "nfhs_cleanfuel",
       "estSeconds": 40,
+      "downloadSeconds": 30,
+      "cacheFiles": ["LGD_Districts.geojson"],
       "cost": "free",
       "attribution": { "india": "NFHS-5 (IIPS / MoHFW); district table via jvargh7" }
     },
@@ -287,6 +311,8 @@
       "subgroup": "District indicators (NFHS-5)",
       "recipe": "nfhs_stunting",
       "estSeconds": 40,
+      "downloadSeconds": 30,
+      "cacheFiles": ["LGD_Districts.geojson"],
       "cost": "free",
       "attribution": { "india": "NFHS-5 (IIPS / MoHFW); district table via jvargh7" }
     },
@@ -298,6 +324,8 @@
       "group": "eco",
       "recipe": "agro_zones",
       "estSeconds": 40,
+      "downloadSeconds": 30,
+      "cacheFiles": ["Agro_Ecological_Zones.geojson"],
       "cost": "free",
       "attribution": { "india": "ICAR agro-ecological regions via Bharatlas, CC0" }
     },
@@ -310,6 +338,8 @@
       "subgroup": "Forests",
       "recipe": "soi_forests",
       "estSeconds": 120,
+      "downloadSeconds": 80,
+      "cacheFiles": ["SOI_Forests.parquet"],
       "cost": "free",
       "attribution": { "india": "Survey of India via Bharatlas, CC0" }
     },
@@ -321,6 +351,8 @@
       "group": "eco",
       "recipe": "wasteland_worldcover",
       "estSeconds": 120,
+      "downloadSeconds": 30,
+      "cacheFiles": ["LGD_Blocks.geojson"],
       "cost": "free",
       "attribution": { "india": "ESA WorldCover 2021 (Copernicus), CC-BY 4.0; LGD blocks via Bharatlas" }
     },

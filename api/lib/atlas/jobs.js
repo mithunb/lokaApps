@@ -180,10 +180,14 @@ async function runJob(job) {
     });
     job.pid = child.pid;
 
+    // a build the operator said yes to may carry its own time (approvedTimeoutMs in atlas.js), never past half an hour
+    const asked = Number(spec.timeoutMs);
+    // never shorter than the ordinary ten minutes, never past half an hour
+    const timeoutMs = Math.min(30 * 60 * 1000, Math.max(JOB_TIMEOUT_MS, Number.isFinite(asked) ? asked : 0));
     const timer = setTimeout(() => {
-      job.message = 'timed out after 10 minutes';
+      job.message = 'timed out after ' + Math.round(timeoutMs / 60000) + ' minutes';
       try { process.kill(-child.pid, 'SIGKILL'); } catch {}
-    }, JOB_TIMEOUT_MS);
+    }, timeoutMs);
 
     let buf = '';
     child.stdout.on('data', (d) => {

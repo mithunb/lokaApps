@@ -126,7 +126,7 @@ check('layers not sent means the layers it has', /b\.layers\.map\(String\) : pri
 check('a region not sent means the region it has', /: \{ iso3: cur\.iso3 \|\| '', level: cur\.level, shapeIDs: cur\.shapeIDs \|\| \[\] \}/.test(rebuild), true);
 check('an atlas with no region keeps having none', /const worldwide = !regionSent && !!cur\.worldwide;/.test(rebuild), true);
 check('boundaries stay compulsory where there is a region', /if \(!worldwide\) \{\s*for \(const l of allowed\.values\(\)\) if \(l\.required/.test(rebuild), true);
-check('the answer says which layers it will build', /res\.json\(\{ ok: true, jobId, slug: inst\.slug, wasPublished, layers: layerIds, change,/.test(rebuild), true);
+check('the answer says which layers it will build', /return \{ ok: true, jobId, slug: inst\.slug, wasPublished, layers: layerIds, change,/.test(rebuild), true);
 check('the prior record is kept for every rebuild, not only one that waits',
   /rebuildPrior: \{ status: inst\.status, tier: inst\.tier, region: inst\.region,\s*regionLabel: inst\.regionLabel, layers: priorLayers, change \},/.test(rebuild), true);
 check('a failed rebuild puts the record back', /reg\.updateInstance\(job\.slug, rebuildFailedPatch\(inst, job\.message\)\);/.test(server), true);

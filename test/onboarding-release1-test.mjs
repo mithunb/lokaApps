@@ -86,8 +86,8 @@ check('nothing else is pre-ticked', /S\.picked\[l\.id\] = true/g.test(setup) && 
 check('no "recommended" anywhere', /recommend/i.test(page) || /recommend/i.test(setup) || /recommend/i.test(rows), false);
 check('the foot names the way back to this list', /You can add any of these later from Owner ▾ → Open data layers\./.test(s3), true);
 check('the forward button names the next screen', /<button class="btn" id="next-3">Name it →<\/button>/.test(s3), true);
-check('a ticked layer that needs an OK says what happens, once',
-  /checked by the LOKA team first, so your atlas waits for a quick OK — usually the same day\./.test(setup), true);
+check('a ticked layer that needs an OK says what happens, once (the same sentence as beside Build; the rest is built straight away)',
+  /var line = waitSentence\(\);\s*ask\.hidden = !line;\s*ask\.textContent = line;/.test(setup) && /Everything else is built straight away\./.test(fs.readFileSync(ROOT + '/atlas/approval-rules.js', 'utf8')), true);
 
 // the shared rows, run as a browser would
 const win = {};

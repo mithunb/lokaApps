@@ -94,9 +94,27 @@
 
   function needsApproval(l) { return !!(l && l.cost && l.cost !== "free"); }
 
+  /* What waits for a yes from the LOKA team, and what is built straight
+     away: the server's own rule (approval-rules.js, the file the server
+     requires), given the server's own figures — estSecondsHere per layer and
+     the cap it adds them up against (GET /catalog approvalAboveSeconds).
+     `picked` is {id: true}; a layer the region is too wide for is not counted. */
+  function secondsOf(l) { return Number(l.estSecondsHere != null ? l.estSecondsHere : l.estSeconds) || 0; }
+  function plan(catalog, picked, aboveSeconds) {
+    var R = window.LokaApprovalRules;
+    var items = (catalog || []).filter(function (l) { return (isGiven(l) || picked[l.id]) && !cannotBuild(l); })
+      .map(function (l) { return { id: l.id, label: l.label, seconds: secondsOf(l), heavy: needsApproval(l) && !isGiven(l), required: !!l.required }; });
+    return R ? R.split(items, aboveSeconds) : { now: items.map(function (it) { return it.id; }), later: [], nowSeconds: 0 };
+  }
+  function waitSentence(later) {
+    var R = window.LokaApprovalRules;
+    return R ? R.waitSentence(later) : "";
+  }
+
   window.LokaCatalogRows = {
     GROUP_LABELS: GROUP_LABELS, GROUP_ORDER: GROUP_ORDER, PLAIN_NAMES: PLAIN_NAMES, TOO_WIDE_TITLE: TOO_WIDE_TITLE,
     isGiven: isGiven, givenLine: givenLine, groups: groups,
     cannotBuild: cannotBuild, needsApproval: needsApproval, rowHTML: rowHTML,
+    plan: plan, waitSentence: waitSentence,
   };
 })();

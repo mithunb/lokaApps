@@ -278,7 +278,7 @@
     if ($("#s2q")) $("#s2q").hidden = true;
     if (n === 2) loadCountries();
     if (n === 3) loadCatalog();
-    if (n === 1) prefillName();
+    if (n === 1) { prefillName(); paintBuildWait(); }
     var here = pos(n);
     $$(".stp").forEach(function (b) {
       var key = b.id === "stp-found" ? "found" : Number(b.dataset.s);
@@ -2171,6 +2171,8 @@
       S.catalog = r.layers || [];
       S.catalogIso = S.iso3;
       S.catalogArea = area;
+      // the cap a build is gated against — the server's number, read, not copied
+      S.approvalAbove = Number(r.approvalAboveSeconds) || 0;
       paintCatalog();
     }).catch(function (e) {
       $("#cats").innerHTML = "";
@@ -2240,9 +2242,30 @@
       return t + (on ? Number(l.estSecondsHere != null ? l.estSecondsHere : l.estSeconds) || 0 : 0);
     }, 0);
   }
-  function paintCounts() {
+  /* What will wait for the LOKA team's yes, from the server's own figures
+     (estSecondsHere and approvalAboveSeconds, GET /catalog) and the server's
+     own order (catalog-rows.js plan): nothing is decided here that the server
+     would decide differently. */
+  function waitPlan() {
     var CR = window.LokaCatalogRows;
-    var picked = 0, asks = [];
+    return CR && CR.plan ? CR.plan(S.catalog || [], S.picked || {}, S.approvalAbove) : { now: [], later: [] };
+  }
+  function waitSentence() {
+    var CR = window.LokaCatalogRows;
+    return CR && CR.waitSentence ? CR.waitSentence(waitPlan().later) : "";
+  }
+  /* Beside the Build button: one plain sentence naming what waits and why,
+     so nobody presses Build and then learns part of the atlas is held. Empty
+     and hidden when nothing waits. */
+  function paintBuildWait() {
+    var el = $("#build-wait");
+    if (!el) return;
+    var line = waitSentence();
+    el.hidden = !line;
+    el.textContent = line;
+  }
+  function paintCounts() {
+    var picked = 0;
     $$("details.cat").forEach(function (d) {
       var boxes = d.querySelectorAll('.cat-row:not(.cat-row-given) input[type="checkbox"]');
       var on = 0;
@@ -2250,23 +2273,20 @@
       picked += on;
       d.querySelector(".cat-n").textContent = on + " of " + boxes.length;
     });
-    (S.catalog || []).forEach(function (l) {
-      if (S.picked[l.id] && !CR.isGiven(l) && !CR.cannotBuild(l) && CR.needsApproval(l)) asks.push(l.label);
-    });
     $("#cat-total").textContent = (picked
       ? picked + (picked === 1 ? " layer" : " layers")
       : "Nothing chosen yet") + " · " + aboutTime(pickedSeconds()) + " to build";
-    /* a ticked layer the LOKA team must OK first: say once, here, what that
-       means for the build — the whole atlas waits for the OK today (a later release
-       builds the rest first) */
+    /* a ticked layer the LOKA team must OK first, or more than one build can
+       carry: say once, here, what that means — the rest of the atlas is built
+       straight away and these are added once they say yes (the same sentence
+       as beside Build) */
     var ask = $("#cat-ask");
     if (ask) {
-      ask.hidden = !asks.length;
-      ask.textContent = asks.length
-        ? asks.join(" and ") + (asks.length > 1 ? " are" : " is") +
-          " checked by the LOKA team first, so your atlas waits for a quick OK — usually the same day."
-        : "";
+      var line = waitSentence();
+      ask.hidden = !line;
+      ask.textContent = line;
     }
+    paintBuildWait();
   }
 
   /* ---- 4 · build for real ---- */
@@ -2310,6 +2330,9 @@
       },
     }).then(function (r) {
       S.slug = r.slug; S.jobId = r.jobId;
+      // the layers the LOKA team must say yes to: the rest is building now,
+      // and these are added by themselves once they have (named at the end)
+      S.pendingLabels = Array.isArray(r.pendingLayers) ? r.pendingLayers : [];
       log("[atlas] " + r.slug);
       /* Layers the region turned out to be too wide for. The atlas is being
          built either way — this says what it will not contain, rather than
@@ -2442,7 +2465,12 @@
   function finish() {
     $("#fill").style.transform = "scaleX(1)";
     $("#build-title").textContent = "Your atlas is ready";
-    $("#build-sub").textContent = "Built from open data just now.";
+    // no wait screen for the layers the LOKA team must say yes to: they are
+    // named, and they arrive by themselves
+    var waiting = (S.pendingLabels || []).map(function (label) { return { id: label, label: label }; });
+    var R = window.LokaApprovalRules;
+    $("#build-sub").textContent = "Built from open data just now." +
+      (waiting.length && R ? " " + R.waitSentence(waiting).replace(/ Everything else.*$/, "") : "");
     /* The atlas's first look (owner.js) says what was just built — the rows
        placed, the rows still without a place — and only this page knows those
        numbers. They ride across in the browser's own storage, keyed to the

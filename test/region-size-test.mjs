@@ -17,7 +17,9 @@ const cut = (src, head, close) => {
   if (a < 0) throw new Error('not found: ' + head);
   return src.slice(a, src.indexOf(close, a + head.length) + close.length);
 };
+// sourceCached reads the server's srccache; here nothing is saved, so every figure is the first build's
 const { layerSeconds, feasibleAt, feasibleLayers } = new Function('BUILD_BUDGET_S', 'EST_AT_DEG2',
+  'const sourceCached = () => false;' +
   cut(server, '\nfunction layerSeconds(', '\n}\n') +
   cut(server, '\nfunction feasibleAt(', '\n}\n') +
   cut(server, '\nfunction feasibleLayers(', '\n}\n') +
@@ -71,14 +73,14 @@ check('and not across ten states', feasibleAt(allowed.get('terrain'), 618), fals
 check('an unknown layer is costed, not waved through', layerSeconds(undefined, 618), 30);
 
 console.log('\n  approval follows the work, not the width');
-check('a wide atlas of outlines and pins goes straight through',
-  /const largeRegion = buildSeconds > BUILD_BUDGET_S \/ 2;/.test(server), true);
+check('a wide atlas of outlines and pins goes straight through (the one rule, approvalFor, against the whole budget)',
+  /const longBuild = buildSeconds > BUILD_BUDGET_S;/.test(server) && !/BUILD_BUDGET_S \/ 2/.test(server), true);
 check('and the reason given is the time, not the area',
-  /a long build: \$\{regionLabel\}, about \$\{Math\.round\(buildSeconds \/ 60\)\} minutes/.test(server), true);
+  /a long build: \$\{ctx && ctx\.regionLabel \? ctx\.regionLabel \+ ', ' : ''\}about \$\{Math\.round\(buildSeconds \/ 60\)\} minutes/.test(server), true);
 
 console.log('\n  and the wizard never offers what will be dropped');
 check('it asks the catalogue about this width', /catalog\?iso3=" \+ encodeURIComponent\(S\.iso3\) \+\n\s*\(area > 0 \? "&areaDeg2="/.test(setup), true);
-check('the catalogue answers per layer', /feasible: feasibleAt\(l, areaDeg2\), estSecondsHere: layerSeconds\(l, areaDeg2\)/.test(server), true);
+check('the catalogue answers per layer', /feasible: feasibleAt\(l, areaDeg2\), estSecondsHere: layerSeconds\(l, areaDeg2, ctx\)/.test(server), true);
 check('asked without a width it answers as before', /Number\.isFinite\(areaDeg2\) && areaDeg2 > 0/.test(server), true);
 // the row itself lives in catalog-rows.js now, shared with the Owner menu's sheet
 const catalogRows = fs.readFileSync(path.join(ROOT, 'atlas/catalog-rows.js'), 'utf8');

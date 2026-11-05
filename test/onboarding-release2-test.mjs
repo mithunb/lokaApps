@@ -142,10 +142,13 @@ console.log('\n  the docs say what the code does');
 check('the area rule: the 6 / 40 square-degree ceiling is stated nowhere as current (only as gone)',
   /Above \*\*6 square degrees\*\*|Above \*\*40 square degrees\*\*|Region ceiling — approval|Region ceiling — refusal/.test(capDoc) ||
   /Above \*\*40 square degrees\*\*|Above 6 square degrees a build/.test(appDoc), false);
-check('the approval rule is any approval layer or a build over 270 s, and that is what the code does',
-  /estimated build is over 270 seconds/.test(capDoc) && /over 270 seconds/.test(appDoc) &&
-  /const BUILD_BUDGET_S = 9 \* 60;/.test(server) && /const largeRegion = buildSeconds > BUILD_BUDGET_S \/ 2;/.test(server) &&
-  /const needsApproval = heavy \|\| buildSeconds > BUILD_BUDGET_S \/ 2;/.test(server), true);
+// since 5 Nov 2026 the gate is the whole budget, the estimates know what is already on the server, and the
+// rest of the atlas is built first (test/approval-waits-test.mjs); the docs say so in plain words
+check('the approval rule is any approval layer or a build over the budget, in one function both gates ask, and the docs say so',
+  /estimated build is over the 9-minute budget/.test(capDoc) && /over the 9-minute budget/.test(appDoc) &&
+  /rest of the atlas is built straight away/.test(capDoc) && /rest of the atlas is built straight away/.test(appDoc) &&
+  /const BUILD_BUDGET_S = 9 \* 60;/.test(server) && /const longBuild = buildSeconds > BUILD_BUDGET_S;/.test(server) &&
+  /return \{ needsApproval: reasons\.length > 0, heavyIds, buildSeconds, longBuild, reasons \};/.test(server), true);
 check('unbuildable layers are dropped and named, and the docs say so',
   /dropped from the build and named in the answer/.test(capDoc) && /dropped from the build and named in the answer/.test(appDoc) &&
   /droppedLabels: dropped\.map/.test(server), true);

@@ -433,11 +433,16 @@ map is first moved (or after five seconds); the ⓘ opens About & sources.
     says "Too wide an area for Terrain & elevation, so that is left out. Everything else is being
     built." — not refused. The wizard greys such rows at the end of their group. If nothing but boundaries could be built and boundaries were not asked for, the build is
     refused with a plain sentence.
-  - the build **waits for the operator's OK** (email with approve and deny links) when **any chosen
-    layer is marked `cost: "approval"`** in the catalogue (today only Floodplain), **or when the
-    estimated build is over 270 seconds** — half the budget — whatever its size. A wide atlas of
-    outlines and pins is seconds of work and goes straight through; one district of terrain and
-    forest can be minutes and waits.
+  - a layer **waits for the operator's OK** (email with links to add it or leave it out) when it is
+    **marked `cost: "approval"`** in the catalogue (today only Floodplain), **or when the
+    estimated build is over the 9-minute budget** — whatever its size. The estimate knows which
+    sources are already saved on the server (`cacheFiles` and `downloadSeconds` in the catalogue),
+    so a second atlas of rivers is priced at the clip, not the download. The rest of the atlas is
+    built straight away, the wizard says beside Build what will wait, and the waiting layers are
+    added by themselves once the OK comes; only its maker and editors can open the atlas until
+    then. Only when nothing could be built now does the whole atlas wait. A wide atlas of outlines
+    and pins is seconds of work and goes straight through; one district of terrain and forest can
+    be minutes and waits.
 - **Changing the region or the open data later** rebuilds in place, with no downtime for a live
   atlas (the new data only replaces the old on success), under **the same rule as a first build**:
   unbuildable layers dropped and named, and the rebuild parked for approval when an approval layer
@@ -977,7 +982,7 @@ State these as out of scope, or as new work, in any proposal.
 | Administrative depths | 1–4, one depth per atlas |
 | Units per atlas | 100 |
 | Region ceiling | none — a layer whose estimated build is over the 9-minute budget at that width is dropped and named (§6) |
-| Build waits for the operator's OK when | any `cost: "approval"` layer is chosen, or the estimated build is over 270 s (§6) |
+| A layer waits for the operator's OK when | it is `cost: "approval"`, or the estimated build is over the 9-minute budget (§6); the rest of the atlas is built straight away |
 | Atlases on the platform | 50 total |
 | New atlases per internet address per day | 3 |
 | Collaborators per atlas | 20 |
