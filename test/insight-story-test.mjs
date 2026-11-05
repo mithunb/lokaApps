@@ -353,7 +353,7 @@ console.log('\n  the visitor card');
     [IM.storyToShow(mode, layer, keep2.slice(0, 1)), IM.storyCardHTML(null)], [null, '']);
   const own = { summaryOn: true, story: SUM.storyKept(thin) };
   check('their own words: the heading, the quotes, and small print that claims nothing',
-    (() => { const c = IM.storyCardHTML(IM.storyToShow(own, layer, features)); return [/<b>In their own words<\/b>/.test(c),
+    (() => { const c = IM.storyCardHTML(IM.storyToShow(own, layer, features)); return [/Story of the place in their own words/.test(c) && !/<b>In their own words<\/b>/.test(c),
       whole.story.sentences.some((x) => c.indexOf(x.text) >= 0), /What people wrote about these places\./.test(c), /Written by AI/.test(c)]; })(),
     [true, false, true, false]);
   check('a story that says nothing shows nothing, and switching it off shows nothing either',
@@ -365,7 +365,7 @@ console.log('\n  the visitor card');
   check('an atlas written before the story shows its summary inside Voices, and goes on showing it after a run that found nothing',
     [IM.visibleSentences(legacy, ['pattern_1']).length,
       IM.storyToShow({ summaryOn: true, story: { sig: 'x', sentences: [], quotes: [] }, summary: legacy }, layer, features),
-      /Voices">' \+ voiceHead\(\) \+\s*\n\s*sents\.map/.test(fs.readFileSync(ROOT + '/atlas/insight-mode.js', 'utf8'))], [2, null, true]);
+      /in their own words">' \+ voiceHead\(\) \+\s*\n\s*sents\.map/.test(fs.readFileSync(ROOT + '/atlas/insight-mode.js', 'utf8'))], [2, null, true]);
   /* Mithun, 5 Nov 2026: a question switched off takes its quotes with it —
      even when its column is the longest thing the place says. */
   const hidden = { id: 'tags', popup: { title: 'name' },

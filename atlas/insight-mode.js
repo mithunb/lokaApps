@@ -1,6 +1,6 @@
 /* LOKA Atlas — Insight mode: for people reading patterns. The questions LOKA
  * asked of the places, each answered as a bar list that colours the map, and
- * "Voices" above them — what people are saying, written by AI
+ * "Story of the place in their own words" above them — what people are saying, written by AI
  * from their own words, with the quotes it rests on. One panel, "Insights"
  * (a visitor sees no tab row at all; the owner: "Insights · Settings").
  *
@@ -10,7 +10,7 @@
  *   mode: {
  *     name: "insight",
  *     layer: "<the layer whose questions are read>",
- *     summaryOn: true,                     // "Voices" on or off
+ *     summaryOn: true,                     // "Story of the place in their own words" on or off
  *     order: ["pattern_3", "pattern_4", …],   // the owner's order
  *     shown: { pattern_1: true, pattern_5: false, … },
  *     summary: { sig, sentences: [{ text, questions: [col…] }], at } | null,
@@ -317,7 +317,7 @@
     return { places: total, questions: questions, pairs: pairs };
   }
 
-  /* ========= the places' own words ("Voices", 5 Nov 2026) =========
+  /* ========= the places' own words ("Story of the place in their own words", 5 Nov 2026) =========
      This is what the visitor card shows (Mithun, 5 Nov 2026: "go with 1").
      summaryTables above is what the older summary reads, and nothing here
      touches it: an atlas written before the story goes on showing that
@@ -988,7 +988,7 @@
     });
     return out.length >= MIN_SENTENCES ? out : [];
   }
-  /* ---------------- "Voices": the story on the card ----------------
+  /* ---------------- "Story of the place in their own words": the story on the card ----------------
      The server writes it (insight-summary.js writeStory) and keeps it in
      mode.story: { sig, sentences: [{ text, quotes:[id] }], quotes: [{ id,
      text, name }], ownWords, at }. An atlas written before the story has no
@@ -1071,7 +1071,7 @@
   /* The card itself. The paragraph is the sentences run together, then the
      quotes that back them, each a button to its place on the map (the same
      data-in="place" data-i row the question lists use). */
-  function voiceHead() { return '<div class="in-sect"><span class="in-stamp">Voices</span></div>'; }
+  function voiceHead() { return '<div class="in-sect"><span class="in-stamp">Story of the place in their own words</span></div>'; }
   function storyCardHTML(shown) {
     if (!shown) return "";
     var quotes = shown.quotes.map(function (q) {
@@ -1080,9 +1080,9 @@
         (q.name ? "See “" + escText(q.name) + "”" : "Show this place on the map") +
         "</button></li>";
     }).join("");
-    return '<section class="in-sum" aria-label="Voices">' + voiceHead() +
+    return '<section class="in-sum" aria-label="Story of the place in their own words">' + voiceHead() +
       (shown.ownWords
-        ? '<p class="in-story"><b>In their own words</b></p>'
+        ? ''
         : '<p class="in-story">' + shown.sentences.map(function (s) { return escText(s.text); }).join(" ") + "</p>") +
       '<ul class="in-quotes">' + quotes + "</ul>" +
       '<div class="in-by">' + (shown.ownWords
@@ -1450,7 +1450,7 @@
     }
 
     /* ---- the panel ---- */
-    /* "Voices": the top of the one Insights panel. Nothing to say
+    /* "Story of the place in their own words": the top of the one Insights panel. Nothing to say
        — turned off, nothing written, nothing being written — and it is not
        there at all, heading and all: the questions stand alone. */
     function voiceHTML() {
@@ -1461,12 +1461,12 @@
          server takes the summary away the moment a story stands in its place. */
       var sents = mode.summaryOn === false ? [] : visibleSentences(mode.summary, Q().cols);
       if (sents.length) {
-        return '<section class="in-sum" aria-label="Voices">' + voiceHead() +
+        return '<section class="in-sum" aria-label="Story of the place in their own words">' + voiceHead() +
           sents.map(function (s) { return '<p class="in-s">' + sentenceHTML(s.text) + "</p>"; }).join("") +
           '<div class="in-by">Written by AI from the answers to the questions, when the atlas was last updated. Numbers count places, not people.</div></section>';
       }
       if (isPending(mode)) {
-        return '<section class="in-sum" aria-live="polite" aria-label="Voices">' + voiceHead() + '<div class="in-writing">' +
+        return '<section class="in-sum" aria-live="polite" aria-label="Story of the place in their own words">' + voiceHead() + '<div class="in-writing">' +
           '<div class="in-lines" aria-hidden="true"><i></i><i></i><i></i></div><p>LOKA is reading what people wrote about these ' + feats().length +
           " places, to say what they are saying. This takes a minute or two. The questions are below.</p></div></section>";
       }
@@ -1765,7 +1765,7 @@
     numbersIn: numbersIn,
     checkSentences: checkSentences,
     checkSentencesWithReasons: checkSentencesWithReasons,
-    // "Voices" — the story the visitor card shows
+    // "Story of the place in their own words" — the story the visitor card shows
     storyDigest: storyDigest,
     offeredById: offeredById,
     placeWords: placeWords,

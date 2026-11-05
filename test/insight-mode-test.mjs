@@ -217,7 +217,7 @@ check('Voices is drawn above the questions in that one panel, and when there is 
     /var h = voice \+ '<div class="in-sect"><span class="in-stamp">The questions/.test(imSrc),
     /if \(isPending\(mode\)\)[\s\S]*?\n      return "";\n    }/.test(imSrc)], [true, true, true]);
 check('the second tab and its "see the questions" link are gone, and the old name with them',
-  [/What the places say/.test(imSrc), /in-tolink/.test(imSrc), /data-in="tab"/.test(imSrc), /Voices/.test(imSrc)], [false, false, false, true]);
+  [/What the places say/.test(imSrc), /in-tolink/.test(imSrc), /data-in="tab"/.test(imSrc), /Story of the place in their own words/.test(imSrc)], [false, false, false, true]);
 const voiceCSS = IM.CSS.split('\n').filter((r) => /^\s*"?\.in-sum|^\s*"?\.in-quotes|^\s*"?\.in-fq/.test(r)).join(' ');
 check('the layout is plain: no box, no background, no left rule, no rule between, no indent',
   [/border-left|border-top|border-radius|border:\s*1px|background:\s*(?!none)/.test(voiceCSS), /padding-left|padding:\s*[^0;}]/.test(voiceCSS), /list-style:none/.test(voiceCSS)],
@@ -605,7 +605,7 @@ try {
       [true, true, shown.quotes.length, true, true, false]);
     check('a visitor reads it in the one Insights panel, with no tab row, and the owner has Settings beside it',
       [IM.panelTabs(f.mode, ['pattern_1', 'pattern_2']), IM.panelTabs(f.mode, ['pattern_1', 'pattern_2'], { key: 'settings', label: 'Settings' }).map((t) => t.key + ':' + t.label),
-        /aria-label="Voices"/.test(card), card.indexOf('Voices') < card.indexOf('in-story')],
+        /aria-label="Story of the place in their own words"/.test(card), card.indexOf('Story of the place') < card.indexOf('in-story')],
       [[], ['q:Insights', 'settings:Settings'], true, true]);
   }
   check('a private atlas is written where it lives, never in the public folder', fs.existsSync(path.join(ROOT, 'atlas', 'datasets', PRIVSLUG)), false);

@@ -1447,7 +1447,7 @@
      press); an Event guide has no tabs — its owner sees the venue list
      exactly as visitors do. Questions belong to Standard alone: they are
      about reading the layers, and Explore and Event do not show layers.
-     Insight's panel is the viewer's own (Insights: Voices,
+     Insight's panel is the viewer's own (Insights: the story of the place,
      insight-mode.js), and owner-modes.js adds Settings to them. */
   function addShelves() {
     var head = $("#atlas-panel .panel-head");

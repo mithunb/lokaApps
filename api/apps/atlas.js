@@ -2247,7 +2247,7 @@ async function reworkSmartButtons(dataset, layerId) {
   return 'reworked';
 }
 
-/* ---------- Insight: the questions, with Voices on top ----------
+/* ---------- Insight: the questions, with the story of the place on top ----------
    The layer whose questions Insight reads: the mode's own, else the first of
    the atlas's layers with a question some place answers that is not about
    people (insight-mode.js canInsight). null when there is none — then
@@ -2298,7 +2298,7 @@ function insightNeedsSummary(mode, src) {
   const sig = insightSummary.storySig(storyDigestOf(src));
   return !(mode.story && mode.story.sig === sig);
 }
-/* Write (or keep) the story of an atlas in Insight — "Voices" —
+/* Write (or keep) the story of an atlas in Insight — "the story of the place" —
    and store it in the mode as `story`. `payer`: the owner's request when they
    asked, 'server' after a reading. Written only if the atlas is still in
    Insight; summaryPending is cleared whatever happens. Never throws.
@@ -2438,9 +2438,9 @@ async function postMode(req, res) {
   }
   // "Write it again": the owner's allowance; visitors see the questions meanwhile
   if (b.name === undefined && b.rewriteSummary !== undefined) {
-    if (now !== 'insight') return res.status(409).json({ error: '\u201cVoices\u201d are for Insight. Switch the atlas to Insight first.' });
-    if (local.mode.summaryOn === false) return res.status(409).json({ error: 'Turn \u201cVoices\u201d on first.' });
-    if (NEVER_READ.has(inst.slug)) return res.status(409).json({ error: 'LOKA does not write Voices for this atlas.' });
+    if (now !== 'insight') return res.status(409).json({ error: 'The story of the place is for Insight. Switch the atlas to Insight first.' });
+    if (local.mode.summaryOn === false) return res.status(409).json({ error: 'Turn the story of the place on first.' });
+    if (NEVER_READ.has(inst.slug)) return res.status(409).json({ error: 'LOKA does not write the story of the place for this atlas.' });
     if (INSIGHT_RUNNING.has(inst.slug)) return res.json({ ok: true, by: 'already writing', ...modeAnswer(local) });
     local.mode = markPending({ ...local.mode });
     writeOverlay(file, local);
@@ -7828,7 +7828,7 @@ function commitLayer({ importId, dataset }, who, opts) {
         const ds = session.dataset;
         setImmediate(() => {
           reworkSmartButtons(ds, id).catch((e) => console.warn('[buttons] could not rework ' + ds + '/' + id + ' — ' + (e && e.message)));
-          // and an atlas in Insight with "Voices" on: written again if the words changed (the server's allowance)
+          // and an atlas in Insight with "the story of the place" on: written again if the words changed (the server's allowance)
           try {
             const ins = reg.getInstance(ds);
             if (ins && insightSummary.shouldRewrite(ds, readOverlay(ins).local, NEVER_READ) === true) runInsightSummary(ds, 'server', { markPending: true });
