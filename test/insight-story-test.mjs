@@ -443,6 +443,7 @@ check('the summary version and its fingerprint have not moved', [SUM.SUMMARY_VER
   const IMX = SUM.IM;
   const f = (p) => ({ properties: p });
   check('the writer is the name they post under', IMX.authorOf(f({ created_by: 'Pratham', created_by_user_id: '8e7ac8ed-54bb-4586-a446-326f5ce5d07e' })), 'Pratham');
+  check('LOKA\u2019s own curated places are credited "From LOKA"', [IMX.authorOf(f({ created_by: 'LOKA Finds' })), IMX.authorOf(f({ created_by: 'loka finds' }))], ['From LOKA', 'From LOKA']);
   check('never an id, an email or a phone number', [IMX.authorOf(f({ created_by: '8e7ac8ed-54bb-4586-a446-326f5ce5d07e' })), IMX.authorOf(f({ created_by: 'a@b.org' })), IMX.authorOf(f({ created_by: '9845012345' })), IMX.authorOf(f({}))], ['', '', '', '']);
   const card = IMX.storyCardHTML({ sentences: [], ownWords: true, quotes: [{ id: 'x', text: 'Why is this here?', name: '', by: 'Pratham', at: 0 }, { id: 'y', text: 'Lovely shade.', name: '', by: '', at: 1 }] });
   check('the card shows the name after the quote, and nothing when there is none', [/Why is this here\?<\/q> <span class="in-by-name">\u2014 Pratham<\/span>/.test(card), (card.match(/in-by-name">/g) || []).length], [true, 1]);

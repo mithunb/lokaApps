@@ -378,6 +378,7 @@
      display name column — never an id, an email or a phone number — read
      fresh from the place, never stored with the story. */
   var AUTHOR_COLS = ["created_by", "creator", "author", "username", "user_name", "tagged_by", "posted_by"];
+  var HOUSE_ACCOUNTS = /^loka\s*finds$/i;
   function authorOf(f) {
     var p = (f && f.properties) || {};
     for (var k = 0; k < AUTHOR_COLS.length; k++) {
@@ -387,6 +388,8 @@
       if (!v || v.length > 40) continue;
       if (/@|https?:|www\.|\d{6,}/.test(v)) continue;                     // an email, a link, a phone
       if (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(v) || /^[0-9a-f]{20,}$/i.test(v)) continue;   // an id
+      // LOKA's own account posts places its super admin curates: credit LOKA, not a feature name (Mithun, 5 Nov 2026)
+      if (HOUSE_ACCOUNTS.test(v)) return "From LOKA";
       return v;
     }
     return "";
