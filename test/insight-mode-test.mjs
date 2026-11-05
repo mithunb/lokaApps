@@ -601,7 +601,7 @@ try {
       [card.indexOf('in-story') < card.indexOf('in-quotes'), card.indexOf(st.sentences[0].text) >= 0,
         (card.match(/data-in="place" data-i="\d+"/g) || []).length, /See \u201cPlace /.test(card),
         /Written by AI from what people wrote about these places\. The counts are in the questions\./.test(card),
-        /Pratham/.test(card)],
+        /Pratham/.test(card.replace(/<span class="in-by-name">[^<]*<\/span>/g, ''))],
       [true, true, shown.quotes.length, true, true, false]);
     check('a visitor reads it in the one Insights panel, with no tab row, and the owner has Settings beside it',
       [IM.panelTabs(f.mode, ['pattern_1', 'pattern_2']), IM.panelTabs(f.mode, ['pattern_1', 'pattern_2'], { key: 'settings', label: 'Settings' }).map((t) => t.key + ':' + t.label),

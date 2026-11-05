@@ -323,12 +323,12 @@ console.log('\n  the visitor card');
   const mode = { summaryOn: true, story: SUM.storyKept(whole) };
   const shown = IM.storyToShow(mode, layer, features);
   const card = IM.storyCardHTML(shown);
-  check('the paragraph, then the quotes it rests on, then the small print — and no tagger anywhere',
+  check('the paragraph, then the quotes it rests on, then the small print — a writer\u2019s name only after a quote, never their id',
     [shown.ownWords, shown.sentences.length, shown.quotes.length === whole.story.quotes.length,
       card.indexOf('in-story') < card.indexOf('in-quotes'),
       /Written by AI from what people wrote about these places\. The counts are in the questions\./.test(card),
-      /Pratham|u-1/.test(card)],
-    [false, 3, true, true, true, false]);
+      /u-1/.test(card), /Pratham/.test(card.replace(/<span class="in-by-name">[^<]*<\/span>/g, ''))],
+    [false, 3, true, true, true, false, false]);
   check('each quote is a button to its place, by the row the question lists use, and names the place in plain words (a name that is a person\u2019s, a credit or a category is no name: "Show this place")',
     [(card.match(/data-in="place" data-i="\d+"/g) || []).length, /See “Place /.test(card),
       IM.storyCardHTML({ sentences: [], quotes: [{ id: 'x', text: 'a line somebody wrote', name: '', at: 0 }], ownWords: true }).includes('Show this place on the map'),
@@ -437,6 +437,16 @@ check('the summary version and its fingerprint have not moved', [SUM.SUMMARY_VER
   check('two feelings under one wide label but about different things are no tension', IMX.tensionsOf([ga, gb]).length, 0);
   check('two feelings about the same trees are a tension', IMX.tensionsOf([ga, gc]).length, 1);
   check('the shared thing ignores glue words and plurals', IMX.thingWords('The trees and a tree near this place'), ['tree']);
+}
+
+{ // Mithun, 5 Nov 2026: each quote names who wrote it (their LOKA name, never an id/email/phone); quotes in plain type
+  const IMX = SUM.IM;
+  const f = (p) => ({ properties: p });
+  check('the writer is the name they post under', IMX.authorOf(f({ created_by: 'Pratham', created_by_user_id: '8e7ac8ed-54bb-4586-a446-326f5ce5d07e' })), 'Pratham');
+  check('never an id, an email or a phone number', [IMX.authorOf(f({ created_by: '8e7ac8ed-54bb-4586-a446-326f5ce5d07e' })), IMX.authorOf(f({ created_by: 'a@b.org' })), IMX.authorOf(f({ created_by: '9845012345' })), IMX.authorOf(f({}))], ['', '', '', '']);
+  const card = IMX.storyCardHTML({ sentences: [], ownWords: true, quotes: [{ id: 'x', text: 'Why is this here?', name: '', by: 'Pratham', at: 0 }, { id: 'y', text: 'Lovely shade.', name: '', by: '', at: 1 }] });
+  check('the card shows the name after the quote, and nothing when there is none', [/Why is this here\?<\/q> <span class="in-by-name">\u2014 Pratham<\/span>/.test(card), (card.match(/in-by-name">/g) || []).length], [true, 1]);
+  check('quotes are plain type: no italics, no display face', /\.in-fq q\{[^}]*(italic|font-display)/.test(IMX.CSS), false);
 }
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');

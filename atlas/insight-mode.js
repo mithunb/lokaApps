@@ -373,6 +373,24 @@
      column called "creator", which no question was read from but which still
      names a person. Used for quotes only; which questions show is unchanged. */
   var PEOPLE_COL = /^(created_by|creator|creators|author|authors|owner|owners|user|users|username|user_name|tagger|taggers|contributor|contributors|photographer|reporter|observer|recorder|submitter|member|members|person|people)$/;
+  /* Who wrote a quote: the name they post under on LOKA (Mithun, 5 Nov 2026,
+     reversing "never a tagger's name on a page" for quotes only). Only a
+     display name column — never an id, an email or a phone number — read
+     fresh from the place, never stored with the story. */
+  var AUTHOR_COLS = ["created_by", "creator", "author", "username", "user_name", "tagged_by", "posted_by"];
+  function authorOf(f) {
+    var p = (f && f.properties) || {};
+    for (var k = 0; k < AUTHOR_COLS.length; k++) {
+      var v = p[AUTHOR_COLS[k]];
+      if (v == null) continue;
+      v = String(v).replace(/\s+/g, " ").trim();
+      if (!v || v.length > 40) continue;
+      if (/@|https?:|www\.|\d{6,}/.test(v)) continue;                     // an email, a link, a phone
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(v) || /^[0-9a-f]{20,}$/i.test(v)) continue;   // an id
+      return v;
+    }
+    return "";
+  }
   function isPeopleColumn(name) {
     var s = String(name || "").trim().toLowerCase().replace(/[\s.-]+/g, "_");
     return PEOPLE_COL.test(s) || /_user_id$/.test(s) || /^user_/.test(s) || /_by$/.test(s) || /_name$/.test(s) && /user|member|author|owner|creator|tagger/.test(s);
@@ -1051,7 +1069,7 @@
          category, or anybody's name is no name to show, and "Show this place
          on the map" stands in its stead. Never placeNameOf here — that would
          put back the very names the rule keeps out. */
-      held.push({ id: q.id, text: q.text, name: placeLabelOf(layer, f), at: i });
+      held.push({ id: q.id, text: q.text, name: placeLabelOf(layer, f), by: authorOf(f), at: i });
     });
     var ownWords = function () {
       return held.length >= STORY_QUOTES_MIN ? { sentences: [], quotes: held, ownWords: true } : null;
@@ -1075,7 +1093,7 @@
   function storyCardHTML(shown) {
     if (!shown) return "";
     var quotes = shown.quotes.map(function (q) {
-      return '<li class="in-fq"><q>' + escText(q.text) + "</q> " +
+      return '<li class="in-fq"><q>' + escText(q.text) + "</q>" + (q.by ? ' <span class="in-by-name">\u2014 ' + escText(q.by) + "</span>" : "") + " " +
         '<button type="button" data-in="place" data-i="' + q.at + '">' +
         // a name that is long, or is only the quote's own first words, says nothing new:
         // the plain link instead (it ran off the panel on Divar Island, 5 Nov 2026)
@@ -1140,7 +1158,8 @@
     ".in-sum .in-story{margin:.35rem 0 0;font-size:.95rem;line-height:1.55;color:var(--color-text-primary,#24211D)}",
     ".in-quotes{margin:.8rem 0 0;padding:0;list-style:none}",
     ".in-fq{margin:.6rem 0 0;padding:0}",
-    ".in-fq q{font-family:var(--font-display,Georgia,serif);font-style:italic;font-size:.92rem;line-height:1.45;color:var(--color-text-secondary,#5A5751);quotes:\"\\201C\" \"\\201D\"}",
+    ".in-fq q{font:inherit;font-size:.95rem;line-height:1.5;color:var(--color-text,#2A2723);quotes:\"\\201C\" \"\\201D\"}",
+    ".in-fq .in-by-name{color:var(--color-text-secondary,#5A5751);font-size:var(--t-meta,.8rem)}",
     ".in-fq button{background:none;border:none;padding:0;margin:0;font:inherit;font-size:var(--t-meta,.8rem);font-weight:700;color:var(--color-leaf-deep,#1F5232);text-decoration:underline;text-underline-offset:2px;cursor:pointer;text-align:left;white-space:normal;overflow-wrap:anywhere}",
     ".in-fq button:focus-visible{outline:2px solid var(--color-leaf,#2A6B41);outline-offset:2px}",
     "@media (max-width:720px){.in-sum .in-story{font-size:.92rem}.in-fq q{font-size:.88rem}}",
@@ -1771,7 +1790,7 @@
     storyDigest: storyDigest,
     offeredById: offeredById,
     placeWords: placeWords,
-    placeLabelOf: placeLabelOf,
+    placeLabelOf: placeLabelOf, authorOf: authorOf,
     quoteFault: quoteFault,
     quoteSourceOf: quoteSourceOf,
     quoteSourcesOf: quoteSourcesOf,
