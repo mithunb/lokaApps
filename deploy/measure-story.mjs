@@ -290,7 +290,7 @@ function droppedText(name, r) {
   lines.push('Places: ' + d.places + '; questions read: ' + d.questions.map((q) => q.id).join(', '));
   lines.push('Places with words of their own: ' + d.quality.withWords + ' of ' + d.quality.places +
     '; places repeating another’s words: ' + d.quality.repeated + (d.quality.thin ? ' — thin, so the warning shows' : ''));
-  lines.push('Places offered to the model: ' + d.offered.length);
+  lines.push('Places offered to the model: ' + d.offered.length + '; quotes worth offering: ' + (d.candidates || []).length);
   lines.push('');
   if (!(r.dropped || []).length) lines.push('Nothing was dropped.');
   (r.dropped || []).forEach((x) => {
@@ -369,8 +369,13 @@ async function main(argv) {
     call = realCall;
   }
 
+  /* --model sets both calls; --proofread-model moves the second one alone.
+     Both are printed and written into the json, so a run is never in doubt. */
+  const proofWith = o.proofreadModel || model;
   console.log('Mocking ' + named + (layer.id ? ' / ' + layer.id : '') + ': ' + features.length + ' places, ' +
-    digestOnly.questions.length + ' questions, ' + digestOnly.offered.length + ' places with words of their own, on ' + model + '.');
+    digestOnly.questions.length + ' questions, ' + digestOnly.offered.length + ' places with words of their own, ' +
+    digestOnly.candidates.length + ' quotes worth offering.');
+  console.log('  Models: write on ' + model + '; proofread on ' + proofWith + (o.proofreadModel ? '' : ' (the same, no --proofread-model)') + '.');
 
   let r;
   try {
@@ -388,7 +393,7 @@ async function main(argv) {
   fs.mkdirSync(o.out, { recursive: true });
   const base = path.join(o.out, o.name);
   fs.writeFileSync(base + '-story.json', JSON.stringify({ atlas: o.name, layer: layer.id || '', model, at: new Date().toISOString(),
-    by: r.by, sig: r.sig, calls: r.calls, story: r.story, quality: r.quality, dropped: r.dropped, digest: r.digest }, null, 1));
+    proofreadModel: proofWith, by: r.by, sig: r.sig, calls: r.calls, story: r.story, quality: r.quality, dropped: r.dropped, digest: r.digest }, null, 1));
   fs.writeFileSync(base + '-dropped.txt', droppedText(o.name, r));
   fs.writeFileSync(base + '-mock.html', mockHTML({ title: o.name, result: r, byWho }));
 

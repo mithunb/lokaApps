@@ -337,6 +337,8 @@
   var SHARED_MAX = 2;
   // at most this many places are offered to the model, and this many characters of each one's words
   var STORY_PLACES = 80, STORY_WORDS = 400;
+  // how many pointed sentences are held up to the model as quotes to choose from
+  var STORY_CANDIDATES = 12;
   /* The story's shape (Mithun, 5 Nov 2026): one short paragraph of 3 to 5
      sentences, each naming the 2 to 6 places it draws from, and two short
      quotes from two different places. Under MIN_STORY sentences left after
@@ -494,6 +496,40 @@
     }
     return { text: "", sentences: [], why: firstFault || "nothing that can be quoted" };
   }
+  /* Which of a place's own sentences is worth showing (Mithun, 6 Nov 2026:
+     "show pointed quotes like questions or insightful descriptions"). The
+     code scores each candidate and the story may quote only the pointed ones:
+
+       + it asks something ("Does anyone know who the artist is?")      +3
+       + it speaks as somebody ("we", "I", "my", "our", "us")           +2
+       + it says how a place feels or what it is worth (FEELING)        +2
+       + it turns ("but", "however", "used to", "no longer", "instead") +2
+       + it is a sentence with a verb doing something, not a caption    +1
+       - it is a bare label: a short noun phrase with no verb at all    -2
+         ("table made with waste materials", "The Bier Library in Sarjapur.")
+
+     A sentence at POINTED_MIN or above may be quoted; below it, the words
+     still feed the story, they are just not held up as a quote. */
+  var FEELING = /\b(beautiful|lovely|pleasant|peaceful|quiet|serene|calm|cool|cooler|shade|shelter|relief|great|wonderful|charming|interesting|strange|odd|sad|sadly|unfortunately|struggle|struggles|neglected|run down|wish|wishes|hope|hopes|wonder|wonders|feels?|seems?|remember|remembers|miss|misses|love|loves|enjoy|enjoys|favourite|favorite|worth|rare treat|no seats|should|must|used to|no longer)\b/i;
+  var TURN = /\b(but|however|though|although|while|whereas|instead|yet|even so|no longer|used to|now)\b/i;
+  var FIRST_PERSON = /\b(i|we|us|our|ours|my|mine|me)\b/i;
+  var DOING = /\b(is|are|was|were|has|have|had|can|could|will|would|should|must|does|do|did|goes|go|sits|sit|stands|stand|grows|grow|reads|read|keeps|keep|feels|feel|seems|seem|provides?|serves?|offers?|gives?|makes?|takes?|covers?|brings?|attracts?|conducts?|starts?|opens?|remains?|functions?|traces?|anchors?|holds?|wish|wonder|struggle|struggles|cross|crosses|drink|drinks|cut|cuts|built|build|builds|wrote|writes|came|comes|stays?|runs?|leads?|shows?|says?|needs?|lives?|works?)\b/i;
+  var LABEL_WORDS = 8, POINTED_MIN = 2;
+  function quoteScore(text) {
+    var t = String(text || "").trim();
+    if (!t) return 0;
+    var n = 0;
+    if (/\?/.test(t)) n += 3;
+    if (FIRST_PERSON.test(t)) n += 2;
+    if (FEELING.test(t)) n += 2;
+    if (TURN.test(t)) n += 2;
+    var doing = DOING.test(t), words = t.split(/\s+/).length;
+    if (doing) n += 1;
+    if (!doing && words <= LABEL_WORDS) n -= 2;
+    return n;
+  }
+  function isPointed(text) { return quoteScore(text) >= POINTED_MIN; }
+
   /* The name this place would be shown by, or "" when it has none that can
      be shown: a title that is really a list, one that only repeats the
      place's categories (blr-finds-test titles its places by them), one its
@@ -597,9 +633,25 @@
       thin: total > 0 && (words / total < THIN_WORDS || repeats / total > THIN_SAME) };
     quality.warning = quality.thin ? "Many places have little written about them, so read this with care" : "";
 
+    /* The quotes worth offering: the pointed sentences of the offered places,
+       the sharpest first, at most one from each place so two quotes are never
+       two halves of the same note, and at most STORY_CANDIDATES in all. */
+    var candidates = [];
+    places.forEach(function (r) {
+      var best = null;
+      (r.sentences || []).forEach(function (one) {
+        var n = quoteScore(one);
+        if (n >= POINTED_MIN && (!best || n > best.score)) best = { id: r.id, text: one, score: n };
+      });
+      if (best) candidates.push(best);
+    });
+    candidates.sort(function (x, y) { return y.score - x.score; });
+    candidates = candidates.slice(0, STORY_CANDIDATES);
+
     return { places: total,
       questions: qs.map(function (st) { return { id: st.col, text: st.question, answers: st.answers.map(function (a) { return a.name; }) }; }),
       offered: places.map(function (r) { return { id: r.id, name: r.name, words: r.words, sentences: r.sentences, answers: r.answers }; }),
+      candidates: candidates,
       /* The reason a place could not be used names no one: quoteFault says
          which person it saw, and that name is nobody's business outside the
          check itself. */
@@ -1485,7 +1537,8 @@
     foldName: foldName,
     hasWhole: hasWhole,
     QUOTE_MIN: QUOTE_MIN, QUOTE_MAX: QUOTE_MAX,
-    STORY_PLACES: STORY_PLACES, STORY_WORDS: STORY_WORDS,
+    STORY_PLACES: STORY_PLACES, STORY_WORDS: STORY_WORDS, STORY_CANDIDATES: STORY_CANDIDATES,
+    quoteScore: quoteScore, isPointed: isPointed, POINTED_MIN: POINTED_MIN,
     MIN_STORY: MIN_STORY, MAX_STORY: MAX_STORY,
     STORY_IDS_MIN: STORY_IDS_MIN, STORY_IDS_MAX: STORY_IDS_MAX, STORY_QUOTES: STORY_QUOTES,
     CSS: CSS,

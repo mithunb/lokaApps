@@ -367,13 +367,22 @@ export function storyPromptFor(digest) {
   const d = digest || {};
   const places = (d.offered || []).map((o) => ({ id: o.id, name: o.name || undefined, words: o.words,
     answers: (o.answers || []).map((a) => a.question + ': ' + a.answer) }));
+  // the answer labels of two words or more: LOKA's filing words, which the story may not borrow
+  const labels = [];
+  (d.questions || []).forEach((q) => (q.answers || []).forEach((a) => { if (String(a).trim().split(/\s+/).length > 1) labels.push(a); }));
   return [
     'Below are places on one map, in their own words: what the person who tagged each one wrote about it, and the answers LOKA read from it.',
     '',
     'Write a short story of these places for somebody looking at this map for the first time, in the words a neighbour would use.',
     '',
-    '1. "sentences": 3 to 5 short sentences, one paragraph, saying what this map is about and what people noticed. Say what the places are like, what keeps coming back in what people wrote, what sort of place somebody put on this map. Let it read as one piece of writing, not a list.',
-    '2. "quotes": exactly two, each one place’s own words: give the place’s "id" and copy ONE whole sentence of its words, letter for letter, into "text". Two different places. Pick the ones that let a reader hear these places. Prefer places your sentences draw on. Never change a quote, not a word, not a comma.',
+    '1. "sentences": write ' + IM.MAX_STORY + ' short sentences, one paragraph, saying what this map is about and what people noticed. Each one is checked on its own and a weak one is thrown away, so write ' + IM.MAX_STORY + ' that can each stand alone and still read as one piece of writing.',
+    '2. "quotes": exactly two, from the "quotes to choose from" at the end: give the place\u2019s "id" and copy its sentence, letter for letter, into "text". Two different places. Those are the sentences worth showing \u2014 somebody asking something, noticing something, saying how a place feels. No other sentence may be quoted. Prefer places your sentences draw on. Never change a quote, not a word, not a comma.',
+    '',
+    'Name concrete things, in the places\u2019 own terms: a rain tree, a stone step, a bench made from a door, egg rice. The reader should be able to picture what is there.',
+    (labels.length ? 'NEVER use the questions\u2019 answer labels as your own wording \u2014 not ' + labels.slice(0, 8).map((x) => '\u201c' + x + '\u201d').join(', ') + ', nor any other label of two words or more. They are LOKA\u2019s filing words, not what anybody wrote, and a sentence carrying one is thrown away. Say what the place is, the way the person who wrote about it would say it.'
+      : 'Never write in filing words: say what the place is, the way the person who wrote about it would say it.'),
+    'Never say who did something \u2014 no people, observers, walkers, visitors, travellers, residents, locals \u2014 unless the place\u2019s own words say so. Write about the places, not about whoever looked at them.',
+    'No framing and no summing up: not \u201cthis map shows places where X and Y intertwine\u201d, not \u201ca blend of\u201d, not \u201ca tapestry of\u201d. One plain thing a sentence.',
     '',
     'NO NUMBERS AT ALL. Not a digit, not a number in words, and no word for how many: no "most", "many", "few", "some", "almost all", "a handful", "half", "often", "all", "every". The questions under this story already show every count, so a sentence that tries to say how many is thrown away. Say what is there, not how much of it there is.',
     '',
@@ -386,6 +395,9 @@ export function storyPromptFor(digest) {
     '- Plain text: no markdown, lists, emoji or quotation marks in your own sentences.',
     '',
     JSON.stringify({ questions: (d.questions || []).map((q) => ({ id: q.id, question: q.text, answers: q.answers })), places }),
+    '',
+    'Quotes to choose from (nothing else may be quoted):',
+    JSON.stringify((d.candidates || []).map((c) => ({ id: c.id, text: c.text }))),
   ].join('\n');
 }
 
@@ -413,6 +425,15 @@ export function storySchemaFor(Type) {
 // a place's own words are compared as a reader sees them: spacing and the kind of quote mark do not count
 function sameWords(a, b) { return IM.foldName(a) === IM.foldName(b); }
 
+// the answer labels of two words or more: the filing words a sentence may not borrow
+function labelsOf(digest) {
+  const out = [];
+  ((digest && digest.questions) || []).forEach((q) => (q.answers || []).forEach((a) => {
+    if (String(a || '').trim().split(/\s+/).length > 1) out.push(a);
+  }));
+  return out;
+}
+
 /* The model's answer, checked by the code: { sentences, quotes, dropped }.
    Every reason is written from the ids and the rules, never from a place's
    words, so the whole dropped list is safe to log. */
@@ -430,6 +451,13 @@ export function checkStory(digest, answer) {
     // the story carries no counts: the questions under it already show them (Mithun, 5 Nov 2026)
     if (/\d/.test(text)) return no('it writes a number, and the story says no numbers at all');
     if (IM.hasAmountWords(text)) return no('it says how many in words');
+    /* LOKA's filing words are not anybody's own (Mithun, 6 Nov 2026, on
+       "highlighting both established structures and natural features"): a
+       sentence that borrows an answer label of two words or more is dropped.
+       A one-word label is an ordinary word — Market, Trees — and is left alone. */
+    const folded = IM.foldName(text);
+    const borrowed = labelsOf(digest).find((l) => IM.hasWhole(folded, IM.foldName(l)));
+    if (borrowed) return no('it uses the question’s answer label “' + borrowed + '” as its own words');
     const given = Array.isArray(s && s.places) ? s.places.map((x) => (typeof x === 'string' ? x.trim() : '')).filter(Boolean) : [];
     const ids = given.filter((id, i) => given.indexOf(id) === i);
     const strange = ids.filter((id) => !by[id]);
@@ -454,6 +482,12 @@ export function checkStory(digest, answer) {
     if (seen.has(id)) return no('that place is already quoted');
     const mine = (place.sentences || []).find((one) => sameWords(one, q && q.text));
     if (!mine) return no('the quote is not this place’s own words, as they were offered');
+    /* Only the pointed sentences may be quoted (Mithun, 6 Nov 2026): a bare
+       label — "table made with waste materials" — says what a thing is and
+       nothing more, and the questions already say that. */
+    if (!(digest.candidates || []).some((c) => c.id === id && sameWords(c.text, mine))) {
+      return no('those words only say what the place is; the story quotes what somebody noticed');
+    }
     // the code's own copy, read again by the safety rules before it is kept
     const fault = IM.quoteFault(mine, []);
     if (fault) return no(fault);
@@ -485,7 +519,7 @@ export function storyProofreadPromptFor(digest, sentences, quotes) {
   const qs = (quotes || []).map((q, i) => ({ index: i, quote: q.text }));
   return [
     'Below are sentences from a short story about places on a map. Each comes with the places it was written from: what somebody wrote about each one, and the answers read from it. After them are the quotes shown beside the story.',
-    'For each sentence answer: "supported" — do these places’ own words and answers plainly bear this sentence out? Mark it false when the sentence goes beyond them, when it says how many (the story may not), when it names a person, or when it stops part way. There is no benefit of the doubt: if you are not sure the places bear it out, mark it FALSE.',
+    'For each sentence answer: "supported" — do these places’ own words and answers plainly bear this sentence out? Mark it false when the sentence goes beyond them, when it says how many (the story may not), when it names a person, or when it stops part way. Mark it false too when it says who did something — people, observers, walkers, visitors, residents — and the words beside it do not say so, or when it is filing words rather than what is there. There is no benefit of the doubt: if you are not sure the places bear it out, mark it FALSE.',
     'For each quote answer: "namesPerson" — true when it names a person, a username or a handle, or carries an email, a phone number, a link or a photo credit such as "Photo: A. Name". A place’s own name, or a god’s, is not a person. When unsure, mark it true.',
     'In "why" put the fault in a few plain words (empty when there is none).',
     'Sentences:',

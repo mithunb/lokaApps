@@ -54,7 +54,9 @@ const features = [];
 const corner = ['by the gate', 'behind the library', 'near the water tank', 'at the bus stand', 'under the flyover',
   'beside the school', 'off the main road', 'past the market', 'on the hill', 'where the lane bends'];
 for (let i = 1; i <= 10; i++) features.push(place('g' + i, 'Garden', 'Natural elements', 'A quiet garden ' + corner[i - 1] + ' where the old rain tree still stands.'));
-for (let i = 1; i <= 5; i++) features.push(place('s' + i, 'Shrine', 'Stone or masonry', 'A small stone shrine ' + corner[i - 1] + ', kept clean by the street.'));
+for (let i = 1; i <= 5; i++) features.push(place('s' + i, 'Shrine', 'Stone or masonry', 'A small stone shrine ' + corner[i - 1] + ', but somebody still keeps it clean.'));
+// a place whose words only say what it is: offered to the story, never held up as a quote
+features.push(place('lab1', 'Garden', 'Natural elements', 'table made with waste materials near the gate'));
 features.push(place('x1', 'Garden', '', 'Photo: J. H. Furneaux, Public domain, via Wikimedia Commons'));
 features.push(place('x2', 'Garden', '', 'Pratham brought the whole class here to count the ants.'));
 features.push(place('x3', 'Garden', '', 'beardcoded cleans this corner of the park every Sunday.', { creator: 'beardcoded' }));
@@ -69,7 +71,7 @@ console.log('\n  the places the model is given');
 check('the people question is not in it, and nor is the tagger', [/pattern_5/.test(all), /Pratham/i.test(all), /u-1/.test(all)], [false, false, false]);
 check('it offers the places that have words of their own, with their answers in plain words',
   [digest.places, digest.questions.map((q) => q.id), digest.offered.length, digest.offered[0].answers],
-  [20, ['pattern_1', 'pattern_2'], 15, [{ question: 'What kind of place is it?', answer: 'Garden' }, { question: 'What is it made of?', answer: 'Natural elements' }]]);
+  [21, ['pattern_1', 'pattern_2'], 16, [{ question: 'What kind of place is it?', answer: 'Garden' }, { question: 'What is it made of?', answer: 'Natural elements' }]]);
 check('the model is shown the places and nothing tallied: no counts anywhere',
   [Object.keys(digest.offered[0]), /"count"/.test(all), /"count"/.test(SUM.storyPromptFor(digest))],
   [['id', 'name', 'words', 'sentences', 'answers'], false, false]);
@@ -84,7 +86,7 @@ check('an email or a phone number keeps the words out',
   [why('x4'), why('x5')], ['it has a link, an email, a phone number or an @handle', 'it has a link, an email, a phone number or an @handle']);
 check('the sample is spread across the answers: the first two offered answer differently',
   [digest.offered.slice(0, 2).map((o) => o.answers[0].answer), digest.quality.withWords, digest.quality.offered],
-  [['Garden', 'Shrine'], 15, 15]);
+  [['Garden', 'Shrine'], 16, 16]);
 check('…and it is capped, taking from each answer in turn',
   (() => { const small = IM.storyDigest(layer, features, { cap: 4 }); return [small.offered.length, small.offered.map((o) => o.answers[0].answer)]; })(),
   [4, ['Garden', 'Shrine', 'Garden', 'Shrine']]);
@@ -204,6 +206,42 @@ check('…and a place whose own id is "__proto__" is still itself',
     place('b', 'Shrine', 'Stone or masonry', 'A small stone shrine at the bus stand, kept clean by the street.')]);
     return [d.offered.length, Object.keys(IM.offeredById(d))]; })(), [2, ['__proto__', 'b']]);
 
+console.log('\n  pointed quotes, not bare labels');
+check('the code scores what is worth quoting: a question, a turn, a feeling, somebody speaking',
+  ['Does anyone know who the artist is?', 'We have to drink water from this muddy pool.',
+    'This place used to be empty and full of trees.', 'A quiet garden by the gate where the old rain tree still stands.'].map((t) => IM.isPointed(t)),
+  [true, true, true, true]);
+check('…and a bare label is not worth quoting',
+  ['table made with waste materials near the gate', 'The Bier Library in Sarjapur.', 'Ganesha idol with granite mandapam'].map((t) => [IM.quoteScore(t), IM.isPointed(t)]),
+  [[-2, false], [-2, false], [-2, false]]);
+check('only the pointed sentences are offered as quotes, one a place, the sharpest first',
+  [digest.candidates.some((c) => c.id === 'lab1'), digest.candidates.length <= IM.STORY_CANDIDATES,
+    digest.candidates.every((c, i, a) => i === 0 || a[i - 1].score >= c.score),
+    new Set(digest.candidates.map((c) => c.id)).size === digest.candidates.length],
+  [false, true, true, true]);
+const bare = good();
+bare.quotes[1] = { id: 'lab1', text: 'table made with waste materials near the gate' };
+check('a quote from a place whose words only say what it is, is refused',
+  SUM.checkStory(digest, bare).dropped.map((d) => d.why),
+  ['those words only say what the place is; the story quotes what somebody noticed', 'the story needs 2 quotes, and fewer passed']);
+check('the prompt holds a list of the quotes to choose from, and the bare label is not in it',
+  (() => { const p = SUM.storyPromptFor(digest); const at = p.indexOf('Quotes to choose from');
+    return [at > 0, p.slice(at).includes('table made with waste materials'), p.slice(at).includes(q1.sentences[0])]; })(),
+  [true, false, true]);
+
+console.log('\n  LOKA\u2019s filing words are not anybody\u2019s own');
+const echoed = good();
+echoed.sentences[0] = { text: 'The map holds established structures and natural elements side by side.', places: [q1.id, q2.id] };
+check('a sentence that borrows a two-word answer label is dropped',
+  SUM.checkStory(digest, echoed).dropped.map((d) => d.why),
+  ['it uses the question\u2019s answer label \u201cNatural elements\u201d as its own words']);
+check('…while a one-word label is an ordinary word and passes',
+  SUM.checkStory(digest, (() => { const a = good(); a.sentences[0] = { text: 'A garden with an old rain tree sits where the lane bends.', places: [q1.id, q2.id] }; return a; })()).sentences.length, 3);
+check('the prompt names the labels it may not borrow, and asks for five sentences',
+  [SUM.storyPromptFor(digest).includes('answer label'), /write 5 short sentences/.test(SUM.storyPromptFor(digest)), IM.MAX_STORY, IM.MIN_STORY], [true, true, 5, 2]);
+check('the proofread asks about invented actors too',
+  /says who did something/.test(SUM.storyProofreadPromptFor(digest, ok0.sentences, ok0.quotes)), true);
+
 console.log('\n  the proofread');
 const verdicts = (f) => ({ sentences: ok0.sentences.map((s, i) => f(i)), quotes: ok0.quotes.map((q, i) => ({ index: i, namesPerson: false, why: '' })) });
 const read = SUM.applyStoryProofread(ok0, verdicts((i) => ({ index: i, supported: i !== 1, why: i === 1 ? 'the places do not say that' : '' })));
@@ -276,22 +314,22 @@ check('it keeps a fingerprint of its own, the places’ words and all',
 console.log('\n  the shipped summary is untouched');
 const tables = IM.summaryTables(layer, features);
 const sent = (text, cell) => Object.assign({ text }, cell);
-const stone = { text: 'Of the 20 places that say what kind of place they are, 5 say Shrine.', questions: ['pattern_1'], answers: ['Shrine'], count: 5, of: 20 };
+const stone = { text: 'Of the 21 places that say what kind of place they are, 5 say Shrine.', questions: ['pattern_1'], answers: ['Shrine'], count: 5, of: 21 };
 check('the cell check still hides a lone sentence (the two-sentence floor)',
-  IM.checkSentences([sent('Of the 20 places that say what kind of place they are, 15 say Garden.', { questions: ['pattern_1'], answers: ['Garden'], count: 15, of: 20 })], tables), []);
+  IM.checkSentences([sent('Of the 21 places that say what kind of place they are, 16 say Garden.', { questions: ['pattern_1'], answers: ['Garden'], count: 16, of: 21 })], tables), []);
 check('…and still keeps two', IM.checkSentences([
-  sent('Of the 20 places that say what kind of place they are, 15 say Garden.', { questions: ['pattern_1'], answers: ['Garden'], count: 15, of: 20 }),
-  sent('Of the 20 places that say what kind of place they are, 5 say Shrine.', { questions: ['pattern_1'], answers: ['Shrine'], count: 5, of: 20 })], tables).length, 2);
+  sent('Of the 21 places that say what kind of place they are, 16 say Garden.', { questions: ['pattern_1'], answers: ['Garden'], count: 16, of: 21 }),
+  sent('Of the 21 places that say what kind of place they are, 5 say Shrine.', { questions: ['pattern_1'], answers: ['Shrine'], count: 5, of: 21 })], tables).length, 2);
 check('it still insists the sentence names its answer', IM.checkSentencesWithReasons([
-  sent('Of the 20 places that say what kind of place they are, 5 are small roadside corners.', { questions: ['pattern_1'], answers: ['Shrine'], count: 5, of: 20 }), stone], tables).dropped.map((d) => d.why),
+  sent('Of the 21 places that say what kind of place they are, 5 are small roadside corners.', { questions: ['pattern_1'], answers: ['Shrine'], count: 5, of: 21 }), stone], tables).dropped.map((d) => d.why),
   ['it does not name Shrine']);
 check('"at all" followed by a number is still the sentence saying all',
-  IM.checkSentencesWithReasons([{ text: 'Garden is at all 15 of the 20 places that say what kind of place they are.', questions: ['pattern_1'], answers: ['Garden'], count: 15, of: 20 }, stone], tables).dropped.map((d) => d.why),
-  ['it says all but the count is a part (15 of 20)']);
+  IM.checkSentencesWithReasons([{ text: 'Garden is at all 16 of the 21 places that say what kind of place they are.', questions: ['pattern_1'], answers: ['Garden'], count: 16, of: 21 }, stone], tables).dropped.map((d) => d.why),
+  ['it says all but the count is a part (16 of 21)']);
 check('…while the idiom still passes', IM.checkSentencesWithReasons([
-  { text: '5 of the 20 places say nothing at all about what they are made of.', questions: ['pattern_2'], answers: [], count: 5, of: 20 }, stone], tables).kept.length, 2);
+  { text: '5 of the 21 places say nothing at all about what they are made of.', questions: ['pattern_2'], answers: [], count: 5, of: 21 }, stone], tables).kept.length, 2);
 check('a cell whose count and group are swapped cannot hide its 0',
-  IM.checkSentencesWithReasons([{ text: '20 of the places say nothing about what kind of place they are.', questions: ['pattern_1'], answers: [], count: 20, of: 0 }, stone], tables).dropped.map((d) => d.why),
+  IM.checkSentencesWithReasons([{ text: '21 of the places say nothing about what kind of place they are.', questions: ['pattern_1'], answers: [], count: 21, of: 0 }, stone], tables).dropped.map((d) => d.why),
   ['number 0 of its cell is not in it']);
 check('the summary version and its fingerprint have not moved', [SUM.SUMMARY_VERSION, SUM.summarySig(tables) === SUM.summarySig(tables)], [4, true]);
 
