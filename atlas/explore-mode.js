@@ -571,6 +571,23 @@
       var b = firstButton(f);
       return api.locPinEl(b ? b.color : NO_BUTTON, b ? b.icon || null : null);
     }
+    /* What the counted discs wear (atlas.js, COLOURED DISCS): the buttons'
+       colours in the row's order — a pin wears its first button's — and a
+       place under no button goes into the grey pool. No buttons: plain discs. */
+    function discColouring() {
+      if (!BUTTONS.length) return null;
+      return {
+        colours: BUTTONS.map(function (b) { return b.color; }),
+        names: BUTTONS.map(function (b) { return b.label; }),
+        pool: "Under no button",
+        // any marker layer's place: one under no button (another layer's, say) is in the pool
+        slotOf: function (L, f) {
+          var b = firstButton(f);
+          var i = b ? BUTTONS.indexOf(b) : -1;
+          return i < 0 ? 6 : i;
+        }
+      };
+    }
 
     // the card keeps the full photograph; the list has the small one
     function photoHTML(props) {
@@ -696,7 +713,8 @@
       var head = document.querySelector("#atlas-panel .sheet-who strong");
       if (head) head.textContent = sh.label;
       var who = document.getElementById("sheet-layer");
-      if (who) { who.innerHTML = ""; who.appendChild(el("span", "sheet-layer-name", esc(sh.small || sh.label))); }
+      // the kicker says the label; with nothing counted yet the line stays empty, never the label twice
+      if (who) { who.innerHTML = ""; if (sh.small) who.appendChild(el("span", "sheet-layer-name", esc(sh.small))); }
     }
     // a row is made once and kept, so its small photo is fetched once
     function rowOf(e) {
@@ -800,6 +818,7 @@
         placeChips();
       }
       if (state.ready) { apply(); renderList(); }
+      if (api.colourDiscs) api.colourDiscs(discColouring());
     }
 
     var me = {
@@ -808,8 +827,14 @@
       pinEl: pinEl,
       cardHTML: cardHTML,
       buildPanel: buildPanel,
+      /* A pressed button's places never fold into a counted disc (atlas.js,
+         answerNamesOn): each stands as its own pin at every zoom, as a
+         Standard atlas's picked answer does (Mithun, 7 Nov 2026). */
+      answerOn: function (L) { return !!state.chosen && !!L && !!L._ev && !!L._ev.explore; },
       ready: function () {
         state.ready = true;
+        // the discs wear the buttons' colours as the pins do
+        if (api.colourDiscs) api.colourDiscs(discColouring());
         apply();
         // the list follows the map: re-ordered once it stops moving
         if (api.onMoveEnd) api.onMoveEnd(function () {

@@ -212,6 +212,19 @@ check('the owner sees Insights · Settings, and the same with the summary switch
   [IM.panelTabs(sumMode, shownBoth, ownerTab).map((x) => x.key + ':' + x.label),
     IM.panelTabs({ summaryOn: false }, shownBoth, ownerTab).map((x) => x.key + ':' + x.label)],
   [['q:Insights', 'settings:Settings'], ['q:Insights', 'settings:Settings']]);
+/* The phone sheet's head is a kicker ("INSIGHTS") over a count line ("96
+   places"). Before the places were counted the count line fell back to the
+   label, so the head read "INSIGHTS / Insights" (and "VENUES / Venues" on a
+   festival guide) until the map had loaded — 7 Nov 2026. Now an empty count
+   is an empty line, which the page's own css hides (.sheet-layer:empty). */
+const evHeadSrc = fs.readFileSync(ROOT + '/atlas/event-mode.js', 'utf8');
+const exHeadSrc = fs.readFileSync(ROOT + '/atlas/explore-mode.js', 'utf8');
+check('before the places are counted the head says "Insights" once, over an empty line',
+  /if \(!state\.ready\) return \{ label: "Insights", small: "" \};/.test(imSrc) &&
+  /if \(sh\.small\) who\.appendChild\(el\("span", "sheet-layer-name", esc\(sh\.small\)\)\);/.test(imSrc), true);
+check('and no head — the page\'s, Event\'s, Explore\'s — writes the label where the count goes',
+  [viewerSrc, evHeadSrc, exHeadSrc, imSrc].map((s) => /esc\(sh\.small \|\| sh\.label\)/.test(s)), [false, false, false, false]);
+check('the page hides an empty count line', /\.sheet-layer:empty \{ display:none; \}/.test(page), true);
 check('Voices is drawn above the questions in that one panel, and when there is nothing to say it is not drawn at all (no empty heading)',
   [/var voice = voiceHTML\(\);/.test(imSrc),
     /var h = voice \+ '<div class="in-sect"><span class="in-stamp">The questions/.test(imSrc),
@@ -660,6 +673,310 @@ try {
 } catch (e) {
   fail++;
   console.log('  FAIL the route checks stopped: ' + (e && e.message) + '\n' + out.slice(-1500));
+}
+
+/* ---------------- the key, and the coloured discs (Mithun, 7 Nov 2026) ----------------
+   The "Coloured by" chip is the key: the question, then one row per answer
+   (dot, name, count), at most six, "+ n more" after them, "Doesn't say" when
+   any place is blank; open everywhere, folded to the one-line chip by a tap on
+   the question. The same six answers colour the counted discs (atlas.js,
+   COLOURED DISCS): the viewer lends the colouring through api.colourDiscs, and
+   a place's slot is its answer's index, blank or past the sixth into the pool.
+   A chosen answer's places never fold (answerOn). Run for real on the
+   Bengaluru fixture with a stand-in page. */
+console.log('\n  the key, and the coloured discs');
+{
+  const lent = [];
+  const vapi = { esc: (x) => String(x), el: () => ({}), data: () => ({ features: bf }), markers: () => [], locPinEl: () => ({}), shotsHTML: () => '', linksIn: () => [],
+    cellShown: (v) => String(v || ''), setLayerVisible() {}, onPhone: () => false, colourDiscs: (c) => lent.push(c) };
+  const v = IM.viewer(IM.defaultInsight(bl), vapi);
+  const X = v.layers([bl])[0];
+  v.ready();
+  const st = IM.shownStats(bl, bf, IM.defaultInsight(bl))[0];
+  check('the map opens coloured by the first question, and the discs are lent that colouring at once', [v.state.open, lent.length, lent[0] && lent[0].colours], ['pattern_1', 1, st.answers.map((a) => a.color)]);
+  const c = lent[0];
+  check('its names are the key\'s, and the pool is "Doesn’t say"', [c.names, c.pool], [st.answers.map((a) => a.name), 'Doesn’t say']);
+  const first = bf.find((f) => f.properties.pattern_1 === st.answers[0].name), blank = bf.find((f) => !f.properties.pattern_1);
+  check('a place\'s slot is its answer\'s place in the key; a blank place goes into the pool (6); so does another marker layer\'s place, which does not answer the question (its disc\'s shares stay right)',
+    [c.slotOf(X, first), c.slotOf(X, blank), c.slotOf({ id: 'other' }, { properties: { name: 'x' } })], [0, 6, 6]);
+  const html = v.chipsHTML();
+  const rows = (html.match(/<li>/g) || []).length;
+  check('the key: the question on top, one row per answer with its count, "Doesn’t say" with the blank count, open by default (aria-expanded)',
+    [/Coloured by: What is its current status\?/.test(html), rows, />Established<\/span><span class="in-key-n">92<\/span>/.test(html), /Doesn’t say<\/span><span class="in-key-n">1<\/span>/.test(html), /aria-expanded="true"/.test(html), /data-folded="0"/.test(html), /▾/.test(html)],
+    [true, 3, true, true, true, true, true]);
+  v.state.keyFolded = true;
+  const folded = v.chipsHTML();
+  check('folded: the same chip, one line, aria-expanded false and the chevron pointing on', [/aria-expanded="false"/.test(folded), /data-folded="1"/.test(folded), /▸/.test(folded), /in-key-l/.test(folded)], [true, true, true, true]);
+  v.state.keyFolded = false;
+  check('a tap on the question folds and opens it (data-in="key"), and the list is hidden by css when folded',
+    [/data-in="key"/.test(html), /if \(d === "key"\) \{ state\.keyFolded = !state\.keyFolded; renderChips\(\); return; \}/.test(imSrc), /\.in-key\[data-folded=\\"1\\"\] \.in-key-l\{display:none\}/.test(imSrc)], [true, true, true]);
+  // more than six answers: six rows, "+ n more", and the rest pooled on the discs
+  const many = bf.map((f, i) => ({ type: 'Feature', geometry: f.geometry, properties: { ...f.properties, pattern_4: i < 8 ? 'Kind ' + i : i < 40 ? 'Kind 0' : '' } }));
+  const lent2 = [];
+  const v2 = IM.viewer(IM.defaultInsight(bl), { ...vapi, data: () => ({ features: many }), colourDiscs: (c) => lent2.push(c) });
+  const X2 = v2.layers([bl])[0];
+  v2.ready();
+  v2.state.open = 'pattern_4'; v2.state.filter = null;
+  v2.state.keyFolded = false;
+  const st4 = IM.stats(bl, many, 'pattern_4');
+  const html2 = (v2.chipsHTML());
+  check('a question with eight answers: six rows, "+ 2 more", then "Doesn’t say"', [(html2.match(/<li>/g) || []).length, /\+ 2 more/.test(html2), /\+ 2 more<\/li><li><span class="in-sw in-sw-none">/.test(html2)], [7, true, true]);
+  v2.state.open = 'pattern_1'; v2.renderPanel(); v2.state.open = 'pattern_4';
+  const c2 = v2.discColouring();
+  const seventh = many.find((f) => f.properties.pattern_4 === st4.answers[6].name);
+  check('…and on the discs the seventh answer pools with the blanks, the pool saying so', [c2.colours.length, c2.slotOf(X2, seventh), c2.pool], [6, 6, 'Doesn’t say, or another answer']);
+  // the chosen answer never folds
+  check('no answer chosen: the layer folds as any other', v.answerOn(X), false);
+  v.state.filter = { col: 'pattern_1', ans: 'established' };
+  check('an answer chosen: its layer is exempt from the fold (atlas.js answerNamesOn asks EV.answerOn), another layer is not', [v.answerOn(X), v.answerOn({ id: 'other' })], [true, false]);
+  check('a chosen answer\'s chip comes after the key (above it on a phone: column-reverse), with its count',
+    [/Established · 92 places/.test(v.chipsHTML()), v.chipsHTML().indexOf('in-key') < v.chipsHTML().indexOf('Established · 92'), /flex-direction:column-reverse/.test(imSrc)], [true, true, true]);
+  v.state.filter = null;
+  check('the question changing lends the discs the new colouring; choosing an answer does not', (() => { const n = lent.length; v.state.open = 'pattern_4'; v.state.filter = { col: 'pattern_4', ans: 'x' }; v.renderPanel(); return lent.length - n; })(), 0);
+  check('the page asks the mode (EV.answerOn) and treats it as a Standard key\'s picked answer', /if \(EV && EV\.answerOn && EV\.answerOn\(L\)\) return true;/.test(viewerSrc), true);
+  check('on a phone the key stands above the credits strip, clear of the LOKA badge, and the cue is lifted over it by the key\'s measured height',
+    [/bottom:calc\(var\(--sheet-h,0px\) \+ 48px\);flex-direction:column-reverse/.test(imSrc), /\.in-chip\.in-key\{max-width:228px\}/.test(imSrc), /\.atlas-stage\.in-on \.atlas-cue\{bottom:calc\(var\(--sheet-h,0px\) \+ var\(--in-chips-h,0px\) \+ 60px\)\}/.test(imSrc), /--in-chips-h/.test(imSrc)], [true, true, true, true]);
+  check('and the map frames the places above the key, not behind it (viewPadding) — with the sheet folded away too',
+    [/chips\.offsetHeight \+ 48/.test(viewerSrc), /var foot = \(sheet > 0 \? sheet \+ 16 \+ evRows : 0\) \+ chipsH;\n\s+if \(foot > 0\) pad\.bottom = Math\.min\(Math\.max\(pad\.bottom, foot\)/.test(viewerSrc)], [true, true]);
+  /* The key counts what is on the map (review, 7 Nov 2026): a chosen answer,
+     a search or "around here" takes places off it and the key follows. */
+  v.state.open = 'pattern_1'; v.state.filter = { col: 'pattern_1', ans: 'established' };
+  const kf = v.chipsHTML();
+  check('an answer chosen: the key counts only the places shown — 92 Established, 0 Natural feature, 0 Doesn\u2019t say',
+    [/Established<\/span><span class="in-key-n">92<\/span>/.test(kf), /Natural feature<\/span><span class="in-key-n">0<\/span>/.test(kf), /Doesn\u2019t say<\/span><span class="in-key-n">0<\/span>/.test(kf)], [true, true, true]);
+  v.state.filter = null;
+  const marks = bf.map((f, i) => ({ f, hidden: i % 2 === 0, subOff: false }));
+  const v3 = IM.viewer(IM.defaultInsight(bl), { ...vapi, markers: () => marks, colourDiscs: () => {} });
+  v3.layers([bl]); v3.ready();
+  const est = bf.filter((f, i) => i % 2 && f.properties.pattern_1 === 'Established').length;
+  check('places a search hid are left out of the key\'s counts (the markers, when the map has them)', new RegExp('Established</span><span class="in-key-n">' + est + '</span>').test(v3.chipsHTML()), true);
+  check('the key\'s "Doesn\u2019t say" mark is the ring\'s pooled grey, and the two are one colour',
+    [/\.in-key-l \.in-sw-none\{background:" \+ POOL \+ "\}/.test(imSrc), (imSrc.match(/var POOL = "(#[0-9A-F]{6})"/) || [])[1], (viewerSrc.match(/var DISC_POOL = "(#[0-9A-F]{6})"/) || [])[1]], [true, '#B8B3A9', '#B8B3A9']);
+  check('the fold button says which question it folds', [/aria-label="Fold the key: coloured by What is its current status\?"/.test(v.chipsHTML()), (v.state.keyFolded = true, /aria-label="Show the key: coloured by What is its current status\?"/.test(v.chipsHTML()))], [true, true]);
+  v.state.keyFolded = false;
+  check('the chips are not a live region; one small status line says "Map coloured by: …" only when the question changes, and a redraw keeps the fold button\'s focus',
+    [/state\.chips\.setAttribute\("aria-live"/.test(imSrc), /state\.live\.setAttribute\("aria-live", "polite"\)/.test(imSrc), /if \(said !== state\.said\) \{ state\.said = said; state\.live\.textContent = said; \}/.test(imSrc), /if \(state\.chips\._html !== html \|\| state\.chips\._fitW !== width\) \{/.test(imSrc), /if \(focused\) \{ var again = state\.chips\.querySelector/.test(imSrc)], [false, true, true, true, true]);
+}
+
+/* ---------------- the panel as a legend, and Research mode (Mithun, 7 Nov 2026) ----------------
+   Default view, every visit: the questions section looks like the map's key —
+   a header line per question, and open, one row per answer (mark, name,
+   count) with a small ⓘ at its end holding what the long row used to say.
+   Pins wear one question's colours; no marks, no compare select, no split
+   bar. A "Research mode" switch at the very bottom, OFF on every load: on,
+   each question gets a tick box ("Show on the map", three at most), pins
+   turn the neutral grey ink and each ticked question wears its own shape
+   beside the pin in tick order (circle, square, triangle; re-ordered when
+   one is unticked); discs ring by the 1st ticked only; the key has one block
+   per ticked question; the compare select and the split bar live here alone.
+   Off again: one question (the first ticked), coloured pins, today's view. */
+console.log('\n  the panel as a legend, and Research mode');
+{
+  const pins = [];
+  const rapi = { esc: (x) => String(x), el: () => ({ classList: { add() {} } }), data: () => ({ features: bf }), markers: () => [], shotsHTML: () => '', linksIn: () => [],
+    cellShown: (v) => String(v || ''), setLayerVisible() {}, onPhone: () => false, colourDiscs() {},
+    locPinEl: (c) => { pins.push({ color: c, rows: null }); return { classList: { add() {} } }; },
+    markRowsEl: (c, rows) => { pins.push({ color: c, rows }); return { classList: { add() {} }, _rowsW: rows.length ? 15 : 0 }; } };
+  const v = IM.viewer(IM.defaultInsight(bl), rapi);
+  const X = v.layers([bl])[0];
+  v.ready();
+  const st = IM.shownStats(bl, bf, IM.defaultInsight(bl))[0];
+  const keyRows = (html) => (html.match(/<li>(?:(?!<\/li>).)*<\/li>/g) || []).map((li) => li.replace(/<[^>]+>/g, '|').replace(/\|+/g, '|').replace(/^\||\|$/g, ''));
+  const panelRows = (html) => (html.match(/<button type="button" class="in-ans-row[^"]*"[^>]*>(?:(?!<\/button>).)*<\/button>/g) || []).map((b) => b.replace(/<[^>]+>/g, '|').replace(/\|+/g, '|').replace(/^\||\|$/g, ''));
+  let html = v.panelHTML();
+  check('the switch is off on load, a real switch at the very bottom, with its one line', [v.state.research, /class="in-rsw" role="switch" aria-checked="false" data-in="research"/.test(html), html.indexOf('in-rmode') > html.lastIndexOf('in-q '), /Put two or three questions on the map at once and compare them\./.test(html)], [false, true, true, true]);
+  check('the hint under THE QUESTIONS stays plain', /Open a question to colour the map by its answers\. Tap an answer to show only those places\./.test(html), true);
+  pins.length = 0; bf.slice(0, 12).forEach((f) => v.pinEl(X, f));
+  check('default: pins wear the open question\'s colours, no marks', [pins.length, pins.every((p) => p.rows === null), pins.some((p) => st.answers.some((a) => a.color === p.color))], [12, true, true]);
+  check('the panel\'s answer rows are the key\'s rows: the same names and counts in the same order, a dot before each, "Doesn’t say" hollow',
+    [panelRows(html), keyRows(v.chipsHTML()).map((r) => r.replace(/\|?\d+$/, '')).every((r, i) => panelRows(html)[i].indexOf(r) === 0), /in-sw in-sw-hollow"><\/span>Doesn’t say/.test(html), (html.match(/class="in-nm"><span class="in-sw" style="background:#/g) || []).length],
+    [st.answers.map((a) => a.name + '|' + a.count).concat(['Doesn’t say|' + st.none]), true, true, st.answers.length]);
+  check('no header line, no bar, no description, no "Answered for" on the rows; no compare select; no split bar',
+    [/in-bar|in-def|in-mini|Answered for/.test(html), /in-cmprow|data-in="cmp"/.test(html), /in-split/.test(html)], [false, false, false]);
+  check('one ⓘ per answer: a button "About <answer>", aria-expanded, after its row', [(html.match(/data-in="info"/g) || []).length, /aria-label="About Established" aria-expanded="false">i<\/button>/.test(html), /aria-label="About Doesn’t say"/.test(html)], [st.answers.length + 1, true, true]);
+  v.state.info = 'pattern_1|established';
+  html = v.panelHTML();
+  const a0 = st.answers.find((a) => a.key === 'established');
+  check('open, the ⓘ says the answer\'s description, "N of M places (x%)" and the words it was read from; the button says it is expanded', [/data-in="info"[^>]*aria-expanded="true"/.test(html), (html.match(/data-in="info"[^>]*aria-expanded="true"/g) || []).length, new RegExp('<div class="in-info" id="in-info-0-' + st.answers.indexOf(a0) + '">' + (a0.definition ? '<p>' : '')).test(html), new RegExp(a0.count + ' of ' + st.total + ' places \\(' + Math.round(100 * a0.count / st.total) + '%\\)\\.').test(html), /Read from: <q>/.test(html)], [true, 1, true, true, true]);
+  check('a second tap closes it; Escape closes it; one open at a time (a single state key)', [/if \(d === "info"\) \{\n\s+var ia = t\.getAttribute\("data-a"\) \|\| "", ik = col \+ "\|" \+ ia;\n\s+state\.info = state\.info === ik \? null : ik;/.test(imSrc), /if \(e\.key !== "Escape" \|\| !state\.info\) return;[\s\S]{0,200}?state\.info = null;\n\s+renderPanel\(\);/.test(imSrc)], [true, true]);
+  v.state.info = null;
+  check('the ⓘ for "Doesn’t say" counts the blanks', (v.state.info = 'pattern_1|', new RegExp(st.none + ' of ' + st.total + ' places \\(\\d+%\\) say nothing about this\\.').test(v.panelHTML())), true);
+  v.state.info = null;
+  check('a split filter picked earlier never shows a split bar outside Research mode', (v.state.filter = { col: 'pattern_1', ans: 'established', col2: 'pattern_2', ans2: 'x' }, /in-split/.test(v.panelHTML())), false);
+  v.state.filter = null;
+  check('desktop: the map key stands down while the panel is open and comes back when it folds; a phone keeps it', [/function hideKeyOnDesktop\(\) \{\n\s+if \(typeof document === "undefined" \|\| api\.onPhone\(\)\) return false;\n\s+var panel = document\.getElementById\("atlas-panel"\);\n\s+return !!panel && !panel\.classList\.contains\("collapsed"\);/.test(imSrc), /var h = api\.onPhone\(\) \? tinyChipHTML\(st\) : hideKeyOnDesktop\(\) \? "" : keyHTML\(st\);/.test(imSrc), /new MutationObserver\(function \(\) \{ renderChips\(\); \}\)\.observe\(panel, \{ attributes: true, attributeFilter: \["class"\] \}\);/.test(imSrc)], [true, true, true]);
+  // Research mode on
+  v.setResearch(true);
+  pins.length = 0; bf.slice(0, 40).concat([bf.find((f) => !f.properties.pattern_1)]).forEach((f) => v.pinEl(X, f));
+  html = v.panelHTML();
+  const cols = IM.shownStats(bl, bf, IM.defaultInsight(bl)).map((s) => s.col);
+  check('on: the question that was open is ticked, the switch says so, every question has a tick box "Show … on the map"', [v.state.ticks, /aria-checked="true"/.test(html), (html.match(/data-in="tick"/g) || []).length, /data-in="tick" data-col="pattern_1" aria-label="Show What is its current status\? on the map" checked>/.test(html)], [['pattern_1'], true, cols.length, true]);
+  check('pins turn neutral, each with one circle in its answer\'s colour (none when the place does not answer)', [pins.every((p) => p.color === '#4A4A4A'), pins.some((p) => p.rows && p.rows.length === 1 && p.rows[0].shape === 'circle' && p.rows[0].color === undefined && p.rows[0].colors.length === 1), pins.some((p) => p.rows && !p.rows.length)], [true, true, true]);
+  check('compare select, and the split bar under a picked answer, appear here', [/data-in="cmp"/.test(html), (v.state.filter = { col: 'pattern_1', ans: 'established' }, /in-split|in-split-one/.test(v.panelHTML()))], [true, true]);
+  v.state.filter = null;
+  // ticking: never opens; the cap; shapes by tick order
+  v.state.ticks = ['pattern_1', 'pattern_2']; v.state.open = 'pattern_3';
+  pins.length = 0; v.renderPanel();
+  html = v.panelHTML();
+  check('ticking is separate from opening: pattern_3 is open and unticked, its rows wear a plain dot; ticked questions\' rows wear their shape', [/data-col="pattern_3" aria-label="[^"]*"(?: checked)?>/.test(html) && !/data-col="pattern_3" aria-label="[^"]*" checked>/.test(html), /data-col="pattern_3" aria-expanded="true"/.test(html), /in-ans-row[^>]*data-col="pattern_3"[^>]*><span class="in-nm"><span class="in-sw" style="background:/.test(html)], [true, true, true]);
+  v.state.open = 'pattern_2'; html = v.panelHTML();
+  check('…the 2nd ticked question\'s rows are squares', /in-ans-row[^>]*data-col="pattern_2"[^>]*><span class="in-nm"><svg class="in-mk"[^>]*><path d="M2\.6 2\.6h8\.8v8\.8h-8\.8z"/.test(html), true);
+  v.state.ticks = ['pattern_1', 'pattern_2', 'pattern_3']; html = v.panelHTML();
+  check('three ticked: the others\' boxes are disabled, "Three at most"', [(html.match(/ disabled>/g) || []).length, (html.match(/title="Three at most"/g) || []).length, /data-col="pattern_4" aria-label="[^"]*" disabled>/.test(html)], [cols.length - 3, cols.length - 3, true]);
+  pins.length = 0; v.renderPanel(); v.state.open = 'pattern_1'; v.renderPanel();
+  const kh = v.chipsHTML();
+  check('the key: one block per ticked question, headed by its shape — "Circles" alone while more than one is ticked (the discs wear no ring then)', [/Circles: What is its current status\?/.test(kh), /Circles and discs/.test(kh), /Squares: /.test(kh), /Triangles: /.test(kh), (kh.match(/in-chip in-key/g) || []).length], [true, false, true, true, 3]);
+  check('more than one question ticked: the discs wear no ring and no colour, the count alone (round 2)', v.discColouring(), null);
+  v.state.ticks = ['pattern_1']; v.renderPanel();
+  check('one question ticked: the discs ring by it, and its block says "Circles and discs"', [v.discColouring().colours, /Circles and discs: What is its current status\?/.test(v.chipsHTML())], [st.answers.slice(0, 6).map((a) => a.color), true]);
+  v.state.ticks = ['pattern_1', 'pattern_2', 'pattern_3']; v.renderPanel();
+  const q3 = IM.shownStats(bl, bf, IM.defaultInsight(bl)).find((s) => s.col === 'pattern_3');
+  const three = bf.find((f) => f.properties.pattern_1 && f.properties.pattern_2 && f.properties.pattern_3);
+  pins.length = 0; v.pinEl(X, three);
+  check('a place answering all three wears circle, square, triangle in that order', pins[0].rows.map((r) => r.shape), ['circle', 'square', 'triangle']);
+  // unticking re-orders
+  v.state.ticks = ['pattern_1', 'pattern_2', 'pattern_3'];
+  v.state.ticks.splice(0, 1);   // what a tap on pattern_1's box does (onClick "tick")
+  pins.length = 0; v.pinEl(X, three);
+  check('unticking the 1st: the 2nd becomes circles and the 3rd squares; two still ticked, so no ring; down to one, the discs ring by the one left', [pins[0].rows.map((r) => r.shape), v.discColouring(), (v.state.ticks = ['pattern_2'], v.discColouring().colours)], [['circle', 'square'], null, IM.shownStats(bl, bf, IM.defaultInsight(bl)).find((s) => s.col === 'pattern_2').answers.slice(0, 6).map((a) => a.color)]);
+  check('the tick handler: untick removes, tick appends up to three, never opens', /if \(d === "tick"\) \{\n\s+var at = state\.ticks\.indexOf\(col\);\n\s+if \(at >= 0\) state\.ticks\.splice\(at, 1\);[^\n]*\n\s+else if \(state\.ticks\.length < 3\) state\.ticks\.push\(col\);\n\s+else return;/.test(imSrc) && !/if \(d === "tick"\)[\s\S]{0,400}state\.open = /.test(imSrc), true);
+  check('a phone in Research mode (a small tablet can reach it): the tiny chip of the first ticked question, never the big blocks', (() => { const p = IM.viewer(IM.defaultInsight(bl), { ...rapi, onPhone: () => true }); p.layers([bl]); p.ready(); p.setResearch(true); p.state.ticks = ['pattern_2', 'pattern_1']; const h = p.chipsHTML(); return [/in-keys|in-chip in-key/.test(h), /class="in-chip in-tiny" data-in="panel" data-col="pattern_2"/.test(h)]; })(), [false, true]);
+  check('the marks\' width reaches the fold, the merge and the fan through the entry (repaint copies _rowsW off the holder)', /e\._rowsW = \(pin && pin\._rowsW\) \|\| 0;/.test(imSrc) && /e\.node\.querySelector\("\.atlas-rowed"\) \|\| e\.node\.querySelector\("\.atlas-pin"\)/.test(imSrc), true);
+  // off again
+  v.state.ticks = ['pattern_2', 'pattern_3']; v.state.open = 'pattern_1'; v.state.filter = { col: 'pattern_2', ans: 'x', col2: 'pattern_3', ans2: 'y' };
+  pins.length = 0;
+  v.setResearch(false);
+  html = v.panelHTML();
+  check('off: one question — the first ticked — coloured pins, no ticks, no marks, no compare, a slice filter let go', [v.state.open, v.state.ticks, pins.every((p) => p.rows === null), /data-in="tick"|data-in="cmp"|in-split/.test(html), v.state.filter, /aria-checked="false"/.test(html)], ['pattern_2', [], true, false, null, true]);
+  check('the owner\'s panel is the same panel (one panelHTML, no owner branch)', (imSrc.match(/function panelHTML\(\)/g) || []).length === 1 && !/owner/.test(imSrc.slice(imSrc.indexOf('function questionHTML'), imSrc.indexOf('function compareHTML'))), true);
+}
+
+/* ---------------- review fixes (Opus, 7 Nov 2026) ----------------
+   A re-render must not drop the keyboard: the ⓘ button (click or Escape) and
+   the tick box are found again by walking attribute values, never by a
+   selector built from an answer key. Popover ids are numbers (unique per
+   answer, any column name), aria-controls only while the popover exists.
+   Turning Research mode on drops a filter on a question that is not the
+   ticked one, as turning it off does. */
+console.log('\n  review fixes: focus, ids, filters');
+{
+  const rapi = { esc: (x) => String(x), el: () => ({ classList: { add() {} } }), data: () => ({ features: bf }), markers: () => [], shotsHTML: () => '', linksIn: () => [],
+    cellShown: (v) => String(v || ''), setLayerVisible() {}, onPhone: () => false, colourDiscs() {}, locPinEl: () => ({ classList: { add() {} } }), markRowsEl: () => ({ classList: { add() {} } }) };
+  const v = IM.viewer(IM.defaultInsight(bl), rapi);
+  v.layers([bl]); v.ready();
+  const st = IM.shownStats(bl, bf, IM.defaultInsight(bl))[0];
+  let html = v.panelHTML();
+  check('closed: the ⓘ names no popover (no aria-controls to nothing)', [/aria-controls/.test(html), /in-info-btn/.test(html)], [false, true]);
+  v.state.info = 'pattern_1|established'; html = v.panelHTML();
+  const a0 = st.answers.findIndex((a) => a.key === 'established');
+  check('open: id and aria-controls are the question\'s and the answer\'s places in their lists — numbers, so any column name or key works, and unique per answer',
+    [new RegExp('aria-controls="in-info-0-' + a0 + '"').test(html), new RegExp('<div class="in-info" id="in-info-0-' + a0 + '">').test(html), (html.match(/aria-controls=/g) || []).length], [true, true, 1]);
+  v.state.info = 'pattern_1|'; check('"Doesn’t say" gets its own id', /id="in-info-0-none"/.test(v.panelHTML()), true);
+  v.state.info = null;
+  check('refocus walks the buttons by attribute value, never a selector from an answer key; tick, ⓘ click and Escape all use it',
+    [/function refocus\(kind, col, a\) \{[\s\S]*?querySelectorAll\('\[data-in="' \+ kind \+ '"\]'\)[\s\S]*?getAttribute\("data-col"\) !== col[\s\S]*?getAttribute\("data-a"\) \|\| ""\) !== a/.test(imSrc),
+     /changed\(true\);\n\s+refocus\("tick", col\);/.test(imSrc), /renderPanel\(\);\n\s+refocus\("info", col, ia\);/.test(imSrc),
+     /if \(e\.key !== "Escape" \|\| !state\.info\) return;[\s\S]*?state\.info = null;\n\s+renderPanel\(\);\n\s+refocus\("info", icol, ia\);/.test(imSrc), /querySelector\('\[data-in="info"\]\[data-col="' \+ col/.test(imSrc)], [true, true, true, true, false]);
+  // the walk, run for real on stand-in nodes
+  const focused = [];
+  const node = (kind, col, a) => ({ getAttribute: (k) => ({ 'data-col': col, 'data-a': a })[k], focus() { focused.push(kind + ':' + col + ':' + a); } });
+  const box = { querySelectorAll: (sel) => sel.indexOf('"info"') >= 0 ? [node('info', 'q"1', 'a\\b'), node('info', 'q"1', 'it\'s')] : [node('tick', 'q"1', null), node('tick', 'q2', null)] };
+  const refocus = new Function('state', imSrc.match(/\n    function refocus\(kind, col, a\) \{[\s\S]*?\n    \}\n/)[0] + '\nreturn refocus;')({ box });
+  refocus('info', 'q"1', 'it\'s'); refocus('tick', 'q2'); refocus('info', 'q"1', 'none');
+  check('…a quote, a backslash or an apostrophe in a key or column is no trouble; nothing matching, nothing focused', focused, ['info:q"1:it\'s', 'tick:q2:null']);
+  // turning on
+  v.state.open = 'pattern_1'; v.state.filter = { col: 'pattern_2', ans: 'x' };
+  v.setResearch(true);
+  check('on: a filter on a question that is not the ticked one is let go', [v.state.ticks, v.state.filter], [['pattern_1'], null]);
+  v.setResearch(false);
+  v.state.filter = { col: 'pattern_1', ans: 'established' };
+  v.setResearch(true);
+  check('…but the ticked question\'s own filter stays', v.state.filter, { col: 'pattern_1', ans: 'established' });
+  v.setResearch(false);
+  check('the research key blocks are built once per render', [(imSrc.match(/: researchKeyHTML\(\);/g) || []).length, (imSrc.match(/researchKeyHTML\(\) \?/g) || []).length], [1, 0]);
+}
+
+/* ---------------- round 2 (Mithun, 7 Nov 2026, after seeing the build) ----------------
+   R1 the panel minimal like the key; R2 no ring with more than one question
+   ticked (checked above); R3 research pins a pure neutral grey (above);
+   R4 whole place names, the map's collision deciding; R5 a phone gets one
+   tiny chip, not the big key, and a tap opens the panel at that question;
+   R6 Research mode not offered below 600px; and the three tidy items. */
+console.log('\n  round 2');
+{
+  check('R1: no box, no card, no serif heading — a plain small bold question line, a hairline between questions, the key\'s own rows',
+    [/"\.in-q\{margin:0;padding:\.1rem 0\}"/.test(imSrc), /"\.in-q\+\.in-q\{border-top:1px solid/.test(imSrc), /\.in-q\{border:1px solid|\.in-q\.open\{border-color|box-shadow:0 2px 10px/.test(imSrc), /"\.in-qt\{font-weight:600;font-size:var\(--t-ui,\.9rem\)/.test(imSrc), /font-family:var\(--font-display,Georgia,serif\);font-weight:700;font-size:1\.02rem/.test(imSrc), /"\.in-ans-row \.in-nm\{flex:1 1 auto;min-width:0;font-weight:400;display:flex/.test(imSrc)],
+    [true, true, false, true, false, true]);
+  check('R4: Insight asks for whole names (fullNames) and the page writes them uncut; Standard and Explore keep maxChars', [/^\s+fullNames: true,$/m.test(imSrc), /var max = EV && EV\.fullNames \? FULL_NAME_MAX : \(t\.maxChars \|\| 32\);/.test(viewerSrc) && /var FULL_NAME_MAX = 90;/.test(viewerSrc), /fullNames/.test(fs.readFileSync(ROOT + '/atlas/explore-mode.js', 'utf8'))], [true, true, false]);
+  const rapi = { esc: (x) => String(x), el: () => ({ classList: { add() {} } }), data: () => ({ features: bf }), markers: () => [], shotsHTML: () => '', linksIn: () => [],
+    cellShown: (v) => String(v || ''), setLayerVisible() {}, onPhone: () => true, colourDiscs() {}, locPinEl: () => ({ classList: { add() {} } }), markRowsEl: () => ({ classList: { add() {} } }) };
+  const p = IM.viewer(IM.defaultInsight(bl), rapi);
+  p.layers([bl]); p.ready();
+  const st = IM.shownStats(bl, bf, IM.defaultInsight(bl))[0];
+  const h = p.chipsHTML();
+  check('R5: a phone gets one tiny chip — the open question, then every answer as a dot with its name, "Doesn’t say" last — and no big key',
+    [/^<button type="button" class="in-chip in-tiny" data-in="panel" data-col="pattern_1" aria-label="Open the questions at: What is its current status\?">/.test(h), (h.match(/class="in-tiny-i"/g) || []).length, /in-sw in-sw-none"><\/span>Doesn’t say<\/span><\/span><\/button>$/.test(h), /in-chip in-key|in-key-l/.test(h)],
+    [true, st.answers.length + 1, true, false]);
+  check('…its answers keep to two lines, the rest giving way to "+ n more" once measured; a tap opens the panel (the sheet full) at that question',
+    [/function fitTinyChip\(box\) \{[\s\S]*?while \(box\.scrollHeight > maxH && items\.length > 1\) \{[\s\S]*?more\.textContent = "\+ " \+ hidden \+ " more";/.test(imSrc), /state\.chips\._fitW = width;\n\s+fitTinyChip\(state\.chips\.querySelector/.test(imSrc), /if \(d === "panel"\) \{[\s\S]*?if \(api\.setSheet\) api\.setSheet\("full"\);[\s\S]*?scrollIntoView/.test(imSrc)], [true, true, true]);
+  check('…a phone\'s chosen answer chip still follows the tiny chip', (p.state.filter = { col: 'pattern_1', ans: 'established' }, /in-tiny[\s\S]*Established · 92 places/.test(p.chipsHTML())), true);
+  p.state.filter = null;
+  check('…the panel lists every question whole (names wrap, nothing cut) with the first one expanded', [/white-space:nowrap/.test((imSrc.match(/"\.in-ans-row \.in-nm\{[^"]*"/) || [''])[0]), p.state.open, (p.panelHTML().match(/data-in="open"/g) || []).length, (p.panelHTML().match(/aria-expanded="true"/g) || []).length], [false, 'pattern_1', IM.shownStats(bl, bf, IM.defaultInsight(bl)).length, 1]);
+  check('R6: Research mode is not offered on a phone — the switch is hidden below 600px (desktop and tablet keep it)', /"@media \(max-width:600px\)\{\.in-rmode\{display:none\}\}"/.test(imSrc), true);
+  check('tidy: an unknown column never borrows question 0\'s popover id', /var qi = Q\(\)\.cols\.indexOf\(st\.col\);\n\s+return "in-info-" \+ \(qi >= 0 \? qi : "x" \+ String\(st\.col\)\.replace/.test(imSrc), true);
+  const q = IM.viewer(IM.defaultInsight(bl), { ...rapi, onPhone: () => false });
+  q.layers([bl]); q.ready();
+  q.state.open = 'no_such_column'; q.state.filter = { col: 'no_such_column', ans: 'x' };
+  q.setResearch(true);
+  check('tidy: Research ON with an unknown open question ticks nothing and keeps no filter', [q.state.ticks, q.state.filter], [[], null]);
+  q.setResearch(false);
+  check('tidy: the Standard ring passes its family index to keyKindColor', /keyKindColor\(L, opt, found\.fi, i\)/.test(viewerSrc) && /found = \{ L: L, opt: act\[0\], fi: 0 \};/.test(viewerSrc), true);
+}
+
+/* ---------------- round-2 review (Opus, 7 Nov 2026) ----------------
+   Research mode cannot be left on where its switch is hidden: a screen that
+   shrinks below 600px with it on drops it (renderPanel, and the resize
+   handler). The tiny chip is fitted again whenever the chips' width changes,
+   from the untrimmed html. Whole names stop at 90 characters, cut at a word. */
+console.log('\n  round-2 review: no stuck Research mode, the chip refits, names cap');
+{
+  const rapi = { esc: (x) => String(x), el: () => ({ classList: { add() {} } }), data: () => ({ features: bf }), markers: () => [], shotsHTML: () => '', linksIn: () => [],
+    cellShown: (v) => String(v || ''), setLayerVisible() {}, onPhone: () => false, colourDiscs() {}, locPinEl: () => ({ classList: { add() {} } }), markRowsEl: () => ({ classList: { add() {} } }) };
+  const v = IM.viewer(IM.defaultInsight(bl), rapi);
+  v.layers([bl]); v.ready();
+  let wide = true;
+  globalThis.matchMedia = (q) => ({ matches: q === '(max-width:600px)' && !wide });
+  v.setResearch(true); v.state.ticks = ['pattern_1', 'pattern_2']; v.renderPanel();
+  check('wide: Research mode on with two ticked', [v.state.research, v.state.ticks.length], [true, 2]);
+  wide = false;
+  const dropped = v.dropResearchIfSmall();   // what the resize handler asks
+  check('the screen shrinks below 600px (a phone turned upright): Research mode goes, one question stays — the first ticked — nothing ticked', [dropped, v.state.research, v.state.ticks, v.state.open, /aria-checked="false"/.test(v.panelHTML())], [true, false, [], 'pattern_1', true]);
+  check('…and renderPanel drops it too, on its own, so no path leaves it on', (v.state.research = true, v.state.ticks = ['pattern_2'], v.renderPanel(), [v.state.research, v.state.open]), [false, 'pattern_2']);
+  wide = true;
+  check('wide again: it can be turned on as before', (v.setResearch(true), [v.state.research, v.dropResearchIfSmall()]), [true, false]);
+  v.setResearch(false);
+  delete globalThis.matchMedia;
+  check('the resize handler asks before drawing', /window\.addEventListener\("resize", function \(\) \{\n\s+var cur = viewer\._current;\n\s+if \(!cur\) return;\n\s+if \(cur\.dropResearchIfSmall\(\)\) return;/.test(imSrc) && /function renderPanel\(\) \{\n\s+if \(dropResearchIfSmall\(\)\) return;/.test(imSrc), true);
+  // the tiny chip's fit, run for real on a stand-in box whose height follows its items and the "width"
+  const fit = new Function('el', 'getComputedStyle', imSrc.match(/\n    function fitTinyChip\(box\) \{[\s\S]*?\n    \}\n/)[0] + '\nreturn fitTinyChip;')(
+    (tag, cls) => ({ tag, cls, textContent: '' }), () => ({ lineHeight: '16px' }));
+  const boxAt = (perLine) => {   // items per line at this width: the box is as tall as the lines they need
+    const items = [1, 2, 3, 4, 5, 6].map((i) => ({ i, className: 'in-tiny-i' }));
+    const box = { children: items, offsetHeight: 16, querySelectorAll: () => items.slice(),
+      removeChild(n) { items.splice(items.indexOf(n), 1); }, appendChild(n) { box.more = n; },
+      get scrollHeight() { return 16 * Math.ceil(items.length / perLine); } };
+    box.items = items;
+    return box;
+  };
+  const wideBox = boxAt(3); fit(wideBox);
+  const narrowBox = boxAt(2); fit(narrowBox);
+  check('wide (three a line): six answers fit two lines, nothing trimmed; narrow (two a line): four stay and "+ 2 more" says so',
+    [wideBox.items.length, wideBox.more, narrowBox.items.length, narrowBox.more && narrowBox.more.textContent], [6, undefined, 4, '+ 2 more']);
+  check('renderChips draws the chips again when their width changed, even with the same html, from the untrimmed html', /var width = state\.chips\.offsetWidth \|\| 0;\n\s+if \(state\.chips\._html !== html \|\| state\.chips\._fitW !== width\) \{[\s\S]{0,400}?state\.chips\.innerHTML = html;[\s\S]{0,200}?fitTinyChip\(state\.chips\.querySelector/.test(imSrc), true);
+  // whole names: a generous cap, cut at a word
+  const shortName = new Function(viewerSrc.match(/\n  function shortName\(s, max\) \{[\s\S]*?\n  \}\n/)[0] + '\nreturn shortName;')();
+  const long = 'Interesting mangrove tree ecosystem roots. But leaves look like sal tree and the bandh beyond it is broken in two places now';
+  check('a 72-character name is written whole; a paragraph ends at a word with "…" inside 90', [shortName(long.slice(0, 72), 90), shortName(long, 90).length <= 90, /…$/.test(shortName(long, 90)), /\S…$/.test(shortName(long, 90))], [long.slice(0, 72), true, true, true]);
 }
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');

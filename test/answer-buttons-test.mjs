@@ -183,9 +183,10 @@ check('with room for the panel and the phone sheet, and a little more for a pin 
 check('and no closer than one place is opened at', fits[0][1].maxZoom, 16);
 
 console.log('\n  the names of the selected places are written');
-const on = new Function('KINDFILTER', 'layerById', 'keyHalves', section(js, 'answerNamesOn') + '\nreturn answerNamesOn;');
+// (EV: the mode, which may hold a chosen answer of its own — none here; fold-test covers that arm)
+const on = new Function('EV', 'KINDFILTER', 'layerById', 'keyHalves', section(js, 'answerNamesOn') + '\nreturn answerNamesOn;');
 const halves = { L1: ['L1', 'L1-pts'] };
-const isOn = (kf, L) => on(kf, (id) => id, (id) => halves[id] || [id])(L);
+const isOn = (kf, L) => on(null, kf, (id) => id, (id) => halves[id] || [id])(L);
 check('the selected answer\'s layer writes every name', isOn({ layer: 'L1' }, 'L1'), true);
 check('and the other half of a split file too', isOn({ layer: 'L1' }, 'L1-pts'), true);
 check('another layer is left as it was', isOn({ layer: 'L1' }, 'L2'), false);

@@ -199,5 +199,115 @@ check('which is styled', /\.key-entry\.key-held > \.key-toggle \.key-tname/.test
 /* a legend decoding marks that are not on the map is worse than no legend */
 check('the disc note stays quiet too', /L\._visible !== false\) \? foldedCount\(L\) : 0/.test(viewer3), true);
 
+/* Crowded pins fold into counted discs in EVERY atlas, whatever mode it is
+   read in. clusterEntries once began "if (EV) return out;" — written when
+   Event was the only mode, read as "any mode at all" once Insight and Explore
+   arrived — so the Khazan Survey on Divar Island (Insight, 96 places along
+   one shore) opened as one heap of 97 pins at phone width, zero discs
+   (7 Nov 2026). Event alone opts out: its venues wear numbers. The population
+   is run for real with stand-ins, as the ring is in answer-buttons-test. */
+console.log('\n  crowds fold in every mode; a festival guide alone opts out (Divar Island, 7 Nov 2026)');
+function section(src, name) {
+  const i = src.indexOf('\n  function ' + name + '(');
+  if (i < 0) throw new Error('no function ' + name);
+  return src.slice(i, src.indexOf('\n  }\n', i) + 4);
+}
+const evSrc = fs.readFileSync(R + 'atlas/event-mode.js', 'utf8');
+const exSrc = fs.readFileSync(R + 'atlas/explore-mode.js', 'utf8');
+const inSrc = fs.readFileSync(R + 'atlas/insight-mode.js', 'utf8');
+const ce = section(viewer3, 'clusterEntries');
+check('the engine no longer empties its population for any mode at all', /if \(EV\) return out;/.test(ce), false);
+check('only for a mode that says so', /if \(EV && EV\.noFold\) return out;/.test(ce), true);
+check('Event says so, Explore and Insight do not',
+  [/\n\s+noFold: true,\n\s+layers: layers,\n/.test(evSrc), /noFold/.test(exSrc), /noFold/.test(inSrc)], [true, false, false]);
+check('a place a mode has taken off the map (not this answer; beyond "around here") is not counted inside a disc',
+  /if \(e\.hidden \|\| e\.away \|\| e\.subOff\) return;/.test(ce), true);
+check('…which is exactly what keeps such a pin off the map, so discs plus lone pins stay equal to every pin shown',
+  /!e\.hidden && !e\.away && !e\.subOff && \(\(!e\._clustered && !e\._absorbed\) \|\| e\._fanned\)/.test(section(viewer3, 'paintMarkerDisplay')), true);
+// the population, run for real
+const entriesOf = (EV, list) => new Function('EV', 'MANIFEST', 'answerNamesOn', 'map', 'markersByLayer',
+  ce + '\nreturn clusterEntries;')(EV, { layers: [{ id: 'L' }] }, () => false, { getZoom: () => 12 }, { L: list })();
+const pin = (o) => Object.assign({ f: { geometry: { type: 'Point', coordinates: [0, 0] } } }, o);
+const crowd = [pin({}), pin({ hidden: true }), pin({ subOff: true }), pin({ away: true }), pin({})];
+check('a Standard atlas folds every pin it shows (two of five here; hidden by search, not this answer, beyond around-here stay out)',
+  entriesOf(null, crowd).map((it) => it.key), ['L|0', 'L|4']);
+check('an Insight or Explore atlas folds the same crowd', [entriesOf({ insight: true }, crowd).length, entriesOf({}, crowd).length], [2, 2]);
+check('a festival guide folds nothing', entriesOf({ noFold: true }, crowd).length, 0);
+
+/* ---------------- coloured discs (Mithun, 7 Nov 2026, mock-up B) ----------------
+   When the pins are coloured by a question the counted discs say what they
+   hold: a pale face, the count in ink, a ring split by the answers' shares —
+   at most six coloured arcs, the rest pooled with "Doesn't say" in grey, a
+   white hairline between arcs. One disc renderer: a map coloured by nothing
+   keeps the plain ink disc. The shares are added up by the clustered source
+   itself (clusterProperties), a merged disc adds its parts' shares, and the
+   ring is an image drawn once per make-up. The pure parts run for real. */
+console.log('\n  coloured discs');
+function fn(src, name) {
+  const i = src.indexOf('\n  function ' + name + '(');
+  if (i < 0) throw new Error('no function ' + name);
+  const j = src.indexOf('\n  }\n', i);
+  return src.slice(i, j + 4);
+}
+const vars = 'var DISC_SLOTS = 6, DISC_POOL = "#B8B3A9", DISC_FACE = "#FDFCF8", DISC_COUNT_INK = "#24211D", DISC_INK = ["#5A5751", "#3F3C37", "#24211D"], DISC_R = [13, 17, 22];\n';
+const pure = new Function('DISC_COLOURING', vars + ['slotKeys', 'discClusterProperties', 'slotCountsOf', 'ringImageExpr', 'ringFilter', 'ringLayout', 'slotOrder', 'slotColour', 'slotName', 'countInk', 'discPaint']
+  .map((n) => fn(viewer3, n)).join('\n') + '\nreturn { slotKeys, discClusterProperties, slotCountsOf, ringImageExpr, ringFilter, ringLayout, slotOrder, slotColour, slotName, countInk, discPaint };');
+const plain = pure(null);
+const coloured = pure({ colours: ['#1', '#2', '#3', '#4', '#5', '#6'], names: ['A', 'B', 'C', 'D', 'E', 'F'], pool: 'Doesn’t say' });
+check('the source counts its members by slot, c0…c6, and marks a disc with any slotted member (cr)',
+  [Object.keys(plain.discClusterProperties()), plain.discClusterProperties().c3, plain.discClusterProperties().cr],
+  [['cr', 'c0', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6'], ['+', ['case', ['==', ['get', '__a'], 3], 1, 0]], ['max', ['case', ['has', '__a'], 1, 0]]]);
+check('the ring image is named by size bracket and the count in each slot — everything the drawing needs',
+  plain.ringImageExpr(), ['concat', 'disc|', ['step', ['get', 'point_count'], 0, 10, 1, 50, 2], '|', ['get', 'c0'], ',', ['get', 'c1'], ',', ['get', 'c2'], ',', ['get', 'c3'], ',', ['get', 'c4'], ',', ['get', 'c5'], ',', ['get', 'c6']]);
+check('only a disc with slotted members wears a ring, so a map coloured by nothing draws none; a merge hides its parts\' rings too',
+  [plain.ringFilter(), plain.ringFilter([4, 9])], [['all', ['has', 'point_count'], ['==', ['get', 'cr'], 1]], ['all', ['has', 'point_count'], ['==', ['get', 'cr'], 1], ['!', ['in', ['get', 'cluster_id'], ['literal', [4, 9]]]]]]);
+check('the ring never loses a placement contest', plain.ringLayout()['icon-allow-overlap'] && plain.ringLayout()['icon-ignore-placement'], true);
+check('plain: ink disc deepening with count, white count; coloured: pale face, ink count — one renderer, one switch',
+  [plain.discPaint()['circle-color'][0], plain.countInk(), coloured.discPaint()['circle-color'], coloured.countInk()], ['step', '#FFFFFF', '#FDFCF8', '#24211D']);
+check('the arcs: most places first, ties in the key\'s order, the pool last whatever its size', coloured.slotOrder([2, 5, 0, 2, 0, 0, 9]), [1, 0, 3, 6]);
+check('the pool is grey and says "Doesn’t say"; a slot wears the key\'s colour and name', [coloured.slotColour(6), coloured.slotName(6), coloured.slotColour(1), coloured.slotName(1)], ['#B8B3A9', 'Doesn’t say', '#2', 'B']);
+check('a disc\'s counts are read back from its properties, missing ones as 0', coloured.slotCountsOf({ c0: 3, c2: '1', c6: 2 }), [3, 0, 1, 0, 0, 0, 2]);
+check('the drawing: white hairline round the ring, pale face, arcs from the top clockwise, a white hairline between arcs',
+  [/g\.arc\(cx, cy, r \+ 1, 0, Math\.PI \* 2\); g\.fillStyle = "#FFFFFF"/.test(viewer3), /var slots = slotOrder\(counts\), a0 = -Math\.PI \/ 2/.test(viewer3), /if \(slots\.length > 1\) \{\n\s+g\.lineWidth = 1; g\.strokeStyle = "#FFFFFF";/.test(viewer3)], [true, true, true]);
+check('a ring the style has not seen is drawn by the page\'s one styleimagemissing handler; one that cannot be drawn gets the 1\u00d71 blank, tracked so the next flush removes it (re-opening the question draws the ring again), so the map never asks twice and never logs it as a base-map gap',
+  [/if \(id\.indexOf\("disc\|"\) === 0 && addRingImage\(id\)\) return;\n\s+map\.addImage\(id, \{ width: 1, height: 1, data: new Uint8Array\(4\) \}\);[\s\S]{0,200}?if \(id\.indexOf\("disc\|"\) === 0\) \{ DISC_IMAGES\.ids\[id\] = 1; return; \}/.test(viewer3),
+   (viewer3.match(/map\.on\("styleimagemissing"/g) || []).length, /if \(!img\) return false;/.test(fn(viewer3, 'addRingImage')), /return true;\n  \}/.test(fn(viewer3, 'addRingImage'))], [true, 1, true, true]);
+check('every point carries its slot into the source, read from the colouring the mode lent (api.colourDiscs)',
+  [/var slot = DISC_COLOURING \? DISC_COLOURING\.slotOf\(it\.L, it\.e\.f\) : null;/.test(fn(viewer3, 'refreshClusterIndex')), /colourDiscs: function \(c\) \{ setDiscColouring\(c\); \}/.test(viewer3)], [true, true]);
+check('a merged disc adds its discs\' counts and its pins\' slots together', [/m\.counts\.forEach\(function \(c, i\) \{ counts\[i\] \+= c; \}\)/.test(fn(viewer3, 'mergeOverlaps')), /counts\[m\.pin\.e\._slot\]\+\+/.test(fn(viewer3, 'mergeOverlaps'))], [true, true]);
+check('the ring layers come down with the engine', /\["atlas-cluster-count", RING_LAYER, CLUSTER_LAYER,[\s\S]*MERGED_RING_LAYER, MERGED_LAYER\]\.forEach/.test(fn(viewer3, 'clusterTeardown')), true);
+/* The merge pass writes the map only when its answer changed. A filter set
+   again reloads the source, which reports back as data, which asks for a sync,
+   which merges again: on Bengaluru on LOKA the map repainted 18 times a second
+   standing still (7 Nov 2026). */
+check('a merge that finds what the last one found writes nothing to the map', [/if \(sig !== MERGED\.sig\) \{/.test(fn(viewer3, 'mergeOverlaps')), /MERGED\.sig = ""/.test(fn(viewer3, 'clearMerged'))], [true, true]);
+check('the hover bubble on a disc lists what it holds, answer by answer, in the ring\'s order (discRowsEl)',
+  [(viewer3.match(/showHint\(f\.properties\.point_count \+ " places here", [^\n]*discRowsEl\(f\.properties\)\)/g) || []).length, /row\.appendChild\(el\("span", "key-word", esc\(counts\[i\] \+ " " \+ slotName\(i\)\)\)\)/.test(fn(viewer3, 'discRowsEl'))], [2, true]);
+// a mode's chosen answer never folds: the same exemption as a Standard key's picked answer
+const anOn = new Function('EV', 'KINDFILTER', 'layerById', 'keyHalves', fn(viewer3, 'answerNamesOn') + '\nreturn answerNamesOn;');
+const Lx = { id: 'L' };
+check('answerNamesOn: a mode\'s chosen answer (Insight\'s filter, Explore\'s button) frees its layer; no mode, no pick: nothing is freed',
+  [anOn({ answerOn: (L) => L.id === 'L' }, null, () => null, () => [])(Lx), anOn({ answerOn: () => false }, null, () => null, () => [])(Lx), anOn(null, null, () => null, () => [])(Lx), anOn({}, { layer: 'L' }, () => Lx, () => [Lx])(Lx)], [true, false, false, true]);
+const freed = new Function('EV', 'MANIFEST', 'answerNamesOn', 'map', 'markersByLayer', ce + '\nreturn clusterEntries;')({ answerOn: () => true }, { layers: [{ id: 'L' }] }, () => true, { getZoom: () => 12 }, { L: [pin({}), pin({})] })();
+check('…and a freed layer\'s pins leave the folding population: they stand as pins at every zoom', freed.length, 0);
+check('the picked answer\'s layers are repainted whoever picked it (paintAnswerLayers no longer waits for a Standard key)', /function paintAnswerLayers\(\) \{\n\s+\(MANIFEST\.layers/.test(viewer3), true);
+check('pins a mode took off the map are not set out in the chosen answer\'s ring', /if \(!e\.hidden && !e\.away && !e\.subOff && e\.f && e\.f\.geometry && e\.f\.geometry\.type === "Point"\) mine\.push\(e\);/.test(fn(viewer3, 'spreadAnswerPins')), true);
+
+/* ---------------- room for Research mode's marks (7 Nov 2026) ----------------
+   Insight's research mode puts marks beside a neutral pin (api.markRowsEl).
+   The holder carries their width (_rowsW) and block (_rowsEl); the mode copies
+   both onto the marker's entry, and from there the fold distance, the merge
+   footprint, the fan's spacing and the right-edge flip price them exactly as
+   a key's rows — a layer with no keys on now counts the pins that wear marks. */
+console.log('\n  room for Research mode\'s marks beside the pin');
+check('markRowsEl hands back the rowed holder with its width and block; no rows, the plain pin', [/holder\._rowsW = ROW_PINGAP \+ w;\n\s+holder\._rowsEl = block;\n\s+return holder;/.test(viewer3), /markRowsEl: function \(color, rows\) \{\n\s+if \(!rows \|\| !rows\.length\) return locPinEl\(color, null\);/.test(viewer3)], [true, true]);
+check('no page-wide width any more: the entry is the one place the engine reads', /INSIGHT_ROWS_W|resetMarkWidth/.test(viewer3), false);
+const kfr = new Function('MANIFEST', 'keyState', 'keyHost', 'markersByLayer', 'map', 'PIN_W', 'CLUSTER_RADIUS', 'KEY_FOLD_FAR', 'KEY_FOLD_NEAR', section(viewer3, 'keyedFoldRadius') + '\nreturn keyedFoldRadius;');
+const fold = (list, keyed, zoom) => kfr({ layers: [{ id: 'L' }] }, keyed ? { L: { active: [1] } } : {}, (L) => L, { L: list }, { getZoom: () => zoom }, 20, 40, 13, 16)();
+check('a layer with no keys on and no marks folds at the plain distance', fold([{}, {}], false, 16), 40);
+check('…pins wearing research marks widen it at street zoom, as a key\'s rows do; a pin without marks on that layer is not averaged in', [fold([{ _rowsW: 40 }, { _rowsW: 40 }, {}], false, 16), fold([{ _rowsW: 40 }, { _rowsW: 40 }, {}], true, 16)], [60, 48]);
+check('…and zoomed out it eases back to the plain distance', fold([{ _rowsW: 40 }], false, 12), 40);
+check('the right-edge flip is checked on any pin wearing a block, keyed layer or not', /\(MANIFEST\.layers \|\| \[\]\)\.forEach\(function \(L\) \{\n\s+\/\/[^\n]*\n\s+\(markersByLayer\[L\.id\] \|\| \[\]\)\.forEach\(function \(e\) \{\n\s+if \(!e\._rowsEl\) return;/.test(section(viewer3, 'updateRowFlips')), true);
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -775,7 +775,8 @@
       var head = document.querySelector("#atlas-panel .sheet-who strong");
       if (head) head.textContent = sh.label;
       var who = document.getElementById("sheet-layer");
-      if (who) { who.innerHTML = ""; who.appendChild(el("span", "sheet-layer-name", esc(sh.small || sh.label))); }
+      // the kicker says the label; with nothing counted yet the line stays empty, never the label twice
+      if (who) { who.innerHTML = ""; if (sh.small) who.appendChild(el("span", "sheet-layer-name", esc(sh.small))); }
     }
     /* rows under their sub-group's heading, groups in the order the mode
        lists them, each keeping the rows' own order; a group with nothing in
@@ -987,6 +988,12 @@
     }
 
     var me = {
+      /* The one mode whose pins never fold into counted discs (atlas.js,
+         clusterEntries): a festival guide's venues are few, each pin wears
+         its own number and carries that venue's programme, and "7 places
+         here" would throw away the very thing the pin was drawn to say.
+         Every other atlas, in every other mode, folds its crowds. */
+      noFold: true,
       layers: layers,
       pinEl: pinEl,
       cardHTML: cardHTML,

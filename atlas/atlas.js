@@ -575,11 +575,33 @@
       data: function (id) { return DATA[id] || null; },
       markers: function (id) { return markersByLayer[id] || null; },
       locPinEl: locPinEl,
+      /* A neutral pin plus one small mark per row ([{shape:"circle"|"square"|"triangle", colors:[one]}],
+         in the order given) beside it — Insight's research mode (atlas/insight-mode.js), reusing the
+         same rowed-pin shapes and positioning Explore's keys already draw (renderMarks). No rows: the
+         plain pin alone. The holder carries how far the block reaches past the pin (_rowsW) and the
+         block itself (_rowsEl); the mode copies both onto the marker's entry, so the fold distance
+         (keyedFoldRadius), the merge footprint, the fan's spacing and the right-edge flip
+         (updateRowFlips) price these marks exactly as they price a key's rows. */
+      markRowsEl: function (color, rows) {
+        if (!rows || !rows.length) return locPinEl(color, null);
+        var holder = el("div", "atlas-rowed loc");
+        holder.appendChild(keyPinEl(color));
+        var block = el("div", "atlas-keyrows");
+        var w = 0;
+        rows.forEach(function (r) { block.appendChild(rowSvg(r.shape, r.colors)); w = Math.max(w, rowWidth(r.shape, r.colors.length)); });
+        holder.appendChild(block);
+        holder._rowsW = ROW_PINGAP + w;
+        holder._rowsEl = block;
+        return holder;
+      },
       shotsHTML: shotsHTML, linksIn: linksIn, cellShown: cellShown,
       dataUrl: function (file) { return dataUrl(file); },
       lokaLinkHTML: lokaLinkHTML,
       navLinkHTML: navLinkHTML, navURL: navURL,
       setLayerVisible: function (L, show) { if (map) setLayerVisible(L, show); else L._visible = show; },
+      // the colouring the mode's pins wear, so the counted discs can wear it too
+      // (COLOURED DISCS): { colours, names, pool, slotOf(L, f) }, or null for plain discs
+      colourDiscs: function (c) { setDiscColouring(c); },
       onPhone: onPhone,
       setSheet: function (h) { setSheet(h); },
       closeCard: function () { if (CARD.open) closeCard(true); },
@@ -685,7 +707,14 @@
     map.on("styleimagemissing", function (e) {
       var id = e && e.id;
       if (!id || map.hasImage(id)) return;
+      // a counted disc's ring is ours, drawn on the spot (COLOURED DISCS); one
+      // that cannot be drawn (the colouring went while the tile was asking)
+      // gets the blank below like anything else, so the map never asks twice
+      if (id.indexOf("disc|") === 0 && addRingImage(id)) return;
       map.addImage(id, { width: 1, height: 1, data: new Uint8Array(4) });
+      // a blank disc ring is tracked like a drawn one, so the next flush removes
+      // it and the same question re-opened draws the ring again (review, 7 Nov)
+      if (id.indexOf("disc|") === 0) { DISC_IMAGES.ids[id] = 1; return; }
       if (blanked[id]) return;
       blanked[id] = true;
       console.info('Atlas: the base map asked for an image called "' + id +
@@ -1013,7 +1042,13 @@
       // event mode's buttons sit on the sheet's top edge (event-mode.js): room for
       // them too — one row, or two while a category's sub-groups are showing
       var evRows = EV && !EV.insight ? (stage.classList.contains("ev-sub-on") ? 104 : 62) : 0;
-      if (sheet > 0) pad.bottom = Math.min(sheet + 16 + evRows, map.getContainer().clientHeight * (EV ? 0.6 : 0.45));
+      // and for the key Insight floats over the map's foot on a phone (insight-mode.js,
+      // .in-chips): the places are framed above it, not behind it
+      var chips = stage && stage.querySelector(".atlas-stage > .in-chips");
+      var chipsH = chips && onPhone() && chips.offsetHeight ? chips.offsetHeight + 48 : 0;   // 48: the chips' own lift over the credits strip
+      // the sheet's room, or the key's alone when the sheet is folded away
+      var foot = (sheet > 0 ? sheet + 16 + evRows : 0) + chipsH;
+      if (foot > 0) pad.bottom = Math.min(Math.max(pad.bottom, foot), map.getContainer().clientHeight * (EV ? 0.6 : 0.45));
     } catch (e) {}
     try {
       var mr = map.getContainer().getBoundingClientRect();
@@ -2185,6 +2220,7 @@
     wireRowFlips();
     renderExtra(H);   // the rows exist only once the data has said which columns qualify
     if (act.length) halves.forEach(function (h) { applyMarkerVisibility(h); });   // discs read the rows' footprint from the start
+    syncStandardDiscs();   // and ring by the first key on from the start (STANDARD RINGS)
   }
 
 /* A column of dates.
@@ -2786,7 +2822,7 @@
     if (!map) return;
     var w = map.getContainer().clientWidth;
     (MANIFEST.layers || []).forEach(function (L) {
-      if (!keyState[keyHost(L).id]) return;   // a points twin wears its host's keys
+      // any pin wearing a block: a key's rows, or Insight's research-mode marks
       (markersByLayer[L.id] || []).forEach(function (e) {
         if (!e._rowsEl) return;
         var x = map.project(e.mk.getLngLat()).x;
@@ -3081,6 +3117,7 @@
     L._legend = keyLegendRows(L, act);
     renderExtra(L);
     keyHalves(L).forEach(function (h) { applyMarkerVisibility(h); });   // discs re-read the new footprints (fold distance included)
+    syncStandardDiscs();   // and wear the first key on (STANDARD RINGS)
     // a pressed kind whose key just went off has nothing left to filter by
     if (KINDFILTER && KINDFILTER.layer === L.id &&
         !act.some(function (o) { return o.col === KINDFILTER.col; })) unpickAnswer();
@@ -3107,9 +3144,12 @@
     (MANIFEST.layers || []).forEach(function (L) {
       if (L._visible === false) return;
       var st = keyState[keyHost(L).id];   // a points twin wears its host's keys
-      if (!st || !st.active.length) return;
+      var keyed = !!(st && st.active.length);
       (markersByLayer[L.id] || []).forEach(function (e) {
         if (e.hidden) return;
+        // a keyed layer's every pin counts, rows or not; any other pin counts only
+        // when a mode drew marks beside it (Insight's research mode, markRowsEl)
+        if (!keyed && !e._rowsW) return;
         sum += PIN_W + (e._rowsW || 0);
         n++;
       });
@@ -3402,6 +3442,7 @@
      32) because a pin's name may be a whole sentence.
   ================================================================== */
   var PIN_NAME_BOX = "atlas-pin-box";   // a transparent image the size of a pin
+  var FULL_NAME_MAX = 90;               // the cut for a mode that asks for whole names (Insight), review 7 Nov 2026
   function ensurePinNames(L) {
     var t = L.label_text;
     if (!t || !t.property || !map || map.getSource(srcId(L) + "-names")) return;
@@ -3451,7 +3492,9 @@
     if (!src) return;
     var feats = [];
     var folded = L.cluster && L._clusterMarker && map.getZoom() < L.cluster.belowZoom && !answerNamesOn(L);
-    var max = t.maxChars || 32;
+    // a mode may ask for whole names (Insight: fullNames): a generous cap, so a
+    // name shows whole when the map finds room, but a paragraph still ends at a word with "…"
+    var max = EV && EV.fullNames ? FULL_NAME_MAX : (t.maxChars || 32);
     if (L._visible !== false && !folded) {
       (markersByLayer[L.id] || []).forEach(function (e) {
         if (e.away || e.subOff) return;   // event mode: beyond "What's around here", or another sub-group
@@ -3529,7 +3572,8 @@
     var on = answerNamesOn(L) && !!map;
     var mine = [];
     if (on) list.forEach(function (e) {
-      if (!e.hidden && e.f && e.f.geometry && e.f.geometry.type === "Point") mine.push(e);
+      // a place a mode has taken off the map (not the chosen answer or button) is not set out
+      if (!e.hidden && !e.away && !e.subOff && e.f && e.f.geometry && e.f.geometry.type === "Point") mine.push(e);
     });
     var want = new Map();
     if (mine.length > 1 && mine.length <= SPREAD_MAX) {
@@ -3800,9 +3844,210 @@
   var DISC_INK = ["#5A5751", "#3F3C37", "#24211D"];
   var DISC_R = [13, 17, 22];          // disc radius by bracket (<10, 10–49, 50+)
   function discBracket(n) { return n >= 50 ? 2 : n >= 10 ? 1 : 0; }
+
+  /* ==================================================================
+     COLOURED DISCS — when the pins are coloured by a question, a disc
+     says what it holds: a pale face, the count in ink, and a ring split
+     by the answers' shares (Mithun, 7 Nov 2026, from the mock-ups: B).
+     At most six answers get a colour — the key names them — and whatever
+     else a place said, or nothing at all, pools into one grey arc. The
+     colouring is lent by whoever colours the pins (a mode: insight-mode.js
+     for the open question, explore-mode.js for its buttons) through
+     api.colourDiscs; a map coloured by nothing keeps the plain ink disc.
+
+     Each point in the clustered source carries its answer's slot (__a:
+     0–5, or 6 for the pool) and the source adds them up per disc in its
+     worker (clusterProperties c0…c6), so a disc's shares cost nothing on
+     the main thread. The ring is an image drawn once per distinct make-up
+     (styleimagemissing → canvas → addImage) and set on the disc by a
+     symbol layer; the count stays a text layer and the circle layer stays
+     the hit target, so hover, click, the fan and the merge are untouched.
+     A merged disc adds its parts' shares together.
+  ================================================================== */
+  var DISC_SLOTS = 6;                 // answers that get a colour; the rest pool
+  var DISC_POOL = "#B8B3A9";          // the pool's grey, the same as the key's "Doesn't say" mark (insight-mode.js POOL)
+  var DISC_FACE = "#FDFCF8";          // the face of a coloured disc (Surface)
+  var DISC_COUNT_INK = "#24211D";     // the count on a coloured disc (Ink)
+  var RING_LAYER = "atlas-cluster-ring";
+  var MERGED_RING_LAYER = "atlas-cluster-merged-ring";
+  // { colours: [≤6], names: [≤6], pool: "Doesn’t say", slotOf: function (L, f) → 0…6 | null }
+  var DISC_COLOURING = null;
+  var DISC_IMAGES = { ids: {}, n: 0 };
+  var DISC_IMAGES_MAX = 400;   // past this many drawn rings they are let go; those on screen are drawn again on demand
+  function slotKeys() { var ks = []; for (var i = 0; i <= DISC_SLOTS; i++) ks.push("c" + i); return ks; }
+  function discClusterProperties() {
+    var p = { cr: ["max", ["case", ["has", "__a"], 1, 0]] };   // 1 when any member carries a slot: the disc wears a ring
+    slotKeys().forEach(function (k, i) { p[k] = ["+", ["case", ["==", ["get", "__a"], i], 1, 0]]; });
+    return p;
+  }
+  function slotCountsOf(props) {
+    return slotKeys().map(function (k) { var v = props && +props[k]; return v > 0 ? v : 0; });
+  }
+  // the ring image's name says everything the drawing needs: the size bracket and the count in each slot
+  function ringImageExpr() {
+    var e = ["concat", "disc|", ["step", ["get", "point_count"], 0, 10, 1, 50, 2], "|"];
+    slotKeys().forEach(function (k, i) { if (i) e.push(","); e.push(["get", k]); });
+    return e;
+  }
+  function ringFilter(hidden) {
+    var f = ["all", ["has", "point_count"], ["==", ["get", "cr"], 1]];
+    if (hidden && hidden.length) f.push(["!", ["in", ["get", "cluster_id"], ["literal", hidden]]]);
+    return f;
+  }
+  function ringLayout() {
+    return { "icon-image": ringImageExpr(), "icon-allow-overlap": true, "icon-ignore-placement": true };
+  }
+  // the slots a disc holds, in the order the ring draws them: most places first, ties in the key's order, the pool last
+  function slotOrder(counts) {
+    var slots = [];
+    counts.forEach(function (c, i) { if (c > 0) slots.push(i); });
+    slots.sort(function (a, b) {
+      if (a === DISC_SLOTS) return 1;
+      if (b === DISC_SLOTS) return -1;
+      return counts[b] - counts[a] || a - b;
+    });
+    return slots;
+  }
+  function slotColour(i) { return i === DISC_SLOTS ? DISC_POOL : ((DISC_COLOURING && DISC_COLOURING.colours[i]) || DISC_POOL); }
+  function slotName(i) {
+    if (!DISC_COLOURING) return "";
+    return i === DISC_SLOTS ? (DISC_COLOURING.pool || "Doesn’t say") : (DISC_COLOURING.names[i] || "");
+  }
+  // one ring, drawn to the name's recipe: white hairline round it, pale face, the arcs from the top clockwise,
+  // a white hairline between arcs so two like colours still read as two
+  function discImage(id) {
+    var m = /^disc\|(\d)\|([\d,]+)$/.exec(id);
+    if (!m || !DISC_COLOURING || typeof document === "undefined") return null;
+    var r = DISC_R[+m[1]] || DISC_R[0], counts = m[2].split(",").map(Number);
+    var n = counts.reduce(function (s, c) { return s + (c > 0 ? c : 0); }, 0);
+    if (!n) return null;
+    var ratio = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
+    var S = r + 2, px = Math.ceil(S * 2 * ratio);
+    var cv = document.createElement("canvas");
+    cv.width = px; cv.height = px;
+    var g = cv.getContext("2d");
+    if (!g) return null;
+    g.scale(px / (S * 2), px / (S * 2));
+    var w = r >= 17 ? 7 : 6, rr = r - w / 2, cx = S, cy = S;
+    g.beginPath(); g.arc(cx, cy, r + 1, 0, Math.PI * 2); g.fillStyle = "#FFFFFF"; g.fill();
+    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fillStyle = DISC_FACE; g.fill();
+    var slots = slotOrder(counts), a0 = -Math.PI / 2, cuts = [];
+    g.lineWidth = w;
+    slots.forEach(function (i) {
+      var a1 = slots.length === 1 ? a0 + Math.PI * 2 : a0 + counts[i] / n * Math.PI * 2;
+      g.beginPath(); g.arc(cx, cy, rr, a0, a1);
+      g.strokeStyle = slotColour(i); g.stroke();
+      cuts.push(a1); a0 = a1;
+    });
+    if (slots.length > 1) {
+      g.lineWidth = 1; g.strokeStyle = "#FFFFFF";
+      cuts.forEach(function (a) {
+        g.beginPath();
+        g.moveTo(cx + (r - w) * Math.cos(a), cy + (r - w) * Math.sin(a));
+        g.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+        g.stroke();
+      });
+    }
+    return { data: g.getImageData(0, 0, px, px), ratio: px / (S * 2) };
+  }
+  // true once the ring is in the style; false when it could not be drawn
+  function addRingImage(id) {
+    if (!map) return false;
+    if (DISC_IMAGES.ids[id]) return true;
+    var img = discImage(id);
+    if (!img) return false;
+    try { map.addImage(id, img.data, { pixelRatio: img.ratio }); DISC_IMAGES.ids[id] = 1; DISC_IMAGES.n++; } catch (e) { return false; }
+    return true;
+  }
+  function flushRingImages() {
+    if (map) for (var id in DISC_IMAGES.ids) { try { map.removeImage(id); } catch (e) {} }
+    DISC_IMAGES = { ids: {}, n: 0 };
+  }
+  // the colouring the pins wear right now, lent by the mode that colours them; null for a plain map
+  function setDiscColouring(c) {
+    var next = c && c.colours && c.colours.length && typeof c.slotOf === "function"
+      ? { colours: c.colours.slice(0, DISC_SLOTS), names: (c.names || []).slice(0, DISC_SLOTS), pool: c.pool || "", slotOf: c.slotOf }
+      : null;
+    var was = DISC_COLOURING ? DISC_COLOURING.colours.join("|") : "";
+    var now = next ? next.colours.join("|") : "";
+    DISC_COLOURING = next;
+    if (!map) return;
+    if (was !== now) { flushRingImages(); if (CLUSTER.ready) restyleDiscs(); }
+    scheduleClusterRefresh();   // every point's slot is read again, and the discs add them up again
+  }
+  /* STANDARD RINGS (Mithun, 7 Nov 2026: "Include rings in Standard or
+     non-research mode"). An atlas read in no mode rings its discs by the
+     FIRST key switched on in the layers panel — the first visible layer, in
+     the manifest's order, with an active key, and that layer's first active
+     key — in the key's own kind colours (keyKindColor), the kinds past the
+     sixth and every place that does not answer pooled in grey, as Insight
+     does. No key on anywhere: today's plain ink disc. A mode (Event, Explore,
+     Insight) lends its own colouring, or none, and is left alone here. */
+  function standardDiscColouring() {
+    if (EV) return null;
+    var found = null;
+    (MANIFEST.layers || []).some(function (L) {
+      if (L._visible === false || keyHost(L) !== L) return false;   // a points twin wears its host's keys
+      var act = activeKeyOptions(L);
+      if (!act.length) return false;
+      found = { L: L, opt: act[0], fi: 0 };   // the first active key is the first family (keyMarkRows counts families in active order)
+      return true;
+    });
+    if (!found) return null;
+    var L = found.L, opt = found.opt, kept = opt.kept || [];
+    var halves = keyHalves(L);
+    return {
+      colours: kept.slice(0, DISC_SLOTS).map(function (v, i) { return keyKindColor(L, opt, found.fi, i); }),
+      names: kept.slice(0, DISC_SLOTS),
+      pool: kept.length > DISC_SLOTS ? "Another answer, or doesn\u2019t say" : "Doesn\u2019t say",
+      // a place's slot is its FIRST answer's place among the kept kinds (the
+      // colour its pin wears); any other answer, no answer, or another layer's
+      // place goes into the pool, so a disc holding both keeps its shares right
+      slotOf: function (ML, f) {
+        if (halves.indexOf(ML) < 0) return DISC_SLOTS;
+        var vals = optValuesOf(L, opt, f);
+        if (!vals.length) return DISC_SLOTS;
+        var i = kept.indexOf(vals[0]);
+        return i >= 0 && i < DISC_SLOTS ? i : DISC_SLOTS;
+      }
+    };
+  }
+  // called wherever the first key on can change: a key toggled, a layer shown or hidden, the keys first offered
+  function syncStandardDiscs() {
+    if (EV || !map) return;
+    setDiscColouring(standardDiscColouring());
+  }
+  function restyleDiscs() {
+    [CLUSTER_LAYER, MERGED_LAYER].forEach(function (id) {
+      if (!map.getLayer(id)) return;
+      var p = discPaint();
+      for (var k in p) { try { map.setPaintProperty(id, k, p[k]); } catch (e) {} }
+    });
+    ["atlas-cluster-count", "atlas-cluster-merged-count"].forEach(function (id) {
+      if (map.getLayer(id)) { try { map.setPaintProperty(id, "text-color", countInk()); } catch (e) {} }
+    });
+  }
+  // what a disc holds, answer by answer, for the hover bubble — "7 Natural Habitat" — in the ring's own order
+  function discRowsEl(props) {
+    if (!DISC_COLOURING || !props || +props.cr !== 1) return null;
+    var counts = slotCountsOf(props), slots = slotOrder(counts);
+    if (!slots.length) return null;
+    var box = el("div", "key-rows");
+    slots.forEach(function (i) {
+      var row = el("div", "key-row");
+      var mini = markEl("circle", slotColour(i));
+      mini.setAttribute("class", "key-mark");
+      row.appendChild(mini);
+      row.appendChild(el("span", "key-word", esc(counts[i] + " " + slotName(i))));
+      box.appendChild(row);
+    });
+    return box;
+  }
+  function countInk() { return DISC_COLOURING ? DISC_COUNT_INK : "#FFFFFF"; }
   function discPaint() {
     return {
-      "circle-color": ["step", ["get", "point_count"], DISC_INK[0], 10, DISC_INK[1], 50, DISC_INK[2]],
+      // coloured: the pale face under the ring image; plain: one ink deepening with count
+      "circle-color": DISC_COLOURING ? DISC_FACE : ["step", ["get", "point_count"], DISC_INK[0], 10, DISC_INK[1], 50, DISC_INK[2]],
       "circle-radius": ["step", ["get", "point_count"], DISC_R[0], 10, DISC_R[1], 50, DISC_R[2]],
       "circle-stroke-color": "#FFFFFF",
       "circle-stroke-width": 2
@@ -3834,8 +4079,15 @@
   // clustering population — nothing else may fold into a disc.
   function clusterEntries() {
     var out = [];
-    // a festival guide's pins are few and each one matters: none fold
-    if (EV) return out;
+    /* Crowding is the map's problem in every atlas, so every atlas folds —
+       whatever mode it is read in. A mode may opt out, and exactly one does:
+       a festival guide's venue pins wear their own numbers and are few
+       (event-mode.js declares noFold). Insight and Explore write nothing on
+       the pin itself, so their crowds fold like anyone else's. This line
+       once read "any mode at all", written when Event was the only mode —
+       and an Insight atlas of 96 places along one shore opened as one heap
+       of pins (Khazan Survey on Divar Island, 7 Nov 2026). */
+    if (EV && EV.noFold) return out;
     (MANIFEST.layers || []).forEach(function (L) {
       if (L._visible === false) return;
       /* A selected answer's places are never folded into a numbered disc,
@@ -3845,7 +4097,12 @@
       var free = answerNamesOn(L);
       if (!free && L.cluster && L._clusterMarker && map.getZoom() < L.cluster.belowZoom) return;
       (markersByLayer[L.id] || []).forEach(function (e, i) {
-        if (e.hidden) return;
+        /* `away` and `subOff` are a mode's own ways of taking a place off the
+           map (beyond "What's around here"; not the chosen answer or button).
+           Such a place is not part of the crowd and must not be counted
+           inside a disc, or a disc would promise places no zoom can reach:
+           discs plus lone pins must equal every pin the reader can see. */
+        if (e.hidden || e.away || e.subOff) return;
         if (free) { e._clustered = false; e._absorbed = false; return; }
         out.push({ L: L, e: e, key: L.id + "|" + i });
       });
@@ -3871,7 +4128,9 @@
       // cannot separate is still a cluster AT max zoom — the click handler
       // reads "expansion zoom past the map's ceiling" as "these can never
       // part" and fans them out instead of pretending a zoom would help.
-      clusterMaxZoom: Math.floor(map.getMaxZoom())
+      clusterMaxZoom: Math.floor(map.getMaxZoom()),
+      // each disc counts its members by answer slot (COLOURED DISCS above)
+      clusterProperties: discClusterProperties()
     });
     map.addSource(CLUSTER_BOUNDS_SRC, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     // hover footprint first, so the discs and their counts draw above it
@@ -3894,11 +4153,18 @@
       filter: ["has", "point_count"],
       paint: discPaint()
     });
+    // the ring of answer shares, over the face and under the count; only discs
+    // whose members carry a slot wear one (ringFilter), so a plain map draws none
+    map.addLayer({
+      id: RING_LAYER, type: "symbol", source: CLUSTER_SRC,
+      filter: ringFilter(),
+      layout: ringLayout()
+    });
     map.addLayer({
       id: "atlas-cluster-count", type: "symbol", source: CLUSTER_SRC,
       filter: ["has", "point_count"],
       layout: countLayout(),
-      paint: { "text-color": "#FFFFFF" }
+      paint: { "text-color": countInk() }
     });
     /* The merged discs (see MERGED below): where two discs, or a disc and a
        lone pin, would land on each other at the closest zoom, they are
@@ -3907,8 +4173,9 @@
        point. */
     map.addSource(MERGED_SRC, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     map.addLayer({ id: MERGED_LAYER, type: "circle", source: MERGED_SRC, paint: discPaint() });
+    map.addLayer({ id: MERGED_RING_LAYER, type: "symbol", source: MERGED_SRC, filter: ["==", ["get", "cr"], 1], layout: ringLayout() });
     map.addLayer({ id: "atlas-cluster-merged-count", type: "symbol", source: MERGED_SRC,
-      layout: countLayout(), paint: { "text-color": "#FFFFFF" } });
+      layout: countLayout(), paint: { "text-color": countInk() } });
     wireClusterEvents();
     CLUSTER.ready = true;
     return true;
@@ -3940,7 +4207,8 @@
       var cid = f.properties.cluster_id;
       var p = map.project(f.geometry.coordinates.slice());
       var r = f.properties.point_count >= 50 ? 22 : f.properties.point_count >= 10 ? 17 : 13;
-      showHint(f.properties.point_count + " places here", { x: p.x, y: p.y - r }, "cl|" + cid);
+      // a coloured disc also says what it holds, answer by answer (discRowsEl)
+      showHint(f.properties.point_count + " places here", { x: p.x, y: p.y - r }, "cl|" + cid, discRowsEl(f.properties));
       showClusterBounds(cid, f.properties.point_count);
     });
     map.on("mouseleave", CLUSTER_LAYER, function () {
@@ -3961,7 +4229,7 @@
       map.getCanvas().style.cursor = "pointer";
       if (SPIDER.items) return;
       var p = map.project(f.geometry.coordinates.slice());
-      showHint(f.properties.point_count + " places here", { x: p.x, y: p.y - DISC_R[discBracket(f.properties.point_count)] }, "cl|m" + f.properties.mid);
+      showHint(f.properties.point_count + " places here", { x: p.x, y: p.y - DISC_R[discBracket(f.properties.point_count)] }, "cl|m" + f.properties.mid, discRowsEl(f.properties));
     });
     map.on("mouseleave", MERGED_LAYER, function () {
       CLUSTER.hovering = false;
@@ -3977,6 +4245,8 @@
     map.on("data", function (e) {
       if (e.sourceId === CLUSTER_SRC && e.isSourceLoaded) scheduleClusterSync();
     });
+    // (a ring the style has not seen is drawn on the spot by the page's one
+    // styleimagemissing handler, which hands "disc|…" names to addRingImage)
     wireHintGlobals();
   }
 
@@ -4078,8 +4348,8 @@
   function clusterTeardown() {
     if (!CLUSTER.ready) return;
     clearMerged();
-    ["atlas-cluster-count", CLUSTER_LAYER, "atlas-cluster-bounds-line", "atlas-cluster-bounds-fill",
-     "atlas-cluster-merged-count", MERGED_LAYER].forEach(function (id) {
+    ["atlas-cluster-count", RING_LAYER, CLUSTER_LAYER, "atlas-cluster-bounds-line", "atlas-cluster-bounds-fill",
+     "atlas-cluster-merged-count", MERGED_RING_LAYER, MERGED_LAYER].forEach(function (id) {
       if (map.getLayer(id)) map.removeLayer(id);
     });
     if (map.getSource(CLUSTER_SRC)) map.removeSource(CLUSTER_SRC);
@@ -4109,7 +4379,12 @@
     clusterEntries().forEach(function (it) {
       byKey[it.key] = it;
       if (!CLUSTER.byKey[it.key]) it.e._clustered = false;
-      feats.push({ type: "Feature", geometry: it.e.f.geometry, properties: { __k: it.key } });
+      var props = { __k: it.key };
+      // the point's answer slot, so the disc it falls into can count it (COLOURED DISCS)
+      var slot = DISC_COLOURING ? DISC_COLOURING.slotOf(it.L, it.e.f) : null;
+      it.e._slot = typeof slot === "number" && slot >= 0 ? Math.min(Math.floor(slot), DISC_SLOTS) : null;
+      if (it.e._slot !== null) props.__a = it.e._slot;
+      feats.push({ type: "Feature", geometry: it.e.f.geometry, properties: props });
     });
     // entries that just LEFT the source must not stay hidden by a stale flag
     for (var k in CLUSTER.byKey) { if (!byKey[k]) CLUSTER.byKey[k].e._clustered = false; }
@@ -4122,9 +4397,9 @@
     paintAnswerLayers();   // left out of the engine, so no verdict will repaint them
     scheduleClusterSync();
   }
-  // the selected answer's layers, which the folding engine no longer touches
+  // the selected answer's layers, which the folding engine no longer touches —
+  // a Standard key's picked answer, or a mode's own (answerNamesOn)
   function paintAnswerLayers() {
-    if (!KINDFILTER) return;
     (MANIFEST.layers || []).forEach(function (L) {
       if (markersByLayer[L.id] && answerNamesOn(L)) paintMarkerDisplay(L);
     });
@@ -4166,6 +4441,8 @@
     // layers whose pins all left the population (search can empty one)
     (MANIFEST.layers || []).forEach(function (L) { if (L._foldEl) updateFoldNote(L); });
     mergeOverlaps();
+    // rings drawn over a long session are let go in one sweep; the ones on screen come straight back
+    if (DISC_IMAGES.n > DISC_IMAGES_MAX) flushRingImages();
   }
 
   /* ==================================================================
@@ -4190,16 +4467,22 @@
      pass is a read of what is on screen, and it runs after the engine has
      spoken, never instead of it.
   ================================================================== */
-  var MERGED = { feats: [], byId: {}, hiddenDiscs: [], seq: 0 };
+  // sig: what the last pass put on the map, so a pass that finds the same
+  // answer writes nothing — a filter set again reloads the source, which
+  // reports back as data, which asks for a sync, which merges again, and the
+  // map never went idle (Bengaluru on LOKA, 7 Nov 2026: 18 repaints a second
+  // standing still)
+  var MERGED = { feats: [], byId: {}, hiddenDiscs: [], seq: 0, sig: "" };
   var MERGE_GAP = 3;   // discs (and a disc and a pin) keep at least this many pixels apart
 
   function clearMerged(quiet) {
     var had = MERGED.feats.length;
     for (var k in CLUSTER.byKey) CLUSTER.byKey[k].e._absorbed = false;
-    MERGED.feats = []; MERGED.byId = {}; MERGED.hiddenDiscs = [];
+    MERGED.feats = []; MERGED.byId = {}; MERGED.hiddenDiscs = []; MERGED.sig = "";
     if (!had || !map) return;
     try {
       if (map.getLayer(CLUSTER_LAYER)) map.setFilter(CLUSTER_LAYER, ["has", "point_count"]);
+      if (map.getLayer(RING_LAYER)) map.setFilter(RING_LAYER, ringFilter());
       if (map.getLayer("atlas-cluster-count")) map.setFilter("atlas-cluster-count", ["has", "point_count"]);
       var src = map.getSource(MERGED_SRC);
       if (src) src.setData({ type: "FeatureCollection", features: [] });
@@ -4218,8 +4501,10 @@
     try { discs = map.querySourceFeatures(CLUSTER_SRC, { filter: ["has", "point_count"] }); } catch (e) { return; }
     // measured against the engine's own answer, not against the last merge;
     // a pin hidden by the last merge must come back if this one frees it
+    // (the flags are cleared here; the map is written only once the answer
+    // is known to differ from the last one — see MERGED.sig)
     var hadBefore = MERGED.feats.length > 0;
-    clearMerged(true);
+    for (var pk in CLUSTER.byKey) CLUSTER.byKey[pk].e._absorbed = false;
     var w = map.getContainer().clientWidth, h = map.getContainer().clientHeight;
     discs.forEach(function (f) {
       var cid = f.properties.cluster_id;
@@ -4228,9 +4513,11 @@
       var n = f.properties.point_count;
       var p = map.project(f.geometry.coordinates.slice());
       if (p.x < -60 || p.y < -60 || p.x > w + 60 || p.y > h + 60) return;   // off screen
-      items.push({ disc: cid, n: n, x: p.x, y: p.y, r: DISC_R[discBracket(n)] + 2, lngLat: f.geometry.coordinates.slice() });
+      // and its members by answer slot, so a merged disc can add them up (COLOURED DISCS)
+      items.push({ disc: cid, n: n, x: p.x, y: p.y, r: DISC_R[discBracket(n)] + 2, lngLat: f.geometry.coordinates.slice(),
+                   counts: +f.properties.cr === 1 ? slotCountsOf(f.properties) : null });
     });
-    if (!items.length) { if (hadBefore) (MANIFEST.layers || []).forEach(paintMarkerDisplay); return; }
+    if (!items.length) { clearMerged(true); if (hadBefore) (MANIFEST.layers || []).forEach(paintMarkerDisplay); return; }
     // the lone pins on screen: a pin stands on its point, 20 wide and 28 tall
     for (var k in CLUSTER.byKey) {
       var it = CLUSTER.byKey[k];
@@ -4257,27 +4544,41 @@
     }
     var groups = {};
     items.forEach(function (it, i) { var g = find(i); (groups[g] = groups[g] || []).push(it); });
-    var feats = [], hidden = [];
+    var feats = [], hidden = [], byId = {};
     for (var g in groups) {
       var members = groups[g];
       if (members.length < 2) continue;
       var n = 0, sx = 0, sy = 0, discIds = [], pinKeys = [];
+      // the merged disc's shares: its discs' counts and its pins' slots, added up
+      var counts = slotKeys().map(function () { return 0; }), coloured = false;
       members.forEach(function (m) {
         n += m.n; sx += m.x * m.n; sy += m.y * m.n;
-        if (m.disc != null) { discIds.push(m.disc); hidden.push(m.disc); }
-        else { pinKeys.push(m.pin.key); m.pin.e._absorbed = true; }
+        if (m.disc != null) {
+          discIds.push(m.disc); hidden.push(m.disc);
+          if (m.counts) { coloured = true; m.counts.forEach(function (c, i) { counts[i] += c; }); }
+        } else {
+          pinKeys.push(m.pin.key); m.pin.e._absorbed = true;
+          if (m.pin.e._slot !== null && m.pin.e._slot !== undefined) { coloured = true; counts[m.pin.e._slot]++; }
+        }
       });
       var at = map.unproject([sx / n, sy / n]);
       var mid = ++MERGED.seq;
-      MERGED.byId[mid] = { discs: discIds, pins: pinKeys, n: n, at: [at.lng, at.lat] };
-      feats.push({ type: "Feature", geometry: { type: "Point", coordinates: [at.lng, at.lat] },
-        properties: { mid: mid, point_count: n, point_count_abbreviated: n >= 1000 ? Math.round(n / 100) / 10 + "k" : String(n) } });
+      byId[mid] = { discs: discIds, pins: pinKeys, n: n, at: [at.lng, at.lat] };
+      var props = { mid: mid, point_count: n, point_count_abbreviated: n >= 1000 ? Math.round(n / 100) / 10 + "k" : String(n), cr: coloured ? 1 : 0 };
+      slotKeys().forEach(function (k, i) { props[k] = counts[i]; });
+      feats.push({ type: "Feature", geometry: { type: "Point", coordinates: [at.lng, at.lat] }, properties: props });
     }
-    MERGED.feats = feats; MERGED.hiddenDiscs = hidden;
-    if (feats.length) {
-      var keep = ["all", ["has", "point_count"], ["!", ["in", ["get", "cluster_id"], ["literal", hidden]]]];
+    // the same answer as last time: the map keeps what it has (and the merged
+    // discs keep the ids a click looks up); a new answer is written once
+    var sig = hidden.slice().sort().join(",") + "|" + feats.map(function (f) {
+      return f.geometry.coordinates.join(",") + ":" + f.properties.point_count + ":" + slotKeys().map(function (k) { return f.properties[k]; }).join("/");
+    }).join(";");
+    if (sig !== MERGED.sig) {
+      MERGED.feats = feats; MERGED.byId = byId; MERGED.hiddenDiscs = hidden; MERGED.sig = sig;
+      var keep = feats.length ? ["all", ["has", "point_count"], ["!", ["in", ["get", "cluster_id"], ["literal", hidden]]]] : ["has", "point_count"];
       try {
         map.setFilter(CLUSTER_LAYER, keep);
+        map.setFilter(RING_LAYER, ringFilter(hidden));
         map.setFilter("atlas-cluster-count", keep);
         map.getSource(MERGED_SRC).setData({ type: "FeatureCollection", features: feats });
       } catch (e) {}
@@ -5369,9 +5670,14 @@
     } catch (e) {}
     try { map.fitBounds(b, { padding: pad, maxZoom: ANSWER_MAX_ZOOM, duration: 600 }); } catch (e) {}
   }
-  // the selected answer's own layer (either half of a split file)
+  // the selected answer's own layer (either half of a split file) — or a
+  // mode's: Insight's chosen answer and Explore's pressed button are the same
+  // exemption (answerOn, in the mode), so those places stand as their own
+  // pins at every zoom, never inside a disc (Mithun, 7 Nov 2026)
   function answerNamesOn(L) {
-    if (!KINDFILTER || !L) return false;
+    if (!L) return false;
+    if (EV && EV.answerOn && EV.answerOn(L)) return true;
+    if (!KINDFILTER) return false;
     var K = layerById(KINDFILTER.layer);
     return !!K && keyHalves(K).indexOf(L) >= 0;
   }
@@ -5560,6 +5866,8 @@
     // one file, one switch: the rows that went on as points follow their outlines
     var twin = pairedTwin(L);
     if (twin) setLayerVisible(twin, show);
+    // the first key on may have moved to another layer (STANDARD RINGS)
+    if (keyState[keyHost(L).id]) syncStandardDiscs();
   }
 
   // Basemap + tile attributions, rendered in a strip BELOW the map (not overlaying
@@ -7901,7 +8209,10 @@
     if (EV) {
       var sh = EV.sheetHead();
       who.innerHTML = "";
-      who.appendChild(el("span", "sheet-layer-name", esc(sh.small || sh.label)));
+      // the kicker above already says the label; until the places are
+      // counted this line stays empty (and hidden) rather than saying the
+      // same word twice — "INSIGHTS / Insights" before the map had loaded
+      if (sh.small) who.appendChild(el("span", "sheet-layer-name", esc(sh.small)));
       return;
     }
     var sec = document.querySelector("#atlas-controls .ctl-group.on-show") ||

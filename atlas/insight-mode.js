@@ -39,6 +39,10 @@
   // red is kept late in the order so a middle answer never reads as a warning
   var PAL = ["#2A6B41", "#3A7FA1", "#E9A237", "#8A5A9E", "#B5541B", "#C9402B", "#6E8B3D"];
   var NONE = "#CFCBC2", PLAIN_PIN = "#7A756C", HOLLOW = "#A39E94";
+  // Research mode's pin: a pure neutral grey, no warm tint, no other colour — the marks beside it carry the colour (Mithun, 7 Nov 2026)
+  var RESEARCH_PIN = "#4A4A4A";
+  // the grey of the discs' pooled arc (atlas.js DISC_POOL): the key's "Doesn't say" mark wears the same
+  var POOL = "#B8B3A9";
   // the few-places shelf: under a quarter of the places, or under 8
   var FEW_SHARE = 0.25, FEW_PLACES = 8;
   // compare two questions only when the places answering both are at least a tenth, and at least 5 (Mithun, 25 Oct 2026)
@@ -228,6 +232,56 @@
     return (list || []).filter(function (st) { return st.col !== col; }).map(function (st) {
       return { st: st, both: bothCount(features, col, st.col) };
     }).filter(function (x) { return canCompare(x.both, total); });
+  }
+  /* The split bar's partner question for a picked answer: the compare
+     option with the most places answering both (Mithun, 7 Nov 2026, "ship
+     the split bar first"). null when none qualifies. */
+  function bestPair(list, features, col) {
+    var opts = compareOptions(list, features, col);
+    if (!opts.length) return null;
+    return opts.reduce(function (best, x) { return x.both > best.both ? x : best; });
+  }
+  /* One answer of one question (ansKey, null for "Doesn't say") split by
+     a partner question sb's answers, over the places answering both:
+     { count, cells: [{ answer, key, color, count }] }. */
+  function splitRow(features, col, ansKey, sb) {
+    var rows = (features || []).filter(function (f) {
+      var p = f && f.properties;
+      var k = keyOf(p, col);
+      return (ansKey === null ? k === "" : k === ansKey) && keyOf(p, sb.col);
+    });
+    return {
+      count: rows.length,
+      cells: sb.answers.map(function (b) {
+        return { answer: b.name, key: b.key, color: b.color, count: rows.filter(function (f) { return keyOf(f.properties, sb.col) === b.key; }).length };
+      }).filter(function (c) { return c.count > 0; }),
+    };
+  }
+  /* The split bar's one line, in plain text (the caller escapes it). It names
+     the picked answer, so it stays true after a slice tap narrows the list
+     under the header (review, 7 Nov 2026). ansName null = "Doesn't say".
+     total = places with the picked answer; row = splitRow(); q = partner question.
+       bar:  "How the 21 places that say X answer “Q”"
+             "How 17 of the 21 places that say X answer “Q”"
+       one:  every place that answers Q says the same thing — no bar:
+             "All 21 places that say X answer “Q” with Y."
+             "Of the 21 places that say X, all 5 that answer “Q” say Y."
+             "Of the 21 places that say X, the one that answers “Q” says Y." */
+  function splitWording(ansName, total, row, q) {
+    var one = total === 1;
+    var grp = ansName === null
+      ? (one ? "the one place with no answer here" : "the " + total + " places with no answer here")
+      : (one ? "the one place that says " + ansName : "the " + total + " places that say " + ansName);
+    var Q = "“" + q + "”";
+    if (row.cells.length === 1) {
+      var y = row.cells[0].answer;
+      var Grp = grp.charAt(0).toUpperCase() + grp.slice(1);
+      if (row.count === total) {
+        return { kind: "one", text: (one ? Grp : "All " + grp.slice(4)) + " answer" + (one ? "s " : " ") + Q + " with " + y + "." };
+      }
+      return { kind: "one", text: "Of " + grp + ", " + (row.count === 1 ? "the one that answers " + Q + " says " : "all " + row.count + " that answer " + Q + " say ") + y + "." };
+    }
+    return { kind: "bar", text: row.count === total ? "How " + grp + " answer " + Q : "How " + row.count + " of " + grp + " answer " + Q };
   }
   /* Each answer of one question, split by the answers of the other, over the
      places answering both: [{ answer, count, cells: [{ answer, count, color }] }]. */
@@ -1137,6 +1191,44 @@
   function sentenceHTML(text) { return escText(text).replace(/\d+(?:,\d{3})*(?:\.\d+)?/g, "<b>$&</b>"); }
   function placesWord(n) { return n === 1 ? "place" : "places"; }
 
+  /* ========= Research mode: shape + colour beside the pin (Mithun, 7 Nov 2026) =========
+     Without research mode a question colours the pins alone (only one is ever
+     active). With it, up to three questions are "ticked" to show on the map at
+     once: the pins turn the atlas's neutral grey ink and each ticked question
+     wears its own shape — 1st ticked a circle, 2nd a square, 3rd a triangle —
+     beside the pin, in that question's answer colour. The same three shapes
+     stand for the map key's blocks and the panel's own rows. */
+  var SHAPES = ["circle", "square", "triangle"];
+  var SHAPE_HEAD = ["Circles and discs", "Squares", "Triangles"];
+  // one small mark, inline, for a key row or a panel answer row (not the map pin,
+  // which is built as a real DOM node by atlas.js's api.markRowsEl)
+  function markSVG(shape, color) {
+    var c = escAttr(color);
+    var path = shape === "square" ? "M2.6 2.6h8.8v8.8h-8.8z"
+      : shape === "triangle" ? "M7 1.6L12.6 11.4H1.4z" : null;
+    return '<svg class="in-mk" viewBox="0 0 14 14" aria-hidden="true">' +
+      (path ? '<path d="' + path + '" fill="' + c + '"></path>' : '<circle cx="7" cy="7" r="5.4" fill="' + c + '"></circle>') +
+      "</svg>";
+  }
+  /* A couple of the words an answer was read from, for its ⓘ popover ("the
+     existing examples if any"): the first few places' own _why text, each
+     shown once. Nothing invented — when no place carries one, the list is
+     simply empty and the popover says so with silence, not a placeholder. */
+  function answerExamples(features, col, key, max) {
+    max = max || 2;
+    var seen = {}, out = [];
+    (features || []).some(function (f) {
+      var p = f && f.properties;
+      if (!p || keyOf(p, col) !== (key || "")) return false;
+      var w = answerOf(p, col + "_why");
+      if (!w || seen[w.toLowerCase()]) return false;
+      seen[w.toLowerCase()] = true;
+      out.push(w);
+      return out.length >= max;
+    });
+    return out;
+  }
+
   var CSS = [
     ".in-panel{padding:.15rem 0 1rem;font-size:var(--t-ui,.9rem)}",
     ".in-panel .in-stamp,.in-card .in-stamp{font-size:var(--t-label,.72rem);font-weight:700;letter-spacing:.12em;text-transform:uppercase}",
@@ -1176,17 +1268,21 @@
     ".in-sect{display:flex;align-items:baseline;justify-content:space-between;gap:.5rem;margin:.2rem 0 .5rem}",
     ".in-sect .in-stamp{color:var(--color-text-muted,#6E6A63)}",
     ".in-hint{font-size:var(--t-meta,.8rem);color:var(--color-text-muted,#6E6A63);margin:-.2rem 0 .7rem}",
-    ".in-q{border:1px solid var(--color-border,rgba(36,33,29,.18));border-radius:var(--radius-lg,.375rem);margin-bottom:.6rem;background:var(--color-surface,#FDFCF8)}",
-    ".in-q.open{border-color:rgba(36,33,29,.35);box-shadow:0 2px 10px rgba(36,33,29,.07)}",
-    ".in-qhead{display:block;width:100%;text-align:left;background:none;border:none;padding:.65rem .8rem .6rem;font:inherit;color:inherit;cursor:pointer}",
-    ".in-qt{font-family:var(--font-display,Georgia,serif);font-weight:700;font-size:1.02rem;line-height:1.3;display:flex;gap:.5rem;justify-content:space-between}",
+    /* The questions, minimal like the map's key (Mithun, 7 Nov 2026, round 2):
+       no box, no card, no large serif heading — a question is a plain small
+       bold line with a chevron, a hairline between questions, its answers the
+       key's own rows beneath it. */
+    ".in-q{margin:0;padding:.1rem 0}",
+    ".in-q+.in-q{border-top:1px solid var(--color-divider,rgba(36,33,29,.1))}",
+    ".in-qhead{display:block;width:100%;text-align:left;background:none;border:none;padding:.5rem 0;font:inherit;color:inherit;cursor:pointer}",
+    ".in-qt{font-weight:600;font-size:var(--t-ui,.9rem);line-height:1.3;display:flex;gap:.5rem;justify-content:space-between}",
     ".in-qt .in-chev{font-family:var(--font-body,system-ui,sans-serif);color:var(--color-text-muted,#6E6A63);font-size:.85rem;flex:none;transition:transform .2s}",
     ".in-q.open .in-qt .in-chev{transform:rotate(180deg)}",
     ".in-cov{font-size:var(--t-meta,.8rem);color:var(--color-text-secondary,#5A5751);margin-top:.15rem}",
     ".in-mini{display:flex;height:6px;border-radius:3px;overflow:hidden;margin-top:.45rem;background:" + NONE + "}",
     ".in-mini span{height:100%}",
     ".in-q.sparse .in-qt{color:var(--color-text-secondary,#5A5751)}",
-    ".in-qbody{padding:0 .8rem .75rem}",
+    ".in-qbody{padding:0 0 .5rem}",
     ".in-ans{display:grid;grid-template-columns:1fr auto;gap:.1rem .6rem;text-align:left;background:none;border:none;border-radius:var(--radius-md,.25rem);padding:.4rem .45rem;margin:0 -.45rem;width:calc(100% + .9rem);font:inherit;color:inherit;cursor:pointer}",
     ".in-ans:hover{background:var(--color-surface-alt,#F0EDE4)}",
     ".in-ans.on{background:var(--color-marigold-tint,rgba(233,162,55,.16))}",
@@ -1215,6 +1311,14 @@
     ".in-cbar button.on{outline:2px solid #24211D;outline-offset:-2px}",
     ".in-from{font-size:var(--t-meta,.8rem);color:var(--color-text-secondary,#5A5751)}",
     ".in-from q{font-style:italic;font-family:var(--font-display,Georgia,serif);font-weight:400;quotes:\"\\201C\" \"\\201D\"}",
+    // the split bar under a picked answer's "N places" header (Mithun, 7 Nov 2026)
+    ".in-split{margin:0 0 .6rem}",
+    ".in-split .in-from{margin-bottom:.3rem}",
+    ".in-split .in-lg{display:flex;flex-wrap:wrap;gap:.15rem .7rem;font-size:var(--t-meta,.8rem);margin:.35rem 0 0;color:var(--color-text-secondary,#5A5751)}",
+    ".in-split .in-lg span{display:inline-flex;align-items:center;gap:.3rem}",
+    ".in-split .in-lg i{width:9px;height:9px;border-radius:2px;display:inline-block;flex:none}",
+    ".in-split .in-lg b{font-weight:700;color:var(--color-text-primary,#24211D);font-variant-numeric:tabular-nums}",
+    ".in-split-one{font-size:var(--t-meta,.8rem);color:var(--color-text-secondary,#5A5751);margin:0 0 .6rem}",
     ".in-plist{margin-top:.7rem;border-top:1px solid var(--color-divider,rgba(36,33,29,.10));padding-top:.5rem}",
     ".in-plist .in-ph{display:flex;justify-content:space-between;align-items:baseline;gap:.5rem;font-size:var(--t-meta,.8rem);color:var(--color-text-secondary,#5A5751);margin-bottom:.2rem}",
     ".in-plist .in-ph button{white-space:nowrap;background:none;border:none;padding:0;font:inherit;color:var(--color-sindoor-deep,#9E3220);font-weight:700;font-size:var(--t-meta,.8rem);cursor:pointer}",
@@ -1228,12 +1332,40 @@
     // the map's chips: what colours the map, and what it is showing
     ".atlas-stage>.in-chips{position:absolute;z-index:4;top:12px;left:calc(var(--in-left,24px));right:64px;display:flex;gap:.4rem;flex-wrap:wrap;pointer-events:none}",
     ".in-chips>*{pointer-events:auto}",
+    ".in-live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}",
     ".in-chip{display:inline-flex;align-items:center;gap:.4rem;background:var(--color-surface,#FDFCF8);border:1px solid var(--color-border,rgba(36,33,29,.18));border-radius:var(--radius-md,.25rem);padding:.28rem .75rem;font-size:var(--t-meta,.8rem);font-weight:600;box-shadow:0 1px 3px rgba(36,33,29,.1);max-width:100%;color:var(--color-text-primary,#24211D)}",
     ".in-chip .in-chip-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}",
     ".in-chip button{background:none;border:none;padding:0 0 0 .2rem;font:inherit;font-weight:700;font-size:1rem;line-height:1;color:var(--color-text-muted,#6E6A63);cursor:pointer;min-width:24px;min-height:24px}",
+    /* The "Coloured by" chip is the key (Mithun, 7 Nov 2026): the question on
+       top, then one row per answer — its dot, its name, its count — at most
+       six, "+ n more" for the rest, and "Doesn't say" when any place is blank.
+       Open everywhere; a tap on the question folds it to the one-line chip. */
+    ".in-chips{align-items:flex-start}",
+    ".in-chip.in-key{display:block;padding:0;max-width:260px}",
+    ".in-chip .in-key-h{display:flex;align-items:center;gap:.4rem;width:100%;min-width:0;background:none;border:0;font:inherit;font-weight:600;font-size:inherit;line-height:1.3;color:inherit;text-align:left;padding:.28rem .75rem;cursor:pointer}",
+    ".in-chip .in-key-h .in-chip-t{flex:1 1 auto;white-space:normal;overflow:visible;text-overflow:clip}",
+    ".in-key[data-folded=\"1\"] .in-key-h .in-chip-t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
+    ".in-chip .in-key-h .in-key-c{flex:0 0 auto;font-size:.7em;color:var(--color-text-muted,#6E6A63)}",
+    ".in-key-l{list-style:none;margin:0;padding:.1rem .75rem .4rem;border-top:1px solid var(--color-divider,rgba(36,33,29,.1))}",
+    ".in-key-l li{display:flex;align-items:center;gap:.45rem;font-weight:400;line-height:1.25;padding:.17rem 0}",
+    ".in-key-l .in-sw{border:1px solid rgba(36,33,29,.18)}",
+    ".in-key-l .in-sw-none{background:" + POOL + "}",
+    ".in-key-l .in-key-n{margin-left:auto;padding-left:.6rem;font-variant-numeric:tabular-nums;color:var(--color-text-muted,#6E6A63)}",
+    ".in-key-l .in-key-more{color:var(--color-text-muted,#6E6A63)}",
+    ".in-key[data-folded=\"1\"] .in-key-l{display:none}",
+    // Research mode's blocks, one per ticked question, in tick order: side by side where there is room, a column on a phone
+    ".in-keys{display:flex;gap:.4rem;flex-wrap:wrap;align-items:flex-start;max-width:100%}",
     // a wide screen: clear of the layers button and of a place's card docked at the right
     "@media (min-width:721px){.atlas-stage>.in-chips{right:auto;max-width:calc(100% - var(--in-left,24px) - 420px)}}",
-    "@media (max-width:720px){.atlas-stage>.in-chips{left:10px;right:56px;top:auto;bottom:calc(var(--sheet-h,0px) + 10px)}.in-chip{font-size:.75rem;padding:.22rem .6rem}" +
+    /* A phone: the chips stand in a column at the map's foot, the key lowest
+       and the chosen answer's chip above it (never wrapped under the key),
+       lifted over the strip the credits button (ⓘ) and the LOKA badge share,
+       and narrow enough to clear the scale and the zoom buttons on the right.
+       The one-time "Tap a pin" cue is lifted over the key by the key's own
+       measured height (--in-chips-h, set by renderChips). */
+    "@media (max-width:720px){.atlas-stage>.in-chips{left:10px;right:56px;top:auto;bottom:calc(var(--sheet-h,0px) + 48px);flex-direction:column-reverse;align-items:flex-start}.in-chip{font-size:.75rem;padding:.22rem .6rem}" +
+      ".in-chip.in-key{max-width:228px}.in-chip .in-key-h{padding:.22rem .6rem}.in-key-l{padding:.1rem .6rem .35rem}.in-keys{flex-direction:column}" +
+      ".atlas-stage.in-on .atlas-cue{bottom:calc(var(--sheet-h,0px) + var(--in-chips-h,0px) + 60px)}" +
       "body:has(#atlas-panel[data-h=\"full\"]) .atlas-stage>.in-chips{display:none}}",
     // a place with no answer to the open question: a hollow grey pin
     ".atlas-pin.loc.in-hollow .pin-body path{fill:#FDFCF8;stroke:" + HOLLOW + ";stroke-width:2.5}",
@@ -1245,12 +1377,65 @@
     ".in-card .in-pa .in-an .in-sw{width:9px;height:9px}",
     ".in-card .in-pa.cur{background:var(--color-marigold-tint,rgba(233,162,55,.16));margin:0 -.6rem;padding:.4rem .6rem;border-radius:var(--radius-md,.25rem)}",
     ".in-card .in-answers{margin:.5rem 0 .4rem}",
+    /* the default panel's answer rows: the same look as the map's key
+       (Mithun, 7 Nov 2026) — a mark, the name, the count — plus a small
+       ⓘ at the end of each row */
+    ".in-arow{display:flex;align-items:center;gap:.15rem;margin:0;width:100%}",
+    ".in-ans-row{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:.45rem;text-align:left;background:none;border:none;border-radius:var(--radius-md,.25rem);padding:.25rem .3rem;font:inherit;line-height:1.25;color:inherit;cursor:pointer}",
+    ".in-ans-row:hover{background:var(--color-surface-alt,#F0EDE4)}",
+    ".in-ans-row.on{background:var(--color-marigold-tint,rgba(233,162,55,.16))}",
+    ".in-ans-row.dim{opacity:.45}",
+    ".in-ans-row .in-nm{flex:1 1 auto;min-width:0;font-weight:400;display:flex;align-items:center;gap:.4rem}",
+    ".in-ans-row.on .in-nm{font-weight:600}",
+    ".in-ans-row .in-ct{flex:none;font-weight:400;font-variant-numeric:tabular-nums;color:var(--color-text-muted,#6E6A63)}",
+    ".in-ans-row .in-ct small{font-weight:400;color:var(--color-text-muted,#6E6A63);font-size:inherit}",
+    ".in-ans-row.none .in-nm{font-weight:600;color:var(--color-text-secondary,#5A5751)}",
+    ".in-mk{width:13px;height:13px;flex:none}",
+    ".in-ans-row .in-sw{width:11px;height:11px}",
+    ".in-sw.in-sw-hollow{background:none;border:2px solid " + POOL + ";box-sizing:border-box}",
+    ".in-arow + .in-caveat{margin-top:.6rem}",
+    ".in-info-btn{flex:none;width:21px;height:21px;border-radius:50%;border:1px solid var(--color-border,rgba(36,33,29,.3));background:var(--color-surface,#FDFCF8);color:var(--color-text-muted,#6E6A63);font:inherit;font-size:.74rem;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}",
+    ".in-info-btn:hover{color:var(--color-text-primary,#24211D)}",
+    ".in-info-btn[aria-expanded=\"true\"]{background:var(--color-leaf,#2A6B41);border-color:var(--color-leaf,#2A6B41);color:#fff}",
+    ".in-info{margin:0 0 .5rem;padding:.5rem .65rem;border-radius:var(--radius-md,.25rem);background:var(--color-surface-alt,#F0EDE4);font-size:var(--t-meta,.8rem);color:var(--color-text-secondary,#5A5751);line-height:1.4}",
+    ".in-info p{margin:.3rem 0 0}",
+    ".in-info p:first-child{margin-top:0}",
+    ".in-info q{font-style:italic;font-family:var(--font-display,Georgia,serif);quotes:\"\\201C\" \"\\201D\"}",
+    // the questions section's "Research mode" switch, bottom of the panel (Mithun, 7 Nov 2026)
+    ".in-rmode{display:flex;align-items:flex-start;gap:.7rem;margin-top:1.2rem;padding-top:.9rem;border-top:1px solid var(--color-divider,rgba(36,33,29,.1))}",
+    ".in-rsw{flex:none;position:relative;width:38px;height:22px;border-radius:11px;border:none;padding:0;background:var(--color-border,rgba(36,33,29,.3));cursor:pointer}",
+    ".in-rsw::after{content:\"\";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 2px rgba(36,33,29,.3)}",
+    ".in-rsw[aria-checked=\"true\"]{background:var(--color-leaf,#2A6B41)}",
+    ".in-rsw[aria-checked=\"true\"]::after{transform:translateX(16px)}",
+    ".in-rtext strong{display:block;font-weight:700;font-size:.95rem}",
+    ".in-rtext span{display:block;font-size:var(--t-meta,.8rem);color:var(--color-text-muted,#6E6A63);margin-top:.1rem}",
+    // the per-question tick box, beside the header, never inside its button (opening and ticking are separate taps)
+    ".in-qrow{display:flex;align-items:flex-start;gap:.3rem}",
+    ".in-qrow .in-qhead{flex:1 1 auto;min-width:0}",
+    ".in-tick{flex:none;display:inline-flex;align-items:center;height:2.2rem;padding:0 .2rem}",
+    // the phone's tiny chip (R5): the question, then its answers as dots with names, two lines at most
+    ".in-chip.in-tiny{display:block;max-width:100%;text-align:left;padding:.3rem .6rem;font:inherit;font-size:.75rem;line-height:1.3;cursor:pointer}",
+    ".in-tiny-q{display:block;font-weight:600}",
+    ".in-tiny-a{display:block;font-weight:400;margin-top:.1rem;color:var(--color-text-secondary,#5A5751)}",
+    ".in-tiny-i{display:inline-flex;align-items:center;gap:.25rem;margin-right:.55rem;white-space:nowrap}",
+    ".in-tiny-i .in-sw{width:8px;height:8px}",
+    ".in-tiny-more{color:var(--color-text-muted,#6E6A63)}",
+    // Research mode is not offered on a phone (R6, recommended): the switch is hidden below 600px
+    "@media (max-width:600px){.in-rmode{display:none}}",
+    ".in-tick input{width:17px;height:17px;margin:0}",
+    ".in-tick.in-tick-off{opacity:.4}",
   ].join("\n");
 
   function viewer(mode, api) {
     var esc = api.esc, el = api.el;
     var srcLayer = null, X = null, titleProp = "name";
-    var state = { ready: false, tab: null, open: null, filter: null, cmp: null, showAll: false, box: null, chips: null };
+    var state = {
+      ready: false, tab: null, open: null, filter: null, cmp: null, showAll: false, box: null, chips: null, keyFolded: false,
+      // Research mode (off on every page load, never remembered): up to 3 ticked
+      // questions, in the order ticked (their shape); which answer's ⓘ is open;
+      // the map key's own fold, kept per ticked question
+      research: false, ticks: [], info: null, rkeyFold: {},
+    };
 
     /* the row whose card is open keeps a Marigold wash until the card closes
        (atlas.js says which place's card is open: "atlas:card") */
@@ -1316,8 +1501,23 @@
     }
 
     /* ---- the map ---- */
+    /* Research mode: no one question is "the" colouring any more, so every
+       pin turns the atlas's neutral grey ink, and each ticked question (at
+       most 3, in tick order) puts its own shape beside the pin in that
+       question's answer colour — circle, square, triangle. A question the
+       place does not answer leaves no mark at all. */
+    function researchPinEl(f) {
+      var rows = [];
+      state.ticks.slice(0, 3).forEach(function (col, i) {
+        var qst = Q().byCol[col];
+        var c = qst && colourOf(qst, f && f.properties);
+        if (c) rows.push({ shape: SHAPES[i], colors: [c] });
+      });
+      return api.markRowsEl ? api.markRowsEl(RESEARCH_PIN, rows) : api.locPinEl(RESEARCH_PIN, null);
+    }
     function pinEl(L, f) {
       if (!L || !L._ev || !L._ev.insight) return null;
+      if (state.research) return researchPinEl(f);
       var st = state.open && Q().byCol[state.open];
       if (!st) return api.locPinEl(PLAIN_PIN, null);
       var c = colourOf(st, f && f.properties);
@@ -1328,19 +1528,132 @@
     }
     function repaint() {
       entries().forEach(function (e) {
-        var old = e.node && e.node.querySelector && e.node.querySelector(".atlas-pin");
+        // a research-mode pin sits inside a holder with its marks: the holder is what goes, never the pin alone
+        var old = e.node && e.node.querySelector && (e.node.querySelector(".atlas-rowed") || e.node.querySelector(".atlas-pin"));
         var pin = old && pinEl(X, e.f);
         if (pin && old.parentNode) old.parentNode.replaceChild(pin, old);
+        // how far the marks reach past the pin (0 without them), read by the fold, the merge and the fan (atlas.js)
+        e._rowsW = (pin && pin._rowsW) || 0;
+        e._rowsEl = (pin && pin._rowsEl) || null;
       });
     }
     function apply() {
       entries().forEach(function (e) { e.subOff = !matches((e.f && e.f.properties) || {}); });
       if (X) api.setLayerVisible(X, true);
     }
+    /* The key (KEY_MAX rows at most, the same six answers the discs colour),
+       folded to the one-line "Coloured by" chip by a tap on the question. */
+    var KEY_MAX = 6;
+    /* The key's counts are of the places on the map right now: a chosen
+       answer, a search, "What's around here" take places off it, and the key
+       follows (the question's own panel keeps the whole counts). Counted
+       over the map's markers once there are any, else over the places that
+       pass the filter. */
+    function shownCounts(st) {
+      var by = {}, none = 0, list = entries();
+      var add = function (p) { var k = keyOf(p || {}, st.col); if (k) by[k] = (by[k] || 0) + 1; else none++; };
+      if (list.length) list.forEach(function (e) { if (!e.hidden && !e.away && !e.subOff) add(e.f && e.f.properties); });
+      else feats().forEach(function (x) { if (matches(x.properties || {})) add(x.properties); });
+      return { by: by, none: none };
+    }
+    function keyHTML(st) {
+      var folded = !!state.keyFolded;
+      var shown = shownCounts(st);
+      var rows = st.answers.slice(0, KEY_MAX).map(function (a) {
+        return '<li><span class="in-sw" style="background:' + a.color + '"></span><span>' + escText(a.name) + '</span><span class="in-key-n">' + (shown.by[a.key] || 0) + "</span></li>";
+      }).join("");
+      if (st.answers.length > KEY_MAX) rows += '<li class="in-key-more">+ ' + (st.answers.length - KEY_MAX) + " more</li>";
+      if (st.none) rows += '<li><span class="in-sw in-sw-none"></span><span>Doesn’t say</span><span class="in-key-n">' + shown.none + "</span></li>";
+      return '<div class="in-chip in-key" data-folded="' + (folded ? 1 : 0) + '">' +
+        '<button type="button" class="in-key-h" data-in="key" aria-expanded="' + (folded ? "false" : "true") + '" aria-label="' +
+        (folded ? "Show the key: coloured by " : "Fold the key: coloured by ") + escAttr(st.question) + '"><span class="in-chip-t">Coloured by: ' + escText(st.question) +
+        '</span><span class="in-key-c" aria-hidden="true">' + (folded ? "▸" : "▾") + "</span></button>" +
+        '<ul class="in-key-l">' + rows + "</ul></div>";
+    }
+    /* Research mode's map key: one block per ticked question, headed by its
+       shape ("Circles and discs: …", "Squares: …", "Triangles: …"), each with
+       the same answer rows the default key has — a mark (now the question's
+       shape, not a plain dot) and the count. Like the single-question key it
+       stands down on desktop while the panel is open (hideKeyOnDesktop, in
+       researchChipsHTML) and always stands on a phone; on a phone with more
+       than one question ticked each block starts folded to its header line. */
+    function researchKeyHTML() {
+      var ticks = state.ticks.filter(function (c) { return !!Q().byCol[c]; });
+      if (!ticks.length) return "";
+      var defaultFold = api.onPhone() && ticks.length > 1;
+      return ticks.map(function (col, i) {
+        var st = Q().byCol[col];
+        var folded = has(state.rkeyFold, col) ? state.rkeyFold[col] : defaultFold;
+        var shown = shownCounts(st);
+        var rows = st.answers.slice(0, KEY_MAX).map(function (a) {
+          return "<li>" + markSVG(SHAPES[i], a.color) + "<span>" + escText(a.name) + '</span><span class="in-key-n">' + (shown.by[a.key] || 0) + "</span></li>";
+        }).join("");
+        if (st.answers.length > KEY_MAX) rows += '<li class="in-key-more">+ ' + (st.answers.length - KEY_MAX) + " more</li>";
+        if (st.none) rows += '<li><span class="in-sw in-sw-none"></span><span>Doesn’t say</span><span class="in-key-n">' + shown.none + "</span></li>";
+        // the discs ring by the first question only while it stands alone; with more ticked they wear no ring
+        var label = (i === 0 && ticks.length > 1 ? "Circles" : SHAPE_HEAD[i]) + ": " + st.question;
+        return '<div class="in-chip in-key" data-folded="' + (folded ? 1 : 0) + '">' +
+          '<button type="button" class="in-key-h" data-in="rkey" data-col="' + escAttr(col) + '" aria-expanded="' + (folded ? "false" : "true") + '" aria-label="' +
+          (folded ? "Show the key: " : "Fold the key: ") + escAttr(label) + '"><span class="in-chip-t">' + escText(label) +
+          '</span><span class="in-key-c" aria-hidden="true">' + (folded ? "▸" : "▾") + "</span></button>" +
+          '<ul class="in-key-l">' + rows + "</ul></div>";
+      }).join("");
+    }
+    /* What the counted discs wear (atlas.js, COLOURED DISCS): the open
+       question's answers in the key's order and colours, a place's slot the
+       index of its answer, blank or past the sixth into the pool. */
+    function discColouring() {
+      // research mode: discs ring by the 1st ticked question only — never
+      // stacked rings, and never a square or triangle on a disc
+      // (and with MORE than one ticked, no ring and no colour at all: the plain
+      // disc with its count — Mithun, 7 Nov 2026, round 2)
+      var ticked = state.research ? state.ticks.filter(function (c) { return !!Q().byCol[c]; }) : [];
+      if (state.research && ticked.length > 1) return null;
+      var col = state.research ? ticked[0] : state.open;
+      var st = col && Q().byCol[col];
+      if (!st || !st.answers.length) return null;
+      var slot = {};
+      st.answers.forEach(function (a, i) { slot[a.key] = Math.min(i, KEY_MAX); });
+      return {
+        colours: st.answers.slice(0, KEY_MAX).map(function (a) { return a.color; }),
+        names: st.answers.slice(0, KEY_MAX).map(function (a) { return a.name; }),
+        pool: st.answers.length > KEY_MAX ? "Doesn’t say, or another answer" : "Doesn’t say",
+        // any marker layer's place: one that does not answer the question (another
+        // layer's, say) is in the pool, so a disc holding both keeps its shares right
+        slotOf: function (L, f) {
+          var k = keyOf((f && f.properties) || {}, st.col);
+          return k && slot[k] !== undefined ? slot[k] : KEY_MAX;
+        }
+      };
+    }
+    /* Desktop: the map's "Coloured by" key says nothing the open Insights
+       panel does not already say, so it stands down while the panel is open
+       and comes back the moment it is folded. A phone's sheet is closed
+       while you look at the map, so its key always stands (Mithun, 7 Nov
+       2026). */
+    function hideKeyOnDesktop() {
+      if (typeof document === "undefined" || api.onPhone()) return false;
+      var panel = document.getElementById("atlas-panel");
+      return !!panel && !panel.classList.contains("collapsed");
+    }
+    /* A phone gets no big key on the map (Mithun, 7 Nov 2026, round 2): one
+       tiny chip — the open question, then its answers as small colour dots
+       with their names, at most two lines (renderChips trims the rest to
+       "+ n more" once it is measured). A tap opens the panel at that
+       question. */
+    function tinyChipHTML(st) {
+      var items = st.answers.map(function (a) {
+        return '<span class="in-tiny-i"><span class="in-sw" style="background:' + a.color + '"></span>' + escText(a.name) + "</span>";
+      });
+      if (st.none) items.push('<span class="in-tiny-i"><span class="in-sw in-sw-none"></span>Doesn\u2019t say</span>');
+      return '<button type="button" class="in-chip in-tiny" data-in="panel" data-col="' + escAttr(st.col) + '" aria-label="Open the questions at: ' + escAttr(st.question) + '">' +
+        '<span class="in-tiny-q">' + escText(st.question) + '</span><span class="in-tiny-a">' + items.join("") + "</span></button>";
+    }
     function chipsHTML() {
+      if (state.research) return researchChipsHTML();
       var st = state.open && Q().byCol[state.open];
       if (!st) return '<span class="in-chip"><span class="in-chip-t">Open a question to colour the map</span></span>';
-      var h = '<span class="in-chip"><span class="in-chip-t">Coloured by: ' + escText(st.question) + "</span></span>";
+      var h = api.onPhone() ? tinyChipHTML(st) : hideKeyOnDesktop() ? "" : keyHTML(st);
       var f = state.filter;
       if (f) {
         var fs = Q().byCol[f.col], a = fs && fs.answers.filter(function (x) { return x.key === f.ans; })[0];
@@ -1352,14 +1665,59 @@
       }
       return h;
     }
+    // same filter chip as the default view (duplicated rather than shared,
+    // so neither path can break the other): research mode's own key blocks
+    // plus whichever answer or slice is picked
+    function researchChipsHTML() {
+      // the blocks stand together in one box, so a phone's column-reverse (the
+      // picked answer's chip above the key) never turns the blocks' own order round
+      var blocks = hideKeyOnDesktop() ? null : researchKeyHTML();
+      var h = blocks === null ? "" : blocks ? '<div class="in-keys">' + blocks + "</div>" : '<span class="in-chip"><span class="in-chip-t">Tick a question to colour the map</span></span>';
+      // a phone (Research mode is not offered below 600px; a small tablet may still reach it): the tiny chip of the first ticked question
+      if (api.onPhone()) {
+        var first = state.ticks.filter(function (c) { return !!Q().byCol[c]; })[0];
+        h = first ? tinyChipHTML(Q().byCol[first]) : '<span class="in-chip"><span class="in-chip-t">Tick a question to colour the map</span></span>';
+      }
+      var f = state.filter;
+      if (f) {
+        var fs = Q().byCol[f.col], a = fs && fs.answers.filter(function (x) { return x.key === f.ans; })[0];
+        var n = feats().filter(function (x) { return matches(x.properties || {}); }).length;
+        var b = f.col2 && Q().byCol[f.col2] && Q().byCol[f.col2].answers.filter(function (x) { return x.key === f.ans2; })[0];
+        var lab = f.ans === null ? "Doesn’t say" : a ? a.name : f.ans;
+        h += '<span class="in-chip"><span class="in-sw" style="background:' + (f.ans === null ? NONE : a ? a.color : NONE) + '"></span><span class="in-chip-t">' +
+          escText(lab) + (b ? " + " + escText(b.name) : "") + " · " + n + " " + placesWord(n) + '</span><button type="button" data-in="clear" aria-label="Show all places">×</button></span>';
+      }
+      return h;
+    }
+    // the tiny chip's answers keep to two lines: the ones past that give way to "+ n more"
+    function fitTinyChip(box) {
+      if (!box || !box.children || !box.children.length || !box.offsetHeight) return;
+      var line = parseFloat((typeof getComputedStyle !== "undefined" && getComputedStyle(box).lineHeight) || "") || 16;
+      var maxH = line * 2 + 2;
+      var items = Array.prototype.slice.call(box.querySelectorAll(".in-tiny-i")), hidden = 0, more = null;
+      while (box.scrollHeight > maxH && items.length > 1) {
+        box.removeChild(items.pop());
+        hidden++;
+        if (!more) { more = el("span", "in-tiny-more"); box.appendChild(more); }
+        more.textContent = "+ " + hidden + " more";
+      }
+    }
     function renderChips() {
       if (typeof document === "undefined") return;
       var stage = document.querySelector(".atlas-stage");
       if (!stage) return;
       if (!state.chips) {
         state.chips = el("div", "in-chips");
-        state.chips.setAttribute("aria-live", "polite");
         state.chips.addEventListener("click", onClick);
+      }
+      /* What a screen reader hears: only that the map's colouring changed, once
+         per question (the chips redraw on every move; a live region on them
+         re-read the whole key each time). */
+      if (!state.live) {
+        state.live = el("div", "in-live");
+        state.live.setAttribute("aria-live", "polite");
+        state.live.setAttribute("role", "status");
+        stage.appendChild(state.live);
       }
       if (state.chips.parentNode !== stage) stage.appendChild(state.chips);
       // clear of the side panel on a wide screen
@@ -1369,7 +1727,29 @@
         var left = pr.right > sr.left && pr.left < sr.left + sr.width / 2 ? Math.round(pr.right - sr.left + 12) : 12;
         stage.style.setProperty("--in-left", left + "px");
       }
-      state.chips.innerHTML = state.ready ? chipsHTML() : "";
+      var html = state.ready ? chipsHTML() : "";
+      // drawn again when the html changed — or when the width did, since the
+      // tiny chip's two-line trim (fitTinyChip) depends on it: the untrimmed
+      // html goes back in first, then it is fitted afresh
+      var width = state.chips.offsetWidth || 0;
+      if (state.chips._html !== html || state.chips._fitW !== width) {
+        // the fold button keeps its focus across a redraw
+        var focused = document.activeElement && state.chips.contains(document.activeElement) ? document.activeElement.getAttribute("data-in") : null;
+        state.chips.innerHTML = html;
+        state.chips._html = html;
+        state.chips._fitW = width;
+        fitTinyChip(state.chips.querySelector && state.chips.querySelector(".in-tiny-a"));
+        if (focused) { var again = state.chips.querySelector('[data-in="' + focused + '"]'); if (again && again.focus) again.focus(); }
+      }
+      var open = state.ready && state.open && Q().byCol[state.open];
+      var said = open ? "Map coloured by: " + open.question : "";
+      if (state.research) {
+        var qs = state.ticks.map(function (c) { return Q().byCol[c]; }).filter(Boolean).map(function (q) { return q.question; });
+        said = qs.length ? "Map showing: " + qs.join("; ") : "Map showing no question";
+      }
+      if (said !== state.said) { state.said = said; state.live.textContent = said; }
+      // how tall the chips stand, for whatever else sits at the map's foot (the cue)
+      try { stage.style.setProperty("--in-chips-h", (state.chips.offsetHeight || 0) + "px"); } catch (e) {}
     }
 
     /* ---- the place's card ---- */
@@ -1496,39 +1876,73 @@
       }
       return "";
     }
+    /* The questions section looks like the map's key (Mithun, 7 Nov 2026):
+       a header line per question (the question, a chevron) and, open, one
+       row per answer — mark, name, count — the mark the same dot the key
+       draws, or the question's shape in Research mode when it is ticked. A
+       small ⓘ at the row's end opens what the old long row said: the
+       answer's description, "N of M places (x%)", and the words a couple of
+       places' answers were read from. One ⓘ open at a time; Escape or a
+       second tap closes it. The compare select and, under a picked answer,
+       the split bar are Research mode's alone. */
+    function tickIndex(col) { return state.research ? state.ticks.indexOf(col) : -1; }
+    function rowMark(st, a) {
+      var i = tickIndex(st.col);
+      if (!a) return '<span class="in-sw in-sw-hollow"></span>';
+      return i >= 0 ? markSVG(SHAPES[i], a.color) : '<span class="in-sw" style="background:' + a.color + '"></span>';
+    }
+    function infoHTML(st, a) {
+      var n = a ? a.count : st.none, pct = st.total ? Math.round(100 * n / st.total) : 0;
+      var h = '<div class="in-info" id="' + infoId(st, a) + '">';
+      if (a && a.definition) h += "<p>" + escText(a.definition) + "</p>";
+      h += "<p>" + n + " of " + st.total + " " + placesWord(st.total) + " (" + pct + "%)" + (a ? "" : " say nothing about this") + ".</p>";
+      var ex = a ? answerExamples(feats(), st.col, a.key, 2) : [];
+      if (ex.length) h += "<p>Read from: " + ex.map(function (w) { return "<q>" + escText(w) + "</q>"; }).join(" · ") + "</p>";
+      return h + "</div>";
+    }
+    // the popover's id: the question's place in the list and the answer's place in it (none for "Doesn't say")
+    // — numbers only, so any column name or answer key makes a sound id
+    function infoId(st, a) {
+      var qi = Q().cols.indexOf(st.col);
+      return "in-info-" + (qi >= 0 ? qi : "x" + String(st.col).replace(/[^\w-]+/g, "_")) + "-" + (a ? st.answers.indexOf(a) : "none");
+    }
+    function answerRowHTML(st, a, f) {
+      var key = a ? a.key : null, name = a ? a.name : "Doesn’t say", count = a ? a.count : st.none;
+      var on = !!f && f.ans === key, dim = !!f && !on;
+      var infoOpen = state.info === st.col + "|" + (key === null ? "" : key);
+      var h = '<div class="in-arow"><button type="button" class="in-ans-row' + (a ? "" : " none") + (on ? " on" : "") + (dim ? " dim" : "") +
+        '" data-in="ans" data-col="' + escAttr(st.col) + '" data-a="' + escAttr(key === null ? "" : key) + '" aria-pressed="' + on + '">' +
+        '<span class="in-nm">' + rowMark(st, a) + escText(name) + '</span><span class="in-ct">' + count + "</span></button>" +
+        '<button type="button" class="in-info-btn" data-in="info" data-col="' + escAttr(st.col) + '" data-a="' + escAttr(key === null ? "" : key) +
+        '" aria-label="About ' + escAttr(name) + '" aria-expanded="' + infoOpen + '"' + (infoOpen ? ' aria-controls="' + infoId(st, a) + '"' : "") + ">i</button></div>";
+      if (infoOpen) h += infoHTML(st, a);
+      return h;
+    }
     function questionHTML(st) {
       var open = state.open === st.col;
-      var mini = st.answers.map(function (a) { return '<span style="width:' + (100 * a.count / (st.total || 1)) + "%;background:" + a.color + '"></span>'; }).join("");
-      var h = '<div class="in-q' + (open ? " open" : "") + (st.sparse ? " sparse" : "") + '"><button type="button" class="in-qhead" data-in="open" data-col="' + escAttr(st.col) +
-        '" aria-expanded="' + open + '"><span class="in-qt"><span>' + escText(st.question) + '</span><span class="in-chev" aria-hidden="true">\u25be</span></span>' +
-        '<span class="in-cov" style="display:block">' + coverWords(st) + "</span>" + (open ? "" : '<span class="in-mini" aria-hidden="true">' + mini + "</span>") + "</button>";
+      var h = '<div class="in-q' + (open ? " open" : "") + (st.sparse ? " sparse" : "") + '"><div class="in-qrow">';
+      if (state.research) {
+        var ti = state.ticks.indexOf(st.col), full = ti < 0 && state.ticks.length >= 3;
+        h += '<label class="in-tick' + (full ? " in-tick-off" : "") + '"' + (full ? ' title="Three at most"' : "") + '><input type="checkbox" data-in="tick" data-col="' + escAttr(st.col) +
+          '" aria-label="Show ' + escAttr(st.question) + ' on the map"' + (ti >= 0 ? " checked" : "") + (full ? " disabled" : "") + "></label>";
+      }
+      h += '<button type="button" class="in-qhead" data-in="open" data-col="' + escAttr(st.col) + '" aria-expanded="' + open + '"><span class="in-qt"><span>' +
+        escText(st.question) + '</span><span class="in-chev" aria-hidden="true">▾</span></span></button></div>';
       if (!open) return h + "</div>";
-      var max = Math.max.apply(null, st.answers.map(function (a) { return a.count; }).concat([1]));
       var f = state.filter && state.filter.col === st.col && !state.filter.col2 ? state.filter : null;
       h += '<div class="in-qbody">';
-      st.answers.forEach(function (a) {
-        var on = !!f && f.ans === a.key, dim = !!f && !on;
-        h += '<button type="button" class="in-ans' + (on ? " on" : "") + (dim ? " dim" : "") + '" data-in="ans" data-col="' + escAttr(st.col) + '" data-a="' + escAttr(a.key) + '" aria-pressed="' + on + '">' +
-          '<span class="in-nm"><span class="in-sw" style="background:' + a.color + '"></span>' + escText(a.name) + "</span>" +
-          '<span class="in-ct">' + a.count + " <small>" + placesWord(a.count) + "</small></span>" +
-          '<span class="in-bar"><span style="width:' + (100 * a.count / max) + "%;background:" + a.color + '"></span></span>' +
-          (a.definition ? '<span class="in-def">' + escText(a.definition) + "</span>" : "") + "</button>";
-      });
-      if (st.none) {
-        var on0 = !!f && f.ans === null, dim0 = !!f && !on0;
-        h += '<button type="button" class="in-ans none' + (on0 ? " on" : "") + (dim0 ? " dim" : "") + '" data-in="ans" data-col="' + escAttr(st.col) + '" data-a="" aria-pressed="' + on0 + '">' +
-          '<span class="in-nm"><span class="in-sw" style="background:' + NONE + '"></span>Doesn\u2019t say</span><span class="in-ct">' + st.none + " <small>" + placesWord(st.none) + "</small></span></button>";
-      }
-      h += st.sparse
-        ? '<p class="in-caveat warn">So few places answer this that it is a hint, not a pattern. Each place shows the words its answer was read from.</p>'
-        : '<p class="in-caveat">LOKA read these answers from what people wrote when they tagged each place. Tap a place to see the words each answer came from.</p>';
-      var opts = compareOptions(Q().list, feats(), st.col);
-      if (opts.length) {
-        var sid = "in-cmp-" + st.col;
-        h += '<div class="in-cmprow"><label for="' + escAttr(sid) + '">Compare with</label><select id="' + escAttr(sid) + '" data-in="cmp"><option value="">another question\u2026</option>' +
-          opts.map(function (o) { return '<option value="' + escAttr(o.st.col) + '"' + (state.cmp === o.st.col ? " selected" : "") + ">" + escText(o.st.question) + "</option>"; }).join("") + "</select></div>";
-        var pick = opts.filter(function (o) { return o.st.col === state.cmp; })[0];
-        if (pick) h += compareHTML(st, pick.st, pick.both);
+      st.answers.forEach(function (a) { h += answerRowHTML(st, a, f); });
+      if (st.none) h += answerRowHTML(st, null, f);
+      if (st.sparse) h += '<p class="in-caveat warn">So few places answer this that it is a hint, not a pattern. Each place shows the words its answer was read from.</p>';
+      if (state.research) {
+        var opts = compareOptions(Q().list, feats(), st.col);
+        if (opts.length) {
+          var sid = "in-cmp-" + st.col;
+          h += '<div class="in-cmprow"><label for="' + escAttr(sid) + '">Compare with</label><select id="' + escAttr(sid) + '" data-in="cmp"><option value="">another question…</option>' +
+            opts.map(function (o) { return '<option value="' + escAttr(o.st.col) + '"' + (state.cmp === o.st.col ? " selected" : "") + ">" + escText(o.st.question) + "</option>"; }).join("") + "</select></div>";
+          var pick = opts.filter(function (o) { return o.st.col === state.cmp; })[0];
+          if (pick) h += compareHTML(st, pick.st, pick.both);
+        }
       }
       h += listHTML(st);
       return h + "</div></div>";
@@ -1549,6 +1963,40 @@
       });
       return h + "</div>";
     }
+    /* The ready-made split bar under a picked answer's "N places" header:
+       how those places answer the compare rule's best-pair question, in the
+       same colours the map would use for it. The line names the picked answer
+       (splitWording, above), so it stays true after a slice tap. Counts are
+       the panel's whole counts, like the rest of the question's panel (the
+       map's key alone follows what is shown). Hidden while "Compare with" is
+       set: that already shows this row. No pair, or none of this answer's
+       places answer the partner: nothing. */
+    function splitBarHTML(st, f) {
+      if (!state.research) return "";   // Research mode's alone (Mithun, 7 Nov 2026)
+      if (state.cmp) return ""; // "Compare with" already shows this answer's row: never the same bar twice
+      var pair = bestPair(Q().list, feats(), st.col);
+      if (!pair) return "";
+      var sb = pair.st, ansKey = f.ans;
+      var a = ansKey === null ? null : st.answers.filter(function (x) { return x.key === ansKey; })[0];
+      var total = ansKey === null ? st.none : (a ? a.count : 0);
+      if (!total) return "";
+      var row = splitRow(feats(), st.col, ansKey, sb);
+      if (!row.count) return "";
+      var w = splitWording(ansKey === null ? null : a ? a.name : ansKey, total, row, sb.question);
+      if (w.kind === "one") return '<p class="in-split-one">' + escText(w.text) + "</p>";
+      var h = '<div class="in-split"><div class="in-from">' + escText(w.text) + '</div><div class="in-cbar">';
+      row.cells.forEach(function (c) {
+        var on = f.col2 === sb.col && f.ans2 === c.key;
+        h += '<button type="button" class="' + (on ? "on" : "") + '" style="flex:' + c.count + ";background:" + c.color + '" data-in="slice" data-col="' + escAttr(st.col) +
+          '" data-a="' + escAttr(ansKey === null ? "" : ansKey) + '" data-col2="' + escAttr(sb.col) + '" data-a2="' + escAttr(c.key) + '" aria-label="' + c.count + " " +
+          placesWord(c.count) + ": " + escAttr(ansKey === null ? "Doesn\u2019t say" : a ? a.name : ansKey) + " and " + escAttr(c.answer) + '" aria-pressed="' + on + '">' +
+          (c.count >= 3 ? c.count : "") + "</button>";
+      });
+      h += '</div><div class="in-lg">' + row.cells.map(function (c) {
+        return '<span><i style="background:' + c.color + '"></i>' + escText(c.answer) + " <b>" + c.count + "</b></span>";
+      }).join("") + "</div></div>";
+      return h;
+    }
     function listHTML(st) {
       var f = state.filter;
       if (!f || f.col !== st.col) return "";
@@ -1560,6 +2008,7 @@
       var h = '<div class="in-plist"><div class="in-ph"><span>' + idx.length + " " + placesWord(idx.length) + ": " +
         escText(f.ans === null ? "doesn\u2019t say" : a ? a.name : f.ans) + (b ? " and " + escText(b.name) : "") +
         '</span><button type="button" data-in="clear">Show all</button></div>';
+      h += splitBarHTML(st, f);
       idx.slice(0, lim).forEach(function (i) {
         var p = all[i].properties || {}, w = whyOf(p, st.col);
         h += '<button type="button" class="in-prow' + (sameF(all[i], openF) ? " in-open" : "") + '" data-in="place" data-i="' + i + '"><div class="in-rn">' + escText(nameOf(all[i])) + "</div>" +
@@ -1575,12 +2024,19 @@
       if (!list.length) return voice || '<p class="in-hint">No questions to show yet.</p>';
       var main = list.filter(function (st) { return !st.sparse; }), few = list.filter(function (st) { return st.sparse; });
       var h = voice + '<div class="in-sect"><span class="in-stamp">The questions</span><span class="in-cov">' + list.length + " asked of every place</span></div>" +
-        '<p class="in-hint">Open a question to colour the map by its answers. Tap an answer to see only those places.</p>';
+        '<p class="in-hint">Open a question to colour the map by its answers. Tap an answer to show only those places.</p>';
       h += main.map(questionHTML).join("");
       if (few.length) h += '<div class="in-sect" style="margin-top:1rem"><span class="in-stamp">Said by only a few places</span></div>' + few.map(questionHTML).join("");
-      return h;
+      return h + researchSwitchHTML();
+    }
+    /* The Research mode switch, the very bottom of the panel: off on every
+       page load, never remembered across visits (Mithun, 7 Nov 2026). */
+    function researchSwitchHTML() {
+      return '<div class="in-rmode"><button type="button" class="in-rsw" role="switch" aria-checked="' + !!state.research + '" data-in="research" aria-labelledby="in-rmode-lbl"></button>' +
+        '<div class="in-rtext"><strong id="in-rmode-lbl">Research mode</strong><span>Put two or three questions on the map at once and compare them.</span></div></div>';
     }
     function renderPanel() {
+      if (dropResearchIfSmall()) return;   // setResearch(false) draws everything again itself
       syncHead();
       renderChips();
       var box = state.box;
@@ -1602,12 +2058,60 @@
       var head = document.querySelector("#atlas-panel .sheet-who strong");
       if (head) head.textContent = sh.label;
       var who = document.getElementById("sheet-layer");
-      if (who) { who.innerHTML = ""; who.appendChild(el("span", "sheet-layer-name", esc(sh.small || sh.label))); }
+      // the kicker says "Insights"; until the places are counted the line
+      // stays empty (hidden), never "INSIGHTS / Insights" (7 Nov 2026)
+      if (who) { who.innerHTML = ""; if (sh.small) who.appendChild(el("span", "sheet-layer-name", esc(sh.small))); }
     }
 
     /* ---- what a visitor does ---- */
+    /* After the panel is drawn again the button a keyboard was on is found
+       again and given focus: walked by attribute value, never a selector
+       built from an answer key (a key may hold a quote or a backslash). */
+    function refocus(kind, col, a) {
+      if (!state.box || !state.box.querySelectorAll) return;
+      var list = state.box.querySelectorAll('[data-in="' + kind + '"]');
+      for (var i = 0; i < list.length; i++) {
+        var n = list[i];
+        if (n.getAttribute("data-col") !== col) continue;
+        if (a !== undefined && (n.getAttribute("data-a") || "") !== a) continue;
+        if (n.focus) n.focus();
+        return;
+      }
+    }
+    /* Research mode on: the question that was open is ticked (circles); off:
+       back to one question — the first ticked — with coloured pins, the
+       compare select and the split bar gone, today's view. */
+    // Research mode is not offered where its switch is hidden (below 600px, R6):
+    // a screen that shrinks past that with it on (a phone turned upright) drops it
+    function noResearchHere() {
+      return typeof matchMedia !== "undefined" && !!matchMedia("(max-width:600px)").matches;
+    }
+    function dropResearchIfSmall() {
+      if (state.research && noResearchHere()) { setResearch(false); return true; }
+      return false;
+    }
+    function setResearch(on) {
+      on = !!on;
+      if (on === state.research) return;
+      state.research = on;
+      state.info = null; state.cmp = null; state.showAll = false; state.rkeyFold = {};
+      if (on) {
+        state.ticks = state.open && Q().byCol[state.open] ? [state.open] : [];
+      } else {
+        if (state.ticks.length) state.open = state.ticks[0];
+        state.ticks = [];
+      }
+      // either way the view is left with one question's filter at most: a slice's
+      // AND filter lives with the split bar, and a filter on a question that is
+      // not the open (ticked) one would show places the panel no longer explains
+      if (state.filter && (state.filter.col2 || state.filter.col !== state.open)) state.filter = null;
+      if (on && !state.ticks.length) state.filter = null;   // nothing ticked (the open question is unknown): nothing to filter by
+      changed(true);
+    }
     function changed(repin, fit) {
       if (repin) repaint();
+      // the discs wear the open question's colours as the pins do
+      if (repin && api.colourDiscs) api.colourDiscs(discColouring());
       apply();
       renderPanel();
       // an answer or a slice chosen: the map goes to its places
@@ -1622,9 +2126,45 @@
       if (!t || t.tagName === "SELECT") return;
       var d = t.getAttribute("data-in"), col = t.getAttribute("data-col");
       if (d === "open") {
+        // opening is for reading; in Research mode it never ticks the question (and ticking never opens one)
         state.open = state.open === col ? null : col;
-        state.filter = null; state.cmp = null; state.showAll = false;
+        state.filter = null; state.cmp = null; state.showAll = false; state.info = null;
         changed(true);
+        return;
+      }
+      if (d === "tick") {
+        var at = state.ticks.indexOf(col);
+        if (at >= 0) state.ticks.splice(at, 1);           // the shapes re-order: the next ticked moves up
+        else if (state.ticks.length < 3) state.ticks.push(col);
+        else return;                                      // three at most (the box is disabled; a keyboard can still get here)
+        if (state.filter && state.filter.col2) state.filter = null;
+        changed(true);
+        refocus("tick", col);
+        return;
+      }
+      if (d === "info") {
+        var ia = t.getAttribute("data-a") || "", ik = col + "|" + ia;
+        state.info = state.info === ik ? null : ik;       // one open at a time; a second tap closes
+        renderPanel();
+        refocus("info", col, ia);
+        return;
+      }
+      if (d === "research") { setResearch(!state.research); return; }
+      if (d === "panel") {
+        // the phone's tiny chip: the panel opens at that question
+        if (col && Q().byCol[col] && state.open !== col) { state.open = col; state.filter = null; state.cmp = null; state.info = null; changed(true); }
+        if (api.setSheet) api.setSheet("full");
+        var qh = state.box && state.box.querySelectorAll ? state.box.querySelectorAll('[data-in="open"]') : [];
+        for (var qi = 0; qi < qh.length; qi++) {
+          if (qh[qi].getAttribute("data-col") === col) { if (qh[qi].scrollIntoView) qh[qi].scrollIntoView({ block: "start" }); if (qh[qi].focus) qh[qi].focus(); break; }
+        }
+        return;
+      }
+      if (d === "rkey") {
+        var ticked = state.ticks.filter(function (c) { return !!Q().byCol[c]; });
+        var was = has(state.rkeyFold, col) ? state.rkeyFold[col] : (api.onPhone() && ticked.length > 1);
+        state.rkeyFold[col] = !was;
+        renderChips();
         return;
       }
       if (d === "ans") {
@@ -1636,7 +2176,11 @@
         return;
       }
       if (d === "slice") {
-        var a1 = t.getAttribute("data-a"), c2 = t.getAttribute("data-col2"), a2 = t.getAttribute("data-a2");
+        // a slice under "Doesn't say" carries data-a="" — read it back as
+        // null (as the "ans" case above does), so the filter and the chip
+        // label match the "doesn't say" places instead of reading as blank
+        // (Fable's finding, 7 Nov 2026)
+        var a1 = t.getAttribute("data-a") || null, c2 = t.getAttribute("data-col2"), a2 = t.getAttribute("data-a2");
         var f = state.filter, same2 = f && f.col2 === c2 && f.ans === a1 && f.ans2 === a2;
         state.filter = same2 ? null : { col: col, ans: a1, col2: c2, ans2: a2 };
         state.showAll = false;
@@ -1644,6 +2188,8 @@
         return;
       }
       if (d === "clear") { state.filter = null; state.showAll = false; changed(false); return; }
+      // the key folds to the one-line chip and opens again; the panel is untouched
+      if (d === "key") { state.keyFolded = !state.keyFolded; renderChips(); return; }
       if (d === "more") { state.showAll = true; renderPanel(); return; }
       if (d === "place") {
         var fe = feats()[+t.getAttribute("data-i")];
@@ -1679,6 +2225,15 @@
       var box = el("div", "in-wrap");
       box.addEventListener("click", onClick);
       box.addEventListener("change", onChange);
+      // Escape closes whichever answer's ⓘ is open (one open at a time), and
+      // the keyboard lands back on that answer's ⓘ button
+      box.addEventListener("keydown", function (e) {
+        if (e.key !== "Escape" || !state.info) return;
+        var cut = state.info.indexOf("|"), icol = state.info.slice(0, cut), ia = state.info.slice(cut + 1);
+        state.info = null;
+        renderPanel();
+        refocus("info", icol, ia);
+      });
       sec.appendChild(box);
       panel.appendChild(sec);
       state.box = box;
@@ -1686,6 +2241,12 @@
       var back = document.getElementById("sheet-card-back");
       if (back && back.lastChild && back.lastChild.nodeType === 3) back.lastChild.nodeValue = "Insights";
       if (back) back.setAttribute("aria-label", "Back to the questions");
+      // the map's key hides on desktop while this panel is open (hideKeyOnDesktop,
+      // above) and must redraw the moment the panel folds or opens again
+      if (typeof MutationObserver !== "undefined" && !panel._inFoldWatched) {
+        panel._inFoldWatched = true;
+        new MutationObserver(function () { renderChips(); }).observe(panel, { attributes: true, attributeFilter: ["class"] });
+      }
     }
 
     /* While the server writes the summary the card says so; the page asks
@@ -1737,10 +2298,20 @@
 
     var me = {
       insight: true,
+      /* A place's name is written whole beside its pin when the map finds
+         room (atlas.js syncPinNames: no cut, no "…"); where it would collide
+         the map drops it and the hover bubble (desktop) or the tap (phone)
+         says the name (Mithun, 7 Nov 2026, round 2). */
+      fullNames: true,
       layers: layers,
       pinEl: pinEl,
       cardHTML: cardHTML,
       buildPanel: buildPanel,
+      /* A chosen answer's places never fold into a counted disc (atlas.js,
+         answerNamesOn): each stands as its own pin at every zoom, set out in
+         a small ring where two would touch, as a Standard atlas's picked
+         answer does (Mithun, 7 Nov 2026). */
+      answerOn: function (L) { return !!state.filter && !!L && !!L._ev && !!L._ev.insight; },
       ready: function () {
         state.ready = true;
         forget();
@@ -1749,7 +2320,12 @@
         if (api.onMoveEnd) api.onMoveEnd(function () { renderChips(); });
         if (typeof window !== "undefined" && !viewer._resizeWired) {
           viewer._resizeWired = true;
-          window.addEventListener("resize", function () { if (viewer._current) { viewer._current.renderTabs(); viewer._current.renderChips(); } });
+          window.addEventListener("resize", function () {
+            var cur = viewer._current;
+            if (!cur) return;
+            if (cur.dropResearchIfSmall()) return;   // the switch went: Research mode goes with it, and everything is drawn again
+            cur.renderTabs(); cur.renderChips();
+          });
         }
         pollSummary();
       },
@@ -1759,6 +2335,11 @@
       sheetHead: sheetHead,
       setMode: setMode,
       renderChips: renderChips,
+      chipsHTML: chipsHTML,
+      panelHTML: panelHTML,
+      setResearch: setResearch,
+      dropResearchIfSmall: dropResearchIfSmall,
+      discColouring: discColouring,
       renderTabs: renderTabs,
       renderPanel: renderPanel,
       state: state,
@@ -1783,6 +2364,9 @@
     canCompare: canCompare,
     compareOptions: compareOptions,
     crossTable: crossTable,
+    bestPair: bestPair,
+    splitRow: splitRow,
+    splitWording: splitWording,
     defaultInsight: defaultInsight,
     cleanSettings: cleanSettings,
     summaryTables: summaryTables,

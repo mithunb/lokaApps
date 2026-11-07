@@ -142,5 +142,36 @@ const out = run(['explore-test-copy']);
 check('a layer whose file name points out of the atlas\'s folder is not read', [out.status, /could not find a layer/.test(out.stderr)], [1, true]);
 fs.rmSync(tmp, { recursive: true, force: true });
 
+/* ---------------- coloured discs, and a pressed button never folds (7 Nov 2026) ----------------
+   The pins wear their first button's colour, so the counted discs do too
+   (atlas.js, COLOURED DISCS): the viewer lends the buttons' colours through
+   api.colourDiscs; a place under no button goes into the grey pool. A pressed
+   button's places never fold into a disc (answerOn). */
+console.log('\n  coloured discs, and a pressed button never folds');
+{
+  const lent = [];
+  const feats = JSON.parse(fs.readFileSync(ROOT + '/test/fixtures/blr.geojson', 'utf8')).features;
+  const api2 = { ...api, data: () => ({ features: feats }), colourDiscs: (c) => lent.push(c) };
+  const v2 = XM.viewer(mode, api2);
+  const L2 = v2.layers([{ id: mode.layer || 'bengaluru-tags', type: 'marker', userLayer: true }]);
+  const X2 = L2 && L2[0];
+  if (X2 && X2.rowsFrom) X2.rowsFrom({ features: feats });
+  // (ready() draws the list, which wants a page; the owner's setButtons lends the same colouring)
+  v2.setButtons(mode.buttons);
+  check('ready, and setButtons, lend the discs the buttons\' colours and names in the row\'s order, the pool for places under no button',
+    [/state\.ready = true;\n\s+\/\/[^\n]*\n\s+if \(api\.colourDiscs\) api\.colourDiscs\(discColouring\(\)\);/.test(src), lent.length, lent[0] && lent[0].colours.length > 0, lent[0] && lent[0].names.length === lent[0].colours.length, lent[0] && lent[0].pool],
+    [true, 1, true, true, 'Under no button']);
+  const withB = feats.find((f) => f._exB && f._exB.length), c = lent[0];
+  const labelOf = (id) => ((mode.buttons || []).find((b) => b.id === id) || {}).label;
+  if (withB && c) check('a place\'s slot is its first button\'s place in the row; another marker layer\'s place, under no button, is in the pool',
+    [c.slotOf(X2, withB), c.slotOf({ id: 'other' }, { properties: { name: 'x' } })], [c.names.indexOf(labelOf(withB._exB[0])), 6]);
+  check('no button pressed: the layer folds as any other', v2.answerOn(X2), false);
+  const firstId = (mode.buttons || [])[0] && (mode.buttons || [])[0].id;
+  v2.state.chosen = firstId || 'x';
+  check('a button pressed: its layer is exempt from the fold (atlas.js answerNamesOn asks EV.answerOn), another layer is not', [v2.answerOn(X2), v2.answerOn({ id: 'other' })], [true, false]);
+  v2.state.chosen = null;
+  check('setButtons lends the discs the new colours too', (() => { const n = lent.length; v2.setButtons(mode.buttons); return lent.length - n; })(), 1);
+}
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

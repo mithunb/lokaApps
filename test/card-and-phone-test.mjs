@@ -146,7 +146,7 @@ check('it is zero on a desktop, where there is no sheet',
 check('the zoom buttons and the scale bar clear it',
   /bottom:calc\(var\(--sheet-h, 0px\) \+ 12px\);/.test(page), true);
 check('and the framing leaves room for it, so pins do not load under it',
-  /if \(sheet > 0\) pad\.bottom = Math\.min\(sheet \+ 16/.test(atlas), true);
+  /var foot = \(sheet > 0 \? sheet \+ 16 \+ evRows : 0\) \+ chipsH;\n\s+if \(foot > 0\) pad\.bottom = Math\.min\(Math\.max\(pad\.bottom, foot\)/.test(atlas), true);
 check('but never so much room that the map has nowhere to draw',
   /map\.getContainer\(\)\.clientHeight \* \(EV \? 0\.6 : 0\.45\)/.test(atlas), true);
 

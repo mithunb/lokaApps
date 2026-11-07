@@ -106,8 +106,8 @@ check('the merged disc counts every member', /n \+= m\.n; sx \+= m\.x \* m\.n; s
 check('its parts are filtered out (discs) or hidden (pins)', /map\.setFilter\(CLUSTER_LAYER, keep\);/.test(js) && /m\.pin\.e\._absorbed = true;/.test(js) && /\(\(!e\._clustered && !e\._absorbed\) \|\| e\._fanned\)/.test(js), true);
 check('a click zooms where a zoom would part them, and fans where it would not', /function mergedClick\(f\) \{[\s\S]*?map\.easeTo\(\{ center: m\.at, zoom: Math\.min\(z \+ 0\.25, maxZ\)[\s\S]*?spiderfyLeaves\("m" \+ f\.properties\.mid, m\.at, leaves\.slice\(0, FAN_MAX\)\);/.test(js), true);
 check('a fresh index clears the merge before re-reading', /clearMerged\(true\);   \/\/ a fresh index means fresh verdicts/.test(js), true);
-check('a hover names the count, as on any disc', /showHint\(f\.properties\.point_count \+ " places here", \{ x: p\.x, y: p\.y - DISC_R\[discBracket\(f\.properties\.point_count\)\] \}, "cl\|m" \+ f\.properties\.mid\);/.test(js), true);
-check('the merged layers are torn down with the engine', /"atlas-cluster-merged-count", MERGED_LAYER\]\.forEach/.test(js) && /if \(map\.getSource\(MERGED_SRC\)\) map\.removeSource\(MERGED_SRC\);/.test(js), true);
+check('a hover names the count, as on any disc (and, coloured, what it holds — discRowsEl)', /showHint\(f\.properties\.point_count \+ " places here", \{ x: p\.x, y: p\.y - DISC_R\[discBracket\(f\.properties\.point_count\)\] \}, "cl\|m" \+ f\.properties\.mid, discRowsEl\(f\.properties\)\);/.test(js), true);
+check('the merged layers are torn down with the engine', /"atlas-cluster-merged-count", MERGED_RING_LAYER, MERGED_LAYER\]\.forEach/.test(js) && /if \(map\.getSource\(MERGED_SRC\)\) map\.removeSource\(MERGED_SRC\);/.test(js), true);
 
 console.log('\n  5. a pin layer\'s names are drawn by the map');
 check('the span under the pin is gone', /node\.appendChild\(el\("span", "atlas-mlabel"/.test(js), false);
@@ -121,7 +121,7 @@ const shortName = lift(js, ['shortName']);
 check('a short name is itself', shortName('Tree stump seats for weary humans', 40), 'Tree stump seats for weary humans');
 check('a sentence is cut at a word with an ellipsis', shortName('Cubbon Park - Established in 1870, this vibrant city park', 28), 'Cubbon Park - Established…');
 check('a word too long to cut at is cut anyway', shortName('Supercalifragilisticexpialidocious-and-then-some', 20), 'Supercalifragilisti…');
-check('the cut is set by the manifest (maxChars), 32 unless told', /var max = t\.maxChars \|\| 32;/.test(js), true);
+check('the cut is set by the manifest (maxChars), 32 unless told — unless a mode asks for whole names (Insight, 7 Nov 2026)', /var max = EV && EV\.fullNames \? FULL_NAME_MAX : \(t\.maxChars \|\| 32\);/.test(js) && /var FULL_NAME_MAX = 90;/.test(js), true);
 
 console.log('\n  6. plain words');
 const uploadKind = lift(js, ['uploadKind']);
