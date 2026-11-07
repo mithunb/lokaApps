@@ -1422,6 +1422,9 @@
     ".in-tiny-more{color:var(--color-text-muted,#6E6A63)}",
     // Research mode is not offered on a phone (R6, recommended): the switch is hidden below 600px
     "@media (max-width:600px){.in-rmode{display:none}}",
+    // ...and in its place on a phone, one plain line saying where it lives
+    ".in-rphone{display:none;margin:1.2rem 0 0;padding-top:.9rem;border-top:1px solid var(--color-divider,rgba(36,33,29,.1));font-size:var(--t-meta,.8rem);color:var(--color-text-muted,#6E6A63)}",
+    "@media (max-width:600px){.in-rphone{display:block}}",
     ".in-tick input{width:17px;height:17px;margin:0}",
     ".in-tick.in-tick-off{opacity:.4}",
   ].join("\n");
@@ -2033,7 +2036,9 @@
        page load, never remembered across visits (Mithun, 7 Nov 2026). */
     function researchSwitchHTML() {
       return '<div class="in-rmode"><button type="button" class="in-rsw" role="switch" aria-checked="' + !!state.research + '" data-in="research" aria-labelledby="in-rmode-lbl"></button>' +
-        '<div class="in-rtext"><strong id="in-rmode-lbl">Research mode</strong><span>Put two or three questions on the map at once and compare them.</span></div></div>';
+        '<div class="in-rtext"><strong id="in-rmode-lbl">Research mode</strong><span>Put two or three questions on the map at once and compare them.</span></div></div>' +
+        // phones (no switch there): say where it lives instead (Mithun, 7 Nov 2026)
+        '<p class="in-rphone">To put several questions on the map at once, or compare one question with another, open LOKA Atlas on a computer or in your browser’s desktop mode.</p>';
     }
     function renderPanel() {
       if (dropResearchIfSmall()) return;   // setResearch(false) draws everything again itself

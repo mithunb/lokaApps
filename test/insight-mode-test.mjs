@@ -923,6 +923,8 @@ console.log('\n  round 2');
   p.state.filter = null;
   check('…the panel lists every question whole (names wrap, nothing cut) with the first one expanded', [/white-space:nowrap/.test((imSrc.match(/"\.in-ans-row \.in-nm\{[^"]*"/) || [''])[0]), p.state.open, (p.panelHTML().match(/data-in="open"/g) || []).length, (p.panelHTML().match(/aria-expanded="true"/g) || []).length], [false, 'pattern_1', IM.shownStats(bl, bf, IM.defaultInsight(bl)).length, 1]);
   check('R6: Research mode is not offered on a phone — the switch is hidden below 600px (desktop and tablet keep it)', /"@media \(max-width:600px\)\{\.in-rmode\{display:none\}\}"/.test(imSrc), true);
+  check('on a phone, a plain line in the switch\'s place says where Research mode lives (Mithun, 7 Nov 2026)',
+    [/class="in-rphone">To put several questions on the map at once, or compare one question with another, open LOKA Atlas on a computer or in your browser’s desktop mode\./.test(imSrc), /\.in-rphone\{display:none;/.test(imSrc), /"@media \(max-width:600px\)\{\.in-rphone\{display:block\}\}"/.test(imSrc)], [true, true, true]);
   check('tidy: an unknown column never borrows question 0\'s popover id', /var qi = Q\(\)\.cols\.indexOf\(st\.col\);\n\s+return "in-info-" \+ \(qi >= 0 \? qi : "x" \+ String\(st\.col\)\.replace/.test(imSrc), true);
   const q = IM.viewer(IM.defaultInsight(bl), { ...rapi, onPhone: () => false });
   q.layers([bl]); q.ready();
