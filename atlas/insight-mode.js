@@ -1414,11 +1414,13 @@
     ".in-qrow .in-qhead{flex:1 1 auto;min-width:0}",
     ".in-tick{flex:none;display:inline-flex;align-items:center;height:2.2rem;padding:0 .2rem}",
     // the phone's tiny chip (R5): the question, then its answers as dots with names, two lines at most
-    ".in-chip.in-tiny{display:block;max-width:100%;text-align:left;padding:.3rem .6rem;font:inherit;font-size:.75rem;line-height:1.3;cursor:pointer}",
+    ".in-chip.in-tiny{display:block;max-width:100%;max-height:40vh;overflow-y:auto;text-align:left;padding:.3rem .6rem;font:inherit;font-size:.75rem;line-height:1.3;cursor:pointer}",
     ".in-tiny-q{display:block;font-weight:600}",
     ".in-tiny-a{display:block;font-weight:400;margin-top:.1rem;color:var(--color-text-secondary,#5A5751)}",
     ".in-tiny-i{display:inline-flex;align-items:center;gap:.25rem;margin-right:.55rem;white-space:nowrap}",
     ".in-tiny-i .in-sw{width:8px;height:8px}",
+    // "Doesn't say" wears the map's grey here too (it had no colour of its own in the chip)
+    ".in-tiny-i .in-sw-none{background:" + POOL + "}",
     ".in-tiny-more{color:var(--color-text-muted,#6E6A63)}",
     // Research mode is not offered on a phone (R6, recommended): the switch is hidden below 600px
     "@media (max-width:600px){.in-rmode{display:none}}",
@@ -1640,10 +1642,10 @@
       return !!panel && !panel.classList.contains("collapsed");
     }
     /* A phone gets no big key on the map (Mithun, 7 Nov 2026, round 2): one
-       tiny chip — the open question, then its answers as small colour dots
-       with their names, at most two lines (renderChips trims the rest to
-       "+ n more" once it is measured). A tap opens the panel at that
-       question. */
+       tiny chip — the open question, then EVERY answer as a small colour dot
+       with its name, wrapping as needed; nothing is cut to "+ n more" (Mithun,
+       7 Nov 2026: "show all the answers to the chosen question in their
+       entirety"). A tap opens the panel at that question. */
     function tinyChipHTML(st) {
       var items = st.answers.map(function (a) {
         return '<span class="in-tiny-i"><span class="in-sw" style="background:' + a.color + '"></span>' + escText(a.name) + "</span>";
@@ -1692,19 +1694,6 @@
       }
       return h;
     }
-    // the tiny chip's answers keep to two lines: the ones past that give way to "+ n more"
-    function fitTinyChip(box) {
-      if (!box || !box.children || !box.children.length || !box.offsetHeight) return;
-      var line = parseFloat((typeof getComputedStyle !== "undefined" && getComputedStyle(box).lineHeight) || "") || 16;
-      var maxH = line * 2 + 2;
-      var items = Array.prototype.slice.call(box.querySelectorAll(".in-tiny-i")), hidden = 0, more = null;
-      while (box.scrollHeight > maxH && items.length > 1) {
-        box.removeChild(items.pop());
-        hidden++;
-        if (!more) { more = el("span", "in-tiny-more"); box.appendChild(more); }
-        more.textContent = "+ " + hidden + " more";
-      }
-    }
     function renderChips() {
       if (typeof document === "undefined") return;
       var stage = document.querySelector(".atlas-stage");
@@ -1731,17 +1720,12 @@
         stage.style.setProperty("--in-left", left + "px");
       }
       var html = state.ready ? chipsHTML() : "";
-      // drawn again when the html changed — or when the width did, since the
-      // tiny chip's two-line trim (fitTinyChip) depends on it: the untrimmed
-      // html goes back in first, then it is fitted afresh
-      var width = state.chips.offsetWidth || 0;
-      if (state.chips._html !== html || state.chips._fitW !== width) {
+      // drawn again only when the html changed (the tiny chip shows every answer: nothing to fit)
+      if (state.chips._html !== html) {
         // the fold button keeps its focus across a redraw
         var focused = document.activeElement && state.chips.contains(document.activeElement) ? document.activeElement.getAttribute("data-in") : null;
         state.chips.innerHTML = html;
         state.chips._html = html;
-        state.chips._fitW = width;
-        fitTinyChip(state.chips.querySelector && state.chips.querySelector(".in-tiny-a"));
         if (focused) { var again = state.chips.querySelector('[data-in="' + focused + '"]'); if (again && again.focus) again.focus(); }
       }
       var open = state.ready && state.open && Q().byCol[state.open];

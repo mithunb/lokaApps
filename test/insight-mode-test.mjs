@@ -755,7 +755,7 @@ console.log('\n  the key, and the coloured discs');
   check('the fold button says which question it folds', [/aria-label="Fold the key: coloured by What is its current status\?"/.test(v.chipsHTML()), (v.state.keyFolded = true, /aria-label="Show the key: coloured by What is its current status\?"/.test(v.chipsHTML()))], [true, true]);
   v.state.keyFolded = false;
   check('the chips are not a live region; one small status line says "Map coloured by: …" only when the question changes, and a redraw keeps the fold button\'s focus',
-    [/state\.chips\.setAttribute\("aria-live"/.test(imSrc), /state\.live\.setAttribute\("aria-live", "polite"\)/.test(imSrc), /if \(said !== state\.said\) \{ state\.said = said; state\.live\.textContent = said; \}/.test(imSrc), /if \(state\.chips\._html !== html \|\| state\.chips\._fitW !== width\) \{/.test(imSrc), /if \(focused\) \{ var again = state\.chips\.querySelector/.test(imSrc)], [false, true, true, true, true]);
+    [/state\.chips\.setAttribute\("aria-live"/.test(imSrc), /state\.live\.setAttribute\("aria-live", "polite"\)/.test(imSrc), /if \(said !== state\.said\) \{ state\.said = said; state\.live\.textContent = said; \}/.test(imSrc), /if \(state\.chips\._html !== html\) \{/.test(imSrc), /if \(focused\) \{ var again = state\.chips\.querySelector/.test(imSrc)], [false, true, true, true, true]);
 }
 
 /* ---------------- the panel as a legend, and Research mode (Mithun, 7 Nov 2026) ----------------
@@ -917,8 +917,8 @@ console.log('\n  round 2');
   check('R5: a phone gets one tiny chip — the open question, then every answer as a dot with its name, "Doesn’t say" last — and no big key',
     [/^<button type="button" class="in-chip in-tiny" data-in="panel" data-col="pattern_1" aria-label="Open the questions at: What is its current status\?">/.test(h), (h.match(/class="in-tiny-i"/g) || []).length, /in-sw in-sw-none"><\/span>Doesn’t say<\/span><\/span><\/button>$/.test(h), /in-chip in-key|in-key-l/.test(h)],
     [true, st.answers.length + 1, true, false]);
-  check('…its answers keep to two lines, the rest giving way to "+ n more" once measured; a tap opens the panel (the sheet full) at that question',
-    [/function fitTinyChip\(box\) \{[\s\S]*?while \(box\.scrollHeight > maxH && items\.length > 1\) \{[\s\S]*?more\.textContent = "\+ " \+ hidden \+ " more";/.test(imSrc), /state\.chips\._fitW = width;\n\s+fitTinyChip\(state\.chips\.querySelector/.test(imSrc), /if \(d === "panel"\) \{[\s\S]*?if \(api\.setSheet\) api\.setSheet\("full"\);[\s\S]*?scrollIntoView/.test(imSrc)], [true, true, true]);
+  check('…every answer shown whole, wrapping — never cut to "+ n more" (Mithun, 7 Nov 2026); a tap opens the panel (the sheet full) at that question',
+    [/fitTinyChip|in-tiny-more"\)|\+ n more/.test(imSrc.replace(/\/\*[\s\S]*?\*\//g, '')), /if \(d === "panel"\) \{[\s\S]*?if \(api\.setSheet\) api\.setSheet\("full"\);[\s\S]*?scrollIntoView/.test(imSrc), /\.in-chip\.in-tiny\{[^"]*max-height:40vh;overflow-y:auto/.test(imSrc)], [false, true, true]);
   check('…a phone\'s chosen answer chip still follows the tiny chip', (p.state.filter = { col: 'pattern_1', ans: 'established' }, /in-tiny[\s\S]*Established · 92 places/.test(p.chipsHTML())), true);
   p.state.filter = null;
   check('…the panel lists every question whole (names wrap, nothing cut) with the first one expanded', [/white-space:nowrap/.test((imSrc.match(/"\.in-ans-row \.in-nm\{[^"]*"/) || [''])[0]), p.state.open, (p.panelHTML().match(/data-in="open"/g) || []).length, (p.panelHTML().match(/aria-expanded="true"/g) || []).length], [false, 'pattern_1', IM.shownStats(bl, bf, IM.defaultInsight(bl)).length, 1]);
@@ -959,22 +959,6 @@ console.log('\n  round-2 review: no stuck Research mode, the chip refits, names 
   v.setResearch(false);
   delete globalThis.matchMedia;
   check('the resize handler asks before drawing', /window\.addEventListener\("resize", function \(\) \{\n\s+var cur = viewer\._current;\n\s+if \(!cur\) return;\n\s+if \(cur\.dropResearchIfSmall\(\)\) return;/.test(imSrc) && /function renderPanel\(\) \{\n\s+if \(dropResearchIfSmall\(\)\) return;/.test(imSrc), true);
-  // the tiny chip's fit, run for real on a stand-in box whose height follows its items and the "width"
-  const fit = new Function('el', 'getComputedStyle', imSrc.match(/\n    function fitTinyChip\(box\) \{[\s\S]*?\n    \}\n/)[0] + '\nreturn fitTinyChip;')(
-    (tag, cls) => ({ tag, cls, textContent: '' }), () => ({ lineHeight: '16px' }));
-  const boxAt = (perLine) => {   // items per line at this width: the box is as tall as the lines they need
-    const items = [1, 2, 3, 4, 5, 6].map((i) => ({ i, className: 'in-tiny-i' }));
-    const box = { children: items, offsetHeight: 16, querySelectorAll: () => items.slice(),
-      removeChild(n) { items.splice(items.indexOf(n), 1); }, appendChild(n) { box.more = n; },
-      get scrollHeight() { return 16 * Math.ceil(items.length / perLine); } };
-    box.items = items;
-    return box;
-  };
-  const wideBox = boxAt(3); fit(wideBox);
-  const narrowBox = boxAt(2); fit(narrowBox);
-  check('wide (three a line): six answers fit two lines, nothing trimmed; narrow (two a line): four stay and "+ 2 more" says so',
-    [wideBox.items.length, wideBox.more, narrowBox.items.length, narrowBox.more && narrowBox.more.textContent], [6, undefined, 4, '+ 2 more']);
-  check('renderChips draws the chips again when their width changed, even with the same html, from the untrimmed html', /var width = state\.chips\.offsetWidth \|\| 0;\n\s+if \(state\.chips\._html !== html \|\| state\.chips\._fitW !== width\) \{[\s\S]{0,400}?state\.chips\.innerHTML = html;[\s\S]{0,200}?fitTinyChip\(state\.chips\.querySelector/.test(imSrc), true);
   // whole names: a generous cap, cut at a word
   const shortName = new Function(viewerSrc.match(/\n  function shortName\(s, max\) \{[\s\S]*?\n  \}\n/)[0] + '\nreturn shortName;')();
   const long = 'Interesting mangrove tree ecosystem roots. But leaves look like sal tree and the bandh beyond it is broken in two places now';
