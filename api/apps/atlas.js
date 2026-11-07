@@ -8759,3 +8759,208 @@ router.post('/layers/enrich/discard', (req, res) => {
   writeKeptCatSet(dataset, [], null);
   res.json({ ok: true });
 });
+
+/* ---------------- link previews, for chat apps only (Mithun, 7 Nov 2026) ----------------
+   Only a link-preview robot ever reaches this route — Apache's rewrite
+   (deploy/lokaApps.conf) sends a handful of known crawler user-agents here
+   for /apps/atlas/?dataset=<slug>, and api/server.js mimics the same rewrite
+   for local dev. Every human visit keeps the plain static page untouched.
+
+   Reads atlas/index.html from the repo at request time, cached by its mtime
+   (it changes on a deploy, never between requests), and swaps its one
+   generic <meta name="description"> for a description plus og:/twitter:
+   tags built from the atlas's own public fields and its own place files —
+   already on disk, no model call, nothing written. A private atlas, an
+   unknown slug or deoria-bioregion gets the same generic block loka.place/
+   itself shows: never its title, region or any photo. req.query.key is
+   never read, nothing but ?dataset= is honoured, and no tag ever echoes the
+   request's own URL — og:url is always the plain /apps/atlas/ address. */
+const PREVIEW_INDEX_PATH = path.join(REPO_ROOT, 'atlas', 'index.html');
+const PREVIEW_BASE = (process.env.ATLAS_PUBLIC_BASE || 'https://loka.place').replace(/\/+$/, '');
+let previewIndexCache = null; // { mtimeMs, html }
+// A failed stat or read (a deploy mid-write, a permissions hiccup) keeps
+// whatever was last read rather than failing the request — a stale page for
+// one crawler hit beats a broken one. Only with nothing cached yet does the
+// route itself answer 503.
+function previewIndexHtml() {
+  try {
+    const stat = fs.statSync(PREVIEW_INDEX_PATH);
+    if (!previewIndexCache || previewIndexCache.mtimeMs !== stat.mtimeMs) {
+      previewIndexCache = { mtimeMs: stat.mtimeMs, html: fs.readFileSync(PREVIEW_INDEX_PATH, 'utf8') };
+    }
+  } catch (e) {
+    if (!previewIndexCache) throw e;
+  }
+  return previewIndexCache.html;
+}
+const PREVIEW_ESCAPE = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+function escPreview(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => PREVIEW_ESCAPE[c]);
+}
+// trimmed to about n characters, always at a word's own boundary, never
+// through the middle of one: cut at the last space at or before n, or — for
+// one word longer than n itself — extended forward to that word's own next
+// space instead of being sliced apart.
+function previewTrim(s, n) {
+  const t = String(s || '').replace(/\s+/g, ' ').trim();
+  if (t.length <= n) return t;
+  let sp = t.slice(0, n).lastIndexOf(' ');
+  if (sp < 0) sp = t.indexOf(' ');
+  const kept = sp < 0 ? t : t.slice(0, sp);
+  return kept.trim() + '…';
+}
+// a place's own photo, if it has one: photo_1_url is already an absolute
+// https address; photo_small is a filename inside the atlas's own dataset
+// folder, so it is turned into one. Never a relative or non-https address.
+function previewPhotoOf(props, slug) {
+  if (!props) return null;
+  const abs = String(props.photo_1_url || '').trim();
+  if (/^https:\/\//i.test(abs)) return abs;
+  const small = String(props.photo_small || '').trim();
+  if (small && SAFE_LAYER_FILE.test(small) && !small.includes('..')) {
+    return `${PREVIEW_BASE}/apps/atlas/datasets/${encodeURIComponent(slug)}/${small}`;
+  }
+  return null;
+}
+function previewPlaceName(props) {
+  const p = props || {};
+  return String(p.description || p.name || p.title || '').trim();
+}
+/* The best place photo for the card: a photo belonging to a place the
+   atlas's own "story of the place" already quotes (same places.tag_id ids
+   insight-mode.js's candidates use — see atlas/insight-mode.js
+   placeIdOf), read straight out of the overlay nothing here computes; else
+   the first place, in layer order, that has a photo at all. null when the
+   atlas has neither a story nor any place with a photo.
+
+   Cached per slug by the mtimes of manifest.local.json and of the layer
+   files it names: a repeated hit (every crawler re-checks a link now and
+   then) re-reads and re-parses nothing — not even the geojson, which can run
+   to thousands of places — as long as none of those files have moved since
+   the last hit. A change to any of them, or the overlay itself, invalidates
+   the cache on its own next read of the overlay's mtime. */
+const previewPhotoCache = new Map(); // slug -> { overlayMtime, layerFiles, layerMtimes, result }
+function statMtime(file) {
+  try { return fs.statSync(file).mtimeMs; } catch { return -1; }
+}
+function previewBestPhoto(inst) {
+  const dir = datasetDirFor(inst);
+  const overlayMtime = statMtime(path.join(dir, 'manifest.local.json'));
+  if (overlayMtime < 0) { previewPhotoCache.delete(inst.slug); return null; }
+  const cached = previewPhotoCache.get(inst.slug);
+  if (cached && cached.overlayMtime === overlayMtime) {
+    const layerMtimes = cached.layerFiles.map((f) => statMtime(path.join(dir, f)));
+    if (layerMtimes.length === cached.layerMtimes.length && layerMtimes.every((m, i) => m === cached.layerMtimes[i])) {
+      return cached.result;
+    }
+  }
+  const { local } = readOverlay(inst);
+  if (!local) { previewPhotoCache.delete(inst.slug); return null; }
+  const layers = ownLayers(local);
+  const result = previewBestPhotoCompute(inst, local, layers);
+  const layerFiles = layers.map((L) => L.source);
+  previewPhotoCache.set(inst.slug, { overlayMtime, layerFiles, layerMtimes: layerFiles.map((f) => statMtime(path.join(dir, f))), result });
+  return result;
+}
+function previewBestPhotoCompute(inst, local, layers) {
+  const mode = local.mode;
+  if (mode && mode.story && Array.isArray(mode.story.quotes) && mode.story.quotes.length) {
+    const storyLayer = layers.find((l) => l.id === mode.layer);
+    const feats = storyLayer ? placesOf(inst, storyLayer) : null;
+    if (feats) {
+      for (const q of mode.story.quotes) {
+        const f = feats.find((x) => x && x.properties && String(x.properties.tag_id || '') === String((q && q.id) || ''));
+        const url = f && previewPhotoOf(f.properties, inst.slug);
+        if (url) return { url, name: previewPlaceName(f.properties) || (q && q.name) || '' };
+      }
+    }
+  }
+  for (const L of layers) {
+    const feats = placesOf(inst, L);
+    if (!feats) continue;
+    for (const f of feats) {
+      const url = f && previewPhotoOf(f.properties, inst.slug);
+      if (url) return { url, name: previewPlaceName(f.properties) };
+    }
+  }
+  return null;
+}
+// og:description, in order: the subtitle, else "about" (trimmed), else the
+// first sentence of the kept story, else a plain line naming the region.
+function previewDescription(inst) {
+  const subtitle = String(inst.subtitle || '').trim();
+  if (subtitle) return previewTrim(subtitle, 160);
+  const about = String(inst.about || '').trim();
+  if (about) return previewTrim(about, 160);
+  try {
+    const { local } = readOverlay(inst);
+    const sentences = (local && local.mode && local.mode.story && local.mode.story.sentences) || [];
+    const first = sentences.find((s) => s && String(s.text || '').trim());
+    if (first) return previewTrim(first.text, 160);
+  } catch { /* fall through to the region line below */ }
+  const region = String(inst.regionLabel || '').trim();
+  return region ? `A map of ${region} on LOKA Atlas` : 'LOKA Atlas — layered, shareable maps for any geography, built from open data.';
+}
+const PREVIEW_DEFAULT_DESC = 'LOKA Atlas — layered, shareable maps for any geography, built from open data.';
+function previewTagsBlock({ title, description, image, imageAlt, url }) {
+  return [
+    `<meta property="og:title" content="${escPreview(title)}" />`,
+    `<meta property="og:description" content="${escPreview(description)}" />`,
+    `<meta property="og:image" content="${escPreview(image)}" />`,
+    `<meta property="og:image:alt" content="${escPreview(imageAlt || '')}" />`,
+    `<meta property="og:url" content="${escPreview(url)}" />`,
+    '<meta property="og:type" content="website" />',
+    '<meta name="twitter:card" content="summary_large_image" />',
+  ].join('\n  ');
+}
+function genericPreviewTags() {
+  return previewTagsBlock({
+    title: 'LOKA Atlas', description: PREVIEW_DEFAULT_DESC,
+    image: `${PREVIEW_BASE}/og-default.png`, imageAlt: 'LOKA Atlas',
+    url: `${PREVIEW_BASE}/apps/atlas/`,
+  });
+}
+function atlasPreviewTags(inst, description) {
+  const photo = previewBestPhoto(inst);
+  return previewTagsBlock({
+    title: `${inst.title || 'LOKA Atlas'} — LOKA Atlas`,
+    description,
+    image: photo ? photo.url : `${PREVIEW_BASE}/og-default.png`,
+    imageAlt: photo && photo.name ? photo.name : 'LOKA Atlas',
+    url: `${PREVIEW_BASE}/apps/atlas/?dataset=${encodeURIComponent(inst.slug)}`,
+  });
+}
+// Only a dataset's own public, published instance qualifies — never deoria-
+// bioregion, same test as GET /instances/:slug a line up (inst.status ===
+// 'published' && inst.visibility === 'public').
+function previewEligible(inst) {
+  return !!inst && inst.status === 'published' && inst.visibility === 'public' && inst.slug !== 'deoria-bioregion';
+}
+router.get('/preview', (req, res) => {
+  // Only the dataset name is read. A crawler's request can carry whatever
+  // Apache's [QSA] passed along — a private link's view key among it — and
+  // none of that belongs in a tag a stranger will see.
+  const slug = String(req.query.dataset || '');
+  let description = PREVIEW_DEFAULT_DESC;
+  let tags = genericPreviewTags();
+  try {
+    const inst = slug ? reg.getInstance(slug) : null;
+    if (previewEligible(inst)) {
+      description = previewDescription(inst);
+      tags = atlasPreviewTags(inst, description);
+    }
+  } catch (e) {
+    console.warn('[preview] ' + slug + ' — ' + (e && e.message));
+  }
+  let html;
+  try { html = previewIndexHtml(); } catch { return res.status(503).type('text/plain').send('preview unavailable'); }
+  // The plain <meta name="description"> carries the very same words as
+  // og:description — a search engine or a chat app that ignores og: tags
+  // still gets the atlas's own description, never the generic line.
+  html = html.replace(
+    /<meta name="description"[^>]*\/?>/,
+    `<meta name="description" content="${escPreview(description)}" />\n  ${tags}`,
+  );
+  res.set('Cache-Control', 'no-cache, must-revalidate');
+  res.type('html').send(html);
+});

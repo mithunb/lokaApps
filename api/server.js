@@ -26,6 +26,12 @@ app.use((req, res, next) => {
 // exactly like loka.place. Enable with LOKA_DEV_STATIC=1; never set in production.
 // Must run before body parsing so the /api/atlas parser exemption sees the
 // rewritten URL.
+// Link-preview robots only (deploy/lokaApps.conf's RewriteRule, mimicked here
+// for local tests): the same handful of chat-app crawlers, the same test —
+// a bare /apps/atlas/ or /apps/atlas/index.html carrying ?dataset=. Every
+// other visitor, including Googlebot, keeps the plain static page.
+const PREVIEW_UA = /(facebookexternalhit|Facebot|Twitterbot|Slackbot|LinkedInBot|WhatsApp|TelegramBot|Discordbot|Applebot)/i;
+
 if (process.env.LOKA_DEV_STATIC) {
   const repoRoot = path.join(__dirname, '..');
   app.use((req, res, next) => {
@@ -34,6 +40,14 @@ if (process.env.LOKA_DEV_STATIC) {
     if (/^\/apps\/api(\/|$)/.test(req.url)) return res.status(403).type('text/plain').send('Forbidden');
     const a = req.url.match(/^\/apps\/atlas\/a\/([a-z0-9-]+)\/?$/);
     if (a) return res.redirect(302, `/apps/atlas/?dataset=${a[1]}`);
+    const qi = req.url.indexOf('?');
+    const pathname = qi < 0 ? req.url : req.url.slice(0, qi);
+    const search = qi < 0 ? '' : req.url.slice(qi + 1);
+    if (/^\/apps\/atlas\/(index\.html)?$/.test(pathname) && PREVIEW_UA.test(req.headers['user-agent'] || '') &&
+      /(^|&)dataset=/.test(search)) {
+      req.url = `/api/atlas/preview${qi < 0 ? '' : '?' + search}`;
+      return next();
+    }
     const m = req.url.match(/^\/apps\/([^/]+)\/api(\/.*|$)/);
     if (m) req.url = `/api/${m[1]}${m[2] || ''}`;
     next();
