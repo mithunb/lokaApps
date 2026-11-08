@@ -22,7 +22,9 @@ const pick = html.slice(html.indexOf('<fieldset class="q-opts mode-pick" id="f-m
 console.log('\n  the wizard asks');
 check('on the Name it step, before Build', html.indexOf('id="f-mode"') > html.indexOf('id="f-org"') && html.indexOf('id="f-mode"') < html.indexOf('id="build-go"'), true);
 check('the question in plain words', /How should visitors explore it\?/.test(pick), true);
-check('Standard, Explore and Insight to choose; Standard is the starting answer', ['standard', 'explore', 'insight'].map((v) => new RegExp('value="' + v + '"' + (v === 'standard' ? ' checked' : '')).test(pick)), [true, true, true]);
+// Insight is no longer offered (7 Nov 2026): Standard took it in
+check('Standard and Explore to choose, Insight no longer; Standard is the starting answer', ['standard', 'explore'].map((v) => new RegExp('value="' + v + '"' + (v === 'standard' ? ' checked' : '')).test(pick)).concat([/value="insight"/.test(pick)]), [true, true, false]);
+check('Standard says what it holds now: the layers, then the story and the questions once LOKA has read the places', /<b>Standard<\/b><span>The map with its layers; when LOKA has read the places, the story of the place and the questions — with a Research mode for comparing them\.<\/span>/.test(pick), true);
 check('Event is shown but cannot be chosen yet, and says why', /value="event" disabled/.test(pick) && /LOKA sets it up for you/.test(pick), true);
 check('it says the choice can change later', /change this any time under Owner/.test(pick), true);
 check('the choice rides with the build', /mode: \(document\.querySelector\('#f-mode input\[name="mode"\]:checked'\) \|\| \{\}\)\.value \|\| "standard"/.test(js), true);

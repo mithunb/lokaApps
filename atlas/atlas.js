@@ -540,10 +540,16 @@
      No mode, an unknown one, or a mode whose layer is missing: nothing changes. */
   function applyMode(m) {
     EV = null;
-    // Insight mode (insight-mode.js): the questions as bar lists that colour
-    // the map, a short summary on top; no row of buttons
+    /* Standard — every atlas not in Event or Explore, a manifest that still
+       says "insight" included (Mithun, 7 Nov 2026: Standard takes in Insight).
+       insight-mode.js draws the one panel: the story of the place when there
+       is one, the questions (or the layer's own keys before LOKA has read the
+       places), the Research switch, and "More on this map" with the layers.
+       An atlas with no marker layer of places (layers() says so) keeps the
+       layer list below. */
     if (window.LokaInsightMode && LokaInsightMode.isOn(m)) {
       try {
+        if (!m.mode || typeof m.mode !== "object") m.mode = { name: "standard" };
         var n = LokaInsightMode.viewer(m.mode, eventApi());
         var ns = n.layers(m.layers || []);
         if (ns) { m.layers = ns; EV = n; }
@@ -599,6 +605,27 @@
       lokaLinkHTML: lokaLinkHTML,
       navLinkHTML: navLinkHTML, navURL: navURL,
       setLayerVisible: function (L, show) { if (map) setLayerVisible(L, show); else L._visible = show; },
+      /* "More on this map" (insight-mode.js): the rows the layer list would show — never a
+         base-map row or a split file's points twin (ONE FILE, ONE ROW) — and the keys a
+         layer offers from its own columns ("Category", "When it was added (by month)"),
+         worked out by the one rule this file keeps (computeKeyOptions), with the values a
+         place has under such a key (optValuesOf: the first of a list cell, a date's month). */
+      rowLayer: function (L) { return !isBaseMapRow(L) && !pairedPrimary(L); },
+      keyOptions: function (L) {
+        var H = keyHost(L), feats = keyFeatures(H);
+        return feats.length ? computeKeyOptions(keyFace(H), feats) : [];
+      },
+      optValues: function (L, opt, f) { return optValuesOf(keyHost(L), opt, f); },
+      /* The owner's doors on a layer row (owner.js, onLayerExtra: Edit card, Remove, the reading's
+         door) hang on the merged panel's rows as they hang on this file's own (renderExtra): the
+         panel sets L._row and L._extra on each row it draws and asks here; nothing else of
+         renderExtra (keys, legend) comes with it. A visitor's page has no hooks: nothing happens. */
+      layerDoors: function (L) {
+        if (!L || !L._extra) return;
+        layerExtraHooks.forEach(function (fn) {
+          try { fn(L, L._extra); } catch (e) { console.error("Atlas: a layer door failed —", e && e.message, e); }
+        });
+      },
       // the colouring the mode's pins wear, so the counted discs can wear it too
       // (COLOURED DISCS): { colours, names, pool, slotOf(L, f) }, or null for plain discs
       colourDiscs: function (c) { setDiscColouring(c); },
@@ -5041,6 +5068,8 @@
       if (/^pattern_\d+_why$/.test(k)) continue;
       // a question about who made the record is never searched: the words would find people
       if (/^pattern_\d+$/.test(k) && peopleQuestion(L, k)) continue;
+      // the merged panel's working columns ("_key:…", insight-mode.js rawKeys) hold a value the place already carries
+      if (k.indexOf("_key:") === 0) continue;
       if (skipSearchProp(k) || skipSearchValue(f.properties[k])) continue;
       parts.push(cellText(f.properties[k]));
     }

@@ -211,7 +211,7 @@ const ownerTab = { key: 'settings', label: 'Settings' };
 check('the owner sees Insights · Settings, and the same with the summary switched off',
   [IM.panelTabs(sumMode, shownBoth, ownerTab).map((x) => x.key + ':' + x.label),
     IM.panelTabs({ summaryOn: false }, shownBoth, ownerTab).map((x) => x.key + ':' + x.label)],
-  [['q:Insights', 'settings:Settings'], ['q:Insights', 'settings:Settings']]);
+  [['q:This map', 'settings:Settings'], ['q:This map', 'settings:Settings']]);
 /* The phone sheet's head is a kicker ("INSIGHTS") over a count line ("96
    places"). Before the places were counted the count line fell back to the
    label, so the head read "INSIGHTS / Insights" (and "VENUES / Venues" on a
@@ -219,8 +219,8 @@ check('the owner sees Insights · Settings, and the same with the summary switch
    is an empty line, which the page's own css hides (.sheet-layer:empty). */
 const evHeadSrc = fs.readFileSync(ROOT + '/atlas/event-mode.js', 'utf8');
 const exHeadSrc = fs.readFileSync(ROOT + '/atlas/explore-mode.js', 'utf8');
-check('before the places are counted the head says "Insights" once, over an empty line',
-  /if \(!state\.ready\) return \{ label: "Insights", small: "" \};/.test(imSrc) &&
+check('before the places are counted the head says "This map" once, over an empty line',
+  /if \(!state\.ready\) return \{ label: "This map", small: "" \};/.test(imSrc) &&
   /if \(sh\.small\) who\.appendChild\(el\("span", "sheet-layer-name", esc\(sh\.small\)\)\);/.test(imSrc), true);
 check('and no head — the page\'s, Event\'s, Explore\'s — writes the label where the count goes',
   [viewerSrc, evHeadSrc, exHeadSrc, imSrc].map((s) => /esc\(sh\.small \|\| sh\.label\)/.test(s)), [false, false, false, false]);
@@ -263,7 +263,7 @@ check('the prompt carries the counts only: not even the atlas\'s title', !/Benga
 check('one summary job per atlas at a time; a stuck pending flag lets a new one start',
   /if \(INSIGHT_RUNNING\.has\(slug\)\) return 'already writing';/.test(server) && /finally \{\s*INSIGHT_RUNNING\.delete\(slug\);/.test(server) && /!INSIGHT\.isPending\(mode\) && !INSIGHT_RUNNING\.has\(inst\.slug\)/.test(server), true);
 check('the visitor page stops asking: a cap, a failed fetch, or the mode gone',
-  /if \(tries > MAX_TRIES\) \{ stop\(true\); return; \}/.test(imSrc) && /if \(!m \|\| m\.name !== "insight"\) \{ stop\(true\); return; \}/.test(imSrc) && /\.catch\(function \(\) \{ if \(pollT\) stop\(true\); \}\)/.test(imSrc), true);
+  /if \(tries > MAX_TRIES\) \{ stop\(true\); return; \}/.test(imSrc) && /if \(!m \|\| !isOn\(\{ mode: m \}\)\) \{ stop\(true\); return; \}/.test(imSrc) && /\.catch\(function \(\) \{ if \(pollT\) stop\(true\); \}\)/.test(imSrc), true);
 check('the prompt carries the tables and asks for numbers copied from the cell', /Copy every number as digits from the table cell/.test(SUM.promptFor(T, 'x')) && SUM.promptFor(T, 'x').endsWith(JSON.stringify(T)), true);
 check('…and for the cell each sentence states, which the answer\'s shape carries',
   /give the cell it states: questions .*answers .*count \(M\) and of \(N\)/.test(SUM.promptFor(T)) && /134 of|of the 134 places say nothing/.test(SUM.promptFor(T)) &&
@@ -393,7 +393,9 @@ console.log('\n  after a reading: only in Insight with the summary on, never the
 const NEVER = new Set(['deoria-bioregion']);
 check('in Insight, summary on', SUM.shouldRewrite('a', { mode: { name: 'insight' } }, NEVER), true);
 check('summary off', SUM.shouldRewrite('a', { mode: { name: 'insight', summaryOn: false } }, NEVER), 'summary off');
-check('in Explore or Standard', [SUM.shouldRewrite('a', { mode: { name: 'explore' } }, NEVER), SUM.shouldRewrite('a', {}, NEVER)], ['not in Insight', 'not in Insight']);
+check('in Explore or Event: no; a plain Standard atlas (no mode, or "standard"): yes, it is the same panel since 7 Nov 2026',
+  [SUM.shouldRewrite('a', { mode: { name: 'explore' } }, NEVER), SUM.shouldRewrite('a', { mode: { name: 'event' } }, NEVER), SUM.shouldRewrite('a', {}, NEVER), SUM.shouldRewrite('a', { mode: { name: 'standard' } }, NEVER), SUM.shouldRewrite('a', { mode: { name: 'standard', summaryOn: false } }, NEVER)],
+  ['not in Insight', 'not in Insight', true, true, 'summary off']);
 check('deoria-bioregion is never touched', SUM.shouldRewrite('deoria-bioregion', { mode: { name: 'insight' } }, NEVER), 'never touched');
 check('the reading\'s commit asks, after the Explore buttons, with the server\'s allowance',
   /reworkSmartButtons\(ds, id\)[^]*?insightSummary\.shouldRewrite\(ds, readOverlay\(ins\)\.local, NEVER_READ\) === true\) runInsightSummary\(ds, 'server', \{ markPending: true \}\)/.test(server), true);
@@ -412,9 +414,8 @@ check('owner tabs: Insight has the visitor\'s two and Settings (owner.js builds 
 check('an editor gets no Settings tab (only the owner can save it): the visitor\'s tabs only',
   /if \(!INST \|\| INST\.role !== "owner"\) return;/.test(ownerModes.slice(ownerModes.indexOf('function insightTabs()'), ownerModes.indexOf('IM().viewer.extraTab = {'))), true);
 check('See it as a visitor puts Settings away: the visitor\'s two tabs are left', /hidden: function \(\) \{ return VISITOR; \}/.test(ownerModes) && /if \(iv && iv\.renderPanel\) iv\.renderPanel\(\);/.test(ownerModes), true);
-check('the dialog offers Insight, last, with its words', /var MODE_ORDER = \["standard", "event", "explore", "insight"\];/.test(ownerModes) && /For people reading patterns: the questions, with a short summary on top\./.test(ownerModes), true);
-check('no questions yet: the sentence, and no Switch button', /if \(to === "insight" && !\(MODEINFO && MODEINFO\.canInsight\)\) \{\s*conf\.innerHTML = "<p>" \+ esc\(INSIGHT_NOT_READY\) \+ "<\/p>";\s*go\.hidden = true;/.test(ownerModes) &&
-  /Insight needs the questions LOKA asks of the places\. They appear once the atlas has been read\./.test(ownerModes), true);
+// 7 Nov 2026: Insight is no longer offered — Standard took it in (see "one mode" below); the "not read yet" gate went with it
+check('the dialog no longer offers Insight, and no longer gates on canInsight', [/var MODE_ORDER = \["standard", "event", "explore"\];/.test(ownerModes), /INSIGHT_NOT_READY|to === "insight"/.test(ownerModes)], [true, false]);
 check('the Settings tab: summary switch, Write it again, a switch and arrows per question, the people one locked with its reason',
   /data-iact="sum"/.test(ownerModes) && /Write it again/.test(ownerModes) && /Writing…/.test(ownerModes) && /data-iact="up"/.test(ownerModes) && /data-iact="show"/.test(ownerModes) && /st\.people \? IM\(\)\.PEOPLE_REASON/.test(ownerModes), true);
 check('saves say "Saved" and "Order saved"', /"Order saved"/.test(ownerModes) && /, "Saved"\)/.test(ownerModes), true);
@@ -551,7 +552,8 @@ try {
         (await call('POST', M(slug), { cookie: editorC, body: { rewriteSummary: true } })).status], [403, 403, 403]);
     check('nothing was written by any of them', fs.readFileSync(path.join(dir, 'manifest.local.json'), 'utf8'), start);
     check('the owner is told Insight can be chosen', (await call('GET', M(slug), { cookie: ownerC })).j.canInsight, true);
-    check('settings are refused while not in Insight', (await call('POST', M(slug), { cookie: ownerC, body: { insight: { summaryOn: false } } })).status, 409);
+    // a plain Standard atlas takes these settings since 7 Nov 2026 (checked below, after the switches); here only a bad one, which writes nothing
+    check('settings not sent properly are refused, and nothing is written', [(await call('POST', M(slug), { cookie: ownerC, body: { insight: 'nope' } })).status, fs.readFileSync(path.join(dir, 'manifest.local.json'), 'utf8')], [400, start]);
     const sw = await call('POST', M(slug), { cookie: ownerC, body: { name: 'insight' } });
     check('switched: Insight, every question shown but people ones, the summary being written', [sw.status, sw.j.name, sw.j.mode.summaryOn, sw.j.mode.summaryPending, sw.j.mode.shown],
       [200, 'insight', true, true, IM.defaultInsight(fx.layer).shown]);
@@ -583,7 +585,8 @@ try {
     const before = fileOf(dir);
     await call('POST', M(slug), { cookie: ownerC, body: { name: 'standard' } });
     f = fileOf(dir);
-    check('to Standard: no mode, the Insight settings kept whole', ['mode' in f, f.modeKept && f.modeKept.insight], [false, before.mode]);
+    // 7 Nov 2026: Standard and Insight are one panel, so the settings and the story come along, not into modeKept
+    check('to Standard: the same settings and story stand as Standard\u2019s, nothing left in modeKept', [f.mode, f.modeKept], [{ ...before.mode, name: 'standard' }, undefined]);
     await call('POST', M(slug), { cookie: ownerC, body: { name: 'explore' } });
     await call('POST', M(slug), { cookie: ownerC, body: { name: 'insight' } });
     f = fileOf(dir);
@@ -591,6 +594,43 @@ try {
     const again = await call('POST', M(slug), { cookie: ownerC, body: { rewriteSummary: true } });
     check('Write it again: one more run, and the answer carries the story', [again.status, again.j.by, ran(slug), !!again.j.mode.story, again.j.mode.summaryPending],
       [200, 'no place has words worth quoting', 2, true, undefined]);
+  }
+  /* A plain Standard atlas takes the same story and settings (7 Nov 2026,
+     Standard takes in Insight): the settings route accepts it and a standard
+     mode object is born in the file the page reads; the story is written on
+     the same triggers only (a reading, a setting, Write it again — never on
+     a page load or at deploy); switching away keeps it under its own name
+     and switching back restores it. Event and Explore are as they were. */
+  console.log('\n  a plain Standard atlas takes the same story and settings');
+  {
+    const dir = PRIV, slug = PRIVSLUG;
+    const kept = fileOf(dir).mode;
+    await call('POST', M(slug), { cookie: ownerC, body: { name: 'standard' } });
+    let f = fileOf(dir);
+    check('an atlas saved as Insight, back to Standard: its story, order and switch come with it (nothing orphaned under either name; Explore\u2019s own settings stay kept)',
+      [f.mode, f.modeKept && (f.modeKept.standard || f.modeKept.insight), !!(f.modeKept && f.modeKept.explore)], [{ ...kept, name: 'standard' }, undefined, true]);
+    // and a plain atlas that was never in Insight: the file without any mode
+    delete f.mode; delete f.modeKept;
+    fs.writeFileSync(path.join(dir, 'manifest.local.json'), JSON.stringify(f, null, 1));
+    const g = await call('GET', M(slug), { cookie: ownerC });
+    check('the owner is answered: Standard, no mode object yet, and no story job started by the look', [g.j.name, 'mode' in g.j, ran(slug)], ['standard', false, 2]);
+    const set = await call('POST', M(slug), { cookie: ownerC, body: { insight: { shown: { pattern_1: false } } } });
+    check('a setting is taken on a plain Standard atlas: a standard mode object is born, the story being written',
+      [set.status, set.j.name, set.j.mode && set.j.mode.name, set.j.mode && set.j.mode.shown.pattern_1, set.j.mode && set.j.mode.summaryPending], [200, 'standard', 'standard', false, true]);
+    f = await settled(dir);
+    check('the story is written for it, under the standard name, in the file the page reads', [f.mode.name, !!f.mode.story, !!f.mode.story.sig, f.mode.summaryPending, ran(slug)], ['standard', true, true, undefined, 3]);
+    const again = await call('POST', M(slug), { cookie: ownerC, body: { rewriteSummary: true } });
+    check('Write it again works on it too', [again.status, ran(slug), again.j.mode.name], [200, 4, 'standard']);
+    const before = fileOf(dir).mode;
+    await call('POST', M(slug), { cookie: ownerC, body: { name: 'explore' } });
+    f = fileOf(dir);
+    check('to Explore: the Standard story and settings kept under their own name', [f.mode.name, f.modeKept.standard], ['explore', before]);
+    check('\u2026and settings and the story are refused on an Explore atlas, as before',
+      [(await call('POST', M(slug), { cookie: ownerC, body: { insight: { summaryOn: false } } })).status, (await call('POST', M(slug), { cookie: ownerC, body: { rewriteSummary: true } })).status], [409, 409]);
+    await call('POST', M(slug), { cookie: ownerC, body: { name: 'standard' } });
+    f = fileOf(dir);
+    check('back to Standard: the same story and settings, no run', [f.mode, ran(slug), f.modeKept && 'standard' in f.modeKept], [before, 4, false]);
+    check('the story is still written only on its triggers: a reading, a setting, Write it again, a switch — no sweep', (server.match(/runInsightSummary\(/g) || []).length, 5);
   }
   console.log('\n  an atlas whose places have words of their own: the whole story');
   {
@@ -619,7 +659,7 @@ try {
     check('a visitor reads it in the one Insights panel, with no tab row, and the owner has Settings beside it',
       [IM.panelTabs(f.mode, ['pattern_1', 'pattern_2']), IM.panelTabs(f.mode, ['pattern_1', 'pattern_2'], { key: 'settings', label: 'Settings' }).map((t) => t.key + ':' + t.label),
         /aria-label="Story of the place in their own words"/.test(card), card.indexOf('Story of the place') < card.indexOf('in-story')],
-      [[], ['q:Insights', 'settings:Settings'], true, true]);
+      [[], ['q:This map', 'settings:Settings'], true, true]);
   }
   check('a private atlas is written where it lives, never in the public folder', fs.existsSync(path.join(ROOT, 'atlas', 'datasets', PRIVSLUG)), false);
   console.log('\n  an atlas not yet read');
@@ -784,8 +824,8 @@ console.log('\n  the panel as a legend, and Research mode');
   const keyRows = (html) => (html.match(/<li>(?:(?!<\/li>).)*<\/li>/g) || []).map((li) => li.replace(/<[^>]+>/g, '|').replace(/\|+/g, '|').replace(/^\||\|$/g, ''));
   const panelRows = (html) => (html.match(/<button type="button" class="in-ans-row[^"]*"[^>]*>(?:(?!<\/button>).)*<\/button>/g) || []).map((b) => b.replace(/<[^>]+>/g, '|').replace(/\|+/g, '|').replace(/^\||\|$/g, ''));
   let html = v.panelHTML();
-  check('the switch is off on load, a real switch at the very bottom, with its one line', [v.state.research, /class="in-rsw" role="switch" aria-checked="false" data-in="research"/.test(html), html.indexOf('in-rmode') > html.lastIndexOf('in-q '), /Put two or three questions on the map at once and compare them\./.test(html)], [false, true, true, true]);
-  check('the hint under THE QUESTIONS stays plain', /Open a question to colour the map by its answers\. Tap an answer to show only those places\./.test(html), true);
+  check('the switch is off on load, a real switch at the very bottom, with its one line', [v.state.research, /class="in-rsw" role="switch" aria-checked="false" data-in="research"/.test(html), html.indexOf('in-rmode') > html.lastIndexOf('in-q '), /Put two or three questions or keys on the map at once and compare them\./.test(html)], [false, true, true, true]);
+  check('the hint under THE QUESTIONS stays plain, and says one at a time', /Open a question to colour the map by its answers, one at a time\. Tap an answer to show only those places\./.test(html), true);
   pins.length = 0; bf.slice(0, 12).forEach((f) => v.pinEl(X, f));
   check('default: pins wear the open question\'s colours, no marks', [pins.length, pins.every((p) => p.rows === null), pins.some((p) => st.answers.some((a) => a.color === p.color))], [12, true, true]);
   check('the panel\'s answer rows are the key\'s rows: the same names and counts in the same order, a dot before each, "Doesn’t say" hollow',
@@ -924,7 +964,7 @@ console.log('\n  round 2');
   check('…the panel lists every question whole (names wrap, nothing cut) with the first one expanded', [/white-space:nowrap/.test((imSrc.match(/"\.in-ans-row \.in-nm\{[^"]*"/) || [''])[0]), p.state.open, (p.panelHTML().match(/data-in="open"/g) || []).length, (p.panelHTML().match(/aria-expanded="true"/g) || []).length], [false, 'pattern_1', IM.shownStats(bl, bf, IM.defaultInsight(bl)).length, 1]);
   check('R6: Research mode is not offered on a phone — the switch is hidden below 600px (desktop and tablet keep it)', /"@media \(max-width:600px\)\{\.in-rmode\{display:none\}\}"/.test(imSrc), true);
   check('on a phone, a plain line in the switch\'s place says where Research mode lives (Mithun, 7 Nov 2026)',
-    [/class="in-rphone">To put several questions on the map at once, or compare one question with another, open LOKA Atlas on a computer or in your browser’s desktop mode\./.test(imSrc), /\.in-rphone\{display:none;/.test(imSrc), /"@media \(max-width:600px\)\{\.in-rphone\{display:block\}\}"/.test(imSrc)], [true, true, true]);
+    [/class="in-rphone">To put several questions or keys on the map at once, or compare one with another, open LOKA Atlas on a computer or in your browser’s desktop mode\./.test(imSrc), /\.in-rphone\{display:none;/.test(imSrc), /"@media \(max-width:600px\)\{\.in-rphone\{display:block\}\}"/.test(imSrc)], [true, true, true]);
   check('tidy: an unknown column never borrows question 0\'s popover id', /var qi = Q\(\)\.cols\.indexOf\(st\.col\);\n\s+return "in-info-" \+ \(qi >= 0 \? qi : "x" \+ String\(st\.col\)\.replace/.test(imSrc), true);
   const q = IM.viewer(IM.defaultInsight(bl), { ...rapi, onPhone: () => false });
   q.layers([bl]); q.ready();
@@ -963,6 +1003,210 @@ console.log('\n  round-2 review: no stuck Research mode, the chip refits, names 
   const shortName = new Function(viewerSrc.match(/\n  function shortName\(s, max\) \{[\s\S]*?\n  \}\n/)[0] + '\nreturn shortName;')();
   const long = 'Interesting mangrove tree ecosystem roots. But leaves look like sal tree and the bandh beyond it is broken in two places now';
   check('a 72-character name is written whole; a paragraph ends at a word with "…" inside 90', [shortName(long.slice(0, 72), 90), shortName(long, 90).length <= 90, /…$/.test(shortName(long, 90)), /\S…$/.test(shortName(long, 90))], [long.slice(0, 72), true, true, true]);
+}
+
+/* ---------------- each question says what it does to the map (Mithun, 7 Nov 2026) ---------------- */
+console.log('\n  each question says what it does to the map');
+{
+  const rapi = { esc: (x) => String(x), el: () => ({ classList: { add() {} } }), data: () => ({ features: bf }), markers: () => [], shotsHTML: () => '', linksIn: () => [],
+    cellShown: (v) => String(v || ''), setLayerVisible() {}, onPhone: () => true, colourDiscs() {}, locPinEl: () => ({ classList: { add() {} } }), markRowsEl: () => ({ classList: { add() {} } }) };
+  const v = IM.viewer(IM.defaultInsight(bl), rapi);
+  v.layers([bl]); v.ready();
+  const html = v.panelHTML();
+  check('the open question says "✓ Showing on the map" (no dots), bold in the leaf green; the others: "Show this on the map"',
+    [(html.match(/<span class="in-qs on"><span aria-hidden="true">✓<\/span>Showing on the map<\/span>/g) || []).length, /in-qs-dots/.test(imSrc),
+     /"\.in-qs\.on\{color:var\(--color-leaf,#2A6B41\);font-weight:700;/.test(imSrc),
+     (html.match(/<span class="in-qs">Show this on the map<\/span>/g) || []).length],
+    [1, false, true, (html.match(/data-in="open"/g) || []).length - 1]);
+  check('the question on the map wears a border (one only); Research mode drops it', [(html.match(/class="in-q open in-on/g) || []).length, /"\.in-q\.in-on\{border:1\.5px solid var\(--color-leaf,#2A6B41\);/.test(imSrc)], [1, true]);
+  v.setResearch(true);
+  check('in Research mode the tick boxes say it instead: no status lines, no border', [/in-qs/.test(v.panelHTML()), /in-on/.test(v.panelHTML())], [false, false]);
+  v.setResearch(false);
+  check('on a phone, opening a question lowers the sheet so the map is in view (closing does not)',
+    /if \(state\.open && !state\.research && api\.onPhone\(\) && api\.setSheet\) api\.setSheet\("peek"\);/.test(imSrc), true);
+}
+
+/* ---- "More on this map" (7 Nov 2026, Standard takes in Insight, step S3) ----
+   Under the questions and the Research switch, folded on every visit: the
+   other data layers and the public map layers, each with a switch, a count
+   (data layers) and a ⓘ; the MAIN layer — the one the questions colour — has
+   no switch. The rows atlas.js leaves out of its list (api.rowLayer) are
+   left out here. A switch goes through api.setLayerVisible; the main layer's
+   id never does. */
+const vapi0 = { esc: (x) => String(x), el: () => ({}), data: () => ({ features: bf }), markers: () => [], locPinEl: () => ({ classList: { add() {} } }),
+  shotsHTML: () => '', linksIn: () => [], cellShown: (v) => String(v || ''), onPhone: () => false, colourDiscs() {}, setLayerVisible() {} };
+console.log('\n  More on this map: the layers under the panel');
+{
+  const seen = [];
+  const other = { id: 'lakes', label: 'Lakes', userLayer: true, type: 'marker', markerDefault: { color: '#3A7FA1' }, uploadedAs: 'lakes.csv' };
+  const wards = { id: 'wards', label: 'Wards', type: 'fill', legend: [{ label: 'Ward boundary', color: '#8C8985', shape: 'line' }], default: false, info: 'The city\u2019s wards, from the census.' };
+  const labels = { id: 'labels', label: 'Place names', type: 'raster' };
+  const lapi = { esc: (x) => String(x), el: () => ({}), data: (id) => ({ features: id === 'lakes' ? bf.slice(0, 7) : bf }), markers: () => [], locPinEl: () => ({ classList: { add() {} } }),
+    shotsHTML: () => '', linksIn: () => [], cellShown: (v) => String(v || ''), onPhone: () => false, colourDiscs() {},
+    setLayerVisible(L, on) { L._visible = on; seen.push(L.id + ':' + on); },
+    rowLayer: (L) => L.id !== 'labels' };
+  const v = IM.viewer(IM.defaultInsight(bl), lapi);
+  v.layers([bl, other, wards, labels]);
+  v.ready();
+  seen.length = 0;
+  let h = v.panelHTML();
+  check('the panel ends with "More on this map", folded: a fold row, no body yet', [/data-in="fold" aria-expanded="false"/.test(h), /More on this map/.test(h), /in-morebody/.test(h)], [true, true, false]);
+  check('the fold comes after the Research switch, under the questions', h.indexOf('in-rmode') < h.indexOf('in-moresect'), true);
+  v.onClick({ target: { closest: () => ({ getAttribute: (k) => ({ 'data-in': 'fold' })[k] || null, tagName: 'BUTTON' }) } });
+  h = v.panelHTML();
+  check('opened: a Layers section and a Map layers section', [/in-stamp">Layers</.test(h), /in-stamp">Map layers</.test(h), /data-in="fold" aria-expanded="true"/.test(h)], [true, true, true]);
+  const mainRow = (h.match(/<div class="in-lrow in-lmain" data-id="[^"]*">[\s\S]*?<\/div>/) || [''])[0];
+  check('the main layer (the one the questions colour) has NO switch, only its name and count', [mainRow.length > 0, /data-in="layer"/.test(mainRow), new RegExp('<span class="in-lct">' + bf.length + '</span>').test(mainRow)], [true, false, true]);
+  check('another data layer has a switch, on by default, with its count', /data-in="layer" data-id="lakes" checked[^>]*>[\s\S]*?<span class="in-lct">7<\/span>/.test(h), true);
+  check('a public map layer has a switch; one the manifest keeps off starts off', /data-in="layer" data-id="wards" aria-label="Wards"><span class="in-lsw">/.test(h) && /class="in-lrow off" data-id="wards">/.test(h), true);
+  check('a row atlas.js leaves out of its list (api.rowLayer) is left out here too', /data-id="labels"/.test(h), false);
+  check('every row has a \u24d8', (h.match(/data-in="linfo"/g) || []).length, 3);
+  check('the main layer\u2019s row says "Places on this map" when its label is only a slug or file name, and its real name otherwise',
+    [/in-lmain[^>]*>[\s\S]*?<span class="in-lname">(<span[^>]*><\/span>)?Places on this map</.test(IM.viewer(IM.defaultInsight({ ...bl, label: 'bengaluru-tags' }), lapi).layers([{ ...bl, label: 'bengaluru-tags' }, other]) && (() => { const w = IM.viewer(IM.defaultInsight({ ...bl, label: 'bengaluru-tags' }), lapi); w.layers([{ ...bl, label: 'bengaluru-tags' }, other]); w.ready(); w.state.more = true; return w.panelHTML(); })()),
+      (() => { const w = IM.viewer(IM.defaultInsight({ ...bl, label: 'Divar Island' }), lapi); w.layers([{ ...bl, label: 'Divar Island' }, other]); w.ready(); w.state.more = true; return /in-lmain[^>]*>[\s\S]*?Divar Island</.test(w.panelHTML()); })(),
+      (() => { const w = IM.viewer(IM.defaultInsight({ ...bl, label: 'places.csv' }), lapi); w.layers([{ ...bl, label: 'places.csv' }, { ...other, label: 'blr-lakes' }]); w.ready(); w.state.more = true; const x = w.panelHTML(); return [/Places on this map/.test(x), /blr-lakes/.test(x)]; })()],
+    [true, true, [true, true]]);
+  seen.length = 0;   // the name checks above drew other viewers through the same api
+  v.onChange({ target: { getAttribute: (k) => ({ 'data-in': 'layer', 'data-id': 'wards' })[k] || null, checked: true } });
+  check('a switch goes through api.setLayerVisible and the row follows', [seen.join(','), /data-id="wards" checked/.test(v.panelHTML())], ['wards:true', true]);
+  v.onChange({ target: { getAttribute: (k) => ({ 'data-in': 'layer', 'data-id': bl.id })[k] || null, checked: false } });
+  check('the main layer\u2019s id is never switched, even by a hand-made event', seen.join(','), 'wards:true');
+  v.onClick({ target: { closest: () => ({ getAttribute: (k) => ({ 'data-in': 'linfo', 'data-id': 'wards' })[k] || null, tagName: 'BUTTON' }) } });
+  h = v.panelHTML();
+  check('a layer\u2019s \u24d8 opens what the layer is (its info line)', /aria-expanded="true">i<\/button><\/div><div class="in-info"><p>The city\u2019s wards, from the census\.<\/p>/.test(h), true);
+  v.onClick({ target: { closest: () => ({ getAttribute: (k) => ({ 'data-in': 'linfo', 'data-id': 'lakes' })[k] || null, tagName: 'BUTTON' }) } });
+  check('a data layer with no info line says its count and where it came from', /<p>7 places on this layer \u00b7 from lakes\.csv\.<\/p>/.test(v.panelHTML()), true);
+  check('an atlas with nothing else on it (one layer, no public layers) has no fold at all', (() => { const w = IM.viewer(IM.defaultInsight(bl), lapi); w.layers([bl]); w.ready(); return /More on this map/.test(w.panelHTML()); })(), false);
+  check('the main layer is drawn in the merged panel without a switch (the source agrees)', /if \(main\) \{[\s\S]*?no switch/.test(imSrc), true);
+}
+
+/* ---- plain-column keys as rows (7 Nov 2026, step S2) ----
+   The keys Standard offered from a layer's own columns ("Category", "When
+   it was added (by month)") are rows like the questions: on a read atlas
+   under "More on this map" → "Other keys"; on an atlas not read yet they ARE
+   the rows, the first open, with one plain line saying what comes once LOKA
+   has read the places. Which columns and a place's value under one come
+   from atlas.js (api.keyOptions, api.optValues); the value is written on the
+   place under RAW_COL + column so the whole map path reads it as an answer. */
+console.log('\n  plain-column keys as rows');
+{
+  const cats = ['Nature', 'Heritage', 'Food', 'Nature', 'Nature', 'Heritage'];
+  const dates = ['2026-03-05', '2026-01-20', '2026-03-09', '2026-02-02', '2026-03-01', '2026-01-04'];
+  const mk = (f, i) => ({ ...f, properties: { ...f.properties, categories: cats[i % 6] + '; extra', created_at: dates[i % 6], created_by: 'Person ' + (i % 3) } });
+  const opts = [
+    { col: 'pattern_1', label: 'Q', isQuestion: true },
+    { col: 'categories', label: 'Category', delim: ';' },
+    { col: 'created_at', label: 'When it was added (by month)', grain: 'month' },
+    { col: 'notes', label: 'Notes', scattered: true },
+    { col: 'created_by', label: 'Created by' },
+  ];
+  const MON = ['Jan', 'Feb', 'Mar'];
+  const optValues = (L, o, f) => {
+    const v = f.properties[o.col]; if (v == null || v === '') return [];
+    if (o.delim) return String(v).split(o.delim).map((x) => x.trim()).filter(Boolean);
+    if (o.grain) { const m = /^(\d{4})-(\d{2})/.exec(v); return m ? [MON[Number(m[2]) - 1] + ' ' + m[1]] : []; }
+    return [String(v)];
+  };
+  const lent = [];
+  const mkApi = (feats) => ({ esc: (x) => String(x), el: () => ({}), data: () => ({ features: feats }), markers: () => [], locPinEl: (c) => ({ c, classList: { add() {} } }),
+    shotsHTML: () => '', linksIn: () => [], cellShown: (v) => String(v || ''), onPhone: () => false, colourDiscs: (c) => lent.push(c), setLayerVisible() {},
+    keyOptions: () => opts, optValues });
+  // a read atlas: the questions lead, the plain keys sit under "More on this map"
+  const rf = bf.map(mk);
+  const v = IM.viewer(IM.defaultInsight(bl), mkApi(rf));
+  v.layers([bl]); v.ready();
+  check('a read atlas still opens on its first question', v.state.open, blrShown[0]);
+  check('the plain keys ride along: known by column, not among the questions', [v.state && Object.keys(IM.viewer._current.state).length > 0, /_key:categories/.test(v.panelHTML())], [true, false]);
+  v.onClick({ target: { closest: () => ({ getAttribute: (k) => ({ 'data-in': 'fold' })[k] || null, tagName: 'BUTTON' }) } });
+  let h = v.panelHTML();
+  check('opened, "Other keys" lists Category and the month key as rows, a question with no column of its own (Q) and a scattered column left out',
+    [/in-stamp">Other keys</.test(h), /data-in="open" data-col="_key:categories"/.test(h), /data-in="open" data-col="_key:created_at"/.test(h), /data-col="_key:notes"/.test(h), /Category…/.test(h)], [true, true, true, false, false]);
+  check('the place carries its value under the working name: the FIRST of a list cell, a date\u2019s month', [rf[0].properties['_key:categories'], rf[0].properties['_key:created_at']], ['Nature', 'Mar 2026']);
+  check('a column of people (Created by) is never a key here, whatever atlas.js offered (seen live on Divar Island)', [/_key:created_by|Created by/.test(h), rf[0].properties['_key:created_by']], [false, undefined]);
+  check('a date key (bookkeeping) comes after the keys that say what a place is, whatever order atlas.js offered them in', h.indexOf('data-col="_key:categories"') < h.indexOf('data-col="_key:created_at"'), true);
+  v.onClick({ target: { closest: () => ({ getAttribute: (k) => ({ 'data-in': 'open', 'data-col': '_key:categories' })[k] || null, tagName: 'BUTTON' }) } });
+  h = v.panelHTML();
+  check('opening a plain key colours the map by it instead of the question: it is the open one, the question closed', [v.state.open, /in-q open in-on[^>]*>[\s\S]*?<span>Category</.test(h), (h.match(/Showing on the map/g) || []).length], ['_key:categories', true, 1]);
+  const last = lent[lent.length - 1];
+  check('the discs wear the plain key\u2019s answers in the one palette, most places first', [last && last.names.slice(0, 3).join('|'), last && last.colours.slice(0, 2).join('|')], ['Nature|Heritage|Food', IM.PAL[0] + '|' + IM.PAL[1]]);
+  check('the pins read it the same way (the first answer\u2019s colour)', v.pinEl(IM.viewer._current.layers([bl])[0], rf[0]).c, IM.PAL[0]);
+  v.onClick({ target: { closest: () => ({ getAttribute: (k) => ({ 'data-in': 'open', 'data-col': '_key:created_at' })[k] || null, tagName: 'BUTTON' }) } });
+  const mo = lent[lent.length - 1];
+  check('a date key\u2019s months run in the order of the year, not of their counts', mo.names.join('|'), 'Jan 2026|Feb 2026|Mar 2026');
+  // an atlas LOKA has not read: no questions, the keys are the rows
+  const ul = { ...bl, keyLabels: {}, keyKinds: {}, keyColumns: {} };
+  const uf = bf.map(mk).map((f) => { const p = { ...f.properties }; Object.keys(p).forEach((k) => { if (/^pattern_/.test(k)) delete p[k]; }); return { ...f, properties: p }; });
+  const u = IM.viewer(IM.defaultInsight(ul), mkApi(uf));
+  u.layers([ul]); u.ready();
+  h = u.panelHTML();
+  check('an unread atlas opens on its first key — what a place is, never the date it was added — pins coloured by it', [u.state.open, /in-q open in-on/.test(h)], ['_key:categories', true]);
+  check('its rows are "The keys", no story, and one plain line says the questions and the story come once LOKA has read the places',
+    [/in-stamp">The keys<\/span><span class="in-cov">2 on this layer/.test(h), /in-sum|Story of the place/.test(h), h.indexOf(IM.NOT_READ_YET) > 0, /No questions to show yet/.test(h)], [true, false, true, false]);
+  check('the Research switch stands on an unread atlas too, and speaks of keys', /in-rmode[\s\S]*questions or keys on the map/.test(h), true);
+  check('an unread atlas with no keys at all says only the one line', (() => { const w = IM.viewer(IM.defaultInsight(ul), { ...mkApi(uf), keyOptions: () => [] }); w.layers([ul]); w.ready(); return w.panelHTML(); })(), '<p class="in-hint">' + IM.NOT_READ_YET + '</p>');
+  check('a page without the hooks (an old atlas.js) just has no plain keys', (() => { const a = mkApi(rf); delete a.keyOptions; const w = IM.viewer(IM.defaultInsight(bl), a); w.layers([bl]); w.ready(); return /Other keys/.test(w.panelHTML()); })(), false);
+}
+
+/* ---- one mode: Standard takes in Insight (7 Nov 2026, steps S1 + S4) ----
+   Every atlas not in Event or Explore is drawn by this panel — a manifest
+   with no mode, one that says "standard", one that still says "insight"
+   (read the same, no data rewritten). atlas.js gives a mode-less manifest a
+   plain { name: "standard" } so the viewer has an object to read. The owner's
+   picker offers Standard · Event · Explore. One palette for every key
+   (Insight's PAL): with the panel on, atlas.js's own keys (KEY_COLORS,
+   ROW_SHAPES, keyKindColor) and its disc rings stand down. */
+console.log('\n  one mode: Standard takes in Insight');
+{
+  const ownerModes = fs.readFileSync(ROOT + '/atlas/owner-modes.js', 'utf8');
+  const wizard = fs.readFileSync(ROOT + '/atlas/setup/index.html', 'utf8');
+  check('on for every atlas but Event and Explore: no mode, "standard" and "insight" alike',
+    [IM.isOn({}), IM.isOn({ mode: { name: 'standard' } }), IM.isOn({ mode: { name: 'insight' } }), IM.isOn({ mode: { name: 'event' } }), IM.isOn({ mode: { name: 'explore' } }), IM.isOn(null)],
+    [true, true, true, false, false, true]);
+  check('atlas.js gives a mode-less manifest a plain standard mode before the viewer reads it', /if \(!m\.mode \|\| typeof m\.mode !== "object"\) m\.mode = \{ name: "standard" \};\s*var n = LokaInsightMode\.viewer\(m\.mode, eventApi\(\)\);/.test(viewerSrc), true);
+  check('and still falls back to its own layer list when there is no marker layer of places (layers() says null)', (() => { const w = IM.viewer({ name: 'standard' }, vapi0); return w.layers([{ id: 'wards', type: 'fill' }]); })(), null);
+  const v = IM.viewer({ name: 'standard' }, vapi0);
+  v.layers([{ ...bl, userLayer: true, type: 'marker' }]); v.ready();   // a plain standard mode names no layer: the first marker layer of places is the one
+  const h = v.panelHTML();
+  check('a Standard atlas (no story written) opens on its first question, pins coloured by it, no story section', [v.state.open, /in-q open in-on/.test(h), /in-sum|Story of the place/.test(h)], [blrShown[0], true, false]);
+  check('the panel is headed "This map"', [v.sheetHead().label, /sheetHead\(\)|"This map"/.test(imSrc), IM.panelTabs({}, [], { key: 'x', label: 'X' })[0].label], ['This map', true, 'This map']);
+  check('a question the owner hid from the layer\u2019s own fold (hiddenKeys) stays off the panel', (() => { const s = IM.settingsOf({ ...bl, hiddenKeys: [blrShown[0]] }, {}); return [s.shown[blrShown[0]], s.order.indexOf(blrShown[0]) >= 0]; })(), [false, true]);
+  check('with the panel on, atlas.js\u2019s own keys and disc rings stand down (one palette: PAL)', [/function initLayerKeys\(L\) \{[\s\S]*?if \(EV\) return;/.test(viewerSrc), /function standardDiscColouring\(\) \{\s*if \(EV\) return null;/.test(viewerSrc), /function syncStandardDiscs\(\) \{\s*if \(EV \|\| !map\) return;/.test(viewerSrc)], [true, true, true]);
+  check('the story keeps polling only while the mode is one this panel draws', /if \(!m \|\| !isOn\(\{ mode: m \}\)\) \{ stop\(true\); return; \}/.test(imSrc), true);
+  check('the owner\u2019s picker: Standard \u00b7 Event \u00b7 Explore, an atlas saved as "insight" shown as Standard', [/var MODE_ORDER = \["standard", "event", "explore"\];/.test(ownerModes), /m\.name === "explore" \|\| m\.name === "event"\) \? m\.name : "standard";/.test(ownerModes), /to === "insight"/.test(ownerModes)], [true, true, false]);
+  check('Standard\u2019s words say what it holds now', /standard: \{ t: "Standard", d: "The map with its layers; when LOKA has read the places, the story of the place and the questions \\u2014 with a Research mode for comparing them\."/.test(ownerModes), true);
+  check('the Settings tab stays for an atlas the server saved as "insight" (its settings route), gated on that, not on the picker', /if \(!insightMode\(\) \|\| !IM\(\) \|\| !IM\(\)\.viewer \|\| !body\) return;/.test(ownerModes) && !/modeDrawn\(\) !== "insight"/.test(ownerModes), true);
+  check('the wizard no longer offers Insight', /value="insight"/.test(wizard), false);
+}
+
+/* ---- the owner's doors on the merged panel's rows (7 Nov 2026, G2) ----
+   Edit card, Remove and the reading's door hang on atlas.js's own layer rows
+   through onLayerExtra (owner.js). The merged panel draws its rows again on
+   every change, so each row drawn — the main layer's too — gets L._row and
+   an empty L._extra and atlas.js is asked to hang the doors (api.layerDoors,
+   the registered hooks only). The main row hands over the manifest's own
+   layer, never the panel's copy. A visitor's page has no hooks. */
+console.log('\n  the owner\u2019s doors on the merged panel\u2019s rows');
+{
+  const ownerSrc = fs.readFileSync(ROOT + '/atlas/owner.js', 'utf8');
+  const doors = [];
+  const dapi = { ...vapi0, layerDoors: (L) => doors.push({ id: L.id, row: !!L._row, extra: !!L._extra, L }), rowLayer: () => true };
+  const main = { ...bl, userLayer: true, type: 'marker' };
+  const other = { id: 'lakes', label: 'Lakes', userLayer: true, type: 'marker' };
+  const v = IM.viewer({ name: 'standard' }, dapi); v.layers([main, other]); v.ready();
+  // a stand-in for the page's box: the rows the drawn HTML holds, by data-id
+  const rows = [];
+  const box = { closest: () => null, querySelectorAll: () => rows,
+    set innerHTML(h) { rows.length = 0; (h.match(/<div class="in-lrow[^"]*" data-id="([^"]+)"/g) || []).forEach((m) => { const id = m.match(/data-id="([^"]+)"/)[1]; rows.push({ kids: [], getAttribute: (k) => (k === 'data-id' ? id : null), appendChild(n) { this.kids.push(n); } }); }); } };
+  v.state.box = box;
+  v.renderPanel();
+  check('folded: no rows drawn, no doors asked for', doors.length, 0);
+  v.state.more = true; v.renderPanel();
+  check('opened: every row drawn, the main layer\u2019s too, is offered to the doors with its row and an empty extra box', doors.map((d) => d.id + ':' + d.row + ':' + d.extra), [main.id + ':true:true', 'lakes:true:true']);
+  check('the main row hands over the manifest\u2019s own layer, never the panel\u2019s copy', [doors[0].L === main, rows[0].kids.length], [true, 1]);
+  check('atlas.js hangs only the registered hooks (no keys, no legend), and owner.js offers its Change menu on a merged row through that hook',
+    [/layerDoors: function \(L\) \{\s*if \(!L \|\| !L\._extra\) return;\s*layerExtraHooks\.forEach/.test(viewerSrc), /addChangeButton: addChangeButton \}\);/.test(ownerSrc), /window\.LokaAtlas\.onLayerExtra\(function \(L\) \{\s*if \(L && L\._row && L\._row\.classList && L\._row\.classList\.contains\("in-lrow"\)\) C\.addChangeButton\(L\);/.test(fs.readFileSync(ROOT + '/atlas/owner-modes.js', 'utf8')), /var head = row\.querySelector\("\.ctl-toggle"\) \|\| row;/.test(ownerSrc)], [true, true, true, true]);
+  check('the search leaves the panel\u2019s working columns out', /if \(k\.indexOf\("_key:"\) === 0\) continue;/.test(viewerSrc), true);
+  check('a page without the hook (an old atlas.js) draws the rows and asks nothing', (() => { const a = { ...dapi }; delete a.layerDoors; const w = IM.viewer({ name: 'standard' }, a); w.layers([main, other]); w.ready(); w.state.box = box; w.state.more = true; w.renderPanel(); return rows.length; })(), 2);
 }
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');

@@ -2114,6 +2114,22 @@ function modeNow(local) {
   const m = local && local.mode;
   return m && typeof m === 'object' && (m.name === 'explore' || m.name === 'event' || m.name === 'insight') ? m.name : 'standard';
 }
+/* The merged Standard panel (Mithun, 7 Nov 2026: Standard takes in Insight): a
+   plain atlas and one saved as "insight" are drawn alike, so the story of the
+   place is written for both and both take the same settings. The mode object
+   such an atlas writes into is the one it has, else a plain standard one — a
+   plain atlas has none until its first story or setting. Event and Explore are
+   untouched. */
+function mergedNow(local) { const n = modeNow(local); return n === 'standard' || n === 'insight'; }
+/* What a Standard/Insight atlas carries over: the mode it is in now when that is
+   the other of the pair (one panel, the settings and the story go straight across),
+   else what it kept under either name when it left for Event or Explore. */
+function keptMerged(kept, local) {
+  if (local && mergedNow(local) && local.mode && typeof local.mode === 'object') return local.mode;
+  for (const k of ['standard', 'insight']) if (kept[k] && typeof kept[k] === 'object') return kept[k];
+  return null;
+}
+function mergedMode(local) { return local && local.mode && typeof local.mode === 'object' ? local.mode : { name: 'standard' }; }
 function keptOf(local) {
   const k = local && local.modeKept;
   return k && typeof k === 'object' && !Array.isArray(k) ? k : {};
@@ -2121,7 +2137,8 @@ function keptOf(local) {
 function modeAnswer(local) {
   const name = modeNow(local), kept = keptOf(local);
   const out = { name, kept: Object.keys(kept).filter((k) => kept[k] && typeof kept[k] === 'object'), canEvent: name === 'event' || !!(kept.event && typeof kept.event === 'object') };
-  if (name === 'explore' || name === 'insight') out.mode = local.mode;
+  // a Standard atlas has a mode object once a story or a setting was written for it
+  if (name === 'explore' || name === 'insight' || (name === 'standard' && local && local.mode && typeof local.mode === 'object')) out.mode = local.mode;
   return out;
 }
 /* The atlas's own layers whose file the private data route would serve (a
@@ -2318,13 +2335,14 @@ async function runInsightSummary(slug, payer, opts) {
     const why = insightSummary.shouldRewrite(slug, first.local, NEVER_READ);
     const clearPending = () => {
       const f = readOverlay(inst);
-      if (f.local && modeNow(f.local) === 'insight' && f.local.mode.summaryPending) {
+      if (f.local && mergedNow(f.local) && f.local.mode && f.local.mode.summaryPending) {
         f.local.mode = clearPendingOf({ ...f.local.mode });
         writeOverlay(f.file, f.local);
       }
     };
     if (why !== true) { clearPending(); return why; }
-    const m = first.local.mode;
+    if (!first.local) return 'no atlas files';
+    const m = mergedMode(first.local);
     const src = insightSource(inst, first.local, m.layer);
     if (!src) { clearPending(); return 'no questions'; }
     if (o.markPending && !o.force && insightNeedsSummary(m, src) && !INSIGHT.isPending(m)) {
@@ -2337,8 +2355,8 @@ async function runInsightSummary(slug, payer, opts) {
     const r = await insightSummary.writeStory({ layer: src.layer, features: src.feats, digest, call: insightCaller(payer, digest),
       model: getStoryModel(), proofreadModel: getStoryProofreadModel(), Type });
     const { file, local } = readOverlay(inst);
-    if (!local || modeNow(local) !== 'insight') return 'changed meanwhile';
-    const mode = { ...local.mode };
+    if (!local || !mergedNow(local)) return 'changed meanwhile';
+    const mode = { ...mergedMode(local) };
     /* The model could not be had at all (Mithun, 5 Nov 2026). Nothing is
        written over what stands — the story, or the older summary on an atlas
        whose story is not written yet — and the fingerprint is NOT stamped, so
@@ -2422,12 +2440,13 @@ async function postMode(req, res) {
      order (insight-mode.js cleanSettings: a people question can never be
      shown). Turning it on writes the story, if none is kept for these places. */
   if (b.name === undefined && b.insight !== undefined) {
-    if (now !== 'insight') return res.status(409).json({ error: 'These settings are for Insight. Switch the atlas to Insight first.' });
-    const src = insightSource(inst, local, local.mode.layer);
+    if (!mergedNow(local)) return res.status(409).json({ error: 'These settings are for a Standard atlas. Switch the atlas to Standard first.' });
+    const was = mergedMode(local);
+    const src = insightSource(inst, local, was.layer);
     if (!src) return res.status(409).json({ error: INSIGHT.NO_QUESTIONS });
-    const clean = INSIGHT.cleanSettings(src.layer, b.insight, local.mode);
+    const clean = INSIGHT.cleanSettings(src.layer, b.insight, was);
     if (clean.error) return res.status(400).json({ error: clean.error });
-    const mode = { ...local.mode, layer: src.layer.id, ...clean.settings };
+    const mode = { ...was, layer: src.layer.id, ...clean.settings };
     const write = !NEVER_READ.has(inst.slug) && insightNeedsSummary(mode, src) && !INSIGHT.isPending(mode) && !INSIGHT_RUNNING.has(inst.slug);
     if (write) markPending(mode);
     local.mode = mode;
@@ -2438,11 +2457,11 @@ async function postMode(req, res) {
   }
   // "Write it again": the owner's allowance; visitors see the questions meanwhile
   if (b.name === undefined && b.rewriteSummary !== undefined) {
-    if (now !== 'insight') return res.status(409).json({ error: 'The story of the place is for Insight. Switch the atlas to Insight first.' });
-    if (local.mode.summaryOn === false) return res.status(409).json({ error: 'Turn the story of the place on first.' });
+    if (!mergedNow(local)) return res.status(409).json({ error: 'The story of the place is for a Standard atlas. Switch the atlas to Standard first.' });
+    if (mergedMode(local).summaryOn === false) return res.status(409).json({ error: 'Turn the story of the place on first.' });
     if (NEVER_READ.has(inst.slug)) return res.status(409).json({ error: 'LOKA does not write the story of the place for this atlas.' });
     if (INSIGHT_RUNNING.has(inst.slug)) return res.json({ ok: true, by: 'already writing', ...modeAnswer(local) });
-    local.mode = markPending({ ...local.mode });
+    local.mode = markPending({ ...mergedMode(local) });
     writeOverlay(file, local);
     const by = await runInsightSummary(inst.slug, req, { force: true });
     const fresh = readOverlay(inst);
@@ -2514,11 +2533,15 @@ async function switchMode(inst, want, payer, { file, local, now }) {
     }
     if (!next) return { status: 409, body: { error: 'Explore needs places of your own on the atlas. Add your data first.' } };
   } else if (want === 'event') next = kept.event;
+  /* Standard and Insight are one panel (7 Nov 2026): back to Standard restores what
+     was kept under either name — the live atlases saved as "insight" keep their story,
+     order and summary switch across a trip to Event or Explore — and both keys go. */
+  else if (want === 'standard') { const k = keptMerged(kept, local); if (k) next = k; }
   /* Insight: the settings kept from last time, else every question shown
      but those about people; never without a question to show */
   let insightSrc = null;
   if (want === 'insight') {
-    const was = kept.insight && typeof kept.insight === 'object' ? kept.insight : null;
+    const was = keptMerged(kept, local);
     insightSrc = insightSource(inst, local, was && was.layer);
     if (!insightSrc) return { status: 409, body: { error: INSIGHT.NO_QUESTIONS, needsQuestions: true } };
     next = was ? { ...was, layer: insightSrc.layer.id } : INSIGHT.defaultInsight(insightSrc.layer);
@@ -2533,7 +2556,8 @@ async function switchMode(inst, want, payer, { file, local, now }) {
     if (key === '_unnamed') for (let n = 2; kept[key] !== undefined; n++) key = '_unnamed-' + n;
     kept[key] = cur;
   }
-  if (want !== 'standard') delete kept[want];
+  delete kept[want];
+  if (want === 'standard' || want === 'insight') { delete kept.standard; delete kept.insight; }
   if (next) local.mode = { ...next, name: want }; else delete local.mode;
   if (Object.keys(kept).length) local.modeKept = kept; else delete local.modeKept;
     if (!writeOverlay(file, local)) return { status: 500, body: { error: 'Could not save your choice. Nothing changed — try again.' } };

@@ -674,7 +674,7 @@
     js.onload = function () {
       if (window.LokaOwnerModes) MODES_KIT = window.LokaOwnerModes.mount({ api: api, errMsg: errMsg, esc: esc, toast: toast, openDialog: openDialog,
         rowsOnMap: rowsOnMap, inst: INST, slug: SLUG, showShelf: function () { if (SHOW_SHELF) SHOW_SHELF(); },
-        closeFold: function () { if (FOLD) closeFold(true); } });
+        closeFold: function () { if (FOLD) closeFold(true); }, addChangeButton: addChangeButton });
       if (MODES_KIT) augmentPanel();
     };
     // the look from a website (Settings' row and sheet): its own file too

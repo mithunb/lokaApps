@@ -27,17 +27,15 @@
      so on arrival. The server is the authority on what is kept and whether an
      event guide has been set up (GET /instances/:slug/mode). */
   var MODES = {
-    standard: { t: "Standard", d: "The map with its layers, and questions about what the places show.",
-      sees: "the layers and the questions about the places" },
+    standard: { t: "Standard", d: "The map with its layers; when LOKA has read the places, the story of the place and the questions \u2014 with a Research mode for comparing them.",
+      sees: "the map with its layers, the story of the place and the questions LOKA asked of the places, with a Research mode for comparing them" },
     event: { t: "Event", d: "A festival guide: the venues, each venue's programme day by day, and what is nearby.",
       sees: "the venues, each venue's programme, and what is near each one" },
     explore: { t: "Explore", d: "For visitors finding their way around: up to four buttons, and a list of what is around here.",
       sees: "up to four buttons and a list of what is around here" },
-    insight: { t: "Insight", d: "For people reading patterns: the questions, with a short summary on top.",
-      sees: "the questions LOKA asked of the places, each answer counted and coloured on the map, with a short summary on top" },
   };
-  var MODE_ORDER = ["standard", "event", "explore", "insight"];
-  var INSIGHT_NOT_READY = "Insight needs the questions LOKA asks of the places. They appear once the atlas has been read.";
+  // Insight is no longer a choice (Mithun, 7 Nov 2026): Standard took it in; an atlas saved as "insight" is shown as Standard
+  var MODE_ORDER = ["standard", "event", "explore"];
   var EVENT_NOT_SET_UP = "An event guide needs its venues and programme set up first. LOKA sets this up for you — write to us.";
   var MODE_SWITCHED = "loka-mode-switched";
   var MODEINFO = null;   // the server's answer: { name, kept, canEvent, canInsight, canChange }
@@ -45,7 +43,7 @@
   // the mode the page is drawing (what the owner's tabs must match)
   function modeDrawn() {
     var M = window.LokaAtlas && window.LokaAtlas.manifest, m = M && M.mode;
-    return m && typeof m === "object" && (m.name === "explore" || m.name === "event" || m.name === "insight") ? m.name : "standard";
+    return m && typeof m === "object" && (m.name === "explore" || m.name === "event") ? m.name : "standard";
   }
   function modeName() { return (MODEINFO && MODES[MODEINFO.name]) ? MODEINFO.name : modeDrawn(); }
 
@@ -123,12 +121,6 @@
           go.hidden = true;
           return;
         }
-        // Insight reads the questions LOKA asked; an atlas not yet read has none
-        if (to === "insight" && !(MODEINFO && MODEINFO.canInsight)) {
-          conf.innerHTML = "<p>" + esc(INSIGHT_NOT_READY) + "</p>";
-          go.hidden = true;
-          return;
-        }
         var n = rowsOnMap();
         var lines = [
           "Visitors will see " + MODES[to].sees + ".",
@@ -138,9 +130,6 @@
         ];
         if (to === "explore" && !(MODEINFO && (MODEINFO.kept || []).indexOf("explore") >= 0)) {
           lines.push("To start, LOKA makes up to four buttons from the categories your places use most. You can change them under Buttons.");
-        }
-        if (to === "insight") {
-          lines.push("LOKA writes the story of the place — a short paragraph of what people are saying about these places. It takes about a minute; visitors see the questions meanwhile. You choose which questions show, and their order, under Settings.");
         }
         conf.innerHTML = "<p>Switch " + esc(title) + " from " + MODES[cur].t + " to " + MODES[to].t + "?</p><ul>" +
           lines.map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("") + "</ul>";
@@ -557,7 +546,8 @@
   function IM() { return window.LokaInsightMode; }
   function insightMode() {
     var M = window.LokaAtlas && window.LokaAtlas.manifest, m = M && M.mode;
-    return m && m.name === "insight" ? m : null;
+    // a plain Standard atlas takes the same settings and story since 7 Nov 2026 (the page gives it a { name: "standard" } mode)
+    return m && (m.name === "insight" || m.name === "standard") ? m : null;
   }
   function insightViewer() { return IM() && IM().viewer && IM().viewer._current; }
   function takeInsight(m) {
@@ -628,7 +618,7 @@
       INS.pollT = null;
       api("instances/" + encodeURIComponent(SLUG) + "/mode").then(function (j) {
         var m = j && j.mode;
-        if (!m || m.name !== "insight") return;
+        if (!m || (m.name !== "insight" && m.name !== "standard")) return;
         if (IM().isPending(m) && INS.polls++ < 110) { if (!host.hidden) pollInsight(host, true); return; }
         if (IM().isPending(m)) { delete m.summaryPending; delete m.summaryPendingAt; }
         takeInsight(m);
@@ -689,7 +679,8 @@
      it, and the visitor's tabs are what is left. */
   function insightTabs() {
     var body = document.getElementById("atlas-controls");
-    if (modeDrawn() !== "insight" || !IM() || !IM().viewer || !body) return;
+    // the server keeps these settings only for an atlas saved as "insight" (its mode object is the one it sends)
+    if (!insightMode() || !IM() || !IM().viewer || !body) return;
     if (!INST || INST.role !== "owner") return;   // an editor could not save these: no Settings, the visitor's tabs only
     var host = document.getElementById("own-ishelf");
     if (!host) {
@@ -719,7 +710,7 @@
     host._insWired = true;
     host.addEventListener("click", function (e) {
       var t = e.target && e.target.closest && e.target.closest("[data-iact]");
-      if (!t || t.disabled || !insightMode() || modeDrawn() !== "insight") return;
+      if (!t || t.disabled || !insightMode()) return;
       var act = t.getAttribute("data-iact"), col = t.getAttribute("data-col");
       var mode = insightMode(), L = exploreStanza(mode);
       if (!L) return;
@@ -958,6 +949,16 @@
     insightTabs();
     api("auth/me").then(function (me) { SUPER_ADMIN = !!(me && me.superAdmin); paintMadeFor(); }).catch(function () {});
     pollSmallPhotos();
+    /* The merged panel's rows under "More on this map" (insight-mode.js) are
+       drawn again on every change, so the row's own doors — Change ▾: Edit
+       card, Remove, who added it (owner.js addChangeButton) — are offered
+       through atlas.js's layer-door hook each time, never once. The Standard
+       list's rows get theirs from owner.js refreshLayers as before. */
+    if (window.LokaAtlas && window.LokaAtlas.onLayerExtra && C.addChangeButton) {
+      window.LokaAtlas.onLayerExtra(function (L) {
+        if (L && L._row && L._row.classList && L._row.classList.contains("in-lrow")) C.addChangeButton(L);
+      });
+    }
     return { drawButtonShelf: drawButtonShelf, visitor: function () { return VISITOR; } };
   }
 

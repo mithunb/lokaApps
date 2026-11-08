@@ -50,6 +50,10 @@
   var PEOPLE_REASON = "Its answers are the names of the people who tagged the places, so LOKA keeps it off the visitor page.";
   var PEOPLE_REFUSED = "That question\u2019s answers are the names of the people who tagged the places, so it stays off the visitor page.";
   var NO_QUESTIONS = "Insight needs the questions LOKA asks of the places. They appear once the atlas has been read.";
+  // an atlas LOKA has not read yet shows the layer's own keys, and says what comes once it has
+  var NOT_READ_YET = "LOKA has not read these places yet. Its questions, and the story of the place, appear here once it has.";
+  // a plain key's value is written on each place under this working name + the column (viewer rawKeys)
+  var RAW_COL = "_key:";
   var MIN_SENTENCES = 2, MAX_SENTENCES = 5, MAX_SENTENCE = 320;
   /* A story "being written" for longer than this is taken as stuck: not
      pending, and a new one may start. Seven minutes, because the story is up
@@ -103,9 +107,14 @@
     return hasNumberWords(t) || hasShareWords(t) || AMOUNT_WORDS.test(t) || RANK_WORDS.test(t);
   }
 
+  /* Every atlas is drawn this way unless its manifest asks for Event or Explore
+     (Mithun, 7 Nov 2026: Standard takes in Insight — one mode, "Standard"; a
+     manifest that still says "insight" reads the same as one that says nothing,
+     no data rewritten). atlas.js still falls back to its own layer list when
+     the atlas has no marker layer of places for this panel to draw (layers()). */
   function isOn(manifest) {
-    var m = manifest && manifest.mode;
-    return !!(m && typeof m === "object" && m.name === "insight");
+    var m = manifest && manifest.mode, n = m && typeof m === "object" ? m.name : null;
+    return n !== "event" && n !== "explore";
   }
   function has(o, k) { return !!o && Object.prototype.hasOwnProperty.call(o, k); }
 
@@ -203,9 +212,11 @@
     var saved = mode && Array.isArray(mode.order) ? mode.order : [];
     saved.forEach(function (c) { if (cols.indexOf(c) >= 0 && !seen[c]) { seen[c] = true; order.push(c); } });
     cols.forEach(function (c) { if (!seen[c]) { seen[c] = true; order.push(c); } });
+    // a question the owner took off the map from the layer's own fold (hiddenKeys, owner.js) stays off here too
+    var hiddenKeys = (layer && layer.hiddenKeys) || [];
     var shown = {};
     order.forEach(function (c) {
-      shown[c] = !isPeople(layer, c) && !(mode && mode.shown && mode.shown[c] === false);
+      shown[c] = !isPeople(layer, c) && !(mode && mode.shown && mode.shown[c] === false) && hiddenKeys.indexOf(c) < 0;
     });
     return { order: order, shown: shown, summaryOn: !(mode && mode.summaryOn === false) };
   }
@@ -1174,7 +1185,7 @@
      all; the owner has one more tab, Settings (`extra`, owner-modes.js), so
      the row shows "Insights · Settings". Fewer than two tabs: none. */
   function panelTabs(mode, shownCols, extra) {
-    var t = [{ key: "q", label: "Insights" }];
+    var t = [{ key: "q", label: "This map" }];
     if (extra) t.push(extra);
     return t.length > 1 ? t : [];
   }
@@ -1282,6 +1293,11 @@
     ".in-mini{display:flex;height:6px;border-radius:3px;overflow:hidden;margin-top:.45rem;background:" + NONE + "}",
     ".in-mini span{height:100%}",
     ".in-q.sparse .in-qt{color:var(--color-text-secondary,#5A5751)}",
+    // the map status under each question: plain for a closed one, the answers' dots + leaf green for the open one
+    ".in-qs{display:flex;align-items:center;gap:.4rem;margin-top:.15rem;font-size:var(--t-meta,.8rem);font-weight:400;color:var(--color-text-muted,#6E6A63)}",
+    ".in-qs.on{color:var(--color-leaf,#2A6B41);font-weight:700;font-size:var(--t-ui,.9rem);gap:.35rem}",
+    // the question on the map: a quiet leaf-green border round the whole question, its answers inside
+    ".in-q.in-on{border:1.5px solid var(--color-leaf,#2A6B41);border-radius:8px;padding:.1rem .75rem .45rem;margin:.4rem 0}",
     ".in-qbody{padding:0 0 .5rem}",
     ".in-ans{display:grid;grid-template-columns:1fr auto;gap:.1rem .6rem;text-align:left;background:none;border:none;border-radius:var(--radius-md,.25rem);padding:.4rem .45rem;margin:0 -.45rem;width:calc(100% + .9rem);font:inherit;color:inherit;cursor:pointer}",
     ".in-ans:hover{background:var(--color-surface-alt,#F0EDE4)}",
@@ -1425,6 +1441,33 @@
     // Research mode is not offered on a phone (R6, recommended): the switch is hidden below 600px
     "@media (max-width:600px){.in-rmode{display:none}}",
     // ...and in its place on a phone, one plain line saying where it lives
+    // "More on this map": a fold that reads like a question row; layer rows with a small switch (the Research switch's look, smaller)
+    ".in-moresect{margin-top:1rem;padding-top:.3rem;border-top:1px solid var(--color-divider,rgba(36,33,29,.1))}",
+    ".in-fold .in-qt{font-weight:600}",
+    ".in-fold[aria-expanded=\"true\"] .in-chev{transform:rotate(180deg)}",
+    ".in-morebody{padding:0 0 .5rem}",
+    ".in-morebody .in-sect{margin:.2rem 0 .25rem}",
+    ".in-morebody .in-q:first-of-type{border-top:0}",
+    ".in-lrow{display:flex;align-items:center;gap:.15rem;width:100%}",
+    ".in-lline{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:.55rem;padding:.3rem .3rem;margin:0;line-height:1.25}",
+    "label.in-lline{cursor:pointer}",
+    ".in-lrow input{position:absolute;opacity:0;width:0;height:0}",
+    ".in-lsw{flex:none;position:relative;width:32px;height:18px;border-radius:9px;background:var(--color-border,rgba(36,33,29,.3));transition:background .15s}",
+    ".in-lsw::after{content:\"\";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(36,33,29,.3);transition:transform .15s}",
+    ".in-lrow input:checked+.in-lsw{background:var(--color-leaf,#2A6B41)}",
+    ".in-lrow input:checked+.in-lsw::after{transform:translateX(14px)}",
+    ".in-lrow input:focus-visible+.in-lsw{outline:2px solid var(--color-leaf,#2A6B41);outline-offset:2px}",
+    ".in-lname{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:.4rem;font-weight:400}",
+    ".in-lmain .in-lname{padding-left:calc(32px + .55rem)}",
+    ".in-lrow.off .in-lname,.in-lrow.off .in-lct{color:var(--color-text-muted,#6E6A63)}",
+    ".in-lname .in-sw{width:11px;height:11px;border:1px solid rgba(36,33,29,.18)}",
+    ".in-lname .in-sw-line{height:3px;width:14px;border-radius:2px;border:0}",
+    ".in-lct{flex:none;font-variant-numeric:tabular-nums;color:var(--color-text-muted,#6E6A63)}",
+    // the owner's doors on a row (owner.js): the row wraps so the menu and the fold sit under the name
+    ".in-lrow{flex-wrap:wrap}",
+    ".in-lrow .in-lextra{flex:1 1 100%}",
+    ".in-lrow .in-lextra:empty,.in-lrow .own-fold:empty{display:none}",
+    ".in-lrow .own-fold,.in-lrow .own-by{flex:1 1 100%}",
     ".in-rphone{display:none;margin:1.2rem 0 0;padding-top:.9rem;border-top:1px solid var(--color-divider,rgba(36,33,29,.1));font-size:var(--t-meta,.8rem);color:var(--color-text-muted,#6E6A63)}",
     "@media (max-width:600px){.in-rphone{display:block}}",
     ".in-tick input{width:17px;height:17px;margin:0}",
@@ -1440,7 +1483,11 @@
       // questions, in the order ticked (their shape); which answer's ⓘ is open;
       // the map key's own fold, kept per ticked question
       research: false, ticks: [], info: null, rkeyFold: {},
+      // "More on this map" (folded on every visit) and which layer's ⓘ is open
+      more: false, linfo: null,
     };
+    // every layer the manifest lists, as atlas.js handed them over (the main one swapped for X)
+    var ALL = [];
 
     /* the row whose card is open keeps a Marigold wash until the card closes
        (atlas.js says which place's card is open: "atlas:card") */
@@ -1474,7 +1521,8 @@
       for (var k in srcLayer) X[k] = srcLayer[k];
       X.default = true; X._visible = true;
       X._ev = { insight: true };
-      return list.map(function (L) { return L === srcLayer ? X : L; });
+      ALL = list.map(function (L) { return L === srcLayer ? X : L; });
+      return ALL;
     }
     function feats() { return (X && (api.data(X.id) || {}).features) || []; }
     function entries() { return (X && api.markers(X.id)) || []; }
@@ -1486,15 +1534,64 @@
     function Q() {
       if (cache) return cache;
       var list = shownStats(srcLayer, feats(), mode);
+      var raw = rawKeys(feats());
       var byCol = {};
       list.forEach(function (st) { byCol[st.col] = st; });
-      cache = { list: list, byCol: byCol, cols: list.map(function (st) { return st.col; }) };
+      raw.forEach(function (st) { byCol[st.col] = st; });
+      // cols: the questions alone (the story, the tabs and the card read them); byCol knows the plain keys too
+      cache = { list: list, raw: raw, byCol: byCol, cols: list.map(function (st) { return st.col; }) };
       return cache;
     }
+    // the first question (not one said by few); on an atlas not read yet, the first of the layer's own keys
     function firstOpen() {
       var l = Q().list;
       var main = l.filter(function (st) { return !st.sparse; })[0];
-      return (main || l[0] || {}).col || null;
+      return (main || l[0] || Q().raw[0] || {}).col || null;
+    }
+    /* The layer's own keys — the plain columns Standard offered as "Explore by"
+       ("Category", "When it was added (by month)") — as rows like the
+       questions, through the same stats, colours and map path (Mithun, 7 Nov
+       2026). Which columns, and a place's value under one (the first of a list
+       cell, a date's month), is atlas.js's one rule (api.keyOptions,
+       api.optValues); the value is written on the place under a working name
+       (RAW_COL + column) so that everything that reads an answer by column —
+       the pins, the discs, the key, a tap on an answer — reads a plain key
+       exactly as it reads a question. The owner's committed colours, if any,
+       are not carried over: one palette for every key (Mithun, 7 Nov 2026). */
+    function rawKeys(fs) {
+      if (!X || !fs.length || !api.keyOptions || !api.optValues) return [];
+      var opts;
+      try { opts = api.keyOptions(X) || []; } catch (e) { opts = []; }
+      var out = [];
+      opts.forEach(function (o) {
+        if (o.isQuestion || o.tooFew || o.scattered || !o.col) return;
+        // a column of people (created_by and its kin) is never a key on the visitor page (people-hidden)
+        if (isPeopleColumn(o.col)) return;
+        var vcol = RAW_COL + o.col;
+        fs.forEach(function (f) {
+          var p = f.properties || (f.properties = {});
+          var vals = api.optValues(X, o, f) || [];
+          p[vcol] = vals.length ? vals[0] : "";
+        });
+        var lab = {}; lab[vcol] = o.label || o.col;
+        var st = stats({ keyLabels: lab }, fs, vcol);
+        if (!st.answered) return;
+        st.question = String(o.label || o.col);   // a key's name is not a question: no "…" on the end
+        st.sparse = false;
+        st.raw = true;
+        // a date's months in the order of the year, not of their counts
+        if (o.grain && st.answers.every(function (a) { return isFinite(Date.parse("1 " + a.name)) || isFinite(Date.parse(a.name)); })) {
+          st.answers.sort(function (a, b) {
+            var da = Date.parse("1 " + a.name), db = Date.parse("1 " + b.name);
+            return (isFinite(da) ? da : Date.parse(a.name)) - (isFinite(db) ? db : Date.parse(b.name));
+          });
+          st.answers.forEach(function (a, i) { a.color = PAL[i % PAL.length]; });
+        }
+        st.dated = !!o.grain;
+        out.push(st);
+      });
+      // a date key ("When it was added") is bookkeeping: it comes after the keys that say what a place is
+      return out.filter(function (st) { return !st.dated; }).concat(out.filter(function (st) { return st.dated; }));
     }
     function matches(p) {
       var f = state.filter;
@@ -1905,16 +2002,26 @@
       if (infoOpen) h += infoHTML(st, a);
       return h;
     }
+    /* Under each question, what it does to the map (Mithun, 7 Nov 2026): a closed
+       one says "Show this on the map"; the open one says "✓ Showing on the map", in
+       the leaf green and bold (no dots: Mithun, 7 Nov 2026). In Research mode the
+       tick boxes say it instead. */
+    function mapStatusHTML(st, open) {
+      if (state.research) return "";
+      if (!open) return '<span class="in-qs">Show this on the map</span>';
+      return '<span class="in-qs on"><span aria-hidden="true">\u2713</span>Showing on the map</span>';
+    }
     function questionHTML(st) {
       var open = state.open === st.col;
-      var h = '<div class="in-q' + (open ? " open" : "") + (st.sparse ? " sparse" : "") + '"><div class="in-qrow">';
+      // the question on the map wears a border (Mithun, 7 Nov 2026); in Research mode the ticks say what is on the map
+      var h = '<div class="in-q' + (open ? " open" : "") + (open && !state.research ? " in-on" : "") + (st.sparse ? " sparse" : "") + '"><div class="in-qrow">';
       if (state.research) {
         var ti = state.ticks.indexOf(st.col), full = ti < 0 && state.ticks.length >= 3;
         h += '<label class="in-tick' + (full ? " in-tick-off" : "") + '"' + (full ? ' title="Three at most"' : "") + '><input type="checkbox" data-in="tick" data-col="' + escAttr(st.col) +
           '" aria-label="Show ' + escAttr(st.question) + ' on the map"' + (ti >= 0 ? " checked" : "") + (full ? " disabled" : "") + "></label>";
       }
       h += '<button type="button" class="in-qhead" data-in="open" data-col="' + escAttr(st.col) + '" aria-expanded="' + open + '"><span class="in-qt"><span>' +
-        escText(st.question) + '</span><span class="in-chev" aria-hidden="true">▾</span></span></button></div>';
+        escText(st.question) + '</span><span class="in-chev" aria-hidden="true">▾</span></span>' + mapStatusHTML(st, open) + "</button></div>";
       if (!open) return h + "</div>";
       var f = state.filter && state.filter.col === st.col && !state.filter.col2 ? state.filter : null;
       h += '<div class="in-qbody">';
@@ -2004,25 +2111,107 @@
       if (idx.length > lim) h += '<button type="button" class="in-more" data-in="more">Show all ' + idx.length + "</button>";
       return h + "</div>";
     }
+    /* ---- "More on this map" ---- */
+    /* Every other layer of the atlas, folded away under the questions
+       (Mithun, 7 Nov 2026: "This map" is one panel; the layers come second):
+       the data layers with a switch each — except the MAIN one, the layer the
+       questions colour, which has no switch — and the public map layers
+       (boundaries, parks and the like) with theirs. Each row carries its
+       count (data layers) and a ⓘ that opens what the layer is. The rows
+       atlas.js's own list leaves out (a base-map row, a split file's points
+       twin) are left out here too (api.rowLayer). */
+    function layerRows() {
+      return ALL.filter(function (L) { return !api.rowLayer || api.rowLayer(L); });
+    }
+    function layerIsOn(L) { return L._visible != null ? !!L._visible : L.default !== false; }
+    function layerCount(L) { return ((api.data(L.id) || {}).features || []).length; }
+    function layerNote(L) {
+      if (L.info) return String(L.info);
+      if (L.userLayer) {
+        var n = layerCount(L), bits = [n + " " + placesWord(n) + " on this layer"];
+        if (L.uploadedAs) bits.push("from " + L.uploadedAs);
+        if (L.addedBy && L.addedBy.name) bits.push("added by " + L.addedBy.name);
+        return bits.join(" \u00b7 ") + ".";
+      }
+      if (L.legend && L.legend.length) return L.legend.map(function (g) { return g.label; }).filter(Boolean).join(", ") + ".";
+      return "A layer of the map.";
+    }
+    function layerSwatch(L) {
+      if (L.userLayer) {
+        var first = L.markers && Object.keys(L.markers)[0];
+        var c = (first && L.markers[first] && L.markers[first].color) || (L.markerDefault && L.markerDefault.color) || null;
+        return c ? '<span class="in-sw" style="background:' + escAttr(c) + '"></span>' : "";
+      }
+      var g = L.legend && L.legend[0];
+      if (!g || !g.color) return "";
+      return '<span class="in-sw' + (g.shape === "line" ? " in-sw-line" : "") + '" style="background:' + escAttr(g.color) + '"></span>';
+    }
+    /* A layer's name on its row. The main layer's label is often the upload's
+       own file name or slug ("bengaluru-tags"): a slug is not a name, so it
+       says "Places on this map" instead. Other layers keep what the owner
+       called them. */
+    function layerName(L, main) {
+      var t = String(L.label || L.title || "").trim();
+      if (!main) return t || String(L.id);
+      var slug = !t || t === L.id || (!/\s/.test(t) && (/[-_]/.test(t) || /\.(csv|geojson|json|xlsx?)$/i.test(t)));
+      return slug ? "Places on this map" : t;
+    }
+    function layerRowHTML(L) {
+      var main = !!X && L.id === X.id, on = main || layerIsOn(L), open = state.linfo === L.id, name = layerName(L, main);
+      var h = '<div class="in-lrow' + (on ? "" : " off") + (main ? " in-lmain" : "") + '" data-id="' + escAttr(L.id) + '">';
+      if (main) {
+        // the main layer: no switch (its places are what the questions colour), just its name
+        h += '<span class="in-lline"><span class="in-lname">' + layerSwatch(L) + escText(name) + '</span><span class="in-lct">' + layerCount(L) + "</span></span>";
+      } else {
+        h += '<label class="in-lline"><input type="checkbox" role="switch" data-in="layer" data-id="' + escAttr(L.id) + '"' + (on ? " checked" : "") +
+          ' aria-label="' + escAttr(name) + '"><span class="in-lsw"></span><span class="in-lname">' + layerSwatch(L) + escText(name) + "</span>" +
+          (L.userLayer ? '<span class="in-lct">' + layerCount(L) + "</span>" : "") + "</label>";
+      }
+      h += '<button type="button" class="in-info-btn" data-in="linfo" data-id="' + escAttr(L.id) + '" aria-label="About ' + escAttr(name) + '" aria-expanded="' + open + '">i</button></div>';
+      if (open) h += '<div class="in-info"><p>' + escText(layerNote(L)) + "</p></div>";
+      return h;
+    }
+    function moreHTML(extraKeys) {
+      // the main layer is a data layer whatever its manifest says of it
+      var rows = layerRows(), data = rows.filter(function (L) { return L.userLayer || (X && L.id === X.id); }), pub = rows.filter(function (L) { return data.indexOf(L) < 0; });
+      // nothing but the main layer (which has no switch): no fold at all
+      var others = data.filter(function (L) { return !(X && L.id === X.id); });
+      if (!others.length && !pub.length && !extraKeys.length) return "";
+      var h = '<div class="in-moresect"><button type="button" class="in-qhead in-fold" data-in="fold" aria-expanded="' + !!state.more + '"><span class="in-qt"><span>More on this map</span><span class="in-chev" aria-hidden="true">\u25be</span></span></button>';
+      if (!state.more) return h + "</div>";
+      h += '<div class="in-morebody">';
+      if (data.length) h += '<div class="in-sect"><span class="in-stamp">Layers</span></div>' + data.map(layerRowHTML).join("");
+      if (pub.length) h += '<div class="in-sect" style="margin-top:.7rem"><span class="in-stamp">Map layers</span></div>' + pub.map(layerRowHTML).join("");
+      if (extraKeys.length) h += '<div class="in-sect" style="margin-top:1rem"><span class="in-stamp">Other keys</span></div><p class="in-hint">Open one to colour the map by it instead.</p>' + extraKeys.map(questionHTML).join("");
+      return h + "</div></div>";
+    }
     function panelHTML() {
       if (!state.ready) return '<p class="ev-hint">' + (typeof window !== "undefined" && window.LokaWait ? window.LokaWait.html("Loading the places\u2026") : "Loading the places\u2026") + "</p>";
       var voice = voiceHTML();
-      var list = Q().list;
-      if (!list.length) return voice || '<p class="in-hint">No questions to show yet.</p>';
+      var list = Q().list, raw = Q().raw;
+      if (!list.length) {
+        /* Not read yet: the layer's own keys are the rows, the first open, and one
+           plain line says the questions and the story come once LOKA has read the
+           places (Mithun, 7 Nov 2026). No story: there is none to show. */
+        if (!raw.length) return '<p class="in-hint">' + escText(NOT_READ_YET) + "</p>" + moreHTML([]);
+        return '<div class="in-sect"><span class="in-stamp">The keys</span><span class="in-cov">' + raw.length + " on this layer</span></div>" +
+          '<p class="in-hint">Open a key to colour the map by it, one at a time. Tap a row to show only those places.</p>' + raw.map(questionHTML).join("") +
+          '<p class="in-hint" style="margin-top:.8rem">' + escText(NOT_READ_YET) + "</p>" + researchSwitchHTML() + moreHTML([]);
+      }
       var main = list.filter(function (st) { return !st.sparse; }), few = list.filter(function (st) { return st.sparse; });
       var h = voice + '<div class="in-sect"><span class="in-stamp">The questions</span><span class="in-cov">' + list.length + " asked of every place</span></div>" +
-        '<p class="in-hint">Open a question to colour the map by its answers. Tap an answer to show only those places.</p>';
+        '<p class="in-hint">Open a question to colour the map by its answers, one at a time. Tap an answer to show only those places.</p>';
       h += main.map(questionHTML).join("");
       if (few.length) h += '<div class="in-sect" style="margin-top:1rem"><span class="in-stamp">Said by only a few places</span></div>' + few.map(questionHTML).join("");
-      return h + researchSwitchHTML();
+      return h + researchSwitchHTML() + moreHTML(raw);
     }
     /* The Research mode switch, the very bottom of the panel: off on every
        page load, never remembered across visits (Mithun, 7 Nov 2026). */
     function researchSwitchHTML() {
       return '<div class="in-rmode"><button type="button" class="in-rsw" role="switch" aria-checked="' + !!state.research + '" data-in="research" aria-labelledby="in-rmode-lbl"></button>' +
-        '<div class="in-rtext"><strong id="in-rmode-lbl">Research mode</strong><span>Put two or three questions on the map at once and compare them.</span></div></div>' +
+        '<div class="in-rtext"><strong id="in-rmode-lbl">Research mode</strong><span>Put two or three questions or keys on the map at once and compare them.</span></div></div>' +
         // phones (no switch there): say where it lives instead (Mithun, 7 Nov 2026)
-        '<p class="in-rphone">To put several questions on the map at once, or compare one question with another, open LOKA Atlas on a computer or in your browser’s desktop mode.</p>';
+        '<p class="in-rphone">To put several questions or keys on the map at once, or compare one with another, open LOKA Atlas on a computer or in your browser’s desktop mode.</p>';
     }
     function renderPanel() {
       if (dropResearchIfSmall()) return;   // setResearch(false) draws everything again itself
@@ -2034,11 +2223,35 @@
       var top = sc ? sc.scrollTop : 0;
       box.innerHTML = panelHTML();
       if (sc) sc.scrollTop = top;
+      wireLayerDoors(box);
+    }
+    /* The owner's doors on each layer row under "More on this map" (Edit card,
+       Remove, the reading's door — owner.js through atlas.js's onLayerExtra):
+       every row drawn, the main layer's too, gets L._row and an empty L._extra
+       and atlas.js is asked to hang the doors (api.layerDoors). The main row
+       hands over the manifest's own layer, not the panel's copy, so a door
+       saves to the layer the owner's tools know. A visitor's page has no
+       hooks, so nothing is added. */
+    function wireLayerDoors(box) {
+      if (!api.layerDoors || !box.querySelectorAll) return;
+      var rows = box.querySelectorAll(".in-lrow[data-id]");
+      for (var i = 0; i < rows.length; i++) {
+        var row = rows[i], id = row.getAttribute("data-id");
+        var L = layerRows().filter(function (x) { return x.id === id; })[0];
+        if (!L) continue;
+        if (X && L.id === X.id && srcLayer) L = srcLayer;
+        var extra = el("div", "in-lextra ctl-extra");
+        row.appendChild(extra);
+        L._row = row;
+        L._extra = extra;
+        api.layerDoors(L);
+      }
     }
     function sheetHead() {
-      if (!state.ready) return { label: "Insights", small: "" };
+      // one mode now, so the panel says what it is: "This map" (Mithun, 7 Nov 2026)
+      if (!state.ready) return { label: "This map", small: "" };
       var n = feats().filter(function (x) { return matches(x.properties || {}); }).length;
-      return { label: "Insights", small: n + " " + placesWord(n) };
+      return { label: "This map", small: n + " " + placesWord(n) };
     }
     function syncHead() {
       if (typeof document === "undefined") return;
@@ -2047,7 +2260,7 @@
       var head = document.querySelector("#atlas-panel .sheet-who strong");
       if (head) head.textContent = sh.label;
       var who = document.getElementById("sheet-layer");
-      // the kicker says "Insights"; until the places are counted the line
+      // the kicker says "This map"; until the places are counted the line
       // stays empty (hidden), never "INSIGHTS / Insights" (7 Nov 2026)
       if (who) { who.innerHTML = ""; if (sh.small) who.appendChild(el("span", "sheet-layer-name", esc(sh.small))); }
     }
@@ -2061,7 +2274,7 @@
       var list = state.box.querySelectorAll('[data-in="' + kind + '"]');
       for (var i = 0; i < list.length; i++) {
         var n = list[i];
-        if (n.getAttribute("data-col") !== col) continue;
+        if (col !== undefined && n.getAttribute("data-col") !== col) continue;
         if (a !== undefined && (n.getAttribute("data-a") || "") !== a) continue;
         if (n.focus) n.focus();
         return;
@@ -2119,6 +2332,15 @@
         state.open = state.open === col ? null : col;
         state.filter = null; state.cmp = null; state.showAll = false; state.info = null;
         changed(true);
+        // on a phone, opening a question lowers the sheet so the map it now colours is in view (Mithun, 7 Nov 2026)
+        if (state.open && !state.research && api.onPhone() && api.setSheet) api.setSheet("peek");
+        return;
+      }
+      if (d === "fold") { state.more = !state.more; renderPanel(); refocus("fold"); return; }
+      if (d === "linfo") {
+        var lid = t.getAttribute("data-id");
+        state.linfo = state.linfo === lid ? null : lid;
+        renderPanel();
         return;
       }
       if (d === "tick") {
@@ -2187,6 +2409,14 @@
     }
     function onChange(e) {
       var s = e.target;
+      if (s && s.getAttribute && s.getAttribute("data-in") === "layer") {
+        // a layer's switch under "More on this map": never the main layer's (it has none)
+        var id = s.getAttribute("data-id"), L = layerRows().filter(function (x) { return x.id === id && !(X && x.id === X.id); })[0];
+        if (!L) return;
+        api.setLayerVisible(L, !!s.checked);
+        renderPanel();
+        return;
+      }
       if (!s || s.getAttribute("data-in") !== "cmp") return;
       state.cmp = s.value || null;
       if (state.filter && state.filter.col2) { state.filter = null; apply(); }
@@ -2210,7 +2440,7 @@
       if (stage) { stage.classList.remove("ev-on"); stage.classList.remove("ex-on"); stage.classList.add("in-on"); }
       var sec = el("section", "ctl-group ev-group in-panel");
       sec.setAttribute("data-group", "insight");
-      sec.setAttribute("data-group-label", "Insights");
+      sec.setAttribute("data-group-label", "This map");
       var box = el("div", "in-wrap");
       box.addEventListener("click", onClick);
       box.addEventListener("change", onChange);
@@ -2228,8 +2458,8 @@
       state.box = box;
       renderPanel();
       var back = document.getElementById("sheet-card-back");
-      if (back && back.lastChild && back.lastChild.nodeType === 3) back.lastChild.nodeValue = "Insights";
-      if (back) back.setAttribute("aria-label", "Back to the questions");
+      if (back && back.lastChild && back.lastChild.nodeType === 3) back.lastChild.nodeValue = "This map";
+      if (back) back.setAttribute("aria-label", "Back to the panel");
       // the map's key hides on desktop while this panel is open (hideKeyOnDesktop,
       // above) and must redraw the moment the panel folds or opens again
       if (typeof MutationObserver !== "undefined" && !panel._inFoldWatched) {
@@ -2257,7 +2487,7 @@
           .then(function (local) {
             if (!pollT) return;
             var m = local && local.mode;
-            if (!m || m.name !== "insight") { stop(true); return; }
+            if (!m || !isOn({ mode: m })) { stop(true); return; }
             if (isPending(m)) return;
             stop(false);
             mode.summary = m.summary || null;
@@ -2332,6 +2562,9 @@
       renderTabs: renderTabs,
       renderPanel: renderPanel,
       state: state,
+      // the panel's own handlers, for the checks (test/insight-mode-test.mjs) to press a row without a page
+      onClick: onClick,
+      onChange: onChange,
     };
     viewer._current = me;
     return me;
@@ -2402,6 +2635,8 @@
     PEOPLE_REASON: PEOPLE_REASON,
     PEOPLE_REFUSED: PEOPLE_REFUSED,
     NO_QUESTIONS: NO_QUESTIONS,
+    NOT_READ_YET: NOT_READ_YET,
+    RAW_COL: RAW_COL,
     FEW_SHARE: FEW_SHARE, FEW_PLACES: FEW_PLACES, CMP_SHARE: CMP_SHARE, CMP_PLACES: CMP_PLACES,
     viewer: viewer,
   };

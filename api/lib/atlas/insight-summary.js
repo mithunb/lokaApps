@@ -246,9 +246,10 @@ export async function proofread({ tables, sentences, call, model, Type, timeoutM
    atlas. Answers true or a reason. */
 export function shouldRewrite(dataset, local, neverRead) {
   if (neverRead && neverRead.has && neverRead.has(dataset)) return 'never touched';
-  const m = local && local.mode;
-  if (!m || typeof m !== 'object' || m.name !== 'insight') return 'not in Insight';
-  if (m.summaryOn === false) return 'summary off';
+  // a plain atlas (no mode, or "standard") is drawn by the same panel as "insight" (7 Nov 2026): the story is written for both
+  const m = local && local.mode && typeof local.mode === 'object' ? local.mode : null;
+  if (m && (m.name === 'explore' || m.name === 'event')) return 'not in Insight';
+  if (m && m.summaryOn === false) return 'summary off';
   return true;
 }
 
