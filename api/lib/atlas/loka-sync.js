@@ -367,12 +367,15 @@ export function mergeNewReading(rows, todo, labels, asked, out) {
   const t = (v) => String(v == null ? '' : v).trim();
   const at = new Map(todo.map((i, k) => [i, k]));
   const questions = [];
+  // a settled question the reading retired (read from an address, enrich.js) is left out, not matched
+  const retired = new Set(((out && out.retired) || []).map((r) => t(r && r.question)));
   for (const q of asked) {
+    if (retired.has(t(q.question))) continue;
     const col = Object.keys(labels).find((c) => RULES.isQuestionColumn(c) && t(labels[c]) === t(q.question));
     const got = (out.questions || []).find((x) => t(x.question) === t(q.question));
     if (!got || !Array.isArray(got.categories) || got.categories.length !== todo.length) return null;
     questions.push({
-      question: q.question, noun: q.noun || '', columns: q.columns || [],
+      question: q.question, noun: q.noun || '', columns: q.columns || [], col: q.col || col || '',
       counts: q.kinds.map((k) => ({ name: k.name, definition: k.definition || '' })),
       categories: rows.map((r, i) => at.has(i) ? (got.categories[at.get(i)] || '') : (col ? String(r[col] || '') : '')),
       why: rows.map((r, i) => at.has(i) ? ((got.why && got.why[at.get(i)]) || [])

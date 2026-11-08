@@ -70,9 +70,9 @@ check('and a sample was considered and refused, with the reason',
 /* A new question goes on the end; a repaired one goes back where it was, so
    the keys keep their order for anybody holding a link. */
 check('a new question is added to the end',
-  /if \(repairing\) all\[putRight\] = fresh; else all\.push\(fresh\);/.test(server), true);
-check('a repaired one takes its own place back',
-  /all\[putRight\] = fresh/.test(server), true);
+  /if \(repairing\) all\[putRight\] = Object\.assign\(\{\}, fresh, \{ col: settled\[putRight\]\.col \}\); else all\.push\(fresh\);/.test(server), true);
+check('a repaired one takes its own place back, under its own column (a retired question leaves a gap, so the column is not its place in the list)',
+  /all\[putRight\] = Object\.assign\(\{\}, fresh, \{ col: settled\[putRight\]\.col \}\)/.test(server) && /settled\.findIndex\(\(q\) => q\.col === String\(b\.replacing\)\)/.test(server), true);
 check('which question is being put right comes from the column',
   /RULES\.isQuestionColumn\(String\(b\.replacing \|\| ''\)\)/.test(server), true);
 /* The cap of five is gone: it was a guess made before anybody had five, and

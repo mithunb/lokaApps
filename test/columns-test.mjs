@@ -436,10 +436,16 @@ console.log('\n  7. the owner\'s per-column lines stay accurate');
   check('and is still marked as asked', (r.columns.find((y) => y.column === 'description') || {}).asked, true);
   check('the column it did look at gets a new line', /^Festival comment: 1 question kept/.test(ln(r, 'festival_comment')), true);
   check('a passed-over column keeps its line too', ln(r, 'status'), ln(r1, 'status'));
-  const settledCols = [{ question: 'Which area is it in?', kinds: areaQ.kinds.map((k) => ({ name: k.name, definition: '' })), columns: ['address'] }];
+  const settledCols = [{ question: 'What sort of place is it?', kinds: sortQ.kinds.map((k) => ({ name: k.name, definition: '' })), columns: ['description'] }];
   const noPrev = await read({ keepQuestions: settledCols }, {});
-  check('with no earlier line, a settled question\'s column says what it kept', /^Address: looked at in an earlier reading, which kept “Which area is it in\?”/.test(ln(noPrev, 'address')), true);
+  check('with no earlier line, a settled question\'s column says what it kept', /^Description: looked at in an earlier reading, which kept “What sort of place is it\?”/.test(ln(noPrev, 'description')), true);
   check('no line on a re-answer says "not asked" of a column that was read', noPrev.columns.filter((c) => /not asked — this reading/.test(c.line)).length, 0);
+  // a settled question read from the address is retired instead (8 Nov 2026; question-rules-test.mjs 1b has the rule)
+  const fromAddress = [{ question: 'Which area is it in?', kinds: areaQ.kinds.map((k) => ({ name: k.name, definition: '' })), columns: ['address'] }];
+  const retired = await read({ keepQuestions: fromAddress }, {});
+  check('a settled question read only from the address is retired, and its line says so',
+    [retired.verdict, retired.retired.map((x) => x.question), /“Which area is it in\?”, which an earlier reading took from it, is now off the map$/.test(ln(retired, 'address'))],
+    ['refused', ['Which area is it in?'], true]);
   const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'loka-lines-'));
   const q = createQueue({ file: path.join(TMP, 'q.json') });
   q.offer({ dataset: 'a', layerId: 'l', sig: 's1', payer: 'o@x' });
@@ -542,6 +548,53 @@ console.log('\n  10. plain words on the owner\'s page');
   const sq = E.columnReport(tight, { [tight.groups[0].label]: { state: 'none' } }, [], [], 0, {});
   check('a column squeezed in with others says why, without numbers', sq[0].line,
     'Festival comment: no question kept — nothing in it sorts the places into groups (read together with other columns, to keep the cost of one reading down: with Description, Tree, Keeper and Labels)');
+}
+
+console.log('\n  11. a retired question leaves a gap: nothing is renumbered, and its number is never worn again');
+{
+  // a Divar-shaped record: six questions, the first and fourth read from the address
+  const six = ['What region is this place in?', 'What kind of place is this?', 'What does this place look like?', 'What locality is this place in?', 'What is this place used for?', 'What is the condition of this place?'];
+  const layer = { id: 'divar-island', keyLabels: {}, keyKinds: {}, keyColumns: {}, keyNouns: {} };
+  six.forEach((q, n) => {
+    const c = 'pattern_' + (n + 1);
+    layer.keyLabels[c] = q; layer.keyKinds[c] = [{ name: 'A' + n, definition: '' }, { name: 'B' + n, definition: '' }];
+    layer.keyColumns[c] = [n === 0 || n === 3 ? 'address' : 'labels'];
+  });
+  const places = Array.from({ length: 5 }, (_, i) => ({ name: 'P' + i, pattern_1: 'A0', pattern_2: 'A1', pattern_3: 'B2', pattern_4: 'A3', pattern_5: 'B4', pattern_6: 'A5' }));
+  const settledSix = RULES.settledQuestions(layer, places);
+  check('a settled question carries its own column', settledSix.map((q) => q.col), ['pattern_1', 'pattern_2', 'pattern_3', 'pattern_4', 'pattern_5', 'pattern_6']);
+  const kept = settledSix.filter((q) => q.columns[0] !== 'address').map((q) => ({ question: q.question, col: q.col, counts: q.kinds, columns: q.columns,
+    categories: places.map((p) => p[q.col]), why: places.map(() => ['w']) }));
+  const shaped = RULES.shapeReading(places, kept, { taken: ['pattern_1', 'pattern_4'] });
+  check('six questions to four: the kept ones keep pattern_2, 3, 5 and 6', Object.keys(shaped.keyLabels), ['pattern_2', 'pattern_3', 'pattern_5', 'pattern_6']);
+  check('and so do their kinds, columns and the places\' answers', [Object.keys(shaped.keyKinds), Object.keys(shaped.keyColumns), shaped.rows[0].pattern_5, shaped.rows[0].pattern_1, shaped.rows[0].pattern_4],
+    [['pattern_2', 'pattern_3', 'pattern_5', 'pattern_6'], ['pattern_2', 'pattern_3', 'pattern_5', 'pattern_6'], 'B4', undefined, undefined]);
+  const later = RULES.shapeReading(places, kept.concat([{ question: 'Is it wet?', counts: [{ name: 'Wet' }], categories: places.map(() => 'Wet'), why: places.map(() => []) }]), { taken: ['pattern_1', 'pattern_4'] });
+  check('a question added later takes pattern_7, never a retired number', Object.keys(later.keyLabels), ['pattern_2', 'pattern_3', 'pattern_5', 'pattern_6', 'pattern_7']);
+  const lastGone = RULES.shapeReading(places, kept.slice(0, 3).concat([{ question: 'Is it wet?', counts: [{ name: 'Wet' }], categories: [], why: [] }]), { taken: ['pattern_1', 'pattern_4', 'pattern_6'] });
+  check('even when the retired number was the highest', Object.keys(lastGone.keyLabels), ['pattern_2', 'pattern_3', 'pattern_5', 'pattern_7']);
+  check('a fresh set with no columns still numbers from pattern_1', Object.keys(RULES.shapeReading(places, [{ question: 'A?', counts: [] }, { question: 'B?', counts: [] }]).keyLabels), ['pattern_1', 'pattern_2']);
+  check('the settled list reads a layer with a gap in order, by number', RULES.settledQuestions(Object.assign({}, layer, shaped), shaped.rows).map((q) => q.col), ['pattern_2', 'pattern_3', 'pattern_5', 'pattern_6']);
+
+  // the owner's overlay: Standard settings, the same kept aside under Explore, the story, hiddenKeys — and Explore's own column
+  const local = {
+    mode: { name: 'explore', tagColumn: 'pattern_3', buttonsFrom: 'analysis', buttons: [{ id: 'a1', label: 'x', words: ['A2'] }] },
+    modeKept: { insight: { name: 'insight', order: ['pattern_4', 'pattern_1', 'pattern_2', 'pattern_3', 'pattern_5', 'pattern_6'], shown: { pattern_1: false, pattern_2: true, pattern_3: true, pattern_4: false, pattern_5: true, pattern_6: false },
+      story: { sig: 'abc', sentences: [{ text: 'one', questions: ['pattern_1'] }, { text: 'two', questions: ['pattern_2', 'pattern_4'] }, { text: 'three', questions: ['pattern_5'] }, { text: 'quote' }] } } },
+    layers: [{ id: 'divar-island', hiddenKeys: ['pattern_4', 'pattern_6'] }, { id: 'other', hiddenKeys: ['pattern_1'] }],
+  };
+  check('nothing is dropped when no column is named, or none is a question column', [RULES.dropRetiredKeys(local, ['divar-island'], []), RULES.dropRetiredKeys(local, ['divar-island'], ['labels']), local.modeKept.insight.order.length], [false, false, 6]);
+  check('the retired columns go from the kept settings\' order and shown, and nothing else moves', [RULES.dropRetiredKeys(local, ['divar-island'], ['pattern_1', 'pattern_4']), local.modeKept.insight.order, local.modeKept.insight.shown],
+    [true, ['pattern_2', 'pattern_3', 'pattern_5', 'pattern_6'], { pattern_2: true, pattern_3: true, pattern_5: true, pattern_6: false }]);
+  check('a story sentence citing only retired questions goes; one citing another too keeps that; a quote is untouched',
+    local.modeKept.insight.story.sentences, [{ text: 'two', questions: ['pattern_2'] }, { text: 'three', questions: ['pattern_5'] }, { text: 'quote' }]);
+  check('hiddenKeys of the named layer drop the retired column; another layer\'s are left alone', [local.layers[0].hiddenKeys, local.layers[1].hiddenKeys], [['pattern_6'], ['pattern_1']]);
+  check('Explore\'s own column is untouched and still names a question on the map', [local.mode.tagColumn, shaped.keyLabels[local.mode.tagColumn]], ['pattern_3', 'What does this place look like?']);
+  const standard = { mode: { name: 'standard', order: ['pattern_1', 'pattern_2'], shown: { pattern_1: true, pattern_2: true }, story: { sig: 's', sentences: [{ text: 'a', questions: ['pattern_1'] }] } } };
+  check('and the live Standard settings the same way', [RULES.dropRetiredKeys(standard, [], ['pattern_1']), standard.mode.order, standard.mode.shown, standard.mode.story.sentences], [true, ['pattern_2'], { pattern_2: true }, []]);
+  const exploreKept = { mode: { name: 'standard' }, modeKept: { explore: { name: 'explore', tagColumn: 'pattern_1', buttonsSig: 'x', buttonsFrom: 'analysis', buttons: [] }, other: { name: 'explore', tagColumn: 'pattern_3' } } };
+  check('an Explore that grouped by a retired question lets go of it (buttons made afresh); one grouped by a live question keeps it',
+    [RULES.dropRetiredKeys(exploreKept, [], ['pattern_1']), 'tagColumn' in exploreKept.modeKept.explore, 'buttonsSig' in exploreKept.modeKept.explore, exploreKept.modeKept.other.tagColumn], [true, false, false, 'pattern_3']);
 }
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');

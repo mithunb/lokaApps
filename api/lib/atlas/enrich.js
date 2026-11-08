@@ -161,22 +161,57 @@ const ADDRESS_TAIL = 0.6;      // the last piece is this often the same one
 const ADDRESS_UNIQUE = 0.5;    // and the pieces are this far from a shared few
 // the test counts how lists end, so it needs a few of them: one list always "ends the same way"
 const ADDRESS_MIN = 5;
-function looksLikeAPlace(filled, delim) {
+/* The second signal has a blind spot (Divar Island, Nov 2026): a small survey
+   whose addresses came from reverse geocoding. Ninety-six places shared
+   twenty-four addresses — the geocoder names the same few spots across a
+   small island — so the pieces came to 30% of the places, the column was read
+   as tags, and two questions were asked of it ("What region is this place
+   in?", "What locality is this place in?"). Judging the pieces against the
+   distinct values instead does not separate it either: measured, Divar's
+   address gives 1.21 pieces a value and its categories column 1.0.
+
+   What a shared address still has, that a tag list never does, is a postal
+   code: a run of four or more digits on nine addresses in ten there, and on
+   every address a geocoder writes. So a list that ends the same way is an
+   address when its pieces are mostly not shared OR most of its values carry a
+   postcode-like number. The second branch is asked for by textColumns alone
+   (postcodes: true) — whether a column is read as a tag list (tagDelimiter)
+   is decided exactly as before. */
+const ADDRESS_POSTCODED = 0.5; // this share of the values carries a postcode-like number
+const POSTCODE_LIKE = /(^|[^\d])\d{4,8}(?!\d)/;
+function looksLikeAPlace(filled, delim, { postcodes = false } = {}) {
   const last = new Map();
   const pieces = new Set();
-  let counted = 0;
+  let counted = 0, postcoded = 0;
   for (const v of filled) {
     const parts = v.split(delim).map((p) => p.trim().toLowerCase()).filter(Boolean);
     if (!parts.length) continue;
     const tail = parts[parts.length - 1];
     last.set(tail, (last.get(tail) || 0) + 1);
     for (const p of parts) pieces.add(p);
+    if (POSTCODE_LIKE.test(v)) postcoded++;
     counted++;
   }
   if (!counted) return false;
   const endsTheSameWay = Math.max(...last.values()) / counted >= ADDRESS_TAIL;
   const notASharedFew = pieces.size / counted >= ADDRESS_UNIQUE;
-  return endsTheSameWay && notASharedFew;
+  const mostlyPostcoded = postcodes && postcoded / counted >= ADDRESS_POSTCODED;
+  return endsTheSameWay && (notASharedFew || mostlyPostcoded);
+}
+
+/* A column whose NAME says it is an address is one, whatever shape its values
+   take — the shape test above cannot see a column of five places, or one
+   whose values are one town each. A short, explicit list, matched whole
+   (case and separators aside): "location_source" is not on it, "Full Address"
+   is. LOKA's own `address` column (loka-sync.js TEXT) is the first entry.
+   A bare "location" or "street" is not on it: those names are given to
+   columns that hold anything ("indoor"/"outdoor", a street's character), so
+   they are an address only when their shape says so. */
+const ADDRESS_NAMES = new Set(['address', 'addr', 'place address', 'full address',
+  'street address', 'postal address', 'formatted address', 'address line', 'address 1', 'address1']);
+export function isAddressName(name) {
+  const plain = String(name || '').toLowerCase().replace(/[_\-\s]+/g, ' ').trim();
+  return ADDRESS_NAMES.has(plain);
 }
 
 // a column is read as tags when its values are short delimited tokens;
@@ -250,7 +285,8 @@ export function buildDigest(rows, fields) {
     name: f,
     values: rows.map((r) => String((r && r[f]) != null ? r[f] : '')),
   }));
-  byCol.forEach((c) => { c.delim = tagDelimiter(c.values); });
+  // a column named as an address is never chopped into tags, whatever its shape
+  byCol.forEach((c) => { c.delim = isAddressName(c.name) ? null : tagDelimiter(c.values); });
   /* Which columns hold a CLOSED list — a small set of words somebody chose
      once, that every place draws from — and which hold an open one, where a
      place may say anything. The finder was shown both as one undifferentiated
@@ -714,14 +750,24 @@ export function textColumns(rows, fields, { nameCol = '' } = {}) {
        digest's own (looksLikeAPlace): a list that ends the same way on most
        places.
 
-       A question an earlier reading found in an address column is not lost:
-       it is settled, so it is answered from its own column whether or not
-       that column is asked anything (enrichRows builds the column's words
-       for it when no group holds them). */
-    const address = !delim && filled.length >= ADDRESS_MIN && avgWords >= TEXT_WORDS && /[,;]/.test(filled[0] || '') &&
-      looksLikeAPlace(filled, filled.filter((v) => v.includes(';')).length > filled.length / 2 ? ';' : ',');
+       Two ways to be one (8 Nov 2026, after Divar Island was asked two
+       address questions after this rule went in): the column's NAME says so
+       (isAddressName — LOKA's own `address` column first among them), or its
+       values have the shape (looksLikeAPlace). The name is enough on its own,
+       because the shape test needs a few places and a few different
+       addresses, and a small survey has neither.
+
+       A question an earlier reading found in an address column is not kept:
+       enrichRows retires it when every column it read is an address (the
+       passed-over entry is marked `address` so it can tell), and the record
+       says so on the column's line. One that also read other columns keeps
+       those. */
+    // (a column the digest reads as tags can still be an address here, by its postcodes — only here)
+    const address = isAddressName(f) ||
+      (filled.length >= ADDRESS_MIN && avgWords >= TEXT_WORDS && /[,;]/.test(filled[0] || '') &&
+        looksLikeAPlace(filled, filled.filter((v) => v.includes(';')).length > filled.length / 2 ? ';' : ',', { postcodes: true }));
     if (address) {
-      passed.push({ column: f, why: 'an address: the map already shows where each place is' });
+      passed.push({ column: f, address: true, why: 'an address: the map already shows where each place is' });
       continue;
     }
     const kind = delim ? 'tags' : avgWords >= TEXT_WORDS ? 'text' : 'short';
@@ -890,7 +936,28 @@ export function columnReport(plan, outcomes, questions, fell = [], total = 0, op
     const carried = earlier(JOINT_LABEL);
     if (carried) lines.push(carried);
   }
+  const retired = (opts && Array.isArray(opts.retired)) ? opts.retired : [];
+  const gaveUp = (opts && Array.isArray(opts.gaveUp)) ? opts.gaveUp : [];
   for (const p of (plan && plan.passed) || []) {
+    /* An address a settled question was read from, before addresses were
+       passed over: the question is retired this reading (enrichRows), and
+       the line says which went — in the owner's words, an earlier line is
+       not carried over it. A question that read other columns too keeps
+       those, and the line says it no longer reads this one. */
+    const gone = retired.filter((x) => (x.columns || []).includes(p.column));
+    const loosened = gaveUp.filter((x) => (x.gaveUp || []).includes(p.column));
+    if (gone.length || loosened.length) {
+      let text = columnLabel(p.column) + ': not asked — ' + p.why;
+      if (gone.length) {
+        text += '; ' + listOf(gone.map((x) => q(x.question))) + ', which an earlier reading took from it, ' +
+          (gone.length === 1 ? 'is' : 'are') + ' now off the map';
+      }
+      for (const x of loosened) {
+        text += '; ' + q(x.question) + ' no longer reads it and keeps ' + listOf(x.columns.map(columnLabel));
+      }
+      lines.push({ column: p.column, label: columnLabel(p.column), asked: false, found: 0, retired: gone.length, line: text });
+      continue;
+    }
     const carried = earlier(p.column);
     /* Read before and passed over now. When the earlier questions are still
        the layer's, what that reading said of the column is still true; when
@@ -902,9 +969,10 @@ export function columnReport(plan, outcomes, questions, fell = [], total = 0, op
       continue;
     }
     /* Passed over now, but holding a question an earlier reading found in it
-       — an address read before addresses were passed over. That question is
-       still on the map and still answered from this column, so the line says
-       so rather than "not asked". */
+       — a column that has since become a key the map offers, say. That
+       question is still on the map and still answered from this column, so
+       the line says so rather than "not asked". (An address is the one case
+       handled above: its question is retired, not kept.) */
     const mine = settled.filter((x) => (x.columns || []).includes(p.column));
     if (mine.length) {
       lines.push({ column: p.column, label: columnLabel(p.column), asked: false, found: 0, earlier: true,
@@ -1724,6 +1792,8 @@ export function settledForAnswering(keepQuestions, fields) {
       const wording = String((q && q.question) || '').trim();
       return {
         question: wording,
+        // its column on the layer (pattern_N), which it keeps; '' for one that has none yet
+        col: /^pattern_\d+$/.test(String((q && q.col) || '')) ? q.col : '',
         // the noun it was stored with, checked again (a settled question keeps its heading)
         noun: LABELS.nounFromQuestion(q && q.noun, wording),
         kinds: ((q && q.kinds) || [])
@@ -1781,14 +1851,39 @@ export async function enrichRows(opts) {
        and is answered from the whole record, as it always was. A column that
        has since gone from the places is no column to answer from: the
        question falls back to the whole record rather than to nothing. */
-    const askedBefore = settledForAnswering(opts.keepQuestions, fields);
-
     /* Every column with words of its own gets its own look. The plan says
        which columns those are, which are read together, and which were passed
        over and why; the record carries all of it (columns, below), so an owner
        can see that no column was skipped without being told. */
     const batches = Math.ceil(rows.length / CLASSIFY_BATCH);
     const plan = planColumns(rows, fields, { nameCol: opts.nameCol || '', budget: opts.callBudget || 24, batches });
+
+    /* A settled question read from an address is retired here (8 Nov 2026).
+       Questions used to be settled for good — "answered from its own column
+       whether or not that column is asked" — which meant a fixed address rule
+       never took back a question the old rule had let through: Divar Island
+       kept "What region is this place in?" and "What locality is this place
+       in?" from its address column through every later reading. Now a settled
+       question whose columns are all addresses (plan.passed marks them) is
+       taken off the map: not answered, not written, and the column's line on
+       the record says which questions went. One that also read other columns
+       keeps those and gives up the address. A question with no column of its
+       own (read from the whole record) is not touched: nothing says what it
+       read. The result carries `retired` so the server can log it and carry
+       the owner's settings across. */
+    const addressColumns = new Set(plan.passed.filter((p) => p.address).map((p) => p.column));
+    const retired = [];
+    const askedBefore = settledForAnswering(opts.keepQuestions, fields).filter((q) => {
+      if (!q.columns.length || !q.columns.some((c) => addressColumns.has(c))) return true;
+      const rest = q.columns.filter((c) => !addressColumns.has(c));
+      if (!rest.length) { retired.push({ question: q.question, columns: q.columns.slice(), col: q.col || '' }); return false; }
+      q.gaveUp = q.columns.filter((c) => addressColumns.has(c));
+      q.columns = rest;
+      q.column = rest.join(' + ');
+      return true;
+    });
+    // a layer that had settled questions reads as one that has them, even when every one was retired
+    const hadSettled = askedBefore.length + retired.length > 0;
     for (const g of plan.groups) {
       g.digest = buildDigest(rows, g.columns);
       // the closed lists are the whole map's, so every column's finder is told them
@@ -1802,7 +1897,8 @@ export async function enrichRows(opts) {
       q.digest = g ? g.digest : Object.assign(buildDigest(rows, q.columns), { lists: digest.lists });
     }
     const previous = Array.isArray(opts.previousColumns) ? opts.previousColumns : [];
-    const report = (qs, fell2 = []) => columnReport(plan, outcomes, qs, fell2, rows.length, { previous });
+    const report = (qs, fell2 = []) => columnReport(plan, outcomes, qs, fell2, rows.length,
+      { previous, retired, gaveUp: askedBefore.filter((q) => q.gaveUp) });
     const outcomes = {};                  // group label -> what happened to it
     const found = {};                     // group label -> the questions it yielded, after the name gate
 
@@ -1827,7 +1923,7 @@ export async function enrichRows(opts) {
       };
       for (const m of missed) m.column = m.under ? columnOf(m.under) : (plan.groups.length ? plan.groups[0].label : '');
     }
-    const groupsToAsk = askedBefore.length
+    const groupsToAsk = hadSettled
       ? (addFrom ? plan.groups.filter((g) => g.columns.some((c) => addFrom.includes(c))) : [])
       : plan.groups;
 
@@ -1970,6 +2066,14 @@ export async function enrichRows(opts) {
         return { verdict: 'refused', reason: 'no question had enough kinds that fit', columns: report(askedBefore) };
       }
     }
+    /* Every question the layer had was read from an address, and a reading
+       of settled questions asks no column afresh: nothing is written, the
+       old questions stay until the owner asks again, and the reason says so. */
+    if (!kept.length && retired.length) {
+      return { verdict: 'refused', retired,
+               reason: 'every question on this map was read from an address, and addresses are no longer asked — ask again to find new questions',
+               columns: report(askedBefore) };
+    }
     if (!kept.length) return { verdict: 'refused', reason: 'no question had enough kinds that fit', columns: report(askedBefore) };
 
     /* A re-read that adds from named columns and found nothing new to add
@@ -1977,7 +2081,7 @@ export async function enrichRows(opts) {
        written again — that would cost a round of answering to arrive back
        where the layer already is, and could move answers somebody has linked
        to. The record still says what became of each column it asked. */
-    if (addFrom && askedBefore.length && kept.length === askedBefore.length) {
+    if (addFrom && hadSettled && !retired.length && kept.length === askedBefore.length) {
       return { verdict: 'nothing_new', columns: report(askedBefore), found };
     }
 
@@ -2174,6 +2278,8 @@ export async function enrichRows(opts) {
         // which column it was asked of, and so where its words come from;
         // a settled question read under the old rule has none
         column: q.column || '', columns: q.columns || [],
+        // the column it already has on the layer (a settled question keeps it; a new one has none yet)
+        col: q.col || '',
         // found by an earlier reading and kept: never the gate's to drop
         settled: Boolean(q.settled),
         // one short list per place: the words that put it where it is
@@ -2283,7 +2389,8 @@ export async function enrichRows(opts) {
                columns: report([], fell) };
     }
     // an add-from-columns re-read whose new questions all fell: as above, stop before writing
-    if (addFrom && askedBefore.length && !questions.some((q) => !q.settled)) {
+    // (not when a question was retired: the layer must be written without it)
+    if (addFrom && hadSettled && !retired.length && !questions.some((q) => !q.settled)) {
       return { verdict: 'nothing_new', columns: report(questions, fell), found };
     }
 
@@ -2349,6 +2456,8 @@ export async function enrichRows(opts) {
              batches: filed.batches, asked: kept.map(({ digest: _d, ...q }) => q),
              // there is no fresh reading of the set when the questions were kept
              reused: !ind, reading: (ind && ind.reading) || '', facts: facts.slice(0, 12),
+             // settled questions taken off the map this reading, each with the address columns it read
+             retired,
              // what became of every column, and what each yielded, for the record and the retry
              columns: report(questions, fell), found };
   }

@@ -179,11 +179,22 @@
      beside it. The question's own wording is not the column name: it travels
      separately as the key's name, so a reader meets "What can you do here?"
      rather than a column named after how it was made. */
-  function shapeReading(rows, questions) {
+  /* A question that already has a column (col, from settledQuestions) keeps
+     it — a settled question's column is its id: the owner's settings, the
+     story's sentences and Explore's buttons all name it. A question with
+     none takes the next number above every column in use and every column
+     ever retired (opts.taken: the layer's retiredKeys), so a retired
+     question's number is never worn by a later one. A fresh set with no
+     columns at all still numbers from pattern_1. */
+  function numberFor(n) { return "pattern_" + n; }
+  function shapeReading(rows, questions, opts) {
     var out = withoutAnswers(rows);
     var keyLabels = {}, keyKinds = {}, keyColumns = {}, keyNouns = {};
-    (questions || []).forEach(function (q, n) {
-      var col = "pattern_" + (n + 1);
+    var taken = ((opts && opts.taken) || []).concat((questions || []).map(function (q) { return q && q.col; }))
+      .filter(function (c) { return isQuestionColumn(String(c || "")); });
+    var next = taken.reduce(function (m, c) { return Math.max(m, Number(c.split("_")[1])); }, 0);
+    (questions || []).forEach(function (q) {
+      var col = isQuestionColumn(String((q && q.col) || "")) ? q.col : numberFor(++next);
       var whyCol = col + "_why";
       keyLabels[col] = q.question;
       /* The few words of the question a heading reads "Explore by …" with
@@ -248,11 +259,62 @@
       .filter(isQuestionColumn)
       .sort(function (a, b) { return Number(a.split("_")[1]) - Number(b.split("_")[1]); })
       .map(function (col) {
-        return { question: labels[col], kinds: kinds[col] || kindsSeenIn(rows, col),
+        return { col: col, question: labels[col], kinds: kinds[col] || kindsSeenIn(rows, col),
                  columns: Array.isArray(from[col]) ? from[col].slice() : [],
                  noun: typeof nouns[col] === "string" ? nouns[col] : "" };
       })
       .filter(function (q) { return q.question && q.kinds.length; });
+  }
+
+  /* A question retired by a reading (one read only from an address, enrich.js)
+     leaves a gap in the numbering, and everything that named its column by
+     number lets go of it: the owner's Standard settings (order, shown), the
+     same settings kept aside while the atlas is in Event or Explore
+     (modeKept), the story's sentences (one citing only retired questions is
+     dropped; the story's fingerprint moves and it is written again by the
+     usual rule), and the layers' hiddenKeys. `local` is the atlas's own
+     manifest overlay, changed in place; answers whether anything changed.
+     Nothing is renumbered, so an entry naming a question still on the map is
+     left exactly as it was. Given no columns, nothing is touched. */
+  function dropRetiredKeys(local, layerIds, cols) {
+    var gone = {};
+    (cols || []).forEach(function (c) { if (isQuestionColumn(String(c || ""))) gone[c] = true; });
+    if (!local || typeof local !== "object" || !Object.keys(gone).length) return false;
+    var changed = false;
+    var keep = function (c) { return !gone[c]; };
+    var fromMode = function (mode) {
+      if (!mode || typeof mode !== "object") return;
+      if (Array.isArray(mode.order) && mode.order.some(function (c) { return gone[c]; })) {
+        mode.order = mode.order.filter(keep); changed = true;
+      }
+      if (mode.shown && typeof mode.shown === "object" && !Array.isArray(mode.shown)) {
+        Object.keys(mode.shown).forEach(function (c) { if (gone[c]) { delete mode.shown[c]; changed = true; } });
+      }
+      // Explore grouped by a retired question: let go of it, so the buttons are made afresh from the questions left
+      if (mode.tagColumn && gone[mode.tagColumn]) {
+        delete mode.tagColumn; delete mode.buttonsSig; delete mode.buttonsFrom; changed = true;
+      }
+      var story = mode.story && typeof mode.story === "object" ? mode.story : null;
+      if (story && Array.isArray(story.sentences)) {
+        var sentences = [];
+        story.sentences.forEach(function (s) {
+          var cites = s && Array.isArray(s.questions) ? s.questions : null;
+          if (!cites || !cites.some(function (c) { return gone[c]; })) { sentences.push(s); return; }
+          changed = true;
+          var left = cites.filter(keep);
+          if (left.length) sentences.push(Object.assign({}, s, { questions: left }));   // a sentence citing only retired questions goes
+        });
+        story.sentences = sentences;
+      }
+    };
+    fromMode(local.mode);
+    var kept = local.modeKept && typeof local.modeKept === "object" ? local.modeKept : {};
+    Object.keys(kept).forEach(function (k) { fromMode(kept[k]); });
+    (local.layers || []).forEach(function (L) {
+      if (!L || (layerIds || []).indexOf(L.id) < 0 || !Array.isArray(L.hiddenKeys)) return;
+      if (L.hiddenKeys.some(function (c) { return gone[c]; })) { L.hiddenKeys = L.hiddenKeys.filter(keep); changed = true; }
+    });
+    return changed;
   }
 
   return {
@@ -269,5 +331,6 @@
     shapeReading: shapeReading,
     kindsSeenIn: kindsSeenIn,
     settledQuestions: settledQuestions,
+    dropRetiredKeys: dropRetiredKeys,
   };
 });

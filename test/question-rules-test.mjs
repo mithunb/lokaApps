@@ -2,6 +2,7 @@
  * Paths are worked out from where this file sits, never from where you
  * happen to be standing when you run it. */
 import path from 'node:path';
+import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -13,9 +14,16 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
      1. an address column is not asked at all, and its line says why;
      2. a new question where one answer covers nine places in ten or more is
         dropped, and the column's line says why.
-   A question already settled on the layer is held to neither: one found in
-   an address by an earlier reading is still answered from that column. Made-up
-   places, a stand-in model, no network. */
+   A question already settled on the layer is not held to the second. It WAS
+   exempt from the first — "answered from its own column whether or not that
+   column is asked" — until Divar Island (Nov 2026) kept two address questions
+   through every reading after the rule went in: a settled question read only
+   from an address is now retired at reading time, and one that also read
+   other columns keeps those (section 1b). An address is known by its name
+   (address, full_address, location…) or by its shape, and the shape test
+   accepts a postcode-like number on most values in place of unshared pieces,
+   because a small survey's reverse-geocoded addresses are shared (section
+   1a, on Divar's own values). Made-up places, a stand-in model, no network. */
 import * as E from '../api/lib/atlas/enrich.js';
 const RULES = createRequire(import.meta.url)(ROOT + '/atlas/reading-rules.js');
 
@@ -95,7 +103,7 @@ const D = [
 // what the finder would offer for the address, were it asked
 const A = [ask('Which area is it in?', ['Campal', 'Fontainhas', 'Miramar']), ask('Is it on a rua or an avenida?', ['rua', 'avenida'])];
 
-console.log('\n  1. an address column is not asked; a question settled from one still is answered');
+console.log('\n  1. an address column is not asked, and its line says why');
 {
   const t = E.textColumns(town, RULES.wordColumns(town), { nameCol: 'loka_name' });
   check('the description is read; the address is passed over, with its reason',
@@ -117,19 +125,87 @@ console.log('\n  1. an address column is not asked; a question settled from one 
   check('the address\'s line says why, in plain words', lineOf(r, 'address'),
     'Address: not asked — an address: the map already shows where each place is');
 }
+console.log('\n  1a. an address is known by its name, or by its shape even when a small survey shares its addresses');
+const DIVAR = JSON.parse(fs.readFileSync(path.join(ROOT, 'test/fixtures/divar-addresses.json'), 'utf8')).addresses;
+// 96 places sharing the twenty addresses the way the survey did (four addresses on half of them), and the survey's
+// three other columns in the shape of the real ones: one-line notes, hyphenated tag lists, a closed list of three
+const WORDS = ['ferry', 'mangrove', 'bund', 'sluice', 'paddy', 'chapel', 'jetty', 'creek', 'palm', 'tide'];
+const island = Array.from({ length: 96 }, (_, i) => ({
+  loka_name: 'Spot ' + (i + 1),
+  where_found: DIVAR[i < 48 ? i % 4 : i % 20],
+  description: 'The ' + WORDS[i % 10] + ' near the ' + WORDS[Math.floor(i / 10) % 10] + ' is ' + (i % 3 ? 'well kept' : 'overgrown') + ' and ' + (i % 2 ? 'seen at low tide' : 'seen from the road') + '.',
+  labels: WORDS[i % 10] + '-' + WORDS[Math.floor(i / 10) % 10] + '; ' + WORDS[(i + 3) % 10] + '-view; ' + (i % 2 ? 'low-tide' : 'road-side'),
+  categories: i % 4 ? (i % 3 ? 'Nature' : 'Nature; Activities') : 'Civic',
+}));
 {
-  // a question an earlier reading found in the address, settled on the layer with its column
-  const settled = [Object.assign(ask('Which area is it in?', ['Campal', 'Fontainhas', 'Miramar']), { columns: ['address'] })];
-  const r = await read(town, { description: D, address: A }, { keepQuestions: settled });
-  check('a normal re-read keeps it, settled, still from the address', r.questions.map((q) => [q.question, q.settled, q.column]),
-    [['Which area is it in?', true, 'address']]);
-  check('and answers it from the address: every Campal, Fontainhas and Miramar place (18 of 24)', r.questions[0].answered, 18);
-  check('with the address\'s own words under each answer', r.questions[0].why.filter((w) => w.length).length, 18);
-  check('no finder call: a re-read answers what is settled', r.log.think, 0);
-  check('the address\'s line says the question it holds, not "not asked"',
-    /^Address: looked at in an earlier reading, which kept “Which area is it in\?” \(reaches 18 of 24 places\); not asked again — an address/.test(lineOf(r, 'address')), true);
-  const add = await read(town, { address: A }, { keepQuestions: settled, addColumns: ['address'] });
-  check('asked to add from the address, it adds nothing and keeps what is settled', add.verdict, 'nothing_new');
+  const t = E.textColumns(island, RULES.wordColumns(island), { nameCol: 'loka_name' });
+  check('Divar\'s own addresses (20 distinct on 96 places, 27 pieces in 100, six in seven with a postcode) are passed over by shape alone, under any column name',
+    t.passed.filter((p) => p.address).map((p) => [p.column, p.why]), [['where_found', 'an address: the map already shows where each place is']]);
+  check('its tag list is read as tags, its notes as text, and neither is mistaken for an address',
+    t.ask.filter((a) => a.column !== 'categories').map((a) => a.column + ':' + a.kind).sort(), ['description:text', 'labels:tags']);
+  // one house on one street each: no shared tail, no postcode — only the column's name says what it is
+  const byName = island.map((r, i) => ({ loka_name: r.loka_name, 'Full Address': 'House ' + (i + 1) + ' ' + WORDS[i % 10] + ' street', labels: r.labels }));
+  check('a column named as an address is one whatever shape its values take', E.textColumns(byName, RULES.wordColumns(byName), { nameCol: 'loka_name' }).passed.filter((p) => p.address).map((p) => p.column), ['Full Address']);
+  check('and the digest never chops it into tags', [...E.buildDigest(byName.map((r, i) => ({ 'Full Address': r['Full Address'] + ', ' + WORDS[i % 10] })), ['Full Address']).tagCounts.keys()].length, 0);
+  check('the name list is matched whole, and a bare "location" or "street" is not on it',
+    ['Address', 'addr', 'Full-Address', 'street_address', 'location', 'street', 'location_source', 'locality'].map(E.isAddressName), [true, true, true, true, false, false, false, false]);
+  // a column called location or street holding anything but addresses is read like any other
+  const loose = island.map((r, i) => ({ loka_name: r.loka_name,
+    location: 'The ' + WORDS[i % 10] + ' near the ' + WORDS[Math.floor(i / 10) % 10] + ' is ' + (i % 2 ? 'indoors under a roof' : 'outdoors in the open'),
+    street: WORDS[i % 10] + '-' + WORDS[Math.floor(i / 10) % 10] + ' lane; ' + WORDS[(i + 1) % 10] + '-lane; ' + (i % 2 ? 'quiet' : 'busy') }));
+  check('"location" and "street" columns with no address in them are asked, not passed over',
+    E.textColumns(loose, RULES.wordColumns(loose), { nameCol: 'loka_name' }).ask.map((a) => a.column + ':' + a.kind).sort(), ['location:text', 'street:tags']);
+  const streets = island.map((r) => ({ loka_name: r.loka_name, street: r.where_found, labels: r.labels }));
+  check('while a "street" column holding addresses is one, by its shape', E.textColumns(streets, RULES.wordColumns(streets), { nameCol: 'loka_name' }).passed.filter((p) => p.address).map((p) => p.column), ['street']);
+  // the postcode branch is the address test's alone: what the digest reads as a tag list is decided as before
+  const dated = Array.from({ length: 30 }, (_, i) => ({ loka_name: 'P' + i, tags: (1990 + (i % 5)) + '; ' + ['heritage', 'market', 'temple'][i % 3] + '; ' + (i % 2 ? 'walled' : 'open') }));
+  check('a "1995; heritage"-style list is still split into tags by the digest', [...E.buildDigest(dated, ['tags']).tagCounts.keys()].sort().slice(0, 4), ['1990', '1991', '1992', '1993']);
+  check('and Divar\'s addresses, under a plain name, are still a list to the digest (tag reading unchanged) though the address test passes them over',
+    [[...E.buildDigest(island, ['where_found']).tagCounts.keys()].some((w) => /india/.test(w)), t.passed.some((p) => p.column === 'where_found' && p.address)], [true, true]);
+  // (the shape test's own counter-cases — "hot, dry"/"cold, dry", a place with no house number — are in stage12-test.mjs; they have no digits, so the postcode branch never fires)
+  const years = Array.from({ length: 30 }, (_, i) => ({ loka_name: 'P' + i, built: 'built in ' + (1900 + i) + ', renovated ' + (1990 + (i % 7)) + ', ' + (i % 2 ? 'listed' : 'unlisted'), description: 'Some words about this place here.' }));
+  check('numbers alone do not make an address: a list that does not end the same way stays what it is',
+    E.textColumns(years, RULES.wordColumns(years), { nameCol: 'loka_name' }).passed.filter((p) => p.address).length, 0);
+}
+
+console.log('\n  1b. a settled question read from an address is retired; one that also read other columns keeps those');
+const area = Object.assign(ask('Which area is it in?', ['Campal', 'Fontainhas', 'Miramar']), { columns: ['address'], col: 'pattern_1' });
+const builtOf = Object.assign(ask('What is it built of?', MATERIAL), { columns: ['description'], col: 'pattern_2' });
+{
+  const r = await read(town, { description: D, address: A }, { keepQuestions: [area, builtOf] });
+  check('the address question is gone and the description one is answered, settled, keeping its own column', r.questions.map((q) => [q.question, q.settled, q.column, q.col]),
+    [['What is it built of?', true, 'description', 'pattern_2']]);
+  check('the reading says what it retired, with the column it read and the column it wore', r.retired, [{ question: 'Which area is it in?', columns: ['address'], col: 'pattern_1' }]);
+  check('no finder call: a re-read answers what is settled and asks nothing afresh', r.log.think, 0);
+  check('the address\'s line says the question is off the map, in plain words', lineOf(r, 'address'),
+    'Address: not asked — an address: the map already shows where each place is; “Which area is it in?”, which an earlier reading took from it, is now off the map');
+  check('the description\'s line is as before', /^Description: looked at in an earlier reading, which kept “What is it built of\?”/.test(lineOf(r, 'description')), true);
+}
+{
+  const r = await read(town, { description: D, address: A }, { keepQuestions: [area] });
+  check('every question on the map read from an address: nothing is written, and the reason says to ask again',
+    [r.verdict, /read from an address/.test(r.reason), r.retired.length, r.log.think], ['refused', true, 1, 0]);
+}
+{
+  const both = Object.assign(ask('What is it built of?', MATERIAL), { columns: ['description', 'address'] });
+  const r = await read(town, { description: D, address: A }, { keepQuestions: [both] });
+  check('a question that read the description and the address keeps the description', r.questions.map((q) => [q.question, q.settled, q.column, q.columns]),
+    [['What is it built of?', true, 'description', ['description']]]);
+  check('and is answered from it: every stone, brick and timber place', r.questions[0].answered, 24);
+  check('nothing retired', r.retired, []);
+  check('the address\'s line says the question no longer reads it', lineOf(r, 'address'),
+    'Address: not asked — an address: the map already shows where each place is; “What is it built of?” no longer reads it and keeps Description');
+}
+{
+  const whole = ask('Which area is it in?', ['Campal', 'Fontainhas', 'Miramar']);
+  const r = await read(town, { description: D, address: A }, { keepQuestions: [whole] });
+  check('a question with no column of its own (read from the whole record) is left alone', r.questions.map((q) => [q.question, q.settled, q.column]),
+    [['Which area is it in?', true, '']]);
+}
+{
+  const add = await read(town, { description: D, address: A }, { keepQuestions: [area, builtOf], addColumns: ['address'] });
+  check('asked to add from the address while one of its questions is retired: the layer is written without it, not "nothing new"',
+    [add.verdict, add.questions.map((q) => q.question), add.retired.map((q) => q.question)], ['questions', ['What is it built of?'], ['Which area is it in?']]);
 }
 
 console.log('\n  2. a new question one answer nearly fills is dropped; a settled one is not');

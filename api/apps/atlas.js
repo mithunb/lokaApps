@@ -4921,6 +4921,8 @@ async function ingestLayerSteps(b, who, tell) {
          taken off the map. */
       reading: prior.reading || '', facts: prior.facts || null,
       hiddenKeys: prior.hiddenKeys || null,
+      // the question columns a reading retired, never to be numbered again (writeReading)
+      retiredKeys: Array.isArray(prior.retiredKeys) ? prior.retiredKeys : null,
       /* The nouns its questions' headings read "Explore by …" with, and the
          wording they belong to: a re-commit that hands no nouns keeps the old
          one wherever the question at that place is word for word the same. */
@@ -5014,6 +5016,10 @@ async function ingestLayerSteps(b, who, tell) {
     replacingReading: replacing ? replacing.reading : undefined,
     replacingFacts: replacing ? replacing.facts : undefined,
     replacingHidden: replacing ? replacing.hiddenKeys : undefined,
+    // the retired question columns: the ones handed in (a reading's write, writeReading) else the layer's own
+    retiredKeys: Array.isArray(b.retiredKeys)
+      ? [...new Set(b.retiredKeys.map(String).filter((c) => RULES.isQuestionColumn(c)))].slice(0, 100)
+      : (replacing && Array.isArray(replacing.retiredKeys) ? replacing.retiredKeys : undefined),
     replacingAddedBy: replacing ? replacing.addedBy : undefined,
     replacingAddedAt: replacing ? replacing.addedAt : undefined,
     replacingCredits: replacing ? replacing.credits : undefined,
@@ -5517,6 +5523,11 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
     } catch { /* gone: refused below as changed */ }
     if (now !== sigAtStart) return { wrote: false, verdict: 'changed', sig: sigAtStart, calls: spentBy(callers) };
   }
+  // the columns the retired questions wore, from the half that carries the questions
+  const labelsBefore = (halves.find((h) => questionsOn(h.layer, rows).length) || halves[0]).layer.keyLabels || {};
+  const retiredCols = (out.retired || []).map((r) => r.col ||
+    (Object.keys(labelsBefore).find((c) => RULES.isQuestionColumn(c) && String(labelsBefore[c]).trim() === String(r.question).trim()) || ''))
+    .filter(Boolean);
   await writeReadingToHalves({
     dataset, halves, questions: out.questions,
     /* What the model made of this set before it asked anything — one line on
@@ -5524,7 +5535,28 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
        produced on every reading and thrown away every time, which left nobody
        able to see WHY a particular set of questions was asked. */
     reading: out.reading || '', facts: out.facts || [],
+    retiredKeys: retiredCols,
   });
+  /* A settled question read from an address was taken off the map by this
+     reading (enrich.js, retired). Its column is gone and the others keep
+     theirs (a gap, never a renumbering), so whatever named that column by
+     number simply lets go of it: the owner's settings, the story's sentences,
+     the layers' hiddenKeys (reading-rules.js dropRetiredKeys). */
+  if ((out.retired || []).length) {
+    for (const r of out.retired) {
+      console.log('[atlas] ' + dataset + '/' + layerId + ' — took “' + r.question + '” off the map: it was read from ' +
+        r.columns.map(enrich.columnLabel).join(' and ') + ', and an address is not asked');
+    }
+    try {
+      const inst = reg.getInstance(dataset);
+      const { file, local } = inst ? readOverlay(inst) : { file: '', local: null };
+      if (local && RULES.dropRetiredKeys(local, halves.map((h) => h.layer.id), retiredCols) && !writeOverlay(file, local)) {
+        throw new Error('the settings file could not be written');
+      }
+    } catch (e) {
+      console.warn('[atlas] ' + dataset + '/' + layerId + ' — could not drop the retired questions from the owner’s settings: ' + (e && e.message));
+    }
+  }
   return {
     wrote: true, verdict: 'questions', places: rows.length, rowsRead: readRows.length, sig: sigAtStart, calls: spentBy(callers),
     columns: out.columns || [],
@@ -5534,8 +5566,10 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
       answered: (q.categories || []).filter((c) => c && c !== 'other').length,
       withWords: (q.why || []).filter((w) => w && w.length).length,
     })),
+    retired: (out.retired || []).map((r) => ({ question: r.question, columns: r.columns.slice(), col: r.col || '' })),
   };
 }
+
 
 /* The stand-in reading (see FAKE_READING). Same shape as enrich.enrichRows
    gives back, so everything after it — the shaping, the write, the keys on the
@@ -5580,6 +5614,7 @@ async function fakeReading(rows, fields, asked, pay, planned, nameCol, previous)
   const q1 = {
     about: 7,
     question: (asked[0] && asked[0].question) || 'How much is written about this place?',
+    col: (asked[0] && asked[0].col) || '',
     noun: (asked[0] && asked[0].noun) || '',
     counts: [{ name: LONG, definition: 'forty letters or more' }, { name: SHORT, definition: 'fewer than forty letters' }],
     categories: rows.map((r) => textOf(r).length >= 40 ? LONG : SHORT),
@@ -5588,6 +5623,7 @@ async function fakeReading(rows, fields, asked, pay, planned, nameCol, previous)
   const q2 = {
     about: 8,
     question: (asked[1] && asked[1].question) || 'Does it mention water?',
+    col: (asked[1] && asked[1].col) || '',
     noun: (asked[1] && asked[1].noun) || '',
     counts: [{ name: WATER, definition: 'names a river, lake, pond, well or the like' }],
     categories: rows.map((r) => wet.test(textOf(r)) ? WATER : 'other'),
@@ -6830,12 +6866,18 @@ router.post('/admin/reread', async (req, res) => {
    a reading finished an hour late, by the server, lands exactly the same way a
    reading finished in front of somebody does — one path, one result, rather
    than a second implementation quietly drifting from the first. */
-async function writeReading({ dataset, layer, layerId, rows, questions, label, source, reading, facts }) {
+async function writeReading({ dataset, layer, layerId, rows, questions, label, source, reading, facts, retiredKeys }) {
   /* The shaping is the shared rule's — one column per question, its words
      beside it, every previous answer cleared first. What is left here is the
      saving, which is the one thing this side and the browser genuinely do
      differently: it calls ingest directly where the browser posts to it. */
-  const shaped = RULES.shapeReading(rows, questions);
+  /* A question's column is its id and is kept (shapeReading); a new question
+     takes a number above every column the layer has now and every one it
+     ever retired (retiredKeys, on the stanza), so a retired number is never
+     worn again. The columns retired this time join that list. */
+  const retiredAll = [...new Set([...(Array.isArray(layer.retiredKeys) ? layer.retiredKeys : []), ...(retiredKeys || [])])]
+    .filter((c) => RULES.isQuestionColumn(String(c)));
+  const shaped = RULES.shapeReading(rows, questions, { taken: retiredAll });
   const out = shaped.rows, labels = shaped.keyLabels, kinds = shaped.keyKinds, froms = shaped.keyColumns,
     nouns = shaped.keyNouns;
   // an area's shapes travel with its rows (shapesFor); a pin's coordinates already do
@@ -6846,6 +6888,7 @@ async function writeReading({ dataset, layer, layerId, rows, questions, label, s
     rows: out,
     geoms: shapes.geoms, geomIdx: shapes.geomIdx,
     keyLabels: labels, keyKinds: kinds, keyColumns: froms, keyNouns: nouns,
+    retiredKeys: retiredAll.length ? retiredAll : undefined,
     reading: reading || undefined,
     facts: (facts || []).length ? facts : undefined,
     meta: { sourceName: source, rowCount: out.length, geometry: shapes.geometry },
@@ -6904,7 +6947,7 @@ const rowsOf = (halves) => halves.flatMap((h) => h.rows);
 /* The answers for the whole file, written to each half: a question's answers
    and words are one list over the halves' rows in order, so each half takes
    its own slice. Every half keeps the same wording, kinds and reading note. */
-async function writeReadingToHalves({ dataset, halves, questions, reading, facts }) {
+async function writeReadingToHalves({ dataset, halves, questions, reading, facts, retiredKeys }) {
   let at = 0, last = null;
   for (const h of halves) {
     const n = h.rows.length;
@@ -6914,7 +6957,7 @@ async function writeReadingToHalves({ dataset, halves, questions, reading, facts
     }));
     last = await writeReading({
       dataset, layer: h.layer, layerId: h.layer.id, rows: h.rows, questions: mine,
-      label: h.layer.label || h.layer.id, source: h.layer.source, reading, facts,
+      label: h.layer.label || h.layer.id, source: h.layer.source, reading, facts, retiredKeys,
     });
     at += n;
   }
@@ -8003,6 +8046,7 @@ function commitPart(session, frag, features) {
   if (session.replacingHidden && session.replacingHidden.length) {
     frag.stanza.hiddenKeys = session.replacingHidden;
   }
+  if (Array.isArray(session.retiredKeys) && session.retiredKeys.length) frag.stanza.retiredKeys = session.retiredKeys;
   const out = imports.commitLayer(session.dataset, frag.stanza, frag.sourceFile,
     { type: 'FeatureCollection', features });
   // embed this layer's tag vocabulary for semantic search (non-blocking)
@@ -8211,14 +8255,15 @@ function sweepAsking(now) {
    Read back rather than re-asked: they are settled, and answering them again
    would be paying for a reading nobody asked for and risking a different one. */
 function questionsAsAnswered(layer, rows) {
-  return questionsOn(layer, rows).map((q, n) => {
-    const col = 'pattern_' + (n + 1);
+  return questionsOn(layer, rows).map((q) => {
+    // its own column, not its place in the list: a retired question leaves a gap in the numbering
+    const col = q.col;
     const whyCol = col + '_why';
     const categories = rows.map((r) => String((r && r[col]) || ''));
     const tally = new Map();
     categories.forEach((c) => { if (c) tally.set(c, (tally.get(c) || 0) + 1); });
     return {
-      question: q.question,
+      question: q.question, col,
       // its heading's noun, kept as it was (the page and the commit check it again)
       noun: q.noun || '',
       /* Every answer this question was given, including the ones no place is
@@ -8277,8 +8322,9 @@ router.post('/layers/ask', async (req, res) => {
     // were read together has its questions on the pins alone)
     const settledOn = halves.find((h) => questionsOn(h.layer, rows).length) || halves[0];
     const settled = questionsOn(settledOn.layer, rows);
+    // by its column, not by arithmetic on the name: a retired question leaves a gap in the numbering
     const putRight = RULES.isQuestionColumn(String(b.replacing || ''))
-      ? Number(String(b.replacing).split('_')[1]) - 1
+      ? settled.findIndex((q) => q.col === String(b.replacing))
       : -1;
     const repairing = putRight >= 0 && putRight < settled.length;
 
@@ -8341,7 +8387,7 @@ router.post('/layers/ask', async (req, res) => {
            whole point of the repair, and a preview that happened to show six
            places that did not move would look like nothing had happened. */
         examples: (q.categories || []).map((c, i) => {
-          const before = repairing ? String(rows[i]['pattern_' + (putRight + 1)] || '') : '';
+          const before = repairing ? String(rows[i][settled[putRight].col] || '') : '';
           return {
             place: String(rows[i].description || rows[i].name || '').slice(0, 60),
             answer: c, words: (q.why[i] || []).join(', '),
@@ -8352,7 +8398,7 @@ router.post('/layers/ask', async (req, res) => {
           .slice(0, 6),
         moved: repairing
           ? (q.categories || []).filter((c, i) => {
-            const before = String(rows[i]['pattern_' + (putRight + 1)] || '');
+            const before = String(rows[i][settled[putRight].col] || '');
             return c && before && before !== c;
           }).length
           : 0,
@@ -8375,7 +8421,8 @@ router.post('/layers/ask', async (req, res) => {
       const fresh = (held && held.dataset === dataset && held.layerId === layerId) ? held.q : q;
       if (b.token) ASKING.delete(String(b.token));
       const all = questionsAsAnswered(settledOn.layer, rows);
-      if (repairing) all[putRight] = fresh; else all.push(fresh);
+      // a repaired question keeps its column; a new one is numbered by the write (shapeReading)
+      if (repairing) all[putRight] = Object.assign({}, fresh, { col: settled[putRight].col }); else all.push(fresh);
       // each half of a split file takes its own share, and keeps its own shapes
       await writeReadingToHalves({ dataset, halves, questions: all });
       return res.json(Object.assign({ wrote: true, questionsNow: all.length }, preview));

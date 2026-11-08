@@ -1,0 +1,25 @@
+{
+ "note": "Twenty distinct address values from a 96-place island survey built in Nov 2026, commonest first (addresses only; no names or ids). Reverse geocoding named the same few spots for many places: 96 places shared 24 addresses, the four commonest covering half of them. The test lays them on 96 places with that sharing.",
+ "addresses": [
+  "Divar Island, Piedade, Chimbel, North Goa, GA, 403106, India",
+  "Old Goa Road, Panvelim, Goa, 403006, India",
+  "Divar Island, Piedade, Chimbel, North Goa, GA, 403403, India",
+  "Navelim, Goa, India",
+  "Unnamed Road, North Goa, Goa, 403402, India",
+  "Unnamed Road, Navelim, Goa, 403403, India",
+  "Navelim, Goa, 403403, India",
+  "Unnamed Road, Panvelim, Goa, 403006, India",
+  "Unnamed Road, Old Goa, Goa, 403402, India",
+  "Old Goa Road, North Goa, Goa, 403402, India",
+  "St. Pedro Ribandar Ferry, Piedade, Goa, 403403, India",
+  "Unnamed Road, Chimbel, Goa, 403006, India",
+  "Divar Ferry, Ribandar, Goa, 403006, India",
+  "St. Pedro Ferry Terminal, Piedade, Goa, 403006, India",
+  "Ribandar, Goa, 403006, India",
+  "Ferry to Divar, National Highway 4A, Ribandar, Goa, 403403, India",
+  "Old Goa Road, Panvelim, Goa, 403110, India",
+  "Unnamed Road, Baingini, Goa, 403402, India",
+  "Old Goa Ferry, Piedade, Goa, 403403, India",
+  "Divar Centre, Piedade, Goa, 403403, India"
+ ]
+}

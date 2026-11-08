@@ -81,6 +81,11 @@ console.log('\n  laying a download beside what the atlas holds');
   check('merge: wording matched trimmed; the marked place gets its answer, the others keep theirs', m1 && [m1.questions[0].categories, m1.questions[0].why], [['Wet', '', 'Wet'], [['pond', 'tank'], [], ['lake']]]);
   check('merge: a settled question with no answers for the marked places writes nothing at all',
     mergeNewReading(rs, [2], { pattern_1: 'Is it wet?' }, q, { questions: [{ question: 'Something else', categories: ['x'], why: [[]] }] }), null);
+  // a settled question the reading retired (read from an address) is left out rather than matched
+  const q2 = q.concat([{ question: 'Which area?', noun: '', columns: ['address'], kinds: [{ name: 'North', definition: '' }] }]);
+  const m2 = mergeNewReading(rs.map((r) => Object.assign({ pattern_2: 'North' }, r)), [2], { pattern_1: 'Is it wet?', pattern_2: 'Which area?' }, q2,
+    { questions: [{ question: 'Is it wet?', categories: ['Wet'], why: [['lake']] }], retired: [{ question: 'Which area?', columns: ['address'] }] });
+  check('merge: a question the reading retired is left out, and the rest merge as before', m2 && m2.questions.map((x) => x.question), ['Is it wet?']);
   check('photo links saved with "; " between them are the same list as " | "', lay(stored.map((r) => Object.assign({}, r, { photo_urls: r.photo_urls.replace(' | ', '; ') })), rows).changed, 0);
   check('nothing different: nothing counted', (({ added, changed, removed }) => [added, changed, removed])(lay(stored, rows)), [0, 0, 0]);
 }
