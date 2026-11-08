@@ -69,7 +69,7 @@ check('a word or two a place with real variety is read, as a short column', [kin
 check('the closed list the map already colours by is not asked again',
   whyOf('categories'), 'the map can already colour places by this (3 answers)');
 check('a column filled on one place is still read: no data is excluded for being sparse', whyOf('labels') === '' && kindOf('labels') !== '', true);
-check('two names, neither on more than 85 of 100 places, is a key the map offers', /^the map can already colour places by this \(2 answers\)$/.test(whyOf('created_by')), true);
+check('who added a place is never read, key-shaped or not (Mithun, 8 Nov 2026)', whyOf('created_by'), 'not read — it is about who added the place');
 check('the same thing on every place is said so', whyOf('status'), 'says the same thing for every place');
 check('one value everywhere, with spaces in it, likewise', whyOf('spaces'), 'says the same thing for every place');
 check('nothing is unaccounted for: every word column is asked or passed over with a reason',

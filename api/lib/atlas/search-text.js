@@ -20,9 +20,11 @@ const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 
 let LABEL_RULES = null;
 try { LABEL_RULES = createRequire(import.meta.url)(path.join(REPO_ROOT, 'atlas', 'label-rules.js')); } catch { LABEL_RULES = null; }
 
-// a raw column that says who made the record
+// a raw column that says who made the record, or an id: the shared rule
+// (label-rules.js isPeopleName/isIdName); the old LOKA-shaped rule if that file cannot be read
 export function isPeopleRawColumn(name) {
   const n = String(name == null ? '' : name).trim().toLowerCase();
+  if (LABEL_RULES && typeof LABEL_RULES.whyNameNotRead === 'function') return !!LABEL_RULES.whyNameNotRead(n);
   return n === 'created_by' || n === 'created_by_user_id' || /_user_id$/.test(n);
 }
 /* Is this column one whose values are people? A raw people column, or a

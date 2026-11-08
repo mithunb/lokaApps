@@ -38,6 +38,8 @@
  * small-photos-<atlas>-<time>/. Never touches deoria-bioregion. */
 import fs from 'node:fs';
 import os from 'node:os';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
@@ -71,6 +73,7 @@ function firstLink(v) {
   const m = String(v == null ? '' : v).match(/https:\/\/[^\s;,|"'\]]+/);
   return m ? m[0] : '';
 }
+const LABELS = createRequire(import.meta.url)(fileURLToPath(new URL('../atlas/label-rules.js', import.meta.url)));
 // where a place's first photograph comes from: { label, file?, url? } or null
 export function photoSource(props, dir) {
   const p = props || {};
@@ -79,7 +82,8 @@ export function photoSource(props, dir) {
     const st = fs.statSync(path.join(dir, own));
     return { label: 'file:' + own + ':' + st.size, file: path.join(dir, own) };
   }
-  const url = firstLink(p.photo_1_url) || firstLink(p.photo_urls) || firstLink(p.image_urls);
+  // LOKA's columns first; else the column whose cells are image links, whatever it is called (label-rules.js)
+  const url = firstLink(p.photo_1_url) || firstLink(p.photo_urls) || firstLink(p.image_urls) || (LABELS.photoLinksOf(p)[0] || '');
   return url ? { label: url, url } : null;
 }
 // the small photo's name: the tag's own id when it has one, else a hash of the source

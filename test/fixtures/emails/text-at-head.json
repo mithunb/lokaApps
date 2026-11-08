@@ -1,0 +1,41 @@
+{
+  "approved": [
+    "text: `Your atlas “${inst.title}” was approved and is building now.\\nCheck progress in the wizard, or view it soon at your atlas link.`,"
+  ],
+  "not widened": [
+    "text: `\"${inst.title}\" stays as it is for now — ${asked} wasn't approved this time.\\nYour atlas and its data are untouched. Reply to this email if you'd like to talk it through.`,"
+  ],
+  "not approved": [
+    "text: `Your atlas “${inst.title}” wasn't approved this time. Reply to this email if you'd like to talk it through.`,"
+  ],
+  "built without": [
+    "text: `Your atlas “${inst.title}” was built without ${labels} — ${pending.length > 1 ? 'they were' : 'it was'} not approved this time.\\n` +",
+    "`Everything else on it stays as it is. Reply to this email if you'd like to talk it through.`,"
+  ],
+  "adding": [
+    "text: `${labels} ${pending.length > 1 ? 'were' : 'was'} approved and ${pending.length > 1 ? 'are' : 'is'} being added to your atlas “${inst.title}” now.\\n` +",
+    "`The atlas stays as it is until the new map is ready, and your data stays where it is.`,"
+  ],
+  "edit token": [
+    "text: `Your atlas: ${inst.title}\\nLink: ${link}\\n\\n` +",
+    "`Edit token (keep it safe — it's the only way to manage this atlas):\\n${bearer}\\n\\n` +",
+    "`Use it to add data layers, publish changes, or delete the atlas.\\n`,"
+  ],
+  "invited": [
+    "text:",
+    "`${invitedBy} invited you to contribute to “${inst.title}”` +",
+    "(inst.regionLabel ? ` (${inst.regionLabel})` : '') + ` on LOKA Atlas.\\n\\n` +",
+    "`As a collaborator you can edit the atlas and add your organisation's data layers.\\n\\n` +",
+    "`To get started:\\n` +",
+    "`1. Open ${siteBase(req)}/apps/atlas/setup/\\n` +",
+    "`2. Sign in with this email address — we'll send you a 6-digit code.\\n` +",
+    "`3. “${inst.title}” will appear under Your atlases.\\n\\n` +",
+    "`If you weren't expecting this, you can ignore this email.\\n`,"
+  ],
+  "sign-in code": [
+    "text: `Your sign-in code is:\\n\\n    ${otp}\\n\\nType it into the LOKA Atlas sign-in box. It works once and expires in 10 minutes.\\n\\nIf you didn't request this, ignore this email.`,"
+  ],
+  "atlas read": [
+    "text: lines.join('\\n') + '\\n'"
+  ]
+}

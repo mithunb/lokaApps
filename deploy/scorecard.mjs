@@ -308,8 +308,8 @@ export function sample(list, k, seed) {
    person check copies only the columns its questions read (and LOKA's own
    short name), and drops any of these even then. Wider than the viewer's
    rule on purpose: when unsure, leave it out. */
-const PEOPLE_COLUMN = /(^|[_\s-])by$|_by_user_id$|_user_id$|(^|[_\s-])(created|updated|modified|edited|added|submitted|uploaded|posted|reported|recorded|collected)[_\s-]?by($|[_\s-])|(^|[_\s-])(user|users|username|user_name|author|authors|contributor|contributors|creator|collector|collectors|owner|email|e-mail|reporter|uploader|submitter|photographer|credit|credits|phone|mobile)($|[_\s-])/i;
-export function isPeopleColumn(col) { return PEOPLE_COLUMN.test(String(col || '')); }
+// the one shared rule (atlas/label-rules.js): a name about a person, or an id
+export function isPeopleColumn(col) { return !!LABELS.whyNameNotRead(String(col || '')); }
 // the person check's columns: those the questions read, and loka_name, never a people column
 export function personColumns(questions, rows) {
   const read = [...new Set((questions || []).flatMap((q) => (q && q.columns) || []))];

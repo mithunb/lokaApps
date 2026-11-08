@@ -2377,13 +2377,13 @@
      people. Any column of the question counts, on either half of a split file.
      There is no owner/visitor split on the map's keys, so it is hidden from
      everyone here; the owner's own tools (owner.js) are unchanged. */
-  function peopleQuestion(L, col) {
+  function peopleQuestion(L, col, feats) {
     var halves;
     try { halves = keyHalves(L); } catch (e) { halves = [L]; }
     if (!halves || !halves.length) halves = [L];
     return halves.some(function (h) {
       if (typeof LokaLabelRules !== "undefined" && LokaLabelRules && typeof LokaLabelRules.isPeopleQuestion === "function") {
-        return !!LokaLabelRules.isPeopleQuestion(h, col);
+        return !!LokaLabelRules.isPeopleQuestion(h, col, feats);
       }
       var kc = ((h && h.keyColumns) || {})[col];
       var list = Array.isArray(kc) ? kc : kc ? [kc] : [];
@@ -2517,13 +2517,19 @@
         var kl = Array.isArray(kcols) ? kcols : kcols ? [kcols] : [];
         // the shared test (label-rules.js); the same rule here if it is not loaded
         var ofPeople = (typeof LokaLabelRules !== "undefined" && LokaLabelRules && typeof LokaLabelRules.isPeopleQuestion === "function")
-          ? LokaLabelRules.isPeopleQuestion(L, col)
+          ? LokaLabelRules.isPeopleQuestion(L, col, feats)
           : kl.some(function (c) {
             var sc = String(c || "").trim().toLowerCase();
             return sc === "created_by" || sc === "created_by_user_id" || /_user_id$/.test(sc);
           });
         if (ofPeople) return;
       }
+      /* A plain column about people or ids (by its name or by its values —
+         label-rules.js, the rule the reader applies) is not a key either,
+         unless the owner committed it as the marker column themselves. */
+      if (!isQuestion && !committed && typeof LokaLabelRules !== "undefined" && LokaLabelRules &&
+          typeof LokaLabelRules.isPeopleColumn === "function" &&
+          LokaLabelRules.isPeopleColumn(col, feats.map(function (f) { return (f.properties || {})[col]; }))) return;
       if (!committed && !isQuestion && named / feats.length < 0.6) return;
       /* A question answered by fewer than 30% of the places is not offered as
          a key (Mithun, October 2026): switched on, it leaves most of the map
@@ -5031,6 +5037,8 @@
     n = String(n == null ? "" : n).toLowerCase();
     // the short name LOKA wrote is the description's own words again (it is the hit's title)
     if (n === LokaLabelRules.NAME_FIELD) return true;
+    // a column about people or ids (the shared rule): a visitor's search never finds an enumerator or an email
+    if (typeof LokaLabelRules.whyNameNotRead === "function" && LokaLabelRules.whyNameNotRead(n)) return true;
     if (/(^|[^a-z])(id|ids|uuid|guid|url|uri|link|href|image|images|img|photo|photos|thumb|thumbnail|icon|lat|latitude|lon|lng|long|longitude|x|y|geom|geometry|wkt|color|colour)([^a-z]|$)/.test(n)) return true;
     return /(created|updated|modified|timestamp)/.test(n);
   }
@@ -5053,6 +5061,8 @@
     var s = cellText(v).trim();
     if (s.length < 2) return true;
     if (!/[a-z]/i.test(s)) return true;
+    // an email address, a phone number or an id is never searchable text (the shared rule)
+    if (typeof LokaLabelRules.isPersonValue === "function" && (LokaLabelRules.isPersonValue(s) || LokaLabelRules.isIdValue(s))) return true;
     if (/^(https?:|www\.|data:|\/\/)/i.test(s)) return true;
     if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-/i.test(s)) return true;
     if (/^\d{4}-\d{2}-\d{2}[t ]/i.test(s)) return true;
@@ -5067,7 +5077,7 @@
       // would weight those places twice in a search
       if (/^pattern_\d+_why$/.test(k)) continue;
       // a question about who made the record is never searched: the words would find people
-      if (/^pattern_\d+$/.test(k) && peopleQuestion(L, k)) continue;
+      if (/^pattern_\d+$/.test(k) && peopleQuestion(L, k, (DATA[L.id] && DATA[L.id].features) || [])) continue;
       // the merged panel's working columns ("_key:…", insight-mode.js rawKeys) hold a value the place already carries
       if (k.indexOf("_key:") === 0) continue;
       if (skipSearchProp(k) || skipSearchValue(f.properties[k])) continue;
@@ -7556,6 +7566,8 @@
     var imgCol = (L && L.spec && L.spec.imageColumn) || "";
     var shots = linksIn(props.image_urls);
     if (!shots.length && imgCol) shots = linksIn(props[imgCol]);
+    // else the column whose cells are image links, whatever it is called (label-rules.js photoLinksOf)
+    if (!shots.length && typeof LokaLabelRules.photoLinksOf === "function") shots = LokaLabelRules.photoLinksOf(props);
     h += shotsHTML(shots);
     if (caption) h += '<p class="pop-caption">' + esc(String(caption).trim()) + "</p>";
     if (krows) h += krows.outerHTML;

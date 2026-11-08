@@ -318,7 +318,9 @@ export function agreements(a, b, n) {
 /* Columns that name the people who added places. A question drawn from one
    of these, or asked "Who …", is about people, and is never sampled; and the
    names in them are scrubbed from everything else the sample carries. */
-const PEOPLE_COLUMN = (c) => /^created_by$/i.test(c) || /_user_id$/i.test(c);
+const LABEL_RULES = createRequire(import.meta.url)(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'atlas', 'label-rules.js'));
+// the one shared rule (atlas/label-rules.js): a name about a person, or an id
+const PEOPLE_COLUMN = (c) => !!LABEL_RULES.whyNameNotRead(c);
 export function peopleQuestions(layer, settled) {
   const out = new Set();
   const labels = (layer && layer.keyLabels) || {}, from = (layer && layer.keyColumns) || {};

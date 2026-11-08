@@ -449,22 +449,261 @@
     });
   }
 
-  /* A question whose answers are people: it was read from a column that says
-     who made the record (created_by, created_by_user_id, any *_user_id).
-     Visitors never see these, in any mode, so this one test is shared by the
-     viewer and by Insight. Any of the question's columns is enough (a mixed
-     list is hidden too): when unsure, hide. */
-  function isPeopleQuestion(layer, col) {
+  /* People and ID columns are never read (Mithun, 8 Nov 2026: "stop reading
+     people columns", and the reading must hold on data that is not LOKA's).
+     One rule, shared by the reader (enrich.js textColumns), the viewer's
+     keys, Insight's questions panel, Other keys, the story's quotes, the
+     search index and the measuring scripts. A column is passed over when
+     EITHER
+
+       its NAME says it is about a person — any whole word of it (case and
+       separators aside: "Recorded by", "_submitted_by", "created_by_user_id",
+       "Respondent phone") is on PEOPLE_WORDS, or the name ends in "by" or
+       "user id". A column merely called "name" is the PLACE's name, never a
+       person; "name" is not on the list, "name of respondent" is caught by
+       "respondent";
+
+       or its VALUES say so — most of the filled cells are email addresses,
+       phone numbers, or opaque ids (UUIDs, long hex, long runs of digits,
+       long mixed tokens). An id column is never a question either.
+
+     The name test is enough on its own because the viewer has only names to
+     go by (a question's keyColumns); the reader, which has the values, asks
+     both. Seen 8 Nov 2026: a re-read of Divar Island ASKED its
+     created_by_user_id column (found nothing, showed nothing — still wrong:
+     privacy and cost). Before that, the rule was LOKA-shaped (created_by,
+     *_by, *_user_id) and a KoboToolbox "Enumerator" or a spreadsheet's
+     "Email" went through. */
+  /* Words that say a person on their own ("Enumerator", "created_by",
+     "Respondent phone"). Company words — owner, contact, mobile, collector —
+     say a person only beside a person or contact word ("Owner name",
+     "Contact number", "Mobile no") or as the whole name ("Owner"): "Owner
+     occupied?", "Contact type", "Mobile clinic", "Storm water collector" are
+     about the place and stay read. Object.create(null): a column called
+     "constructor" is a column. */
+  var PEOPLE_WORDS = Object.create(null);
+  ("user users username usernames userid userids author authors creator creators " +
+   "observer observers recorder recorders surveyor surveyors enumerator enumerators volunteer volunteers " +
+   "submitter submitters uploader uploaders contributor contributors reporter reporters " +
+   "editor editors tagger taggers photographer photographers respondent respondents informant informants " +
+   "interviewer interviewers interviewee interviewees " +
+   "email emails phone phones telephone whatsapp").split(" ").forEach(function (w) { PEOPLE_WORDS[w] = true; });
+  var COMPANY_WORDS = Object.create(null);
+  "owner owners contact contacts mobile collector collectors".split(" ").forEach(function (w) { COMPANY_WORDS[w] = true; });
+  // the words that make a company word a person: "owner name", "contact person", "mobile number"
+  var WITH_WORDS = Object.create(null);
+  "name names person persons people number numbers no nos num details detail info id phone email mail address".split(" ")
+    .forEach(function (w) { WITH_WORDS[w] = true; });
+  var ID_WORDS = Object.create(null);
+  "id ids uuid uuids guid guids objectid identifier fid gid oid".split(" ").forEach(function (w) { ID_WORDS[w] = true; });
+  // a column name as words: "created_by_user_id" → ["created","by","user","id"]; camelCase is opened too
+  function nameWords(name) {
+    return String(name == null ? "" : name).replace(/whatsapp/ig, "whatsapp").replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase()
+      .split(/[^a-z0-9]+/).filter(Boolean);
+  }
+  /* What a column's NAME says: { why: "people" | "id" | "", strong }.
+     Strong is an explicit people name — "by" as the last word or before a
+     person word ("Recorded by", "submitted_by"; "Crops grown by block" is
+     about the crops), a person word, "e mail" as the pair, "cell phone". A
+     company word alone or with a person word is "people" but weak; an id
+     word is "id" and weak. Weak matches are passed over when questions are
+     looked for, but never take an existing question off the map. */
+  function nameSignal(name) {
+    var words = nameWords(name), none = { why: "", strong: false };
+    if (!words.length) return none;
+    for (var i = 0; i < words.length; i++) {
+      var w = words[i], next = words[i + 1];
+      if (w === "by") { if (next === undefined || PEOPLE_WORDS[next] || next === "name") return { why: "people", strong: true }; continue; }
+      if (w === "e") { if (next === "mail") return { why: "people", strong: true }; continue; }
+      if (w === "cell") { if (next === "phone") return { why: "people", strong: true }; continue; }
+      if (PEOPLE_WORDS[w]) return { why: "people", strong: true };
+    }
+    for (var c = 0; c < words.length; c++) {
+      if (!COMPANY_WORDS[words[c]]) continue;
+      if (words.length === 1) return { why: "people", strong: false };
+      var before = words[c - 1], after = words[c + 1];
+      if ((after !== undefined && WITH_WORDS[after]) || (before !== undefined && WITH_WORDS[before])) return { why: "people", strong: false };
+    }
+    for (var j = 0; j < words.length; j++) if (ID_WORDS[words[j]]) return { why: "id", strong: false };
+    return none;
+  }
+  function whyNameNotRead(name) { return nameSignal(name).why; }
+  function isPeopleName(name) { return whyNameNotRead(name) === "people"; }
+  function isIdName(name) { return whyNameNotRead(name) === "id"; }
+
+  var EMAIL = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
+  // a phone: written with a + or separators (never a dot: 12.971600 is a coordinate) and seven digits or more
+  var PHONE = /^(\+|[\d\s()\-]*[\s()\-])[\d\s()\-]{6,}$/;
+  var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  var LONG_HEX = /^[0-9a-f]{16,}$/i;
+  var DIGIT_RUN = /^\d{10,}$/;     // ten digits or more: a count never; an id (a census or LGD code, a timestamp)
+  // a long token with no spaces and a few digits in it: an api key, a record id
+  var OPAQUE = /^(?=(?:[^\d]*\d){3})[A-Za-z0-9_\-:]{14,}$/;
+  var DATE_LIKE = /^\d{1,4}[-\/.]\d{1,2}[-\/.]\d{1,4}$/;   // 04-03-2021 is a date, not a phone
+  var VALUES_MOSTLY = 0.6;    // this share of the filled cells, and the column is what they are
+  function cellOf(v) {
+    if (v == null) return "";
+    return String(Array.isArray(v) ? v.join("; ") : v).replace(/\s+/g, " ").trim();
+  }
+  function isPersonValue(s) {
+    if (DATE_LIKE.test(s)) return false;
+    return EMAIL.test(s) || (PHONE.test(s) && (s.match(/\d/g) || []).length >= 7);
+  }
+  function isIdValue(s) { return UUID.test(s) || LONG_HEX.test(s) || DIGIT_RUN.test(s) || OPAQUE.test(s); }
+  /* What a column's VALUES say: "people" when most filled cells are emails
+     or phone numbers, "id" when most are opaque ids, "" otherwise (an empty
+     column says nothing). Strong when most are emails, phones or UUIDs. */
+  function valuesSignal(values) {
+    var filled = 0, person = 0, id = 0, uuid = 0;
+    (values || []).forEach(function (v) {
+      var s = cellOf(v);
+      if (!s) return;
+      filled++;
+      if (isPersonValue(s)) person++;
+      else if (isIdValue(s)) { id++; if (UUID.test(s)) uuid++; }
+    });
+    if (!filled) return { why: "", strong: false };
+    if (person / filled >= VALUES_MOSTLY) return { why: "people", strong: true };
+    if (id / filled >= VALUES_MOSTLY) return { why: "id", strong: uuid / filled >= VALUES_MOSTLY };
+    return { why: "", strong: false };
+  }
+  function whyValuesNotRead(values) { return valuesSignal(values).why; }
+  /* The one rule: why a column is not read — "people", "id" or "". Given the
+     values too, either the name or the values is enough. */
+  function notReadSignal(name, values) {
+    var byName = nameSignal(name);
+    if (byName.why && byName.strong) return byName;
+    var byValues = values && values.length ? valuesSignal(values) : { why: "", strong: false };
+    if (byValues.why && byValues.strong) return byValues;   // a weak name with values that are mostly emails: strong
+    return byName.why ? byName : byValues;
+  }
+  function whyNotRead(name, values) { return notReadSignal(name, values).why; }
+  function isPeopleColumn(name, values) { return !!whyNotRead(name, values); }
+  // only a strong signal takes a question an earlier reading found off the map
+  function strongNotRead(name, values) { var s = notReadSignal(name, values); return s.why && s.strong ? s.why : ""; }
+  /* A value worth scrubbing from a place's shown words: an email, a phone,
+     an id, or a short display name (title case, no digits: "Asha Rao"). A
+     single capitalised word counts only from a column whose name is a strong
+     people name (created_by, Enumerator: its words are names); from a weaker
+     column "Good" or "Yes" is an answer, not a person. Never "Piped water". */
+  var DISPLAY_NAME = /^(?:[A-Z][A-Za-z'’.\-]*)(?:\s+[A-Z][A-Za-z'’.\-]*){1,3}$/;
+  var ONE_NAME = /^[A-Z][A-Za-z'’.\-]{2,}$/;
+  var AN_ANSWER = Object.create(null);   // one capitalised word that is an answer, never a name
+  "yes no none good bad fair poor other unknown true false ok okay high low medium many few some all nil".split(" ")
+    .forEach(function (w) { AN_ANSWER[w] = true; });
+  function isPersonLikeValue(v, strongName) {
+    var s = cellOf(v);
+    if (!s || s.length > 60) return false;
+    if (isPersonValue(s) || isIdValue(s)) return true;
+    if (DISPLAY_NAME.test(s)) return true;
+    return !!strongName && ONE_NAME.test(s) && !AN_ANSWER[s.toLowerCase()];
+  }
+  // the owner's words for it, on the column's line of the record
+  var NOT_READ_WHY = {
+    people: "not read — it is about who added the place",
+    id: "not read — it is an id, not something about the place"
+  };
+
+  /* A question whose answers are people: it was read from a column that
+     names a person, by the rule above. Visitors never see these, in any
+     mode, so this one test is shared by the viewer and by Insight. Any of the
+     question's columns is enough (a mixed list is hidden too): when unsure,
+     hide. Given the places (features), their values are asked as well. */
+  function isPeopleQuestion(layer, col, features) {
     var kc = ((layer && layer.keyColumns) || {})[col];
     var list = Array.isArray(kc) ? kc : kc ? [kc] : [];
     return list.some(function (c) {
-      var s = String(c || "").trim().toLowerCase();
-      return s === "created_by" || s === "created_by_user_id" || /_user_id$/.test(s);
+      var values = Array.isArray(features) && features.length
+        ? features.map(function (f) { return f && f.properties ? f.properties[c] : (f ? f[c] : null); }) : null;
+      return !!whyNotRead(c, values);
     });
+  }
+
+  /* Photos found by what the cells hold, not by LOKA's column names (Mithun,
+     8 Nov 2026): the first column whose filled cells are mostly https links
+     to an image (jpg, jpeg, png, webp, gif — or LOKA's own /api/images/
+     path). LOKA's own columns are preferred when present and filled, so a
+     LOKA export reads exactly as before. Takes rows (plain objects) or
+     features; answers the column's name, or "". */
+  var LOKA_PHOTO_COLS = ["photo_urls", "photo_1_url", "image_urls"];
+  var NOT_A_PHOTO = Object.create(null);
+  "thumb thumbs thumbnail thumbnails icon icons logo logos small avatar".split(" ").forEach(function (w) { NOT_A_PHOTO[w] = true; });
+  /* One token is an image link when it parses as an https URL whose PATH
+     ends in an image extension (the query is never looked at:
+     https://x/a.exe?x=.png is not a photo), or LOKA's own /api/images/ path
+     on loka.place alone. A cell is split on spaces and list separators. */
+  var IMAGE_PATH = /\.(jpe?g|png|webp|gif)$/i;
+  function isImageLink(token) {
+    var t = String(token || "").trim();
+    if (!/^https:\/\//i.test(t)) return false;
+    var u;
+    try { u = new URL(t); } catch (e) { return false; }
+    if (u.protocol !== "https:") return false;
+    if (IMAGE_PATH.test(u.pathname)) return true;
+    return u.hostname === "loka.place" && u.pathname.indexOf("/api/images/") === 0;
+  }
+  function tokensOf(v) { return cellOf(v).split(/[\s;,|"'\]\[]+/).filter(Boolean); }
+  function imageLinksIn(v) { return tokensOf(v).filter(isImageLink); }
+  // every token an image link: a description or a website cell with prose and a link never counts
+  function linksOnly(v) { var t = tokensOf(v); return t.length > 0 && t.every(isImageLink); }
+  function photoColumnOf(rows) {
+    var list = (rows || []).map(function (r) { return r && r.properties ? r.properties : (r || {}); });
+    if (!list.length) return "";
+    var filledIn = function (col) { return list.some(function (p) { return cellOf(p[col]); }); };
+    for (var i = 0; i < LOKA_PHOTO_COLS.length; i++) if (filledIn(LOKA_PHOTO_COLS[i])) return LOKA_PHOTO_COLS[i];
+    var cols = [], seen = Object.create(null);
+    list.forEach(function (p) { Object.keys(p).forEach(function (k) { if (!seen[k]) { seen[k] = true; cols.push(k); } }); });
+    for (var c = 0; c < cols.length; c++) {
+      // a thumbnail, an icon or a logo is not the place's photograph (LOKA's thumbnail_url among them)
+      if (nameWords(cols[c]).some(function (w) { return NOT_A_PHOTO[w]; })) continue;
+      var filled = 0, images = 0;
+      list.forEach(function (p) {
+        var s = cellOf(p[cols[c]]);
+        if (!s) return;
+        filled++;
+        if (linksOnly(s)) images++;
+      });
+      if (filled && images / filled >= VALUES_MOSTLY) return cols[c];
+    }
+    return "";
+  }
+  /* The image links of one place. Given the layer's rows (or features) the
+     column is decided from the whole layer; given the place alone, a cell is
+     taken only when it is links-only — every token an image link — so a link
+     pasted into a description or a notes cell is never a photo. LOKA's own
+     columns first, either way. */
+  function photoLinksOf(props, rows) {
+    var p = props && props.properties ? props.properties : (props || {});
+    if (Array.isArray(rows) && rows.length) {
+      var col = photoColumnOf(rows);
+      return col ? imageLinksIn(p[col]) : [];
+    }
+    for (var i = 0; i < LOKA_PHOTO_COLS.length; i++) if (cellOf(p[LOKA_PHOTO_COLS[i]])) return imageLinksIn(p[LOKA_PHOTO_COLS[i]]);
+    var keys = Object.keys(p);
+    for (var k = 0; k < keys.length; k++) {
+      if (nameWords(keys[k]).some(function (w) { return NOT_A_PHOTO[w]; })) continue;
+      if (linksOnly(p[keys[k]])) return imageLinksIn(p[keys[k]]);
+    }
+    return [];
   }
 
   return {
     isPeopleQuestion: isPeopleQuestion,
+    isPeopleColumn: isPeopleColumn,
+    isPeopleName: isPeopleName,
+    isIdName: isIdName,
+    whyNotRead: whyNotRead,
+    whyNameNotRead: whyNameNotRead,
+    whyValuesNotRead: whyValuesNotRead,
+    strongNotRead: strongNotRead,
+    isPersonValue: isPersonValue,
+    isIdValue: isIdValue,
+    isPersonLikeValue: isPersonLikeValue,
+    NOT_READ_WHY: NOT_READ_WHY,
+    photoColumnOf: photoColumnOf,
+    photoLinksOf: photoLinksOf,
+    imageLinksIn: imageLinksIn,
+    isImageLink: isImageLink,
     distinctHeadings: distinctHeadings,
     NOUN_WORDS: NOUN_WORDS,
     NOUN_MAX: NOUN_MAX,

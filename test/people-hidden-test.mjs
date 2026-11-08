@@ -28,7 +28,7 @@ function check(label, got, want) {
   console.log((ok ? '  ok   ' : '  FAIL ') + label + (ok ? '' : '\n         got  ' + JSON.stringify(got) + '\n         want ' + JSON.stringify(want)));
 }
 
-const a = src.indexOf('function peopleQuestion(L, col)');
+const a = src.indexOf('function peopleQuestion(L, col, feats)');
 const b = src.indexOf('function computeKeyOptions');
 const body = src.slice(a, src.lastIndexOf('/*', b) > a ? src.lastIndexOf('/*', b) : b);
 function load(withShared) {
@@ -75,7 +75,7 @@ for (const [name, withShared] of [['shared file loaded', true], ['shared file mi
 check('the shared test is the one Insight uses (shared function exists)', typeof LR.isPeopleQuestion, 'function');
 check('Insight asks the shared test first, and keeps its own rule as a fallback', /LokaLabelRules\.isPeopleQuestion/.test(imSrc) && /created_by_user_id/.test(imSrc), true);
 check('the viewer\'s key options skip a people question', /isQuestion\) \{\s*var kcols[^]*?isPeopleQuestion[^]*?if \(ofPeople\) return;/.test(src), true);
-check('the viewer\'s search text skips a people question', /\^pattern_\\d\+\$\/\.test\(k\) && peopleQuestion\(L, k\)/.test(src), true);
+check('the viewer\'s search text skips a people question, asking the places\' values too', /\^pattern_\\d\+\$\/\.test\(k\) && peopleQuestion\(L, k, \(DATA\[L\.id\]/.test(src), true);
 check('label-rules loads before atlas.js', (() => { const h = fs.readFileSync(ROOT + '/atlas/index.html', 'utf8'); return h.indexOf('label-rules.js') < h.indexOf('./atlas.js'); })(), true);
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');

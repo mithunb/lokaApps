@@ -51,7 +51,9 @@ function logFallback(to, subject, text) {
   console.log(`[mail:fallback] To: ${to}\n[mail:fallback] Subject: ${subject}\n[mail:fallback] ${text.replace(/\n/g, '\n[mail:fallback] ')}`);
 }
 
-export async function sendMail({ to, subject, text }) {
+// html is optional: when given, the message carries both parts
+// (multipart/alternative) and the text part is what the log fallback prints.
+export async function sendMail({ to, subject, text, html }) {
   // dev override: MAIL_TRANSPORT=log forces links into the console
   if (process.env.MAIL_TRANSPORT === 'log') {
     logFallback(to, subject, text);
@@ -63,7 +65,7 @@ export async function sendMail({ to, subject, text }) {
     return { sent: false, via: 'log' };
   }
   try {
-    await transport.t.sendMail({ from: fromAddress(), to, subject, text });
+    await transport.t.sendMail({ from: fromAddress(), to, subject, text, ...(html ? { html } : {}) });
     return { sent: true, via: transport.kind };
   } catch (e) {
     console.warn(`[mail] ${transport.kind} send failed:`, e.message);

@@ -16,6 +16,7 @@ import { createRequire } from 'node:module';
 import * as reg from '../lib/atlas/registry.js';
 import * as auth from '../lib/atlas/auth.js';
 import { sendMail } from '../lib/mailer.js';
+import { layout as emailLayout, paragraphsFromLines } from '../lib/atlas/email-layout.js';
 import { noteTrouble, noteOk, setTroubleNotifier, openTroubles } from '../lib/atlas/trouble.js';
 import * as owed from '../lib/atlas/owed.js';
 import { queue as QUESTIONS, createQueue, fileSignatureOf, sameFile, NEVER_READ, payerOf } from '../lib/atlas/questions-queue.js';
@@ -1233,6 +1234,28 @@ function siteBase(req) {
   return `${proto}://${host}`;
 }
 
+/* The atlas on the small card of an email to its owner or a collaborator
+   (api/lib/atlas/email-layout.js). Only a public, published atlas shows its
+   region and its best place photo — the same photo its link preview shows
+   (previewEligible, previewBestPhoto); a private or unpublished one is named
+   and linked, nothing more. The photo is kept only when loka.place itself
+   serves it (the atlas's own small photo, or LOKA's /api/images/): an image
+   fetched from any other host tells that host the mail was opened, and no
+   email of ours carries a tracker. A photo that cannot be read is left off. */
+function emailCard(inst) {
+  if (!inst) return null;
+  const card = { title: inst.title || inst.slug, url: `${PREVIEW_BASE}/apps/atlas/a/${encodeURIComponent(inst.slug)}` };
+  if (!previewEligible(inst)) return card;
+  card.region = inst.regionLabel || '';
+  try {
+    const photo = previewBestPhoto(inst);
+    if (photo && String(photo.url || '').startsWith(PREVIEW_BASE + '/')) { card.photo = photo.url; card.photoName = photo.name || ''; }
+  } catch (e) {
+    console.warn('[mail] no photo for ' + inst.slug + ' — ' + (e && e.message));
+  }
+  return card;
+}
+
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
 function validLogo(dataUrl) {
   if (typeof dataUrl !== 'string') return null;
@@ -1549,7 +1572,14 @@ router.get('/admin/action', async (req, res) => {
       await sendMail({
         to: inst.email,
         subject: `[LOKA Atlas] approved: ${inst.title}`,
-        text: `Your atlas “${inst.title}” was approved and is building now.\nCheck progress in the wizard, or view it soon at your atlas link.`,
+        ...emailLayout({
+          headline: 'Approved — building now',
+          paragraphs: [`Your atlas “${inst.title}” was approved and is building now.`, 'Check progress in the wizard, or view it soon at your atlas link.'],
+          atlasCard: emailCard(inst),
+          button: { label: 'Check progress', href: `${PREVIEW_BASE}/apps/atlas/setup/` },
+          footer: `You asked for “${inst.title}” on LOKA Atlas.`,
+          text: `Your atlas “${inst.title}” was approved and is building now.\nCheck progress in the wizard, or view it soon at your atlas link.`,
+        }),
       });
     }
     return res.send(page('Approved', `“${inst.title}” approved — build queued.`));
@@ -1573,7 +1603,14 @@ router.get('/admin/action', async (req, res) => {
       await sendMail({
         to: inst.email,
         subject: `[LOKA Atlas] ${layersOnly ? 'layers not changed' : 'not widened'}: ${inst.title}`,
-        text: `"${inst.title}" stays as it is for now — ${asked} wasn't approved this time.\nYour atlas and its data are untouched. Reply to this email if you'd like to talk it through.`,
+        ...emailLayout({
+          headline: layersOnly ? 'Layers not changed' : 'Not widened this time',
+          paragraphs: [`"${inst.title}" stays as it is for now — ${asked} wasn't approved this time.`,
+            `Your atlas and its data are untouched. Reply to this email if you'd like to talk it through.`],
+          atlasCard: emailCard(inst),
+          footer: `You own “${inst.title}” on LOKA Atlas.`,
+          text: `"${inst.title}" stays as it is for now — ${asked} wasn't approved this time.\nYour atlas and its data are untouched. Reply to this email if you'd like to talk it through.`,
+        }),
       });
     }
     return res.send(page('Left as it was', `"${inst.title}" keeps its current map.`));
@@ -1583,7 +1620,13 @@ router.get('/admin/action', async (req, res) => {
     await sendMail({
       to: inst.email,
       subject: `[LOKA Atlas] not approved: ${inst.title}`,
-      text: `Your atlas “${inst.title}” wasn't approved this time. Reply to this email if you'd like to talk it through.`,
+      ...emailLayout({
+        headline: 'Not approved this time',
+        paragraphs: [`Your atlas “${inst.title}” wasn't approved this time. Reply to this email if you'd like to talk it through.`],
+        atlasCard: emailCard(inst),
+        footer: `You asked for “${inst.title}” on LOKA Atlas.`,
+        text: `Your atlas “${inst.title}” wasn't approved this time. Reply to this email if you'd like to talk it through.`,
+      }),
     });
   }
   res.send(page('Denied', `“${inst.title}” denied.`));
@@ -1615,8 +1658,16 @@ async function actOnPendingLayers(req, res, inst, yes) {
       await sendMail({
         to: inst.email,
         subject: `[LOKA Atlas] built without ${labels}: ${inst.title}`,
-        text: `Your atlas “${inst.title}” was built without ${labels} — ${pending.length > 1 ? 'they were' : 'it was'} not approved this time.\n` +
-          `Everything else on it stays as it is. Reply to this email if you'd like to talk it through.`,
+        ...emailLayout({
+          headline: `Built without ${labels}`,
+          paragraphs: [`Your atlas “${inst.title}” was built without ${labels} — ${pending.length > 1 ? 'they were' : 'it was'} not approved this time.`,
+            `Everything else on it stays as it is. Reply to this email if you'd like to talk it through.`],
+          atlasCard: emailCard(inst),
+          button: { label: 'Open the atlas', href: `${PREVIEW_BASE}/apps/atlas/a/${encodeURIComponent(inst.slug)}` },
+          footer: `You own “${inst.title}” on LOKA Atlas.`,
+          text: `Your atlas “${inst.title}” was built without ${labels} — ${pending.length > 1 ? 'they were' : 'it was'} not approved this time.\n` +
+            `Everything else on it stays as it is. Reply to this email if you'd like to talk it through.`,
+        }),
       });
     }
     return res.send(page('Left out', `“${inst.title}” keeps its map without ${labels}.`));
@@ -1658,8 +1709,16 @@ async function addPendingLayers(inst, pending) {
     await sendMail({
       to: inst.email,
       subject: `[LOKA Atlas] adding ${labels}: ${inst.title}`,
-      text: `${labels} ${pending.length > 1 ? 'were' : 'was'} approved and ${pending.length > 1 ? 'are' : 'is'} being added to your atlas “${inst.title}” now.\n` +
-        `The atlas stays as it is until the new map is ready, and your data stays where it is.`,
+      ...emailLayout({
+        headline: `Adding ${labels}`,
+        paragraphs: [`${labels} ${pending.length > 1 ? 'were' : 'was'} approved and ${pending.length > 1 ? 'are' : 'is'} being added to your atlas “${inst.title}” now.`,
+          `The atlas stays as it is until the new map is ready, and your data stays where it is.`],
+        atlasCard: emailCard(inst),
+        button: { label: 'Open the atlas', href: `${PREVIEW_BASE}/apps/atlas/a/${encodeURIComponent(inst.slug)}` },
+        footer: `You own “${inst.title}” on LOKA Atlas.`,
+        text: `${labels} ${pending.length > 1 ? 'were' : 'was'} approved and ${pending.length > 1 ? 'are' : 'is'} being added to your atlas “${inst.title}” now.\n` +
+          `The atlas stays as it is until the new map is ready, and your data stays where it is.`,
+      }),
     });
   }
   return out;
@@ -1968,9 +2027,21 @@ router.post('/instances/:slug/email-token', async (req, res) => {
   const result = await sendMail({
     to: email,
     subject: `[LOKA Atlas] your edit token for “${inst.title}”`,
-    text: `Your atlas: ${inst.title}\nLink: ${link}\n\n` +
-      `Edit token (keep it safe — it's the only way to manage this atlas):\n${bearer}\n\n` +
-      `Use it to add data layers, publish changes, or delete the atlas.\n`,
+    ...emailLayout({
+      headline: 'Your edit token',
+      code: bearer,
+      paragraphs: [`Edit token (keep it safe — it's the only way to manage this atlas).`,
+        `Use it to add data layers, publish changes, or delete the atlas.`,
+        ...(inst.visibility === 'private'
+          ? [`Your atlas is private — it opens for you once you sign in; the private link for other people is under Share, in the Owner menu.`]
+          : [])],
+      atlasCard: emailCard(inst),
+      button: { label: 'Open the atlas', href: `${PREVIEW_BASE}/apps/atlas/a/${encodeURIComponent(inst.slug)}` },
+      footer: `You asked for the edit token of “${inst.title}” on LOKA Atlas.`,
+      text: `Your atlas: ${inst.title}\nLink: ${link}\n\n` +
+        `Edit token (keep it safe — it's the only way to manage this atlas):\n${bearer}\n\n` +
+        `Use it to add data layers, publish changes, or delete the atlas.\n`,
+    }),
   });
   if (!inst.email) reg.updateInstance(inst.slug, { email });
   res.json({ ok: true, sent: !!result.sent, via: result.via || 'log' });
@@ -3241,15 +3312,29 @@ router.post('/instances/:slug/collaborators', async (req, res) => {
   const result = await sendMail({
     to: email,
     subject: `You're invited to contribute to “${inst.title}” — LOKA Atlas`,
-    text:
-      `${invitedBy} invited you to contribute to “${inst.title}”` +
-      (inst.regionLabel ? ` (${inst.regionLabel})` : '') + ` on LOKA Atlas.\n\n` +
-      `As a collaborator you can edit the atlas and add your organisation's data layers.\n\n` +
-      `To get started:\n` +
-      `1. Open ${siteBase(req)}/apps/atlas/setup/\n` +
-      `2. Sign in with this email address — we'll send you a 6-digit code.\n` +
-      `3. “${inst.title}” will appear under Your atlases.\n\n` +
-      `If you weren't expecting this, you can ignore this email.\n`,
+    ...emailLayout({
+      headline: `You're invited to contribute`,
+      paragraphs: [`${invitedBy} invited you to contribute to “${inst.title}”` +
+        (inst.regionLabel ? ` (${inst.regionLabel})` : '') + ` on LOKA Atlas.`,
+        `As a collaborator you can edit the atlas and add your organisation's data layers.`,
+        'To get started:'],
+      steps: [`Open ${PREVIEW_BASE}/apps/atlas/setup/`,
+        `Sign in with this email address — we'll send you a 6-digit code.`,
+        `“${inst.title}” will appear under Your atlases.`],
+      atlasCard: emailCard(inst),
+      button: { label: 'Open LOKA Atlas', href: `${PREVIEW_BASE}/apps/atlas/setup/` },
+      quiet: `If you weren't expecting this, you can ignore this email.`,
+      footer: `${invitedBy} added this address as a collaborator on “${inst.title}”.`,
+      text:
+        `${invitedBy} invited you to contribute to “${inst.title}”` +
+        (inst.regionLabel ? ` (${inst.regionLabel})` : '') + ` on LOKA Atlas.\n\n` +
+        `As a collaborator you can edit the atlas and add your organisation's data layers.\n\n` +
+        `To get started:\n` +
+        `1. Open ${siteBase(req)}/apps/atlas/setup/\n` +
+        `2. Sign in with this email address — we'll send you a 6-digit code.\n` +
+        `3. “${inst.title}” will appear under Your atlases.\n\n` +
+        `If you weren't expecting this, you can ignore this email.\n`,
+    }),
   });
   res.json({ ok: true, collaborator: { email: c.email, invitedAt: c.invitedAt, acceptedAt: c.acceptedAt || null }, sent: !!result.sent, collaborators: collabList(inst) });
 });
@@ -3282,7 +3367,14 @@ router.post('/auth/request-link', async (req, res) => {
   const result = await sendMail({
     to: email,
     subject: `${otp} is your LOKA Atlas sign-in code`,
-    text: `Your sign-in code is:\n\n    ${otp}\n\nType it into the LOKA Atlas sign-in box. It works once and expires in 10 minutes.\n\nIf you didn't request this, ignore this email.`,
+    ...emailLayout({
+      headline: 'Your sign-in code',
+      code: otp,
+      paragraphs: ['Type it into the LOKA Atlas sign-in box. It works once and expires in 10 minutes.'],
+      quiet: `If you didn't request this, ignore this email.`,
+      footer: 'You asked to sign in to LOKA Atlas with this email address.',
+      text: `Your sign-in code is:\n\n    ${otp}\n\nType it into the LOKA Atlas sign-in box. It works once and expires in 10 minutes.\n\nIf you didn't request this, ignore this email.`,
+    }),
   });
   res.json({ ok: true, sent: !!result.sent, via: result.via || 'log' });
 });
@@ -6206,8 +6298,17 @@ let retrying = false;
 
 async function tellTheOwner(o, subject, lines) {
   if (!o.email) return;
+  // the atlas only dresses the mail; if it cannot be looked up the mail still goes
+  let inst = null;
+  try { inst = reg.getInstance(o.dataset); } catch { inst = null; }
   try {
-    await sendMail({ to: o.email, subject, text: lines.join('\n') + '\n' });
+    await sendMail({ to: o.email, subject, ...emailLayout({
+      headline: subject,
+      paragraphs: paragraphsFromLines(lines),
+      atlasCard: emailCard(inst),
+      footer: `You own “${(inst && inst.title) || o.dataset}” on LOKA Atlas.`,
+      text: lines.join('\n') + '\n',
+    }) });
   } catch (e) {
     console.warn('[owed] could not write to ' + o.email + ' — ' + (e && e.message));
   }
@@ -8887,6 +8988,9 @@ function previewPhotoOf(props, slug) {
   if (!props) return null;
   const abs = String(props.photo_1_url || '').trim();
   if (/^https:\/\//i.test(abs)) return abs;
+  // else the column whose cells are https image links, whatever it is called (atlas/label-rules.js photoLinksOf)
+  const found = shortLabels.LABELS.photoLinksOf(props)[0] || '';
+  if (/^https:\/\//i.test(found)) return found;
   const small = String(props.photo_small || '').trim();
   if (small && SAFE_LAYER_FILE.test(small) && !small.includes('..')) {
     return `${PREVIEW_BASE}/apps/atlas/datasets/${encodeURIComponent(slug)}/${small}`;

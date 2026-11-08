@@ -437,17 +437,37 @@
      narrow isPeople above reads the layer's keyColumns and so misses a plain
      column called "creator", which no question was read from but which still
      names a person. Used for quotes only; which questions show is unchanged. */
-  var PEOPLE_COL = /^(created_by|creator|creators|author|authors|owner|owners|user|users|username|user_name|tagger|taggers|contributor|contributors|photographer|reporter|observer|recorder|submitter|member|members|person|people)$/;
+  var PEOPLE_COL = /^(created_by|creator|creators|author|authors|owner|owners|user|users|username|user_name|tagger|taggers|contributor|contributors|photographer|reporter|observer|recorder|submitter|enumerator|surveyor|volunteer|respondent|email|e_mail|phone|mobile|contact|whatsapp)$/;
   /* Who wrote a quote: the name they post under on LOKA (Mithun, 5 Nov 2026,
      reversing "never a tagger's name on a page" for quotes only). Only a
      display name column — never an id, an email or a phone number — read
      fresh from the place, never stored with the story. */
-  var AUTHOR_COLS = ["created_by", "creator", "author", "username", "user_name", "tagged_by", "posted_by"];
+  /* No names on non-LOKA quotes (Mithun, 8 Nov 2026): credit comes only
+     from LOKA's own columns on a LOKA-shaped layer (atlas.js marks one
+     _loka; a place with a UUID tag_id and a description is one too), or from
+     a column that plainly means the author ("author", "written by") on any
+     data — never from an enumerator, a surveyor, a "recorded by" or a
+     respondent, who did not write the words. */
+  var LOKA_AUTHOR_COLS = ["created_by", "creator", "username", "user_name", "tagged_by", "posted_by"];
   var HOUSE_ACCOUNTS = /^loka\s*finds$/i;
-  function authorOf(f) {
+  var UUID_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  function lokaShapedPlace(layer, p) {
+    if (layer && layer._loka) return true;
+    return UUID_ID.test(String(p.tag_id || "").trim()) && ("description" in p);
+  }
+  function authorColumns(layer, p) {
+    var cols = Object.keys(p).filter(function (k) {
+      var w = String(k).replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).join(" ");
+      return w === "author" || w === "authors" || w === "written by" || w === "author name";
+    });
+    return lokaShapedPlace(layer, p) ? LOKA_AUTHOR_COLS.concat(cols) : cols;
+  }
+  function authorOf(layer, f) {
+    if (f === undefined) { f = layer; layer = null; }   // authorOf(f): a place with no layer to ask
     var p = (f && f.properties) || {};
-    for (var k = 0; k < AUTHOR_COLS.length; k++) {
-      var v = p[AUTHOR_COLS[k]];
+    var cols = authorColumns(layer, p);
+    for (var k = 0; k < cols.length; k++) {
+      var v = p[cols[k]];
       if (v == null) continue;
       v = String(v).replace(/\s+/g, " ").trim();
       if (!v || v.length > 40) continue;
@@ -459,7 +479,12 @@
     }
     return "";
   }
-  function isPeopleColumn(name) {
+  /* The one shared rule (label-rules.js isPeopleColumn: a name about a
+     person or an id, or values that are emails, phones or ids); the older,
+     narrower rule stands in only if that file is not loaded. */
+  function isPeopleColumn(name, values) {
+    var shared = typeof LokaLabelRules !== "undefined" && LokaLabelRules && LokaLabelRules.isPeopleColumn;
+    if (typeof shared === "function") return !!shared(name, values);
     var s = String(name || "").trim().toLowerCase().replace(/[\s.-]+/g, "_");
     return PEOPLE_COL.test(s) || /_user_id$/.test(s) || /^user_/.test(s) || /_by$/.test(s) || /_name$/.test(s) && /user|member|author|owner|creator|tagger/.test(s);
   }
@@ -476,7 +501,16 @@
      word. */
   function peopleValuesOf(layer, props) {
     var out = [], p = props || {};
-    Object.keys(p).forEach(function (k) { if (isPeopleColumn(k)) pushValue(out, p[k]); });
+    /* Only from a column the rule calls people, and only values that look
+       like a person — an email, a phone, an id, a display name ("Asha Rao";
+       a single "Asha" only from a column strongly named, created_by or
+       Enumerator) — never an answer such as "Yes", "Good" or "Piped water". */
+    var shared = typeof LokaLabelRules !== "undefined" && LokaLabelRules && typeof LokaLabelRules.isPersonLikeValue === "function" ? LokaLabelRules : null;
+    Object.keys(p).forEach(function (k) {
+      if (!isPeopleColumn(k, [p[k]])) return;
+      if (shared && !shared.isPersonLikeValue(p[k], !!shared.strongNotRead(k))) return;
+      pushValue(out, p[k]);
+    });
     colsOf(layer).forEach(function (c) {
       if (!isPeople(layer, c)) return;
       pushValue(out, p[c]); pushValue(out, p[c + "_why"]);
@@ -559,13 +593,13 @@
     var kc = ((layer && layer.keyColumns) || {})[col];
     (Array.isArray(kc) ? kc : kc ? [kc] : []).forEach(function (c) {
       // the same columns are barred here as anywhere else: a space's name, an address, a link are not words of a place's own
-      if (c && !NOT_TEXT.test(String(c).toLowerCase()) && !/^pattern_\d+(_why)?$/.test(String(c)) && !isPeopleColumn(c) && looksFree(p[c])) {
+      if (c && !NOT_TEXT.test(String(c).toLowerCase()) && !/^pattern_\d+(_why)?$/.test(String(c)) && !isPeopleColumn(c, [p[c]]) && looksFree(p[c])) {
         out.push(String(p[c]).replace(/\s+/g, " ").trim());
       }
     });
     var best = "";
     Object.keys(p).forEach(function (k) {
-      if (NOT_TEXT.test(String(k).toLowerCase()) || /^pattern_\d+(_why)?$/.test(k) || isPeopleColumn(k)) return;
+      if (NOT_TEXT.test(String(k).toLowerCase()) || /^pattern_\d+(_why)?$/.test(k) || isPeopleColumn(k, [p[k]])) return;
       var v = p[k];
       if (typeof v !== "string" || !looksFree(v)) return;
       var s = v.replace(/\s+/g, " ").trim();
@@ -1110,7 +1144,7 @@
     });
     var out = [], seen = Object.create(null);
     Object.keys(p).forEach(function (k) {
-      if (NOT_TEXT.test(String(k).toLowerCase()) || /^pattern_\d+(_why)?$/.test(k) || isPeopleColumn(k)) return;
+      if (NOT_TEXT.test(String(k).toLowerCase()) || /^pattern_\d+(_why)?$/.test(k) || isPeopleColumn(k, [p[k]])) return;
       if (claimed[k] && !open[k]) return;      // only a question now switched off is read from it
       if (!looksFree(p[k])) return;
       var one = foldName(String(p[k]).replace(/\s+/g, " ").trim());
@@ -1137,7 +1171,7 @@
          category, or anybody's name is no name to show, and "Show this place
          on the map" stands in its stead. Never placeNameOf here — that would
          put back the very names the rule keeps out. */
-      held.push({ id: q.id, text: q.text, name: placeLabelOf(layer, f), by: authorOf(f), at: i });
+      held.push({ id: q.id, text: q.text, name: placeLabelOf(layer, f), by: authorOf(layer, f), at: i });
     });
     var ownWords = function () {
       return held.length >= STORY_QUOTES_MIN ? { sentences: [], quotes: held, ownWords: true } : null;
@@ -1565,8 +1599,8 @@
       var out = [];
       opts.forEach(function (o) {
         if (o.isQuestion || o.tooFew || o.scattered || !o.col) return;
-        // a column of people (created_by and its kin) is never a key on the visitor page (people-hidden)
-        if (isPeopleColumn(o.col)) return;
+        // a column of people or ids (by name or by values) is never a key on the visitor page (people-hidden)
+        if (isPeopleColumn(o.col, fs.map(function (f) { return (f.properties || {})[o.col]; }))) return;
         var vcol = RAW_COL + o.col;
         fs.forEach(function (f) {
           var p = f.properties || (f.properties = {});
@@ -1839,7 +1873,10 @@
     /* ---- the place's card ---- */
     function photoHTML(props) {
       if (props.photo_file && api.dataUrl) return api.shotsHTML([api.dataUrl(String(props.photo_file))]);
-      return api.shotsHTML(api.linksIn(props.photo_urls || props.photo_1_url || props.image_urls));
+      var links = api.linksIn(props.photo_urls || props.photo_1_url || props.image_urls);
+      // else the column whose cells are image links, whatever it is called (label-rules.js photoLinksOf)
+      if (!links.length && typeof LokaLabelRules !== "undefined" && LokaLabelRules && LokaLabelRules.photoLinksOf) links = LokaLabelRules.photoLinksOf(props);
+      return api.shotsHTML(links);
     }
     function whyOf(props, col) { return answerOf(props, col + "_why"); }
     function cardHTML(L, props, f) {

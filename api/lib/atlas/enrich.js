@@ -722,6 +722,17 @@ export function textColumns(rows, fields, { nameCol = '' } = {}) {
       return (Array.isArray(v) ? v.filter((x) => x != null && String(x).trim()).join('; ') : String(v)).trim();
     });
     const filled = values.filter(Boolean);
+    /* A column about a person, or an id, is never read (Mithun, 8 Nov 2026):
+       by its name or by its values, one rule shared with the viewer
+       (atlas/label-rules.js whyNotRead). It comes before the closed-list
+       test on purpose: a created_by column of two names is key-shaped, and
+       its line must say what it is, not that the map can colour by it. */
+    const notRead = LABELS.whyNotRead(f, values);
+    if (notRead) {
+      // strong: an explicit people name, or values that are mostly emails, phones or UUIDs — the only kind that retires a question
+      passed.push({ column: f, notRead, strong: !!LABELS.strongNotRead(f, values), why: LABELS.NOT_READ_WHY[notRead] });
+      continue;
+    }
     const distinct = new Set(filled.map((v) => v.toLowerCase())).size;
     const delim = tagDelimiter(values);
     if (closed.has(f)) {
@@ -946,8 +957,10 @@ export function columnReport(plan, outcomes, questions, fell = [], total = 0, op
        those, and the line says it no longer reads this one. */
     const gone = retired.filter((x) => (x.columns || []).includes(p.column));
     const loosened = gaveUp.filter((x) => (x.gaveUp || []).includes(p.column));
+    // a people or id column's reason already says "not read"; the others are "not asked — why"
+    const said = p.notRead ? p.why : 'not asked — ' + p.why;
     if (gone.length || loosened.length) {
-      let text = columnLabel(p.column) + ': not asked — ' + p.why;
+      let text = columnLabel(p.column) + ': ' + said;
       if (gone.length) {
         text += '; ' + listOf(gone.map((x) => q(x.question))) + ', which an earlier reading took from it, ' +
           (gone.length === 1 ? 'is' : 'are') + ' now off the map';
@@ -981,7 +994,7 @@ export function columnReport(plan, outcomes, questions, fell = [], total = 0, op
       continue;
     }
     lines.push({ column: p.column, label: columnLabel(p.column), asked: false, found: 0,
-      line: columnLabel(p.column) + ': not asked — ' + p.why });
+      line: columnLabel(p.column) + ': ' + said });
   }
   return lines;
 }
@@ -1808,8 +1821,14 @@ export function settledForAnswering(keepQuestions, fields) {
 }
 
 export async function enrichRows(opts) {
-  const { rows, fields, title = '', seedSet, callJSON, models = {} } = opts;
-  const digest = buildDigest(rows, fields);
+  const { rows, title = '', seedSet, callJSON, models = {} } = opts;
+  /* People and id columns are not read at all — not in the whole-record
+     digest either, which the joint read and a settled question with no
+     column of its own are answered from. The plan (planColumns) is still
+     given every column, so the record carries a line for each saying so. */
+  const fields = (opts.fields || []).map(String);
+  const readable = fields.filter((f) => !LABELS.whyNotRead(f, (rows || []).map((r) => r && r[f])));
+  const digest = buildDigest(rows, readable);
   const texts = digest.entries.map((e) => e.text);
 
   // an owner-kept set: file the rows into it — the safe job, works without AI
@@ -1871,7 +1890,13 @@ export async function enrichRows(opts) {
        own (read from the whole record) is not touched: nothing says what it
        read. The result carries `retired` so the server can log it and carry
        the owner's settings across. */
-    const addressColumns = new Set(plan.passed.filter((p) => p.address).map((p) => p.column));
+    /* …and, from 8 Nov 2026 too, one read only from a people or id column —
+       but only when the column is caught by a STRONG signal (an explicit
+       people name: created_by, *_by, *_user_id, enumerator, respondent,
+       email, phone…; or values mostly emails, phones or UUIDs). A weaker
+       match ("Owner", "tag_id", long numbers) is passed over when questions
+       are looked for, but never takes an existing question off the map. */
+    const addressColumns = new Set(plan.passed.filter((p) => p.address || (p.notRead && p.strong)).map((p) => p.column));
     const retired = [];
     const askedBefore = settledForAnswering(opts.keepQuestions, fields).filter((q) => {
       if (!q.columns.length || !q.columns.some((c) => addressColumns.has(c))) return true;
@@ -1934,7 +1959,7 @@ export async function enrichRows(opts) {
       /* Worked out before the call now, not after it: these are the questions
          the map can already answer, and the finder needs to know so it does not
          propose one of them again in other words. */
-      const alreadyKeyed = keyKindsByColumn(rows, fields);
+      const alreadyKeyed = keyKindsByColumn(rows, readable);   // never a people column's names
       const reserved = [...fields, ...alreadyKeyed.flatMap((k) => k.words)];
       let finderCalls = 0;                // finder calls this attempt has made, for a caller that keeps no count
       // the first attempt's finding for a group, kept as it was — its questions,

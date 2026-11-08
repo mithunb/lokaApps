@@ -591,8 +591,11 @@
 
     // the card keeps the full photograph; the list has the small one
     function photoHTML(props) {
-      if (!props.photo_file || !api.dataUrl) return api.shotsHTML(api.linksIn(props.photo_urls || props.photo_1_url || props.image_urls));
-      return api.shotsHTML([api.dataUrl(String(props.photo_file))]);
+      if (props.photo_file && api.dataUrl) return api.shotsHTML([api.dataUrl(String(props.photo_file))]);
+      var links = api.linksIn(props.photo_urls || props.photo_1_url || props.image_urls);
+      // else the column whose cells are image links, whatever it is called (label-rules.js photoLinksOf)
+      if (!links.length && typeof LokaLabelRules !== "undefined" && LokaLabelRules && LokaLabelRules.photoLinksOf) links = LokaLabelRules.photoLinksOf(props);
+      return api.shotsHTML(links);
     }
     function cardHTML(L, props, f) {
       if (!L || !L._ev || !L._ev.explore) return null;

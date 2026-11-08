@@ -93,7 +93,8 @@ check('…re-ordered when the map stops moving (once, a moment after)', /api\.on
 check('each row says how far in plain words (Event mode\'s distanceWords)', /distanceWords = EVM\.distanceWords/.test(src) && /d\.textContent = mid \? distanceWords\(r\.m\)/.test(src), true);
 check('a row shows the small photo through the data address (like photo_file); none, the button\'s icon — never the full photo',
   /p\.photo_small && api\.dataUrl/.test(src) && /api\.dataUrl\(String\(p\.photo_small\)\)/.test(src) && !/rowOf[\s\S]{0,600}photo_1_url/.test(src), true);
-check('the card keeps the full photograph', /function photoHTML\(props\) \{\s*if \(!props\.photo_file[^\n]*photo_1_url/.test(src), true);
+check('the card keeps the full photograph (the place\'s own file, else LOKA\'s link columns, else the column whose cells are image links)',
+  /function photoHTML\(props\) \{\s*if \(props\.photo_file && api\.dataUrl\)[\s\S]{0,300}photo_1_url[\s\S]{0,300}LokaLabelRules\.photoLinksOf\(props\)/.test(src), true);
 check('the card has "What’s around here" and "See this place in LOKA"', /What’s around here/.test(src) && /api\.lokaLinkHTML\(srcLayer \|\| L, props\)/.test(src), true);
 check('"What’s around here" centres the map on the place (no OpenStreetMap)', /api\.centreOn\(f\.geometry\.coordinates\)/.test(src) && !/overpass|osm/i.test(src.replace(/\/\*[\s\S]*?\*\//g, '')), true);
 check('one button at a time; the chosen one again shows every place', /state\.chosen = state\.chosen === c\.id \? null : c\.id;/.test(src), true);
