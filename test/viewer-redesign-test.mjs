@@ -177,7 +177,9 @@ check('the owner\'s tools still find Share and the actions row by the same ids',
 console.log('\n  10. the last review');
 check('the card\'s Esc steps back when something above it took the key', /if \(e\.key !== "Escape" \|\| !LAST_POP \|\| e\.defaultPrevented\) return;/.test(js), true);
 check('the owner\'s panel takes its Esc, so nothing under it hears it', /function onKey\(e\) \{ if \(e\.key === "Escape"\) \{ e\.preventDefault\(\); shut\(\); btn\.focus\(\); \} \}/.test(fs.readFileSync(ROOT + '/atlas/owner.js', 'utf8')), true);
-check('an embed is known in the head, before paint, so the ☰ never flashes', /if \(\/\[\?&\]embed=\(1\|map\)\(&\|\$\)\/\.test\(location\.search\)\) document\.documentElement\.classList\.add\("atlas-embed"\);/.test(html.slice(0, html.indexOf('</head>'))), true);
+// (the head now also says whether the frame belongs to somebody else's site —
+// test/embed-view-test.mjs holds that half)
+check('an embed is known in the head, before paint, so the ☰ never flashes', /if \(\/\[\?&\]embed=\(1\|map\)\(&\|\$\)\/\.test\(location\.search\)\) \{ document\.documentElement\.classList\.add\("atlas-embed"\);/.test(html.slice(0, html.indexOf('</head>'))), true);
 check('the card hands focus to its way back, and back to the chevron when it closes', /var back = document\.getElementById\("sheet-card-back"\);\s*if \(back\) \{ try \{ back\.focus\(\{ preventScroll: true \}\);/.test(js) && /var chev = panel && panel\.querySelector\("\.panel-collapse"\);\s*if \(chev\) \{ try \{ chev\.focus\(\{ preventScroll: true \}\);/.test(js), true);
 check('Tab stays inside the open ☰ menu', /if \(e\.key !== "Tab"\) return;\s*\/\/ Tab stays inside the open menu/.test(html) || /\/\/ Tab stays inside the open menu\s*if \(e\.key !== "Tab"\) return;/.test(html), true);
 check('every menu row is the same: 48px (14 + 20 + 14), text centred, no icons', /padding:14px \.25rem; line-height:20px; min-height:0; box-sizing:border-box; text-align:left;/.test(phoneHead) && /\.nav-menu \.share-btn svg \{ display:none; \}/.test(phoneHead) && /\.nav-menu \.own-btn \.own-dot \{ order:3; margin-left:auto; \}/.test(phoneHead), true);

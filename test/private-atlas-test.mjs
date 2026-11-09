@@ -134,7 +134,10 @@ check('a dead private link is told apart from no link',
 check('the data bench previews a private draft through the API', /var VIA = PRIVATE \? "&via=api" : "";/.test(bench) && /private: inst\.visibility === "private",/.test(addData), true);
 
 check('a web page where the manifest should be counts as "not here", so a private atlas still opens when the site answers unknown addresses with its own page',
-  /function notHere\(r\) \{\s*return r\.status === 404 \|\| \(r\.ok && \/text\\\/html\/i\.test/.test(viewer) && /if \(VIA_API \|\| !notHere\(r\)\) return r;/.test(viewer), true);
+  /function notHere\(r\) \{\s*return r\.status === 404 \|\| \(r\.ok && \/text\\\/html\/i\.test/.test(viewer) && /if \(EMBED_SITE \|\| VIA_API \|\| !notHere\(r\)\) return r;/.test(viewer), true);
+// …except inside somebody else's frame, where a private atlas is never drawn
+// at all and the API is never asked (test/embed-view-test.mjs)
+check('a guest frame reads the static files only', /if \(EMBED_SITE\) VIA_API = false;/.test(viewer), true);
 check('and a missing atlas is still said plainly, never read as data', /return notHere\(r\) && r\.ok \? new Response\("", \{ status: 404 \}\) : r;/.test(viewer), true);
 
 console.log('\n  the server keeps a private atlas out of the web root');

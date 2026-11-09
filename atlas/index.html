@@ -41,7 +41,21 @@
        the stage is not drawn and the gallery's own frame is: its lead, the
        list with "Loading the atlases" in it, the band and the footer. -->
   <script>if (/[?&]dataset=[^&]/.test(location.search)) { document.documentElement.classList.add("atlas-full"); document.documentElement.classList.add("atlas-pending"); } else { document.documentElement.classList.add("atlas-home"); }
-  if (/[?&]embed=(1|map)(&|$)/.test(location.search)) document.documentElement.classList.add("atlas-embed");
+  if (/[?&]embed=(1|map)(&|$)/.test(location.search)) { document.documentElement.classList.add("atlas-embed");
+    /* An embed on SOMEBODY ELSE'S site gets .atlas-embed-site as well, and the
+       whole site header goes with it — no title row, no Share, no "Get the LOKA
+       app", nothing to sign in to. The test is the frame itself: a frame whose
+       parent page is loka.place is one of the atlas's own previews (the
+       wizard's data bench, the look sheet), and those keep the header, because
+       the branding in it is the thing they are previewing. A frame on another
+       origin cannot be read at all — the browser throws — and that throw is the
+       answer. No frame at all is a guest too: ?embed=1 pasted into a tab is not
+       one of our previews either. Decided here so the first frame is already
+       headerless; atlas.js reaches the same answer the same way. */
+    var sameSite = false;
+    try { sameSite = window.top !== window && window.top.location.origin === location.origin; } catch (e) { sameSite = false; }
+    if (!sameSite) document.documentElement.classList.add("atlas-embed-site");
+  }
   document.write(document.documentElement.classList.contains("atlas-full")
     ? '<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600;700&family=Lora:ital,wght@0,700;1,400&display=swap" onload="this.onload=null;this.rel=\'stylesheet\'" />'
     : '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600;700&family=Lora:ital,wght@0,700;1,400&display=swap" />');</script>
@@ -1682,6 +1696,65 @@
     /* map-only: the frame IS the map — not even the header */
     .atlas-embed-map header.site,
     .atlas-embed-map .atlas-hero { display:none; }
+
+    /* ---- ?embed=1 on somebody else's website (.atlas-embed-site) ----
+       A guest frame shows the map and the panel, and nothing of loka.place
+       around them: no header (title row, Share, "Get the LOKA app", sign in),
+       no way to the wizard at the foot of About & sources. What a visitor loses
+       with the header — the atlas's name — comes back as a one-line label at
+       the head of the panel, and one quiet "Open full map ↗" sits in the map's
+       top corner, so the map always says what it is and where it lives. The
+       panel itself, the modes, the phone's bottom sheet and LOKA's badge are
+       exactly as they are on the full page. */
+    .atlas-embed-site header.site,
+    .atlas-embed-site .atlas-hero,
+    .atlas-embed-site .sources-foot { display:none !important; }
+    /* the atlas's name, one line, at the head of the panel (under the phone's
+       grabber band, above "This map"); never while a place's card has the sheet */
+    .embed-title { display:none; }
+    /* a row of its own at the top of the head, whatever the head is: a flex
+       row on a wide screen (so it is told to take the whole width), a block on
+       a phone (under the grabber, above "This map") */
+    .atlas-embed-site .panel-head { flex-wrap:wrap; }
+    .atlas-embed-site .embed-title { display:block; flex:1 0 100%; width:100%;
+      padding:0 0 .4rem; margin:0 0 .1rem;
+      font-family:var(--font-display); font-weight:var(--weight-display); font-size:var(--t-ui);
+      line-height:1.3; color:var(--color-text-primary);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      border-bottom:1px solid var(--color-divider); }
+    .atlas-embed-site .embed-title:empty { display:none; }
+    /* not while a place's card has the sheet, and not in the folded drawer's
+       little "Layers" button */
+    .atlas-panel.card-mode .embed-title,
+    .atlas-panel.collapsed .embed-title { display:none; }
+    /* "Open full map ↗" — the map's top corner, clear of the map's own round
+       button (which steps down a row to make room) and of a docked card */
+    .embed-open { display:none; }
+    .atlas-embed-site .embed-open { position:absolute; top:8px; right:8px; z-index:7;
+      display:inline-flex; align-items:center; gap:.25rem; height:32px; padding:0 .6rem;
+      border-radius:var(--radius-pill); border:1px solid var(--color-border);
+      background:rgba(253,252,248,.94); color:var(--color-text-secondary);
+      font-size:var(--t-label); line-height:1.3; white-space:nowrap; text-decoration:none; }
+    .atlas-embed-site .embed-open:hover { background:var(--color-surface); color:var(--color-leaf-deep); text-decoration:none; }
+    .atlas-embed-site .embed-open[hidden] { display:none; }
+    @media (min-width:721px){
+      .atlas-embed-site .map-style-btn { top:52px; }
+      .atlas-embed-site .atlas-stage.card-docked .embed-open { right:356px; }
+    }
+    @media (max-width:720px){
+      /* the phone's search band stops short of the link */
+      .atlas-embed-site .atlas-strip { padding-right:8.5rem; }
+      /* in the sheet's head the name lines up with "This map" under it */
+      .atlas-embed-site .embed-title { padding:.35rem 8px .3rem 0; margin:0; }
+      /* the sheet is the same sheet, one line taller at peek so it can carry
+         the atlas's name (--sheet-h is measured, so the map's own floating
+         pieces follow it without a second number anywhere) */
+      .atlas-embed-site .atlas-panel[data-h="peek"] { height:calc(114px + env(safe-area-inset-bottom)); }
+    }
+    /* A private atlas, or no atlas at that address: the same plain card either
+       way, naming neither (the link-preview rule — nothing about an atlas a
+       stranger may not open). .atlas-error-box gives it its shape. */
+    .atlas-embed-site .embed-card h2 { font-size:var(--t-section); }
     /* Touch sizes: on a touch screen of any size, and on any screen as
        narrow as a phone (a phone's browser is not always honest about its
        pointer). The guide figure is 44px; a question's row is 48px; a word
@@ -2107,6 +2180,11 @@
     <!-- shown from the first frame on an atlas; atlas.js takes it away once
          the map has drawn (showLoading). The gallery never shows it. -->
     <div class="atlas-loading" id="atlas-loading" aria-live="polite"><div class="atlas-loading-words"><span class="wait-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>Loading the map</span><small id="atlas-loading-more"></small></div></div>
+    <!-- Embedded on another website only (.atlas-embed-site): the one way out
+         of the frame, to the whole atlas in a tab of its own. atlas.js sets the
+         address — the atlas's own plain link, no key, nothing else. -->
+    <a class="embed-open" id="embed-open" hidden target="_blank" rel="noopener"
+       title="Open the whole map on LOKA Atlas, in a new tab">Open full map <span aria-hidden="true">↗</span></a>
     <!-- data-h is the phone sheet's height (peek · half · full), set here so
          the first frame is the final layout; atlas.js keeps it current. On a
          wide screen it is ignored. -->
@@ -2118,6 +2196,10 @@
            no manifest can change or remove it. -->
       <div class="panel-head">
         <div class="sheet-grip" aria-hidden="true"><i></i></div>
+        <!-- Embedded on another website the site header is gone, so the atlas's
+             own name is read here, one line, above "This map" (atlas.js fills
+             it from the manifest; empty, it is not drawn). Nowhere else. -->
+        <div class="embed-title" id="embed-title"></div>
         <div class="panel-head-row">
           <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/></svg>
           <div class="sheet-who">

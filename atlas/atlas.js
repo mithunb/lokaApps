@@ -24,9 +24,23 @@
   // add-data preview wants: a look at the atlas, not at loka.place.
   // ?embed=map goes further: nothing but the stage, filling the frame.
   var EMBED = QS.get("embed") === "1" || QS.get("embed") === "map";
+  /* An embed on somebody else's website, as against one of the atlas's own
+     previews (the data bench's, the look sheet's — frames on loka.place
+     itself). index.html's head makes the same call, the same way, before
+     anything is drawn, and it is the one that takes the site header away; this
+     is the same answer for the code that needs it: no site header to put a
+     title in, so the panel carries the name; one way out of the frame; a
+     private atlas never drawn; and the map must not take the page's scroll.
+     A frame on another origin cannot be read — the browser throws, and that
+     throw is the answer. No frame at all counts as a guest too. */
+  var EMBED_SITE = EMBED && !(function () {
+    try { return window.top !== window && window.top.location.origin === location.origin; }
+    catch (e) { return false; }
+  })();
   if (EMBED) {
     document.documentElement.classList.add("atlas-embed");
     if (QS.get("embed") === "map") document.documentElement.classList.add("atlas-embed-map");
+    if (EMBED_SITE) document.documentElement.classList.add("atlas-embed-site");
     // The owner's own tooling has no business inside someone else's frame:
     // Share offers a link to an atlas that may not be published yet, and Add
     // data walks the frame off to the data bench in the middle of a flow. Take
@@ -50,6 +64,16 @@
   // preview a private atlas, since the plaintext key is issued once at creation
   // and only its hash is kept, so no page can look it up later.
   var VIA_API = !!KEY || QS.get("via") === "api";
+  /* Embedded on somebody else's website, the atlas reads the plain static
+     files and nothing else. A private atlas is never drawn inside a stranger's
+     frame — not for a key in the address either, which is the rule Share has
+     always kept (it refuses to hand out an embed snippet for a private atlas,
+     because a key written into a public page is a published key). So the key
+     and ?via= are set aside, the API is never asked, and a private atlas comes
+     back the only way a stranger's request can come back: not here. The plain
+     card in draw() answers for it, and for an address with no atlas at all, in
+     the very same words. */
+  if (EMBED_SITE) VIA_API = false;
   var BASE = VIA_API ? "./api/datasets/" + DATASET + "/" : "./datasets/" + DATASET + "/";
   /* True once the atlas has answered through the API — only a private atlas
      does, so this is the viewer's own knowledge that it is drawing one, with
@@ -264,6 +288,29 @@
     return m;
   }
 
+  /* This atlas's own plain link, for the way out of a frame. The address the
+     frame itself was given, minus everything that only belongs inside it: no
+     embed flag, no view key, no ?via=. Built from this page's own path so it
+     is right wherever the app is served from. */
+  function fullMapUrl() {
+    return location.origin + location.pathname.replace(/index\.html$/, "") +
+      "?dataset=" + encodeURIComponent(DATASET);
+  }
+
+  /* Embedded on somebody else's website, an atlas a stranger may not open is
+     one plain card and no more — the same card whether the atlas is private or
+     there is no atlas at that address, so the card itself tells a stranger
+     nothing. No title, no region, no photo: the rule link previews keep
+     (api/apps/atlas.js, genericPreviewTags). The link goes to LOKA Atlas, in a
+     tab of its own, where the owner can sign in and anyone with the private
+     link can use it — neither of which can happen inside a frame. */
+  function embedPrivateCard() {
+    return '<div class="atlas-error"><div class="atlas-error-box embed-card" role="status">' +
+        '<h2>This map is private</h2>' +
+        '<p><a href="' + esc(fullMapUrl()) + '" target="_blank" rel="noopener">Open it on LOKA Atlas ↗</a></p>' +
+      '</div></div>';
+  }
+
   /* The manifest, from wherever the atlas lives. A public atlas is a folder of
      static files; a private one has left the web root and answers only through
      the API — to its owner and editors by their sign-in, to anyone else by the
@@ -284,7 +331,8 @@
   function fetchManifest() {
     return fetch(dataUrl("manifest.json")).then(function (r) {
       if (r.ok && VIA_API) PRIVATE = true;
-      if (VIA_API || !notHere(r)) return r;
+      // a guest frame never asks the API — see EMBED_SITE up top
+      if (EMBED_SITE || VIA_API || !notHere(r)) return r;
       VIA_API = true;
       BASE = "./api/datasets/" + DATASET + "/";
       return fetch(dataUrl("manifest.json"), { credentials: "same-origin" }).then(function (r2) {
@@ -338,6 +386,7 @@
               ? "This atlas is still being built — it opens by itself when it's ready."
               : "There's no atlas at that address — it may have been removed, or it's still being built.");
             e.stillBuilding = yes;
+            e.noAtlas = !yes;
             throw e;
           });
         }
@@ -376,6 +425,13 @@
           // one retry at a time: a dataset switch during the wait must not start a second chain
           clearTimeout(window.__lokaBuildWait);
           window.__lokaBuildWait = setTimeout(draw, 5000);
+          return false;
+        }
+        /* Embedded on somebody else's website: an atlas a stranger may not
+           open, and an address with no atlas on it, are one and the same plain
+           card — nothing named, nothing to sign in to inside a frame. */
+        if (EMBED_SITE && err && (err.privateAtlas || err.noAtlas)) {
+          $("#atlas-map").innerHTML = embedPrivateCard();
           return false;
         }
         /* A small panel that says what happened in words and offers one thing
@@ -668,6 +724,15 @@
     MANIFEST = manifest;
     document.title = manifest.title + " — LOKA Atlas";
     setText("#atlas-title", manifest.title);
+    /* Embedded on another website there is no header to read the title in, so
+       the panel's head says what this map is, and one link leads out of the
+       frame to the whole atlas. Both are drawn only once the manifest has
+       named the atlas — a frame never shows a label with nothing in it. */
+    if (EMBED_SITE) {
+      setText("#embed-title", manifest.title);
+      var openFull = $("#embed-open");
+      if (openFull) { openFull.href = fullMapUrl(); openFull.hidden = false; }
+    }
     setText("#atlas-subtitle", manifest.subtitle || "");
     setText("#atlas-about", manifest.about || "");
     // the same two lines, where an atlas view reads them: the About & sources panel
@@ -703,6 +768,20 @@
       zoom: manifest.zoom,
       minZoom: manifest.minzoom || 5,
       maxZoom: manifest.maxzoom || 16,
+      /* In a frame the map must not take the page's scroll. A visitor scrolling
+         past the frame used to get caught in the map and zoom it instead of
+         moving on. With cooperative gestures the map waits to be asked: two
+         fingers move it on a touch screen, Ctrl (⌘ on a Mac) and the wheel zoom
+         it, and the map engine's own hint says so — in our words, not its
+         shorthand. Dragging, the zoom buttons and every tap are untouched.
+         Guest frames only (another site, or framed through one); our own
+         previews and the full page keep the plain wheel they always had. */
+      cooperativeGestures: EMBED_SITE,
+      locale: {
+        "CooperativeGesturesHandler.WindowsHelpText": "Hold Ctrl and scroll to zoom the map",
+        "CooperativeGesturesHandler.MacHelpText": "Hold ⌘ and scroll to zoom the map",
+        "CooperativeGesturesHandler.MobileHelpText": "Use two fingers to move the map"
+      },
       attributionControl: false,
       hash: false
     });

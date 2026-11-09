@@ -38,6 +38,12 @@ if (process.env.LOKA_DEV_STATIC) {
     // Apache denies the api/ folder outright (lokaApps.conf); so does this,
     // or a private atlas's files would be a static URL away in dev only
     if (/^\/apps\/api(\/|$)/.test(req.url)) return res.status(403).type('text/plain').send('Forbidden');
+    // the pretty address keeps the embed flag through its redirect (Apache's
+    // RewriteRule in deploy/lokaApps.conf, mimicked here) — a site that frames
+    // /a/<slug>?embed=1 must land on the embed, not on the whole page. Only
+    // that flag is carried over; nothing else in the query string is.
+    const ae = req.url.match(/^\/apps\/atlas\/a\/([a-z0-9-]+)\/?\?(?:.*&)?embed=(1|map)(?:&|$)/);
+    if (ae) return res.redirect(302, `/apps/atlas/?dataset=${ae[1]}&embed=${ae[2]}`);
     const a = req.url.match(/^\/apps\/atlas\/a\/([a-z0-9-]+)\/?$/);
     if (a) return res.redirect(302, `/apps/atlas/?dataset=${a[1]}`);
     const qi = req.url.indexOf('?');
