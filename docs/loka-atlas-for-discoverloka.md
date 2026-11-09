@@ -66,7 +66,7 @@ Other modes: **Event** (festival guide: venues, programme, Eat & Drink / See & D
 - **Framing is allowed today.** loka.place sends no `X-Frame-Options` and no CSP `frame-ancestors`, and
   discoverloka.org sends no CSP either, so a plain iframe works now:
   ```html
-  <iframe src="https://loka.place/apps/atlas/?dataset=khazan-survey-on-divar-island"
+  <iframe src="https://loka.place/apps/atlas/?dataset=khazan-survey-on-divar-island&embed=1"
           title="Khazan Survey on Divar Island — LOKA Atlas map"
           loading="lazy" style="width:100%;height:80vh;min-height:520px;border:0"
           referrerpolicy="strict-origin-when-cross-origin"></iframe>
@@ -74,16 +74,20 @@ Other modes: **Event** (festival guide: venues, programme, Eat & Drink / See & D
   ```
   Give the frame a real height (the atlas fills its window; a short frame gives a cramped map) and always
   put an "Open the full map" link beside it (phones, slow connections, people who want it full-screen).
-- **There is no embed view yet.** Inside a frame the visitor gets the WHOLE atlas page: its own header
-  (title, Share, "Get the LOKA app", sign in) and panel. On a phone-width frame it switches to the bottom
-  sheet. This is acceptable for a first version; a cleaner embed (map + panel only, no header/sign-in, a
-  small "Open full map ↗") would be a change in **lokaApps** (`atlas/index.html` / `atlas/atlas.js`, e.g. an
-  `&embed=1` flag) — ask the lokaApps session for it rather than hacking around it from the website.
-- **Scrolling:** the map captures wheel and touch inside the frame, so a visitor scrolling the page can get
-  "stuck" in the map. Leave space above/below, or show a static preview image that loads the frame on tap
-  (click-to-load also saves a heavy map load for visitors who never use it).
-- **Only public atlases embed.** A private atlas asks the visitor to sign in (and sign-in inside a
-  third-party frame may be blocked by browsers). Divar Island is public and published.
+- **Use the embed view: add `&embed=1` to the FULL link** (live since 85d340f, 9 Nov 2026). Inside
+  another site's frame it shows only the map and the "This map" panel: no header, Share, "Get the LOKA
+  app", sign-in or owner tools; the atlas's name heads the panel; a small "Open full map ↗" in the map's
+  corner opens the normal atlas in a new tab. A phone-width frame gets the usual bottom sheet. Without
+  the flag, the whole atlas page shows, header included.
+  Use the full `?dataset=…&embed=1` address, NOT the short `/a/<slug>?embed=1`: the short link's
+  redirect keeps the flag only after the Apache config on loka.place is updated (needs the "Server
+  Security and Performance" session and Mithun's "go"); until then it drops it.
+- **Scrolling:** in the embed view the map no longer catches the page's scroll — two fingers move it on a
+  touch screen, Ctrl/⌘ + scroll zooms it with a mouse, and the map says so. A click-to-load teaser image
+  is still a good idea to save a heavy map load for visitors who never use it.
+- **Only public atlases embed.** In the embed view a private atlas shows only "This map is private / Open
+  it on LOKA Atlas ↗" (no title, region or photo), even with a private key in the address — never put a
+  key in an embed. Divar Island is public and published.
 - **Do not copy the atlas's files into the website** or call its APIs from the site; the atlas updates
   itself (new tags, new readings, new story) and an iframe/link always shows the current version.
 - **Brand and look:** the atlas has its own look (Bazaar colours, Latin-first fonts); the website keeps its
