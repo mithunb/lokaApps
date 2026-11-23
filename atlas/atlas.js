@@ -657,6 +657,10 @@
         return holder;
       },
       shotsHTML: shotsHTML, linksIn: linksIn, cellShown: cellShown,
+      /* a mode's card draws the layer's own card fields with the ordinary card's one copy of
+         the rules and markup (cardFieldsHTML), prints its Source line the same way (sourceHTML),
+         and knows a LOKA layer */
+      cardFieldsHTML: cardFieldsHTML, sourceHTML: sourceHTML, isLoka: isLoka,
       dataUrl: function (file) { return dataUrl(file); },
       lokaLinkHTML: lokaLinkHTML,
       navLinkHTML: navLinkHTML, navURL: navURL,
@@ -7516,6 +7520,12 @@
     return "";
   }
 
+  // the Source line as a card prints it: the ordinary card's, and a mode's card through the viewer api (one copy)
+  function sourceHTML(L) {
+    var src = sourceLine(L);
+    return src ? '<div class="pop-src">Source · ' + esc(src) + "</div>" : "";
+  }
+
 /* Is this a layer that came out of the LOKA app?
 
    The atlas is built to take any spreadsheet from anyone, and it guesses well
@@ -7653,52 +7663,25 @@
     return h;
   }
 
-  function popupHTML(L, props, f) {
-    POPUP_LAYER = L && L.id;   // the tag chips below belong to this layer
-    // a venue's card carries its programme; a nearby place's, how far it is
-    if (EV && L && L._ev) return EV.cardHTML(L, props, f) || "";
-    var spec = L.popup;
-    // the same key-by-key rows the hover bubble shows — a touch screen has
-    // no hover, so the tap popup is where the marks get decoded there. A
-    // keyed layer with no popup stanza still gets a popup of just the rows.
-    var krows = keyRowsEl(L, props, true);   // a popup shows every answer, not only the marks
-    if (!spec && !krows) return "";
-    spec = spec || {};
-    var title = f ? placeName(L, f) : popupTitleText(L, props);
-    var sub = spec.subtitle || (spec.subtitleProperty ? cellShown(props[spec.subtitleProperty]) : "");
-    var loka = isLoka(L);
-    var shell = '<div class="pop">';
-    var h = shell;
-    /* A short name written by LOKA (label-rules NAME_FIELD; the server's
-       place-names.js): the heading is the tagger's own words, cut to a name,
-       and one small line under it says so — the approved wording. Only when
-       the name is shorter than what it was made from; a short description
-       used as it is needs no explaining. */
-    var byLoka = "";
-    if (spec.title === LokaLabelRules.NAME_FIELD && L.lokaNames && L.lokaNames.from && title) {
-      var whole = cellShown(props[L.lokaNames.from]);
-      if (whole && whole.trim() !== title.trim()) byLoka = '<div class="pop-byline">Short name by LOKA, from the tagger’s words</div>';
-    }
-    /* On a LOKA place the description IS the title, and it is a sentence —
-       sometimes with a photo credit on the end — so heading the card with it
-       produced an eight-line title. It is a caption, and it belongs under the
-       picture it captions. So a LOKA card opens with the photo, then the
-       caption, then what the atlas worked out; the generic card keeps the
-       heading-first order that suits a spreadsheet nobody has seen.
+  /* A layer's own card fields — the columns chosen for its card in the wizard
+     or under the layer's Settings (L.popup.fields) — as the rows of a card.
 
-       Given a short name, the LOKA card has a heading again — above the
-       photo, in the display face — and the whole description stays as the
-       caption under it. */
-    if (loka) {
-      var caption = cellShown(props.description) || title;
-      if (title && title.trim() !== caption.trim()) h += '<div class="pop-title">' + esc(title) + "</div>" + byLoka;
-      h += lokaLead(L, props, caption, krows);
-    } else {
-      // the kicker first ("SURVEY VILLAGE · GORAKHPUR"), then the name
-      if (sub) h += '<div class="pop-sub">' + esc(sub) + "</div>";
-      if (title) h += '<div class="pop-title">' + esc(title) + "</div>" + byLoka;
-      if (krows) h += krows.outerHTML;
-    }
+     ONE copy. The ordinary card (popupHTML, below) and a mode's card (the
+     viewer api's cardFieldsHTML — insight-mode.js cardHTML, Mithun, 23 Nov
+     2026: a plain spreadsheet's Standard card showed its answers and Navigate
+     and none of its own data) both draw their rows here, so on every card
+     alike a tag is a button that filters the map, an empty cell is no row, a
+     card of long labels stacks, and the machinery's own columns (pattern_N,
+     pattern_N_why) are never shown.
+
+       o.loka  the layer is LOKA's own: its fields in the composed order, and
+               the photo and caption that led the card are not said again
+       o.skip  (property, value, field) → true for a column the caller's card
+               has said already, or must never say */
+  function cardFieldsHTML(L, props, o) {
+    o = o || {};
+    var spec = (L && L.popup) || {}, loka = !!o.loka;
+    var h = "";
     /* Plain facts sit in one two-column list — label beside value, values
        lined up — so consecutive facts are gathered and written out together.
        Anything that is not a plain fact (tags, notes, a photo) closes the
@@ -7721,15 +7704,6 @@
       h += '<div class="pop-facts' + (stacked ? " pop-facts-stacked" : "") + '">' + facts + "</div>";
       facts = "";
     }
-    /* A layer's popup rows are generated from its columns when it is added, so
-       every column a key later claims got said twice: once in the key rows above
-       and again as a row of its own. Worse, a question's column arrived as a raw
-       "Pattern 1" — the machinery's name for it, in front of a reader. And the
-       Source line at the foot already names whoever added the places, so a
-       Creator row repeated it a third time. */
-    var keyCols = {};
-    // a points twin's card leaves out the columns its host's keys already say
-    (keyHost(L)._keyOptions || []).forEach(function (o) { if (o.col) keyCols[o.col] = 1; });
     var srcLine = sourceLine(L);
 
     /* Our own data is not a guess. The wizard's field order is a fair reading of
@@ -7747,7 +7721,7 @@
       var labText = fl.shortened ? fl.text : (fld.label || fl.text);
       var labHTML = '<span class="pop-lbl"' + (fl.shortened ? ' title="' + esc(fl.full) + '"' : "") + ">" +
         esc(labText) + (fl.shortened ? " " + labelInfoHTML(fl.full) : "") + "</span>";
-      if (keyCols[fld.property]) return;                          // the key rows said it
+      if (o.skip && o.skip(fld.property, v, fld)) return;         // the caller's card said it already (the key rows, a mode's own lead)
       if (/^pattern_\d+(_why)?$/.test(fld.property)) return;      // never show the machinery's name
       if (srcLine && String(v).trim() === String(srcLine).trim()) return;   // the Source line said it
       if (fld.type === "tags") {
@@ -7821,12 +7795,71 @@
       }
     });
     flushFacts();
+    return h;
+  }
+
+  function popupHTML(L, props, f) {
+    POPUP_LAYER = L && L.id;   // the tag chips below belong to this layer
+    // a venue's card carries its programme; a nearby place's, how far it is
+    if (EV && L && L._ev) return EV.cardHTML(L, props, f) || "";
+    var spec = L.popup;
+    // the same key-by-key rows the hover bubble shows — a touch screen has
+    // no hover, so the tap popup is where the marks get decoded there. A
+    // keyed layer with no popup stanza still gets a popup of just the rows.
+    var krows = keyRowsEl(L, props, true);   // a popup shows every answer, not only the marks
+    if (!spec && !krows) return "";
+    spec = spec || {};
+    var title = f ? placeName(L, f) : popupTitleText(L, props);
+    var sub = spec.subtitle || (spec.subtitleProperty ? cellShown(props[spec.subtitleProperty]) : "");
+    var loka = isLoka(L);
+    var shell = '<div class="pop">';
+    var h = shell;
+    /* A short name written by LOKA (label-rules NAME_FIELD; the server's
+       place-names.js): the heading is the tagger's own words, cut to a name,
+       and one small line under it says so — the approved wording. Only when
+       the name is shorter than what it was made from; a short description
+       used as it is needs no explaining. */
+    var byLoka = "";
+    if (spec.title === LokaLabelRules.NAME_FIELD && L.lokaNames && L.lokaNames.from && title) {
+      var whole = cellShown(props[L.lokaNames.from]);
+      if (whole && whole.trim() !== title.trim()) byLoka = '<div class="pop-byline">Short name by LOKA, from the tagger’s words</div>';
+    }
+    /* On a LOKA place the description IS the title, and it is a sentence —
+       sometimes with a photo credit on the end — so heading the card with it
+       produced an eight-line title. It is a caption, and it belongs under the
+       picture it captions. So a LOKA card opens with the photo, then the
+       caption, then what the atlas worked out; the generic card keeps the
+       heading-first order that suits a spreadsheet nobody has seen.
+
+       Given a short name, the LOKA card has a heading again — above the
+       photo, in the display face — and the whole description stays as the
+       caption under it. */
+    if (loka) {
+      var caption = cellShown(props.description) || title;
+      if (title && title.trim() !== caption.trim()) h += '<div class="pop-title">' + esc(title) + "</div>" + byLoka;
+      h += lokaLead(L, props, caption, krows);
+    } else {
+      // the kicker first ("SURVEY VILLAGE · GORAKHPUR"), then the name
+      if (sub) h += '<div class="pop-sub">' + esc(sub) + "</div>";
+      if (title) h += '<div class="pop-title">' + esc(title) + "</div>" + byLoka;
+      if (krows) h += krows.outerHTML;
+    }
+    /* A layer's popup rows are generated from its columns when it is added, so
+       every column a key later claims got said twice: once in the key rows above
+       and again as a row of its own. Worse, a question's column arrived as a raw
+       "Pattern 1" — the machinery's name for it, in front of a reader. And the
+       Source line at the foot already names whoever added the places, so a
+       Creator row repeated it a third time. */
+    var keyCols = {};
+    // a points twin's card leaves out the columns its host's keys already say
+    (keyHost(L)._keyOptions || []).forEach(function (o) { if (o.col) keyCols[o.col] = 1; });
+    // the fields themselves: one copy, shared with the modes' cards (cardFieldsHTML, above)
+    h += cardFieldsHTML(L, props, { loka: loka, skip: function (prop) { return !!keyCols[prop]; } });
     /* Where this place came from, in words. The pin's ring used to hint at this
        and could not be checked — the popup never named the upload, so a reader
        who wondered had nowhere to look. Only contributed layers have an upload
        to name; a curated atlas's own pins have none. */
-    var src = sourceLine(L);
-    if (src) h += '<div class="pop-src">Source · ' + esc(src) + "</div>";
+    h += sourceHTML(L);
     if (h !== shell) h += navLinkHTML(props, f) + lokaLinkHTML(L, props);
 
     // A popup stanza can point at columns the data no longer carries — that

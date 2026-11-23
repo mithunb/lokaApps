@@ -118,6 +118,52 @@
   }
   function has(o, k) { return !!o && Object.prototype.hasOwnProperty.call(o, k); }
 
+  /* Which layer does this mode read? ONE rule, asked by the visitor's panel
+     (viewer.layers, below), by the owner's Settings tab (owner-modes.js
+     insightStanza) and by the server (api/apps/atlas.js insightSource), so a
+     mode saved without `layer` resolves to the same layer everywhere. Such a
+     mode is ordinary: the story written after a reading is kept in a plain
+     { name: "standard", story } (Mithun, 23 Nov 2026 — on such an atlas the
+     panel found its layer, and Settings, which looked only for mode.layer,
+     sat on "Loading the places…" for ever).
+       1. the layer the mode names, while it can still be read;
+       2. else the first of the owner's marker layers that can be read;
+       3. else the first of the owner's layers of any other kind that can be
+          read (areas) — never for the panel (o.pinsOnly): it draws pins,
+          and cannot draw an areas layer the mode does not itself name, so
+          an areas-only atlas keeps the ordinary layer list, as it always
+          did, while the server still reads its areas for the story;
+       4. else, nothing being readable, the layer the mode names if the atlas
+          still has it, else the first of the owner's marker layers (not
+          read yet: the panel shows its plain keys).
+     null when none of these exists. "Can be read": it has questions, and —
+     where its places are to hand (o.featsOf(layer) gives them: the server)
+     — one of them, not about people, is answered by some place
+     (canInsight); where they are not (the page, before any data has
+     arrived), one of them is not about people. So the server accepts every
+     atlas it accepted before this rule was shared, and a layer whose
+     questions are all retired or all about people gives way to one that
+     can be read, on the page and the server alike. `layers` are the
+     atlas's layer stanzas in the manifest's order; o.own(layer) says which
+     are the owner's (the page: userLayer; the server hands over only the
+     owner's). Nothing is written back to the mode: the layer is worked out
+     each time it is asked for. */
+  function modeLayer(mode, layers, o) {
+    o = o || {};
+    var list = (layers || []).filter(Boolean), want = mode && mode.layer;
+    var own = list.filter(function (L) { return o.own ? o.own(L) : !!L.userLayer; });
+    var pins = own.filter(function (L) { return L.type === "marker"; });
+    var named = want != null ? list.filter(function (L) { return L.id === want; })[0] || null : null;
+    function readable(L) {
+      var cols = colsOf(L);
+      if (!cols.length) return false;
+      var fs = o.featsOf ? o.featsOf(L) : null;
+      return fs ? canInsight(L, fs) : cols.some(function (c) { return !isPeople(L, c); });
+    }
+    return (named && readable(named) ? named : null) || pins.filter(readable)[0] ||
+      (o.pinsOnly ? null : own.filter(readable)[0]) || named || pins[0] || null;
+  }
+
   /* ---------------- the questions ---------------- */
   // the layer's questions, in the analysis's own order (pattern_1, pattern_2, …)
   function colsOf(layer) {
@@ -1427,6 +1473,8 @@
     ".in-card .in-pa .in-an .in-sw{width:9px;height:9px}",
     ".in-card .in-pa.cur{background:var(--color-marigold-tint,rgba(233,162,55,.16));margin:0 -.6rem;padding:.4rem .6rem;border-radius:var(--radius-md,.25rem)}",
     ".in-card .in-answers{margin:.5rem 0 .4rem}",
+    // the layer's own card fields under the answers (index.html's .pop-field / .pop-facts / .pop-tags draw them; a long tag list wraps)
+    ".in-card .in-own{margin:0 0 .5rem;min-width:0}",
     /* the default panel's answer rows: the same look as the map's key
        (Mithun, 7 Nov 2026) — a mark, the name, the count — plus a small
        ⓘ at the end of each row */
@@ -1546,9 +1594,7 @@
     }
 
     function layers(list) {
-      srcLayer = list.filter(function (L) { return L.id === mode.layer; })[0] ||
-        list.filter(function (L) { return L.userLayer && L.type === "marker" && L.keyLabels; })[0] ||
-        list.filter(function (L) { return L.userLayer && L.type === "marker"; })[0] || null;
+      srcLayer = modeLayer(mode, list, { pinsOnly: true });   // the one rule the owner's Settings and the server ask too
       if (!srcLayer) return null;
       titleProp = (srcLayer.popup && srcLayer.popup.title) || (srcLayer.label_text && srcLayer.label_text.property) || "name";
       X = {};
@@ -1871,14 +1917,65 @@
     }
 
     /* ---- the place's card ---- */
-    function photoHTML(props) {
-      if (props.photo_file && api.dataUrl) return api.shotsHTML([api.dataUrl(String(props.photo_file))]);
+    // the photographs the card leads with (the fields below never show one of them again)
+    function leadShots(props) {
+      if (props.photo_file && api.dataUrl) return [api.dataUrl(String(props.photo_file))];
       var links = api.linksIn(props.photo_urls || props.photo_1_url || props.image_urls);
       // else the column whose cells are image links, whatever it is called (label-rules.js photoLinksOf)
       if (!links.length && typeof LokaLabelRules !== "undefined" && LokaLabelRules && LokaLabelRules.photoLinksOf) links = LokaLabelRules.photoLinksOf(props);
-      return api.shotsHTML(links);
+      return links;
     }
+    function photoHTML(props) { return api.shotsHTML(leadShots(props)); }
     function whyOf(props, col) { return answerOf(props, col + "_why"); }
+    /* A column about people or ids is never on a card: by its name, or by what
+       the whole column holds (label-rules.js whyNotRead, through isPeopleColumn
+       — the rule that already keeps such a column from being read or offered
+       as a key). Asked once per column for the places as they are now. */
+    var hush = { of: null, by: {} };
+    function neverShown(col) {
+      var fs = feats();
+      if (hush.of !== fs) { hush.of = fs; hush.by = {}; }
+      if (!has(hush.by, col)) hush.by[col] = !!isPeopleColumn(col, fs.map(function (f) { return ((f && f.properties) || {})[col]; }));
+      return hush.by[col];
+    }
+    // a cell as it is compared: its shown words, spaces and case evened out
+    function saidAs(v) { return String(api.cellShown(v) || "").replace(/\s+/g, " ").trim().toLowerCase(); }
+    /* The layer's own card fields, after the answers (Mithun, 23 Nov 2026: a
+       plain spreadsheet's card showed "says too little…" and Navigate, and
+       none of the columns its owner chose for the card). Drawn by the ordinary
+       card's one copy of the rules and markup (atlas.js cardFieldsHTML): a tag
+       is a button that filters the map, an empty cell is no row, pattern_N and
+       its _why never show. What this card adds to those rules:
+         - never a column about people or ids (neverShown);
+         - never what the card has said already: the photographs it led with
+           (an image field, or a cell holding only those links), its
+           description, its address;
+         - a column a question was read from IS shown — the answer is a
+           reading, the cell is the fact — unless its cell says exactly what
+           an answer printed on this card says;
+         - a LOKA layer's bookkeeping (when a place was added, and by whom)
+           stays off, as it always was on this card: of LOKA's own columns the
+           card gains the labels, as tags, and nothing else.
+       "" when the page gives no such rows (a stand-in page in a check). */
+    var LOKA_KEPT_OFF = { created_at: 1, creator: 1 };
+    function fieldsHTML(L, props, answers) {
+      if (!api.cardFieldsHTML) return "";
+      var layer = srcLayer || L, loka = !!(api.isLoka && api.isLoka(layer));
+      var led = leadShots(props), ledAt = {}, printed = {};
+      led.forEach(function (u) { ledAt[String(u)] = 1; });
+      answers.forEach(function (a) { if (saidAs(a)) printed[saidAs(a)] = 1; });
+      return api.cardFieldsHTML(layer, props, {
+        loka: loka,
+        skip: function (col, v, fld) {
+          if (col === "description" || col === "address") return true;       // the card's own caption and address line
+          if (loka && LOKA_KEPT_OFF[col]) return true;
+          if (neverShown(col)) return true;
+          var links = api.linksIn(v) || [];
+          if (led.length && ((fld && fld.type === "image") || (links.length && links.every(function (u) { return ledAt[String(u)]; })))) return true;
+          return !!printed[saidAs(v)];
+        },
+      });
+    }
     function cardHTML(L, props, f) {
       if (!L || !L._ev || !L._ev.insight) return null;
       var list = Q().list;
@@ -1900,9 +1997,17 @@
       if (hasIt.length && not.length) h += '<div class="in-pa"><div class="in-from">Doesn\u2019t say: ' +
         not.map(function (st) { return escText(st.noun || st.question); }).join(" \u00b7 ") + "</div></div>";
       h += "</div>";
+      // the place's own data: the columns its owner chose for the card
+      var own = fieldsHTML(L, props, hasIt.map(function (st) { return answerOf(props, st.col); }));
+      if (own) h += '<div class="in-own">' + own + "</div>";
       if (props.address) h += '<p class="ev-addr">' + esc(api.cellShown(props.address)) + "</p>";
+      /* Where the place came from, as the ordinary card says it (atlas.js
+         sourceHTML: the same line, the same markup) — unless the card ends on
+         the place's own page in LOKA, which is its source and says so. */
+      var lokaLink = api.lokaLinkHTML ? api.lokaLinkHTML(srcLayer || L, props) : "";
+      if (!lokaLink && api.sourceHTML) h += api.sourceHTML(srcLayer || L);
       if (api.navLinkHTML) h += api.navLinkHTML(props, f);
-      if (api.lokaLinkHTML) h += api.lokaLinkHTML(srcLayer || L, props);
+      h += lokaLink;
       return h + "</div>";
     }
 
@@ -2619,6 +2724,7 @@
     settingsOf: settingsOf,
     shownStats: shownStats,
     canInsight: canInsight,
+    modeLayer: modeLayer,
     bothCount: bothCount,
     canCompare: canCompare,
     compareOptions: compareOptions,

@@ -1,0 +1,578 @@
+{
+ "about": "Made-up places for test/standard-card-fields-test.mjs. plain: a spreadsheet atlas in Standard — no description, address or photo; plain columns and two tag columns; people and id columns ticked for the card; a mode kept without `layer`. loka: a LOKA-shaped layer. No real person, place record or address.",
+ "plain": {
+  "layer": {
+   "id": "recordings",
+   "group": "userdata",
+   "type": "marker",
+   "source": "user-recordings.geojson",
+   "label": "Recordings",
+   "default": true,
+   "userLayer": true,
+   "label_text": {
+    "property": "name"
+   },
+   "popup": {
+    "title": "name",
+    "fields": [
+     {
+      "label": "State",
+      "property": "state"
+     },
+     {
+      "label": "Habitat",
+      "property": "habitat"
+     },
+     {
+      "label": "Animal groups",
+      "property": "animal_groups"
+     },
+     {
+      "label": "Animals heard",
+      "property": "animals_heard",
+      "type": "tags"
+     },
+     {
+      "label": "Scientific names",
+      "property": "scientific_names",
+      "type": "tags"
+     },
+     {
+      "label": "Recorded by",
+      "property": "recorded_by"
+     },
+     {
+      "label": "Contact email",
+      "property": "contact_email"
+     },
+     {
+      "label": "Ref",
+      "property": "ref"
+     },
+     {
+      "label": "Pattern 1",
+      "property": "pattern_1"
+     },
+     {
+      "label": "Pattern 1 why",
+      "property": "pattern_1_why"
+     }
+    ]
+   },
+   "uploadedAs": "recordings.csv",
+   "addedBy": {
+    "name": "Owner",
+    "email": "owner@example.test"
+   },
+   "addedAt": 1795000000000,
+   "keyLabels": {
+    "pattern_1": "Which state is this place in?",
+    "pattern_2": "What kind of habitat is this place?"
+   },
+   "keyColumns": {
+    "pattern_1": [
+     "state"
+    ],
+    "pattern_2": [
+     "habitat"
+    ]
+   },
+   "keyNouns": {
+    "pattern_1": "state",
+    "pattern_2": "habitat"
+   },
+   "keyKinds": {
+    "pattern_1": [
+     {
+      "name": "Kerala",
+      "definition": "Places in Kerala."
+     },
+     {
+      "name": "Karnataka",
+      "definition": "Places in Karnataka."
+     },
+     {
+      "name": "Tamil Nadu",
+      "definition": "Places in Tamil Nadu."
+     },
+     {
+      "name": "Other states",
+      "definition": "Places in any other state."
+     }
+    ],
+    "pattern_2": [
+     {
+      "name": "Forest",
+      "definition": "Woods of any kind."
+     },
+     {
+      "name": "Farmland or garden",
+      "definition": "Land people grow things on."
+     },
+     {
+      "name": "Wetland",
+      "definition": "Wet ground."
+     },
+     {
+      "name": "Open country",
+      "definition": "Open ground."
+     }
+    ]
+   }
+  },
+  "mode": {
+   "name": "standard",
+   "story": {
+    "sig": "set-by-the-check",
+    "at": 1795000000000,
+    "sentences": [],
+    "quotes": [],
+    "ownWords": false
+   }
+  },
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      76.1,
+      12.1
+     ]
+    },
+    "properties": {
+     "name": "Recording place 1",
+     "state": "Kerala",
+     "habitat": "Farmland",
+     "animal_groups": "Birds",
+     "animals_heard": "Brown Hawk Owl",
+     "scientific_names": "Ninox scutulata",
+     "species_count": "1",
+     "recorded_by": "Recorder 1",
+     "contact_email": "recorder1@example.test",
+     "ref": "a1b21001-c3d4-4e5f-8a9b-f10000000001",
+     "pattern_1": "Kerala",
+     "pattern_1_why": "Kerala",
+     "pattern_2": "Farmland or garden",
+     "pattern_2_why": "Farmland"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      76.2,
+      12.2
+     ]
+    },
+    "properties": {
+     "name": "Recording place 2",
+     "state": "Maharashtra",
+     "habitat": "",
+     "animal_groups": "Birds",
+     "animals_heard": "Songbird 1; Songbird 2; Songbird 3; Songbird 4; Songbird 5; Songbird 6; Songbird 7; Songbird 8; Songbird 9; Songbird 10; Songbird 11; Songbird 12; Songbird 13; Songbird 14; Songbird 15; Songbird 16; Songbird 17; Songbird 18; Songbird 19; Songbird 20; Songbird 21; Songbird 22; Songbird 23; Songbird 24; Songbird 25; Songbird 26; Songbird 27; Songbird 28; Songbird 29; Songbird 30; Songbird 31; Songbird 32; Songbird 33; Songbird 34; Songbird 35; Songbird 36; Songbird 37; Songbird 38; Songbird 39; Songbird 40; Songbird 41; Songbird 42; Songbird 43; Songbird 44; Songbird 45; Songbird 46; Songbird 47; Songbird 48; Songbird 49; Songbird 50; Songbird 51; Songbird 52; Songbird 53; Songbird 54; Songbird 55; Songbird 56; Songbird 57; Songbird 58; Songbird 59; Songbird 60; Songbird 61; Songbird 62; Songbird 63; Songbird 64; Songbird 65; Songbird 66; Songbird 67; Songbird 68; Songbird 69; Songbird 70; Songbird 71; Songbird 72; Songbird 73; Songbird 74; Songbird 75; Songbird 76; Songbird 77",
+     "scientific_names": "Avis cantans 1; Avis cantans 2; Avis cantans 3; Avis cantans 4; Avis cantans 5; Avis cantans 6; Avis cantans 7; Avis cantans 8; Avis cantans 9; Avis cantans 10; Avis cantans 11; Avis cantans 12; Avis cantans 13; Avis cantans 14; Avis cantans 15; Avis cantans 16; Avis cantans 17; Avis cantans 18; Avis cantans 19; Avis cantans 20; Avis cantans 21; Avis cantans 22; Avis cantans 23; Avis cantans 24; Avis cantans 25; Avis cantans 26; Avis cantans 27; Avis cantans 28; Avis cantans 29; Avis cantans 30; Avis cantans 31; Avis cantans 32; Avis cantans 33; Avis cantans 34; Avis cantans 35; Avis cantans 36; Avis cantans 37; Avis cantans 38; Avis cantans 39; Avis cantans 40; Avis cantans 41; Avis cantans 42; Avis cantans 43; Avis cantans 44; Avis cantans 45; Avis cantans 46; Avis cantans 47; Avis cantans 48; Avis cantans 49; Avis cantans 50; Avis cantans 51; Avis cantans 52; Avis cantans 53; Avis cantans 54; Avis cantans 55; Avis cantans 56; Avis cantans 57; Avis cantans 58; Avis cantans 59; Avis cantans 60; Avis cantans 61; Avis cantans 62; Avis cantans 63; Avis cantans 64; Avis cantans 65; Avis cantans 66; Avis cantans 67; Avis cantans 68; Avis cantans 69; Avis cantans 70; Avis cantans 71; Avis cantans 72; Avis cantans 73; Avis cantans 74; Avis cantans 75; Avis cantans 76; Avis cantans 77",
+     "species_count": "77",
+     "recorded_by": "Recorder 2",
+     "contact_email": "recorder2@example.test",
+     "ref": "a1b21002-c3d4-4e5f-8a9b-f10000000002",
+     "pattern_1": "Other states",
+     "pattern_1_why": "Maharashtra",
+     "pattern_2": "",
+     "pattern_2_why": ""
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      76.3,
+      12.3
+     ]
+    },
+    "properties": {
+     "name": "Recording place 3",
+     "state": "",
+     "habitat": "",
+     "animal_groups": "Birds",
+     "animals_heard": "Indian Pitta; Common Iora",
+     "scientific_names": "Pitta brachyura; Aegithina tiphia",
+     "species_count": "2",
+     "recorded_by": "Recorder 3",
+     "contact_email": "recorder3@example.test",
+     "ref": "a1b21003-c3d4-4e5f-8a9b-f10000000003",
+     "pattern_1": "",
+     "pattern_1_why": "",
+     "pattern_2": "",
+     "pattern_2_why": ""
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      76.4,
+      12.4
+     ]
+    },
+    "properties": {
+     "name": "Recording place 4",
+     "state": "Kerala",
+     "habitat": "Evergreen forest",
+     "animal_groups": "Birds",
+     "animals_heard": "Ashy Prinia; Indian Robin",
+     "scientific_names": "Prinia socialis; Saxicoloides fulicatus",
+     "species_count": "2",
+     "recorded_by": "Recorder 4",
+     "contact_email": "recorder4@example.test",
+     "ref": "a1b21004-c3d4-4e5f-8a9b-f10000000004",
+     "pattern_1": "Kerala",
+     "pattern_1_why": "Kerala",
+     "pattern_2": "Forest",
+     "pattern_2_why": "Evergreen forest"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      76.5,
+      12.5
+     ]
+    },
+    "properties": {
+     "name": "Recording place 5",
+     "state": "Karnataka",
+     "habitat": "Dry forest",
+     "animal_groups": "Birds",
+     "animals_heard": "Asian Koel",
+     "scientific_names": "Eudynamys scolopaceus",
+     "species_count": "1",
+     "recorded_by": "Recorder 5",
+     "contact_email": "recorder5@example.test",
+     "ref": "a1b21005-c3d4-4e5f-8a9b-f10000000005",
+     "pattern_1": "Karnataka",
+     "pattern_1_why": "Karnataka",
+     "pattern_2": "Forest",
+     "pattern_2_why": "Dry forest"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      76.6,
+      12.6
+     ]
+    },
+    "properties": {
+     "name": "Recording place 6",
+     "state": "Karnataka",
+     "habitat": "Paddy field",
+     "animal_groups": "Birds",
+     "animals_heard": "Shikra",
+     "scientific_names": "Accipiter badius",
+     "species_count": "1",
+     "recorded_by": "Recorder 6",
+     "contact_email": "recorder6@example.test",
+     "ref": "a1b21006-c3d4-4e5f-8a9b-f10000000006",
+     "pattern_1": "Karnataka",
+     "pattern_1_why": "Karnataka",
+     "pattern_2": "Farmland or garden",
+     "pattern_2_why": "Paddy field"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      76.7,
+      12.7
+     ]
+    },
+    "properties": {
+     "name": "Recording place 7",
+     "state": "Tamil Nadu",
+     "habitat": "Scrub",
+     "animal_groups": "Birds",
+     "animals_heard": "Coppersmith Barbet",
+     "scientific_names": "Psilopogon haemacephalus",
+     "species_count": "1",
+     "recorded_by": "Recorder 7",
+     "contact_email": "recorder7@example.test",
+     "ref": "a1b21007-c3d4-4e5f-8a9b-f10000000007",
+     "pattern_1": "Tamil Nadu",
+     "pattern_1_why": "Tamil Nadu",
+     "pattern_2": "Open country",
+     "pattern_2_why": "Scrub"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      76.8,
+      12.8
+     ]
+    },
+    "properties": {
+     "name": "Recording place 8",
+     "state": "Tamil Nadu",
+     "habitat": "Town garden",
+     "animal_groups": "Birds",
+     "animals_heard": "",
+     "scientific_names": "",
+     "species_count": "0",
+     "recorded_by": "Recorder 8",
+     "contact_email": "recorder8@example.test",
+     "ref": "a1b21008-c3d4-4e5f-8a9b-f10000000008",
+     "pattern_1": "Tamil Nadu",
+     "pattern_1_why": "Tamil Nadu",
+     "pattern_2": "Farmland or garden",
+     "pattern_2_why": "Town garden"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      76.9,
+      12.9
+     ]
+    },
+    "properties": {
+     "name": "Recording place 9",
+     "state": "Kerala",
+     "habitat": "Wet forest",
+     "animal_groups": "Birds",
+     "animals_heard": "Indian Pitta",
+     "scientific_names": "Pitta brachyura",
+     "species_count": "1",
+     "recorded_by": "Recorder 9",
+     "contact_email": "recorder9@example.test",
+     "ref": "a1b21009-c3d4-4e5f-8a9b-f10000000009",
+     "pattern_1": "Kerala",
+     "pattern_1_why": "Kerala",
+     "pattern_2": "Forest",
+     "pattern_2_why": "Wet forest"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      77,
+      13
+     ]
+    },
+    "properties": {
+     "name": "Recording place 10",
+     "state": "Goa",
+     "habitat": "Mangrove",
+     "animal_groups": "Birds",
+     "animals_heard": "Common Iora",
+     "scientific_names": "Aegithina tiphia",
+     "species_count": "1",
+     "recorded_by": "Recorder 10",
+     "contact_email": "recorder10@example.test",
+     "ref": "a1b21010-c3d4-4e5f-8a9b-f10000000010",
+     "pattern_1": "Other states",
+     "pattern_1_why": "Goa",
+     "pattern_2": "Wetland",
+     "pattern_2_why": "Mangrove"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      77.1,
+      13.1
+     ]
+    },
+    "properties": {
+     "name": "Recording place 11",
+     "state": "Kerala",
+     "habitat": "Riverside",
+     "animal_groups": "Birds",
+     "animals_heard": "Ashy Prinia",
+     "scientific_names": "Prinia socialis",
+     "species_count": "1",
+     "recorded_by": "Recorder 11",
+     "contact_email": "recorder11@example.test",
+     "ref": "a1b21011-c3d4-4e5f-8a9b-f10000000011",
+     "pattern_1": "Kerala",
+     "pattern_1_why": "Kerala",
+     "pattern_2": "Wetland",
+     "pattern_2_why": "Riverside"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      77.2,
+      13.2
+     ]
+    },
+    "properties": {
+     "name": "Recording place 12",
+     "state": "Karnataka",
+     "habitat": "Grassland",
+     "animal_groups": "Birds",
+     "animals_heard": "Indian Robin",
+     "scientific_names": "Saxicoloides fulicatus",
+     "species_count": "1",
+     "recorded_by": "Recorder 12",
+     "contact_email": "recorder12@example.test",
+     "ref": "a1b21012-c3d4-4e5f-8a9b-f10000000012",
+     "pattern_1": "Karnataka",
+     "pattern_1_why": "Karnataka",
+     "pattern_2": "Open country",
+     "pattern_2_why": "Grassland"
+    }
+   }
+  ]
+ },
+ "loka": {
+  "layer": {
+   "id": "tags",
+   "group": "userdata",
+   "type": "marker",
+   "source": "user-tags.geojson",
+   "label": "Island tags",
+   "default": true,
+   "userLayer": true,
+   "spec": {
+    "imageColumn": "photo_urls"
+   },
+   "popup": {
+    "title": "loka_name",
+    "fields": [
+     {
+      "label": "Photo urls",
+      "property": "photo_urls",
+      "type": "image"
+     },
+     {
+      "label": "Created by",
+      "property": "created_by"
+     },
+     {
+      "label": "Created by user id",
+      "property": "created_by_user_id"
+     },
+     {
+      "label": "Labels",
+      "property": "labels",
+      "type": "tags"
+     },
+     {
+      "label": "Address",
+      "property": "address"
+     },
+     {
+      "label": "Created at",
+      "property": "created_at"
+     }
+    ]
+   },
+   "keyLabels": {
+    "pattern_1": "What kind of place is this?"
+   },
+   "keyColumns": {
+    "pattern_1": [
+     "labels"
+    ]
+   },
+   "keyNouns": {
+    "pattern_1": "kind of place"
+   }
+  },
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      73.91000000000001,
+      15.5
+     ]
+    },
+    "properties": {
+     "tag_id": "a1b21501-c3d4-4e5f-8a9b-f10000000501",
+     "loka_name": "Ferry point",
+     "description": "The ferry point, busy every morning.",
+     "categories": "{Nature}",
+     "labels": "{ferry,water-crossing}",
+     "created_by": "Tagger 1",
+     "created_by_user_id": "a1b21901-c3d4-4e5f-8a9b-f10000000901",
+     "created_at": "2026-11-01T02:16:33.595767+00:00",
+     "address": "Ferry Road 1, Goa",
+     "photo_urls": "https://example.test/photos/p1.jpg",
+     "pattern_1": "Waterway",
+     "pattern_1_why": "riverside"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      73.92,
+      15.5
+     ]
+    },
+    "properties": {
+     "tag_id": "a1b21502-c3d4-4e5f-8a9b-f10000000502",
+     "loka_name": "Old bund",
+     "description": "An old bund of mud and rocks.",
+     "categories": "{Nature}",
+     "labels": "{}",
+     "created_by": "Tagger 2",
+     "created_by_user_id": "a1b21902-c3d4-4e5f-8a9b-f10000000902",
+     "created_at": "2026-11-02T02:16:33.595767+00:00",
+     "address": "Ferry Road 2, Goa",
+     "photo_urls": "https://example.test/photos/p2.jpg",
+     "pattern_1": "Structure",
+     "pattern_1_why": "riverside"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      73.93,
+      15.5
+     ]
+    },
+    "properties": {
+     "tag_id": "a1b21503-c3d4-4e5f-8a9b-f10000000503",
+     "loka_name": "Mangrove edge",
+     "description": "Mangroves at the edge of the field.",
+     "categories": "{Nature}",
+     "labels": "{mangrove}",
+     "created_by": "Tagger 3",
+     "created_by_user_id": "a1b21903-c3d4-4e5f-8a9b-f10000000903",
+     "created_at": "2026-11-03T02:16:33.595767+00:00",
+     "address": "Ferry Road 3, Goa",
+     "photo_urls": "https://example.test/photos/p3.jpg",
+     "pattern_1": "",
+     "pattern_1_why": ""
+    }
+   }
+  ]
+ }
+}

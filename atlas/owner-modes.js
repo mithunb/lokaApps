@@ -330,17 +330,36 @@
       '<button class="share-btn primary" type="button" id="own-bsave"' + (!d || BTN.saving ? " disabled" : "") + ">Save</button>";
   }
 
+  /* Waiting for the places, on either owner tab (Explore's Buttons, Standard's
+     Settings): the calm wait line while they may still arrive — asked for
+     again every 400 ms, 40 times, about 16 seconds — and after that plain
+     words and a way to ask again, never a wait line that stays for ever
+     (Mithun, 23 Nov 2026: a Settings tab sat on "Loading the places…"; waits
+     need feedback). `state` is the tab's own (BTN or INS: its `tries`, set
+     back to 0 once the places are there); `again` draws the tab. */
+  var PLACES_TRIES = 40, PLACES_EVERY = 400;
+  var PLACES_LATE = "The places on this map have not loaded, so there is nothing to show here yet. Check your connection, then try again.";
+  // (true of a map of areas too, which may be full of places: these settings are the pins' panel's)
+  var NO_PLACES_LAYER = "There is nothing to set here yet. These settings are for places shown as pins on the map, and this map has none of its own so far.";
+  function waitForPlaces(host, state, again) {
+    if (state.tries++ < PLACES_TRIES) {
+      host.innerHTML = '<p class="own-set-p">' + (window.LokaWait ? window.LokaWait.html("Loading the places…") : "Loading the places…") + "</p>";
+      setTimeout(function () { if (!host.hidden) again(host); }, PLACES_EVERY);
+      return;
+    }
+    host.innerHTML = '<div class="own-bbody"><p class="own-set-p" role="status">' + esc(PLACES_LATE) + "</p>" +
+      '<button class="share-btn" type="button" data-places-again>Try again</button></div>';
+    host.querySelector("[data-places-again]").onclick = function () { state.tries = 0; again(host); };
+  }
+
   function drawButtonShelf(host) {
     var mode = exploreMode();
     if (!mode || !XM()) { host.innerHTML = ""; return; }
     if (!BTN.saved) { BTN.saved = plainButtons(mode.buttons); BTN.draft = plainButtons(mode.buttons); }
     wireButtonShelf(host);
     var feats = exploreFeatures();
-    if (!feats) {
-      host.innerHTML = '<p class="own-set-p">' + (window.LokaWait ? window.LokaWait.html("Loading the places…") : "Loading the places…") + "</p>";
-      if (BTN.tries++ < 40) setTimeout(function () { if (!host.hidden) drawButtonShelf(host); }, 400);
-      return;
-    }
+    if (!feats) { waitForPlaces(host, BTN, drawButtonShelf); return; }
+    BTN.tries = 0;
     var pal = XM().PALETTE, cols = XM().colourOf(BTN.draft), cats = XM().wordCounts(feats, mode), choices = XM().ICON_CHOICES;
     var stanza = exploreStanza(mode), analysis = mode.buttonsFrom === "analysis";
     var pick = stanza ? XM().pickQuestion(stanza, feats) : null;
@@ -550,6 +569,16 @@
     return m && (m.name === "insight" || m.name === "standard") ? m : null;
   }
   function insightViewer() { return IM() && IM().viewer && IM().viewer._current; }
+  /* The layer these settings are about: the one the visitor's panel reads —
+     insight-mode.js modeLayer, the one rule the panel, this tab and the server
+     share. A Standard mode is often saved without `layer` (the story written
+     after a reading is kept in a plain { name: "standard", story }); looking
+     only for mode.layer, as this tab did, found nothing on such an atlas and
+     it waited for ever (Mithun, 23 Nov 2026). */
+  function insightStanza(mode) {
+    var M = window.LokaAtlas && window.LokaAtlas.manifest;
+    return IM().modeLayer(mode, (M && M.layers) || [], { pinsOnly: true });   // asked exactly as the panel asks: the two never differ
+  }
   function takeInsight(m) {
     var v = insightViewer(), live = insightMode();
     if (v && v.setMode) v.setMode(m);
@@ -563,13 +592,11 @@
     var mode = insightMode();
     if (!mode || !IM()) { host.innerHTML = ""; return; }
     wireInsightShelf(host);
-    var L = exploreStanza(mode), A = window.LokaAtlas;
-    var d = L && A.dataFor ? A.dataFor(L.id) : null, feats = d && d.features;
-    if (!L || !feats) {
-      host.innerHTML = '<p class="own-set-p">' + (window.LokaWait ? window.LokaWait.html("Loading the places…") : "Loading the places…") + "</p>";
-      if (INS.tries++ < 40) setTimeout(function () { if (!host.hidden) drawInsightShelf(host); }, 400);
-      return;
-    }
+    var L = insightStanza(mode), A = window.LokaAtlas;
+    // no layer to set anything for: waiting would never end, so it is said at once, in words
+    if (!L) { host.innerHTML = '<div class="own-bbody"><p class="own-set-p" role="status">' + esc(NO_PLACES_LAYER) + "</p></div>"; return; }
+    var d = A.dataFor ? A.dataFor(L.id) : null, feats = d && d.features;
+    if (!feats) { waitForPlaces(host, INS, drawInsightShelf); return; }
     INS.tries = 0;
     var s = IM().settingsOf(L, mode), busy = INS.saving || INS.writing;
     var writing = INS.writing || IM().isPending(mode);
@@ -712,7 +739,7 @@
       var t = e.target && e.target.closest && e.target.closest("[data-iact]");
       if (!t || t.disabled || !insightMode()) return;
       var act = t.getAttribute("data-iact"), col = t.getAttribute("data-col");
-      var mode = insightMode(), L = exploreStanza(mode);
+      var mode = insightMode(), L = insightStanza(mode);
       if (!L) return;
       var s = IM().settingsOf(L, mode);
       if (act === "asvisitor") { setVisitorView(true); return; }

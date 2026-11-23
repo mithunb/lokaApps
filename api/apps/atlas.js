@@ -2336,18 +2336,28 @@ async function reworkSmartButtons(dataset, layerId) {
 }
 
 /* ---------- Insight: the questions, with the story of the place on top ----------
-   The layer whose questions Insight reads: the mode's own, else the first of
-   the atlas's layers with a question some place answers that is not about
-   people (insight-mode.js canInsight). null when there is none — then
-   Insight cannot be chosen yet. */
-function insightSource(inst, local, layerId) {
-  const layers = ownLayers(local).filter((L) => L.keyLabels && typeof L.keyLabels === 'object');
-  layers.sort((a, b) => (b.id === layerId) - (a.id === layerId));
-  for (const L of layers) {
-    const feats = placesOf(inst, L);
-    if (feats && feats.length && INSIGHT.canInsight(L, feats)) return { layer: L, feats };
-  }
-  return null;
+   The layer whose questions a Standard/Insight mode reads, and its places.
+   WHICH layer is insight-mode.js modeLayer — the one rule the visitor's panel
+   and the owner's Settings tab ask too, so the story is written from, and the
+   settings are checked against, the very layer the page draws (Mithun, 23 Nov
+   2026: a mode saved without `layer` is resolved here each time, never by a
+   rule of the server's own). `mode` is the mode whose layer is wanted (null:
+   an atlas with none yet). The rule is handed each layer's places, so here
+   "can be read" is the whole test — a question, not about people, that some
+   place answers (insight-mode.js canInsight) — and every atlas this accepted
+   before the rule was shared is accepted still: the mode's own layer while
+   it can be read, else another of the owner's layers that can, of any kind
+   (an areas-only atlas keeps its story and its settings; a named layer
+   whose questions are all gone gives way). null when no layer can be read —
+   then there is nothing to write a story from, and Insight cannot be chosen
+   yet. */
+function insightSource(inst, local, mode) {
+  const read = new Map();   // each layer's file is read once (a file that cannot be read has no places)
+  const featsOf = (L) => { if (!read.has(L)) read.set(L, placesOf(inst, L) || []); return read.get(L); };
+  const L = INSIGHT.modeLayer(mode, ownLayers(local), { own: () => true, featsOf });
+  if (!L || !L.keyLabels || typeof L.keyLabels !== 'object') return null;
+  const feats = featsOf(L);
+  return feats.length && INSIGHT.canInsight(L, feats) ? { layer: L, feats } : null;
 }
 /* The model caller for the story. The stand-in (FAKE_READING) writes one
    sentence a group from the digest and vouches for everything at the
@@ -2414,7 +2424,7 @@ async function runInsightSummary(slug, payer, opts) {
     if (why !== true) { clearPending(); return why; }
     if (!first.local) return 'no atlas files';
     const m = mergedMode(first.local);
-    const src = insightSource(inst, first.local, m.layer);
+    const src = insightSource(inst, first.local, m);
     if (!src) { clearPending(); return 'no questions'; }
     if (o.markPending && !o.force && insightNeedsSummary(m, src) && !INSIGHT.isPending(m)) {
       first.local.mode = markPending({ ...m });
@@ -2441,6 +2451,11 @@ async function runInsightSummary(slug, payer, opts) {
       // a run that honestly found nothing does not take an older summary away
       if (kept.sentences.length || kept.quotes.length) delete mode.summary;
       mode.story = kept;
+      /* …and the mode says which layer it was written from, as a saved setting
+         does (postMode). A story written after a reading used to leave a bare
+         { name: "standard", story }; such modes are on disk and are resolved
+         when read (insightSource), never rewritten for this. */
+      mode.layer = src.layer.id;
       delete mode.storyFailed;
     }
     clearPendingOf(mode);
@@ -2470,7 +2485,8 @@ router.get('/instances/:slug/mode', (req, res) => {
   const { local } = readOverlay(inst);
   const ans = modeAnswer(local || {});
   // Insight can be chosen once the atlas has been read: a question, not about people, that places answer
-  ans.canInsight = ans.name === 'insight' || !!(local && insightSource(inst, local, null));
+  // (asked of the mode a switch to Insight would carry over — switchMode — so the two never disagree)
+  ans.canInsight = ans.name === 'insight' || !!(local && insightSource(inst, local, keptMerged(keptOf(local), local)));
   res.json({ ...ans, canChange: callerRole(req, inst) === 'owner' });
 });
 
@@ -2513,7 +2529,7 @@ async function postMode(req, res) {
   if (b.name === undefined && b.insight !== undefined) {
     if (!mergedNow(local)) return res.status(409).json({ error: 'These settings are for a Standard atlas. Switch the atlas to Standard first.' });
     const was = mergedMode(local);
-    const src = insightSource(inst, local, was.layer);
+    const src = insightSource(inst, local, was);
     if (!src) return res.status(409).json({ error: INSIGHT.NO_QUESTIONS });
     const clean = INSIGHT.cleanSettings(src.layer, b.insight, was);
     if (clean.error) return res.status(400).json({ error: clean.error });
@@ -2613,7 +2629,7 @@ async function switchMode(inst, want, payer, { file, local, now }) {
   let insightSrc = null;
   if (want === 'insight') {
     const was = keptMerged(kept, local);
-    insightSrc = insightSource(inst, local, was && was.layer);
+    insightSrc = insightSource(inst, local, was);
     if (!insightSrc) return { status: 409, body: { error: INSIGHT.NO_QUESTIONS, needsQuestions: true } };
     next = was ? { ...was, layer: insightSrc.layer.id } : INSIGHT.defaultInsight(insightSrc.layer);
     clearPendingOf(next);
@@ -9040,7 +9056,8 @@ function previewBestPhoto(inst) {
 function previewBestPhotoCompute(inst, local, layers) {
   const mode = local.mode;
   if (mode && mode.story && Array.isArray(mode.story.quotes) && mode.story.quotes.length) {
-    const storyLayer = layers.find((l) => l.id === mode.layer);
+    // the layer the story was written from: the one rule (a Standard mode is often kept without `layer`)
+    const storyLayer = INSIGHT.modeLayer(mode, layers, { own: () => true });
     const feats = storyLayer ? placesOf(inst, storyLayer) : null;
     if (feats) {
       for (const q of mode.story.quotes) {
