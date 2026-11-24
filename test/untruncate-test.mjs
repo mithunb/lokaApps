@@ -21,16 +21,24 @@ const wrap = (list) => JSON.stringify(list.map((u, i) => ({ id: 'id-' + i + '-46
 console.log('\n  the shape a Cubbon Park place is stored in');
 const four = [url(1), url(2), url(3), url(4)];
 check('wrapped, it does not fit in five hundred characters', wrap(four).length > 500, true);
-check('as plain addresses it does', justTheLinks(wrap(four)).length <= 500, true);
+check('as plain addresses it does', justTheLinks(wrap(four), 500).length <= 500, true);
 check('and all four survive', justTheLinks(wrap(four)).split('; ').length, 4);
 
 console.log('\n  whole addresses only, never half of one');
+/* A cell is kept whole now (fragment.js MAX_CELL), so the default cap no
+   longer throws photographs away at five hundred characters — all twenty
+   survive. Where a caller IS filling something smaller it says so, and at
+   that cap the rule is the same: whole addresses, or none. */
 const many = Array.from({ length: 20 }, (_, i) => url(i));
 const kept = justTheLinks(wrap(many));
-check('what is kept fits the cap', kept.length <= 500, true);
+check('every photograph is kept', kept.split('; ').length, 20);
 check('every piece kept is a whole address',
   kept.split('; ').every((u) => /^https:\/\/\S+\.jpg$/.test(u)), true);
-check('some were dropped rather than halved', kept.split('; ').length < 20, true);
+const small = justTheLinks(wrap(many), 500);
+check('asked for five hundred, what is kept fits it', small.length <= 500, true);
+check('and some were dropped rather than halved', small.split('; ').length < 20, true);
+check('each of those is still a whole address',
+  small.split('; ').every((u) => /^https:\/\/\S+\.jpg$/.test(u)), true);
 
 console.log('\n  values that are not pictures are left alone');
 check('plain words', justTheLinks('a banyan tree covering a large area'), null);

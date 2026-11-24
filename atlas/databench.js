@@ -1483,6 +1483,14 @@
       bits.push('<b style="color:var(--color-sindoor-deep)">' +
         esc(rep.droppedColumns.join(", ")) + " did not reach the map — please report this</b>");
     }
+    /* A cell too long to keep whole, said plainly at the moment it happens.
+       The old cut was silent and five hundred characters long, which a list
+       or a paragraph passes easily; this one all but never fires. */
+    (rep.shortened || []).forEach(function (s) {
+      bits.push('<b style="color:var(--color-sindoor-deep)">' + esc(s.column) +
+        " was too long to keep whole on " + s.places + " place" + (s.places > 1 ? "s" : "") +
+        " — cut at a separator</b>");
+    });
     $("#stat-line").innerHTML = bits.join(" · ");
 
     // out-of-area choice

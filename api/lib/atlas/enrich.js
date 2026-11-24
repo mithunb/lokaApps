@@ -60,6 +60,7 @@ const ONE_SIDED_SHARE = 0.9;
 const CATCH_ALL_ITEM = 8;
 const SAME_QUESTION = 0.8;       // agreement at which a question IS a column already on the map
 const CLIP = 280;                // description characters per digest line
+const TAG_CLIP = 420;            // tag-list characters per digest line (prompt only; the place keeps them all)
 
 // the quality gate's thresholds
 const FOLD_BELOW = 3;            // B: a theme covering fewer places folds into "other"
@@ -318,7 +319,15 @@ export function buildDigest(rows, fields) {
       }
     });
     const desc = clipAtWord(prose.join(' · '), CLIP);
-    const text = desc + (tags.length ? (desc ? ' — tags: ' : 'tags: ') + tags.join(', ') : '');
+    /* The tags on this line are budgeted too, like the description beside
+       them. A stored cell is kept whole now (lib/fragment.js MAX_CELL), and
+       one real place listed 77 creatures heard there — forty such places in a
+       filing call is a prompt three times the size it was, for a line the
+       model only has to recognise, not recite. The place keeps all 77; the
+       prompt reads as many as fit. `tags` below is untouched, so the counts
+       across the whole set are still taken from every word. */
+    const tagLine = clipAtWord(tags.join(', '), TAG_CLIP);
+    const text = desc + (tagLine ? (desc ? ' — tags: ' : 'tags: ') + tagLine : '');
     /* The words this one place said, kept beside its line. tagCounts says how
        often a word occurs across the whole set but not WHERE, and the question
        worth asking afterwards is whether the places saying a common word found

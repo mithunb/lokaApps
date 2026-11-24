@@ -1757,6 +1757,16 @@
       " no point yet; " + plural(none, "it waits", "they wait") + " on the finished atlas to be given one.");
     else if (none) bits.push(n(none) + rowsWord(none) + " name no place we have an outline for" +
       (pointsOfferWanted(rep) ? " — see below." : "; they wait on the finished atlas to be given one."));
+    /* A cell too long to keep whole is said in words, here and now. The old
+       five-hundred-character cut happened silently, so a list of 77 creatures
+       arrived as 26 and nobody knew. This one is all but unreachable by real
+       writing, and if it is reached the owner reads which column and how many
+       places before the atlas is built. */
+    (rep.shortened || []).forEach(function (s) {
+      bits.push("“" + s.column + "” was too long to keep whole on " + n(s.places) +
+        plural(s.places, " place", " places") + " — it was cut at a separator, so nothing is left half-said. " +
+        "Shorten it in your file and upload again if you need all of it.");
+    });
     if (!bits.length) bits.push("Nothing to fix.");
     return bits.join(" ");
   }

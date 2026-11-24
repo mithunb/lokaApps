@@ -571,7 +571,53 @@ export function prettify(col) {
 /* ---------------- sanitisation ---------------- */
 
 const MAX_FEATURES = 5000;
-const MAX_STR = 500;
+
+/* How much of one cell of somebody's own data is kept.
+
+   It was five hundred characters, in two places that did not know about each
+   other: at the door (ingestLayer) and again on the way onto the map
+   (sanitizeFeatures). Five hundred is shorter than a paragraph. A file of
+   wildlife recordings came in with a list of 77 creatures heard at one place,
+   1,523 characters of it, and the map was given 26 of them with the 26th
+   halfway through its name; the column counting them still said 77. Nobody was
+   told. Prose fared worse: a description is routinely longer than this.
+
+   So the stored cell is now kept whole. A ceiling remains, because one
+   pathological cell should not be allowed to carry a megabyte onto a map that
+   must stay quick to draw and to read, but it is set where real writing never
+   reaches it: twenty thousand characters is some three thousand words, several
+   pages, for ONE cell of ONE place — and the body of an upload is capped
+   besides. A cell that does reach it is cut at a separator or between words,
+   never through the middle of one, and whoever uploaded it is told which
+   column it happened in and on how many places (ingestLayer's `shortened`).
+
+   Limits that protect a PREVIEW, a SEARCH INDEX or a prompt stay where they
+   are. They are not this; they apply to a copy, and the data keeps its words. */
+export const MAX_CELL = 20000;
+const MAX_STR = MAX_CELL;
+
+// the separators this product puts between several of anything, longest first
+const CELL_SEPARATORS = ['; ', ' · ', ' | ', ';', '|', ', ', ','];
+
+/** One cell, kept whole unless it is past the ceiling — and then cut at a
+    separator (so no item of a list is halved) or between words, never through
+    the middle of either. Returns the value and whether anything was dropped. */
+export function keepWholeCell(v, limit) {
+  const cap = limit || MAX_CELL;
+  const s = typeof v === 'string' ? v : String(v == null ? '' : v);
+  if (s.length <= cap) return { value: s, cut: false };
+  const head = s.slice(0, cap);
+  let at = -1;
+  for (const sep of CELL_SEPARATORS) {
+    const i = head.lastIndexOf(sep);
+    if (i > at) at = i;
+  }
+  if (at <= cap / 2) {
+    const sp = head.lastIndexOf(' ');
+    at = sp > cap / 2 ? sp : cap;
+  }
+  return { value: head.slice(0, at).replace(/[\s,;|·]+$/, ''), cut: true };
+}
 
 /* The web addresses in a value, and nothing else.
 
@@ -587,7 +633,12 @@ const MAX_STR = 500;
    through one — and far fewer of them reach it at all, because the wrapping
    was most of the length. Measured on a real place: 500 characters held three
    addresses and part of a fourth; the same place as plain addresses is 213,
-   and all four survive. */
+   and all four survive.
+
+   The cap it answers to is MAX_CELL now, like any other cell, so a place with
+   twenty photographs keeps all twenty. A caller that is filling something
+   smaller — a preview, a card — passes its own limit, and whole addresses only
+   is still the rule at whatever limit it passes. */
 export function justTheLinks(v, limit) {
   const cap = limit || MAX_STR;
   const out = [];
@@ -651,7 +702,7 @@ export function sanitizeFeatures(feats, keepProps, bounds, outsideAction) {
     for (const k of keepProps) {
       const v = f.properties ? f.properties[k] : undefined;
       if (v === undefined || v === null) continue;
-      props[k] = typeof v === 'number' && Number.isFinite(v) ? v : String(v).slice(0, MAX_STR);
+      props[k] = typeof v === 'number' && Number.isFinite(v) ? v : keepWholeCell(v).value;
     }
     out.push({ type: 'Feature', properties: { ...props }, geometry: f.geometry });
   }

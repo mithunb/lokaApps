@@ -3543,7 +3543,8 @@ import { getFlashModel, getFlashLiteModel, getEmbedModel, getResolverStatus, get
 import { profileColumns, bestNameColumn } from '../lib/tabular.js';
 import { norm, dice, joinByName, AUTO_ACCEPT, spellings, fallbackRequest, applyFallback, splitPointRows } from '../lib/matching.js';
 import { hasDevanagari, skeleton } from '../lib/devanagari.js';
-import { PALETTES, PALETTE_ALIASES, MARKER_COLORS, buildFragment, sanitizeFeatures, justTheLinks } from '../lib/fragment.js';
+import { PALETTES, PALETTE_ALIASES, MARKER_COLORS, buildFragment, sanitizeFeatures, justTheLinks,
+  keepWholeCell } from '../lib/fragment.js';
 import * as imports from '../lib/atlas/imports.js';
 import * as enrich from '../lib/atlas/enrich.js';
 import { geocodeOne, markCollisions } from '../lib/atlas/geocode.js';
@@ -4800,6 +4801,10 @@ function applyResult(session, withDraft) {
   const parts = placeAll(session);
   const { frag } = parts.outline;
   const report = parts.report;   // with the rows put on as points taken off its lists
+  /* Said out loud on every answer about this upload, so a cell that WAS too
+     long to keep whole is reported at the moment it happens and not discovered
+     on the finished map (fragment.js MAX_CELL). Normal data never sets it. */
+  if (session.shortened && session.shortened.length) report.shortened = session.shortened;
   const features = parts.outline.features;
   const pointCount = parts.points ? parts.points.features.length : 0;
   let draftId = null;
@@ -4976,15 +4981,27 @@ async function ingestLayerSteps(b, who, tell) {
   }
   const columns = schema.map((c) => String((c && c.name) || '')).filter(Boolean).slice(0, MAX_COLS);
   if (!columns.length) throw refuse(400, 'no usable columns');
+  /* The rows as they will be kept. A cell is kept WHOLE: the five-hundred
+     character cut that used to live on this line took a list of 77 creatures
+     heard at one place down to 26 and a half, while the column counting them
+     went on saying 77, and said nothing to the owner about it. The ceiling
+     that remains (lib/fragment.js MAX_CELL) is for a pathological cell only;
+     if it is ever reached the cut falls at a separator, and `shortened` below
+     tells the owner which column and how many places. */
+  const shortened = new Map();
   const rows = b.rows.slice(0, MAX_ROWS).map((r) => {
     const o = {};
     for (const c of columns) {
       const v = r ? r[c] : undefined;
-      o[c] = (typeof v === 'number' && Number.isFinite(v)) || typeof v === 'boolean'
-        ? v : (v == null ? '' : String(v).slice(0, 500));
+      if ((typeof v === 'number' && Number.isFinite(v)) || typeof v === 'boolean') { o[c] = v; continue; }
+      if (v == null) { o[c] = ''; continue; }
+      const kept = keepWholeCell(v);
+      o[c] = kept.value;
+      if (kept.cut) shortened.set(c, (shortened.get(c) || 0) + 1);
     }
     return o;
   });
+  const shortenedCols = [...shortened.entries()].map(([column, places]) => ({ column, places }));
   const meta = b.meta && typeof b.meta === 'object' ? {
     sourceType: String(b.meta.sourceType || '').slice(0, 20),
     encoding: String(b.meta.encoding || '').slice(0, 20),
@@ -5052,6 +5069,10 @@ async function ingestLayerSteps(b, who, tell) {
     addedBy: (who !== 'server' && auth.sessionFromReq(who)) || undefined,
     filename: String(b.filename || '').slice(0, 120), meta,
     columnsRaw: columns, rows, profilesSummary: profiles.map((p) => ({ name: p.name, type: p.type })),
+    /* Which columns had a cell past the ceiling, and on how many places. Kept
+       on the session so every answer about this upload can say it in words,
+       instead of the owner finding out from the map months later. */
+    shortened: shortenedCols.length ? shortenedCols : undefined,
     geomIdx: geomIdx || undefined,
     // What the owner wants each key called. Kept beside the rows so it survives
     // to commit — a key otherwise wears its raw column name, and "themes" says
