@@ -80,6 +80,12 @@ export function searchSkipValue(v) {
   if (/^\d{4}-\d{2}-\d{2}[t ]/i.test(s)) return true;        // timestamps
   return false;
 }
+/* The index's own budget. A stored cell is kept whole at any length
+   (api/lib/fragment.js), so this takes its own copy of each cell up to the
+   same length the whole blob is capped at — one 1 MB cell can then never be
+   lowercased and joined in full only to be thrown away at 4,000, and a
+   column late in the row still reaches the index. The place keeps its words. */
+const SEARCH_BLOB_MAX = 4000;
 // One searchable blob per feature: what the viewer matches a raw query against.
 export function featureSearchText(props, stanza) {
   const parts = [];
@@ -87,9 +93,10 @@ export function featureSearchText(props, stanza) {
     if (searchSkipProp(k, stanza)) continue;
     const v = props[k];
     if (searchSkipValue(v)) continue;
-    parts.push(searchCellText(v));
+    const s = searchCellText(v);
+    parts.push(s.length > SEARCH_BLOB_MAX ? s.slice(0, SEARCH_BLOB_MAX) : s);
   }
-  return parts.join(' · ').toLowerCase().slice(0, 4000);
+  return parts.join(' · ').toLowerCase().slice(0, SEARCH_BLOB_MAX);
 }
 
 export const SEARCH_STOP = new Set(('the a an and or of in on at to for with from by is are was were this that these those it its as be' +
@@ -99,8 +106,10 @@ export const SEARCH_STOP = new Set(('the a an and or of in on at to for with fro
 // (free text), so "bamboo-wall" survives whole while a sentence contributes
 // "recycled", "library".
 export function termsFromValue(v, out) {
-  const s = searchCellText(v);
+  let s = searchCellText(v);
   if (!s) return;
+  // the vocabulary's own copy of a cell, budgeted like the blob above
+  if (s.length > SEARCH_BLOB_MAX) s = s.slice(0, SEARCH_BLOB_MAX);
   for (const cell of s.split(/\s*[;|\n]\s*|\s*,\s+/)) {
     const c = cell.trim().toLowerCase().replace(/\s+/g, ' ');
     if (!/[a-z]/.test(c)) continue;

@@ -37,7 +37,20 @@
     if (u.changed) parts.push(count(u.changed, "changed", "changed"));
     if (u.removed) parts.push(count(u.removed, "taken out", "taken out"));
     var line = parts.length ? parts.join(", ") : "Nothing had changed";
-    return line + (u.skipped ? " · " + count(u.skipped, "place", "places") + " left out for having no position" : "");
+    if (u.skipped) line += " · " + count(u.skipped, "place", "places") + " left out for having no position";
+    /* The atlas used to keep only the first part of a long description. It
+       keeps all of it now, so the first update after that brings the rest
+       back — and the owner is told which places got their words back, and
+       that the atlas is reading them again, rather than wondering why so
+       many places "changed" when nobody edited them. */
+    if (u.lengthened) {
+      line += u.lengthened === 1
+        ? ". 1 place had a longer description in LOKA than the atlas had kept. It now has the full text" +
+          (u.reread ? " and is being read again." : ".")
+        : ". " + u.lengthened + " places had longer descriptions in LOKA than the atlas had kept. " +
+          "They now have the full text" + (u.reread ? " and are being read again." : ".");
+    }
+    return line;
   }
 
   function waitLine(text) { return window.LokaWait ? window.LokaWait.html(text) : esc(text); }

@@ -25,18 +25,20 @@ check('as plain addresses it does', justTheLinks(wrap(four), 500).length <= 500,
 check('and all four survive', justTheLinks(wrap(four)).split('; ').length, 4);
 
 console.log('\n  whole addresses only, never half of one');
-/* A cell is kept whole now (fragment.js MAX_CELL), so the default cap no
-   longer throws photographs away at five hundred characters — all twenty
-   survive. Where a caller IS filling something smaller it says so, and at
-   that cap the rule is the same: whole addresses, or none. */
-const many = Array.from({ length: 20 }, (_, i) => url(i));
+/* A cell is kept whole now, with no ceiling of any kind (fragment.js), so on
+   the way into a layer nothing is dropped however many photographs a place
+   has — a hundred survive as readily as twenty. Where a caller IS filling
+   something smaller it says so, and at that cap the rule is the same: whole
+   addresses, or none. */
+const many = Array.from({ length: 250 }, (_, i) => url(i));
 const kept = justTheLinks(wrap(many));
-check('every photograph is kept', kept.split('; ').length, 20);
+check('every photograph is kept, past every ceiling there ever was',
+  [kept.split('; ').length, kept, kept.length > 20000], [250, many.join('; '), true]);
 check('every piece kept is a whole address',
   kept.split('; ').every((u) => /^https:\/\/\S+\.jpg$/.test(u)), true);
 const small = justTheLinks(wrap(many), 500);
 check('asked for five hundred, what is kept fits it', small.length <= 500, true);
-check('and some were dropped rather than halved', small.split('; ').length < 20, true);
+check('and some were dropped rather than halved', small.split('; ').length < 120, true);
 check('each of those is still a whole address',
   small.split('; ').every((u) => /^https:\/\/\S+\.jpg$/.test(u)), true);
 

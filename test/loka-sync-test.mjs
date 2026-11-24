@@ -71,9 +71,32 @@ console.log('\n  laying a download beside what the atlas holds');
   const photos = lay(stored, [Object.assign({}, rows[0], { photo_urls: 'x', photo_1_url: 'x' })].concat(rows.slice(1)));
   check('changed photos lose their small photo', [photos.rows[0].photo_small, photos.changed], ['', 1]);
   check('a layer with no questions is not marked', lay([], rows, { asking: false }).rows.some((r) => r[UNREAD]), false);
-  const long = toRow(tag(1, { description: 'x'.repeat(700) }), 'S');
-  const saved = Object.assign({}, long, { description: long.description.slice(0, 500) });
-  check('a description cut at 500 on saving is not a change', lay([saved], [long]).changed, 0);
+  /* The atlas used to keep only the first 500 characters of a cell. It keeps
+     all of them now, so a place still carrying that old cut reads as changed
+     on the next update, gets its whole description back, and is read again —
+     and `lengthened` says how many of the changed places that was. It must
+     settle: a second update straight after finds nothing. */
+  const long = toRow(tag(1, { description: 'A pond by the old school. ' + 'x'.repeat(700) }), 'S');
+  const saved = Object.assign({}, long, { description: long.description.slice(0, 500),
+    pattern_1: 'Water', pattern_1_why: 'pond', loka_name: 'A pond' });
+  const back = lay([saved], [long], { asking: true });
+  check('a description the atlas had cut at 500 is a change now, and is counted as one brought back',
+    [back.changed, back.lengthened], [1, 1]);
+  check('the whole description is stored, word for word', back.rows[0].description, long.description);
+  check('its answers are cleared, its short name gone, and it is marked to be read again',
+    [back.rows[0].pattern_1 || '', back.rows[0].loka_name || '', back.rows[0][UNREAD]], ['', '', '1']);
+  const again = lay(back.rows, [long], { asking: true });
+  check('and it settles: a second update straight after finds nothing changed',
+    [again.added, again.changed, again.removed, again.lengthened], [0, 0, 0, 0]);
+  const shortRow = toRow(tag(2), 'S');
+  const shortStored = Object.assign({}, shortRow, { pattern_1: 'Quiet', loka_name: 'Place 2' });
+  const near = lay([shortStored, saved], [shortRow, long], { asking: true });
+  check('a place under 500 characters is untouched by any of it',
+    [near.changed, near.lengthened, near.rows.find((r) => r.tag_id === shortRow.tag_id).pattern_1], [1, 1, 'Quiet']);
+  check('a change only after character 500 is noticed now',
+    lay([Object.assign({}, long)], [Object.assign({}, long, { description: long.description + ' and a new line about the well' })]).changed, 1);
+  check('a real rewrite is changed but is not an old cut being undone',
+    (({ changed, lengthened }) => [changed, lengthened])(lay([long], [Object.assign({}, long, { description: 'Something else entirely' })])), [1, 0]);
   check('a different space name alone is not a change (a taken-over upload may carry another)', lay(stored.map((r) => Object.assign({}, r, { spaces: 'Old name' })), rows).changed, 0);
   const q = [{ question: 'Is it wet?', noun: '', columns: [], kinds: [{ name: 'Wet', definition: '' }] }];
   const rs = [{ pattern_1: 'Wet', pattern_1_why: 'pond, tank' }, { pattern_1: '' }, { pattern_1: '' }];
@@ -303,6 +326,68 @@ try {
       JSON.stringify(JSON.parse(kept).filter((r) => tags.some((t) => t.id === r[0]))));
     check(name + ': no place is left marked', W.layerRows().some((p) => p[UNREAD]), false);
   }
+
+  /* The real road for an atlas built before the cut was taken out: a place
+     whose stored description is the first 500 characters of what LOKA holds.
+     The next update must bring the whole of it back, clear that place's
+     answers, read it again, leave every other place and every setting of the
+     owner's alone — and then settle, finding nothing on the update after. */
+  console.log('\n  a place the atlas kept a CUT copy of gets its whole words back, once');
+  const LONG = 'A pond by the old school, dry by March. ' +
+    'People walk around it in the evening and talk about the well behind the temple. '.repeat(12);
+  const T1 = () => tag(1, { likes_count: 9, description: LONG });
+  const T2 = () => tag(2, { description: 'Stalls selling vegetables and flowers; nothing wet about it', updated_at: 'later' });
+  const T3 = () => tag(3, { description: 'Market square with many stalls and loud traders', likes_count: 7 });
+  const update = async (who) => {
+    const was = (await W.call('GET', '/loka-sync', { cookie: who })).j.lastUpdate.at;
+    await W.call('POST', '/loka-sync/update', { cookie: who });
+    return W.finished(who, was);
+  };
+  const layerFile = () => {
+    const ov = W.overlay(), L = (ov.layers || []).find((l) => l.id === (ov.lokaSync && ov.lokaSync.layerId));
+    return path.join(W.DATA, 'private-datasets', W.slug, L.source);
+  };
+  const layerNow = () => (W.overlay().layers || []).find((l) => l.id === W.overlay().lokaSync.layerId);
+  // the owner's settings, and the layer as the old door stored it: the first 500 characters
+  {
+    const ov = W.overlay();
+    const L = (ov.layers || []).find((l) => l.id === ov.lokaSync.layerId);
+    L.hiddenKeys = ['pattern_2']; L.retiredKeys = ['pattern_9'];
+    L.keyLabels = Object.assign({ made_up: 'A name the owner gave' }, L.keyLabels || {});
+    ov.mode = { kind: 'insight', story: { sentences: [{ text: 'People talk about the pond.', quotes: [] }] } };
+    fs.writeFileSync(path.join(W.DATA, 'private-datasets', W.slug, 'manifest.local.json'), JSON.stringify(ov));
+    const gj = JSON.parse(fs.readFileSync(layerFile(), 'utf8'));
+    for (const f of gj.features) if (f.properties.tag_id === tid(1)) f.properties.description = LONG.slice(0, 500);
+    fs.writeFileSync(layerFile(), JSON.stringify(gj));
+  }
+  // what the owner has settled: which keys are hidden or retired, what each is called,
+  // and which columns the card shows, in their order (that is what cardColumns is kept as)
+  const settingsOf = () => { const { hiddenKeys, retiredKeys, keyLabels, popup, label } = layerNow();
+    return JSON.stringify({ hiddenKeys, retiredKeys, keyLabels, label,
+      card: [(popup || {}).title, ((popup || {}).fields || []).map((f) => f.property)] }); };
+  const settingsBefore = settingsOf();
+  const modeBefore = W.overlay().mode.kind;
+  const othersBefore = JSON.stringify(W.layerRows().filter((p) => p.tag_id !== tid(1)).map((p) => [p.tag_id, p.pattern_1, p.pattern_1_why, p.description]));
+  loka.tags = [T1(), T2(), T3()];
+  let n = await update(editor);
+  check('the cut place counts as changed, and as one whose words came back', n && [n.changed, n.lengthened, n.added, n.removed], [1, 1, 0, 0]);
+  check('the owner is told it is being read again', n && n.reread, true);
+  {
+    const by = Object.fromEntries(W.layerRows().map((p) => [p.tag_id, p]));
+    check('its whole description is back, word for word', by[tid(1)].description, LONG);
+    check('its answers are cleared and it is marked to be read again', [by[tid(1)].pattern_1 || '', by[tid(1)][UNREAD] || ''], ['', '1']);
+  }
+  check('every place that was under the old cut is untouched',
+    JSON.stringify(W.layerRows().filter((p) => p.tag_id !== tid(1)).map((p) => [p.tag_id, p.pattern_1, p.pattern_1_why, p.description])), othersBefore);
+  // the mode's story is written from the places, so it may be written again; the owner's CHOICE of mode stays
+  check('the owner\'s settings are exactly as they were',
+    [settingsOf(), W.overlay().mode.kind], [settingsBefore, modeBefore]);
+  const reRead = await until(() => { const x = W.layerRows(); return x && x.every((p) => !p[UNREAD]) ? x : null; }, 25000);
+  check('and it is read again, so no place is left waiting',
+    reRead ? true : W.layerRows().map((p) => [p.tag_id.slice(-1), p.pattern_1, p[UNREAD]]), true);
+  loka.tags = [T1(), T2(), T3()];
+  n = await update(editor);
+  check('it settles: the very next update finds nothing changed', n && [n.added, n.changed, n.removed, n.lengthened], [0, 0, 0, 0]);
 
   console.log('\n  what visitors can read, and a layer that is not from LOKA');
   const ovl = W.overlay().lokaSync;

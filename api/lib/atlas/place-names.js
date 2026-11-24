@@ -184,6 +184,15 @@ export function sourceColumnOf(layer, spec) {
    in the shape the model is asked about. A kept "" means the model was asked
    and had no fair name, so the place keeps its first words and is not asked
    again. */
+/* How much of one entry the model is shown. A stored cell is kept whole at any
+   length now (api/lib/fragment.js), and a name is at most a few words taken
+   from the entry's own opening — so the prompt's copy of a very long entry is
+   budgeted, while the place keeps every word. The key is still the fingerprint
+   of the WHOLE entry, so a name stays tied to the description it was made
+   from, and the check that a name uses only the entry's own words reads this
+   same copy, so prompt and check can never disagree. */
+export const PROMPT_TEXT_MAX = 2000;
+
 export function wanting(rows, col, kept) {
   const have = kept || {};
   const out = [], seen = new Set();
@@ -193,7 +202,7 @@ export function wanting(rows, col, kept) {
     const key = descHash(text);
     if (seen.has(key) || have[key] !== undefined) continue;
     seen.add(key);
-    out.push({ key, text });
+    out.push({ key, text: text.length > PROMPT_TEXT_MAX ? text.slice(0, PROMPT_TEXT_MAX) : text });
   }
   return out;
 }

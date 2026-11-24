@@ -307,14 +307,43 @@ export function toRows(tags, spaceName) {
 // the words a reading is made from: a change to any of these is a change to what its answers were about
 const TEXT = ['description', 'categories', 'labels', 'address'];
 const PHOTOS = ['photo_urls', 'photo_1_url', 'photo_2_url', 'photo_3_url', 'photo_4_url'];
-// a saved layer keeps at most 500 characters of a cell (ingestLayer), so both sides are cut the same way
-const clip = (v) => String(v == null ? '' : v).slice(0, 500);
+/* Both sides, as text, WHOLE.
+
+   This used to cut each side to 500 characters, because a saved layer used to
+   keep only that much of a cell. It no longer keeps less than all of it
+   (api/lib/fragment.js), so cutting here would only hide a difference: a LOKA
+   place edited after its five-hundredth character read as unchanged for ever.
+
+   A cut of any length is a trap for a comparison, not only a blind spot. The
+   store and the comparison have to cut in exactly the same way, and once they
+   did not — the store cut at a separator and the comparison cut raw, so a long
+   cell read as changed on every single sync. With nothing cut on either side
+   that cannot happen. Keep it that way: no cap belongs in this line. */
+const clip = (v) => String(v == null ? '' : v);
 const same = (a, b) => clip(a) === clip(b);
 const sameNum = (a, b) => same(a, b) || (num(a) !== null && num(a) === num(b));
 // a saved upload turns a " | " list into "; " (found on a real LOKA-layer copy), so the two spell one list
 const listed = (v) => String(v == null ? '' : v).replace(/\s*[|;]\s*/g, '; ');
 const differs = (cols, a, b) => cols.some((c) => !(c === 'latitude' || c === 'longitude' ? sameNum(a[c], b[c])
   : c === 'photo_urls' ? same(listed(a[c]), listed(b[c])) : same(a[c], b[c])));
+
+/* A place whose stored words are the BEGINNING of what LOKA holds, nothing
+   more: the atlas kept a cut copy and LOKA has the rest. Older atlases are
+   full of these — every cell was cut at 500 characters on its way in, and for
+   a while at 20,000 — so the first update after that cut was removed brings
+   their full text back, and the owner is told so in those words (the count
+   rides home as `lengthened`; api/apps/atlas.js carries it to Settings).
+   A place somebody genuinely rewrote shows as changed either way; this count
+   only says how many of the changed ones are an old cut being undone. */
+const OLD_CUTS = [500, 20000];
+const wasCutShort = (a, b) => {
+  const x = String(a == null ? '' : a), y = String(b == null ? '' : b);
+  if (!x || y.length <= x.length || !y.startsWith(x)) return false;
+  // a cut landed at one of the old ceilings, give or take the separator or word it fell back to
+  return OLD_CUTS.some((n) => x.length <= n && x.length > n - 200);
+};
+const lostWords = (o, r) => TEXT.some((c) => wasCutShort(o[c], r[c])) ||
+  wasCutShort(listed(o.photo_urls), listed(r.photo_urls));
 
 /* The marker a place carries until its answers have been found
    (api/apps/atlas.js runReading looks for it, the reading's own write clears it). */
@@ -331,7 +360,7 @@ export const UNREAD = 'pattern_unread';
 export function lay(oldRows, rows, { asking = false } = {}) {
   const had = new Map();
   for (const o of oldRows || []) if (o && o.tag_id) had.set(String(o.tag_id), o);
-  const out = []; let added = 0, changed = 0;
+  const out = []; let added = 0, changed = 0, lengthened = 0;
   const now = new Set(rows.map((r) => r.tag_id));
   for (const r of rows) {
     const o = had.get(r.tag_id);
@@ -339,6 +368,7 @@ export function lay(oldRows, rows, { asking = false } = {}) {
     // the space's name is not a change to the place (a taken-over upload may carry another)
     if (!differs(EXPORT_COLUMNS.filter((c) => c !== 'spaces'), o, r)) { out.push(o); continue; }
     changed += 1;
+    if (lostWords(o, r)) lengthened += 1;
     const row = {};
     for (const k of Object.keys(o)) if (EXPORT_COLUMNS.indexOf(k) < 0 && k.charAt(0) !== '_') row[k] = o[k];
     Object.assign(row, r);
@@ -354,7 +384,7 @@ export function lay(oldRows, rows, { asking = false } = {}) {
   const cols = EXPORT_COLUMNS.slice();
   for (const r of out) for (const k of Object.keys(r)) if (cols.indexOf(k) < 0) cols.push(k);
   const even = out.map((r) => { const o = {}; for (const c of cols) o[c] = r[c] === undefined ? '' : r[c]; return o; });
-  return { rows: even, added, changed, removed };
+  return { rows: even, added, changed, removed, lengthened };
 }
 
 /* The answers for only the marked places, laid beside the answers the others

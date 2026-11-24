@@ -582,17 +582,23 @@
   function splitSentences(text) {
     var out = [];
     String(text == null ? "" : text).split(/[\n\r]+/).forEach(function (para) {
-      var buf = "";
+      var from = 0;   // where the sentence being gathered began
       for (var i = 0; i < para.length; i++) {
         var ch = para.charAt(i);
-        buf += ch;
         if (!/[.!?…]/.test(ch)) continue;
         var next = para.charAt(i + 1);
         if (next && !/\s/.test(next)) continue;
-        if (ch === "." && ABBREV.test(buf.replace(/\s+$/, ""))) continue;
-        out.push(buf); buf = "";
+        /* Only the end of the sentence so far is asked (cut from the text itself, never gathered letter by letter): an abbreviation is
+           a few letters before this full stop, and the stop has just been
+           added, so nothing trails it. Asking the whole of it at every stop
+           made a long list of initials ("A. cinerea, B. ibis, …") take the
+           square of its length — seconds for one place, on the server too —
+           once a cell could be any size (24 Nov 2026). Sixteen characters is
+           longer than any abbreviation here, so the answer is the same. */
+        if (ch === "." && ABBREV.test(para.slice(Math.max(from, i - 15), i + 1))) continue;
+        out.push(para.slice(from, i + 1)); from = i + 1;
       }
-      out.push(buf);
+      out.push(para.slice(from));
     });
     return out.map(function (s) { return s.replace(/\s+/g, " ").trim(); }).filter(function (s) { return !!s; });
   }

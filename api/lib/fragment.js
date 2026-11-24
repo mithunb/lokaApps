@@ -572,7 +572,7 @@ export function prettify(col) {
 
 const MAX_FEATURES = 5000;
 
-/* How much of one cell of somebody's own data is kept.
+/* How much of one cell of somebody's own data is kept: ALL of it.
 
    It was five hundred characters, in two places that did not know about each
    other: at the door (ingestLayer) and again on the way onto the map
@@ -582,65 +582,47 @@ const MAX_FEATURES = 5000;
    halfway through its name; the column counting them still said 77. Nobody was
    told. Prose fared worse: a description is routinely longer than this.
 
-   So the stored cell is now kept whole. A ceiling remains, because one
-   pathological cell should not be allowed to carry a megabyte onto a map that
-   must stay quick to draw and to read, but it is set where real writing never
-   reaches it: twenty thousand characters is some three thousand words, several
-   pages, for ONE cell of ONE place — and the body of an upload is capped
-   besides. A cell that does reach it is cut at a separator or between words,
-   never through the middle of one, and whoever uploaded it is told which
-   column it happened in and on how many places (ingestLayer's `shortened`).
+   That cut became a twenty-thousand-character ceiling, and then (Mithun,
+   24 Nov 2026: "Do not impose any truncation of text while ingesting files
+   into the Atlas") nothing at all. There is no ceiling here now, and no
+   separator cut: whatever one cell of a file or of a LOKA download says is
+   what the layer stores, word for word. What still bounds an upload is the
+   size of the request itself (10 MB on /layers/ingest), and an upload past
+   that is refused WHOLE, in plain words — never halved, never partly stored.
+
+   A ceiling here was also a standing trap for anything that compares a stored
+   cell with its source: the store cut at a separator while the comparison cut
+   raw, so an over-ceiling cell read as changed on every LOKA sync for ever.
+   With no ceiling that class of bug cannot exist. Keep it that way.
 
    Limits that protect a PREVIEW, a SEARCH INDEX or a prompt stay where they
    are. They are not this; they apply to a copy, and the data keeps its words. */
-export const MAX_CELL = 20000;
-const MAX_STR = MAX_CELL;
-
-// the separators this product puts between several of anything, longest first
-const CELL_SEPARATORS = ['; ', ' · ', ' | ', ';', '|', ', ', ','];
-
-/** One cell, kept whole unless it is past the ceiling — and then cut at a
-    separator (so no item of a list is halved) or between words, never through
-    the middle of either. Returns the value and whether anything was dropped. */
-export function keepWholeCell(v, limit) {
-  const cap = limit || MAX_CELL;
-  const s = typeof v === 'string' ? v : String(v == null ? '' : v);
-  if (s.length <= cap) return { value: s, cut: false };
-  const head = s.slice(0, cap);
-  let at = -1;
-  for (const sep of CELL_SEPARATORS) {
-    const i = head.lastIndexOf(sep);
-    if (i > at) at = i;
-  }
-  if (at <= cap / 2) {
-    const sp = head.lastIndexOf(' ');
-    at = sp > cap / 2 ? sp : cap;
-  }
-  return { value: head.slice(0, at).replace(/[\s,;|·]+$/, ''), cut: true };
+export function wholeCell(v) {
+  return typeof v === 'string' ? v : String(v == null ? '' : v);
 }
 
 /* The web addresses in a value, and nothing else.
 
    A picture column can arrive holding its addresses wrapped — a list of little
    records, each with an id beside the address it carries. That is far longer
-   than the addresses themselves, and every value is cut at MAX_STR on its way
+   than the addresses themselves, and every value used to be cut on its way
    onto a map, so a place with three or four photographs was cut through the
    middle of an address: the list stopped being readable, and the map was left
    holding a fragment that loads nothing.
 
    Kept as the addresses alone, separated the way this product separates
-   several of anything, the cut falls between whole addresses instead of
-   through one — and far fewer of them reach it at all, because the wrapping
+   several of anything, a cut falls between whole addresses instead of
+   through one — and far fewer of them reach one at all, because the wrapping
    was most of the length. Measured on a real place: 500 characters held three
    addresses and part of a fourth; the same place as plain addresses is 213,
    and all four survive.
 
-   The cap it answers to is MAX_CELL now, like any other cell, so a place with
-   twenty photographs keeps all twenty. A caller that is filling something
-   smaller — a preview, a card — passes its own limit, and whole addresses only
-   is still the rule at whatever limit it passes. */
+   On the way into a layer there is no cap at all now, so a place with twenty
+   photographs keeps all twenty. A caller that is filling something smaller —
+   a preview, a card — passes its own limit, and whole addresses only is still
+   the rule at whatever limit it passes. */
 export function justTheLinks(v, limit) {
-  const cap = limit || MAX_STR;
+  const cap = limit > 0 ? limit : Infinity;
   const out = [];
   const seen = new Set();
   (function take(x, depth) {
@@ -702,7 +684,7 @@ export function sanitizeFeatures(feats, keepProps, bounds, outsideAction) {
     for (const k of keepProps) {
       const v = f.properties ? f.properties[k] : undefined;
       if (v === undefined || v === null) continue;
-      props[k] = typeof v === 'number' && Number.isFinite(v) ? v : keepWholeCell(v).value;
+      props[k] = typeof v === 'number' && Number.isFinite(v) ? v : wholeCell(v);
     }
     out.push({ type: 'Feature', properties: { ...props }, geometry: f.geometry });
   }

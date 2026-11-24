@@ -94,6 +94,25 @@ export const router = express.Router();
 const jsonBig = express.json({ limit: '10mb' });
 const jsonStd = express.json({ limit: '2mb' });
 router.use((req, res, next) => (req.path === '/layers/ingest' ? jsonBig : jsonStd)(req, res, next));
+/* A body bigger than that limit, in plain words.
+
+   Nothing between a file and a stored layer shortens a cell any more, so the
+   ONE thing that can still stop an upload is its sheer size — and the person
+   has to be told that in a sentence, not left with express's own HTML page and
+   a client that could only say "something went wrong". A body past the limit
+   is refused WHOLE: the parser stops at the limit and this answers before any
+   route runs, so not one row and not one cell of it is stored or cut.
+   (It sits here rather than at the end of the file because an error travels
+   forward from the middleware that raised it: the json parser is above.) */
+router.use((err, req, res, next) => {
+  if (!err || (err.type !== 'entity.too.large' && err.status !== 413)) return next(err);
+  const mb = Math.round((Number(err.limit) || 0) / (1024 * 1024)) || 10;
+  // only the upload door carries a file; any other request that is too big is said so in its own words
+  res.status(413).json({ error: req.path === '/layers/ingest'
+    ? 'That file holds too much to send in one go — once read, its places come to more than ' + mb +
+      ' MB of data. Nothing was saved. Split it into smaller files and upload them one after another.'
+    : 'That was too much to send in one go (the limit is ' + mb + ' MB). Nothing was saved.' });
+});
 
 /* Every refusal leaves a trace. Twice now a person has hit a wall in the setup
    flow and reported "something went wrong", and the log held nothing at all —
@@ -3544,7 +3563,7 @@ import { profileColumns, bestNameColumn } from '../lib/tabular.js';
 import { norm, dice, joinByName, AUTO_ACCEPT, spellings, fallbackRequest, applyFallback, splitPointRows } from '../lib/matching.js';
 import { hasDevanagari, skeleton } from '../lib/devanagari.js';
 import { PALETTES, PALETTE_ALIASES, MARKER_COLORS, buildFragment, sanitizeFeatures, justTheLinks,
-  keepWholeCell } from '../lib/fragment.js';
+  wholeCell } from '../lib/fragment.js';
 import * as imports from '../lib/atlas/imports.js';
 import * as enrich from '../lib/atlas/enrich.js';
 import { geocodeOne, markCollisions } from '../lib/atlas/geocode.js';
@@ -3636,6 +3655,11 @@ function requireDatasetEditor(req, res, datasetId) {
 }
 
 const MAX_ROWS = 5000, MAX_COLS = 40;
+/* How much of ONE cell a prompt's own copy carries. A stored cell is kept
+   whole at any length (lib/fragment.js), so every place that puts cells in
+   front of a model budgets its own copy; this is the budget for the sample of
+   rows the schema reading is shown. The stored rows are never touched. */
+const PROMPT_CELL = 400;
 /* How long a question may be. Read where one is asked and where one is stored,
    because those two disagreeing is how a question came to be sawn in half. */
 const MAX_QUESTION_CHARS = 120;
@@ -4801,10 +4825,6 @@ function applyResult(session, withDraft) {
   const parts = placeAll(session);
   const { frag } = parts.outline;
   const report = parts.report;   // with the rows put on as points taken off its lists
-  /* Said out loud on every answer about this upload, so a cell that WAS too
-     long to keep whole is reported at the moment it happens and not discovered
-     on the finished map (fragment.js MAX_CELL). Normal data never sets it. */
-  if (session.shortened && session.shortened.length) report.shortened = session.shortened;
   const features = parts.outline.features;
   const pointCount = parts.points ? parts.points.features.length : 0;
   let draftId = null;
@@ -4981,27 +5001,25 @@ async function ingestLayerSteps(b, who, tell) {
   }
   const columns = schema.map((c) => String((c && c.name) || '')).filter(Boolean).slice(0, MAX_COLS);
   if (!columns.length) throw refuse(400, 'no usable columns');
-  /* The rows as they will be kept. A cell is kept WHOLE: the five-hundred
-     character cut that used to live on this line took a list of 77 creatures
-     heard at one place down to 26 and a half, while the column counting them
-     went on saying 77, and said nothing to the owner about it. The ceiling
-     that remains (lib/fragment.js MAX_CELL) is for a pathological cell only;
-     if it is ever reached the cut falls at a separator, and `shortened` below
-     tells the owner which column and how many places. */
-  const shortened = new Map();
+  /* The rows as they will be kept. A cell is kept WHOLE, with no ceiling of
+     any kind: the five-hundred character cut that used to live on this line
+     took a list of 77 creatures heard at one place down to 26 and a half,
+     while the column counting them went on saying 77, and said nothing to the
+     owner about it. The twenty-thousand-character ceiling that replaced it is
+     gone too (Mithun, 24 Nov 2026) — nothing between a file and a stored
+     layer shortens a cell now. What bounds an upload is the size of the
+     request (jsonBig, 10 MB): a body past that is refused whole, before any
+     of this runs, so nothing is ever partly stored. */
   const rows = b.rows.slice(0, MAX_ROWS).map((r) => {
     const o = {};
     for (const c of columns) {
       const v = r ? r[c] : undefined;
       if ((typeof v === 'number' && Number.isFinite(v)) || typeof v === 'boolean') { o[c] = v; continue; }
       if (v == null) { o[c] = ''; continue; }
-      const kept = keepWholeCell(v);
-      o[c] = kept.value;
-      if (kept.cut) shortened.set(c, (shortened.get(c) || 0) + 1);
+      o[c] = wholeCell(v);
     }
     return o;
   });
-  const shortenedCols = [...shortened.entries()].map(([column, places]) => ({ column, places }));
   const meta = b.meta && typeof b.meta === 'object' ? {
     sourceType: String(b.meta.sourceType || '').slice(0, 20),
     encoding: String(b.meta.encoding || '').slice(0, 20),
@@ -5069,10 +5087,6 @@ async function ingestLayerSteps(b, who, tell) {
     addedBy: (who !== 'server' && auth.sessionFromReq(who)) || undefined,
     filename: String(b.filename || '').slice(0, 120), meta,
     columnsRaw: columns, rows, profilesSummary: profiles.map((p) => ({ name: p.name, type: p.type })),
-    /* Which columns had a cell past the ceiling, and on how many places. Kept
-       on the session so every answer about this upload can say it in words,
-       instead of the owner finding out from the map months later. */
-    shortened: shortenedCols.length ? shortenedCols : undefined,
     geomIdx: geomIdx || undefined,
     // What the owner wants each key called. Kept beside the rows so it survives
     // to commit — a key otherwise wears its raw column name, and "themes" says
@@ -5234,7 +5248,16 @@ async function ingestLayerSteps(b, who, tell) {
       const prompt = [
         'You are helping map a tabular dataset onto an interactive atlas. Infer its schema.',
         'Column profiles (from code, trustworthy):', JSON.stringify(profiles),
-        'First rows (sample):', JSON.stringify(rows.slice(0, 30)),
+        /* The sample's OWN copy of each cell is budgeted. A stored cell has no
+           ceiling now, so thirty rows of a file of long descriptions would
+           otherwise be a prompt of megabytes — for a question (what is this
+           column for?) that the first couple of hundred characters answer as
+           well as the whole. The rows themselves are untouched. */
+        'First rows (sample):', JSON.stringify(rows.slice(0, 30).map((r) => {
+          const o = {};
+          for (const k of Object.keys(r)) o[k] = typeof r[k] === 'string' ? r[k].slice(0, PROMPT_CELL) : r[k];
+          return o;
+        })),
         'Atlas context: groups are userdata (default for contributed data), base, agri, eco. Use "userdata" unless the layer clearly belongs to one of the others. Map bounds ' + JSON.stringify(sessionBounds(session)) + '.',
         'Joinable boundary layers (choose joinLayer from these ids when rows are admin units; "geo:" ids are geoBoundaries admin levels for the atlas region — prefer them for village/locality names):',
         JSON.stringify(allOptions.map((o) => ({ id: o.id, label: o.label, count: o.count, exampleNames: o.exampleNames }))),
@@ -6563,7 +6586,15 @@ async function applyLoka(slug, tags) {
     return { at: new Date().toISOString(), added: 0, changed: 0, removed: old.length, skipped, emptied: true, error: '' };
   }
   const laid = lokaSync.lay(old, rows, { asking: !!layer && questionsOn(layer, old).length > 0 });
-  const note = { at: new Date().toISOString(), added: laid.added, changed: laid.changed, removed: laid.removed, skipped, error: '' };
+  /* `lengthened`: how many of the changed places were only ever changed
+     because the atlas had kept a CUT copy of their words and LOKA has the
+     whole of them (loka-sync.js lostWords). Settings says it in plain words,
+     because the owner sees those places go back to being read. */
+  const note = { at: new Date().toISOString(), added: laid.added, changed: laid.changed, removed: laid.removed,
+    lengthened: laid.lengthened || 0,
+    // ...and whether those places are going to be read again (the layer asks questions of them)
+    reread: !!laid.lengthened && laid.rows.some((r) => r[lokaSync.UNREAD]),
+    skipped, error: '' };
   if (layer && !laid.added && !laid.changed && !laid.removed) return note;
   if (layer) {
     const dir = path.join(reg.DATA_DIR, 'backups', 'loka-sync-' + slug + '-' + new Date().toISOString().replace(/[:.]/g, '-'));
@@ -9034,9 +9065,14 @@ function previewPhotoOf(props, slug) {
   }
   return null;
 }
+/* The caption under a place's photo — the alt text of a link preview's image
+   and of the photo in the nine emails. It comes from a cell, which has no
+   ceiling now, so this copy of it carries its own: a caption is a line, and a
+   whole description would be a megabyte of alt text in somebody's inbox. */
+const PREVIEW_NAME_CHARS = 120;
 function previewPlaceName(props) {
   const p = props || {};
-  return String(p.description || p.name || p.title || '').trim();
+  return previewTrim(p.description || p.name || p.title || '', PREVIEW_NAME_CHARS);
 }
 /* The best place photo for the card: a photo belonging to a place the
    atlas's own "story of the place" already quotes (same places.tag_id ids
