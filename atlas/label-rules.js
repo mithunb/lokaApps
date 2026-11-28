@@ -619,6 +619,570 @@
     });
   }
 
+  /* ===== What SHAPE a column is: a list, a number, a place on the map =====
+     (Mithun, 28 Nov 2026, after a plain sheet of 312 recording sites: a
+     "state" column asked as "Which state is this place in?", a list of up to
+     77 animals answered with one of them, the same list asked "how many", two
+     lists of bird names shown as somebody's "own words", and "Read from"
+     printing "West, Bengal" for West Bengal.) Every rule here goes by what the
+     cells hold; a column's name is only ever a helper. One copy, read by the
+     server's reading (api/lib/atlas/enrich.js) and by the viewer. */
+
+  /* The items of a cell that holds several things: split at ";" or "|" when
+     it has either, else at ",". The words inside an item are left as written. */
+  function listItems(v) {
+    var s = cellOf(v);
+    if (!s) return [];
+    return (/[;|]/.test(s) ? s.split(/[;|]/) : s.split(","))
+      .map(function (t) { return t.trim(); }).filter(Boolean);
+  }
+  // small words a sentence is built with and a list of names is not
+  var SENTENCE_WORDS = Object.create(null);
+  ("is are was were am be been the a an we i you they he she it this that these those there here " +
+   "has have had my our your their very not but because so").split(" ").forEach(function (w) { SENTENCE_WORDS[w] = true; });
+  var LIST_ITEM_WORDS = 4;       // an item is a name or a short label: at most this many words
+  var LIST_COMMA_ITEMS = 3;      // commas live inside prose, so a comma list needs this many items; ";" or "|" needs two
+  /* Is this cell a LIST — names or labels joined by separators — and not a
+     sentence somebody wrote? "Sunbird; Drongo; Brown Hawk Owl" is; so is
+     "Birds, Mammals, Frogs". "We came at dawn, saw two herons, and left." is
+     not: it ends as a sentence does, one of its pieces runs long, and it is
+     built with sentence words. A list is data, never anybody's own words. */
+  function isListCell(v) {
+    var s = cellOf(v);
+    if (!s || /[.!?…]$/.test(s)) return false;
+    var items = listItems(s);
+    if (items.length < (/[;|]/.test(s) ? 2 : LIST_COMMA_ITEMS)) return false;
+    var words = 0, small = 0, long = 0;
+    items.forEach(function (it) {
+      var ws = it.split(" ");
+      if (ws.length > LIST_ITEM_WORDS) long++;
+      ws.forEach(function (w) { words++; if (SENTENCE_WORDS[w.toLowerCase().replace(/[^a-z]/g, "")]) small++; });
+    });
+    return long <= items.length * 0.2 && small < words * 0.1;
+  }
+  /* Where the whole items of a cell begin and end, when the cell is made of
+     short items (a list, or one short value such as "West Bengal"); none for
+     prose, whose pieces are clauses, not items. */
+  function itemSpans(text) {
+    if (!text || /[.!?…]$/.test(text)) return [];
+    var spans = [], from = 0, sep = /[;|]/.test(text) ? /[;|]/ : /,/;
+    for (var i = 0; i <= text.length; i++) {
+      if (i < text.length && !sep.test(text.charAt(i))) continue;
+      var raw = text.slice(from, i), lead = raw.length - raw.replace(/^\s+/, "").length, body = raw.trim();
+      if (body) {
+        if (body.split(" ").length > LIST_ITEM_WORDS) return [];
+        spans.push({ from: from + lead, to: from + lead + body.length });
+      }
+      from = i + 1;
+    }
+    return spans;
+  }
+  /* The words behind an answer, as the place wrote them ("Read from").
+     The reading cites one to three words; shown joined by commas they read
+     "West, Bengal" for West Bengal and "Brown, Hawk" for Brown Hawk Owl. So
+     each cited word is found in the place's own cells and given back as it
+     stands there: words that sit side by side are one phrase, a word inside
+     a short item (a list's item, a one-value cell) is the whole item, and the
+     phrases come in the order the cells have them. A word found in no cell
+     (the cell has changed since) is kept as it was given. */
+  function phrasesAsWritten(words, cells) {
+    var texts = (cells || []).map(cellOf).filter(Boolean);
+    var lows = texts.map(function (t) { return t.toLowerCase(); });
+    var spans = [], loose = [], out = [], seen = Object.create(null);
+    var inWord = function (text, k) { return k >= 0 && k < text.length && /[\p{L}\p{N}]/u.test(text.charAt(k)); };
+    // where the cited letters stand in a cell: as whole words when asked so, else anywhere
+    var findIn = function (c, low, wholeOnly) {
+      if (lows[c].length !== texts[c].length) return -1;      // a script whose lower case moves the letters: not searched
+      for (var at = lows[c].indexOf(low); at >= 0; at = lows[c].indexOf(low, at + 1)) {
+        if (!wholeOnly || (!inWord(texts[c], at - 1) && !inWord(texts[c], at + low.length))) return at;
+      }
+      return -1;
+    };
+    (words || []).forEach(function (w) {
+      var word = cellOf(w), low = word.toLowerCase();
+      if (!word) return;
+      // "West" is the West of "West Bengal" before it is the start of "Western Ghats" in another cell
+      for (var pass = 0; pass < 2; pass++) {
+        for (var c = 0; c < texts.length; c++) {
+          var at = findIn(c, low, pass === 0);
+          if (at < 0) continue;
+          var to = at + low.length;
+          // the whole word, when the cited letters stop inside one
+          while (inWord(texts[c], at - 1)) at--;
+          while (inWord(texts[c], to)) to++;
+          spans.push({ c: c, from: at, to: to });
+          return;
+        }
+      }
+      loose.push(word);
+    });
+    spans.sort(function (a, b) { return (a.c - b.c) || (a.from - b.from); });
+    var merged = [];
+    spans.forEach(function (s) {
+      var last = merged[merged.length - 1];
+      if (last && last.c === s.c && (s.from <= last.to || /^\s*$/.test(texts[s.c].slice(last.to, s.from)))) {
+        last.to = Math.max(last.to, s.to);
+        return;
+      }
+      merged.push({ c: s.c, from: s.from, to: s.to });
+    });
+    var push = function (p) { var k = p.toLowerCase(); if (p && !seen[k]) { seen[k] = true; out.push(p); } };
+    /* "Read from" may only show words the reading actually cited. A short
+       item used to be shown WHOLE whenever one of its words was cited, so
+       ["PURAM", "DEVASANDRA"] came back as "KR PURAM DEVASANDRA MARKET" —
+       two words the model never said, put in its mouth. The whole item is
+       shown only when the reading cited every word of it, or when the item
+       is the whole cell ("West Bengal", a state column, cited as "West").
+       Otherwise the cited words are shown as they stand in the cell, in the
+       cell's order and spelling, and only joined where they sit side by
+       side. */
+    var cited = Object.create(null);
+    (words || []).forEach(function (w) {
+      cellOf(w).split(/\s+/).forEach(function (p) {
+        var k = p.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+        if (k) cited[k] = true;
+      });
+    });
+    merged.forEach(function (s) {
+      var text = texts[s.c], items = itemSpans(text), whole = null;
+      for (var k = 0; k < items.length; k++) if (items[k].from <= s.from && s.to <= items[k].to) whole = items[k];
+      if (whole) {
+        var item = text.slice(whole.from, whole.to);
+        var everyWord = item.split(/\s+/).every(function (p) {
+          var t = p.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+          return !t || cited[t];
+        });
+        if (!everyWord && item !== text.trim()) whole = null;
+      }
+      push(text.slice(whole ? whole.from : s.from, whole ? whole.to : s.to));
+    });
+    loose.forEach(push);
+    return out;
+  }
+
+  /* A NUMBER column: nearly every filled cell is a number ("12", "1,204",
+     "3.5", "40%"). A count is worked out, never read: sent to the reader as
+     words, "likes" or "species_count" comes back as a question with made-up
+     kinds. (A run of ten digits or more is an id, and a date is a date:
+     neither is a number here.) */
+  var NUMBER_CELL = /^[-+]?(\d{1,3}(,\d{3})+|\d+)(\.\d+)?\s*%?$/;
+  var NUMBERS_MOSTLY = 0.9;
+  function isNumberCell(v) { var s = cellOf(v); return NUMBER_CELL.test(s) && !DIGIT_RUN.test(s); }
+  function isNumberColumn(values) {
+    var filled = 0, numbers = 0;
+    (values || []).forEach(function (v) { var s = cellOf(v); if (!s) return; filled++; if (isNumberCell(s)) numbers++; });
+    return filled > 0 && numbers / filled >= NUMBERS_MOSTLY;
+  }
+  /* A COMMA IS A LIST'S COMMA UNLESS THE WHOLE COLUMN SAYS OTHERWISE.
+     "1,200" is one number with its thousands marked; "123,456" is that
+     shape too, and it is just as likely to be two three-digit things
+     somebody typed with a comma between them. The cell cannot tell; the
+     column can. It is grouped numbers only when every comma in it groups
+     exactly three digits, no comma is followed by a space ("123, 456" is a
+     list, written as a list), and nearly every cell is a number by that
+     convention. Anything else keeps its commas and stays a list. */
+  var GROUPED_CELL = /^[-+]?\d{1,3}(,\d{3})+(\.\d+)?\s*%?$/;
+  function isGroupedNumberColumn(values) {
+    var filled = 0, grouped = 0, plain = 0, byList = false;
+    (values || []).forEach(function (v) {
+      var s = cellOf(v);
+      if (!s) return;
+      filled++;
+      if (s.indexOf(",") < 0) { if (isNumberCell(s)) plain++; return; }
+      if (/,\s/.test(s) || !GROUPED_CELL.test(s) || DIGIT_RUN.test(s)) byList = true;
+      else grouped++;
+    });
+    return !byList && filled > 0 && grouped > 0 && (grouped + plain) / filled >= NUMBERS_MOSTLY;
+  }
+
+  /* ===== A NUMBER KEY: a number column offered as 3 to 5 ranges =====
+     (Mithun, 28 Nov 2026: "build number ranges as a general feature".) A
+     column of numbers is never read into a question — and used to be offered
+     as nothing at all once it held more than ten different values. Now the
+     map can be coloured by it: the Atlas works out a few ranges and each
+     place falls in one. No model, no cost; decided by the values, the name
+     only helping.
+
+     NOT a number key (numberKey answers null, and the column is treated as
+     it always was):
+       - not numbers (isNumberColumn), or fewer than NUMBER_KEY_MIN of them;
+       - one value everywhere;
+       - a coordinate, a person's or record's id, a postal code — by its
+         name (latitude, x, "id", "pin code": the people/id and location
+         rules above), or by its values: whole numbers that are all
+         different and run on from each other (row numbers, record ids), or
+         all of one length with the same leading digits (pincodes, census
+         codes). A population is all different too, but neither of those.
+     A column of YEARS (whole numbers between 1000 and 2100) is grouped the
+     same way but worded as years: "1990–2005", never "1,990–2,005".
+
+     A FEW VALUES. A rating of 1 to 5, a count of storeys: five different
+     numbers or fewer are not cut at all — each number is its own kind, in
+     order ("1", "2", "3", "4", "5"). (The viewer never offered such a column
+     as a plain key: a kind has to read as a word, and "3" does not.)
+
+     THE RANGES. Quantiles, so the places spread across them, each edge then
+     moved to the nearest round number that keeps every range in use. Skewed
+     data cannot fall into one range: with one place at 392 and most at 1,
+     the edges come out 1, 2, 4 … and a single value stands alone ("1",
+     "2–4", "5–10", "More than 10"). Never an empty range; every place with
+     a number is in exactly one; a blank stays blank. Whole numbers are
+     worded lo–hi; decimals "Up to 2.5", "2.5–10", "More than 10" (a value
+     on an edge belongs to the range below). */
+  var NUMBER_KEY_MIN = 8, NUMBER_RANGES = 5;
+  var COORDINATE_NAME = /^(lat|latitude|lon|lng|long|longitude|x|y|easting|northing)$/i;
+  function toNumber(v) {
+    var s = cellOf(v);
+    if (!isNumberCell(s)) return NaN;
+    return Number(s.replace(/[,%\s]/g, ""));
+  }
+  // a round number at the number's own size: its first `digits` figures, the rest zeroed.
+  // Worked out from the figures themselves, so it holds at any scale — 0.0023 rounds
+  // to 0.002 as surely as 2,300 rounds to 2,000.
+  function roundTo(x, digits) {
+    if (!x || !isFinite(x)) return 0;
+    return Number(Number(x).toPrecision(digits));
+  }
+  /* HOW MANY DECIMALS THE WORDS NEED — the one thing that decided whether a
+     number key could be read. The words used to round to two decimals (to a
+     whole number at a hundred and above) whatever the data's own precision,
+     so a column that lives in a narrow band came out as nonsense: salinity
+     0.001–0.009 read "Up to 0 / 0–0 / 0–0.01 / 0.01–0.01 / 0.01", prices
+     199.50–199.99 read "200–200" four times over. Two ranges with the same
+     words are not two ranges: the panel counted them as one and the map
+     coloured them as two.
+
+     So the precision comes from the numbers, not from a constant: the FEWEST
+     decimals that tell every edge apart (none at all for 20 / 50 / 100,
+     three for a band of salinities), and the edges themselves are then moved
+     onto that precision so the words say exactly where a range ends. Capped,
+     because a reader cannot use twelve decimals either — a column whose
+     ranges cannot be told apart within the cap makes fewer ranges, or is not
+     a number key. */
+  var NUMBER_DECIMALS_MAX = 12;
+  function decimalsFor(list) {
+    for (var d = 0; d <= NUMBER_DECIMALS_MAX; d++) {
+      var seen = Object.create(null), ok = true;
+      for (var i = 0; i < list.length; i++) {
+        var s = list[i].toFixed(d);
+        if (seen[s]) { ok = false; break; }
+        seen[s] = 1;
+      }
+      if (ok) return d;
+    }
+    return -1;
+  }
+  function numberWords(x, year, dp) {
+    if (year) return String(x);
+    var d = Math.max(0, Math.min(dp == null ? 2 : dp, 20));
+    var s = Number(x).toFixed(d);
+    if (s.indexOf(".") >= 0) s = s.replace(/0+$/, "").replace(/\.$/, "");
+    if (/^-0$/.test(s)) s = "0";
+    var parts = s.split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return parts.join(".");
+  }
+  function numberKey(name, values) {
+    var nums = [];
+    (values || []).forEach(function (v) { var x = toNumber(v); if (isFinite(x)) nums.push(x); });
+    if (nums.length < NUMBER_KEY_MIN || !isNumberColumn(values)) return null;
+    var words = nameWords(name).join(" ");
+    if (COORDINATE_NAME.test(words) || whyNotRead(name, values) || locationSignal(name, values, null).why) return null;
+    nums.sort(function (a, b) { return a - b; });
+    var distinct = [];
+    nums.forEach(function (x) { if (!distinct.length || distinct[distinct.length - 1] !== x) distinct.push(x); });
+    if (distinct.length < 2) return null;
+    var whole = nums.every(function (x) { return Math.floor(x) === x; });
+    var min = nums[0], max = nums[nums.length - 1];
+    var year = whole && min >= 1000 && max <= 2100;
+    /* AN ID IS NOT A MEASURE — but ALL DIFFERENT is not what tells them
+       apart. The first try asked only how tightly the values packed (every
+       all-different whole-number column spanning less than three times the
+       row count was called an id), which threw away real measures: a change
+       of -20 to 19 percent, percentages 0 to 78, a column of likes where no
+       two places agree, one year per place. What an id actually has is one
+       of three marks:
+         - its NAME says so (id, serial, code, reference, row);
+         - its values RUN ON at a fixed step from a counting base (1, 1,000,
+           40,000 — a serial, a row number), which is not how a size behaves;
+         - it is WRITTEN as a code: leading zeros ("007"), or all of one
+           width, five digits or more, under the same two leading digits
+           (pincodes, census codes).
+       A year is none of these, however tidily it runs. */
+    var ID_WORD = /\b(id|ids|uid|uuid|guid|identifier|identifiers|serial|serials|serialno|sno|srno|code|codes|barcode|ref|refs|reference|rowid|objectid|fid|gid|roll)\b/i;
+    var ID_ALONE = /^(index|idx|row|rows|no|num|number|sl|key|rank|order)$/i;
+    var SIZE_WORD = /\b(count|counts|total|totals|sum|amount|how many|likes|views|visits|comments|photos|population|people|households|families|area|size|length|width|height|depth|distance|weight|price|cost|budget|income|spend|rate|score|rating|percent|percentage|pct|share|age|capacity|seats|beds|rooms|storeys|floors|trees|species|visitors|members|units|km|metres|meters|hectares|acres)\b/i;
+    if (whole && distinct.length === nums.length) {
+      if (ID_WORD.test(words) || ID_ALONE.test(words.replace(/\s+/g, " ").trim())) return null;
+      /* a serial: the same step all the way up, counted from 1 or from a
+         round base — unless the name says a size, because a count of bees
+         that happens to run 1, 2, 3 … is still a count, and a year is a
+         year however tidily it runs */
+      var gaps = [], step = nums.length > 1 ? nums[1] - nums[0] : 0, even = 0;
+      for (var gi = 1; gi < nums.length; gi++) { gaps.push(nums[gi] - nums[gi - 1]); if (nums[gi] - nums[gi - 1] === step) even++; }
+      var place = Math.pow(10, String(Math.abs(min)).length - 1);
+      var counting = min >= 1 && (min === 1 || min % place === 0);
+      if (!year && !SIZE_WORD.test(words) && step > 0 && gaps.length && even >= gaps.length * 0.9 && counting) return null;
+      // written as a code: leading zeros on nine cells in ten ("007", "0450")
+      var filledCells = 0, zeros = 0;
+      (values || []).forEach(function (v) { var s = cellOf(v); if (!s) return; filledCells++; if (/^0\d/.test(s)) zeros++; });
+      if (filledCells && zeros >= filledCells * 0.9) return null;
+      // codes: one length, five digits or more, the same two leading digits on nine in ten
+      var lead = Object.create(null), top = 0, len = String(Math.abs(min)).length;
+      nums.forEach(function (x) { var t = String(Math.abs(x)); if (t.length === len) { var k = t.slice(0, 2); lead[k] = (lead[k] || 0) + 1; if (lead[k] > top) top = lead[k]; } });
+      if (len >= 5 && top >= nums.length * 0.9) return null;
+    }
+    var w = function (x, dp) { return numberWords(x, year, dp); };
+    // a few values: each its own kind, in order (told apart to the data's own precision)
+    if (distinct.length <= NUMBER_RANGES) {
+      var dpFew = year || whole ? 0 : decimalsFor(distinct);
+      if (dpFew < 0) return null;
+      return { ranges: distinct.map(function (x, k) { return { label: w(x, dpFew), max: k === distinct.length - 1 ? Infinity : x }; }), year: year };
+    }
+    var inUpTo = function (from, to) { return nums.filter(function (x) { return x > from && x <= to; }).length; };
+    // the upper edge of every range but the last: quantiles, each moved to a round number where one fits
+    function edgesFor(n) {
+      var edges = [];
+      for (var i = 1; i < n; i++) {
+        var q = nums[Math.min(nums.length - 1, Math.floor(i * nums.length / n))];
+        var prev = edges.length ? edges[edges.length - 1] : -Infinity;
+        var tries = (whole && Math.abs(q) < 20) || year ? [year ? roundTo(q, 3) : q, q] : [roundTo(q, 1), roundTo(q, 2), q];
+        for (var t = 0; t < tries.length; t++) {
+          var e = whole ? Math.round(tries[t]) : tries[t];
+          if (!(e > prev && e < max && inUpTo(prev, e) > 0)) continue;     // no range may be empty, and one must be left above
+          // a ROUND edge may sit a little to either side of its quantile: by at most half a range's share of the places
+          var drift = Math.abs(inUpTo(-Infinity, e) - i * nums.length / n);
+          if (e !== q && drift > nums.length / (n * 2)) continue;
+          edges.push(e);
+          break;
+        }
+      }
+      return edges;
+    }
+    // "2–4"; with a number below zero in it, "-40 to -20", so the dash is never read as a minus
+    function labelled(edges, dp) {
+      var span = function (a, b) { return a < 0 || b < 0 ? w(a, dp) + " to " + w(b, dp) : w(a, dp) + "\u2013" + w(b, dp); };
+      var ranges = [], said = Object.create(null), list = edges.concat([Infinity]);
+      for (var k = 0; k < list.length; k++) {
+        var e = list[k], from = k ? edges[k - 1] : -Infinity, label;
+        var inside = nums.filter(function (x) { return x > from && x <= e; });
+        if (!inside.length) return null;                                  // never an empty range
+        var lo = inside[0], hi = inside[inside.length - 1];
+        if (e === Infinity) label = lo === hi ? w(lo, dp) : (year ? "After " : "More than ") + w(from, dp);
+        else if (whole) { lo = k ? from + 1 : lo; label = lo === e ? w(e, dp) : span(lo, e); }
+        else label = k ? span(from, e) : "Up to " + w(e, dp);
+        if (!label || said[label]) return null;                           // and never the same words twice
+        said[label] = 1;
+        ranges.push({ label: label, max: e });
+      }
+      return ranges;
+    }
+    /* n ranges, or nothing. Every edge is moved onto the precision the words
+       are written at, so "Up to 0.002" says exactly where the range ends; if
+       that move empties a range, or two ranges still read alike, the words
+       gain a decimal and it is tried again. Whole numbers and years are
+       already on their own precision, so they are tried once. */
+    function rangesFor(n) {
+      var edges = edgesFor(n);
+      if (!edges.length) return null;
+      var start = (whole || year) ? 0 : decimalsFor(edges);
+      if (start < 0) return null;
+      for (var dp = start; dp <= NUMBER_DECIMALS_MAX; dp++) {
+        var snapped = [], good = true, prev = -Infinity;
+        for (var i = 0; i < edges.length; i++) {
+          var e = (whole || year) ? edges[i] : Number(edges[i].toFixed(dp));
+          if (!(e > prev && e < max && inUpTo(prev, e) > 0)) { good = false; break; }
+          snapped.push(e); prev = e;
+        }
+        if (good && inUpTo(prev, Infinity) > 0) {
+          var built = labelled(snapped, dp);
+          if (built && built.length >= 2) return built;
+        }
+        if (whole || year) break;
+      }
+      return null;
+    }
+    /* Five ranges where the numbers can fill five, fewer where they cannot,
+       down to two; a column that cannot make two ranges whose words differ is
+       not a number key at all. */
+    var fewer = null;
+    for (var n = NUMBER_RANGES; n >= 2; n--) {
+      var got = rangesFor(n);
+      if (got && got.length >= 3) return { ranges: got, year: year };
+      if (got && got.length >= 2 && !fewer) fewer = got;
+    }
+    return fewer ? { ranges: fewer, year: year } : null;
+  }
+  /* The range a cell falls in, by its label; "" for a blank or a cell that is not a number. */
+  function numberBucket(v, ranges) {
+    var x = toNumber(v);
+    if (!isFinite(x)) return "";
+    for (var i = 0; i < (ranges || []).length; i++) if (x <= ranges[i].max) return ranges[i].label;
+    return "";
+  }
+  /* The colours of a number key: one hue (the palette's moss), light to
+     dark, so more reads as more — told apart by lightness alone, which is
+     what a colour-blind reader has. n of them, spread across the ramp. */
+  /* A NUMBER KEY THAT IS MOSTLY ONE RANGE. A key whose commonest answer
+     holds more than 85 places in a hundred is no key: it tells the places
+     apart hardly at all, and the map comes out one colour. A number key
+     earns an exception, because the few places that differ are exactly what
+     a reader is after and the ranges say how far they differ: most corners
+     have no likes at all, and "0 / 1–2 / 3–10 / More than 10" is a real
+     picture of the handful that do. Kept when at least two ranges hold
+     places AND the minority is a real one — five places, or three in a
+     hundred; otherwise it is dropped like any other flat key. */
+  var RANGE_MINORITY_MIN = 5, RANGE_MINORITY_SHARE = 0.03;
+  function numberKeySpreads(rangesHeld, minority, places) {
+    return rangesHeld >= 2 && minority > 0 &&
+      (minority >= RANGE_MINORITY_MIN || minority >= (places || 0) * RANGE_MINORITY_SHARE);
+  }
+  /* WHERE A KIND SITS in its key's own order — one answer, read by the map
+     (atlas.js keyMarkRows) and by the Insights panel (insight-mode.js)
+     alike, so the two can never disagree about which colour a kind wears or
+     which row it belongs to. -1 when the key does not hold that kind: the
+     map draws it grey, the panel puts it last. (It can only be one place
+     now that a number key's ranges never read alike; when two ranges carried
+     the same words, the panel merged them and the map drew them apart.) */
+  function kindIndex(kept, name) {
+    return (kept || []).indexOf(name);
+  }
+  var NUMBER_RAMP = ["#A9D3B3", "#74B787", "#45935E", "#2A6B41", "#143D25"];
+  function rampColors(n) {
+    if (n >= NUMBER_RAMP.length) return NUMBER_RAMP.slice();
+    if (n <= 1) return [NUMBER_RAMP[3]];
+    var out = [];
+    for (var i = 0; i < n; i++) out.push(NUMBER_RAMP[Math.round(i * (NUMBER_RAMP.length - 1) / (n - 1))]);
+    return out;
+  }
+
+  /* A LEFTOVER answer: "Other States", "Others", "Miscellaneous", "Everything
+     else". It names no kind — it is what is left when the kinds run out — so
+     a place given it reads as a contradiction beside its own value ("Other
+     States / Read from: West Bengal"). The reading already has an honest
+     leftover (no answer for that place), so a kind named like this is never
+     kept as a kind; a place it would have taken keeps its own value on the
+     card and has no answer to that one question. */
+  var LEFTOVER = /^(other|others|misc|miscellaneous|everything else|all others?|all the rest|the rest|elsewhere|unspecified|none of (these|the above))\b/i;
+  function isLeftoverName(name) { return LEFTOVER.test(cellOf(name)); }
+
+  /* A LOCATION column says where a place is — a country, state, district,
+     taluk, city, village, ward, pincode. The map already shows that, from the
+     place's own coordinates, so such a column is never read into a question
+     (Mithun, 8 Nov 2026: location is from the map). An address is caught by
+     its own rule (enrich.js looksLikeAPlace); this one catches the clean
+     one-name-a-cell column an address rule cannot see.
+
+     How it is decided, by the values, with the name only as a helper:
+       1. KNOWN NAMES, whatever the column is called: most filled cells are
+          names the atlas's own boundaries carry (opts.places, lower-cased —
+          the server hands them to the reading). KNOWN_SHARE of the cells;
+          KNOWN_NAMED when the column's name also says place ("state",
+          "district", "ward"). Strong.
+       2. A name that can only mean a place (district, taluk, village, city,
+          country, pincode …) AND values with the shape of place names (one
+          short capitalised name a cell, no digits, no lists) or of postal
+          codes. Strong.
+     Nothing else is a location. A name that only MAY mean a place decides
+     nothing without known names behind it: a "state" of repair (Under
+     repair, Collapsed), a body "region" (Left arm), a hospital "ward"
+     (Maternity), a park's "zone" (Core, Buffer), a "block" (Rose Block), a
+     "division" (Water Works), a "locality" type (Dense Urban) all have
+     tidy capitalised values, and all sit together on the map as real
+     states do — so neither the shape nor the map can tell them from
+     places, and asking a question too many is the smaller harm than
+     silencing a real one or retiring it. There is no weak signal: a
+     column is a location on strong evidence or it is read. */
+  var PLACE_SURE = Object.create(null), PLACE_MAYBE = Object.create(null);
+  ("country countries nation province provinces district districts subdistrict taluk taluka taluks talukas tehsil tehsils tahsil mandal mandals " +
+   "city cities town towns village villages county counties municipality municipalities panchayat " +
+   "pincode pincodes postcode postcodes zipcode zip").split(" ").forEach(function (w) { PLACE_SURE[w] = true; });
+  "state states region regions ward wards block blocks division divisions zone zones locality localities neighbourhood neighborhood suburb area"
+    .split(" ").forEach(function (w) { PLACE_MAYBE[w] = true; });
+  /* What the NAME says: "sure", "maybe" or "". The name's last word decides,
+     a trailing "name" or "code" aside ("Home state", "district_name", "Pin
+     code"); "State of repair" and "Village type" end on other words. */
+  function locationName(name) {
+    var words = nameWords(name);
+    var last = words.length - 1;
+    if (last > 0 && /^(name|names)$/.test(words[last])) last--;
+    if (last < 0) return "";
+    if (words[last] === "code" && last > 0 && /^(pin|post|postal|zip)$/.test(words[last - 1])) return "sure";
+    return PLACE_SURE[words[last]] ? "sure" : PLACE_MAYBE[words[last]] ? "maybe" : "";
+  }
+  var PLACE_NAME = /^[\p{Lu}\p{Lo}][\p{L}\p{M}'’.\-]*(?:\s+(?:[\p{L}\p{M}'’.\-]+|&))*$/u;   // "West Bengal", "Dadra & Nagar Haveli"
+  var POSTAL_CODE = /^(\d{3}\s?\d{3}|\d{5}(-\d{4})?|[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2})$/i;
+  var PLACE_SHAPE = 0.8, KNOWN_SHARE = 0.6, KNOWN_NAMED = 0.4;
+  function placeShape(cells) {
+    var names = 0, codes = 0, answers = 0;
+    cells.forEach(function (s) {
+      if (POSTAL_CODE.test(s)) { codes++; return; }
+      if (/[;|,\d]/.test(s) || s.split(" ").length > 4 || !PLACE_NAME.test(s)) return;
+      names++;
+      if (AN_ANSWER[s.toLowerCase()]) answers++;
+    });
+    if (codes >= cells.length * PLACE_SHAPE) return "codes";
+    return names >= cells.length * PLACE_SHAPE && answers < names * 0.5 ? "names" : "";
+  }
+  /* The one rule: { why: "location" | "", strong, by } for a column, given its
+     name and values and — when the caller has them — the atlas's own
+     boundary names (opts.places: an object or Set of lower-cased names).
+     `by` says which signal decided. */
+  function locationSignal(name, values, opts) {
+    var none = { why: "", strong: false, by: "" };
+    var cells = (values || []).map(cellOf).filter(Boolean);
+    if (cells.length < 2) return none;
+    var named = locationName(name);
+    var places = opts && opts.places, knows = function (s) {
+      return !!places && (typeof places.has === "function" ? places.has(s) : !!places[s]);
+    };
+    if (places) {
+      var known = cells.filter(function (s) { return knows(s.toLowerCase()); }).length;
+      if (known >= cells.length * (named ? KNOWN_NAMED : KNOWN_SHARE)) return { why: "location", strong: true, by: "known names" };
+    }
+    if (named !== "sure") return none;
+    var shape = placeShape(cells);
+    if (!shape) return none;
+    /* A name that can only mean a place, with place-shaped values, PASSES
+       OVER a new question — but it does not RETIRE a settled one. A
+       "district" column holding hospital wards, a "city" column holding team
+       names, a "country" column holding the origins of species all wear this
+       exact shape: a sure-sounding name and tidy capitalised words. The name
+       is enough to leave a question unasked (the harm is one question
+       missing); it is not enough to take a reading off the map that is
+       already there (the harm is a question silently lost). What is enough:
+       the values are names the atlas's own boundaries carry (above), or they
+       are postal codes, which nothing else is shaped like. */
+    return { why: "location", strong: shape === "codes", by: "name and values" };
+  }
+  var LOCATION_WHY = "says where each place is, and the map already shows that";
+
+  /* Do these rows hold anything WRITTEN — a description, a comment, a note —
+     in any column? The story on an atlas is written from such words and
+     quotes them; a sheet of categories, lists and numbers has none, and its
+     owner should hear that before building (the wizard's check line). A
+     column counts when one filled cell in five is prose: four words or
+     more, twenty-five characters, not a list of names, not a link, and not
+     a column about people or ids. Rows are plain objects, a column a key. */
+  var PROSE_WORDS = 4, PROSE_CHARS = 25, PROSE_SHARE = 0.2;
+  function isProseCell(v) {
+    var s = cellOf(v);
+    return s.length >= PROSE_CHARS && s.split(" ").length >= PROSE_WORDS && !/^https?:/i.test(s) && !isListCell(s);
+  }
+  function hasWrittenWords(rows) {
+    var list = (rows || []).filter(function (r) { return r && typeof r === "object"; });
+    var cols = Object.create(null);
+    list.forEach(function (r) { Object.keys(r).forEach(function (k) { cols[k] = true; }); });
+    return Object.keys(cols).some(function (k) {
+      if (k.charAt(0) === "_" || /^pattern_\d+(_why)?$/.test(k)) return false;
+      var values = list.map(function (r) { return r[k]; });
+      if (whyNotRead(k, values)) return false;
+      var filled = 0, prose = 0;
+      values.forEach(function (v) { if (!cellOf(v)) return; filled++; if (isProseCell(v)) prose++; });
+      return prose > 0 && prose >= filled * PROSE_SHARE;
+    });
+  }
+
   /* Photos found by what the cells hold, not by LOKA's column names (Mithun,
      8 Nov 2026): the first column whose filled cells are mostly https links
      to an image (jpg, jpeg, png, webp, gif — or LOKA's own /api/images/
@@ -700,6 +1264,22 @@
     isIdValue: isIdValue,
     isPersonLikeValue: isPersonLikeValue,
     NOT_READ_WHY: NOT_READ_WHY,
+    listItems: listItems,
+    isListCell: isListCell,
+    phrasesAsWritten: phrasesAsWritten,
+    isNumberCell: isNumberCell,
+    isNumberColumn: isNumberColumn,
+    isGroupedNumberColumn: isGroupedNumberColumn,
+    numberKey: numberKey,
+    numberBucket: numberBucket,
+    kindIndex: kindIndex,
+    numberKeySpreads: numberKeySpreads,
+    rampColors: rampColors,
+    isLeftoverName: isLeftoverName,
+    locationName: locationName,
+    locationSignal: locationSignal,
+    LOCATION_WHY: LOCATION_WHY,
+    hasWrittenWords: hasWrittenWords,
     photoColumnOf: photoColumnOf,
     photoLinksOf: photoLinksOf,
     imageLinksIn: imageLinksIn,

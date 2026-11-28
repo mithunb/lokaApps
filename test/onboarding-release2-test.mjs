@@ -159,8 +159,11 @@ check('the AI limits are 150 / 40 / 24, in the code and the docs',
 check('keys are rows beside the pin, not corner badges', /one row of small marks beside the pin/.test(capDoc) &&
   !/sit at the pin's four corners|corners are all taken|corner badges/.test(capDoc) &&
   /var ROW_SHAPES = \["circle", "square", "triangle", "diamond", "bar"\];/.test(viewer), true);
-check('the 85% rule is in the code and the docs', /var KEY_DOMINANCE = 0\.85;/.test(viewer) && /counts\[0\]\.n \/ feats\.length > KEY_DOMINANCE\) return;/.test(viewer) &&
-  /no single answer may cover more than 85% of the places/.test(capDoc), true);
+// …with its one exception: a number key whose ranges still spread (label-rules.js numberKeySpreads)
+check('the 85% rule is in the code and the docs', /var KEY_DOMINANCE = 0\.85;/.test(viewer) && /counts\[0\]\.n \/ feats\.length > KEY_DOMINANCE &&/.test(viewer) &&
+  /numberKeySpreads\(kindsHere, named - counts\[0\]\.n, feats\.length\)\)\) return;/.test(viewer) &&
+  /no single answer may cover more than 85% of the places/.test(capDoc) &&
+  /number key whose ranges still spread/.test(capDoc), true);
 check('DESIGN.md describes the release', /### The setup wizard, release 2 \(October 2026\)/.test(design) && /The first look/.test(design) && /The logo lives in Settings/.test(design), true);
 
 console.log('\n  the first look counts what is drawn, not what was hoped for');

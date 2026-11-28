@@ -1762,7 +1762,21 @@
        however long it is (api/lib/fragment.js). A file too big to send at all
        is refused whole, with its own plain sentence, before any of this. */
     if (!bits.length) bits.push("Nothing to fix.");
-    return bits.join(" ");
+    return bits.join(" ") + noWordsSays();
+  }
+  /* What the upload lacks, said before the owner builds (Mithun, 28 Nov
+     2026): a sheet with no written column — only categories, lists and
+     numbers — gets questions and no story, and its owner used to find that
+     out on the finished atlas. Asked of the rows the check already holds, by
+     the rule the story itself uses (label-rules.js hasWrittenWords). It is
+     not a thing to fix, so it follows whatever else the line says; "" when
+     the rows have words, or cannot be asked. */
+  var NO_WORDS = "These places have no written descriptions, so there will be no story \u2014 only questions from their categories.";
+  function noWordsSays() {
+    var rules = typeof LokaLabelRules !== "undefined" ? LokaLabelRules : null;
+    var rows = BENCH && BENCH.state && BENCH.state.canonical && BENCH.state.canonical.rows;
+    if (!rules || typeof rules.hasWrittenWords !== "function" || !Array.isArray(rows) || !rows.length) return "";
+    return rules.hasWrittenWords(rows) ? "" : " " + NO_WORDS;
   }
 
   /* ---- the question screen ---- */

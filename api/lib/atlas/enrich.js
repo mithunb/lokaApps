@@ -59,6 +59,11 @@ const ONE_SIDED_SHARE = 0.9;
 // the finder's checklist item "anything else": never grouped by the one-question-per-item rule
 const CATCH_ALL_ITEM = 8;
 const SAME_QUESTION = 0.8;       // agreement at which a question IS a column already on the map
+const SAME_BEYOND = 0.6;         // …and this far beyond what the commonest answer alone would get right (plain columns)
+const OWN_VALUES = 0.6;          // this share of a question's answers are a column's own values: it reads that column
+const EVIDENCE_SHARE = 0.05;     // a column backs a question when it holds the words for this share of its answers
+const COUNTS_ALIKE = 0.9;        // answers that follow a list's length this closely are a count
+const LIST_SEVERAL = 0.3;        // this share of places holding several of a question's answers: one answer cannot stand for them
 const CLIP = 280;                // description characters per digest line
 const TAG_CLIP = 420;            // tag-list characters per digest line (prompt only; the place keeps them all)
 
@@ -332,7 +337,10 @@ export function buildDigest(rows, fields) {
        often a word occurs across the whole set but not WHERE, and the question
        worth asking afterwards is whether the places saying a common word found
        anywhere to go. */
-    return { text, tags: tags.map((t) => t.toLowerCase()) };
+    /* …and its cells as they were written, whole: the words behind an answer
+       are given back from these as the place wrote them (answerQuestions,
+       label-rules.js phrasesAsWritten), never from the clipped line above. */
+    return { text, tags: tags.map((t) => t.toLowerCase()), cells: byCol.map((c) => c.values[i].trim()).filter(Boolean) };
   });
   /* The closed lists, each with its whole vocabulary and how many places carry
      each word — not a sample, the lot, because the point is that it IS the lot. */
@@ -719,7 +727,27 @@ export function columnLabel(name) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 }
 
-export function textColumns(rows, fields, { nameCol = '' } = {}) {
+/* The names an atlas's own boundaries carry, lower-cased: every outline's
+   name and the names of what it sits in (state, district, taluk …), from the
+   boundary file's own properties. Short values with letters only — never a
+   code, a number, or the bookkeeping words every outline shares ("admin").
+   Null when the file holds none, so the reading asks nothing of it. */
+const NOT_A_BOUNDARY_NAME = /^(kind|type|level|source|shape|iso|.*(_id|_lgd|_code|id|code))$/i;
+export function boundaryNamesOf(geojson) {
+  const names = new Set();
+  for (const f of ((geojson && geojson.features) || [])) {
+    const props = (f && f.properties) || {};
+    for (const k of Object.keys(props)) {
+      const v = props[k];
+      if (typeof v !== 'string' || NOT_A_BOUNDARY_NAME.test(k)) continue;
+      const s = v.replace(/\s+/g, ' ').trim();
+      if (s.length >= 2 && s.length <= 60 && /\p{L}/u.test(s) && !/\d/.test(s) && !/^https?:/i.test(s)) names.add(s.toLowerCase());
+    }
+  }
+  return names.size ? names : null;
+}
+
+export function textColumns(rows, fields, { nameCol = '', places = null } = {}) {
   const cols = (fields || []).map(String);
   const closed = keyShapedColumns(rows, cols);
   const ask = [], passed = [];
@@ -742,6 +770,28 @@ export function textColumns(rows, fields, { nameCol = '' } = {}) {
       passed.push({ column: f, notRead, strong: !!LABELS.strongNotRead(f, values), why: LABELS.NOT_READ_WHY[notRead] });
       continue;
     }
+    /* A column that says WHERE a place is — a state, a district, a village,
+       a pincode — is never asked (Mithun, 28 Nov 2026; location is from the
+       map). The address rule below catches a line of pieces ending the same
+       way; a clean column of one place name a cell slipped past it, and a
+       sheet of recording sites was asked "Which state is this place in?".
+       Decided by the values (label-rules.js locationSignal): they are names
+       the atlas's own boundaries carry (places — the server hands them in),
+       or the column's name can only mean a place ("district", "pincode")
+       and its values are place names or postal codes. Either is a strong
+       signal, and retires a question an earlier reading took only from it
+       (enrichRows), exactly as an address does. A name that only MAY mean a
+       place ("state" of repair, a hospital "ward", a park's "zone") decides
+       nothing on its own, however its values sit on the map: such a column
+       is asked. Before the closed-list test, as a people column is: a
+       "district" column of eight districts is key-shaped, and its line must
+       say what it is. The column stays on the card and, where the viewer
+       offers it, as a key. */
+    const where = LABELS.locationSignal(f, values, { places });
+    if (where.why) {
+      passed.push({ column: f, location: true, strong: where.strong, by: where.by, why: LABELS.LOCATION_WHY });
+      continue;
+    }
     const distinct = new Set(filled.map((v) => v.toLowerCase())).size;
     const delim = tagDelimiter(values);
     if (closed.has(f)) {
@@ -756,6 +806,14 @@ export function textColumns(rows, fields, { nameCol = '' } = {}) {
     }
     if (distinct === 1 && filled.length === values.length) {
       passed.push({ column: f, why: 'says the same thing for every place' });
+      continue;
+    }
+    /* A number is counted, never read (Mithun, 28 Nov 2026). The reader's
+       own column list already leaves numbers out (reading-rules.js
+       wordColumns); this is the same rule for a caller that names its
+       columns itself, with the reason on the column's line. */
+    if (LABELS.isNumberColumn(values)) {
+      passed.push({ column: f, number: true, why: 'a number — it is counted, not read as words' });
       continue;
     }
     const avgLen = filled.reduce((n, v) => n + v.length, 0) / filled.length;
@@ -808,8 +866,8 @@ export function textColumns(rows, fields, { nameCol = '' } = {}) {
    left is how many groups may be asked on their own. Columns beyond that are
    read together, and the record says so — a column read together with
    another is not a column ignored. */
-export function planColumns(rows, fields, { nameCol = '', budget = 24, batches = 1 } = {}) {
-  const { ask, passed } = textColumns(rows, fields, { nameCol });
+export function planColumns(rows, fields, { nameCol = '', budget = 24, batches = 1, places = null } = {}) {
+  const { ask, passed } = textColumns(rows, fields, { nameCol, places });
   /* Prose first, then tags, richest first within each: the column with the
      most to say gets the first look, and when two columns hand back the same
      question the first to ask it keeps it, so a description's wording wins
@@ -899,6 +957,11 @@ export function columnReport(plan, outcomes, questions, fell = [], total = 0, op
     if (o.twice) why.push(o.twice === 1 ? 'its question was one another column had already asked' : o.twice + ' of its questions were ones another column had already asked');
     return 'no question kept — ' + (why.length ? why.join('; ') : 'what it suggested was too vague to sort the places');
   };
+  // settled questions this reading took off the map for what they were (a count, one item of a list), each with its reason
+  const offMap = ((opts && Array.isArray(opts.retired)) ? opts.retired : []).filter((x) => x && x.why);
+  const goneFrom = (c) => offMap.filter((x) => (x.columns || []).includes(c));
+  const goneSays = (gone) => !gone.length ? '' : '; ' + listOf(gone.map((x) => q(x.question))) + ', which an earlier reading took from it, ' +
+    (gone.length === 1 ? 'is' : 'are') + ' now off the map — ' + gone[0].why;
   for (const g of (plan && plan.groups) || []) {
     const o = outcomes[g.label];
     const survived = (questions || []).filter((x) => x.column === g.label && !x.settled);
@@ -908,7 +971,7 @@ export function columnReport(plan, outcomes, questions, fell = [], total = 0, op
       // not looked at this time
       const mine = settled.filter((x) => (x.columns || []).some((c) => g.columns.includes(c)));
       const carried = g.columns.map(earlier);
-      if (carried.every(Boolean)) { lines.push(...carried); continue; }
+      if (carried.every(Boolean) && !g.columns.some((c) => goneFrom(c).length)) { lines.push(...carried); continue; }
       if (mine.length) {
         text = 'looked at in an earlier reading, which kept ' + mine.map((x) => q(x.question) + (x.answered != null ? reach(x) : '')).join(', ');
       } else if (settled.length) {
@@ -920,7 +983,8 @@ export function columnReport(plan, outcomes, questions, fell = [], total = 0, op
       text = yielded(o, survived, dropped);
     }
     for (const c of g.columns) {
-      if (!o) {
+      const gone = goneFrom(c);
+      if (!o && !gone.length) {
         const carried = earlier(c);
         if (carried) { lines.push(carried); continue; }
       }
@@ -928,9 +992,23 @@ export function columnReport(plan, outcomes, questions, fell = [], total = 0, op
       const together = !others.length ? ''
         : g.squeezed ? ' (read together with other columns, to keep the cost of one reading down: with ' + listOf(others) + ')'
         : ' (read with ' + listOf(others) + ' — ' + (others.length === 1 ? 'it holds' : 'each holds') + ' only a word or two)';
+      /* A question found while columns were read together is kept against
+         the columns its answers were really read from (enrichRows narrows
+         its `columns`), so a column of the group that gave it nothing says
+         so, and names the column that did — never "1 question kept" on a
+         column no answer came from. */
+      const reads = (x) => !Array.isArray(x.columns) || !x.columns.length || x.columns.includes(c);
+      const mine = survived.filter(reads);
+      let said = text;
+      if (o && survived.length && mine.length < survived.length) {
+        const theirs = survived.filter((x) => !reads(x));
+        said = mine.length ? yielded(o, mine, dropped)
+          : 'no question of its own — ' + listOf(theirs.map((x) => q(x.question))) + (theirs.length === 1 ? ' was' : ' were') + ' read from ' +
+            listOf([...new Set(theirs.flatMap((x) => x.columns))].map(columnLabel));
+      }
       // asked: a finder call was made for it, whatever it said
       lines.push({ column: c, label: columnLabel(c), asked: Boolean(o && (o.state === 'asked' || o.state === 'none')),
-        found: survived.length, line: columnLabel(c) + ': ' + text + together });
+        found: mine.length, line: columnLabel(c) + ': ' + said + together + goneSays(gone), ...(gone.length ? { retired: gone.length } : {}) });
     }
   }
   /* The columns read together once more (G2), one line of its own after the
@@ -1004,6 +1082,12 @@ export function columnReport(plan, outcomes, questions, fell = [], total = 0, op
     }
     lines.push({ column: p.column, label: columnLabel(p.column), asked: false, found: 0,
       line: columnLabel(p.column) + ': ' + said });
+  }
+  // …and from a column that is no longer read at all (a number column), a line of its own
+  for (const c of [...new Set(offMap.flatMap((x) => x.columns || []))]) {
+    if (lines.some((l) => l.column === c)) continue;
+    lines.push({ column: c, label: columnLabel(c), asked: false, found: 0, retired: goneFrom(c).length,
+      line: columnLabel(c) + ': not read — a number is counted, not read as words' + goneSays(goneFrom(c)) });
   }
   return lines;
 }
@@ -1596,6 +1680,29 @@ export async function answerQuestions({ digest, questions, title, callJSON, mode
         lineOf: (q, i) => String((q.digest ? q.digest.entries[i] : digest.entries[i]).text || '') })
     : null;
 
+  /* Last of all, the words are kept as the place wrote them (28 Nov 2026).
+     The model is asked for words and gives words: "West" and "Bengal" for
+     West Bengal, "Brown" and "Hawk" for Brown Hawk Owl — and stored that way
+     the card read "Read from: West, Bengal". So each cited word is given
+     back as it stands in the place's own cells: words side by side are one
+     phrase, a word of a list's item is the whole item, in the cells' order
+     (label-rules.js phrasesAsWritten).
+
+     LAST on purpose. Every check above — the word is on the place's line, no
+     word argues for two answers, the careful check — has already run on the
+     words exactly as they were cited, so which answers stand is decided as
+     it always was. Joining "quiet" and "nature" into "quiet nature" before
+     the two-answers check would have hidden "nature" from it. Only what is
+     stored and shown changes. A digest made by hand, with no cells, keeps
+     the words as cited. */
+  questions.forEach((q, n) => {
+    for (let i = 0; i < why[n].length; i++) {
+      if (!why[n][i].length) continue;
+      const cells = (q.digest ? q.digest.entries[i] : digest.entries[i]).cells;
+      if (Array.isArray(cells) && cells.length) why[n][i] = LABELS.phrasesAsWritten(why[n][i], cells);
+    }
+  });
+
   return { answers: out, why, batches, unread, trouble, check };
 }
 
@@ -1884,7 +1991,33 @@ export async function enrichRows(opts) {
        over and why; the record carries all of it (columns, below), so an owner
        can see that no column was skipped without being told. */
     const batches = Math.ceil(rows.length / CLASSIFY_BATCH);
-    const plan = planColumns(rows, fields, { nameCol: opts.nameCol || '', budget: opts.callBudget || 24, batches });
+    // placeNames: the atlas's own boundary names, lower-cased, when the caller has them (label-rules.js locationSignal)
+    const plan = planColumns(rows, fields, { nameCol: opts.nameCol || '', budget: opts.callBudget || 24, batches,
+      places: opts.placeNames || null });
+    // a place's cell as written, and what a column says anywhere (whole cells and the items of its lists), lower-cased
+    const cellAt = (i, c) => {
+      const v = rows[i] && rows[i][c];
+      return v == null ? '' : (Array.isArray(v) ? v.filter((x) => x != null).join('; ') : String(v)).trim();
+    };
+    const saidIn = new Map();
+    const says = (c) => {
+      if (!saidIn.has(c)) {
+        const set = new Set();
+        rows.forEach((_, i) => {
+          const v = cellAt(i, c);
+          if (!v) return;
+          set.add(v.toLowerCase());
+          for (const item of LABELS.listItems(v)) set.add(item.toLowerCase());
+        });
+        saidIn.set(c, set);
+      }
+      return saidIn.get(c);
+    };
+    const delims = new Map();             // column -> the separator its lists use, or null for a column that is not a list
+    const delimOf = (c) => {
+      if (!delims.has(c)) delims.set(c, tagDelimiter(rows.map((_, i) => cellAt(i, c))));
+      return delims.get(c);
+    };
 
     /* A settled question read from an address is retired here (8 Nov 2026).
        Questions used to be settled for good — "answered from its own column
@@ -1905,13 +2038,195 @@ export async function enrichRows(opts) {
        email, phone…; or values mostly emails, phones or UUIDs). A weaker
        match ("Owner", "tag_id", long numbers) is passed over when questions
        are looked for, but never takes an existing question off the map. */
-    const addressColumns = new Set(plan.passed.filter((p) => p.address || (p.notRead && p.strong)).map((p) => p.column));
+    /* …and, from 28 Nov 2026, one read only from a column that says where a
+       place is (a state, a district: plan.passed marks it `location`), again
+       on a strong signal only.
+
+       A settled question's columns are first brought down to the ones it
+       really reads. A question found in a group of short columns read
+       together used to claim the whole group: "Which state is this place
+       in?" was recorded as read from habitat, state and animal_groups, so
+       the rule above saw two honest columns beside the location and kept the
+       question. When the question's own answers are the values of exactly
+       one of its columns (most of its kinds are written in that column, none
+       in the others), that column is the one it reads. */
+    const addressColumns = new Set(plan.passed.filter((p) => p.address || (p.notRead && p.strong) || (p.location && p.strong)).map((p) => p.column));
+    /* A question may LET GO of a location column it was recorded against
+       even on a weak signal ("district", "city": a sure-sounding name and
+       tidy capitalised values, which a ward of a hospital wears too) — it
+       keeps the columns it really reads and loses nothing. Being taken off
+       the map is the other thing, and that still needs a STRONG signal
+       (addressColumns): known boundary names, or postal codes. */
+    const letGoColumns = new Set(plan.passed.filter((p) => p.address || (p.notRead && p.strong) || p.location).map((p) => p.column));
+    const sizeAsks = /^\s*how many\b|\bhow many (?:different |kinds of |types of )?\w+|\bnumber of\b/i;
+    const countsAColumn = (q) => {
+      for (const c of (q.columns || [])) {
+        const delim = delimOf(c);
+        if (!delim && !LABELS.isNumberColumn(rows.map((_, i) => cellAt(i, c)))) continue;
+        if (sizeAsks.test(q.question)) return c;
+        const sizes = new Map();          // answer -> the sizes of its places
+        q.categories.forEach((k, i) => {
+          const v = cellAt(i, c);
+          if (!k || k === 'other' || !v) return;
+          const size = delim ? v.split(delim).filter((t) => t.trim()).length : Number(v.replace(/[,%\s]/g, ''));
+          if (!Number.isFinite(size)) return;
+          if (!sizes.has(k)) sizes.set(k, []);
+          sizes.get(k).push(size);
+        });
+        if (sizes.size < MIN_CATS) continue;
+        const order = [...sizes.values()].map((a) => { const sorted = a.slice().sort((x, y) => x - y); return { a, mid: sorted[Math.floor(sorted.length / 2)] }; })
+          .sort((x, y) => x.mid - y.mid);
+        if (order.some((o, j) => j && o.mid === order[j - 1].mid)) continue;
+        /* Two things at once. The answers run in the order of the sizes:
+           each place sits between the middle size of the answer below its
+           own and the middle size of the answer above. And the size alone
+           tells the answer: places of one size nearly all have the same
+           one. Either alone can happen by accident; both, nine places in
+           ten, is a count. */
+        let right = 0, total = 0;
+        const bySize = new Map();         // a size -> how many places of that size took each answer
+        order.forEach((o, j) => {
+          const from = j ? order[j - 1].mid : -Infinity;
+          const to = j < order.length - 1 ? order[j + 1].mid : Infinity;
+          for (const size of o.a) {
+            total += 1;
+            if (size >= from && size <= to) right += 1;
+            if (!bySize.has(size)) bySize.set(size, new Map());
+            bySize.get(size).set(j, (bySize.get(size).get(j) || 0) + 1);
+          }
+        });
+        let told = 0;
+        for (const tally of bySize.values()) told += Math.max(...tally.values());
+        if (told / total < COUNTS_ALIKE) continue;
+        if (total >= KIND_FLOOR * MIN_CATS && right / total >= COUNTS_ALIKE) return c;
+      }
+      return null;
+    };
+    const picksFromAList = (q) => {
+      for (const c of (q.columns || [])) {
+        const delim = delimOf(c);
+        if (!delim) continue;
+        const answerOf = new Map();       // an item as written, lower-cased (one or many) -> the answer it is
+        for (const k of q.counts) {
+          answerOf.set(k.name.toLowerCase(), k.name);
+          answerOf.set(String(LABELS.singular(k.name)).toLowerCase(), k.name);
+        }
+        const asItems = new Set();
+        let answered = 0, several = 0;
+        q.categories.forEach((k, i) => {
+          if (!k || k === 'other') return;
+          answered += 1;
+          const mine = new Set();
+          for (const part of cellAt(i, c).split(delim)) {
+            const item = part.trim().toLowerCase();
+            const a = answerOf.get(item) || answerOf.get(String(LABELS.singular(item)).toLowerCase());
+            if (a) { mine.add(a); asItems.add(a); }
+          }
+          if (mine.size > 1) several += 1;
+        });
+        if (asItems.size >= MIN_CATS && asItems.size >= q.counts.length * OWN_VALUES && several >= answered * LIST_SEVERAL) {
+          return { column: c, several, answered };
+        }
+      }
+      return null;
+    };
+    // free text: four words or more a place, and not a list
+    const proseOf = new Map();
+    const isProse = (c) => {
+      if (!proseOf.has(c)) {
+        let filled = 0, words = 0;
+        rows.forEach((_, i) => { const v = cellAt(i, c); if (v) { filled += 1; words += v.split(/\s+/).length; } });
+        proseOf.set(c, !delimOf(c) && filled > 0 && words / filled >= TEXT_WORDS);
+      }
+      return proseOf.get(c);
+    };
+    const isNumbers = (c) => LABELS.isNumberColumn(rows.map((_, i) => cellAt(i, c)));
+    // what the places already wear under a settled question (its own column on the rows), when the rows carry it
+    const storedAnswers = (q) => {
+      if (!q.col || !rows.some((r) => r && r[q.col] != null && String(r[q.col]).trim())) return null;
+      return rows.map((r) => String((r && r[q.col]) || '').trim());
+    };
     const retired = [];
-    const askedBefore = settledForAnswering(opts.keepQuestions, fields).filter((q) => {
-      if (!q.columns.length || !q.columns.some((c) => addressColumns.has(c))) return true;
-      const rest = q.columns.filter((c) => !addressColumns.has(c));
-      if (!rest.length) { retired.push({ question: q.question, columns: q.columns.slice(), col: q.col || '' }); return false; }
-      q.gaveUp = q.columns.filter((c) => addressColumns.has(c));
+    /* A settled question read from a number column keeps that column here:
+       the reader's own list leaves numbers out now (wordColumns), and a
+       question whose column has "gone" would fall back to the whole record
+       and never be seen for what it is. */
+    const numberColumns = [...new Set((opts.keepQuestions || []).flatMap((q) => (Array.isArray(q && q.columns) ? q.columns : []).map(String)))]
+      .filter((c) => !fields.includes(c) && rows.some((r) => r && r[c] != null) && isNumbers(c));
+    const settledNow = settledForAnswering(opts.keepQuestions, fields.concat(numberColumns));
+    for (const q of settledNow) {
+      /* Never when one of its columns is free text: a question read from
+         descriptions is real reading, whichever other column its answers
+         happen to match, and must not be brought down onto a column that
+         could then retire it. And when the places still wear its answers,
+         those answers must BE that column's values (eight places in ten),
+         not merely share names with them. */
+      if (q.columns.length < 2 || q.columns.some(isProse)) continue;
+      const named = q.kinds.filter((k) => !LABELS.isLeftoverName(k.name));
+      const held = q.columns.map((c) => named.filter((k) => says(c).has(k.name.toLowerCase())).length);
+      const most = Math.max(...held), at = held.indexOf(most);
+      if (!(most >= MIN_CATS && most >= named.length * OWN_VALUES && held.every((h, k) => k === at || h === 0))) continue;
+      const stored = storedAnswers(q);
+      if (stored) {
+        let both = 0, same = 0;
+        stored.forEach((a, i) => {
+          const v = cellAt(i, q.columns[at]).toLowerCase();
+          if (!a || !v || LABELS.isLeftoverName(a)) return;
+          both += 1;
+          if (v === a.toLowerCase() || LABELS.listItems(v).includes(a.toLowerCase())) same += 1;
+        });
+        if (!both || same / both < SAME_QUESTION) continue;
+      }
+      q.columns = [q.columns[at]];
+      q.column = q.columns[0];
+    }
+    /* …and, from 28 Nov 2026 (Mithun: "Retire them too"), two more, each on
+       what the cells hold and never on a name or a wording alone:
+
+       ONE ITEM OF A LIST — every column it reads is a list, most of its
+       answers are items of that list, and three places in ten that hold one
+       of them hold several. A grouping question (new names over a list's
+       items — LOKA's labels read as "What is there to use?") is not this.
+
+       A COUNT — every column it reads is a list or a number column, and the
+       answers the places wear follow the size (countsAColumn); where the
+       rows no longer carry the answers, the question must also ask "how
+       many". A question read only from number columns is a count by what it
+       reads. "How many families live here?" read from descriptions is
+       reading, and stays. */
+    const offTheMap = (q) => {
+      if (!q.columns.length) return '';
+      const stored = storedAnswers(q);
+      if (q.columns.every((c) => Boolean(delimOf(c)) || isNumbers(c))) {
+        if (q.columns.every(isNumbers)) return 'a number is counted, not read';
+        const follows = stored ? countsAColumn({ question: '', columns: q.columns, categories: stored }) : null;
+        if (follows || (!stored && sizeAsks.test(q.question))) return 'it only counts what the column holds — a count is worked out, not read';
+      }
+      if (q.columns.every((c) => Boolean(delimOf(c)))) {
+        const named = q.kinds.filter((k) => !LABELS.isLeftoverName(k.name));
+        const lower = new Map(named.map((k) => [k.name.toLowerCase(), k.name]));
+        // each place wears its stored answer; where the rows no longer carry it, the first of the answers its list holds
+        const categories = stored || rows.map((_, i) => {
+          for (const c of q.columns) for (const part of cellAt(i, c).split(delimOf(c))) { const a = lower.get(part.trim().toLowerCase()); if (a) return a; }
+          return '';
+        });
+        const picks = picksFromAList({ columns: q.columns, counts: named.map((k) => ({ name: k.name })), categories });
+        if (picks) return 'each answer is one item of the list, and ' + picks.several + ' of the ' + picks.answered + ' places it answered hold more than one of them — the list is shown as tags instead';
+      }
+      return '';
+    };
+    const askedBefore = settledNow.filter((q) => {
+      const why = offTheMap(q);
+      if (why) { retired.push({ question: q.question, columns: q.columns.slice(), col: q.col || '', why }); return false; }
+      if (!q.columns.length || !q.columns.some((c) => letGoColumns.has(c))) return true;
+      const rest = q.columns.filter((c) => !letGoColumns.has(c));
+      if (!rest.length) {
+        // nothing else left to read: off the map only on a strong signal, otherwise it stays as it was
+        if (!q.columns.some((c) => addressColumns.has(c))) return true;
+        retired.push({ question: q.question, columns: q.columns.slice(), col: q.col || '' });
+        return false;
+      }
+      q.gaveUp = q.columns.filter((c) => letGoColumns.has(c));
       q.columns = rest;
       q.column = rest.join(' + ');
       return true;
@@ -1986,8 +2301,13 @@ export async function enrichRows(opts) {
         let proposed = got.thin || 0, dropped = got.thin || 0, twice = 0;
         for (const q of got.questions) {
           proposed += 1;
+          /* A kind named "Other …" is the leftover wearing a name
+             (label-rules.js isLeftoverName): it is not offered, so a place
+             none of the kinds fit has no answer here and keeps its own value
+             on its card — never "Other States" beside "West Bengal". The
+             map's seven named kinds are as they were. */
           const kinds = got.reused ? { kept: q.kinds, dropped: [] }
-            : gateNames(q.kinds, { title, listLength: got.listLength, reserved });
+            : gateNames(q.kinds.filter((k) => !LABELS.isLeftoverName(k && k.name)), { title, listLength: got.listLength, reserved });
           if (kinds.kept.length < MIN_CATS) { dropped += 1; continue; }
           /* Two columns can hand back the same question — "What kind of place
              is it?" from the description and again from the tags. One map,
@@ -2104,8 +2424,11 @@ export async function enrichRows(opts) {
        of settled questions asks no column afresh: nothing is written, the
        old questions stay until the owner asks again, and the reason says so. */
     if (!kept.length && retired.length) {
+      const onlyAddresses = retired.every((x) => !x.why && x.columns.every((c) => plan.passed.some((p) => p.column === c && p.address)));
       return { verdict: 'refused', retired,
-               reason: 'every question on this map was read from an address, and addresses are no longer asked — ask again to find new questions',
+               reason: onlyAddresses
+                 ? 'every question on this map was read from an address, and addresses are no longer asked — ask again to find new questions'
+                 : 'every question on this map was of a kind that is no longer asked (where a place is, who added it, a count, or one item of a list) — ask again to find new questions',
                columns: report(askedBefore) };
     }
     if (!kept.length) return { verdict: 'refused', reason: 'no question had enough kinds that fit', columns: report(askedBefore) };
@@ -2219,6 +2542,98 @@ export async function enrichRows(opts) {
         }
       }
     }
+
+    /* A new question keeps only the columns its answers were really read
+       from (28 Nov 2026). A question found in several columns read together
+       — the short columns as one group, or every column in the joint read —
+       was recorded against all of them, and that list drives "Read from",
+       the quotes, and which questions an address or location rule retires.
+       The words under each answer say where it came from: a column is kept
+       when it holds those words for three places or more (and one place in
+       twenty of those with words); the others are let go. With nothing to
+       go by, the list stays as it was. */
+    kept.forEach((q, n) => {
+      if (!fresh(n) || !Array.isArray(q.columns) || q.columns.length < 2) return;
+      const backs = q.columns.map(() => 0);
+      let evidenced = 0;
+      filed.why[n].forEach((words, i) => {
+        const ans = filed.answers[n][i];
+        if (!ans || ans === 'other' || !words || !words.length) return;
+        evidenced += 1;
+        q.columns.forEach((c, k) => {
+          const cell = cellAt(i, c).toLowerCase();
+          if (cell && words.some((w) => cell.includes(String(w).toLowerCase()))) backs[k] += 1;
+        });
+      });
+      const floor = Math.max(KIND_FLOOR, evidenced * EVIDENCE_SHARE);
+      const own = q.columns.filter((_, k) => backs[k] >= floor);
+      if (own.length && own.length < q.columns.length) q.columns = own;
+    });
+
+    /* Three things a question may not be, each decided by counting the
+       places' own cells against its answers (28 Nov 2026) — never by the
+       question's wording alone, never by a column's name.
+
+       A COUNT. "How many different species are heard here?" — One species,
+       Two to four, Five to ten — is the length of a list, or a number column
+       cut into ranges: arithmetic, which a model does badly and a line of
+       code does exactly. It is one when it asks "how many" of a list or a
+       number column, or when its answers simply follow the size (each answer
+       its own stretch of sizes, nine places in ten).
+
+       ONE ITEM OF A LIST. "What kind of animal is heard here?" answered
+       "Sunbird" for a place that lists twenty-six animals: the answers are
+       items of the list itself, and a place that holds several of them can
+       wear only one. The list is already tags on every card — tappable,
+       counted — which says all of them. It is this when most of its answers
+       are items of the list and three places in ten that it answered hold
+       more than one of them. (A list where each place holds one of the
+       answers is a fair sorting and is kept.)
+
+       A PLAIN COLUMN OVER AGAIN. sameAsAColumn below sees only the closed
+       LISTS; a plain column of a few values ("main_animal_group": six of
+       them) is just as much a key the map already offers, and a question
+       whose answer can be told from that column's value alone — the same
+       groups, or a few of them merged — adds nothing to it. */
+    const plainKeys = [...keyShapedColumns(rows, readable)].filter((c) => !delimOf(c));
+    /* Only for a question read from lists or short columns. One read from
+       free text is real reading even when it agrees with a column: on an
+       Event atlas "What happens here?" read from the descriptions may well
+       follow a plain "type" column, and it is still the descriptions'. A
+       question with no column of its own (the whole record) is left alone
+       for the same reason. */
+    const sameAsAPlainKey = (q) => {
+      if (!Array.isArray(q.columns) || !q.columns.length || q.columns.some(isProse)) return null;
+      const cats = q.categories;
+      const answered = cats.filter((c) => c && c !== 'other').length;
+      for (const c of plainKeys) {
+        const byValue = new Map(), answers = new Map();
+        let total = 0;
+        cats.forEach((k, i) => {
+          const v = cellAt(i, c).toLowerCase();
+          if (!k || k === 'other' || !v) return;
+          total += 1;
+          answers.set(k, (answers.get(k) || 0) + 1);
+          if (!byValue.has(v)) byValue.set(v, new Map());
+          byValue.get(v).set(k, (byValue.get(v).get(k) || 0) + 1);
+        });
+        if (!answered || total < answered * SAME_QUESTION || byValue.size < MIN_CATS) continue;
+        let agree = 0;
+        const told = new Set();           // the answers some value of the column tells
+        for (const tally of byValue.values()) {
+          const top = [...tally.entries()].sort((x, y) => y[1] - x[1])[0];
+          agree += top[1];
+          told.add(top[0]);
+        }
+        // and well beyond what always guessing the commonest answer would get right
+        const guess = Math.max(...answers.values()) / total;
+        const beyond = guess < 1 ? (agree / total - guess) / (1 - guess) : 0;
+        if (told.size >= MIN_CATS && agree / total >= SAME_QUESTION && beyond >= SAME_BEYOND) {
+          return { column: c, agreement: Math.round(agree / total * 100) };
+        }
+      }
+      return null;
+    };
 
     /* A question judged by what it SORTS, not by what it is called.
 
@@ -2357,7 +2772,24 @@ export async function enrichRows(opts) {
          every question kept ahead of it, the settled ones included. */
       .filter((q) => {
         if (q.settled) return true;
-        const same = sameAsAColumn(q, q.categories);
+        const counted = countsAColumn(q);
+        if (counted) {
+          fell.push({ question: q.question, column: q.column,
+            why: 'it only counts what the ' + columnLabel(counted) + ' column holds — a count is worked out, not read' });
+          return false;
+        }
+        const picks = picksFromAList(q);
+        if (picks) {
+          fell.push({ question: q.question, column: q.column,
+            why: 'each answer is one item of the ' + columnLabel(picks.column) + ' list, and ' + picks.several + ' of the ' + picks.answered +
+              ' places it answered hold more than one of them — the list is shown as tags instead' });
+          return false;
+        }
+        return true;
+      })
+      .filter((q) => {
+        if (q.settled) return true;
+        const same = sameAsAColumn(q, q.categories) || sameAsAPlainKey(q);
         if (!same) return true;
         echoed.push({ question: q.question, column: same.column, agreement: same.agreement });
         fell.push({ question: q.question, column: q.column, why: 'it sorted the places the same way the ' + same.column + ' column already does' });

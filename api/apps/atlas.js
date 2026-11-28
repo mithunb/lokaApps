@@ -5563,6 +5563,11 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
     addColumns: Array.isArray(opts.addColumns) && opts.addColumns.length ? opts.addColumns : null,
     reuseFound: firstFound,
     previousColumns,
+    /* The names this atlas's own boundaries carry, so a column that says
+       where a place is — a state, a district — is known by its VALUES,
+       whatever it is called (enrich.js textColumns, label-rules.js
+       locationSignal). Null when the atlas has no boundary file. */
+    placeNames: boundaryNamesFor(m.dir),
   });
   let out = await ask([]);
   firstFound = out.found || null;
@@ -5696,8 +5701,9 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
      the layers' hiddenKeys (reading-rules.js dropRetiredKeys). */
   if ((out.retired || []).length) {
     for (const r of out.retired) {
+      // r.why: a count, or one item of a list (enrich.js offTheMap); without it, a column that is no longer asked
       console.log('[atlas] ' + dataset + '/' + layerId + ' — took “' + r.question + '” off the map: it was read from ' +
-        r.columns.map(enrich.columnLabel).join(' and ') + ', and an address is not asked');
+        r.columns.map(enrich.columnLabel).join(' and ') + ', and ' + (r.why || 'that column is no longer asked (where a place is, or who added it)'));
     }
     try {
       const inst = reg.getInstance(dataset);
@@ -5722,6 +5728,25 @@ async function runReading(dataset, layerId, afresh, opts = {}) {
   };
 }
 
+
+/* The names an atlas's own boundaries carry (admin.geojson: each outline's
+   name, and the state or district it sits in), lower-cased, for the reading
+   (enrich.js boundaryNamesOf). The file is read once for each version of it
+   — kept by its path, size and time — and an atlas with no boundary file
+   costs one stat and gets null. */
+const boundaryNameCache = new Map();
+function boundaryNamesFor(dir) {
+  const file = path.join(dir, 'admin.geojson');
+  let stat = null;
+  try { stat = fs.statSync(file); } catch { return null; }
+  const key = file + '|' + stat.size + '|' + stat.mtimeMs;
+  if (boundaryNameCache.has(key)) return boundaryNameCache.get(key);
+  let names = null;
+  try { names = enrich.boundaryNamesOf(JSON.parse(fs.readFileSync(file, 'utf8'))); } catch { names = null; }
+  if (boundaryNameCache.size >= 16) boundaryNameCache.delete(boundaryNameCache.keys().next().value);
+  boundaryNameCache.set(key, names);
+  return names;
+}
 
 /* The stand-in reading (see FAKE_READING). Same shape as enrich.enrichRows
    gives back, so everything after it — the shaping, the write, the keys on the

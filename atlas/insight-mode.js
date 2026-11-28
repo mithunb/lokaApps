@@ -632,9 +632,67 @@
   }
   // the columns a quote may come from: free text nobody would mistake for a field
   var NOT_TEXT = /^(address|latitude|longitude|lat|lon|lng|created_at|updated_at|date|time|tag_id|id|uuid|slug|public_link|photo_small|thumbnail_url|photo_urls|photo_count|likes|comments|spaces|categories|labels|themes|_category|loka_name|name|title)$/;
+  /* The shared column-shape rules (label-rules.js): the page's own copy, or
+     Node's when the server's story writer loads this file. Null when neither
+     is to be had (a stand-in page in a check): every caller then behaves as
+     it did before those rules existed. */
+  function shapeRules() {
+    if (typeof LokaLabelRules !== "undefined" && LokaLabelRules) return LokaLabelRules;
+    if (typeof module === "object" && module.exports && typeof require === "function") {
+      try { return require("./label-rules.js"); } catch (e) { return null; }
+    }
+    return null;
+  }
+  /* A list of names is not somebody's words (Mithun, 28 Nov 2026): a sheet
+     with no prose at all had two "quotes" that were lists of birds heard at a
+     site, under "Story of the place in their own words". A cell made of
+     items joined by separators, with no sentence in it (label-rules.js
+     isListCell), is data: never offered as a quote or fed to the story
+     (placeWords — the server's story writer reads its digest through it),
+     and a quote already stored from one is no longer shown (wordsNow). An
+     atlas with no prose so has no story and no quotes, and its panel starts
+     with the questions. Asked after a source's sentences have been judged,
+     so a credit line or a link still gives its own reason. */
+  function isListOfNames(v) {
+    var rules = shapeRules();
+    return !!(rules && typeof rules.isListCell === "function" && rules.isListCell(v));
+  }
   function looksFree(v) {
     var s = String(v == null ? "" : v).replace(/\s+/g, " ").trim();
     return s.length >= QUOTE_MIN && s.split(" ").length >= 4 && !/^https?:/i.test(s);
+  }
+  /* The words behind an answer, as the card shows them ("Read from").
+     Stored by a reading before 28 Nov 2026 they are single words joined by
+     commas — "West, Bengal" for West Bengal, "Brown, Hawk" for Brown Hawk
+     Owl. A newer reading stores the phrases themselves; either way they are
+     shown as they stand in the place's own cells (label-rules.js
+     phrasesAsWritten): the columns the question was read from, or every
+     plain column of the place when the layer names none. Words no cell
+     holds any more are shown as stored. */
+  function whyShown(layer, props, col) {
+    var p = props || {}, stored = answerOf(p, col + "_why");
+    var rules = shapeRules();
+    if (!stored || !rules || typeof rules.phrasesAsWritten !== "function") return stored;
+    var kc = ((layer && layer.keyColumns) || {})[col];
+    var from = Array.isArray(kc) ? kc : kc ? [kc] : [];
+    if (!from.length) {
+      from = Object.keys(p).filter(function (k) {
+        return k.charAt(0) !== "_" && !/^pattern_\d+(_why)?$/.test(k) && typeof p[k] === "string" && !isPeopleColumn(k, [p[k]]);
+      });
+    }
+    var cells = from.map(function (k) { return p[k]; }).filter(function (v) { return typeof v === "string" && v; });
+    return rules.phrasesAsWritten(stored.split(/\s*,\s*/), cells).join(", ");
+  }
+  /* The line under an answer. An answer that is only a leftover ("Other
+     States", from a reading before leftovers stopped being kinds) would read
+     as a contradiction beside the place's own value, so there the line says
+     plainly that these are the place's words, not what the answer was read
+     as. Already-escaped markup; "" with no words. */
+  function fromHTML(answer, words) {
+    if (!words) return "";
+    var rules = shapeRules();
+    var leftover = !!(rules && typeof rules.isLeftoverName === "function" && rules.isLeftoverName(answer));
+    return '<div class="in-from">' + (leftover ? "This place says: <q>" : "Read from: <q>") + escText(words) + "</q></div>";
   }
   /* The text a quote for this question comes from: the column the question
      was read from when that column holds free text, else the place's longest
@@ -685,6 +743,7 @@
         ok.push(one); len += one.length + 1;
       });
       if (!ok.length) { firstFault = firstFault || faults[0] || "nothing that can be quoted"; continue; }
+      if (isListOfNames(sources[s])) { firstFault = firstFault || "it is a list, not something somebody wrote"; continue; }
       return { text: ok.join(" "), sentences: ok, why: "" };
     }
     return { text: "", sentences: [], why: firstFault || "nothing that can be quoted" };
@@ -1198,7 +1257,7 @@
     Object.keys(p).forEach(function (k) {
       if (NOT_TEXT.test(String(k).toLowerCase()) || /^pattern_\d+(_why)?$/.test(k) || isPeopleColumn(k, [p[k]])) return;
       if (claimed[k] && !open[k]) return;      // only a question now switched off is read from it
-      if (!looksFree(p[k])) return;
+      if (!looksFree(p[k]) || isListOfNames(p[k])) return;
       var one = foldName(String(p[k]).replace(/\s+/g, " ").trim());
       if (one && !seen[one]) { seen[one] = true; out.push(one); }
     });
@@ -1317,7 +1376,7 @@
     (features || []).some(function (f) {
       var p = f && f.properties;
       if (!p || keyOf(p, col) !== (key || "")) return false;
-      var w = answerOf(p, col + "_why");
+      var w = whyShown(null, p, col);
       if (!w || seen[w.toLowerCase()]) return false;
       seen[w.toLowerCase()] = true;
       out.push(w);
@@ -1673,11 +1732,27 @@
           });
           st.answers.forEach(function (a, i) { a.color = PAL[i % PAL.length]; });
         }
+        /* A number key's ranges in the order of the numbers, coloured light
+           to dark in one hue so more reads as more (label-rules.js
+           rampColors) — the same ramp the ordinary viewer's key wears. */
+        if (o.ranges && Array.isArray(o.kept)) {
+          var rules = shapeRules(), ramp = rules && rules.rampColors ? rules.rampColors(o.kept.length) : null;
+          // the same answer the map reads for a kind's place (label-rules.js kindIndex)
+          var at = function (a) {
+            var k = rules && rules.kindIndex ? rules.kindIndex(o.kept, a.name) : o.kept.indexOf(a.name);
+            return k < 0 ? o.kept.length : k;
+          };
+          st.answers.sort(function (a, b) { return at(a) - at(b); });
+          st.answers.forEach(function (a, i) { a.color = (ramp && ramp[at(a)]) || PAL[i % PAL.length]; });
+          st.ranged = true;
+        }
         st.dated = !!o.grain;
         out.push(st);
       });
       // a date key ("When it was added") is bookkeeping: it comes after the keys that say what a place is
-      return out.filter(function (st) { return !st.dated; }).concat(out.filter(function (st) { return st.dated; }));
+      // …and so does a number key, after the plain keys and before the dates
+      return out.filter(function (st) { return !st.dated && !st.ranged; })
+        .concat(out.filter(function (st) { return st.ranged; }), out.filter(function (st) { return st.dated; }));
     }
     function matches(p) {
       var f = state.filter;
@@ -1932,7 +2007,7 @@
       return links;
     }
     function photoHTML(props) { return api.shotsHTML(leadShots(props)); }
-    function whyOf(props, col) { return answerOf(props, col + "_why"); }
+    function whyOf(props, col) { return whyShown(srcLayer || X, props, col); }
     /* A column about people or ids is never on a card: by its name, or by what
        the whole column holds (label-rules.js whyNotRead, through isPeopleColumn
        — the rule that already keeps such a column from being read or offered
@@ -1998,7 +2073,7 @@
         var a = answerOf(props, st.col), c = colourOf(st, props) || NONE, w = whyOf(props, st.col);
         h += '<div class="in-pa' + (st.col === state.open ? " cur" : "") + '"><div class="in-ql">' + escText(st.question) + "</div>" +
           '<div class="in-an"><span class="in-sw" style="background:' + c + '"></span>' + escText(a) + "</div>" +
-          (w ? '<div class="in-from">Read from: <q>' + escText(w) + "</q></div>" : "") + "</div>";
+          fromHTML(a, w) + "</div>";
       });
       if (hasIt.length && not.length) h += '<div class="in-pa"><div class="in-from">Doesn\u2019t say: ' +
         not.map(function (st) { return escText(st.noun || st.question); }).join(" \u00b7 ") + "</div></div>";
@@ -2254,7 +2329,7 @@
       idx.slice(0, lim).forEach(function (i) {
         var p = all[i].properties || {}, w = whyOf(p, st.col);
         h += '<button type="button" class="in-prow' + (sameF(all[i], openF) ? " in-open" : "") + '" data-in="place" data-i="' + i + '"><div class="in-rn">' + escText(nameOf(all[i])) + "</div>" +
-          (w ? '<div class="in-from">Read from: <q>' + escText(w) + "</q></div>" : "") + "</button>";
+          fromHTML(answerOf(p, st.col), w) + "</button>";
       });
       if (idx.length > lim) h += '<button type="button" class="in-more" data-in="more">Show all ' + idx.length + "</button>";
       return h + "</div>";
@@ -2752,6 +2827,8 @@
     quoteFault: quoteFault,
     quoteSourceOf: quoteSourceOf,
     quoteSourcesOf: quoteSourcesOf,
+    whyShown: whyShown,
+    fromHTML: fromHTML,
     SHARED_MAX: SHARED_MAX,
     splitSentences: splitSentences,
     peopleValuesOf: peopleValuesOf,

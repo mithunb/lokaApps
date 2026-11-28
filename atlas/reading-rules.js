@@ -42,6 +42,8 @@
      fingerprint, and of every list of plain columns, so writing them on is
      never a change to anybody's data. */
   var NAME_FIELD = "loka_name";
+  // a cell that is a number: "12", "1,204", "3.5", "40%" (label-rules.js NUMBER_CELL, the same test)
+  var NUMBER_CELL = /^[-+]?(\d{1,3}(,\d{3})+|\d+)(\.\d+)?\s*%?$/;
   function isAnswerColumn(k) { return /^pattern_/.test(k) || k === NAME_FIELD; }
   function isQuestionColumn(k) { return /^pattern_\d+$/.test(k); }
 
@@ -78,7 +80,7 @@
          put words into the mouth of the next. */
       if (k.charAt(0) === "_" || k === "themes" || isAnswerColumn(k)) return false;
       if (/^(lat|latitude|lon|lng|long|longitude)$/i.test(k)) return false;
-      var seen = {}, distinct = 0, spaced = 0, filled = 0, datey = 0;
+      var seen = {}, distinct = 0, spaced = 0, filled = 0, datey = 0, numbers = 0;
       for (var i = 0; i < rows.length; i++) {
         var v = cellText((rows[i] || {})[k]);
         if (!v) continue;
@@ -88,6 +90,7 @@
         filled++;
         if (v.indexOf(" ") >= 0) spaced++;
         if (/^\d{4}-\d{2}(-\d{2})?([T ].*)?$/.test(v)) datey++;
+        if (NUMBER_CELL.test(v) && !/^\d{10,}$/.test(v)) numbers++;
         if (!seen[v]) { seen[v] = 1; distinct++; }
       }
       if (!filled) return false;
@@ -98,6 +101,14 @@
          from the column itself, where no justification is needed or possible.
          Kept tight to ISO-ish dates so a house number is not mistaken for one. */
       if (datey >= filled * 0.9) return false;
+      /* A number is not words either (Mithun, 28 Nov 2026: counting is
+         arithmetic, not reading). A column of counts — "likes", "comments",
+         "species_count", "recordings" — used to pass as a short column
+         whenever its numbers repeated, and came back as a question with
+         made-up kinds ("One species", "Two to four"). Decided by the values
+         (label-rules.js isNumberColumn states the same rule for the server):
+         nine filled cells in ten are numbers. */
+      if (numbers >= filled * 0.9) return false;
       // all different and none of them spaced: that is an id, not words
       return !(distinct === filled && spaced === 0);
     });

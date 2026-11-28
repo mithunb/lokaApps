@@ -2478,6 +2478,23 @@
   }
 
   function computeKeyOptions(L, feats) {
+    // the number a layer is already drawn by (its bubbles' size, its fill's value) is not offered again as ranges
+    function drawnByNumber(L, col) {
+      var spec = (L && L.spec) || {};
+      return [L && L.valueColumn, spec.valueColumn, spec.sizeColumn, L && L.bubble && L.bubble.property, L && L.value && L.value.property]
+        .some(function (c) { return c && String(c) === col; });
+    }
+    // a column that only repeats each point's own longitude or latitude, whatever it is called
+    function isOwnCoordinate(feats, col) {
+      var seen = 0, same = 0;
+      for (var i = 0; i < feats.length && seen < 200; i++) {
+        var g = feats[i] && feats[i].geometry, v = Number((feats[i].properties || {})[col]);
+        if (!g || g.type !== "Point" || !isFinite(v)) continue;
+        seen++;
+        if (Math.abs(v - g.coordinates[0]) < 1e-6 || Math.abs(v - g.coordinates[1]) < 1e-6) same++;
+      }
+      return seen >= 3 && same >= seen * 0.9;
+    }
     var committedCol = null;
     if (L.markerBy) {
       committedCol = (L.spec && L.spec.categoryColumn) ? String(L.spec.categoryColumn)
@@ -2512,16 +2529,44 @@
       [";", ","].forEach(function (d) {
         if (!delim && nonEmpty.filter(function (v) { return v.indexOf(d) >= 0; }).length >= nonEmpty.length * 0.4) delim = d;
       });
+      /* "1,200" is a number with its thousands marked, not a list of two
+         things — but only when the whole column is written that way, which
+         is the one rule in label-rules.js (isGroupedNumberColumn). A column
+         of "123,456" where the commas are a list's commas keeps them. */
+      if (delim === ",") {
+        var byThousands = LokaLabelRules.isGroupedNumberColumn
+          ? LokaLabelRules.isGroupedNumberColumn(nonEmpty)
+          : Boolean(LokaLabelRules.isNumberColumn && LokaLabelRules.isNumberColumn(nonEmpty));
+        if (byThousands) delim = null;
+      }
       /* A column of dates arrives with one kind per date, which is no key at
          all. It becomes one by grouping — see dateGrain. Only for a column that
          is dates all the way down; anything else is counted as it comes. */
       var grain = (!committed && !delim && looksLikeDates(nonEmpty))
         ? dateGrain(nonEmpty, 9) : null;
+      /* A column of NUMBERS arrives the same way — one kind per number — and
+         becomes a key the same way, by grouping: three to five ranges the
+         Atlas works out (label-rules.js numberKey, which also says which
+         number columns are not quantities at all: coordinates, ids, postal
+         codes, a rating of 1 to 5). Never a question's own column, never the
+         number the layer is already drawn by, never a point's own
+         coordinates under another name. From then on it is a key like any
+         other: every place is asked through optValuesOf below. */
+      var ranges = null;
+      if (!committed && !delim && !grain && !/^pattern_\d+/.test(col) && LokaLabelRules.numberKey &&
+          !drawnByNumber(L, col) && !isOwnCoordinate(feats, col)) {
+        var nk = LokaLabelRules.numberKey(col, nonEmpty);
+        ranges = nk ? nk.ranges : null;
+      }
       var counts = [], seen = {};
       nonEmpty.forEach(function (v) {
         if (delim) { var i = v.indexOf(delim); if (i >= 0) v = v.slice(0, i); }
         if (grain) {
           v = dateBucket(v, grain);
+          if (!v) return;
+        }
+        if (ranges) {
+          v = LokaLabelRules.numberBucket(v, ranges);
           if (!v) return;
         }
         v = unquotePiece(v).slice(0, 40);
@@ -2560,9 +2605,11 @@
         kept = Object.keys(L.markers);   // the committed kinds, committed order, committed colours
       } else {
         kept = counts.slice(0, KEY_MAX).map(function (c) { return c.kind; });
+        // a number key's kinds are its ranges, in the order of the numbers (never of their counts)
+        if (ranges) kept = ranges.map(function (r) { return r.label; }).filter(function (k) { return seen[k] != null; });
         // every kept kind must read as a word: a column of shared links,
-        // id-strings or timestamps is not a set of readable kinds
-        if (kept.some(function (k) { return skipSearchValue(k); })) return;
+        // id-strings or timestamps is not a set of readable kinds (a range, "2–4", is its own kind of word)
+        if (!ranges && kept.some(function (k) { return skipSearchValue(k); })) return;
       }
       var named = 0;
       counts.forEach(function (c) { if (kept.indexOf(c.kind) >= 0) named += c.n; });
@@ -2620,11 +2667,20 @@
          stays on the list marked tooFew, so the places that did answer still
          show it on their cards; only the panel's tick is left out. */
       var tooFew = Boolean(isQuestion && !committed && named / feats.length < QUESTION_MIN_REACH);
-      // and a key that does not tell places apart is not a key — see KEY_DOMINANCE
+      var kindsHere = 0;
+      counts.forEach(function (c) { if (kept.indexOf(c.kind) >= 0 && c.n > 0) kindsHere += 1; });
+      /* And a key that does not tell places apart is not a key — see
+         KEY_DOMINANCE. A number key is the one exception: most corners have
+         no likes at all, and the handful that do are what a reader is
+         looking for. The rule for that is label-rules.js numberKeySpreads
+         (two ranges in use, and a real minority), so the map, the panel and
+         the server all keep the same column. */
       if (!committed && !isQuestion && counts.length &&
-          counts[0].n / feats.length > KEY_DOMINANCE) return;
+          counts[0].n / feats.length > KEY_DOMINANCE &&
+          !(ranges && LokaLabelRules.numberKeySpreads &&
+            LokaLabelRules.numberKeySpreads(kindsHere, named - counts[0].n, feats.length))) return;
       // and a key whose answers are mostly one of a kind groups nothing — see KEY_MIN_SHARED
-      var scattered = Boolean(!committed && !isQuestion &&
+      var scattered = Boolean(!committed && !isQuestion && !ranges &&
         sharedShare(nonEmpty, delim, grain) < KEY_MIN_SHARED);
       /* A name the owner gave this key wins over the column's own name. The
          column is called "themes", which says how it was made rather than what
@@ -2648,10 +2704,8 @@
       var lopsided = (named && top) ? top.n / named : 0;
       // does the commonest answer outweigh everything else the question answered?
       var outweighs = Boolean(top && top.n > (named - top.n));
-      var kindsHere = 0;
-      counts.forEach(function (c) { if (kept.indexOf(c.kind) >= 0 && c.n > 0) kindsHere += 1; });
       opts.push({ col: col, label: shown, full: lab.full, shortened: lab.shortened,
-        delim: delim, committed: committed, grain: grain, tooFew: tooFew, scattered: scattered,
+        delim: delim, committed: committed, grain: grain, ranges: ranges, tooFew: tooFew, scattered: scattered,
         // what share of the places this key can actually speak for; shown beside
         // a discovered question, whose whole point is that it may not reach all
         reach: feats.length ? named / feats.length : 0, isQuestion: isQuestion,
@@ -2678,7 +2732,10 @@
           || (b.committed ? 1 : 0) - (a.committed ? 1 : 0)
           || (a.flat ? 1 : 0) - (b.flat ? 1 : 0);
     });
-    return opts;
+    /* A number key follows the keys that say what a place is, whatever it
+       reaches: every place has a count of likes, and a map must never open
+       coloured by one while it has a question or a plain column to open on. */
+    return opts.filter(function (o) { return !o.ranges; }).concat(opts.filter(function (o) { return o.ranges; }));
   }
 
   function activeKeyOptions(L) {
@@ -2693,6 +2750,11 @@
   // colours untouched wherever it sits in the list — the list is ordered by
   // reach now (computeKeyOptions), so it is no longer always the first family.
   function keyKindColor(L, opt, familyIndex, slot) {
+    // a number key: one hue, light to dark, so more reads as more (label-rules.js rampColors)
+    if (opt.ranges && LokaLabelRules.rampColors) {
+      var ramp = LokaLabelRules.rampColors(opt.kept.length);
+      if (ramp[slot]) return ramp[slot];
+    }
     if (opt.committed) {
       var m = L.markers && L.markers[opt.kept[slot]];
       if (m && m.color) return m.color;
@@ -2723,6 +2785,11 @@
          and the map would come out entirely blank under a key that reads fine. */
       if (opt.grain) {
         s = dateBucket(s, opt.grain);
+        if (!s) return;
+      }
+      // …and a number is asked which range it falls in
+      if (opt.ranges) {
+        s = LokaLabelRules.numberBucket(s, opt.ranges);
         if (!s) return;
       }
       s = unquotePiece(s).slice(0, 40);
@@ -2899,7 +2966,9 @@
       var vals = optValuesOf(L, opt, f);
       if (!vals.length) return;   // no answer under this key: no row
       rows.push({ shape: ROW_SHAPES[fi], colors: vals.map(function (v) {
-        var slot = opt.kept.indexOf(v);
+        // where a kind sits in its key: the shared answer (label-rules.js kindIndex), so the
+        // map and the Insights panel can never give one kind two different places
+        var slot = LokaLabelRules.kindIndex ? LokaLabelRules.kindIndex(opt.kept, v) : opt.kept.indexOf(v);
         return slot >= 0 ? keyKindColor(L, opt, fi, slot) : KEY_OTHER;
       }) });
     });

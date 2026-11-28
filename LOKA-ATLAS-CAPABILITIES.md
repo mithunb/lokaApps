@@ -513,6 +513,10 @@ A "key" means: colour the places of one layer by the answers in one of its colum
   reader nothing. Measured on the live Bengaluru layer: "Creator" was offered, and 89% of its
   places said "LOKA Finds". This rule is not applied to a question asked of the places, nor to the
   marker column the owner committed to — both are somebody's decision, not an accident of a column;
+  nor to a **number key whose ranges still spread** (November 2026): most corners have no likes at
+  all, and the handful that do are exactly what a reader is after, so a number key is kept when at
+  least two of its ranges hold places and the minority is a real one — five places, or three in a
+  hundred (`numberKeySpreads`, label-rules.js);
 - **at least half of the places that answered must share their answer with at least one other
   place** (`KEY_MIN_SHARED = 0.5`, October 2026): a key exists to group places. In the
   Multispecies atlas 11 people answered and 9 gave an organisation's name, all different — few
